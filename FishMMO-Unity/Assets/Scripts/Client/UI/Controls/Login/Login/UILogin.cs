@@ -73,6 +73,25 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Called when the client is set. Subscribes to connection and authentication events.
 		/// </summary>
+		public override void OnStarting()
+		{
+			base.OnStarting();
+
+			// Wire button listeners programmatically so they survive
+			// scene/prefab reimports that would clear Inspector OnClick lists.
+			if (RegisterButton != null) RegisterButton.onClick.AddListener(OnClick_OnRegister);
+			if (SignInButton != null) SignInButton.onClick.AddListener(OnClick_Login);
+		}
+
+		/// <inheritdoc/>
+		public override void OnDestroying()
+		{
+			base.OnDestroying();
+
+			if (RegisterButton != null) RegisterButton.onClick.RemoveListener(OnClick_OnRegister);
+			if (SignInButton != null) SignInButton.onClick.RemoveListener(OnClick_Login);
+		}
+
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;

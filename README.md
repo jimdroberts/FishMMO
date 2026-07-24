@@ -467,7 +467,7 @@ After building all C# projects and the WebTransport native library, open the Uni
 The FishMMO-Installer automates database creation (Database menu, option `3`), but here is what happens under the hood:
 
 1. **PostgreSQL Installation** — The installer installs PostgreSQL via your platform's package manager (option `1`).
-2. **Database + User Creation** — Creates the `fish_mmo_postgresql` database and a dedicated `fishmmo` user role (option `3`).
+2. **Database + User Creation** — Creates the `fishmmo` database and a dedicated `fishmmo` user role (option `3`).
 3. **EF Core Migration** — Creates and applies an initial Entity Framework Core migration (option `3`).
 4. **Permissions** — Grants the user full privileges on the `public` schema (options `3` and `5`).
 
@@ -482,9 +482,9 @@ sudo -u postgres psql
 
 ```sql
 CREATE USER fishmmo WITH PASSWORD 'your_secure_password';
-CREATE DATABASE fish_mmo_postgresql OWNER fishmmo;
-GRANT ALL PRIVILEGES ON DATABASE fish_mmo_postgresql TO fishmmo;
-\c fish_mmo_postgresql
+CREATE DATABASE fishmmo OWNER fishmmo;
+GRANT ALL PRIVILEGES ON DATABASE fishmmo TO fishmmo;
+\c fishmmo
 GRANT ALL ON SCHEMA public TO fishmmo;
 ```
 
@@ -818,7 +818,7 @@ FishMMO-Setup/
 {
   "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username",
   "Npgsql": {
-    "Database": "fish_mmo_postgresql",
+    "Database": "fishmmo",
     "Username": "",
     "Password": "",
     "Host": "127.0.0.1",
@@ -833,7 +833,7 @@ FishMMO-Setup/
 {
   "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username",
   "Npgsql": {
-    "Database": "fish_mmo_postgresql",
+    "Database": "fishmmo",
     "Username": "",
     "Password": "",
     "Host": "127.0.0.1",
@@ -932,8 +932,8 @@ The installer handles PostgreSQL installation. For manual setup, ensure:
 2. The `fishmmo` user can connect with password authentication.
 3. `pg_hba.conf` allows local password connections:
    ```
-   local   fish_mmo_postgresql   fishmmo   md5
-   host    fish_mmo_postgresql   fishmmo   127.0.0.1/32   md5
+   local   fishmmo   fishmmo   md5
+   host    fishmmo   fishmmo   127.0.0.1/32   md5
    ```
 
 **Securing PostgreSQL (Production):**
@@ -966,7 +966,7 @@ After installation, configure PgBouncer to pool connections to your FishMMO data
 
 ```ini
 [databases]
-fish_mmo_postgresql = host=127.0.0.1 port=5432 dbname=fish_mmo_postgresql
+fishmmo = host=127.0.0.1 port=5432 dbname=fishmmo
 
 [pgbouncer]
 listen_addr = 127.0.0.1
@@ -1023,7 +1023,7 @@ Point your game servers at PgBouncer (port `6432`) instead of PostgreSQL directl
 sudo systemctl status pgbouncer
 sudo systemctl restart pgbouncer
 # Test connection through PgBouncer
-psql -h 127.0.0.1 -p 6432 -U fishmmo -d fish_mmo_postgresql
+psql -h 127.0.0.1 -p 6432 -U fishmmo -d fishmmo
 ```
 
 **Windows:**

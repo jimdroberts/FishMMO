@@ -156,7 +156,16 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Routes an incoming <see cref="TokenAuthBroadcast"/> to the core token authentication channel.</summary>
 		internal void OnServerTokenAuthBroadcastReceived(NetworkConnection conn, TokenAuthBroadcast msg, Channel channel)
-			=> core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
+		{
+			// Validate wire-format bounds before any allocation or crypto work.
+			// Reject oversized payloads on the network thread.
+			if (msg.Token == null || msg.Token.Length > AuthSizeLimits.MaxTokenAuthSize)
+			{
+				conn.Disconnect(true);
+				return;
+			}
+			core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
+		}
 
 		#endregion
 
@@ -255,8 +264,9 @@ namespace FishMMO.Server.Implementation
 		/// <param name="accountName">Account name extracted from the verified token.</param>
 		/// <param name="accessLevel">Access level extracted from the verified token.</param>
 		/// <param name="loginServerId">Originating LoginServer ID (used to look up the HMAC signing key).</param>
-		private async Task IssueRenewalTokenCoreAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId)
+		private async Task IssueRenewalTokenCoreAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId, CancellationToken ct)
 		{
+			ct.ThrowIfCancellationRequested();
 			if (conn == null || !conn.IsActive)
 				return;
 
@@ -271,10 +281,12 @@ namespace FishMMO.Server.Implementation
 			// during exactly the conditions that caused the blip. Make one short
 			// retry with linear backoff before giving up.
 			var currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
+			ct.ThrowIfCancellationRequested();
 			if (currentSigningKey.Key == null)
 			{
-				await Task.Delay(150);
+				await Task.Delay(150, ct);
 				if (!conn.IsActive) return;
+				ct.ThrowIfCancellationRequested();
 				currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
 			}
 			byte[] signingKey = currentSigningKey.Key;
@@ -441,7 +453,7 @@ namespace FishMMO.Server.Implementation
 
 			/// <inheritdoc/>
 			protected override Task OnTokenAuthSuccessAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId) =>
-				outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId);
+				outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId, outer.ShutdownToken);
 		}
 
 		#endregion

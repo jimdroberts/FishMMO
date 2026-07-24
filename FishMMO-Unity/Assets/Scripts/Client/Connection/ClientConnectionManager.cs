@@ -30,6 +30,20 @@ namespace FishMMO.Client
 		/// a defensive measure — it costs nothing on x86/ARM and documents the intent against future refactoring
 		/// that might introduce background-thread access.</remarks>
 		private int connectingGuard = 0;
+		/// <summary>
+		/// Timestamp (double precision, seconds since startup) of the most recent
+		/// successful connectingGuard acquisition. Used to detect and recover from a
+		/// leaked guard. Double precision prevents float loss after ~24h of client
+		/// uptime, which would cause guardAge to compute as zero.
+		/// </summary>
+		private double connectingGuardAcquiredAt = 0.0;
+		/// <summary>
+		/// ── FIX #10: Reference to the in-flight connection coroutine ──
+		/// Stored so ResetReconnectState can stop the coroutine before
+		/// releasing the connectingGuard.  Uses IEnumerator because
+		/// CoroutineRunner.Start/Stop accept IEnumerator, not UnityEngine.Coroutine.
+		/// </summary>
+		private System.Collections.IEnumerator inFlightConnectionCoroutine;
 		/// <summary>Thread-safe disconnect flag. Volatile for visibility across transport-worker callbacks.</summary>
 		private volatile bool forceDisconnect;
 		private string lastWorldAddress = "";
@@ -106,9 +120,12 @@ namespace FishMMO.Client
 				Log.Warning("ClientConnection", "ConnectToServer already in progress; ignoring duplicate call.");
 				return;
 			}
-			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
+			connectingGuardAcquiredAt = (double)Time.realtimeSinceStartup;
+		if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
 			NetworkManager.ClientManager.StopConnection();
-			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
+			var routine = OnAwaitingConnectionReady(address, port, isWorldServer);
+			inFlightConnectionCoroutine = routine;
+			CoroutineRunner.Start(routine);
 		}
 
 		/// <summary>Attempts a reconnect with exponential backoff. The backoff delay is set in
@@ -151,10 +168,21 @@ namespace FishMMO.Client
 			ReconnectsAttempted = 0; nextReconnect = -1;
 			CurrentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = ""; lastWorldPort = 0;
+			// ── FIX #10: Stop in-flight coroutine BEFORE releasing guard ──
+			// If a connection coroutine is suspended at a yield point,
+			// releasing the guard would allow a second ConnectToServer to
+			// start a concurrent coroutine on the same transport.  Stop the
+			// coroutine first, then release the guard.
+			if (inFlightConnectionCoroutine != null)
+			{
+				CoroutineRunner.Stop(inFlightConnectionCoroutine);
+				inFlightConnectionCoroutine = null;
+			}
 			// Reset the in-flight connection guard. If a coroutine was
 			// interrupted (e.g., StopAllCoroutines in QuitToLogin), the
 			// guard would otherwise be permanently stuck at 1, blocking
 			// all future ConnectToServer calls.
+			connectingGuardAcquiredAt = 0.0;
 			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 		}
 

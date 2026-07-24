@@ -110,12 +110,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: We use Task.Run to escape
 					// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
 					// At this point the server is shutting down, so blocking the main thread momentarily
-					// is acceptable and prevents the DB cleanup from being silently dropped.
-					Task.Run(() => worldServerService.DeleteAsync(runtimeData.ID)).Wait(5000);
+					// is acceptable and ensures the DB cleanup completes before process exit.
+					var deleteTask = Task.Run(() => worldServerService.DeleteAsync(runtimeData.ID));
+					if (!deleteTask.Wait(5000))
+					{
+						Log.Warning("WorldServerSystem", $"World server deregistration timed out after 5000ms (ServerID={runtimeData.ID})");
+					}
+					else
+					{
+						DatabaseResult deleteResult = deleteTask.GetAwaiter().GetResult();
+						if (!deleteResult.IsSuccess)
+						{
+							Log.Warning("WorldServerSystem", $"Failed to deregister world server from DB (ServerID={runtimeData.ID}): [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
+						}
+					}
 				}
 				catch (Exception ex)
 				{
-					Log.Error("WorldServerSystem", $"Failed to deregister world server from DB: {ex.Message}");
+					Log.Error("WorldServerSystem", $"Failed to deregister world server from DB (ServerID={runtimeData.ID}): {ex}");
 				}
 			}
 		}
@@ -151,7 +163,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 				if (!result.IsSuccess)
 				{
-					throw new UnityException($"Failed to register world server: {result.ErrorMessage}");
+					throw new UnityException($"Failed to register world server: [{result.ErrorCode}] {result.ErrorMessage}");
 				}
 
 				data.ID = result.Data.ServerId;

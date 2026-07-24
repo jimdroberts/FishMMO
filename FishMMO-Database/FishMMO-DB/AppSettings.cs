@@ -34,7 +34,7 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Gets or sets the PostgreSQL database name.
 		/// </summary>
-		public string Database { get; set; } = "fish_mmo_postgresql";
+		public string Database { get; set; } = "fishmmo";
 
 		/// <summary>
 		/// Gets or sets the database schema name.

@@ -138,7 +138,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!dbResult.IsSuccess)
 			{
-				Log.Error("LoginServerSystem", $"Failed to register login server in database: {dbResult.ErrorMessage}");
+				Log.Error("LoginServerSystem", $"Failed to register login server in database: [{dbResult.ErrorCode}] {dbResult.ErrorMessage} (IsTransient={dbResult.IsTransient})");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -184,7 +184,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!keyResult.IsSuccess)
 			{
-				Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: {keyResult.ErrorMessage}");
+				Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: [{keyResult.ErrorCode}] {keyResult.ErrorMessage}");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -295,14 +295,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 						// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
 						// At this point the server is shutting down, so blocking the main thread momentarily
 						// is acceptable and ensures the DB cleanup completes before process exit.
-						if (!Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000))
+						var keyDeleteTask = Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID));
+						if (!keyDeleteTask.Wait(5000))
 						{
 							Log.Warning("LoginServerSystem", $"Signing key deletion timed out after 5000ms");
+						}
+						else
+						{
+							DatabaseResult keyDeleteResult = keyDeleteTask.GetAwaiter().GetResult();
+							if (!keyDeleteResult.IsSuccess)
+							{
+								Log.Warning("LoginServerSystem", $"Failed to delete signing key from DB: [{keyDeleteResult.ErrorCode}] {keyDeleteResult.ErrorMessage}");
+							}
 						}
 					}
 					catch (Exception ex)
 					{
-						Log.Error("LoginServerSystem", $"Failed to delete signing key from DB: {ex.Message}");
+						Log.Error("LoginServerSystem", $"Failed to delete signing key from DB: {ex}");
 					}
 				}
 
@@ -311,14 +320,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 					try
 					{
 						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL (see comment above).
-						if (!Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000))
+						var deregisterTask = Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID));
+						if (!deregisterTask.Wait(5000))
 						{
 							Log.Warning("LoginServerSystem", $"Login server deregistration timed out after 5000ms");
+						}
+						else
+						{
+							DatabaseResult deregisterResult = deregisterTask.GetAwaiter().GetResult();
+							if (!deregisterResult.IsSuccess)
+							{
+								Log.Warning("LoginServerSystem", $"Failed to deregister login server from DB: [{deregisterResult.ErrorCode}] {deregisterResult.ErrorMessage}");
+							}
 						}
 					}
 					catch (Exception ex)
 					{
-						Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex.Message}");
+						Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex}");
 					}
 				}
 			}
@@ -396,7 +414,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!keyResult.IsSuccess)
 				{
 					CryptographicOperationsCompat.ZeroMemory(newHmacKey);
-					await Log.Warning("LoginServerSystem", $"Signing key rotation persistence failed: {keyResult.ErrorMessage}");
+					await Log.Warning("LoginServerSystem", $"Signing key rotation persistence failed: [{keyResult.ErrorCode}] {keyResult.ErrorMessage}");
 					return;
 				}
 
@@ -453,7 +471,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!dbResult.IsSuccess)
 				{
-					await Log.Warning("LoginServerSystem", $"Pulse failed: {dbResult.ErrorMessage}");
+					await Log.Warning("LoginServerSystem", $"Pulse failed: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)

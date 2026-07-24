@@ -63,6 +63,42 @@ namespace FishMMO.Shared
 		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
 		/// </summary>
 		public const int CreateAccountMaxFieldSize = 2048;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted Username field in SrpVerifyRequestBroadcast.
+		/// AES-GCM overhead (~28 bytes) + encrypted username (max 128 bytes plaintext) = generous cap at 512.
+		/// </summary>
+		public const int MaxSrpUsernameSize = 512;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted PublicEphemeral field (SRP client A or server B).
+		/// SRP-6a 4096-bit ephemeral (512 bytes) + AES-GCM overhead (~28 bytes) = generous cap at 1024.
+		/// </summary>
+		public const int MaxSrpEphemeralSize = 1024;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted Proof field (SrpProofBroadcast).
+		/// SRP-6a client proof M1 = 64 bytes (SHA-512) + AES-GCM overhead (~28 bytes) = generous cap at 256.
+		/// </summary>
+		public const int MaxSrpProofSize = 256;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted Salt field (SrpVerifyResponseBroadcast).
+		/// SRP-6a salt (max 64 bytes) + AES-GCM overhead (~28 bytes) = generous cap at 256.
+		/// </summary>
+		public const int MaxSrpSaltSize = 256;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted Token field in TokenAuthBroadcast.
+		/// AES-GCM encrypted signed auth token = generous cap at 1024.
+		/// </summary>
+		public const int MaxTokenAuthSize = 1024;
+
+		/// <summary>
+		/// Maximum allowed size in bytes for the encrypted Code field in TwoFactorVerifyBroadcast.
+		/// Encrypted 6-digit TOTP code + AES-GCM overhead (~28 bytes) = generous cap at 128.
+		/// </summary>
+		public const int MaxTotpCodeSize = 128;
 	}
 
 	/// <summary>

@@ -114,7 +114,7 @@ Example override file:
 {
   "Npgsql": {
     "Host": "127.0.0.1",
-    "Database": "fish_mmo_postgresql_dev",
+    "Database": "fishmmo_dev",
     "Username": "postgres",
     "Password": "dev_password"
   },
@@ -236,7 +236,7 @@ Example (fish):
 
 ```fish
 set -x Npgsql__Host 10.0.0.25
-set -x Npgsql__Database fish_mmo_postgresql
+set -x Npgsql__Database fishmmo
 set -x Npgsql__Username postgres
 set -x Npgsql__Password super_secret
 ```

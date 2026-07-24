@@ -215,7 +215,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"SaveCharacterAsync failed for character {charData.ID}: {ex.Message}");
+				await Log.Error("CharacterSystem", $"SaveCharacterAsync failed for character {charData.ID}: {ex}");
 			}
 		}
 
@@ -262,7 +262,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					catch (Exception ex)
 					{
-						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {charData.ID}: {ex.Message}");
+						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {charData.ID}: {ex}");
 					}
 
 					// Refresh session lease regardless of whether the save succeeded.
@@ -280,7 +280,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						catch (Exception ex)
 						{
-							await Log.Error("CharacterSystem", $"SaveAllCharactersAsync: RefreshSessionLeaseAsync failed for character {charData.ID}: {ex.Message}");
+							await Log.Error("CharacterSystem", $"SaveAllCharactersAsync: RefreshSessionLeaseAsync failed for character {charData.ID}: {ex}");
 						}
 					}
 				}
@@ -340,7 +340,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync failed for character {characterID}: {ex.Message}");
+				await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync failed for character {characterID}: {ex}");
 			}
 		}
 
@@ -494,7 +494,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"SaveBuffsAsync failed: {ex.Message}");
+				await Log.Error("CharacterSystem", $"SaveBuffsAsync failed: {ex}");
 			}
 		}
 
@@ -519,7 +519,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"SaveAttributesAsync failed: {ex.Message}");
+				await Log.Error("CharacterSystem", $"SaveAttributesAsync failed: {ex}");
 			}
 		}
 
@@ -544,7 +544,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"SaveAbilitiesAsync failed: {ex.Message}");
+				await Log.Error("CharacterSystem", $"SaveAbilitiesAsync failed: {ex}");
 			}
 		}
 

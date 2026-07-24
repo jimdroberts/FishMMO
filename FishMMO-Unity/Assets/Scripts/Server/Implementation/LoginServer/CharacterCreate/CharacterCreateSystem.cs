@@ -452,7 +452,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
 				{
-					await Log.Error("CharacterCreateSystem", $"Failed to begin unit of work: {uowResult.ErrorMessage}");
+					await Log.Error("CharacterCreateSystem", $"Failed to begin unit of work: [{uowResult.ErrorCode}] {uowResult.ErrorMessage}");
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
@@ -507,7 +507,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						DatabaseResult factionResult = await factionService.PersistAsync(factions);
 						if (!factionResult.IsSuccess)
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist factions: {factionResult.ErrorMessage}");
+							await Log.Error("CharacterCreateSystem", $"Failed to persist factions: [{factionResult.ErrorCode}] {factionResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -526,7 +526,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						DatabaseResult abilityResult = await abilityService.PersistAsync(abilities);
 						if (!abilityResult.IsSuccess)
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist abilities: {abilityResult.ErrorMessage}");
+							await Log.Error("CharacterCreateSystem", $"Failed to persist abilities: [{abilityResult.ErrorCode}] {abilityResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -545,7 +545,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						DatabaseResult inventoryResult = await inventoryService.PersistAsync(inventoryItems);
 						if (!inventoryResult.IsSuccess)
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist inventory: {inventoryResult.ErrorMessage}");
+							await Log.Error("CharacterCreateSystem", $"Failed to persist inventory: [{inventoryResult.ErrorCode}] {inventoryResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -564,7 +564,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						DatabaseResult equipResult = await equipmentService.PersistAsync(equipment);
 						if (!equipResult.IsSuccess)
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist equipment: {equipResult.ErrorMessage}");
+							await Log.Error("CharacterCreateSystem", $"Failed to persist equipment: [{equipResult.ErrorCode}] {equipResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -583,7 +583,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						DatabaseResult attrResult = await attributeService.PersistAsync(initialAttributes.Values);
 						if (!attrResult.IsSuccess)
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist attributes: {attrResult.ErrorMessage}");
+							await Log.Error("CharacterCreateSystem", $"Failed to persist attributes: [{attrResult.ErrorCode}] {attrResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -602,7 +602,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult commitResult = await uow.CommitAsync();
 					if (!commitResult.IsSuccess)
 					{
-						await Log.Error("CharacterCreateSystem", $"Failed to commit unit of work: {commitResult.ErrorMessage}");
+						await Log.Error("CharacterCreateSystem", $"Failed to commit unit of work: [{commitResult.ErrorCode}] {commitResult.ErrorMessage}");
 						TryEnqueueMainThread(() =>
 						{
 							if (conn != null && conn.IsActive)
@@ -633,7 +633,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterCreateSystem", $"ProcessCharacterCreateAsync failed: {ex.Message}");
+				await Log.Error("CharacterCreateSystem", $"ProcessCharacterCreateAsync failed: {ex}");
 				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)

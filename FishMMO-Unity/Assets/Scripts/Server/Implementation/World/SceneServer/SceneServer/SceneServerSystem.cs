@@ -181,7 +181,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!persistResult.IsSuccess)
 			{
-				Log.Error("SceneServerSystem", $"Failed to register scene server in database: {persistResult.ErrorMessage}");
+				Log.Error("SceneServerSystem", $"Failed to register scene server in database: [{persistResult.ErrorCode}] {persistResult.ErrorMessage} (IsTransient={persistResult.IsTransient})");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -189,7 +189,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			runtimeData.ID = id;
 
 			// Delete any stale scenes for this server
-			Task.Run(() => sceneService.DeleteBySceneServerAsync(id)).GetAwaiter().GetResult();
+			DatabaseResult<int> cleanupResult = Task.Run(() => sceneService.DeleteBySceneServerAsync(id)).GetAwaiter().GetResult();
+			if (!cleanupResult.IsSuccess)
+			{
+				Log.Warning("SceneServerSystem", $"Failed to clean up stale scenes for server {id}: [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
+			}
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -232,7 +236,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
 				{
 					// Blocking call during shutdown to ensure cleanup completes
-					Task.Run(() => sceneService.DeleteBySceneServerAsync(runtimeData.ID)).GetAwaiter().GetResult();
+					DatabaseResult<int> cleanupResult = Task.Run(() => sceneService.DeleteBySceneServerAsync(runtimeData.ID)).GetAwaiter().GetResult();
+					if (!cleanupResult.IsSuccess)
+					{
+						Log.Warning("SceneServerSystem", $"Failed to clean up scene server from DB during shutdown (ServerID={runtimeData.ID}): [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
+					}
 				}
 			}
 

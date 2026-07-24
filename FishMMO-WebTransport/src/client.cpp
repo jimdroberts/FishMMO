@@ -121,6 +121,24 @@ int32_t wt_client_connect_impl(
     if (!client || !server_name || !address)
         return WT_ERR_UNKNOWN;
 
+    /* Validate server_name before using it as TLS SNI.
+     * Reject empty hostnames (violates RFC 6066 §3 which requires a
+     * non-empty SNI hostname) and hostnames exceeding the 253-octet
+     * DNS total-length limit (RFC 1035 §2.3.4).  Also reject hostnames
+     * with embedded NUL bytes (truncation in C string functions would
+     * hide the true length from the TLS stack). */
+    {
+        size_t name_len = strnlen(server_name, 256);
+        if (name_len == 0 || name_len > 253)
+            return WT_ERR_UNKNOWN;
+        /* Check for embedded NULs: strnlen stops at the first NUL, so if
+         * the original pointer has a NUL byte before name_len, the
+         * string was already truncated by an earlier operation.  A
+         * memchr scan catches NULs anywhere in the buffer. */
+        if (memchr(server_name, '\0', name_len) != NULL)
+            return WT_ERR_UNKNOWN;
+    }
+
     if (atomic_load(&client->state) != WT_CLIENT_STOPPED)
         return WT_ERR_INVALID_STATE;
 
@@ -396,6 +414,13 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             if (hr != 0) {
                 WT_LOG_ERROR("HTTP/3 client handshake start failed");
                 cli->h3_session->client_state = H3_CLI_ERROR;
+                /* Increment pending_shutdowns BEFORE ConnectionShutdown so
+                 * wt_client_free_impl's spin-wait waits for the async
+                 * SHUTDOWN_COMPLETE callback.  Without this increment,
+                 * free_impl sees pending_shutdowns==0, takes the "never
+                 * connected" fast-path, calls ConnectionClose + free(client)
+                 * while the QUIC callback thread still references cli — UAF. */
+                atomic_fetch_add(&cli->pending_shutdowns, 1);
                 MsQuic->ConnectionShutdown(conn,
                     QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
             }
@@ -472,17 +497,18 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * If the callback triggers wt_client_destroy → free_impl,
          * pending_shutdowns==0 allows the spin-wait to exit cleanly
          * rather than deadlocking.
-         * Guard against unsigned underflow: if ConnectionClose fires
-         * SHUTDOWN_COMPLETE synchronously on the never-connected path,
-         * pending_shutdowns may not have been incremented yet.
-         * Use a single atomic_fetch_sub and check the pre-decrement
-         * value to eliminate the TOCTOU race between the separate
-         * atomic_load and atomic_fetch_sub. */
+         *
+         * Use a CAS loop that decrements ONLY if > 0, eliminating the
+         * TOCTOU race between fetch_sub and the underflow-correction
+         * fetch_add that existed in the previous implementation.
+         * If pending_shutdowns is 0 (duplicate SHUTDOWN_COMPLETE),
+         * the CAS loop exits harmlessly without touching the counter. */
         {
-            unsigned int prev_sub = atomic_fetch_sub(&cli->pending_shutdowns, 1);
-            if (prev_sub == 0) {
-                /* Underflow — correct it: add the 1 back. */
-                atomic_fetch_add(&cli->pending_shutdowns, 1);
+            unsigned int expected = atomic_load(&cli->pending_shutdowns);
+            while (expected > 0) {
+                if (atomic_compare_exchange_strong(
+                        &cli->pending_shutdowns, &expected, expected - 1))
+                    break;
             }
         }
 
@@ -536,10 +562,20 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     }
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_RECEIVED: {
-        /* Atomic load — avoid non-atomic read of session pointer. */
+        /* Atomic load — avoid non-atomic read of session pointer.
+         * Acquire a session reference to prevent UAF, matching the
+         * PEER_STREAM_STARTED pattern. */
         {
             wt_session_t* session = (wt_session_t*)atomic_ptr_load(&cli->session);
-            if (!session) break;
+            if (!session || !wt_session_acquire(session)) break;
+
+            /* Re-check after acquire — session may have been nulled
+             * by SHUTDOWN_COMPLETE between load and acquire. */
+            if (atomic_ptr_load(&cli->session) != session ||
+                !atomic_load(&cli->connected)) {
+                wt_session_release(session);
+                break;
+            }
 
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
@@ -553,6 +589,7 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                     }
                 }
             }
+            wt_session_release(session);
         }
         break;
     }

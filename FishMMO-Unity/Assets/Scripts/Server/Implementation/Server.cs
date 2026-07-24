@@ -467,6 +467,17 @@ namespace FishMMO.Server.Implementation
 
 			this.periodicCallbacks.Clear();
 
+			// 0. Cancel the external-IP-fetch timeout coroutine.  If the server
+			//    is destroyed before the external IP fetch completes (e.g. early
+			//    play-mode exit, invalid config), the coroutine would otherwise
+			//    fire after 30s and call OnFinalizeSetup on a destroyed GameObject,
+			//    producing MissingReferenceException or silent zombie-object access.
+			if (externalIpTimeoutCoroutine != null)
+			{
+				StopCoroutine(externalIpTimeoutCoroutine);
+				externalIpTimeoutCoroutine = null;
+			}
+
 			// 1. Signal worker cancellation FIRST — in-flight auth operations can
 			//    finish broadcasting before the transport is stopped.
 			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)

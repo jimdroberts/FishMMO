@@ -164,7 +164,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
-					await Log.Warning("CharacterSelectSystem", $"Failed to fetch character list for account '{accountName}': {dbResult.ErrorMessage}");
+					await Log.Warning("CharacterSelectSystem", $"Failed to fetch character list for account '{accountName}': [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
 					SendEmptyCharacterList(conn);
 					return;
 				}
@@ -272,7 +272,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
 				{
-					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character delete: {uowResult.ErrorMessage}");
+					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character delete: [{uowResult.ErrorCode}] {uowResult.ErrorMessage}");
 					SendDeleteFailure(conn);
 					return;
 				}
@@ -283,7 +283,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchAsync(characterName);
 					if (!fetchResult.IsSuccess || fetchResult.Data == null)
 					{
-						await Log.Warning("CharacterSelectSystem", $"Failed to fetch character '{characterName}' for deletion: {fetchResult.ErrorMessage}");
+						await Log.Warning("CharacterSelectSystem", $"Failed to fetch character '{characterName}' for deletion: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}");
 						SendDeleteFailure(conn);
 						return;
 					}
@@ -314,36 +314,36 @@ namespace FishMMO.Server.Implementation.LoginServer
 						// soft-delete is the critical operation; orphaned sub-entity rows are harmless.
 						DatabaseResult r;
 						r = await abilityService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete abilities for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete abilities for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await achievementService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete achievements for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete achievements for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await attributeService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete attributes for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete attributes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await bankService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete bank for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete bank for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await buffService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete buffs for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete buffs for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await equipmentService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete equipment for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete equipment for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await factionService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete factions for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete factions for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await friendService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete friends for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete friends for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await hotkeyService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete hotkeys for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete hotkeys for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await inventoryService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete inventory for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete inventory for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await knownAbilityService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete known abilities for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete known abilities for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await petService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pets for character {characterId}: {r.ErrorMessage}");
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pets for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 					}
 
 					// Soft-delete the character row (also hard-deletes guild/party memberships)
 					DatabaseResult deleteResult = await characterService.DeleteAsync(characterId, character.Version + 1);
 					if (!deleteResult.IsSuccess)
 					{
-						await Log.Error("CharacterSelectSystem", $"Failed to delete character '{characterName}': {deleteResult.ErrorMessage}");
+						await Log.Error("CharacterSelectSystem", $"Failed to delete character '{characterName}': [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
 						SendDeleteFailure(conn);
 						return;
 					}
@@ -352,7 +352,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult commitResult = await uow.CommitAsync();
 					if (!commitResult.IsSuccess)
 					{
-						await Log.Error("CharacterSelectSystem", $"Failed to commit character delete: {commitResult.ErrorMessage}");
+						await Log.Error("CharacterSelectSystem", $"Failed to commit character delete: [{commitResult.ErrorCode}] {commitResult.ErrorMessage}");
 						SendDeleteFailure(conn);
 						return;
 					}
@@ -442,7 +442,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
 				{
-					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character select: {uowResult.ErrorMessage}");
+					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character select: [{uowResult.ErrorCode}] {uowResult.ErrorMessage}");
 					SendEmptyServerList(conn);
 					return;
 				}
@@ -480,7 +480,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult setSelectedResult = await characterService.SetSelectedAsync(accountName, character.ID);
 					if (!setSelectedResult.IsSuccess)
 					{
-						await Log.Warning("CharacterSelectSystem", $"SetSelectedAsync failed for account '{accountName}': {setSelectedResult.ErrorMessage}");
+						await Log.Warning("CharacterSelectSystem", $"SetSelectedAsync failed for account '{accountName}': [{setSelectedResult.ErrorCode}] {setSelectedResult.ErrorMessage}");
 						SendEmptyServerList(conn);
 						return;
 					}
@@ -500,7 +500,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult commitResult = await uow.CommitAsync();
 					if (!commitResult.IsSuccess)
 					{
-						await Log.Error("CharacterSelectSystem", $"Failed to commit character select: {commitResult.ErrorMessage}");
+						await Log.Error("CharacterSelectSystem", $"Failed to commit character select: [{commitResult.ErrorCode}] {commitResult.ErrorMessage}");
 						SendEmptyServerList(conn);
 						return;
 					}
@@ -539,7 +539,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 				else
 				{
-					await Log.Warning("CharacterSelectSystem", $"Failed to fetch active world servers after character select: {worldResult.ErrorMessage}");
+					await Log.Warning("CharacterSelectSystem", $"Failed to fetch active world servers after character select: [{worldResult.ErrorCode}] {worldResult.ErrorMessage}");
 					SendEmptyServerList(conn);
 				}
 			}

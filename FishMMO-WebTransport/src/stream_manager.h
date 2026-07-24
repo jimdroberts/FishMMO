@@ -67,6 +67,12 @@ typedef struct wt_stream_entry_s {
     bool            in_use;
     bool            send_closed;
     bool            recv_closed;
+    /* CAS gate — prevents concurrent StreamShutdown(GRACEFUL) from a
+     * QUIC callback (PEER_SEND_SHUTDOWN) and StreamShutdown(ABORT) from
+     * the poll thread (wt_stream_manager_shutdown) on the same handle.
+     * Set to true by whichever path wins the CAS; the loser skips the
+     * shutdown to avoid undefined behavior in MsQuic. */
+    atomic_bool     shutdown_initiated;
 } wt_stream_entry_t;
 
 typedef struct wt_stream_manager_s {

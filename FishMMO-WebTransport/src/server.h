@@ -54,6 +54,20 @@ typedef struct {
      * connection creation.  Used to rate-limit queue-full warnings
      * without a global counter that bleeds across connections. */
     atomic_int              dgram_drop_count;
+
+    /* ── FIX #3: H3 handshake deadline ─────────────────────────
+     * Monotonic-ms timestamp by which the HTTP/3 WebTransport
+     * handshake must complete.  Set in CONNECTED when the
+     * h3_session is created; checked in wt_server_poll_impl.
+     * Zero = deadline not set (connection is idle or already
+     * through the handshake).
+     *
+     * MUST be accessed via atomic_load_u64 / atomic_store_u64
+     * (defined in server.cpp).  The CONNECTED callback writes
+     * this field from a QUIC worker thread, and the poll sweep
+     * reads it from the application thread.  Plain uint64_t
+     * access tears on 32-bit ARM. */
+    uint64_t                h3_handshake_deadline_ms;
 } wt_server_conn_t;
 
 /* ── Server structure ───────────────────────────────────────── */
@@ -73,6 +87,8 @@ typedef struct wt_server_s {
     char                    cert_path[512];
     char                    key_path[512];
     char                    allowed_origins[1024];  /* comma-separated, empty = allow all */
+    char                    expected_authority[256]; /* hostname to validate in :authority, empty = skip */
+    bool                    allow_native_clients;    /* allow raw-QUIC clients (default true for compat) */
 
     atomic_int              state;
     atomic_uint             connection_count;
@@ -87,8 +103,48 @@ typedef struct wt_server_s {
      * Protected by atomic reads/writes — only the QUIC callback thread
      * writes (append), only the poll thread reads (drain). */
     wt_connection_id_t      pending_shutdown_queue[WT_MAX_CLIENTS];
-    atomic_uint             pending_shutdown_head;  /* poll reads here */
-    atomic_uint             pending_shutdown_tail;  /* callback writes here */
+    /* 64-bit counters — eliminate the ~5-day wraparound inherent in
+     * 32-bit head/tail indices under sustained disconnect load.  The
+     * subtraction-based fullness check (tail - head) requires that tail
+     * never wraps past head more than once; 2^64 operations make this
+     * unreachable within any practical server lifetime. */
+    atomic_uint64_t         pending_shutdown_head;  /* poll reads here */
+    atomic_uint64_t         pending_shutdown_tail;  /* callback writes here */
+
+    /* ── Per-IP connection rate limiter ──────────────────────────
+     * Prevents connection-slot exhaustion by limiting the rate at
+     * which a single IP can open new QUIC connections.  Operates at
+     * the transport layer (server_listener_cb) BEFORE TLS handshake
+     * or slot allocation, closing the window between QUIC accept and
+     * application-layer (C#) rate limiting.
+     *
+     * Uses a fixed-size hash table with FNV-1a address hashing.
+     * Collisions are tolerated — two different IPs hashing to the
+     * same bucket share the rate limit, which is a minor fairness
+     * degradation, not a security bypass. */
+    #define WT_RATE_LIMIT_BUCKETS 4096    /* ── FIX #1: was 256 — 256-bucket table saturates
+                                         under distributed-IP attack (~256 IPs × 10/sec),
+                                         causing total connection DoS.  4096 matches
+                                         WT_MAX_CLIENTS and requires ~4× the IP diversity
+                                         to saturate. */
+    #define WT_RATE_LIMIT_INTERVAL_MS 100  /* min 100ms between connects from same bucket */
+    struct {
+        atomic_int  addr_hash;         /* FNV-1a 32-bit hash of raw address bytes (0 = empty) */
+        /* ── FIX #2: 64-bit monotonic-ms timestamp ──────────────────
+         * MUST be accessed via atomic_load_u64 / atomic_store_u64
+         * (defined in server.cpp) to prevent torn reads on 32-bit
+         * architectures (ARM).  Plain loads/stores of uint64_t
+         * compile to two 32-bit instructions on ARM, producing
+         * arbitrary values that can permanently disable or bypass
+         * rate limiting for a bucket.
+         *
+         * The `volatile` qualifier is NOT sufficient — volatile
+         * prevents compiler reordering but does NOT prevent the
+         * hardware from tearing a 64-bit access across two 32-bit
+         * bus transactions.  Only the atomic macros guarantee a
+         * single atomic 64-bit load/store. */
+        uint64_t last_connect_ms;
+    } rate_limits[WT_RATE_LIMIT_BUCKETS];
 } wt_server_s;
 
 /* ── Internal API (called by webtransport_api.cpp) ──────────── */

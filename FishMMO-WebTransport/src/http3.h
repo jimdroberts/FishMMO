@@ -119,6 +119,9 @@ typedef struct h3_stream_ctx_s {
     bool                is_request;     /* true if this is the CONNECT request stream */
     struct h3_session_s* h3;            /* back-pointer to HTTP/3 session (for data processing) */
     struct h3_stream_ctx_s* next;       /* linked list for session cleanup */
+    atomic_bool             freed;          /* CAS guard — prevents double-free when
+                                               PEER_SEND_ABORTED and SHUTDOWN_COMPLETE
+                                               both fire for the same stream */
 } h3_stream_ctx_t;
 
 /* ── HTTP/3 Session ─────────────────────────────────────────── */
@@ -172,6 +175,20 @@ typedef struct h3_session_s {
     /* Link to parent (for cleanup during teardown) */
     /* Allowed origins for CORS (comma-separated, empty = allow all) */
     char                    allowed_origins[1024];
+
+    /* Expected :authority hostname to validate in CONNECT requests.
+     * Empty = skip authority validation (backward compatible).
+     * When configured, browser CONNECT requests MUST include an
+     * :authority matching this value. Prevents host-confusion attacks
+     * in multi-tenant deployments. */
+    char                    expected_authority[256];
+
+    /* When true, native (non-HTTP/3) clients are allowed to connect
+     * without CORS or :authority validation. Defaults to true for
+     * backward compatibility. Set to false in production when
+     * allowed_origins is configured to prevent native clients from
+     * bypassing origin-based access control. */
+    bool                    allow_native_clients;
 
     void*               parent_ptr;     /* wt_server_conn_t* or wt_client_s* */
 } h3_session_t;

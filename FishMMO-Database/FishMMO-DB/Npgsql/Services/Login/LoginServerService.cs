@@ -65,7 +65,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return await ExecuteReturningAsync(
 					dbContext,
 					sql,
-					new object[] { name, address, port },
+					new object[] { name, address, (int)port },
 					reader => new LoginServerEntity
 					{
 						ID = reader.GetInt64(0),

@@ -101,6 +101,11 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
+			// Wire button listeners programmatically so they survive
+			// scene/prefab reimports that would clear Inspector OnClick lists.
+			if (RegisterButton != null) RegisterButton.onClick.AddListener(OnClick_Register);
+			if (QuitToLoginButton != null) QuitToLoginButton.onClick.AddListener(OnClick_QuitToLogin);
+
 			if (AgeSelect == null) return;
 
 			AgeSelect.ClearOptions();
@@ -143,6 +148,17 @@ namespace FishMMO.Client
 			DeleteSavedTwoFactorSetupFile();
 			ClearAllFields();
 			SetFormLocked(false);
+		}
+
+		/// <summary>
+		/// Cleans up programmatically-wired button listeners to prevent leaks.
+		/// </summary>
+		public override void OnDestroying()
+		{
+			base.OnDestroying();
+
+			if (RegisterButton != null) RegisterButton.onClick.RemoveListener(OnClick_Register);
+			if (QuitToLoginButton != null) QuitToLoginButton.onClick.RemoveListener(OnClick_QuitToLogin);
 		}
 
 		/// <summary>

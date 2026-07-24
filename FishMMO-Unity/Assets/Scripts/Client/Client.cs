@@ -322,6 +322,22 @@ namespace FishMMO.Client
 			UIManager.SetClient(null);
 			this.clientPostbootSystem?.UnsetClient(this);
 			Application.logMessageReceived -= OnLogMessage;
+
+#if UNITY_WEBGL || UNITY_IOS || UNITY_ANDROID
+			// ── FIX #5: Best-effort token revocation for WebGL/mobile ──
+			// OnApplicationQuit is not reliably called on these platforms.
+			// OnApplicationPause(true) sets wasApplicationPaused before
+			// OnDestroy fires during tab-close / app-kill.  This is a
+			// best-effort revocation; if the runtime is killed abruptly
+			// (force-quit, browser crash), the token remains valid until
+			// its natural TTL (default 10 min on server).  The auth token
+			// expiry window is the effective revocation delay.
+			if (wasApplicationPaused)
+			{
+				try { this.loginAuthenticator?.RevokeAndClearAuthToken(); }
+				catch { /* best effort — runtime may already be tearing down */ }
+			}
+#endif
 		}
 
 		// ── Init helpers ────────────────────────────────────────────────
@@ -685,9 +701,23 @@ namespace FishMMO.Client
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
 				d.Hide();
 
-			_ = (loginAuthenticator?.RetryHandshakeAsync() ?? System.Threading.Tasks.Task.CompletedTask)
-				.ContinueWith(static t => Log.Error("Client", $"RetryHandshakeAsync failed: {t.Exception?.InnerException?.Message}"),
-					System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
+			/* async void local function captures Unity's SynchronizationContext
+			 * so the continuation after await runs on the main thread.
+			 * ContinueWith would run on the ThreadPool, making Log.Error
+			 * and any future Unity API calls unsafe. */
+			async void RetryWithFaultHandling()
+			{
+				try
+				{
+					if (loginAuthenticator != null)
+						await loginAuthenticator.RetryHandshakeAsync();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
+				}
+			}
+			RetryWithFaultHandling();
 		}
 		else // position -1 = cancelled (timeout / shutdown)
 		{
@@ -755,9 +785,37 @@ namespace FishMMO.Client
 		/// kills WebGL tab blur / mobile sessions. Only revoke on explicit quit or logout.
 		/// </summary>
 		/// <param name="paused">True if the application is being paused.</param>
-		private void OnApplicationPause(bool paused) { /* Auth token preserved across pause/unpause cycle. */ }
+		/// <summary>
+		/// Unity OnApplicationPause. Does NOT revoke the auth token — revoking on pause
+		/// kills WebGL tab blur / mobile sessions. On WebGL/mobile, flags the application
+		/// as terminating so <see cref="OnDestroy"/> can attempt best-effort revocation.
+		/// </summary>
+		/// <param name="paused">True if the application is being paused.</param>
+		private void OnApplicationPause(bool paused)
+		{
+			/* Auth token preserved across pause/unpause cycle.
+			 * ── FIX #5: Flag termination for OnDestroy fallback ──
+			 * On WebGL, iOS, and Android, Unity does not reliably call
+			 * OnApplicationQuit when the app is terminated (tab close,
+			 * app kill).  OnApplicationPause(true) is the closest signal
+			 * we get.  Flag wasApplicationPaused so OnDestroy can
+			 * attempt a best-effort token revocation. */
+#if UNITY_WEBGL || UNITY_IOS || UNITY_ANDROID
+			wasApplicationPaused = paused;
+#endif
+		}
+#if UNITY_WEBGL || UNITY_IOS || UNITY_ANDROID
+		/// <summary>
+		/// Set to true by OnApplicationPause when the app is backgrounded
+		/// (WebGL tab blur / mobile app suspend).  OnDestroy uses this flag
+		/// to decide whether to attempt best-effort token revocation.
+		/// </summary>
+		private bool wasApplicationPaused = false;
+#endif
 		/// <summary>
 		/// Unity OnApplicationQuit. Revokes the auth token when the application exits.
+		/// NOTE: Not reliably called on WebGL or mobile platforms.
+		/// On those platforms, OnApplicationPause + OnDestroy provide a fallback.
 		/// </summary>
 		private void OnApplicationQuit() { try { this.loginAuthenticator?.RevokeAndClearAuthToken(); } catch { } }
 

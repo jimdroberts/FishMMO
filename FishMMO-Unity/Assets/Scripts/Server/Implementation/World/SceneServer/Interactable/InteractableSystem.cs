@@ -309,9 +309,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					if (!TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(itemsToSave), character.ID))
 					{
-						_ = PersistInventoryItemsAsync(itemsToSave).ContinueWith(
-							t => Log.Error("InteractableSystem", $"Fallback inventory persist failed for CharID={character.ID}: {t.Exception}"),
-							TaskContinuationOptions.OnlyOnFaulted);
+						/* async void local function captures Unity's SynchronizationContext
+						 * so the continuation after await runs on the main thread.
+						 * ContinueWith would run on the ThreadPool. */
+						async void PersistWithFaultHandling()
+						{
+							try
+							{
+								await PersistInventoryItemsAsync(itemsToSave);
+							}
+							catch (Exception ex)
+							{
+								Log.Error("InteractableSystem", $"Fallback inventory persist failed for CharID={character.ID}: {ex}");
+							}
+						}
+						PersistWithFaultHandling();
 						Log.Warning("InteractableSystem", $"SendNewItemBroadcast: Async worker rejected inventory persist for CharID={character.ID}; executed fallback persistence path.");
 					}
 				}

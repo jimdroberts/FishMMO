@@ -332,7 +332,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"LoadCharacterAsync failed: {ex.Message}");
+				await Log.Error("CharacterSystem", $"LoadCharacterAsync failed: {ex}");
 
 				// If we successfully claimed the session before the failure, release it
 				if (sessionToken != Guid.Empty && charData.ID > 0)

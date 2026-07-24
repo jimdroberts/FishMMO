@@ -790,7 +790,7 @@ namespace FishMMO.Installer
 				"""
 				{
 				  "Npgsql": {
-				    "Database": "fish_mmo_postgresql",
+				    "Database": "fishmmo",
 				    "Schema": "public",
 				    "Username": "user",
 				    "Password": "change_me",
@@ -856,7 +856,7 @@ namespace FishMMO.Installer
 			Console.WriteLine("--- PostgreSQL ---");
 			s.Npgsql.Host = PromptString("  Host", defaults.Npgsql?.Host ?? "127.0.0.1");
 			s.Npgsql.Port = PromptString("  Port", defaults.Npgsql?.Port ?? "5432");
-			s.Npgsql.Database = PromptString("  Database", defaults.Npgsql?.Database ?? "fish_mmo_postgresql");
+			s.Npgsql.Database = PromptString("  Database", defaults.Npgsql?.Database ?? "fishmmo");
 			s.Npgsql.Schema = PromptString("  Schema", defaults.Npgsql?.Schema ?? "public");
 			s.Npgsql.Username = PromptString("  Username", defaults.Npgsql?.Username ?? "user");
 
@@ -922,7 +922,7 @@ namespace FishMMO.Installer
 			string port = PromptString("  Port", parts.GetValueOrDefault("port", "5432"));
 			string db   = PromptString("  Database",
 				parts.GetValueOrDefault("database",
-				parts.GetValueOrDefault("initial catalog", "fish_mmo_postgresql")));
+				parts.GetValueOrDefault("initial catalog", "fishmmo")));
 			string user = PromptString("  Username",
 				parts.GetValueOrDefault("username",
 				parts.GetValueOrDefault("user id", "user")));

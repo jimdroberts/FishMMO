@@ -1232,7 +1232,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"PersistInventoryItemAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"PersistInventoryItemAsync failed: {ex}");
 			}
 		}
 
@@ -1259,7 +1259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"PersistInventoryItemsAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"PersistInventoryItemsAsync failed: {ex}");
 			}
 		}
 
@@ -1288,7 +1288,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"DeleteInventorySlotAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"DeleteInventorySlotAsync failed: {ex}");
 			}
 		}
 
@@ -1315,7 +1315,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"PersistBankItemAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"PersistBankItemAsync failed: {ex}");
 			}
 		}
 
@@ -1342,7 +1342,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"PersistBankItemsAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"PersistBankItemsAsync failed: {ex}");
 			}
 		}
 
@@ -1371,7 +1371,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"DeleteBankSlotAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"DeleteBankSlotAsync failed: {ex}");
 			}
 		}
 
@@ -1398,7 +1398,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"PersistEquipmentItemAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"PersistEquipmentItemAsync failed: {ex}");
 			}
 		}
 
@@ -1427,7 +1427,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"DeleteEquipmentSlotAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"DeleteEquipmentSlotAsync failed: {ex}");
 			}
 		}
 
@@ -1456,7 +1456,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterInventorySystem", $"PersistAttributesAsync failed: {ex.Message}");
+				await Log.Error("CharacterInventorySystem", $"PersistAttributesAsync failed: {ex}");
 			}
 		}
 
