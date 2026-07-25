@@ -28,6 +28,7 @@
 *.mdb
 *.opendb
 *.VC.db
+*.generated.cs
 
 # --- Specific Assets/Config to Ignore ---
 /[Aa]ssets/DefaultPrefabObjects.asset
