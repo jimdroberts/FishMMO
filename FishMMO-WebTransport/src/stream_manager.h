@@ -88,6 +88,13 @@ typedef struct wt_stream_manager_s {
     void*               callback_ctx;
     wt_connection_id_t  conn_id;
 
+    /* Browser WebTransport (HTTP/3): client/server-initiated data streams
+     * begin with a WEBTRANSPORT_STREAM capsule (type 0x41) carrying the
+     * CONNECT stream ID as session id. Native FishMMO clients send raw
+     * bytes — leave use_wt_stream_header false for them. */
+    bool                use_wt_stream_header;
+    uint64_t            wt_session_id;  /* CONNECT stream ID when framing on */
+
     /* Called when active_streams reaches 0 during shutdown.
      * The session uses this to defer free(mgr) until all streams are done. */
     void (*on_all_streams_done)(void* ctx);

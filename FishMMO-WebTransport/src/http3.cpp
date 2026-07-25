@@ -2685,6 +2685,10 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     phdr.path[0] ? phdr.path : "(none)",
                                                     phdr.authority[0] ? phdr.authority : "(none)");
 
+                                        /* Record session metadata for WT stream framing */
+                                        h3->is_webtransport = true;
+                                        h3->connect_stream_id = sctx->stream_id;
+
                                         /* Copy path & authority for the on_ready callback */
                                         if (phdr.path[0])
                                             strncpy(h3->request_path, phdr.path, sizeof(h3->request_path)-1);

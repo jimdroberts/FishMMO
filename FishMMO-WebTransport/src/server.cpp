@@ -76,6 +76,20 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
     session->parent.server = sconn->owner;
     wt_session_wire_callbacks(session);
 
+    /* Browser CONNECT sessions need WEBTRANSPORT_STREAM framing on data
+     * streams so Chrome associates them with the WT session. Native raw
+     * clients leave use_wt_stream_header=false (default). */
+    if (sconn->h3_session && sconn->h3_session->is_webtransport &&
+        session->stream_mgr) {
+        session->stream_mgr->use_wt_stream_header = true;
+        session->stream_mgr->wt_session_id =
+            sconn->h3_session->connect_stream_id;
+        WT_LOG_INFO(
+            "Client %llu WT stream framing ON session_id=%llu",
+            (unsigned long long)sconn->id,
+            (unsigned long long)session->stream_mgr->wt_session_id);
+    }
+
     /* ── CRITICAL: Native client data replay ──────────────────
      * If this session was created via native protocol detection
      * (first byte != 0x00), the first peer stream's data was
