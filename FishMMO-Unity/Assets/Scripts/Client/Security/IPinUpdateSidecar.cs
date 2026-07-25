@@ -12,9 +12,9 @@ namespace FishMMO.Client.Security
 	/// default is always returned, meaning the static pin set from
 	/// <see cref="ClientSecurityBootstrap"/> is never overridden at runtime.
 	///
-	/// Hard-coded compile-time pins (see <see cref="ClientSecurityBootstrap"/>) and
-	/// StreamingAssets configuration both require shipping a new client build to
-	/// rotate keys. That is unacceptable when a CA-incident or HSM rotation forces
+	/// Hard-coded compile-time pins (see <see cref="ClientSecurityBootstrap"/>)
+	/// require shipping a new client build to rotate keys. That is unacceptable
+	/// when a CA-incident or HSM rotation forces
 	/// an emergency pin swap on a faster cadence than the client release pipeline.
 	///
 	/// The intended production implementation:

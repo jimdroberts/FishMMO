@@ -141,7 +141,7 @@ namespace FishMMO.Client
 		/// The URL to fetch HTML news content from.
 		/// </summary>
 		[SerializeField]
-		private string htmlViewURL = "https://www.fishmmo.com/docs/introduction.html";
+		private string htmlViewURL = GeneratedHostConfig.LauncherHtmlUrl;
 		/// <summary>
 		/// The URL to fetch HTML news content from.
 		/// </summary>

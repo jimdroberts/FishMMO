@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using FishMMO.Client.Security;
 
 namespace FishMMO.Client
 {
@@ -17,60 +18,47 @@ namespace FishMMO.Client
 	/// server, NOT from this header.
 	/// </para>
 	/// <para>
-	/// To rotate the secret: change <see cref="secretLiteral"/> and rebuild
-	/// the client at the same time as the matching server-side configuration
-	/// (env var <c>FISHMMO_CLIENT_GATE_SECRET</c>). There is no rolling
-	/// upgrade window — by design, mismatched clients get a hard 401.
+	/// The secret value lives in <see cref="GeneratedClientSecret.Secret"/>
+	/// (CertificatePins.generated.cs), which CI substitutes from the
+	/// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable. The committed
+	/// source contains a sentinel placeholder — the build validator blocks
+	/// release builds that still contain the sentinel.
 	/// </para>
 	/// </summary>
 	internal static class ClientApiSecret
 	{
 		/// <summary>
-		/// The shared secret. Long, opaque, and high-entropy.
-		///
-		/// <para>
-		/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		/// WARNING: THIS IS A PLACEHOLDER. IT MUST BE REPLACED BEFORE SHIPPING.
-		/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		/// </para>
-		///
-		/// <para>
-		/// The value committed here is a well-known default so the project
-		/// compiles and can be tested in the editor / dev builds.  If you ship
-		/// a public binary with this default, every user will have the same
-		/// secret — recovery from the binary is trivial — and the gate provides
-		/// zero protection.  Rotate the secret by changing this literal AND
-		/// setting the matching server-side value via the
-		/// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable.
-		/// </para>
+		/// The shared secret. Read from the build-time-generated
+		/// <see cref="GeneratedClientSecret.Secret"/> so CI can inject
+		/// the real value without touching this file.
 		/// </summary>
-		private const string secretLiteral =
-			"FishMMO-default-client-gate-secret-replace-before-release-d8b1c4a6e7f23519";
+		private const string secretLiteral = GeneratedClientSecret.Secret;
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
 		/// <summary>
-		/// True when the default placeholder API secret is still active in a release build.
-		/// Other security-sensitive code (e.g. ClientSecurityBuildValidator) should check this flag.
+		/// True when the sentinel placeholder API secret is still active
+		/// in a release build. Checked by ClientSecurityBuildValidator.
 		/// </summary>
 		public static bool IsPlaceholderSecret { get; private set; }
 
 		static ClientApiSecret()
 		{
-			UnityEngine.Debug.LogError(
-				"[ClientApiSecret] *******************************************************\n" +
-				"[ClientApiSecret] *  SECURITY HOLD: The placeholder default secret is    *\n" +
-				"[ClientApiSecret] *  still in use in a release build.                    *\n" +
-				"[ClientApiSecret] *                                                      *\n" +
-				"[ClientApiSecret] *  Set FISHMMO_CLIENT_GATE_SECRET to a unique value    *\n" +
-				"[ClientApiSecret] *  AND update secretLiteral before shipping.           *\n" +
-				"[ClientApiSecret] *                                                      *\n" +
-				"[ClientApiSecret] *  This binary's gate secret is PUBLIC and provides    *\n" +
-				"[ClientApiSecret] *  NO protection against general crawler traffic.      *\n" +
-				"[ClientApiSecret] *******************************************************");
-			// Alert other security code (e.g. ClientSecurityBuildValidator) that the
-			// default placeholder API secret is still active in a release build.
-			IsPlaceholderSecret = true;
+			if (secretLiteral.Contains(GeneratedPinSet.SentinelMarker))
+			{
+				IsPlaceholderSecret = true;
+				throw new InvalidOperationException(
+					"API gate secret is the sentinel placeholder. " +
+					"The build validator should have blocked this build. " +
+					"Set FISHMMO_CLIENT_GATE_SECRET in CI and rebuild.");
+			}
 		}
+#else
+		/// <summary>
+		/// In editor/dev builds, the sentinel secret is acceptable —
+		/// the gate provides no protection, but local development works.
+		/// </summary>
+		public static bool IsPlaceholderSecret =>
+			secretLiteral.Contains(GeneratedPinSet.SentinelMarker);
 #endif
 
 		/// <summary>

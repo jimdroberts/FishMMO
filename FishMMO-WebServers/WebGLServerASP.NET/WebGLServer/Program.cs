@@ -202,7 +202,13 @@ namespace FishMMO.WebServer
 							if (!h.ContainsKey("Cross-Origin-Embedder-Policy"))
 								h["Cross-Origin-Embedder-Policy"] = "require-corp";
 							if (!h.ContainsKey("Content-Security-Policy"))
-								h["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' wss://game.fishmmo.com:* https://game.fishmmo.com:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+							{
+								string gameHost = context.Configuration["GameHost"] ?? "game.fishmmo.com";
+								h["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; " +
+									"connect-src 'self' wss://" + gameHost + ":* https://" + gameHost + ":*; " +
+									"img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+									"worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+							}
 						});
 						// NOTE: ClientGate (UseFishMMOClientGate) is intentionally NOT used
 						// here. Browsers cannot add custom headers (X-FishMMO-Client) to static

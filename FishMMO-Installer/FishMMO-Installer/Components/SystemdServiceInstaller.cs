@@ -109,31 +109,39 @@ namespace FishMMO.Installer
         /// <summary>
         /// Generates a systemd .service file content for an ASP.NET Core application.
         /// </summary>
-        private static string GenerateSystemdUnit(string serviceName, string dllPath, string description)
-        {
-            string workingDir = Path.GetDirectoryName(dllPath) ?? "/opt/fishmmo";
-            string envFilePath = Path.Combine(workingDir, "fishmmo-secrets.env");
-            string user = Environment.UserName;
+		/// <summary>
+		/// Path to the system-wide FishMMO secrets file shared by all services.
+		/// All systemd units reference this single file so secrets (gate secret,
+		/// HMAC key, KEK) are identical across IpFetchServer, Patcher, WebGLServer,
+		/// and the AppHealthMonitor (which passes them to Login/World/Scene servers).
+		/// </summary>
+		internal const string SystemWideSecretsPath = "/etc/fishmmo/secrets.env";
 
-            return $"""
-                    [Unit]
-                    Description={description}
-                    After=network.target postgresql.service
+		private static string GenerateSystemdUnit(string serviceName, string dllPath, string description)
+		{
+			string workingDir = Path.GetDirectoryName(dllPath) ?? "/opt/fishmmo";
+			string user = Environment.UserName;
 
-                    [Service]
-                    WorkingDirectory={workingDir}
-                    ExecStart=/usr/bin/dotnet "{dllPath}"
-                    Restart=always
-                    RestartSec=5
-                    User={user}
-                    Environment=ASPNETCORE_ENVIRONMENT=Production
-                    Environment=FISHMMO_ENVIRONMENT=Production
-                    EnvironmentFile=-{envFilePath}
+			return $"""
+			        [Unit]
+			        Description={description}
+			        After=network.target postgresql.service
 
-                    [Install]
-                    WantedBy=multi-user.target
-                    """;
-        }
+			        [Service]
+			        WorkingDirectory={workingDir}
+			        ExecStart=/usr/bin/dotnet "{dllPath}"
+			        Restart=always
+			        RestartSec=5
+			        User={user}
+			        Environment=ASPNETCORE_ENVIRONMENT=Production
+			        Environment=FISHMMO_ENVIRONMENT=Production
+			        EnvironmentFile=-{SystemWideSecretsPath}
+			        EnvironmentFile=-/etc/fishmmo/db-secrets.env
+
+			        [Install]
+			        WantedBy=multi-user.target
+			        """;
+		}
 
         /// <summary>Finds the publish output directory for a given project.</summary>
         private static string? FindPublishDirectory(string root, string projectDir)
@@ -341,7 +349,7 @@ namespace FishMMO.Installer
 			}
 
 			string workingDir = Path.GetDirectoryName(dllPath) ?? candidate;
-			string envFilePath = Path.Combine(workingDir, "fishmmo-secrets.env");
+			// Use system-wide secrets path shared by all FishMMO services.
 			string serviceName = InstallationConstants.AppHealthMonitorSystemdServiceName;
 			string unitPath = Path.Combine(InstallationConstants.LinuxSystemdUnitDirectory, $"{serviceName}.service");
 			string envName = ResolveServiceEnvironmentName();
@@ -361,7 +369,8 @@ namespace FishMMO.Installer
 				$"Environment=ASPNETCORE_ENVIRONMENT={envName}\n" +
 				$"Environment=DOTNET_ENVIRONMENT={envName}\n" +
 				$"Environment=FISHMMO_ENVIRONMENT={envName}\n" +
-				$"EnvironmentFile=-{envFilePath}\n" +
+				$"EnvironmentFile=-{SystemWideSecretsPath}\n" +
+				$"EnvironmentFile=-/etc/fishmmo/db-secrets.env\n" +
 				$"\n" +
 				$"[Install]\n" +
 				$"WantedBy=multi-user.target\n";

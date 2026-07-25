@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using FishMMO.Shared;
 using UnityEditor;
 using UnityEngine;
@@ -13,13 +14,13 @@ namespace FishMMO.Client.Security.Editor
 	/// <summary>
 	/// Editor tool that downloads SSL certificates from configured hosts,
 	/// computes SPKI SHA-256 pins via <see cref="ClientCertificatePinning.ComputeSpkiSha256Base64"/>,
-	/// and writes them to <c>StreamingAssets/client-security.json</c>.
+	/// and writes them to <c>Assets/Scripts/Client/Security/CertificatePins.generated.cs</c>.
 	///
 	/// <para>Open via <b>FishMMO &gt; Security &gt; Fetch Certificate Pins</b>.</para>
 	/// </summary>
 	public sealed class CertificatePinTool : EditorWindow
 	{
-		private const string configFileName = "client-security.json";
+		private const string generatedFileName = "CertificatePins.generated.cs";
 		private const int sslTimeoutMs = 10000;
 
 		private string apiHost;
@@ -39,14 +40,12 @@ namespace FishMMO.Client.Security.Editor
 		public static void ShowWindow()
 		{
 			var window = GetWindow<CertificatePinTool>(true, "Certificate Pins", true);
-			window.minSize = new Vector2(450, 380);
+			window.minSize = new Vector2(450, 480);
 			window.Show();
 		}
 
 		private void OnEnable()
 		{
-			// Default hosts from Constants.  Fall back to well-known FQDNs if
-			// Constants is not yet initialised (e.g. first domain reload).
 			try { apiHost = ExtractHost(Constants.Configuration.APIHost); }
 			catch { apiHost = "api.fishmmo.com"; }
 
@@ -66,9 +65,10 @@ namespace FishMMO.Client.Security.Editor
 			EditorGUILayout.HelpBox(
 				"Connect to each host via TLS, download the leaf certificate, " +
 				"extract the SubjectPublicKeyInfo (SPKI) SHA-256 pin, and write the " +
-				"result to StreamingAssets/" + configFileName + ".\n\n" +
+				"result to Assets/Scripts/Client/Security/" + generatedFileName + ".\n\n" +
 				"Always configure at least two pins (active + backup key) so certificate " +
-				"renewals don't require a client patch.",
+				"renewals don't require a client patch.\n\n" +
+				"Pins are IL-embedded at compile time — no StreamingAssets file.",
 				MessageType.Info);
 
 			EditorGUILayout.Space();
@@ -105,13 +105,40 @@ namespace FishMMO.Client.Security.Editor
 
 			if (discoveredPins.Count > 0)
 			{
-				if (GUILayout.Button("Write to " + configFileName, GUILayout.Height(30)))
-					WritePinsToFile();
+				if (GUILayout.Button("Write to " + generatedFileName, GUILayout.Height(30)))
+					WritePinsToGeneratedFile();
 			}
 			EditorGUILayout.EndHorizontal();
 
-			if (GUILayout.Button("Load Existing from " + configFileName, GUILayout.Height(20)))
+			EditorGUILayout.BeginHorizontal();
+			if (GUILayout.Button("Load Existing from " + generatedFileName, GUILayout.Height(20)))
 				LoadExistingPins();
+
+			if (GUILayout.Button("Validate Build Config", GUILayout.Height(20)))
+				ValidateBuildConfig();
+			EditorGUILayout.EndHorizontal();
+
+			EditorGUILayout.Space();
+
+			// ── CI export ─────────────────────────────────────────────
+
+			if (discoveredPins.Count > 0)
+			{
+				EditorGUILayout.LabelField("CI Environment Variables", EditorStyles.boldLabel);
+				EditorGUILayout.HelpBox(
+					"export FISHMMO_PIN_ACTIVE=\"" + (discoveredPins.Count > 0 ? discoveredPins[0] : "") + "\"\n" +
+					"export FISHMMO_PIN_BACKUP=\"" + (discoveredPins.Count > 1 ? discoveredPins[1] : "") + "\"",
+					MessageType.None);
+
+				if (GUILayout.Button("Copy CI Export to Clipboard"))
+				{
+					var sb = new StringBuilder();
+					for (int i = 0; i < discoveredPins.Count; i++)
+						sb.AppendLine("export FISHMMO_PIN_" + (i == 0 ? "ACTIVE" : "BACKUP") +
+							"=\"" + discoveredPins[i] + "\"");
+					EditorGUIUtility.systemCopyBuffer = sb.ToString();
+				}
+			}
 
 			EditorGUILayout.Space();
 
@@ -191,10 +218,6 @@ namespace FishMMO.Client.Security.Editor
 			Repaint();
 		}
 
-		/// <summary>
-		/// Opens a TLS connection to <paramref name="host"/>:<paramref name="port"/>,
-		/// captures the leaf certificate, and returns its SPKI SHA-256 pin.
-		/// </summary>
 		private static string FetchSpkiPin(string host, int port)
 		{
 			using (var client = new TcpClient())
@@ -217,33 +240,18 @@ namespace FishMMO.Client.Security.Editor
 					false,
 					(sender, certificate, chain, errors) =>
 					{
-						// Capture the leaf certificate DER bytes during validation.
-						// We pin the SPKI, which survives key-reuse across renewals.
 						if (certificate != null)
-						{
 							certDer = certificate.GetRawCertData();
-						}
 
-						if (errors == System.Net.Security.SslPolicyErrors.None)
-						{
+						if (errors == SslPolicyErrors.None)
 							return true;
-						}
 
-						// Log a clear warning so the operator can verify the
-						// fingerprint via an out-of-band channel.  We still return
-						// true (allowing the handshake to proceed) because staging /
-						// self-signed certs are common during development, but the
-						// operator must confirm the printed SPKI before saving pins.
-						UnityEngine.Debug.LogWarning(
+						Debug.LogWarning(
 							$"[CertificatePinTool] TLS validation warning for {host}: " +
 							$"{errors}. The certificate chain could not be verified against " +
 							$"the system trust store. If you are on an untrusted network, " +
-							$"man-in-the-middle interception is possible. Verify the SPKI " +
-							$"fingerprint shown in the output window via an out-of-band " +
-							$"channel (e.g. SSH to the server and run: " +
-							$"openssl x509 -in /path/to/cert.pem -pubkey -noout | " +
-							$"openssl pkey -pubin -outform DER | " +
-							$"openssl dgst -sha256 -binary | base64) before saving.");
+							$"MITM interception is possible. Verify the SPKI " +
+							$"fingerprint via an out-of-band channel before saving.");
 						return true;
 					},
 					null))
@@ -260,28 +268,69 @@ namespace FishMMO.Client.Security.Editor
 
 		// ── File I/O ──────────────────────────────────────────────────
 
-		private void WritePinsToFile()
+		private void WritePinsToGeneratedFile()
 		{
 			try
 			{
-				EnsureStreamingAssetsExists();
+				string path = GetGeneratedFilePath();
+				string dir = Path.GetDirectoryName(path);
+				if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+					Directory.CreateDirectory(dir);
 
-				string path = GetConfigFilePath();
-				var payload = new PinConfigPayload
+				var sb = new StringBuilder();
+				sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+				sb.AppendLine("// AUTO-GENERATED — CI substitutes real values before release builds.");
+				sb.AppendLine("// Generated by FishMMO > Security > Fetch Certificate Pins");
+				sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
+				sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+				sb.AppendLine("//");
+				sb.AppendLine("// Sentinel check: the build validator (ClientSecurityBuildValidator) blocks");
+				sb.AppendLine("// non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
+				sb.AppendLine("// CI must replace every occurrence before invoking Unity.");
+				sb.AppendLine();
+				sb.AppendLine("namespace FishMMO.Client.Security");
+				sb.AppendLine("{");
+				sb.AppendLine("\t/// <summary>");
+				sb.AppendLine("\t/// IL-embedded certificate pin set. The real values are substituted at");
+				sb.AppendLine("\t/// build time by CI. The committed sentinel values are intentionally");
+				sb.AppendLine("\t/// invalid so pinning cannot accidentally ship with empty values.");
+				sb.AppendLine("\t/// </summary>");
+				sb.AppendLine("\tinternal static class GeneratedPinSet");
+				sb.AppendLine("\t{");
+				sb.AppendLine("\t\tinternal const string SentinelMarker = \"FISHMMO_SENTINEL_PLACEHOLDER\";");
+				sb.AppendLine();
+				sb.AppendLine("\t\t/// <summary>");
+				sb.AppendLine("\t\t/// SHA-256 SPKI pins (base64). Minimum 2 entries required for");
+				sb.AppendLine("\t\t/// release builds.");
+				sb.AppendLine("\t\t/// </summary>");
+				sb.AppendLine("\t\tinternal static readonly string[] Pins =");
+				sb.AppendLine("\t\t{");
+
+				for (int i = 0; i < discoveredPins.Count; i++)
 				{
-					pins = discoveredPins.ToArray(),
-					allowOnEmpty = false
-				};
-				string json = JsonUtility.ToJson(payload, prettyPrint: true);
-				File.WriteAllText(path, json);
+					string comma = i < discoveredPins.Count - 1 ? "," : "";
+					sb.AppendLine($"\t\t\t\"{discoveredPins[i]}\"{comma}");
+				}
+
+				sb.AppendLine("\t\t};");
+				sb.AppendLine();
+				sb.AppendLine("\t\t/// <summary>");
+				sb.AppendLine("\t\t/// Ed25519 public key (base64) for verifying signed pin update");
+				sb.AppendLine("\t\t/// manifests from the API. Empty string disables runtime updates.");
+				sb.AppendLine("\t\t/// </summary>");
+				sb.AppendLine("\t\tinternal const string ManifestPublicKeyBase64 = \"\";");
+				sb.AppendLine("\t}");
+				sb.AppendLine("}");
+
+				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
 				AssetDatabase.Refresh();
 
-				statusMessage = $"Wrote {discoveredPins.Count} pin(s) to {configFileName}";
+				statusMessage = $"Wrote {discoveredPins.Count} pin(s) to {generatedFileName}";
 				statusType = MessageType.Info;
 			}
 			catch (Exception ex)
 			{
-				statusMessage = "Failed to write config: " + ex.Message;
+				statusMessage = "Failed to write generated file: " + ex.Message;
 				statusType = MessageType.Error;
 			}
 			Repaint();
@@ -292,27 +341,106 @@ namespace FishMMO.Client.Security.Editor
 			discoveredPins.Clear();
 			fetchErrors.Clear();
 
-			string path = GetConfigFilePath();
+			string path = GetGeneratedFilePath();
 			if (!File.Exists(path))
 			{
-				statusMessage = configFileName + " does not exist yet. Fetch pins from your hosts, then write the file.";
+				statusMessage = generatedFileName + " does not exist yet. Fetch pins from your hosts, then write the file.";
 				statusType = MessageType.Info;
 				return;
 			}
 
 			try
 			{
-				string json = File.ReadAllText(path);
-				var parsed = JsonUtility.FromJson<PinConfigPayload>(json);
-				if (parsed?.pins != null)
-					discoveredPins.AddRange(parsed.pins);
+				// Parse pin strings from the generated C# file.
+				string content = File.ReadAllText(path);
+				var parsed = ParsePinsFromGeneratedFile(content);
+				if (parsed != null)
+					discoveredPins.AddRange(parsed);
 
 				statusMessage = $"Loaded {discoveredPins.Count} existing pin(s).";
 				statusType = MessageType.Info;
 			}
 			catch (Exception ex)
 			{
-				statusMessage = "Failed to parse " + configFileName + ": " + ex.Message;
+				statusMessage = "Failed to parse " + generatedFileName + ": " + ex.Message;
+				statusType = MessageType.Error;
+			}
+			Repaint();
+		}
+
+		/// <summary>
+		/// Extracts pin strings from the generated C# file by looking for
+		/// quoted strings inside the Pins array initializer.
+		/// </summary>
+		private static List<string> ParsePinsFromGeneratedFile(string content)
+		{
+			var result = new List<string>();
+			// Find the Pins array: everything between "Pins =\n\t\t{" and the matching "};"
+			int start = content.IndexOf("Pins =", StringComparison.Ordinal);
+			if (start < 0) return result;
+			start = content.IndexOf('{', start);
+			if (start < 0) return result;
+			int end = content.IndexOf("};", start, StringComparison.Ordinal);
+			if (end < 0) return result;
+
+			string arrayContent = content.Substring(start + 1, end - start - 1);
+			// Extract quoted strings.
+			foreach (string line in arrayContent.Split('\n'))
+			{
+				string trimmed = line.Trim();
+				if (trimmed.StartsWith("\"", StringComparison.Ordinal))
+				{
+					int firstQuote = trimmed.IndexOf('"');
+					int lastQuote = trimmed.LastIndexOf('"');
+					if (firstQuote >= 0 && lastQuote > firstQuote)
+					{
+						string pin = trimmed.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
+						if (!string.IsNullOrWhiteSpace(pin) && !pin.Contains(GeneratedPinSet.SentinelMarker))
+							result.Add(pin);
+					}
+				}
+			}
+			return result;
+		}
+
+		// ── Build validation ──────────────────────────────────────────
+
+		private void ValidateBuildConfig()
+		{
+			statusMessage = "";
+			statusType = MessageType.None;
+			fetchErrors.Clear();
+
+			string path = GetGeneratedFilePath();
+			if (!File.Exists(path))
+			{
+				fetchErrors.Add(generatedFileName + " does not exist. Fetch pins and write the file first.");
+			}
+			else
+			{
+				string content = File.ReadAllText(path);
+				if (content.Contains(GeneratedPinSet.SentinelMarker))
+					fetchErrors.Add("Sentinel placeholder values still present in " + generatedFileName +
+						". Fetch real pins before making a release build.");
+
+				var pins = ParsePinsFromGeneratedFile(content);
+				if (pins.Count < 2)
+					fetchErrors.Add("Less than 2 real pins configured. At least 2 (active + backup) are required for release builds.");
+			}
+
+			// Check no StreamingAssets pin file exists.
+			string oldPath = Path.Combine(Application.streamingAssetsPath, "client-security.json");
+			if (File.Exists(oldPath))
+				fetchErrors.Add("Obsolete StreamingAssets/client-security.json still exists. Delete it — pins are now IL-embedded.");
+
+			if (fetchErrors.Count == 0)
+			{
+				statusMessage = "Build config is valid for release.";
+				statusType = MessageType.Info;
+			}
+			else
+			{
+				statusMessage = fetchErrors.Count + " issue(s) found.";
 				statusType = MessageType.Error;
 			}
 			Repaint();
@@ -320,34 +448,19 @@ namespace FishMMO.Client.Security.Editor
 
 		// ── Helpers ───────────────────────────────────────────────────
 
-		private static string GetConfigFilePath()
+		private static string GetGeneratedFilePath()
 		{
-			return Path.Combine(Application.streamingAssetsPath, configFileName);
+			// Resolve relative to the project Assets folder.
+			return Path.Combine(Application.dataPath,
+				"Scripts", "Client", "Security", generatedFileName);
 		}
 
-		private static void EnsureStreamingAssetsExists()
-		{
-			string dir = Application.streamingAssetsPath;
-			if (!Directory.Exists(dir))
-				Directory.CreateDirectory(dir);
-		}
-
-		/// <summary>
-		/// Extracts the hostname from a URL (e.g. "https://api.fishmmo.com/" → "api.fishmmo.com").
-		/// </summary>
 		private static string ExtractHost(string url)
 		{
 			if (string.IsNullOrWhiteSpace(url)) return url;
 			if (Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
 				return uri.Host;
 			return url.Trim();
-		}
-
-		[Serializable]
-		private sealed class PinConfigPayload
-		{
-			public string[] pins;
-			public bool allowOnEmpty;
 		}
 	}
 }

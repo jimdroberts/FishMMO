@@ -106,15 +106,19 @@ namespace FishMMO.Shared
 			/// Unified API Host URL. NGINX routes to the correct backend by path.
 			///
 			/// <para>
-			/// This is a <c>const</c> — the canonical deployment domain is baked
-			/// at compile time. Changing the deployment domain requires a rebuild.
+			/// Set at build time via <see cref="GeneratedHostConfig.ApiHost"/>,
+			/// which CI substitutes from the FISHMMO_API_HOST environment variable.
+			/// The committed source contains a sentinel placeholder — the build
+			/// validator blocks release builds that still contain the sentinel.
+			/// </para>
+			/// <para>
 			/// For development/testing against different servers, use the
 			/// <see cref="GlobalSettings"/> override mechanism (see
 			/// <c>ApiHostResolver</c>) instead of modifying this constant.
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public const string APIHost = "https://api.fishmmo.com/";
+			public static readonly string APIHost = GeneratedHostConfig.ApiHost;
 
 			/// <summary>
 			/// Game server hostname. All clients (standalone + WebGL) connect via
@@ -122,15 +126,17 @@ namespace FishMMO.Shared
 			/// raw UDP to the correct backend game server on loopback.
 			///
 			/// <para>
-			/// This is a <c>const</c> — the canonical deployment domain is baked
-			/// at compile time. Changing the deployment domain requires a rebuild.
+			/// Set at build time via <see cref="GeneratedHostConfig.GameHost"/>,
+			/// which CI substitutes from the FISHMMO_GAME_HOST environment variable.
+			/// </para>
+			/// <para>
 			/// For development/testing against different servers, use the
 			/// <see cref="GlobalSettings"/> override mechanism (see
 			/// <c>ApiHostResolver</c>) instead of modifying this constant.
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public const string GameHost = "game.fishmmo.com";
+			public static readonly string GameHost = GeneratedHostConfig.GameHost;
 
 			/// <summary>
 			/// Root path for Unity scene assets.

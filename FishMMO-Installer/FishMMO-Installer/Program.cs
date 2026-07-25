@@ -660,6 +660,7 @@ namespace FishMMO.Installer
                 Console.WriteLine("1 : Configure Web Server Settings (IPFetch, Patcher, WebGL)");
                 Console.WriteLine("2 : Configure Discord Bot Settings");
                 Console.WriteLine("3 : Configure CMS Server Settings");
+                Console.WriteLine("4 : Configure Client Security Files (gate secret + cert pins)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -675,6 +676,9 @@ namespace FishMMO.Installer
                         break;
                     case ConsoleKey.D3:
                         await AppSettingsInstaller.ConfigureCmsComponent();
+                        break;
+                    case ConsoleKey.D4:
+                        await AppSettingsInstaller.ConfigureClientSecurityFiles();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:

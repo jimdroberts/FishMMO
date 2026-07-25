@@ -4,6 +4,7 @@ using System.Net.Mail;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Smtp;
+using FishMMO.Shared;
 using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation.Smtp
@@ -44,8 +45,8 @@ namespace FishMMO.Server.Implementation.Smtp
 				: configuration.GetInt("Smtp:Port", 587);
 			username = EnvOrConfig("FISHMMO_SMTP_USERNAME", "Smtp:Username", "", configuration);
 			password = EnvOrConfig("FISHMMO_SMTP_PASSWORD", "Smtp:Password", "", configuration);
-			fromAddress = EnvOrConfig("FISHMMO_SMTP_FROM_ADDRESS", "Smtp:FromAddress", "noreply@fishmmo.com", configuration);
-			fromName = EnvOrConfig("FISHMMO_SMTP_FROM_NAME", "Smtp:FromName", "FishMMO", configuration);
+			fromAddress = EnvOrConfig("FISHMMO_SMTP_FROM_ADDRESS", "Smtp:FromAddress", GeneratedHostConfig.SmtpFromAddress, configuration);
+			fromName = EnvOrConfig("FISHMMO_SMTP_FROM_NAME", "Smtp:FromName", GeneratedHostConfig.SmtpFromName, configuration);
 			useSsl = EnvOrConfig("FISHMMO_SMTP_USE_SSL", "Smtp:UseSsl", "true", configuration)
 				.Equals("true", StringComparison.OrdinalIgnoreCase);
 		}

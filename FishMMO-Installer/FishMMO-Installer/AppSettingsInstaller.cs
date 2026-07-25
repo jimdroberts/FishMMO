@@ -202,7 +202,7 @@ namespace FishMMO.Installer
 
 			var secrets = new Dictionary<string, string>
 			{
-				[ClientGateSecretEnvVar] = GenerateClientGateSecret(),
+				[ClientGateSecretEnvVar] = GenerateBase64Key(),
 			};
 
 			if (hasNpgsqlDsn)
@@ -220,17 +220,35 @@ namespace FishMMO.Installer
 			}
 		}
 
-		private static string GenerateClientGateSecret()
+		/// <summary>
+		/// Generates a cryptographically random key, base64-encoded.
+		/// Uses <see cref="RandomNumberGenerator.Fill"/> (CSPRNG), the same primitive
+		/// as <c>CryptoHelper.GenerateKey</c>. The returned string round-trips through
+		/// <c>Convert.FromBase64String</c> to the exact byte length specified.
+		/// Key material is zeroed in a finally block.
+		/// </summary>
+		/// <param name="byteLength">Number of random bytes to generate (default 32 for AES-256 / HMAC-SHA256).</param>
+		/// <returns>Base64-encoded key string.</returns>
+		/// <exception cref="ArgumentOutOfRangeException">If <paramref name="byteLength"/> is not positive.</exception>
+		private static string GenerateBase64Key(int byteLength = 32)
 		{
-			byte[] secretBytes = new byte[32];
-			RandomNumberGenerator.Fill(secretBytes);
+			if (byteLength <= 0) throw new ArgumentOutOfRangeException(nameof(byteLength));
+			byte[] keyBytes = new byte[byteLength];
+			RandomNumberGenerator.Fill(keyBytes);
 			try
 			{
-				return Convert.ToBase64String(secretBytes);
+				string encoded = Convert.ToBase64String(keyBytes);
+				// Round-trip validation: the generated key must decode correctly.
+				byte[] decoded = Convert.FromBase64String(encoded);
+				if (decoded.Length != byteLength)
+					throw new InvalidOperationException(
+						$"Generated key round-trip failed: expected {byteLength} bytes, got {decoded.Length}.");
+				CryptographicOperations.ZeroMemory(decoded);
+				return encoded;
 			}
 			finally
 			{
-				CryptographicOperations.ZeroMemory(secretBytes);
+				CryptographicOperations.ZeroMemory(keyBytes);
 			}
 		}
 
@@ -456,6 +474,355 @@ namespace FishMMO.Installer
 			}
 		}
 
+
+		// ──────────────────────────────────────────────────────────────────────────
+		//  Component: Client Security Files (generated .cs files for Unity)
+		// ──────────────────────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Generates the IL-embedded client security and host configuration files
+		/// in the Unity project. Covers:
+		///   - Gate secret (X-FishMMO-Client HMAC signing)
+		///   - Connection token HMAC key (shared across IpFetch + all game servers)
+		///   - Signing key KEK (wraps auth token signing keys at rest)
+		///   - Deployment domains (API, Game, Play hosts, root domain)
+		///   - Certificate pins (sentinel placeholders or env-var-provided)
+		/// </summary>
+		public static async Task ConfigureClientSecurityFiles()
+		{
+			string unityProjectPath = InstallationConstants.FishMMOUnityProjectPath;
+			string securityDir = Path.Combine(unityProjectPath, "Assets", "Scripts", "Client", "Security");
+
+			if (!Directory.Exists(securityDir))
+			{
+				await Log.Error("FishMMOInstaller",
+					$"Unity project security directory not found: {securityDir}\n" +
+					"Ensure the FishMMO-Unity project exists and the path is correct.");
+				return;
+			}
+
+			await Log.Info("FishMMOInstaller", "=== Client Security & Host Configuration ===");
+			Console.WriteLine();
+			Console.WriteLine($"Unity project: {unityProjectPath}");
+			Console.WriteLine();
+
+			// ── Gate secret ──────────────────────────────────────────────
+			Console.WriteLine("── Gate Secret (X-FishMMO-Client HMAC signing) ──");
+			Console.WriteLine("The gate secret is shared between the client binary and the");
+			Console.WriteLine("public web endpoints (IpFetch, Patcher, WebGL).");
+			Console.WriteLine();
+
+			string? gateSecret = null;
+			string? envSecret = Environment.GetEnvironmentVariable("FISHMMO_CLIENT_GATE_SECRET");
+			if (!string.IsNullOrWhiteSpace(envSecret))
+			{
+				Console.WriteLine($"Using existing FISHMMO_CLIENT_GATE_SECRET env var ({envSecret.Length} chars).");
+				gateSecret = envSecret;
+			}
+			else
+			{
+				Console.Write("Generate a new gate secret? [Y/n]: ");
+				string? response = Console.ReadLine()?.Trim();
+				if (!string.IsNullOrEmpty(response) &&
+					!response.Equals("y", StringComparison.OrdinalIgnoreCase) &&
+					!response.Equals("yes", StringComparison.OrdinalIgnoreCase))
+				{
+					Console.WriteLine("Skipping gate secret generation.");
+				}
+				else
+				{
+					gateSecret = GenerateBase64Key();
+					Console.WriteLine($"Generated new gate secret ({gateSecret.Length} chars).");
+				}
+			}
+
+			// Write ClientApiSecret.generated.cs
+			if (!string.IsNullOrWhiteSpace(gateSecret))
+			{
+				string secretFilePath = Path.Combine(securityDir, "ClientApiSecret.generated.cs");
+				await WriteClientApiSecretGeneratedFile(secretFilePath, gateSecret);
+				await Log.Info("FishMMOInstaller", $"Client API secret written to: {secretFilePath}");
+			}
+
+			// ── Connection Token HMAC Key ────────────────────────────────
+			Console.WriteLine();
+			Console.WriteLine("── Connection Token HMAC Key ──");
+			Console.WriteLine("This key signs connection tokens shared between IpFetchServer");
+			Console.WriteLine("and all game servers. It MUST be identical across all servers.");
+			Console.WriteLine();
+
+			string? hmacKey = null;
+			string? envHmac = Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
+			if (!string.IsNullOrWhiteSpace(envHmac))
+			{
+				Console.WriteLine($"Using existing FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 env var ({envHmac.Length} chars).");
+				hmacKey = envHmac;
+			}
+			else
+			{
+				Console.Write("Generate a new HMAC key? [Y/n]: ");
+				string? resp = Console.ReadLine()?.Trim();
+				if (string.IsNullOrEmpty(resp) || resp.Equals("y", StringComparison.OrdinalIgnoreCase))
+				{
+					hmacKey = GenerateBase64Key();
+					Console.WriteLine($"Generated new HMAC key ({hmacKey.Length} chars).");
+				}
+			}
+
+			// ── Signing Key KEK ──────────────────────────────────────────
+			Console.WriteLine();
+			Console.WriteLine("── Signing Key KEK (AES-256 Key Encryption Key) ──");
+			Console.WriteLine("This key wraps auth token signing keys at rest in the database.");
+			Console.WriteLine();
+
+			string? kekKey = null;
+			string? envKek = Environment.GetEnvironmentVariable("FISHMMO_SIGNING_KEY_KEK_BASE64");
+			if (!string.IsNullOrWhiteSpace(envKek))
+			{
+				Console.WriteLine($"Using existing FISHMMO_SIGNING_KEY_KEK_BASE64 env var ({envKek.Length} chars).");
+				kekKey = envKek;
+			}
+			else
+			{
+				Console.Write("Generate a new KEK? [Y/n]: ");
+				string? resp2 = Console.ReadLine()?.Trim();
+				if (string.IsNullOrEmpty(resp2) || resp2.Equals("y", StringComparison.OrdinalIgnoreCase))
+				{
+					kekKey = GenerateBase64Key();
+					Console.WriteLine($"Generated new KEK ({kekKey.Length} chars).");
+				}
+			}
+
+			// Collect all secrets for unified export.
+			var allSecrets = new Dictionary<string, string>();
+			if (!string.IsNullOrWhiteSpace(gateSecret))
+				allSecrets["FISHMMO_CLIENT_GATE_SECRET"] = gateSecret;
+			if (!string.IsNullOrWhiteSpace(hmacKey))
+				allSecrets["FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64"] = hmacKey;
+			if (!string.IsNullOrWhiteSpace(kekKey))
+				allSecrets["FISHMMO_SIGNING_KEY_KEK_BASE64"] = kekKey;
+
+			// Offer unified secrets export (only if we have more than just the gate secret).
+			if (allSecrets.Count > 1)
+			{
+				Console.WriteLine();
+				Console.WriteLine("Export secrets as environment variables?");
+				Console.WriteLine("1 : fish shell snippet");
+				Console.WriteLine("2 : systemd / .env file");
+				Console.WriteLine("3 : Skip export");
+				ConsoleKeyInfo exportKey = Console.ReadKey(true);
+				Console.WriteLine();
+				switch (exportKey.Key)
+				{
+					case ConsoleKey.D1: await WriteFishSecretsSnippet(allSecrets); break;
+					case ConsoleKey.D2: await WriteSystemWideEnvFile(allSecrets); break;
+				}
+			}
+
+			// ── Domain configuration ────────────────────────────────────
+			Console.WriteLine();
+			Console.WriteLine("── Deployment Domains ──");
+			Console.WriteLine("Configure the hostnames for this deployment.");
+			Console.WriteLine("Press Enter to keep the default shown in brackets.");
+			Console.WriteLine();
+
+			Console.Write("  Root domain    [fishmmo.com]: ");
+			string rootDomain = Console.ReadLine()?.Trim() ?? "";
+			if (string.IsNullOrWhiteSpace(rootDomain)) rootDomain = "fishmmo.com";
+
+			string defaultApi = "https://api." + rootDomain + "/";
+			Console.Write($"  API host       [{defaultApi}]: ");
+			string apiHost = Console.ReadLine()?.Trim() ?? "";
+			if (string.IsNullOrWhiteSpace(apiHost)) apiHost = defaultApi;
+			if (!apiHost.EndsWith("/")) apiHost += "/";
+
+			string defaultGame = "game." + rootDomain;
+			Console.Write($"  Game host      [{defaultGame}]: ");
+			string gameHost = Console.ReadLine()?.Trim() ?? "";
+			if (string.IsNullOrWhiteSpace(gameHost)) gameHost = defaultGame;
+
+			string defaultPlay = "play." + rootDomain;
+			Console.Write($"  Play host      [{defaultPlay}]: ");
+			string playHost = Console.ReadLine()?.Trim() ?? "";
+			if (string.IsNullOrWhiteSpace(playHost)) playHost = defaultPlay;
+
+			// Write HostConfig.generated.cs
+			string sharedImplDir = Path.Combine(unityProjectPath, "Assets", "Scripts", "Shared", "Implementation");
+			string hostConfigPath = Path.Combine(sharedImplDir, "HostConfig.generated.cs");
+			await WriteHostConfigGeneratedFile(hostConfigPath, apiHost, gameHost, playHost, rootDomain);
+			await Log.Info("FishMMOInstaller", $"Host config written to: {hostConfigPath}");
+
+			// ── Certificate pins ────────────────────────────────────────
+			Console.WriteLine();
+			Console.WriteLine("── TLS Certificate Pins ──");
+			Console.WriteLine();
+			Console.WriteLine("Certificate pin generation requires live TLS connections to the");
+			Console.WriteLine("server hosts. The Installer cannot fetch pins automatically.");
+			Console.WriteLine();
+			Console.WriteLine("To generate real pins:");
+			Console.WriteLine("  1. Open the Unity project");
+			Console.WriteLine("  2. FishMMO > Security > Fetch Certificate Pins");
+			Console.WriteLine("  3. Click 'Fetch Pins' then 'Write to CertificatePins.generated.cs'");
+			Console.WriteLine();
+			Console.WriteLine("For CI: set FISHMMO_PIN_ACTIVE and FISHMMO_PIN_BACKUP env vars");
+			Console.WriteLine("before building; the CI substitution script will replace sentinels.");
+			Console.WriteLine();
+
+			string pinsFilePath = Path.Combine(securityDir, "CertificatePins.generated.cs");
+			string? pinActive = Environment.GetEnvironmentVariable("FISHMMO_PIN_ACTIVE");
+			string? pinBackup = Environment.GetEnvironmentVariable("FISHMMO_PIN_BACKUP");
+
+			if (!string.IsNullOrWhiteSpace(pinActive) && !string.IsNullOrWhiteSpace(pinBackup))
+			{
+				Console.WriteLine("FISHMMO_PIN_ACTIVE and FISHMMO_PIN_BACKUP env vars found.");
+				await WriteCertificatePinsGeneratedFile(pinsFilePath, pinActive, pinBackup);
+				await Log.Info("FishMMOInstaller", $"Certificate pins written to: {pinsFilePath}");
+			}
+			else
+			{
+				Console.WriteLine("Writing sentinel placeholder pin file (replace before release build).");
+				await WriteCertificatePinsGeneratedFile(pinsFilePath,
+					"FISHMMO_SENTINEL_PLACEHOLDER_ACTIVE_PIN",
+					"FISHMMO_SENTINEL_PLACEHOLDER_BACKUP_PIN");
+				await Log.Info("FishMMOInstaller", $"Sentinel pin file written to: {pinsFilePath}");
+			}
+
+			Console.WriteLine();
+			Console.WriteLine("Done. Generated files:");
+			Console.WriteLine($"  {Path.Combine(securityDir, "ClientApiSecret.generated.cs")}");
+			Console.WriteLine($"  {pinsFilePath}");
+			Console.WriteLine($"  {hostConfigPath}");
+			Console.WriteLine();
+			Console.WriteLine("Next steps:");
+			Console.WriteLine("  1. Open the Unity project to confirm it compiles");
+			Console.WriteLine("  2. Generate real certificate pins (see instructions above)");
+			Console.WriteLine("  3. The build validator will block release builds until pins are real");
+		}
+
+		/// <summary>
+		/// <summary>
+		/// Writes <c>ClientApiSecret.generated.cs</c> with the given secret.
+		/// </summary>
+		private static async Task WriteClientApiSecretGeneratedFile(string filePath, string secret)
+		{
+			var sb = new StringBuilder();
+			sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+			sb.AppendLine("// AUTO-GENERATED by FishMMO-Installer — CI may override from FISHMMO_CLIENT_GATE_SECRET.");
+			sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
+			sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+			sb.AppendLine("//");
+			sb.AppendLine("// Sentinel check: the build validator (ClientSecurityBuildValidator) blocks");
+			sb.AppendLine("// non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
+			sb.AppendLine("// CI must replace every occurrence before invoking Unity.");
+			sb.AppendLine();
+			sb.AppendLine("namespace FishMMO.Client.Security");
+			sb.AppendLine("{");
+			sb.AppendLine("\t/// <summary>");
+			sb.AppendLine("\t/// IL-embedded client gate secret. The real value is substituted at");
+			sb.AppendLine("\t/// build time by CI from the FISHMMO_CLIENT_GATE_SECRET env var.");
+			sb.AppendLine("\t/// </summary>");
+			sb.AppendLine("\tinternal static class GeneratedClientSecret");
+			sb.AppendLine("\t{");
+			sb.AppendLine("\t\t/// <summary>");
+			sb.AppendLine("\t\t/// Shared secret for X-FishMMO-Client HMAC header signing.");
+			sb.AppendLine("\t\t/// The committed value is a sentinel — CI must replace it.");
+			sb.AppendLine("\t\t/// </summary>");
+			sb.AppendLine("\t\tinternal const string Secret = \"" + secret + "\";");
+			sb.AppendLine("\t}");
+			sb.AppendLine("}");
+
+			string? dir = Path.GetDirectoryName(filePath);
+			if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+			await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
+			await ApplySecurePermissions(filePath);
+		}
+
+		/// <summary>
+		/// Writes <c>CertificatePins.generated.cs</c> with the given pin values.
+		/// </summary>
+		private static async Task WriteCertificatePinsGeneratedFile(string filePath, string pinActive, string pinBackup)
+		{
+			var sb = new StringBuilder();
+			sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+			sb.AppendLine("// AUTO-GENERATED by FishMMO-Installer — CI may override from FISHMMO_PIN_* env vars.");
+			sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
+			sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+			sb.AppendLine("//");
+			sb.AppendLine("// Sentinel check: the build validator (ClientSecurityBuildValidator) blocks");
+			sb.AppendLine("// non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
+			sb.AppendLine("// CI must replace every occurrence before invoking Unity.");
+			sb.AppendLine();
+			sb.AppendLine("namespace FishMMO.Client.Security");
+			sb.AppendLine("{");
+			sb.AppendLine("\t/// <summary>");
+			sb.AppendLine("\t/// IL-embedded certificate pin set. The real values are substituted at");
+			sb.AppendLine("\t/// build time by CI. The committed sentinel values are intentionally");
+			sb.AppendLine("\t/// invalid so pinning cannot accidentally ship with empty values.");
+			sb.AppendLine("\t/// </summary>");
+			sb.AppendLine("\tinternal static class GeneratedPinSet");
+			sb.AppendLine("\t{");
+			sb.AppendLine("\t\tinternal const string SentinelMarker = \"FISHMMO_SENTINEL_PLACEHOLDER\";");
+			sb.AppendLine();
+			sb.AppendLine("\t\t/// <summary>");
+			sb.AppendLine("\t\t/// SHA-256 SPKI pins (base64). Minimum 2 entries required for");
+			sb.AppendLine("\t\t/// release builds — one active key + one backup for rotation.");
+			sb.AppendLine("\t\t/// </summary>");
+			sb.AppendLine("\t\tinternal static readonly string[] Pins =");
+			sb.AppendLine("\t\t{");
+			sb.AppendLine("\t\t\t\"" + pinActive + "\",");
+			sb.AppendLine("\t\t\t\"" + pinBackup + "\",");
+			sb.AppendLine("\t\t};");
+			sb.AppendLine();
+			sb.AppendLine("\t\t/// <summary>");
+			sb.AppendLine("\t\t/// Ed25519 public key (base64) for verifying signed pin update");
+			sb.AppendLine("\t\t/// manifests from the API. Empty string disables runtime updates.");
+			sb.AppendLine("\t\t/// </summary>");
+			sb.AppendLine("\t\tinternal const string ManifestPublicKeyBase64 = \"\";");
+			sb.AppendLine("\t}");
+			sb.AppendLine("}");
+
+			string? dir = Path.GetDirectoryName(filePath);
+			if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+			await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
+		}
+
+		/// <summary>
+		/// Writes <c>HostConfig.generated.cs</c> with the configured domain values.
+		/// </summary>
+		private static async Task WriteHostConfigGeneratedFile(
+			string filePath, string apiHost, string gameHost, string playHost, string rootDomain)
+		{
+			string smtpFromAddress = "noreply@" + rootDomain;
+			string launcherUrl = "https://www." + rootDomain + "/docs/introduction.html";
+
+			var sb = new StringBuilder();
+			sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+			sb.AppendLine("// AUTO-GENERATED by FishMMO-Installer — CI may override from FISHMMO_* env vars.");
+			sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
+			sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
+			sb.AppendLine();
+			sb.AppendLine("namespace FishMMO.Shared");
+			sb.AppendLine("{");
+			sb.AppendLine("\tpublic static class GeneratedHostConfig");
+			sb.AppendLine("\t{");
+			sb.AppendLine("\t\tinternal const string SentinelMarker = \"FISHMMO_SENTINEL_PLACEHOLDER\";");
+			sb.AppendLine();
+			sb.AppendLine("\t\tinternal const string ApiHost = \"" + apiHost + "\";");
+			sb.AppendLine("\t\tinternal const string GameHost = \"" + gameHost + "\";");
+			sb.AppendLine("\t\tinternal const string PlayHost = \"" + playHost + "\";");
+			sb.AppendLine("\t\tinternal const string RootDomain = \"" + rootDomain + "\";");
+			sb.AppendLine("\t\tinternal const string SmtpFromAddress = \"" + smtpFromAddress + "\";");
+			sb.AppendLine("\t\tinternal const string SmtpFromName = \"FishMMO\";");
+			sb.AppendLine("\t\tinternal const string LauncherHtmlUrl = \"" + launcherUrl + "\";");
+			sb.AppendLine("\t}");
+			sb.AppendLine("}");
+
+			string? dir = Path.GetDirectoryName(filePath);
+			if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+			await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
+			await ApplySecurePermissions(filePath);
+		}
+
 		// ──────────────────────────────────────────────────────────────────────────
 		//  Shared action-menu runner
 		// ──────────────────────────────────────────────────────────────────────────
@@ -611,6 +978,72 @@ namespace FishMMO.Installer
 		/// Sets file permissions to 600 (owner read/write only) on Linux.
 		/// No-ops silently on non-Linux platforms.
 		/// </summary>
+
+	/// <summary>
+	/// Resolves the system-wide secrets file path shared by all FishMMO services.
+	/// Linux: /etc/fishmmo/secrets.env. Windows: %ProgramData%\FishMMO\secrets.env.
+	/// All systemd units reference this single file so the HMAC key, KEK, and
+	/// gate secret are guaranteed identical across every service.
+	/// </summary>
+	private static string GetSystemWideSecretsPath()
+	{
+		if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+		{
+			string programData = Environment.GetEnvironmentVariable("ProgramData") ?? @"C:\ProgramData";
+			return Path.Combine(programData, "FishMMO", "secrets.env");
+		}
+		return "/etc/fishmmo/secrets.env";
+	}
+
+	/// <summary>
+	/// Writes secrets to the system-wide path shared by all FishMMO services.
+	/// On Linux this is /etc/fishmmo/secrets.env (chmod 600).
+	/// All systemd units reference this single file, guaranteeing the HMAC key,
+	/// KEK, and gate secret are identical across IpFetchServer, Patcher,
+	/// WebGLServer, LoginServer, WorldServer, and SceneServer.
+	/// </summary>
+	private static async Task WriteSystemWideEnvFile(Dictionary<string, string> secrets)
+	{
+		string filePath = GetSystemWideSecretsPath();
+		string? dir = Path.GetDirectoryName(filePath);
+
+		if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+		{
+			try { Directory.CreateDirectory(dir); }
+			catch (UnauthorizedAccessException)
+			{
+				await Log.Warning("FishMMOInstaller",
+					$"Cannot create {dir}. Writing to current directory instead.");
+				filePath = Path.Combine(Directory.GetCurrentDirectory(), "fishmmo-secrets.env");
+			}
+		}
+
+		var sb = new StringBuilder();
+		sb.AppendLine("# FishMMO system-wide secrets — shared by all services.");
+		sb.AppendLine("# Written by FishMMO-Installer at " + DateTime.UtcNow.ToString("O"));
+		sb.AppendLine("#");
+		sb.AppendLine("# ALL FishMMO systemd units reference this file:");
+		sb.AppendLine("#   EnvironmentFile=-" + filePath);
+		sb.AppendLine("#");
+		sb.AppendLine("# WARNING: This file contains secrets. Keep permissions at 600.");
+		sb.AppendLine("# Deploy this EXACT same file to every server in the cluster.");
+		sb.AppendLine();
+		foreach (KeyValuePair<string, string> kvp in secrets)
+		{
+			if (!string.IsNullOrEmpty(kvp.Value))
+				sb.AppendLine($"{kvp.Key}={EscapeEnvFileValue(kvp.Value)}");
+		}
+
+		await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
+		await ApplySecurePermissions(filePath);
+
+		await Log.Info("FishMMOInstaller", $"System-wide secrets written to: {filePath}");
+		Console.WriteLine();
+		Console.WriteLine($"System-wide secrets written to: {filePath}");
+		Console.WriteLine("All FishMMO systemd services reference this single file.");
+		Console.WriteLine("Copy this file to every server in the deployment cluster.");
+	}
+
 		private static async Task ApplySecurePermissions(string filePath)
 		{
 			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

@@ -69,6 +69,9 @@ namespace FishMMO.Client.Security
 		/// <summary>
 		/// Replace the active pin set. Pins are SHA-256(SPKI) base64 strings.
 		/// Passing <c>null</c> or an empty collection clears the pin set.
+		///
+		/// Restricted to editor / development builds. Release builds must use
+		/// <see cref="SetInitialPins"/> and <see cref="TryAugmentPins"/> instead.
 		/// </summary>
 		/// <param name="newPins">
 		///   The new pin list. Whitespace and empty entries are ignored.
@@ -78,7 +81,12 @@ namespace FishMMO.Client.Security
 		///   will fall back to <em>temporal validity only</em> instead of rejecting
 		///   the certificate outright. Use only for editor / development builds.
 		/// </param>
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 		public static void Configure(IEnumerable<string> newPins, bool allowOnEmpty = false)
+#else
+		// Hidden in release builds — callers must use SetInitialPins / TryAugmentPins.
+		private static void Configure(IEnumerable<string> newPins, bool allowOnEmpty = false)
+#endif
 		{
 			var rebuilt = new HashSet<string>(StringComparer.Ordinal);
 			if (newPins != null)
@@ -100,6 +108,97 @@ namespace FishMMO.Client.Security
 			}
 
 			Log.Debug(logChannel, $"Configured {rebuilt.Count} TLS pin(s); allowOnEmpty={allowOnEmpty}.");
+		}
+
+		/// <summary>
+		/// Set the initial pin set at bootstrap. Must be called before any network
+		/// requests are dispatched. In release builds, an empty or null pin set
+		/// causes all TLS connections to be rejected (fail-closed).
+		///
+		/// Unlike <see cref="Configure"/>, this method cannot be used to clear
+		/// pins once they have been set — it is a one-way door.
+		/// </summary>
+		/// <param name="initialPins">The compile-time pin set from GeneratedPinSet.</param>
+		public static void SetInitialPins(string[] initialPins)
+		{
+			if (initialPins == null || initialPins.Length == 0)
+			{
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+				Log.Warning(logChannel,
+					"No compile-time pins configured. TLS validation disabled (dev build).");
+				Configure(Array.Empty<string>(), allowOnEmpty: true);
+				return;
+#else
+				Log.Critical(logChannel,
+					"No compile-time pins configured. ALL TLS CONNECTIONS WILL BE REJECTED. " +
+					"The build validator should have blocked this. Rebuild with real pins.");
+				Configure(Array.Empty<string>(), allowOnEmpty: false);
+				return;
+#endif
+			}
+
+			var rebuilt = new HashSet<string>(StringComparer.Ordinal);
+			foreach (var raw in initialPins)
+			{
+				if (string.IsNullOrWhiteSpace(raw)) continue;
+				string trimmed = raw.Trim();
+				// Skip sentinel placeholder values — they are intentionally
+				// invalid and should never reach the pin set even in dev builds.
+				if (trimmed.Contains(GeneratedPinSet.SentinelMarker))
+				{
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+					Log.Warning(logChannel,
+						$"Skipping sentinel placeholder pin: {trimmed.Substring(0, Math.Min(trimmed.Length, 40))}...");
+					continue;
+#else
+					Log.Critical(logChannel,
+						"Sentinel placeholder pin detected in release build. " +
+						"The build validator should have blocked this. ALL TLS CONNECTIONS REJECTED.");
+					rebuilt.Clear();
+					break;
+#endif
+				}
+				rebuilt.Add(trimmed);
+			}
+
+			lock (sync)
+			{
+				pins = rebuilt;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+				allowOnEmptyPins = true;
+#else
+				allowOnEmptyPins = false;
+#endif
+			}
+
+			Log.Debug(logChannel, $"Initial pin set: {rebuilt.Count} pin(s); allowOnEmpty={allowOnEmptyPins}.");
+		}
+
+		/// <summary>
+		/// Add pins from a verified API manifest. Only ADDS to the existing
+		/// set — never removes. A compromised API response can inject bogus
+		/// pins but cannot disable the compile-time pins already configured.
+		///
+		/// This is safe to call at any time. Thread-safe.
+		/// </summary>
+		/// <param name="newPins">Pins to add to the active set.</param>
+		public static void TryAugmentPins(string[] newPins)
+		{
+			if (newPins == null || newPins.Length == 0) return;
+
+			lock (sync)
+			{
+				int added = 0;
+				foreach (var raw in newPins)
+				{
+					if (string.IsNullOrWhiteSpace(raw)) continue;
+					string trimmed = raw.Trim();
+					if (trimmed.Contains(GeneratedPinSet.SentinelMarker)) continue;
+					if (pins.Add(trimmed)) added++;
+				}
+				if (added > 0)
+					Log.Debug(logChannel, $"Augmented pin set with {added} new pin(s); total={pins.Count}.");
+			}
 		}
 
 		/// <summary>
@@ -178,7 +277,7 @@ namespace FishMMO.Client.Security
 						Log.Error(logChannel,
 							"TLS pin set is empty — falling back to temporal-validity-only validation. " +
 							$"First accepted SPKI={spkiPin}. This is a MITM-vulnerable configuration; " +
-							"populate StreamingAssets/client-security.json with the production pins.");
+							"populate CertificatePins.generated.cs with the production pins.");
 					}
 					else
 					{
