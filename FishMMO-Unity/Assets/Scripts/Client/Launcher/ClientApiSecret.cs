@@ -36,9 +36,10 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Compiled-in shared secret. Must match the IPFetch/Patcher process env
 		/// <c>FISHMMO_CLIENT_GATE_SECRET</c> exactly (UTF-8 string, same value).
-		/// Replace before shipping a production client binary.
+		/// Eqbrowser production value — keep in sync with server secrets.env.
 		/// </summary>
-		private const string secretLiteral = PlaceholderSecret;
+		private const string secretLiteral =
+			"rWbj3bwCYra4kyEeciqGfgQfFknYkVGFyzOc1zkUk";
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
 		/// <summary>

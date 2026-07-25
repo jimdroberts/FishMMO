@@ -54,18 +54,22 @@ namespace FishMMO.Client
 			/// </summary>
 			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion, string gameVersion)
 			{
-				var connState = outer.Client?.Connection?.ClientState ?? LocalConnectionState.Stopped;
-				if (connState != LocalConnectionState.Started)
+				// Authoritative readiness: FishNet ClientManager.Started (set before OnClientConnectionState).
+				// Do NOT use ClientConnectionManager.ClientState here — that field is updated by a separate
+				// subscriber and may still be Starting when this authenticator runs first, which aborted
+				// ClientHandshake and left zero app payload on LoginServer.
+				if (!outer.IsFishNetClientStarted())
 				{
-					Log.Error("ClientLoginAuthenticator",
-						$"Send ClientHandshake aborted: connection state={connState} " +
-						"(need Started before FishNet broadcast — otherwise server sees zero app payload).");
+					outer.lastHandshakeSendSucceeded = false;
+					Log.Warning("ClientLoginAuthenticator",
+						$"Send ClientHandshake deferred: FishNet.ClientManager.Started=false " +
+						$"(managerState={outer.Client?.Connection?.ClientState}). Will retry on FishNet-ready path.");
 					return;
 				}
 				Log.Info("ClientLoginAuthenticator",
 					$"Send ClientHandshake pubKeyLen={publicKey?.Length ?? 0} cookieLen={cookie?.Length ?? 0} " +
 					$"tokenLen={connectionToken?.Length ?? 0} gameVersion={gameVersion ?? "?"} " +
-					"connState=Started (post-WT FishNet auth start — server should see app payload next)");
+					"fishNetStarted=true (server should see app payload next)");
 				try
 				{
 					// Client.Broadcast is the static helper on FishMMO.Client.Client.
@@ -78,9 +82,11 @@ namespace FishMMO.Client
 						MaxVersion = maxVersion,
 						GameVersion = gameVersion,
 					}, Channel.Reliable);
+					outer.lastHandshakeSendSucceeded = true;
 				}
 				catch (Exception ex)
 				{
+					outer.lastHandshakeSendSucceeded = false;
 					// Do not rethrow: Client.OnLogMessage used to ForceDisconnect on network-stack
 					// exceptions, which produced establish → instant TRANSPORT shutdown.
 					Log.Error("ClientLoginAuthenticator", $"ClientHandshake Broadcast failed: {ex.Message}", ex);
@@ -134,11 +140,10 @@ namespace FishMMO.Client
 				byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
 				byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
 			{
-				var connState = outer.Client?.Connection?.ClientState ?? LocalConnectionState.Stopped;
-				if (connState != LocalConnectionState.Started)
+				if (!outer.IsFishNetClientStarted())
 				{
 					Log.Error("ClientLoginAuthenticator",
-						$"Send CreateAccountBroadcast aborted: connection state={connState}");
+						"Send CreateAccountBroadcast aborted: FishNet.ClientManager.Started=false");
 					return;
 				}
 				Log.Info("ClientLoginAuthenticator",
@@ -249,6 +254,23 @@ namespace FishMMO.Client
 		private bool initialized;
 
 		/// <summary>
+		/// True after a successful initial <see cref="ClientHandshake"/> broadcast on this connection.
+		/// Cleared on Stopped/Stopping so the next connect can send again.
+		/// </summary>
+		private bool initialClientHandshakeSent;
+
+		/// <summary>
+		/// Set by <see cref="LoginAuthenticatorCore.SendClientHandshake"/> so the outer can
+		/// know whether the last send actually went out (vs deferred/aborted).
+		/// </summary>
+		private bool lastHandshakeSendSucceeded;
+
+		/// <summary>
+		/// Connection token held until handshake send succeeds (survives deferred retry).
+		/// </summary>
+		private string pendingHandshakeConnectionToken;
+
+		/// <summary>
 		/// Client authentication event. Subscribe to receive authentication results from the server.
 		/// </summary>
 		public event Action<ClientAuthenticationResult> OnClientAuthenticationResult;
@@ -312,12 +334,14 @@ namespace FishMMO.Client
 		// the transport may have fired connection state callbacks (e.g., disconnect
 		// due to timeout, or the server dropped us). If we call OnConnected on a
 		// stopped connection, the core state machine will be in an inconsistent
-		// state. Only proceed if the connection is still valid.
-		if (Client == null || Client.Connection == null ||
-			Client.Connection.ClientState == LocalConnectionState.Stopped)
+		// state. Only proceed if FishNet is still Started.
+		if (!IsFishNetClientStarted())
 			return;
+		// Force a full re-handshake (queue admit path); token already recovered.
+		initialClientHandshakeSent = false;
+		pendingHandshakeConnectionToken = null;
 		core.OnDisconnected();
-		core.OnConnected(connectionToken: null);
+		TrySendInitialClientHandshake("RetryHandshakeAsync");
 	}
 
 		/// <summary>
@@ -348,6 +372,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
+			UnsubscribeConnectionReady();
 			if (initialized && networkManager != null && networkManager.ClientManager != null)
 			{
 				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
@@ -364,12 +389,109 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the client instance for broadcasting messages.
+		/// Subscribes to <see cref="ClientConnectionManager.OnConnectionSuccessful"/> so
+		/// ClientHandshake can be retried after the connection manager reaches Started
+		/// if the first attempt was deferred.
 		/// </summary>
 		/// <param name="client">The client instance.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetClient(Client client)
 		{
+			UnsubscribeConnectionReady();
 			Client = client;
+			if (Client?.Connection != null)
+				Client.Connection.OnConnectionSuccessful += OnConnectionManagerSuccessful;
+		}
+
+		private void UnsubscribeConnectionReady()
+		{
+			if (Client?.Connection != null)
+				Client.Connection.OnConnectionSuccessful -= OnConnectionManagerSuccessful;
+		}
+
+		/// <summary>
+		/// True when FishNet reports the client transport as Started (broadcasts allowed).
+		/// Prefers the cached networkManager from InitializeOnce; falls back to base.NetworkManager.
+		/// </summary>
+		private bool IsFishNetClientStarted()
+		{
+			var nm = networkManager ?? base.NetworkManager;
+			return nm != null
+				&& nm.ClientManager != null
+				&& nm.ClientManager.Started;
+		}
+
+		/// <summary>
+		/// Backup path: ClientConnectionManager has applied Started. If the authenticator's
+		/// earlier OnClientConnectionState path deferred handshake (stale manager state check
+		/// or send failure), send now on this confirmed-ready signal.
+		/// </summary>
+		private void OnConnectionManagerSuccessful()
+		{
+			TrySendInitialClientHandshake("ClientConnection.OnConnectionSuccessful");
+		}
+
+		/// <summary>
+		/// Sends the initial ClientHandshake once per connection, only when FishNet is Started.
+		/// Safe to call from both FishNet state callbacks and connection-manager ready events.
+		/// </summary>
+		private void TrySendInitialClientHandshake(string source)
+		{
+			if (core == null || !initialized) return;
+			if (initialClientHandshakeSent)
+			{
+				Log.Debug("ClientLoginAuthenticator",
+					$"Skip ClientHandshake ({source}): already sent this connection");
+				return;
+			}
+			if (!IsFishNetClientStarted())
+			{
+				Log.Warning("ClientLoginAuthenticator",
+					$"Defer ClientHandshake ({source}): FishNet.ClientManager.Started=false");
+				return;
+			}
+
+			// Prefer token held for retry; else take current ConnectionToken once.
+			if (pendingHandshakeConnectionToken == null && !string.IsNullOrEmpty(ConnectionToken))
+			{
+				pendingHandshakeConnectionToken = ConnectionToken;
+				ConnectionToken = null;
+			}
+
+			string token = pendingHandshakeConnectionToken;
+			lastHandshakeSendSucceeded = false;
+
+			Log.Info("ClientLoginAuthenticator",
+				$"TrySendInitialClientHandshake source={source} tokenLen={token?.Length ?? 0} " +
+				$"fishNetStarted=true managerState={Client?.Connection?.ClientState}");
+
+			try
+			{
+				// Clear any partial crypto from a deferred prior attempt, then start clean.
+				core.OnDisconnected();
+				core.OnConnected(token);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("ClientLoginAuthenticator",
+					$"OnConnected/handshake failed ({source}): {ex.Message}", ex);
+				return;
+			}
+
+			if (lastHandshakeSendSucceeded)
+			{
+				initialClientHandshakeSent = true;
+				pendingHandshakeConnectionToken = null;
+				Log.Info("ClientLoginAuthenticator",
+					$"ClientHandshake sent OK ({source}) — LoginServer should see app payload");
+			}
+			else
+			{
+				// Keep token for the next ready signal (e.g. OnConnectionSuccessful after this).
+				pendingHandshakeConnectionToken = token;
+				Log.Warning("ClientLoginAuthenticator",
+					$"ClientHandshake not sent ({source}); will retry on next FishNet-ready signal");
+			}
 		}
 
 		/// <summary>
@@ -503,35 +625,39 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// FishNet callback invoked when the local client connection state changes.
-		/// Forwards <c>Started</c> to <see cref="ClientAuthenticatorCore.OnConnected"/> and
-		/// <c>Stopping</c>/<c>Stopped</c> to <see cref="ClientAuthenticatorCore.OnDisconnected"/>.
+		/// <c>Started</c> → send ClientHandshake (or schedule retry via connection-manager ready).
+		/// <c>Stopping</c>/<c>Stopped</c> → clear per-connection crypto; credentials kept.
 		/// </summary>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			Log.Info("ClientLoginAuthenticator",
-				$"ConnectionState={args.ConnectionState} " +
-				$"(Stopped clears crypto only; Started sends ClientHandshake)");
+				$"ConnectionState={args.ConnectionState} fishNetStarted={IsFishNetClientStarted()} " +
+				$"handshakeSent={initialClientHandshakeSent} " +
+				$"(Stopped clears crypto only; Started sends ClientHandshake when FishNet ready)");
 
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
 				args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				// Crypto only — credentials intentionally survive for create-account race.
 				core.OnDisconnected();
+				initialClientHandshakeSent = false;
+				lastHandshakeSendSucceeded = false;
+				// Do not clear pendingHandshakeConnectionToken on Stopping alone if a new
+				// connect is about to start — but Stopped ends the session; capture any
+				// still-set ConnectionToken for the *next* connect only if UI re-sets it.
+				// Drop pending token on full stop so a stale IPFetch token is not reused.
+				if (args.ConnectionState == LocalConnectionState.Stopped)
+					pendingHandshakeConnectionToken = null;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				// Capture token then clear so it is single-use per connection.
-				string token = ConnectionToken;
-				ConnectionToken = null;
-				try
+				// Capture token into pending before send so retries keep it.
+				if (pendingHandshakeConnectionToken == null && !string.IsNullOrEmpty(ConnectionToken))
 				{
-					core.OnConnected(token);
+					pendingHandshakeConnectionToken = ConnectionToken;
+					ConnectionToken = null;
 				}
-				catch (Exception ex)
-				{
-					Log.Error("ClientLoginAuthenticator",
-						$"OnConnected/handshake failed: {ex.Message}", ex);
-				}
+				TrySendInitialClientHandshake("FishNet.OnClientConnectionState.Started");
 			}
 		}
 
