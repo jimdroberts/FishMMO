@@ -22,15 +22,25 @@ namespace FishNet.Transporting.WebTransport.Client
 		#endregion
 
 		private SafeClientHandle clientHandle;
+
+		/// <summary>
+		/// Last connect target for diagnostics (WebGL URL or host:port).
+		/// Always available so editor / standalone builds can log without #if.
+		/// </summary>
+		private string lastConnectTarget = string.Empty;
+
 #if UNITY_WEBGL && !UNITY_EDITOR
 		private int webglIndex = -1;
 
 		/// <summary>
 		/// Full URL last passed to <see cref="WebTransportJSLib.WTConnect"/>
-		/// (e.g. https://loginserver.eqbrowser.com:7770). Used in open/error logs
-		/// so browser + managed logs share the same target.
+		/// (e.g. https://loginserver.eqbrowser.com:7770).
 		/// </summary>
-		private string webglConnectUrl = string.Empty;
+		private string webglConnectUrl
+		{
+			get => lastConnectTarget;
+			set => lastConnectTarget = value ?? string.Empty;
+		}
 
 		/// <summary>
 		/// Maps JS session index → managed socket. Looked up from static
@@ -212,7 +222,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				// Prevent double WTConnect while a session is already Starting/Started.
 				LogTransportWarning(
 					$"[FishWT] StartConnection IGNORED — socket already {priorState} " +
-					$"(url was {webglConnectUrl}). One FishNet client / one WT session only.");
+					$"(target was {lastConnectTarget}). One FishNet client / one WT session only.");
 				return false;
 			}
 
@@ -314,6 +324,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				throw;
 			}
 #else
+			lastConnectTarget = $"{address}:{port}";
 			if (!WebTransportNative.EnsureInitialized())
 			{
 				base.SetConnectionState(LocalConnectionState.Stopped, false);
@@ -455,7 +466,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				{
 					UnityEngine.Debug.LogWarning(
 						$"[FishWT] SendToServer DROP state={state} ch={channelId} len={segment.Count} " +
-						$"dropNotStarted={n} url={webglConnectUrl} " +
+						$"dropNotStarted={n} target={lastConnectTarget} " +
 						"(FishNet may have Broadcast above this — wire never saw it)");
 				}
 				return;
@@ -465,9 +476,12 @@ namespace FishNet.Transporting.WebTransport.Client
 			if (webglIndex < 0)
 			{
 				UnityEngine.Debug.LogError(
-					$"[FishWT] SendToServer DROP webglIndex<0 len={segment.Count} url={webglConnectUrl}");
+					$"[FishWT] SendToServer DROP webglIndex<0 len={segment.Count} target={lastConnectTarget}");
 				return;
 			}
+			int sessionIndex = webglIndex;
+#else
+			int sessionIndex = -1;
 #endif
 
 			base.Send(outgoing, channelId, segment, -1);
@@ -476,7 +490,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				UnityEngine.Debug.Log(
 					$"[FishWT] SendToServer QUEUED #{q} ch={channelId} len={segment.Count} " +
-					$"index={webglIndex} url={webglConnectUrl}");
+					$"index={sessionIndex} target={lastConnectTarget}");
 			}
 		}
 
@@ -510,7 +524,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				{
 					UnityEngine.Debug.LogError(
 						$"[FishWT] DequeueOutgoing cleared {dropped} packets — state not Started " +
-						$"(url={webglConnectUrl}). Broadcast never reached browser WT.");
+						$"(target={lastConnectTarget}). Broadcast never reached browser WT.");
 				}
 				return;
 			}
