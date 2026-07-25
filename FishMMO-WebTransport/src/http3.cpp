@@ -308,92 +308,97 @@ static const qpack_entry_t kQpackStatic[] = {
  * included for full spec conformance.
  */
 
-/* Code lengths in bits */
+/*
+ * RFC 7541 Appendix B / QPACK Huffman tables.
+ * Codes are right-aligned bit patterns (same form as nghttp2 after
+ * converting left-aligned 32-bit codes). Previous tables corrupted
+ * lowercase codes ('a' was 0x23 instead of 0x03) so Chrome Huffman
+ * :authority / :protocol values failed at the first non-indexed field.
+ */
 static const uint8_t kHuffLen[256] = {
-   13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28,  /*  0-15 */
-   28, 28, 28, 28, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 28,  /* 16-31 */
-    6, 10, 10, 12, 13,  6,  8, 11, 10, 10,  8, 11,  8,  6,  6,  6,  /* 32-47 */
-    5,  5,  5,  6,  6,  6,  6,  6,  6,  6,  7,  8, 15,  6, 12, 10,  /* 48-63 */
-   13,  6,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  /* 64-79 */
-    7,  7,  7,  7,  7,  7,  7,  7,  8,  7,  8, 13, 19, 13,  6, 13,  /* 80-95 */
-   19,  6,  6,  6,  6,  6,  6,  6,  6,  7,  6,  6,  6,  6,  6,  6,  /* 96-111 */
-    6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  7,  /*112-127 */
-   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*128-143 */
-   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*144-159 */
-   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*160-175 */
-   19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,  /*176-191 */
-   20, 20, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21,  /*192-207 */
-   22, 22, 22, 22, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23,  /*208-223 */
-   24, 24, 24, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 25,  /*224-239 */
-   26, 26, 26, 26, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 27   /*240-255 */
+    13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28,  /* 0-15 */
+    28, 28, 28, 28, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 28,  /* 16-31 */
+     6, 10, 10, 12, 13,  6,  8, 11, 10, 10,  8, 11,  8,  6,  6,  6,  /* 32-47 */
+     5,  5,  5,  6,  6,  6,  6,  6,  6,  6,  7,  8, 15,  6, 12, 10,  /* 48-63 */
+    13,  6,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  /* 64-79 */
+     7,  7,  7,  7,  7,  7,  7,  7,  8,  7,  8, 13, 19, 13, 14,  6,  /* 80-95 */
+    15,  5,  6,  5,  6,  5,  6,  6,  6,  5,  7,  7,  6,  6,  6,  5,  /* 96-111 */
+     6,  7,  6,  5,  5,  6,  7,  7,  7,  7,  7, 15, 11, 14, 13, 28,  /* 112-127 */
+    20, 22, 20, 20, 22, 22, 22, 23, 22, 23, 23, 23, 23, 23, 24, 23,  /* 128-143 */
+    24, 24, 22, 23, 24, 23, 23, 23, 23, 21, 22, 23, 22, 23, 23, 24,  /* 144-159 */
+    22, 21, 20, 22, 22, 23, 23, 21, 23, 22, 22, 24, 21, 22, 23, 23,  /* 160-175 */
+    21, 21, 22, 21, 23, 22, 23, 23, 20, 22, 22, 22, 23, 22, 22, 23,  /* 176-191 */
+    26, 26, 20, 19, 22, 23, 22, 25, 26, 26, 26, 27, 27, 26, 24, 25,  /* 192-207 */
+    19, 21, 26, 27, 27, 26, 27, 24, 21, 21, 26, 26, 28, 27, 27, 27,  /* 208-223 */
+    20, 24, 20, 21, 22, 21, 21, 23, 22, 22, 25, 25, 24, 24, 26, 23,  /* 224-239 */
+    26, 27, 26, 26, 27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26   /* 240-255 */
 };
 
-/* Huffman codes (right-padded MSB-aligned, one per symbol 0-255) */
 static const uint32_t kHuffCode[256] = {
-    0x1ff8,     0x7fffd8,   0xfffffe2,  0xfffffe3,  /*  0- 3 */
-    0xfffffe4,  0xfffffe5,  0xfffffe6,  0xfffffe7,  /*  4- 7 */
-    0xfffffe8,  0xffffea,   0x3ffffffc, 0xfffffe9,  /*  8-11 */
-    0xfffffea,  0x3ffffffd, 0xfffffeb,  0xfffffec,  /* 12-15 */
-    0xfffffed,  0xfffffee,  0xfffffef,  0xffffff0,  /* 16-19 */
-    0xffffff1,  0xffffff2,  0x3ffffffe, 0xffffff3,  /* 20-23 */
-    0xffffff4,  0xffffff5,  0xffffff6,  0xffffff7,  /* 24-27 */
-    0xffffff8,  0xffffff9,  0xffffffa,  0xffffffb,  /* 28-31 */
-    0x14,       0x3f8,      0x3f9,      0xffa,      /* 32-35 */
-    0x1ff9,     0x15,       0xf8,       0x7fa,      /* 36-39 */
-    0x3fa,      0x3fb,      0xf9,       0x7fb,      /* 40-43 */
-    0xfa,       0x16,       0x17,       0x18,       /* 44-47 */
-    0x00,       0x01,       0x02,       0x19,       /* 48-51 */
-    0x1a,       0x1b,       0x1c,       0x1d,       /* 52-55 */
-    0x1e,       0x1f,       0x5c,       0xfb,       /* 56-59 */
-    0x7ffc,     0x20,       0xffb,      0x3fc,      /* 60-63 */
-    0x1ffa,     0x21,       0x5d,       0x5e,       /* 64-67 */
-    0x5f,       0x60,       0x61,       0x62,       /* 68-71 */
-    0x63,       0x64,       0x65,       0x66,       /* 72-75 */
-    0x67,       0x68,       0x69,       0x6a,       /* 76-79 */
-    0x6b,       0x6c,       0x6d,       0x6e,       /* 80-83 */
-    0x6f,       0x70,       0x71,       0x72,       /* 84-87 */
-    0xfc,       0x73,       0xfd,       0x1ffb,     /* 88-91 */
-    0x7ffc0,    0x3ffd,     0x22,       0x1ffc,     /* 92-95 */
-    0x7ffc1,    0x23,       0x24,       0x25,       /* 96-99 */
-    0x26,       0x27,       0x28,       0x29,       /*100-103 */
-    0x2a,       0x7b,       0x2b,       0x2c,       /*104-107 */
-    0x2d,       0x2e,       0x2f,       0x30,       /*108-111 */
-    0x31,       0x32,       0x33,       0x34,       /*112-115 */
-    0x35,       0x36,       0x37,       0x38,       /*116-119 */
-    0x39,       0x3a,       0x3b,       0x3c,       /*120-123 */
-    0x3d,       0x3e,       0x3f,       0x7c,       /*124-127 */
-    0x7ffc2,    0x7ffc3,    0x7ffc4,    0x7ffc5,    /*128-131 */
-    0x7ffc6,    0x7ffc7,    0x7ffc8,    0x7ffc9,    /*132-135 */
-    0x7ffca,    0x7ffcb,    0x7ffcc,    0x7ffcd,    /*136-139 */
-    0x7ffce,    0x7ffcf,    0x7ffd0,    0x7ffd1,    /*140-143 */
-    0x7ffd2,    0x7ffd3,    0x7ffd4,    0x7ffd5,    /*144-147 */
-    0x7ffd6,    0x7ffd7,    0x7ffd8,    0x7ffd9,    /*148-151 */
-    0x7ffda,    0x7ffdb,    0x7ffdc,    0x7ffdd,    /*152-155 */
-    0x7ffde,    0x7ffdf,    0x7ffe0,    0x7ffe1,    /*156-159 */
-    0x7ffe2,    0x7ffe3,    0x7ffe4,    0x7ffe5,    /*160-163 */
-    0x7ffe6,    0x7ffe7,    0x7ffe8,    0x7ffe9,    /*164-167 */
-    0x7ffea,    0x7ffeb,    0x7ffec,    0x7ffed,    /*168-171 */
-    0x7ffee,    0x7ffef,    0x7fff0,    0x7fff1,    /*172-175 */
-    0x7fff2,    0x7fff3,    0x7fff4,    0x7fff5,    /*176-179 */
-    0x7fff6,    0x7fff7,    0x7fff8,    0x7fff9,    /*180-183 */
-    0x7fffa,    0x7fffb,    0x7fffc,    0x7fffd,    /*184-187 */
-    0x7fffe,    0x7ffff,    0x80000,    0x80001,    /*188-191 */
-    0x3ffe0,    0x3ffe1,    0x3ffe2,    0x3ffe3,    /*192-195 */
-    0x3ffe4,    0x3ffe5,    0x3ffe6,    0x3ffe7,    /*196-199 */
-    0x1ffdc,    0x1ffdd,    0x1ffde,    0x1ffdf,    /*200-203 */
-    0x1ffe0,    0x1ffe1,    0x1ffe2,    0x1ffe3,    /*204-207 */
-    0xfff0,     0xfff1,     0xfff2,     0xfff3,     /*208-211 */
-    0xfff4,     0xfff5,     0xfff6,     0xfff7,     /*212-215 */
-    0x7ffe0,    0x7ffe1,    0x7ffe2,    0x7ffe3,    /*216-219 */
-    0x7ffe4,    0x7ffe5,    0x7ffe6,    0x7ffe7,    /*220-223 */
-    0x3ffe8,    0x3ffe9,    0x3ffea,    0x3ffeb,    /*224-227 */
-    0x3ffec,    0x3ffed,    0x3ffee,    0x3ffef,    /*228-231 */
-    0x3fff0,    0x3fff1,    0x3fff2,    0x3fff3,    /*232-235 */
-    0x3fff4,    0x3fff5,    0x3fff6,    0x3fff7,    /*236-239 */
-    0x1fffc,    0x1fffd,    0x1fffe,    0x1ffff,    /*240-243 */
-    0x20000,    0x20001,    0x20002,    0x20003,    /*244-247 */
-    0x10000,    0x10001,    0x10002,    0x10003,    /*248-251 */
-    0x10004,    0x10005,    0x10006,    0x10007     /*252-255 */
+    0x1ff8, 0x7fffd8, 0xfffffe2, 0xfffffe3,  /* 0-3 */
+    0xfffffe4, 0xfffffe5, 0xfffffe6, 0xfffffe7,  /* 4-7 */
+    0xfffffe8, 0xffffea, 0x3ffffffc, 0xfffffe9,  /* 8-11 */
+    0xfffffea, 0x3ffffffd, 0xfffffeb, 0xfffffec,  /* 12-15 */
+    0xfffffed, 0xfffffee, 0xfffffef, 0xffffff0,  /* 16-19 */
+    0xffffff1, 0xffffff2, 0x3ffffffe, 0xffffff3,  /* 20-23 */
+    0xffffff4, 0xffffff5, 0xffffff6, 0xffffff7,  /* 24-27 */
+    0xffffff8, 0xffffff9, 0xffffffa, 0xffffffb,  /* 28-31 */
+    0x14, 0x3f8, 0x3f9, 0xffa,  /* 32-35 */
+    0x1ff9, 0x15, 0xf8, 0x7fa,  /* 36-39 */
+    0x3fa, 0x3fb, 0xf9, 0x7fb,  /* 40-43 */
+    0xfa, 0x16, 0x17, 0x18,  /* 44-47 */
+    0x0, 0x1, 0x2, 0x19,  /* 48-51 */
+    0x1a, 0x1b, 0x1c, 0x1d,  /* 52-55 */
+    0x1e, 0x1f, 0x5c, 0xfb,  /* 56-59 */
+    0x7ffc, 0x20, 0xffb, 0x3fc,  /* 60-63 */
+    0x1ffa, 0x21, 0x5d, 0x5e,  /* 64-67 */
+    0x5f, 0x60, 0x61, 0x62,  /* 68-71 */
+    0x63, 0x64, 0x65, 0x66,  /* 72-75 */
+    0x67, 0x68, 0x69, 0x6a,  /* 76-79 */
+    0x6b, 0x6c, 0x6d, 0x6e,  /* 80-83 */
+    0x6f, 0x70, 0x71, 0x72,  /* 84-87 */
+    0xfc, 0x73, 0xfd, 0x1ffb,  /* 88-91 */
+    0x7fff0, 0x1ffc, 0x3ffc, 0x22,  /* 92-95 */
+    0x7ffd, 0x3, 0x23, 0x4,  /* 96-99  — 'a'=0x3 (was wrongly 0x23) */
+    0x24, 0x5, 0x25, 0x26,  /* 100-103 */
+    0x27, 0x6, 0x74, 0x75,  /* 104-107 */
+    0x28, 0x29, 0x2a, 0x7,  /* 108-111 — 'l'=0x28 */
+    0x2b, 0x76, 0x2c, 0x8,  /* 112-115 */
+    0x9, 0x2d, 0x77, 0x78,  /* 116-119 — 't'=0x9 'w'=0x78 */
+    0x79, 0x7a, 0x7b, 0x7ffe,  /* 120-123 */
+    0x7fc, 0x3ffd, 0x1ffd, 0xffffffc,  /* 124-127 */
+    0xfffe6, 0x3fffd2, 0xfffe7, 0xfffe8,  /* 128-131 */
+    0x3fffd3, 0x3fffd4, 0x3fffd5, 0x7fffd9,  /* 132-135 */
+    0x3fffd6, 0x7fffda, 0x7fffdb, 0x7fffdc,  /* 136-139 */
+    0x7fffdd, 0x7fffde, 0xffffeb, 0x7fffdf,  /* 140-143 */
+    0xffffec, 0xffffed, 0x3fffd7, 0x7fffe0,  /* 144-147 */
+    0xffffee, 0x7fffe1, 0x7fffe2, 0x7fffe3,  /* 148-151 */
+    0x7fffe4, 0x1fffdc, 0x3fffd8, 0x7fffe5,  /* 152-155 */
+    0x3fffd9, 0x7fffe6, 0x7fffe7, 0xffffef,  /* 156-159 */
+    0x3fffda, 0x1fffdd, 0xfffe9, 0x3fffdb,  /* 160-163 */
+    0x3fffdc, 0x7fffe8, 0x7fffe9, 0x1fffde,  /* 164-167 */
+    0x7fffea, 0x3fffdd, 0x3fffde, 0xfffff0,  /* 168-171 */
+    0x1fffdf, 0x3fffdf, 0x7fffeb, 0x7fffec,  /* 172-175 */
+    0x1fffe0, 0x1fffe1, 0x3fffe0, 0x1fffe2,  /* 176-179 */
+    0x7fffed, 0x3fffe1, 0x7fffee, 0x7fffef,  /* 180-183 */
+    0xfffea, 0x3fffe2, 0x3fffe3, 0x3fffe4,  /* 184-187 */
+    0x7ffff0, 0x3fffe5, 0x3fffe6, 0x7ffff1,  /* 188-191 */
+    0x3ffffe0, 0x3ffffe1, 0xfffeb, 0x7fff1,  /* 192-195 */
+    0x3fffe7, 0x7ffff2, 0x3fffe8, 0x1ffffec,  /* 196-199 */
+    0x3ffffe2, 0x3ffffe3, 0x3ffffe4, 0x7ffffde,  /* 200-203 */
+    0x7ffffdf, 0x3ffffe5, 0xfffff1, 0x1ffffed,  /* 204-207 */
+    0x7fff2, 0x1fffe3, 0x3ffffe6, 0x7ffffe0,  /* 208-211 */
+    0x7ffffe1, 0x3ffffe7, 0x7ffffe2, 0xfffff2,  /* 212-215 */
+    0x1fffe4, 0x1fffe5, 0x3ffffe8, 0x3ffffe9,  /* 216-219 */
+    0xffffffd, 0x7ffffe3, 0x7ffffe4, 0x7ffffe5,  /* 220-223 */
+    0xfffec, 0xfffff3, 0xfffed, 0x1fffe6,  /* 224-227 */
+    0x3fffe9, 0x1fffe7, 0x1fffe8, 0x7ffff3,  /* 228-231 */
+    0x3fffea, 0x3fffeb, 0x1ffffee, 0x1ffffef,  /* 232-235 */
+    0xfffff4, 0xfffff5, 0x3ffffea, 0x7ffff4,  /* 236-239 */
+    0x3ffffeb, 0x7ffffe6, 0x3ffffec, 0x3ffffed,  /* 240-243 */
+    0x7ffffe7, 0x7ffffe8, 0x7ffffe9, 0x7ffffea,  /* 244-247 */
+    0x7ffffeb, 0xffffffe, 0x7ffffec, 0x7ffffed,  /* 248-251 */
+    0x7ffffee, 0x7ffffef, 0x7fffff0, 0x3ffffee   /* 252-255 */
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -739,25 +744,44 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
 /**
  * Write a SETTINGS frame to `out`. Returns bytes written.
  * The caller must ensure `out` has at least 256 bytes.
+ *
+ * Advertises every SETTINGS identifier that Chrome/Quiche checks:
+ *   - QPACK_MAX_TABLE_CAPACITY = 0     (static-table-only, no dynamic QPACK)
+ *   - MAX_FIELD_SECTION_SIZE = 65536   (reasonable default for QPACK)
+ *   - QPACK_BLOCKED_STREAMS = 0        (no dynamic table → 0 blocked)
+ *   - ENABLE_CONNECT_PROTOCOL = 1      (RFC 9220 Extended CONNECT)
+ *   - H3_DATAGRAM = 1                  (RFC 9297 HTTP/3 DATAGRAM)
+ *   - ENABLE_WEBTRANSPORT (draft00) = 1
+ *   - WT_MAX_SESSIONS (draft07) = 1    (Chromium requires non-zero)
  */
 static int h3_write_settings(uint8_t* out)
 {
     uint8_t* p = out;
-    /* SETTINGS frame: type=4.
-     * Chrome WebTransport requires ALL of:
-     *   - SETTINGS_ENABLE_CONNECT_PROTOCOL (0x08) — Extended CONNECT
-     *   - SETTINGS_H3_DATAGRAM (0x33)
-     *   - SETTINGS_ENABLE_WEBTRANSPORT (0x2b603742)
-     *   - SETTINGS_WT_MAX_SESSIONS (0x14e9db3d) ≥ 1  (Chromium)
-     * Without ENABLE_CONNECT_PROTOCOL / ENABLE_WEBTRANSPORT the browser
-     * never sends CONNECT and hangs until QUIC_NETWORK_IDLE_TIMEOUT. */
     uint8_t type_buf[8], len_buf[8];
     uint8_t type_n = varint_encode(H3_FRAME_SETTINGS, type_buf);
 
-    uint8_t  settings_payload[48];
+    uint8_t  settings_payload[96];
     uint8_t* sp = settings_payload;
     uint8_t id_buf[8], val_buf[8];
     uint8_t id_n, val_n;
+
+    /* QPACK_MAX_TABLE_CAPACITY = 0 (static-table-only) */
+    id_n  = varint_encode(0x01, id_buf);
+    val_n = varint_encode(0, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
+
+    /* MAX_FIELD_SECTION_SIZE = 65536 */
+    id_n  = varint_encode(0x06, id_buf);
+    val_n = varint_encode(65536, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
+
+    /* QPACK_BLOCKED_STREAMS = 0 */
+    id_n  = varint_encode(0x07, id_buf);
+    val_n = varint_encode(0, val_buf);
+    memcpy(sp, id_buf, id_n); sp += id_n;
+    memcpy(sp, val_buf, val_n); sp += val_n;
 
     /* SETTINGS_ENABLE_CONNECT_PROTOCOL = 1 */
     id_n  = varint_encode(H3_SETTINGS_ENABLE_CONNECT_PROTOCOL, id_buf);
@@ -771,14 +795,14 @@ static int h3_write_settings(uint8_t* out)
     memcpy(sp, id_buf, id_n); sp += id_n;
     memcpy(sp, val_buf, val_n); sp += val_n;
 
-    /* SETTINGS_ENABLE_WEBTRANSPORT = 1 */
+    /* SETTINGS_ENABLE_WEBTRANSPORT (draft00) = 1 */
     id_n  = varint_encode(H3_SETTINGS_ENABLE_WEBTRANSPORT, id_buf);
     val_n = varint_encode(1, val_buf);
     memcpy(sp, id_buf, id_n); sp += id_n;
     memcpy(sp, val_buf, val_n); sp += val_n;
 
-    /* SETTINGS_WT_MAX_SESSIONS = 1 (Chromium requires a non-zero max) */
-    id_n  = varint_encode(H3_SETTINGS_WT_MAX_SESSIONS, id_buf);
+    /* SETTINGS_WT_MAX_SESSIONS (draft07, Chromium) = 1 */
+    id_n  = varint_encode(H3_SETTINGS_WT_MAX_SESSIONS_DRAFT07, id_buf);
     val_n = varint_encode(1, val_buf);
     memcpy(sp, id_buf, id_n); sp += id_n;
     memcpy(sp, val_buf, val_n); sp += val_n;
@@ -789,6 +813,11 @@ static int h3_write_settings(uint8_t* out)
     memcpy(p, type_buf, type_n); p += type_n;
     memcpy(p, len_buf, len_n);   p += len_n;
     memcpy(p, settings_payload, settings_payload_len); p += settings_payload_len;
+
+    WT_LOG_INFO("H3: SETTINGS payload %u bytes "
+                "(QPACK=0,MAX_FIELD=65536,BLOCKED=0,CONNECT=1,DATAGRAM=1,"
+                "WT_DRAFT00=1,MAX_SESS_DRAFT07=1)",
+                (unsigned)settings_payload_len);
     return (int)(p - out);
 }
 
@@ -1617,6 +1646,188 @@ void h3_session_release(h3_session_t* h3)
     }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+ * Proactive SETTINGS Bootstrap
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * Chrome/Quiche expects the server to send SETTINGS as soon as
+ * encryption is established — before or concurrently with the
+ * client's control stream.  The bootstrap mechanism defers
+ * StreamOpen/StreamSend to the poll (application) thread because
+ * calling them from inside a QUIC connection/stream callback
+ * re-enters msquic and causes QuicOperationFree crashes.
+ *
+ * h3_server_send_initial_settings()  ← called from CONNECTED (QUIC cb)
+ *   └─ h3_server_request_settings_bootstrap()  ← sets flag
+ *        └─ h3_server_poll_deferred()           ← called from poll thread
+ *             └─ h3_server_bootstrap_settings() ← does the real work
+ */
+
+/**
+ * Open the server control stream (type 0x00) and send a SETTINGS frame.
+ * Called from the application poll thread ONLY — NEVER from a QUIC
+ * stream/connection callback.
+ */
+static int h3_server_bootstrap_settings(h3_session_t* h3, const char* reason)
+{
+    if (!h3 || !h3->quic_conn) return -1;
+    if (!reason) reason = "unknown";
+
+    if (h3->server_settings_sent) {
+        WT_LOG_INFO("H3: bootstrap SETTINGS skipped (already sent) state=%d reason=%s",
+                    (int)h3->server_state, reason);
+        return 0;
+    }
+
+    /* Already have a control stream handle from a partial prior attempt —
+     * do not open a second control stream (H3 forbids duplicate control). */
+    if (h3->server_control_stream) {
+        WT_LOG_WARN("H3: bootstrap: control stream already open but "
+                    "server_settings_sent=0 — marking sent to avoid dual control");
+        h3->server_settings_sent = true;
+        if (h3->server_state < H3_SRV_WAIT_CONNECT)
+            h3->server_state = H3_SRV_WAIT_CONNECT;
+        return 0;
+    }
+
+    uint8_t settings_buf[128];
+    int settings_len = h3_write_settings(settings_buf);
+    if (settings_len <= 0) {
+        WT_LOG_ERROR("H3: bootstrap: h3_write_settings failed");
+        return -1;
+    }
+
+    h3_send_only_ctx_t* send_ctx =
+        h3_send_only_ctx_create(NULL, h3, 1 /* server_control */);
+    if (!send_ctx) {
+        WT_LOG_ERROR("H3: bootstrap: OOM allocating server control stream context");
+        return -1;
+    }
+
+    /* Control stream = single stream-type byte 0x00 + one SETTINGS frame. */
+    uint8_t* srv_data = (uint8_t*)malloc((size_t)(1 + settings_len));
+    if (!srv_data) {
+        free(send_ctx);
+        return -1;
+    }
+    srv_data[0] = H3_STREAM_CONTROL; /* exactly one type byte */
+    memcpy(srv_data + 1, settings_buf, (size_t)settings_len);
+    /* Guard: settings frame must start with SETTINGS type 0x04, not 0x00. */
+    if (settings_len < 1 || settings_buf[0] != H3_FRAME_SETTINGS) {
+        WT_LOG_ERROR("H3: bootstrap: SETTINGS frame first byte=0x%02x (want 0x04)",
+                     settings_len > 0 ? settings_buf[0] : 0xff);
+        free(srv_data);
+        free(send_ctx);
+        return -1;
+    }
+
+    HQUIC srv_ctrl = NULL;
+    QUIC_STATUS st = MsQuic->StreamOpen(
+        h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
+        h3_send_only_stream_cb, send_ctx, &srv_ctrl);
+    if (QUIC_FAILED(st)) {
+        WT_LOG_ERROR("H3: bootstrap: StreamOpen server control failed: 0x%x", st);
+        free(srv_data);
+        free(send_ctx);
+        return -1;
+    }
+    send_ctx->stream = srv_ctrl;
+
+    H3_LOCK(h3);
+    h3->server_control_stream = srv_ctrl;
+    h3->server_control_ctx = send_ctx;
+    H3_UNLOCK(h3);
+
+    WT_LOG_INFO("H3: bootstrap: server control stream open %p (uni-only; no server QPACK)",
+                (void*)srv_ctrl);
+
+    /* Start control stream. */
+    st = MsQuic->StreamStart(srv_ctrl, QUIC_STREAM_START_FLAG_SHUTDOWN_ON_FAIL);
+    if (QUIC_FAILED(st)) {
+        WT_LOG_ERROR("H3: bootstrap: StreamStart server control failed: 0x%x", st);
+        H3_LOCK(h3);
+        if (h3->server_control_stream == srv_ctrl) {
+            h3->server_control_stream = NULL;
+            h3->server_control_ctx = NULL;
+        }
+        H3_UNLOCK(h3);
+        /* Detach h3 before async abort — same UAF guard as h3_session_free. */
+        send_ctx->h3 = NULL;
+        free(srv_data);
+        h3_send_only_abort(srv_ctrl);
+        return -1;
+    }
+
+    /* Send SETTINGS inline after StreamStart.  Ownership of srv_data
+     * transfers to SEND_COMPLETE via ClientContext — freed there. */
+    {
+        QUIC_BUFFER buf;
+        buf.Buffer = srv_data;
+        buf.Length = (uint32_t)(1 + settings_len);
+        st = MsQuic->StreamSend(srv_ctrl, &buf, 1,
+                                 QUIC_SEND_FLAG_NONE, srv_data);
+        if (QUIC_FAILED(st)) {
+            /* StreamSend failed: we still own srv_data (no SEND_COMPLETE). */
+            free(srv_data);
+            H3_LOCK(h3);
+            if (h3->server_control_stream == srv_ctrl) {
+                h3->server_control_stream = NULL;
+                h3->server_control_ctx = NULL;
+            }
+            H3_UNLOCK(h3);
+            send_ctx->h3 = NULL;
+            WT_LOG_ERROR("H3: StreamSend server SETTINGS failed: 0x%x stream=%p",
+                         st, (void*)srv_ctrl);
+            h3_send_only_abort(srv_ctrl);
+            return -1;
+        }
+    }
+
+    h3->server_settings_sent = true;
+    h3->server_state = H3_SRV_WAIT_CONNECT;
+    WT_LOG_INFO("H3: bootstrap SETTINGS queued stream=%p state=WAIT_CONNECT "
+                "reason=%s (control SETTINGS only; no server QPACK uni)",
+                (void*)srv_ctrl, reason);
+    return 0;
+}
+
+void h3_server_request_settings_bootstrap(h3_session_t* h3)
+{
+    if (!h3 || !h3->is_server) return;
+    if (h3->server_settings_sent) return;
+    h3->settings_bootstrap_pending = 1;
+    WT_LOG_INFO("H3: SETTINGS bootstrap scheduled for poll thread "
+                "(avoid StreamOpen from stream/conn callbacks)");
+}
+
+void h3_server_poll_deferred(h3_session_t* h3)
+{
+    if (!h3 || !h3->is_server) return;
+    if (!h3->settings_bootstrap_pending) return;
+    h3->settings_bootstrap_pending = 0;
+    if (h3->server_settings_sent) return;
+    WT_LOG_INFO("H3: running deferred SETTINGS bootstrap on poll thread");
+    if (h3_server_bootstrap_settings(h3, "poll-deferred") != 0) {
+        WT_LOG_ERROR("H3: deferred SETTINGS bootstrap failed");
+        /* Allow a later retry if peer traffic arrives again. */
+        if (!h3->server_settings_sent)
+            h3->settings_bootstrap_pending = 1;
+    }
+}
+
+int h3_server_send_initial_settings(h3_session_t* h3)
+{
+    /* Public API kept for server.cpp CONNECTED path: schedule only.
+     * Actual send runs on poll (application thread). */
+    if (!h3 || !h3->is_server) return -1;
+    h3_server_request_settings_bootstrap(h3);
+    return 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * Session Lifecycle
+ * ═══════════════════════════════════════════════════════════════ */
+
 h3_session_t* h3_session_create(
     HQUIC quic_conn, bool is_server,
     h3_on_session_ready_fn on_ready,
@@ -1631,6 +1842,11 @@ h3_session_t* h3_session_create(
     h3->on_error = on_error;
     h3->callback_ctx = ctx;
     h3->handshake_complete = false;
+    h3->server_settings_sent = false;
+    h3->settings_bootstrap_pending = 0;
+    h3->peer_h3_seen = false;
+    h3->is_webtransport = false;
+    h3->connect_stream_id = 0;
     h3->allow_native_clients = true;  /* default: backward compatible */
     h3->expected_authority[0] = '\0'; /* default: skip validation */
     atomic_store(&h3->ref_count, 1);  /* owner reference */
@@ -1674,6 +1890,8 @@ void h3_session_free(h3_session_t* h3)
      * memory → SEGV in pthread_mutex_lock / QuicStreamFree. */
     HQUIC srv_ctrl = NULL;
     HQUIC cli_ctrl = NULL;
+    HQUIC qpack_enc = NULL;
+    HQUIC qpack_dec = NULL;
     void* srv_ctx = NULL;
     void* cli_ctx = NULL;
     H3_LOCK(h3);
@@ -1685,6 +1903,10 @@ void h3_session_free(h3_session_t* h3)
     h3->client_control_stream = NULL;
     cli_ctx = h3->client_control_ctx;
     h3->client_control_ctx = NULL;
+    qpack_enc = h3->server_qpack_encoder_stream;
+    h3->server_qpack_encoder_stream = NULL;
+    qpack_dec = h3->server_qpack_decoder_stream;
+    h3->server_qpack_decoder_stream = NULL;
     H3_UNLOCK(h3);
 
     /* Detach h3 back-pointer BEFORE queuing async abort — the callback
@@ -1698,6 +1920,14 @@ void h3_session_free(h3_session_t* h3)
     }
     if (cli_ctrl) {
         h3_send_only_abort(cli_ctrl);
+    }
+    if (qpack_enc) {
+        WT_LOG_INFO("H3: session_free aborting server QPACK encoder %p", (void*)qpack_enc);
+        h3_send_only_abort(qpack_enc);
+    }
+    if (qpack_dec) {
+        WT_LOG_INFO("H3: session_free aborting server QPACK decoder %p", (void*)qpack_dec);
+        h3_send_only_abort(qpack_dec);
     }
 
     /* Free all tracked h3_stream_ctx_t objects still on the list.
@@ -2036,179 +2266,17 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
         if (sctx->is_unidirectional) {
             if (first_byte == H3_STREAM_CONTROL) {
                 sctx->stream_type = H3_STREAM_CONTROL;
+                h3->peer_h3_seen = true;
 
-                /* Send server SETTINGS (only once). Stream lifetime:
-                 * StreamClose only inside h3_send_only_stream_cb SHUTDOWN_COMPLETE.
-                 * Error paths use StreamShutdown(ABORT) — never double-close. */
-                if (!h3->server_control_stream) {
-                    uint8_t settings_buf[128];
-                    int settings_len = h3_write_settings(settings_buf);
-
-                    HQUIC srv_ctrl = NULL;
-                    h3_send_only_ctx_t* send_ctx =
-                        h3_send_only_ctx_create(NULL, h3, 1 /* server_control */);
-                    if (!send_ctx) {
-                        WT_LOG_ERROR("H3: OOM allocating server control stream context");
-                        return -1;
-                    }
-
-                    QUIC_STATUS st = MsQuic->StreamOpen(
-                        h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
-                        h3_send_only_stream_cb, send_ctx, &srv_ctrl);
-                    if (QUIC_FAILED(st)) {
-                        WT_LOG_ERROR("H3: StreamOpen server control failed: 0x%x", st);
-                        free(send_ctx);
-                        return -1;
-                    }
-                    send_ctx->stream = srv_ctrl;
-
-                    WT_LOG_INFO("H3: server control stream open %p", (void*)srv_ctrl);
-
-                    st = MsQuic->StreamStart(srv_ctrl,
-                                              QUIC_STREAM_START_FLAG_IMMEDIATE);
-                    if (QUIC_FAILED(st)) {
-                        WT_LOG_ERROR("H3: StreamStart server control failed: 0x%x", st);
-                        /* Stream was opened with callback — abort; SHUTDOWN_COMPLETE closes. */
-                        h3_send_only_abort(srv_ctrl);
-                        return -1;
-                    }
-
-                    uint8_t* srv_data = (uint8_t*)malloc((size_t)(1 + settings_len));
-                    if (!srv_data) {
-                        h3_send_only_abort(srv_ctrl);
-                        return -1;
-                    }
-                    srv_data[0] = H3_STREAM_CONTROL;
-                    memcpy(srv_data + 1, settings_buf, (size_t)settings_len);
-
-                    {
-                        QUIC_BUFFER buf;
-                        buf.Buffer = srv_data;
-                        buf.Length = (uint32_t)(1 + settings_len);
-                        /* Publish handle BEFORE Send so concurrent teardown can find it. */
-                        H3_LOCK(h3);
-                        h3->server_control_stream = srv_ctrl;
-                        h3->server_control_ctx = send_ctx;
-                        H3_UNLOCK(h3);
-
-                        st = MsQuic->StreamSend(srv_ctrl, &buf, 1,
-                                                 QUIC_SEND_FLAG_NONE, srv_data);
-                        if (QUIC_FAILED(st)) {
-                            /* StreamSend failed: we still own srv_data (no SEND_COMPLETE). */
-                            free(srv_data);
-                            H3_LOCK(h3);
-                            if (h3->server_control_stream == srv_ctrl) {
-                                h3->server_control_stream = NULL;
-                                h3->server_control_ctx = NULL;
-                            }
-                            H3_UNLOCK(h3);
-                            /* Detach h3 before async abort — same UAF guard as h3_session_free. */
-                            send_ctx->h3 = NULL;
-                            WT_LOG_ERROR("H3: StreamSend server SETTINGS failed: 0x%x stream=%p",
-                                         st, (void*)srv_ctrl);
-                            h3_send_only_abort(srv_ctrl);
-                            return -1;
-                        }
-                    }
-                    h3->server_state = H3_SRV_WAIT_CONNECT;
-                    WT_LOG_INFO("H3: browser control stream seen; sent server SETTINGS "
-                                "(ENABLE_CONNECT_PROTOCOL+WT+DATAGRAM+MAX_SESSIONS) stream=%p",
-                                (void*)srv_ctrl);
-
-                    /* ── Open server QPACK uni streams ────────────────
-                     * RFC 9204: server MUST open encoder (0x02) and decoder (0x03)
-                     * uni streams.  First instruction on encoder stream MUST be
-                     * Set Dynamic Table Capacity (= 0 for static-table-only).
-                     * Without this, some clients (including Chromium) may not
-                     * consider the QPACK setup complete and may stall. */
-                    {
-                        /* QPACK encoder stream: type 0x02 + Set Dynamic Table Capacity=0 */
-                        const uint8_t qpack_enc_data[] = {
-                            0x02,  /* QPACK encoder stream type */
-                            0x20   /* Set Dynamic Table Capacity = 0
-                                    * (001 00000: 3-bit tag + 5-bit prefix varint) */
-                        };
-                        HQUIC qenc = NULL;
-                        h3_send_only_ctx_t* qenc_ctx =
-                            h3_send_only_ctx_create(NULL, NULL, 0);
-                        if (qenc_ctx) {
-                            QUIC_STATUS qst = MsQuic->StreamOpen(
-                                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
-                                h3_send_only_stream_cb, qenc_ctx, &qenc);
-                            if (QUIC_SUCCEEDED(qst)) {
-                                qenc_ctx->stream = qenc;
-                                qst = MsQuic->StreamStart(
-                                    qenc, QUIC_STREAM_START_FLAG_IMMEDIATE);
-                                if (QUIC_SUCCEEDED(qst)) {
-                                    uint8_t* copy = (uint8_t*)malloc(sizeof(qpack_enc_data));
-                                    if (copy) {
-                                        memcpy(copy, qpack_enc_data, sizeof(qpack_enc_data));
-                                        QUIC_BUFFER buf;
-                                        buf.Buffer = copy;
-                                        buf.Length = sizeof(qpack_enc_data);
-                                        qst = MsQuic->StreamSend(qenc, &buf, 1,
-                                            QUIC_SEND_FLAG_NONE, copy);
-                                        if (QUIC_SUCCEEDED(qst)) {
-                                            WT_LOG_INFO("H3: server QPACK encoder stream open "
-                                                        "stream=%p (Set Dynamic Table Capacity=0)",
-                                                        (void*)qenc);
-                                        } else {
-                                            free(copy);
-                                            h3_send_only_abort(qenc);
-                                        }
-                                    } else {
-                                        h3_send_only_abort(qenc);
-                                    }
-                                } else {
-                                    h3_send_only_abort(qenc);
-                                }
-                            } else {
-                                free(qenc_ctx);
-                            }
-                        }
-
-                        /* QPACK decoder stream: type byte 0x03 only.
-                         * No decoder instructions needed for static-table-only. */
-                        const uint8_t qpack_dec_data[] = { 0x03 };
-                        HQUIC qdec = NULL;
-                        h3_send_only_ctx_t* qdec_ctx =
-                            h3_send_only_ctx_create(NULL, NULL, 0);
-                        if (qdec_ctx) {
-                            QUIC_STATUS qst = MsQuic->StreamOpen(
-                                h3->quic_conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL,
-                                h3_send_only_stream_cb, qdec_ctx, &qdec);
-                            if (QUIC_SUCCEEDED(qst)) {
-                                qdec_ctx->stream = qdec;
-                                qst = MsQuic->StreamStart(
-                                    qdec, QUIC_STREAM_START_FLAG_IMMEDIATE);
-                                if (QUIC_SUCCEEDED(qst)) {
-                                    uint8_t* copy = (uint8_t*)malloc(sizeof(qpack_dec_data));
-                                    if (copy) {
-                                        memcpy(copy, qpack_dec_data, sizeof(qpack_dec_data));
-                                        QUIC_BUFFER buf;
-                                        buf.Buffer = copy;
-                                        buf.Length = sizeof(qpack_dec_data);
-                                        qst = MsQuic->StreamSend(qdec, &buf, 1,
-                                            QUIC_SEND_FLAG_NONE, copy);
-                                        if (QUIC_SUCCEEDED(qst)) {
-                                            WT_LOG_INFO("H3: server QPACK decoder stream open "
-                                                        "stream=%p (static-table only)",
-                                                        (void*)qdec);
-                                        } else {
-                                            free(copy);
-                                            h3_send_only_abort(qdec);
-                                        }
-                                    } else {
-                                        h3_send_only_abort(qdec);
-                                    }
-                                } else {
-                                    h3_send_only_abort(qdec);
-                                }
-                            } else {
-                                free(qdec_ctx);
-                            }
-                        }
-                    }
+                /* Schedule SETTINGS on poll — NEVER open streams /
+                 * StreamSend from inside stream RECEIVE (msquic
+                 * re-entrancy → QuicOperationFree crash). */
+                if (!h3->server_settings_sent) {
+                    WT_LOG_INFO("H3: peer control type=0x00; schedule SETTINGS bootstrap");
+                    h3_server_request_settings_bootstrap(h3);
+                } else {
+                    WT_LOG_INFO("H3: peer control stream type=0x00 seen "
+                                "(server SETTINGS already sent; waiting for CONNECT)");
                 }
 
                 if (sctx->recv_offset > 1) {
@@ -2223,9 +2291,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
             if (first_byte == H3_STREAM_QPACK_ENCODER ||
                 first_byte == H3_STREAM_QPACK_DECODER) {
                 sctx->stream_type = (int)first_byte;
-                WT_LOG_INFO("H3: accepting QPACK uni stream type=0x%02x (no native fallback)",
+                h3->peer_h3_seen = true;
+                WT_LOG_INFO("H3: accepting peer QPACK uni stream type=0x%02x "
+                            "(static-only; drain encoder inserts, no dynamic table)",
                             (unsigned)first_byte);
-                /* Drain / ignore QPACK; we use static table only. */
+                /* Schedule SETTINGS if not yet sent — same defer-to-poll
+                 * pattern as control stream above. */
+                if (!h3->server_settings_sent) {
+                    WT_LOG_INFO("H3: peer QPACK before SETTINGS; schedule bootstrap");
+                    h3_server_request_settings_bootstrap(h3);
+                }
                 return 0;
             }
 
@@ -2245,16 +2320,19 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
             return h3_server_process_data(h3, sctx);
         }
 
-        if (h3->server_state >= H3_SRV_WAIT_CONNECT) {
-            /* Browser CONNECT request after SETTINGS exchange. */
-            sctx->stream_type = H3_STREAM_REQUEST;
-            sctx->is_request = true;
-            /* Continue into CONNECT parse below (stream_type no longer -1). */
-        } else {
-            /* Raw/native protocol: first bidi byte is not H3 control.
-             * Only valid for native FishMMO clients, never for browsers.
-             *
-             * ── Native-client access control ─────────────────
+        if (!h3->server_settings_sent) {
+            WT_LOG_INFO("H3: first bidi before SETTINGS; schedule bootstrap");
+            h3_server_request_settings_bootstrap(h3);
+            /* Wait for poll to send SETTINGS before classifying CONNECT. */
+            return 0;
+        }
+
+        /* Browser CONNECT HEADERS frame type is 0x01. Native FishMMO clients
+         * send raw game bytes. After proactive SETTINGS we are already in
+         * WAIT_CONNECT — preserve native detection when no peer H3 uni was
+         * seen and the first byte is not HEADERS. */
+        if (!h3->peer_h3_seen && first_byte != H3_FRAME_HEADERS) {
+            /* Raw/native protocol.
              * When allowed_origins is configured (non-empty, not "*"),
              * native clients cannot perform CORS validation and are
              * rejected by default.  Operators must explicitly enable
@@ -2313,6 +2391,18 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
              * (acceptable — connection is shutting down anyway). */
             return 1;
         }
+
+        /* Browser CONNECT request after SETTINGS exchange.
+         * Peer H3 uni was seen (or first byte is HEADERS) —
+         * classify as request stream for CONNECT parsing. */
+        sctx->stream_type = H3_STREAM_REQUEST;
+        sctx->is_request = true;
+        WT_LOG_INFO("H3: bidi stream classified as CONNECT candidate "
+                    "first=0x%02x peer_h3=%d state=%d",
+                    (unsigned)first_byte,
+                    h3->peer_h3_seen ? 1 : 0,
+                    (int)h3->server_state);
+        /* Continue into CONNECT parse below (stream_type no longer -1). */
     }
 
     if (sctx->stream_type == H3_STREAM_CONTROL) {

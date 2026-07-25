@@ -59,12 +59,19 @@ extern "C" {
 #define H3_FRAME_MAX_PUSH_ID    0x0D
 
 /* ── HTTP/3 Settings Identifiers ─────────────────────────────── */
-
-#define H3_SETTINGS_ENABLE_WEBTRANSPORT  0x2b603742  /* RFC 9220 §5 — WebTransport support */
-#define H3_SETTINGS_DATAGRAM             0x33        /* RFC 9297 §5.1 — HTTP/3 DATAGRAM support */
-#define H3_SETTINGS_ENABLE_CONNECT_PROTOCOL 0x08     /* RFC 9220 / RFC 8441 — Extended CONNECT required by Chrome WT */
-/* draft-ietf-webtrans-http3 SETTINGS_WT_MAX_SESSIONS (formerly draft id varies; Chrome accepts 0x14e9db3d). */
-#define H3_SETTINGS_WT_MAX_SESSIONS      0x14e9db3d
+/*
+ * Chrome/Quiche (http_constants.h) requires the draft-07 max-sessions ID
+ * and also understands draft-00 enable + RFC 9297 datagram. Advertise all
+ * known IDs so Chromium enables Extended CONNECT + WebTransport.
+ */
+#define H3_SETTINGS_ENABLE_WEBTRANSPORT       0x2b603742u /* draft00 SETTINGS_WEBTRANS / ENABLE_WEBTRANSPORT */
+#define H3_SETTINGS_DATAGRAM                  0x33u       /* RFC 9297 SETTINGS_H3_DATAGRAM */
+#define H3_SETTINGS_DATAGRAM_DRAFT04          0xffd277u   /* draft-ietf-masque-h3-datagram-04 (Quiche still checks) */
+#define H3_SETTINGS_ENABLE_CONNECT_PROTOCOL   0x08u       /* RFC 9220 / RFC 8441 Extended CONNECT */
+#define H3_SETTINGS_WT_MAX_SESSIONS_DRAFT07   0xc671706au /* Quiche SETTINGS_WEBTRANS_MAX_SESSIONS_DRAFT07 */
+#define H3_SETTINGS_WT_MAX_SESSIONS_ALT       0x14e9cd29u /* picoquic drafts 13-14 SETTINGS_WEBTRANSPORT_MAX_SESSIONS */
+/* Legacy alias for backward compatibility with internal callers: */
+#define H3_SETTINGS_WT_MAX_SESSIONS           H3_SETTINGS_WT_MAX_SESSIONS_DRAFT07
 
 /* ── QPACK encoding prefixes ─────────────────────────────────── */
 #define QPACK_INDEXED_STATIC    0xC0  /* 11xxxxxx — indexed static table entry */
@@ -137,6 +144,21 @@ typedef struct h3_session_s {
     h3_server_state_t   server_state;
     HQUIC               server_control_stream;
     void*               server_control_ctx;   /* h3_send_only_ctx_t* — for teardown nulling */
+    /* Server-initiated QPACK uni streams (types 0x02 / 0x03). Chrome/Quiche
+     * expect the peer to open these even when only the static table is used;
+     * missing them can stall the client after SETTINGS with no CONNECT. */
+    HQUIC               server_qpack_encoder_stream;
+    HQUIC               server_qpack_decoder_stream;
+    /* True after server control SETTINGS have been StreamSend'd (proactive or
+     * reactive). Prevents double SETTINGS if peer control arrives later. */
+    bool                server_settings_sent;
+    /* Set on QUIC worker when SETTINGS must be sent; cleared and executed on
+     * the application poll thread. NEVER open streams / StreamSend from
+     * inside stream RECEIVE (msquic re-entrancy → QuicOperationFree crash). */
+    volatile int        settings_bootstrap_pending;
+    /* True once any peer H3 uni is seen (control 0x00 / QPACK 0x02/0x03).
+     * Used to preserve native-FishMMO detection after proactive SETTINGS. */
+    bool                peer_h3_seen;
 
     /* Client state */
     h3_client_state_t   client_state;
@@ -148,6 +170,11 @@ typedef struct h3_session_s {
     char                request_authority[256];
     bool                handshake_complete;
     bool                is_server;      /* true = server, false = client */
+    /* QUIC stream ID of the accepted CONNECT request (WebTransport Session ID).
+     * Used to frame post-handshake data streams for Chrome (WEBTRANSPORT_STREAM). */
+    uint64_t            connect_stream_id;
+    /* True when session was established via browser CONNECT (not native raw). */
+    bool                is_webtransport;
 
     /* Callbacks */
     h3_on_session_ready_fn  on_ready;
@@ -246,6 +273,33 @@ h3_session_t* h3_session_create(
     h3_on_session_ready_fn  on_ready,
     h3_on_error_fn          on_error,
     void*                   ctx);
+
+/**
+ * Request server SETTINGS bootstrap (control + QPACK uni).
+ * Safe from any thread: only sets a flag. Actual StreamOpen/Send runs on
+ * the next wt_server_poll via h3_server_poll_deferred().
+ */
+void h3_server_request_settings_bootstrap(h3_session_t* h3);
+
+/**
+ * Run deferred SETTINGS bootstrap if pending. Call from application poll
+ * thread only (not from msquic stream/connection callbacks).
+ */
+void h3_server_poll_deferred(h3_session_t* h3);
+
+/**
+ * Server-side: immediately open control + QPACK uni streams and send SETTINGS.
+ *
+ * Chromium/Quiche send server SETTINGS as soon as encryption is established
+ * (not after seeing the client's control stream). Calling this from
+ * QUIC_CONNECTION_EVENT_CONNECTED unblocks Chrome WebTransport CONNECT, which
+ * otherwise stalls after SETTINGS never arriving on the peer control stream.
+ *
+ * Safe to call only once; subsequent calls are no-ops if SETTINGS already sent.
+ *
+ * @return 0 on success (or already sent), negative on failure.
+ */
+int h3_server_send_initial_settings(h3_session_t* h3);
 
 /**
  * Free the HTTP/3 session and all associated resources.

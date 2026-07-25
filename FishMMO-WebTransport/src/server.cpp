@@ -770,6 +770,21 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
             server->h3_sweep_cursor = 1;
     }
 
+    /* Deferred H3 SETTINGS bootstrap (app thread — safe for StreamOpen/Send).
+     * The CONNECTED callback (QUIC worker) schedules SETTINGS via
+     * h3_server_send_initial_settings → h3_server_request_settings_bootstrap,
+     * which sets settings_bootstrap_pending=1.  This poll loop opens the
+     * server control stream and sends SETTINGS on the application thread,
+     * avoiding msquic re-entrancy that caused QuicOperationFree crashes. */
+    for (uint32_t i = 1; i <= server->max_clients; i++) {
+        wt_server_conn_t* c = &server->connections[i];
+        if (!atomic_load(&c->in_use))
+            continue;
+        if (!c->h3_session)
+            continue;
+        h3_server_poll_deferred(c->h3_session);
+    }
+
     wt_datagram_queue_drain(&server->dgram_queue,
                              on_server_dgram_drain, server);
 }
@@ -1500,9 +1515,17 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
                 sconn->h3_session->allow_native_clients =
                     sconn->owner->allow_native_clients;
             }
+
+            /* Schedule SETTINGS for poll thread (never StreamOpen here —
+             * connection/stream callbacks re-entering msquic caused
+             * QuicOperationFree double-fault / Login 255/EXCEPTION). */
+            h3_server_send_initial_settings(sconn->h3_session);
+            WT_LOG_INFO(
+                "H3: SETTINGS bootstrap scheduled for client %llu (poll thread)",
+                (unsigned long long)sconn->id);
         }
-        /* When h3_session is created, the first PEER_STREAM_STARTED will
-         * trigger protocol detection. Session init is deferred until
+        /* When h3_session is created, peer streams drive protocol detection
+         * (browser CONNECT vs native). Session init is deferred until
          * on_h3_session_ready fires. */
         break;
     }
