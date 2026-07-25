@@ -290,6 +290,9 @@ namespace FishMMO.Client
 		/// <summary>How long after ClientHandshake send to wait for ServerHandshake before declaring failure.</summary>
 		private const float ServerHandshakeTimeoutSeconds = 12f;
 
+		/// <summary>Resend ClientHandshake once if no ServerHandshake after this many seconds (wire path verified).</summary>
+		private const float ClientHandshakeResendAfterSeconds = 2f;
+
 		/// <summary>
 		/// Client authentication event. Subscribe to receive authentication results from the server.
 		/// </summary>
@@ -538,9 +541,12 @@ namespace FishMMO.Client
 				pendingHandshakeConnectionToken = null;
 				StopWaitForManagerReadyRoutine();
 				Log.Info("ClientLoginAuthenticator",
-					$"ClientHandshake Broadcast queued ({source}) managerState=Started — " +
-					"awaiting ServerHandshake (not progress until server replies)");
-				StartServerHandshakeWatchdog();
+					$"ClientHandshake Broadcast returned ({source}) managerState=Started — " +
+					"NOT progress until [FishWT] WIRE SEND OK + ServerHandshake received");
+				LogWireStats("post-broadcast");
+				// Only start watchdog once per connection (resend reuses it).
+				if (serverHandshakeWatchdogRoutine == null && !serverHandshakeReceived)
+					StartServerHandshakeWatchdog();
 			}
 			else
 			{
@@ -618,11 +624,15 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// After ClientHandshake is queued, require ServerHandshake within a timeout.
-		/// "sent OK" alone is not success if LoginServer never sees app payload.
+		/// "Broadcast queued" is NOT success — prove ServerHandshake or wire silence.
+		/// Optional one resend at ~2s if still no reply.
 		/// </summary>
 		private IEnumerator ServerHandshakeWatchdog()
 		{
-			float deadline = Time.realtimeSinceStartup + ServerHandshakeTimeoutSeconds;
+			float start = Time.realtimeSinceStartup;
+			float deadline = start + ServerHandshakeTimeoutSeconds;
+			bool resendAttempted = false;
+
 			while (Time.realtimeSinceStartup < deadline)
 			{
 				if (serverHandshakeReceived)
@@ -635,25 +645,80 @@ namespace FishMMO.Client
 					serverHandshakeWatchdogRoutine = null;
 					yield break;
 				}
+
+				// One resend after 2s if no ServerHandshake (only when still fully ready).
+				if (!resendAttempted
+					&& (Time.realtimeSinceStartup - start) >= ClientHandshakeResendAfterSeconds
+					&& IsFullyReadyToBroadcast())
+				{
+					resendAttempted = true;
+					LogWireStats("pre-resend");
+					Log.Warning("ClientLoginAuthenticator",
+						$"No ServerHandshake after {ClientHandshakeResendAfterSeconds:0.#}s — " +
+						"resending ClientHandshake once (wire path re-prove)");
+					// Allow TrySend to run again with same connection.
+					initialClientHandshakeSent = false;
+					lastHandshakeSendSucceeded = false;
+					TrySendInitialClientHandshake("ServerHandshakeWatchdog.resend");
+				}
+
 				yield return null;
 			}
 			serverHandshakeWatchdogRoutine = null;
 			if (serverHandshakeReceived) yield break;
 
+			LogWireStats("timeout");
 			Log.Error("ClientLoginAuthenticator",
-				$"No ServerHandshake within {ServerHandshakeTimeoutSeconds:0}s after ClientHandshake. " +
-				"LoginServer likely still has zero app payload (TRANSPORT session only). " +
-				"CreateAccount cannot run without ECDH after ServerHandshake.");
+				$"NO ServerHandshake within {ServerHandshakeTimeoutSeconds:0}s after ClientHandshake. " +
+				"Transport silent / LoginServer has zero app payload (session establish only). " +
+				"Not ServerBusy — handshake never completed. " +
+				"Check [FishWT] WIRE SEND OK vs DROP; LoginServer for 'deliver N bytes' / ClientHandshake.");
 
-			// Surface failure to UI so create-account does not hang forever.
+			// Surface explicit failure (not generic "busy") so UI unlocks with a real message path.
 			try
 			{
+				// ServerBusy is the least-wrong existing code that register UI shows a dialog for;
+				// the log line above is the authoritative diagnosis.
 				OnClientAuthenticationResult?.Invoke(ClientAuthenticationResult.ServerBusy);
 			}
 			catch (Exception ex)
 			{
 				Log.Warning("ClientLoginAuthenticator",
 					$"Failed to raise handshake-timeout auth result: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Log FishNet→WebTransport wire counters so we can see Broadcast queued vs WT send.
+		/// </summary>
+		private void LogWireStats(string tag)
+		{
+			try
+			{
+				var nm = networkManager ?? base.NetworkManager;
+				var wt = nm?.TransportManager?.Transport as FishNet.Transporting.WebTransport.WebTransport;
+				if (wt == null && nm?.TransportManager?.Transport is FishNet.Transporting.Multipass.Multipass mp)
+					wt = mp.ClientTransport as FishNet.Transporting.WebTransport.WebTransport;
+
+				if (wt == null)
+				{
+					Log.Warning("ClientLoginAuthenticator",
+						$"WireStats[{tag}]: WebTransport client transport not found");
+					return;
+				}
+				wt.GetClientWireStats(out long queued, out long sentOk, out long sentFail,
+					out long sentBytes, out long dropNotStarted);
+				Log.Info("ClientLoginAuthenticator",
+					$"WireStats[{tag}]: queued={queued} wireSentOk={sentOk} wireSentFail={sentFail} " +
+					$"wireBytes={sentBytes} dropNotStarted={dropNotStarted} " +
+					$"(if queued>0 && wireSentOk==0 → FishNet→WT glue bug)");
+				UnityEngine.Debug.Log(
+					$"[FishWT] WireStats[{tag}] queued={queued} sentOk={sentOk} sentFail={sentFail} " +
+					$"bytes={sentBytes} dropNotStarted={dropNotStarted}");
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("ClientLoginAuthenticator", $"WireStats[{tag}] failed: {ex.Message}");
 			}
 		}
 

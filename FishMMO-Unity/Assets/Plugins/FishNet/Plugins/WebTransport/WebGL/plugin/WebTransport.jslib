@@ -299,10 +299,27 @@ var LibraryFishWebTransport = {
     WTSendStream__deps: ['$FishWebTransport'],
     WTSendStream: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
-        if (!session || !session.wt) return false;
-        if (session.wt.readyState !== 'connected') return false;
+        if (!session || !session.wt) {
+            console.error('[FishWT] WTSendStream FAIL no session index=' + index + ' len=' + length);
+            return false;
+        }
+        if (session.wt.readyState !== 'connected') {
+            console.error('[FishWT] WTSendStream FAIL readyState=' + session.wt.readyState +
+                ' index=' + index + ' len=' + length + ' url=' + (session._url || ''));
+            return false;
+        }
 
         var data = HEAPU8.slice(dataPtr, dataPtr + length);
+        session._wireSendN = (session._wireSendN || 0) + 1;
+        var n = session._wireSendN;
+        /* Prove managed→browser handoff for first packets (handshake). */
+        if (n <= 12 || (n % 50) === 0) {
+            console.log('[FishWT] WTSendStream HAND_TO_BROWSER #' + n +
+                ' index=' + index + ' len=' + length +
+                ' readyState=' + session.wt.readyState +
+                ' url=' + (session._url || '') +
+                ' (LoginServer should see app stream next)');
+        }
 
         /* Check cached writer — desiredSize is null when the
          * underlying stream is closed or errored. */
@@ -322,8 +339,13 @@ var LibraryFishWebTransport = {
         if (session._streamWriter) {
             /* Reuse the existing writer — no new stream created. */
             var writer = session._streamWriter;
-            writer.write(data).catch(function(e) {
-                console.warn('[FishWT] stream write error: ' + e.message);
+            writer.write(data).then(function() {
+                if (n <= 12) {
+                    console.log('[FishWT] WTSendStream write RESOLVED #' + n +
+                        ' index=' + index + ' len=' + length);
+                }
+            }).catch(function(e) {
+                console.warn('[FishWT] stream write error #' + n + ': ' + e.message);
                 if (session._streamWriter === writer) {
                     try { writer.releaseLock(); } catch (_) {}
                     session._streamWriter = null;
@@ -340,14 +362,20 @@ var LibraryFishWebTransport = {
         if (session._streamWriterPending) {
             if (!session._sendQueue) session._sendQueue = [];
             session._sendQueue.push(data);
+            console.log('[FishWT] WTSendStream queued behind pending stream #' + n +
+                ' index=' + index + ' len=' + length + ' qlen=' + session._sendQueue.length);
             return true;
         }
 
         /* No valid cached writer and no pending creation:
          * start creating a new persistent bidirectional stream. */
         session._streamWriterPending = true;
+        console.log('[FishWT] WTSendStream createBidirectionalStream #' + n +
+            ' index=' + index + ' len=' + length + ' url=' + (session._url || ''));
         try {
             session.wt.createBidirectionalStream().then(function(stream) {
+                console.log('[FishWT] WTSendStream bidi stream OPENED #' + n +
+                    ' index=' + index + ' — writing app payload');
                 var writer = stream.writable.getWriter();
                 session._streamWriter = writer;
                 session._streamWriterPending = false;
@@ -363,15 +391,21 @@ var LibraryFishWebTransport = {
                 }
 
                 /* Write the current data. */
-                writer.write(data).catch(function(e) {
-                    console.warn('[FishWT] stream write error: ' + e.message);
+                writer.write(data).then(function() {
+                    if (n <= 12) {
+                        console.log('[FishWT] WTSendStream first-write RESOLVED #' + n +
+                            ' index=' + index + ' len=' + length);
+                    }
+                }).catch(function(e) {
+                    console.warn('[FishWT] stream write error #' + n + ': ' + e.message);
                     if (session._streamWriter === writer) {
                         try { writer.releaseLock(); } catch (_) {}
                         session._streamWriter = null;
                     }
                 });
             }).catch(function(err) {
-                console.warn('[FishWT] createBidirectionalStream failed: ' + err.message);
+                console.error('[FishWT] createBidirectionalStream FAILED #' + n +
+                    ': ' + err.message + ' index=' + index);
                 session._streamWriterPending = false;
                 session._sendQueue = [];
             });

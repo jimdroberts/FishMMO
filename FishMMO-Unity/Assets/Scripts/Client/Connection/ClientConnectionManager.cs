@@ -119,13 +119,18 @@ namespace FishMMO.Client
 				return;
 			}
 			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
-			// Stop any prior session first. This may fire Stopping/Stopped once.
-			// Auth core must NOT wipe login/register credentials on that event
-			// (create-account needs them after ECDH on the new connection).
+			// Stop any prior session first — but only if not already Stopped.
+			// Unnecessary Stop+Start churn was producing double WTConnect (index=0 then index=1).
+			// Auth core must NOT wipe login/register credentials on Stop events.
 			Log.Info("ClientConnection",
 				$"ConnectToServer begin host={address} port={port} priorState={ClientState} " +
-				"(StopConnection then Start — credentials must survive this stop)");
-			NetworkManager.ClientManager.StopConnection();
+				"(single StartConnection after clean stop — one WT session)");
+			if (ClientState != LocalConnectionState.Stopped)
+			{
+				Log.Info("ClientConnection",
+					$"Stopping prior connection state={ClientState} before new connect");
+				NetworkManager.ClientManager.StopConnection();
+			}
 			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
 
@@ -286,12 +291,34 @@ namespace FishMMO.Client
 			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
 
+			// Final guard: never Start while still Starting/Started (double WTConnect).
+			if (ClientState == LocalConnectionState.Starting || ClientState == LocalConnectionState.Started)
+			{
+				Log.Error("ClientConnection",
+					$"Abort StartConnection — still {ClientState} for host={address}:{port}. " +
+					"Refusing second WT session (one FishNet client only).");
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				yield break;
+			}
+
 			Log.Info("ClientConnection",
-				$"StartConnection host={address} port={port} isWorld={isWorldServer} timeout={ConnectTimeoutSeconds:0.#}s");
+				$"StartConnection host={address} port={port} isWorld={isWorldServer} " +
+				$"priorState={ClientState} timeout={ConnectTimeoutSeconds:0.#}s " +
+				"(expect exactly one [FishWT] WTConnect BEGIN)");
 
 			try
 			{
-				NetworkManager.ClientManager.StartConnection(address, port);
+				bool started = NetworkManager.ClientManager.StartConnection(address, port);
+				if (!started)
+				{
+					Log.Error("ClientConnection",
+						$"StartConnection returned false for {address}:{port} " +
+						$"(transport may already be Starting/Started — check double connect)");
+					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					OnConnectTimedOut?.Invoke(address, port,
+						$"Could not start WebTransport to {address}:{port} (StartConnection false)");
+					yield break;
+				}
 			}
 			catch (Exception ex)
 			{

@@ -237,8 +237,9 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             sctx->mgr->on_stream_data &&
             sctx->mgr->callback_ctx) {
             WT_LOG_INFO(
-                "Stream %llu: deliver %zu bytes to app (conn=%llu) "
-                "first=%02x %02x %02x %02x stamp=WT_CAPSULE_NO_LEN_V1",
+                "Stream %llu: FIRST_APP_PAYLOAD_AFTER_SESSION deliver %zu bytes "
+                "to app (conn=%llu) first=%02x %02x %02x %02x "
+                "stamp=WT_CAPSULE_NO_LEN_V1 (success bar: any payload after WT establish)",
                 (unsigned long long)sctx->stream_id,
                 app_len,
                 (unsigned long long)sctx->mgr->conn_id,

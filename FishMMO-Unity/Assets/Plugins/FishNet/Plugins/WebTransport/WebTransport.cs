@@ -181,7 +181,29 @@ namespace FishNet.Transporting.WebTransport
 					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
 				return;
 			}
+			// FishNet TransportManager flushes bundles here during IterateOutgoing.
+			// Log first packets so we can tell "Broadcast queued" vs "transport accepted".
+			var sockState = this.clientSocket != null
+				? this.clientSocket.GetConnectionState()
+				: LocalConnectionState.Stopped;
+			if (segment.Count > 0)
+			{
+				UnityEngine.Debug.Log(
+					$"[FishWT] Transport.SendToServer ch={channelId} len={segment.Count} " +
+					$"clientSocketState={sockState}");
+			}
 			this.clientSocket.SendToServer(channelId, segment);
+		}
+
+		/// <summary>
+		/// Wire-send counters for diagnostics (handshake / create-account).
+		/// </summary>
+		public void GetClientWireStats(out long queued, out long sentOk, out long sentFail, out long sentBytes, out long dropNotStarted)
+		{
+			if (clientSocket != null)
+				clientSocket.GetWireStats(out queued, out sentOk, out sentFail, out sentBytes, out dropNotStarted);
+			else
+				queued = sentOk = sentFail = sentBytes = dropNotStarted = 0;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

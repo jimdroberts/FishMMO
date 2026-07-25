@@ -1242,7 +1242,8 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             }
             WT_LOG_INFO(
                 "Client %llu accepting peer stream into stream_mgr "
-                "stamp=WT_CAPSULE_NO_LEN_V1",
+                "stamp=WT_CAPSULE_NO_LEN_V1 FIRST_APP_STREAM_AFTER_SESSION "
+                "(expect ClientHandshake / FishNet bytes next — not just TRANSPORT shutdown)",
                 (unsigned long long)sconn->id);
             wt_stream_manager_accept_stream(
                 session->stream_mgr,
