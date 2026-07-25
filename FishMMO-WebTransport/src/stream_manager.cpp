@@ -5,6 +5,8 @@
 
 #include "stream_manager.h"
 #include <stdlib.h>
+#include <stddef.h>
+#include <string.h>
 
 /* ── Mutex helpers ────────────────────────────────────────────── */
 #if defined(WT_PLATFORM_WINDOWS)
@@ -45,6 +47,18 @@ static void sm_unlock_fn(wt_stream_manager_t* mgr)
 
 /* ── Per-stream context (attached to each QUIC stream) ──────── */
 
+/* Heap send request: QUIC_BUFFER + payload must outlive StreamSend until
+ * SEND_COMPLETE. Stack QUIC_BUFFER caused QuicStreamSendBufferRequest SIGSEGV. */
+#define SM_SEND_REQ_MAGIC  0x534E4442u  /* 'SNDB' */
+
+typedef struct sm_send_req_s {
+    uint32_t    magic;
+    int         freed;       /* 1 after free — detect double free */
+    uint32_t    length;      /* payload length in data[] */
+    QUIC_BUFFER buf;         /* buf.Buffer points at data[] */
+    uint8_t     data[1];     /* flexible: actual size = length */
+} sm_send_req_t;
+
 typedef struct {
     wt_stream_manager_t* mgr;
     wt_stream_id_t       stream_id;
@@ -56,7 +70,55 @@ typedef struct {
     bool                 header_checked;
     /* Prevent double StreamClose (mgr shutdown race vs SHUTDOWN_COMPLETE). */
     bool                 close_done;
+    /* Outbound payload waiting for START_COMPLETE before StreamSend.
+     * NULL after ownership transfers to StreamSend ClientContext. */
+    sm_send_req_t*       pending_send;
 } stream_ctx_t;
+
+static sm_send_req_t* sm_send_req_alloc(const uint8_t* header, size_t header_len,
+                                        const uint8_t* data, int32_t length)
+{
+    if (length < 0) return NULL;
+    size_t total = header_len + (size_t)length;
+    /* sizeof(sm_send_req_t) already includes 1 byte of data[1] */
+    size_t bytes = offsetof(sm_send_req_t, data) + total;
+    sm_send_req_t* req = (sm_send_req_t*)malloc(bytes);
+    if (!req) return NULL;
+    req->magic = SM_SEND_REQ_MAGIC;
+    req->freed = 0;
+    req->length = (uint32_t)total;
+    req->buf.Buffer = req->data;
+    req->buf.Length = (uint32_t)total;
+    if (header_len > 0 && header)
+        memcpy(req->data, header, header_len);
+    if (length > 0 && data)
+        memcpy(req->data + header_len, data, (size_t)length);
+    return req;
+}
+
+static void sm_send_req_free(void* client_ctx, const char* reason)
+{
+    sm_send_req_t* req = (sm_send_req_t*)client_ctx;
+    if (!req) {
+        WT_LOG_WARN("SEND free: null ClientContext (%s)", reason ? reason : "?");
+        return;
+    }
+    if (req->magic != SM_SEND_REQ_MAGIC) {
+        WT_LOG_ERROR("SEND free: bad magic 0x%x (%s) — not our buffer",
+                     req->magic, reason ? reason : "?");
+        return;
+    }
+    if (req->freed) {
+        WT_LOG_ERROR("SEND free: DOUBLE FREE blocked len=%u (%s)",
+                     req->length, reason ? reason : "?");
+        return;
+    }
+    req->freed = 1;
+    req->magic = 0;
+    WT_LOG_INFO("SEND_COMPLETE free ok len=%u (%s)",
+                req->length, reason ? reason : "complete");
+    free(req);
+}
 
 /* WEBTRANSPORT_STREAM capsule type (draft-ietf-webtrans-http3). */
 #define WT_STREAM_CAPSULE_TYPE  0x41u
@@ -383,9 +445,84 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         return QUIC_STATUS_SUCCESS;
     }
 
+    case QUIC_STREAM_EVENT_START_COMPLETE: {
+        /*
+         * CRITICAL: never StreamSend until START_COMPLETE.
+         * Sending immediately after StreamStart races the msquic worker and
+         * hits QuicStreamSendBufferRequest on invalid stream state (SIGSEGV).
+         * Match http3.cpp send-only pattern: queue payload, flush here.
+         */
+        if (event->START_COMPLETE.Status != 0 &&
+            QUIC_FAILED(event->START_COMPLETE.Status)) {
+            WT_LOG_ERROR(
+                "Stream START_COMPLETE failed st=0x%x stream_id=%llu",
+                event->START_COMPLETE.Status,
+                (unsigned long long)sctx->stream_id);
+            if (sctx->pending_send) {
+                sm_send_req_free(sctx->pending_send, "start_failed");
+                sctx->pending_send = NULL;
+            }
+            if (!sctx->close_done) {
+                MsQuic->StreamShutdown(
+                    stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT |
+                        QUIC_STREAM_SHUTDOWN_FLAG_IMMEDIATE,
+                    0);
+            }
+            return QUIC_STATUS_SUCCESS;
+        }
+
+        sm_send_req_t* req = sctx->pending_send;
+        if (!req) {
+            WT_LOG_INFO(
+                "Stream START_COMPLETE stream_id=%llu (no pending send)",
+                (unsigned long long)sctx->stream_id);
+            return QUIC_STATUS_SUCCESS;
+        }
+        /* Transfer ownership to StreamSend ClientContext before call. */
+        sctx->pending_send = NULL;
+
+        QUIC_STATUS st = MsQuic->StreamSend(
+            stream,
+            &req->buf,
+            1,
+            QUIC_SEND_FLAG_FIN,
+            req);
+        if (QUIC_FAILED(st)) {
+            WT_LOG_ERROR(
+                "StreamSend failed after START_COMPLETE st=0x%x "
+                "stream_id=%llu len=%u — free now (no SEND_COMPLETE)",
+                st,
+                (unsigned long long)sctx->stream_id,
+                req->length);
+            sm_send_req_free(req, "send_failed");
+            if (!sctx->close_done) {
+                MsQuic->StreamShutdown(
+                    stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT |
+                        QUIC_STREAM_SHUTDOWN_FLAG_IMMEDIATE,
+                    0);
+            }
+            return QUIC_STATUS_SUCCESS;
+        }
+
+        WT_LOG_INFO(
+            "StreamSend queued after START_COMPLETE stream_id=%llu len=%u "
+            "stamp=SEND_AFTER_START_V1 (free only on SEND_COMPLETE)",
+            (unsigned long long)sctx->stream_id,
+            req->length);
+        return QUIC_STATUS_SUCCESS;
+    }
+
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
-        /* Free the copy buffer we malloc'd in wt_stream_manager_send */
-        free(event->SEND_COMPLETE.ClientContext);
+        /* Exactly one free per successful StreamSend ClientContext. */
+        if (event->SEND_COMPLETE.Canceled) {
+            WT_LOG_WARN(
+                "SEND_COMPLETE canceled stream_id=%llu — free buffer",
+                (unsigned long long)sctx->stream_id);
+        }
+        sm_send_req_free(event->SEND_COMPLETE.ClientContext,
+                         event->SEND_COMPLETE.Canceled ? "canceled" : "ok");
         return QUIC_STATUS_SUCCESS;
 
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
@@ -401,6 +538,12 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
         wt_stream_manager_t* mgr = sctx->mgr;
+
+        /* Free unsent pending buffer (never reached StreamSend). */
+        if (sctx->pending_send) {
+            sm_send_req_free(sctx->pending_send, "shutdown_before_send");
+            sctx->pending_send = NULL;
+        }
 
         /* Clear the slot under lock — concurrent with send/accept/mgr shutdown. */
         sm_lock(mgr);
@@ -637,21 +780,9 @@ int32_t wt_stream_manager_send(
     mgr->streams[slot].quic_stream = quic_stream;
     sm_unlock(mgr);
 
-    status = MsQuic->StreamStart(quic_stream,
-                                  QUIC_STREAM_START_FLAG_IMMEDIATE);
-    if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamStart failed: 0x%x stream_id=%llu",
-                     status, (unsigned long long)stream_id);
-        /* Handler is already registered at StreamOpen — do NOT free(sctx) here.
-         * StreamClose delivers SHUTDOWN_COMPLETE which frees sctx and clears slot.
-         * Freeing before close was UAF → quic_bugcheck. */
-        MsQuic->StreamClose(quic_stream);
-        return WT_ERR_SEND_FAILED;
-    }
-
-    /* Send data — copy to ensure lifetime across async send.
-     * Browser WebTransport: WEBTRANSPORT_STREAM = Type 0x41 + Session ID
-     * (no length). Wrong length framing breaks Chrome stream association. */
+    /* Build heap send request BEFORE StreamStart. StreamSend runs only from
+     * START_COMPLETE so msquic worker never touches a stack QUIC_BUFFER or a
+     * half-started stream (QuicStreamSendBufferRequest SIGSEGV). */
     size_t header_len = 0;
     uint8_t header[1 + 8];
     if (mgr->use_wt_stream_header) {
@@ -664,49 +795,39 @@ int32_t wt_stream_manager_send(
             (unsigned long long)mgr->wt_session_id, header_len, length);
     }
 
-    uint8_t* copy = (uint8_t*)malloc(header_len + (size_t)length);
-    if (!copy) {
-        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
-         * StreamShutdown will handle slot cleanup (and free sctx). */
+    sm_send_req_t* req = sm_send_req_alloc(
+        header_len > 0 ? header : NULL, header_len, data, length);
+    if (!req) {
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         return WT_ERR_BUFFER_FULL;
     }
-    if (header_len > 0)
-        memcpy(copy, header, header_len);
-    memcpy(copy + header_len, data, (size_t)length);
+    sctx->pending_send = req;
 
-    QUIC_BUFFER send_buf;
-    send_buf.Buffer = copy;
-    send_buf.Length = (uint32_t)(header_len + (size_t)length);
-
-    status = MsQuic->StreamSend(quic_stream, &send_buf, 1,
-                                 QUIC_SEND_FLAG_FIN, copy);
-    /* `copy` is freed by stream_send_complete on SEND_COMPLETE event */
+    status = MsQuic->StreamStart(quic_stream,
+                                  QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamSend failed: 0x%x stream_id=%llu",
+        WT_LOG_ERROR("StreamStart failed: 0x%x stream_id=%llu",
                      status, (unsigned long long)stream_id);
-        free(copy);
-        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
-         * StreamShutdown will handle slot cleanup. */
-        MsQuic->StreamShutdown(quic_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+        /* pending_send freed in SHUTDOWN_COMPLETE; do not free sctx here. */
+        MsQuic->StreamClose(quic_stream);
         return WT_ERR_SEND_FAILED;
     }
 
     WT_LOG_INFO(
-        "StreamOpen+Start+Send OK conn=%llu stream_id=%llu app_len=%d "
-        "wire_len=%u header_len=%zu stamp=SERVER_REPLY_STREAM_V1 "
-        "(ServerHandshake / app reply should reach client)",
+        "StreamOpen+Start OK conn=%llu stream_id=%llu app_len=%d "
+        "wire_len=%u header_len=%zu pending_send=1 stamp=SERVER_REPLY_STREAM_V2 "
+        "(StreamSend deferred to START_COMPLETE — buffer free on SEND_COMPLETE only)",
         (unsigned long long)mgr->conn_id,
         (unsigned long long)stream_id,
         length,
-        (unsigned)send_buf.Length,
+        (unsigned)req->length,
         header_len);
 
-    /* Update send_closed under lock. */
+    /* send_closed updated when FIN is actually queued (START_COMPLETE path
+     * always uses QUIC_SEND_FLAG_FIN). Mark intent now for accounting. */
     sm_lock(mgr);
-    mgr->streams[slot].send_closed = true;  /* FIN sent */
+    mgr->streams[slot].send_closed = true;
     sm_unlock(mgr);
     return WT_OK;
 }
