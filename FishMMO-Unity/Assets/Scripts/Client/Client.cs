@@ -791,9 +791,24 @@ namespace FishMMO.Client
 		private void OnLogMessage(string condition, string stackTrace, LogType type)
 		{
 			if (type != LogType.Exception) return;
-			Log.Error("Client", stackTrace);
+			Log.Error("Client",
+				$"Unhandled exception (will not auto-disconnect unless network stack): {condition}\n{stackTrace}");
 			if (Connection?.ClientState == LocalConnectionState.Stopped) return;
 			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkStack(stackTrace)) return;
+			// Force-disconnecting on every network exception produces the production
+			// create-account signature: WT session established → instant TRANSPORT
+			// shutdown with zero CreateAccountBroadcast. Prefer logging + leave the
+			// connection up so auth can still complete; only kill on true transport faults.
+			bool isTransportFault =
+				stackTrace.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0 ||
+				stackTrace.IndexOf("WebTransport", StringComparison.Ordinal) >= 0;
+			if (!isTransportFault)
+			{
+				Log.Warning("Client",
+					"Network-adjacent exception during auth/game code — keeping connection open " +
+					"(avoids create-account hang from premature ForceDisconnect).");
+				return;
+			}
 			try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
 			Connection?.ForceDisconnect();
 		}

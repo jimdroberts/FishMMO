@@ -54,19 +54,37 @@ namespace FishMMO.Client
 			/// </summary>
 			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion, string gameVersion)
 			{
+				var connState = outer.Client?.Connection?.ClientState ?? LocalConnectionState.Stopped;
+				if (connState != LocalConnectionState.Started)
+				{
+					Log.Error("ClientLoginAuthenticator",
+						$"Send ClientHandshake aborted: connection state={connState} " +
+						"(need Started before FishNet broadcast — otherwise server sees zero app payload).");
+					return;
+				}
 				Log.Info("ClientLoginAuthenticator",
 					$"Send ClientHandshake pubKeyLen={publicKey?.Length ?? 0} cookieLen={cookie?.Length ?? 0} " +
 					$"tokenLen={connectionToken?.Length ?? 0} gameVersion={gameVersion ?? "?"} " +
-					"(post-WT FishNet auth start)");
-				Client.Broadcast(new ClientHandshake()
+					"connState=Started (post-WT FishNet auth start — server should see app payload next)");
+				try
 				{
-					PublicKey = publicKey,
-					Cookie = cookie,
-					ConnectionToken = connectionToken,
-					MinVersion = minVersion,
-					MaxVersion = maxVersion,
-					GameVersion = gameVersion,
-				}, Channel.Reliable);
+					// Client.Broadcast is the static helper on FishMMO.Client.Client.
+					Client.Broadcast(new ClientHandshake()
+					{
+						PublicKey = publicKey,
+						Cookie = cookie,
+						ConnectionToken = connectionToken,
+						MinVersion = minVersion,
+						MaxVersion = maxVersion,
+						GameVersion = gameVersion,
+					}, Channel.Reliable);
+				}
+				catch (Exception ex)
+				{
+					// Do not rethrow: Client.OnLogMessage used to ForceDisconnect on network-stack
+					// exceptions, which produced establish → instant TRANSPORT shutdown.
+					Log.Error("ClientLoginAuthenticator", $"ClientHandshake Broadcast failed: {ex.Message}", ex);
+				}
 			}
 
 			/// <summary>
@@ -116,20 +134,35 @@ namespace FishMMO.Client
 				byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
 				byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
 			{
+				var connState = outer.Client?.Connection?.ClientState ?? LocalConnectionState.Stopped;
+				if (connState != LocalConnectionState.Started)
+				{
+					Log.Error("ClientLoginAuthenticator",
+						$"Send CreateAccountBroadcast aborted: connection state={connState}");
+					return;
+				}
 				Log.Info("ClientLoginAuthenticator",
 					$"Send CreateAccountBroadcast seq={seq} " +
 					$"userEnc={encryptedUsername?.Length ?? 0} emailEnc={encryptedEmail?.Length ?? 0} " +
 					$"ageEnc={encryptedAge?.Length ?? 0} saltEnc={encryptedSalt?.Length ?? 0} " +
-					$"verifierEnc={encryptedVerifier?.Length ?? 0} (register path after ECDH)");
-				Client.Broadcast(new CreateAccountBroadcast()
+					$"verifierEnc={encryptedVerifier?.Length ?? 0} (register path after ECDH — " +
+					"LoginServer must log CreateAccountBroadcast received)");
+				try
 				{
-					Username = encryptedUsername,
-					Email = encryptedEmail,
-					Age = encryptedAge,
-					Salt = encryptedSalt,
-					Verifier = encryptedVerifier,
-					Seq = seq,
-				}, Channel.Reliable);
+					Client.Broadcast(new CreateAccountBroadcast()
+					{
+						Username = encryptedUsername,
+						Email = encryptedEmail,
+						Age = encryptedAge,
+						Salt = encryptedSalt,
+						Verifier = encryptedVerifier,
+						Seq = seq,
+					}, Channel.Reliable);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("ClientLoginAuthenticator", $"CreateAccountBroadcast failed: {ex.Message}", ex);
+				}
 			}
 
 			/// <summary>
@@ -387,6 +420,17 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Clears login/register credentials (username/password/email/register flag).
+		/// Safe after a terminal auth UI result or user cancel; do not call between
+		/// SetLoginCredentials and post-ECDH CreateAccount/SRP send.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void ClearCredentials()
+		{
+			core?.ClearCredentials();
+		}
+
+		/// <summary>
 		/// Best-effort server-side token revocation: if a token is currently stored and
 		/// the client connection is active, sends a <see cref="RevokeTokenBroadcast"/>
 		/// to the LoginServer with the raw token bytes. The server will hash and revoke
@@ -464,14 +508,30 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
+			Log.Info("ClientLoginAuthenticator",
+				$"ConnectionState={args.ConnectionState} " +
+				$"(Stopped clears crypto only; Started sends ClientHandshake)");
+
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
 				args.ConnectionState == LocalConnectionState.Stopped)
 			{
+				// Crypto only — credentials intentionally survive for create-account race.
 				core.OnDisconnected();
 			}
 			else if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				core.OnConnected(ConnectionToken); ConnectionToken = null;
+				// Capture token then clear so it is single-use per connection.
+				string token = ConnectionToken;
+				ConnectionToken = null;
+				try
+				{
+					core.OnConnected(token);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("ClientLoginAuthenticator",
+						$"OnConnected/handshake failed: {ex.Message}", ex);
+				}
 			}
 		}
 

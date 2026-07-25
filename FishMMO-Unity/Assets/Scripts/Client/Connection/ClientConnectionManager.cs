@@ -119,6 +119,12 @@ namespace FishMMO.Client
 				return;
 			}
 			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
+			// Stop any prior session first. This may fire Stopping/Stopped once.
+			// Auth core must NOT wipe login/register credentials on that event
+			// (create-account needs them after ECDH on the new connection).
+			Log.Info("ClientConnection",
+				$"ConnectToServer begin host={address} port={port} priorState={ClientState} " +
+				"(StopConnection then Start — credentials must survive this stop)");
 			NetworkManager.ClientManager.StopConnection();
 			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
@@ -195,6 +201,8 @@ namespace FishMMO.Client
 		private void OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			ClientState = args.ConnectionState;
+			Log.Info("ClientConnection",
+				$"State → {ClientState} forceDisconnect={forceDisconnect} type={CurrentConnectionType}");
 			switch (ClientState)
 			{
 				case LocalConnectionState.Stopped:
@@ -211,6 +219,10 @@ namespace FishMMO.Client
 					CurrentConnectionType = ServerConnectionType.None;
 					break;
 				case LocalConnectionState.Started:
+					// FishNet is usable for broadcasts only after Started — not merely
+					// "WebTransport session established" on the wire.
+					Log.Info("ClientConnection",
+						"Started — FishNet ready for ClientHandshake / CreateAccountBroadcast");
 					OnConnectionSuccessful?.Invoke();
 					ReconnectsAttempted = 0; nextReconnect = -1; forceDisconnect = false;
 					break;

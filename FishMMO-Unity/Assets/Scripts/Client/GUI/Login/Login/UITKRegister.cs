@@ -79,6 +79,12 @@ namespace FishMMO.Client
 		private string savedTwoFactorSetupPath;
 
 		/// <summary>
+		/// True while this panel owns create-account / verify flow. Gates auth-result handling
+		/// so a parallel UILogin attempt cannot force-disconnect mid-registration.
+		/// </summary>
+		private bool isAuthFlowActive;
+
+		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -203,15 +209,37 @@ namespace FishMMO.Client
 		/// <param name="args">Connection state arguments.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
+			if (!isAuthFlowActive) return;
+
+			Log.Info("UITKRegister",
+				$"Create-account connection state={args.ConnectionState}");
+
+			if (args.ConnectionState == LocalConnectionState.Started)
+			{
+				if (statusMessage != null)
+					statusMessage.text = "Connected — creating account...";
+				return;
+			}
+
 			if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				if (statusMessage != null)
 				{
 					statusMessage.text = "";
 				}
+				// Surface hang case: WT came up then died before AccountCreated.
+				if (isAuthFlowActive)
+				{
+					Log.Error("UITKRegister",
+						"Create-account connection stopped before success. " +
+						"If LoginServer only shows 'session established' + TRANSPORT shutdown, " +
+						"ClientHandshake/CreateAccount never landed — check browser [FishWT] / client logs.");
+				}
 				SetFormLocked(false);
-				pendingVerifyUsername = null;
-				DeleteSavedTwoFactorSetupFile();
+				// Keep pendingVerifyUsername if we already created and are mid-verify;
+				// only clear when no verify is outstanding.
+				if (string.IsNullOrEmpty(pendingVerifyUsername))
+					DeleteSavedTwoFactorSetupFile();
 			}
 		}
 
@@ -221,6 +249,11 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Ignore results from login (or other) flows — prevent ForceDisconnect cross-talk.
+			if (!isAuthFlowActive) return;
+
+			Log.Info("UITKRegister", $"Auth result during create-account: {result}");
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:
@@ -238,7 +271,10 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.ServerBusy:
 					OnRegistrationDialog("Server is busy. Please try again later.");
 					break;
-				// Not applicable during registration flow.
+				case ClientAuthenticationResult.VersionMismatch:
+					OnVersionMismatch();
+					break;
+				// Intermediate / non-registration results: do not tear down the session.
 				case ClientAuthenticationResult.SrpVerify:
 				case ClientAuthenticationResult.SrpProof:
 				case ClientAuthenticationResult.AlreadyOnline:
@@ -253,10 +289,8 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountUnverified:
 				case ClientAuthenticationResult.TwoFactorRequired:
 				case ClientAuthenticationResult.TwoFactorInvalid:
-				case ClientAuthenticationResult.VersionMismatch:
-					OnVersionMismatch();
-					break;
 				case ClientAuthenticationResult.TokenDecryptFailed:
+					Log.Warning("UITKRegister", $"Ignoring non-registration auth result: {result}");
 					break;
 			}
 		}
@@ -583,8 +617,11 @@ namespace FishMMO.Client
 			{
 				statusMessage.text = "Creating account...";
 			}
+			// register=true must stick through Stop→Start inside ConnectToServer.
+			// Credentials are set before Connect so ECDH can emit CreateAccountBroadcast.
 			Log.Info("UITKRegister",
-				$"Connect host={Constants.Configuration.GetGameHostForPort(serverPort)} port={serverPort} age={age}");
+				$"Create Account Connect host={Constants.Configuration.GetGameHostForPort(serverPort)} " +
+				$"port={serverPort} age={age} register=true (expect ClientHandshake then CreateAccountBroadcast)");
 			Client.ConnectToServer(serverPort);
 		}
 
@@ -630,10 +667,14 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the locked state of all form controls (enables/disables interactivity).
+		/// Locking also marks this panel as owning the create-account auth flow.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetFormLocked(bool locked)
 		{
+			if (locked) isAuthFlowActive = true;
+			else isAuthFlowActive = false;
+
 			if (registerButton != null)
 			{
 				registerButton.SetEnabled(!locked);

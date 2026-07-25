@@ -217,12 +217,28 @@ namespace FishMMO.Client
 		/// <param name="args">Connection state arguments.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
+			if (!isAuthFlowActive) return;
+
+			Log.Info("UIRegister", $"Create-account connection state={args.ConnectionState}");
+
+			if (args.ConnectionState == LocalConnectionState.Started)
+			{
+				if (StatusMessage != null)
+					StatusMessage.text = "Connected — creating account...";
+				return;
+			}
+
 			if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				StatusMessage.text = "";
+				if (StatusMessage != null)
+					StatusMessage.text = "";
+				Log.Error("UIRegister",
+					"Create-account connection stopped before success. " +
+					"If LoginServer only shows session established + TRANSPORT shutdown, " +
+					"ClientHandshake/CreateAccount never landed — check client logs.");
 				SetFormLocked(false);
-				pendingVerifyUsername = null;
-				DeleteSavedTwoFactorSetupFile();
+				if (string.IsNullOrEmpty(pendingVerifyUsername))
+					DeleteSavedTwoFactorSetupFile();
 			}
 		}
 
@@ -237,6 +253,8 @@ namespace FishMMO.Client
 			// intended for the other panel (e.g., UIRegister force-disconnecting
 			// on InvalidUsernameOrPassword during UILogin's login attempt).
 			if (!isAuthFlowActive) return;
+
+			Log.Info("UIRegister", $"Auth result during create-account: {result}");
 
 			switch (result)
 			{
@@ -255,7 +273,12 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.ServerBusy:
 					OnRegistrationDialog("Server is busy. Please try again later.");
 					break;
-				// Not applicable during registration flow.
+				case ClientAuthenticationResult.VersionMismatch:
+					OnVersionMismatch();
+					break;
+				// Intermediate / non-registration results: do not tear down the session.
+				// (Previously these all fell through to OnVersionMismatch → ForceDisconnect,
+				// which could abort create-account immediately after WT session open.)
 				case ClientAuthenticationResult.SrpVerify:
 				case ClientAuthenticationResult.SrpProof:
 				case ClientAuthenticationResult.AlreadyOnline:
@@ -270,10 +293,8 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountUnverified:
 				case ClientAuthenticationResult.TwoFactorRequired:
 				case ClientAuthenticationResult.TwoFactorInvalid:
-				case ClientAuthenticationResult.VersionMismatch:
-					OnVersionMismatch();
-					break;
 				case ClientAuthenticationResult.TokenDecryptFailed:
+					Log.Warning("UIRegister", $"Ignoring non-registration auth result: {result}");
 					break;
 			}
 		}
