@@ -504,26 +504,11 @@ int32_t wt_stream_manager_send(
      * fine because we haven't opened the stream yet. */
     sm_unlock(mgr);
 
-    /* Open bidirectional stream (no lock needed — MsQuic handles its own
-     * synchronisation). */
-    HQUIC quic_stream = NULL;
-    QUIC_STATUS status = MsQuic->StreamOpen(
-        mgr->quic_conn, QUIC_STREAM_OPEN_FLAG_NONE, NULL, NULL,
-        &quic_stream);
-    if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamOpen failed: 0x%x", status);
-        /* Release the reserved slot and undo the active_streams increment. */
-        sm_lock(mgr);
-        mgr->streams[slot].in_use = false;
-        mgr->streams[slot].id = 0;
-        atomic_fetch_sub(&mgr->active_streams, 1);
-        sm_unlock(mgr);
-        return WT_ERR_SEND_FAILED;
-    }
-
+    /* MsQuic requires a non-NULL stream callback at StreamOpen.
+     * Passing NULL,NULL → QUIC_STATUS_INVALID_PARAMETER (0x16) and
+     * ServerHandshake never leaves the server (client 12s timeout). */
     stream_ctx_t* sctx = (stream_ctx_t*)calloc(1, sizeof(stream_ctx_t));
     if (!sctx) {
-        MsQuic->StreamClose(quic_stream);
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].id = 0;
@@ -533,10 +518,34 @@ int32_t wt_stream_manager_send(
     }
     sctx->mgr = mgr;
     sctx->stream_id = stream_id;
+    sctx->quic_stream = NULL;
+    sctx->header_checked = true; /* outbound: no inbound WT capsule to strip */
+
+    HQUIC quic_stream = NULL;
+    QUIC_STATUS status = MsQuic->StreamOpen(
+        mgr->quic_conn,
+        QUIC_STREAM_OPEN_FLAG_NONE,
+        k_stream_handler,
+        sctx,
+        &quic_stream);
+    if (QUIC_FAILED(status)) {
+        WT_LOG_ERROR(
+            "StreamOpen failed: 0x%x (conn=%llu stream_id=%llu) — "
+            "ServerHandshake/app reply cannot leave host",
+            status,
+            (unsigned long long)mgr->conn_id,
+            (unsigned long long)stream_id);
+        free(sctx);
+        sm_lock(mgr);
+        mgr->streams[slot].in_use = false;
+        mgr->streams[slot].id = 0;
+        atomic_fetch_sub(&mgr->active_streams, 1);
+        sm_unlock(mgr);
+        return WT_ERR_SEND_FAILED;
+    }
     sctx->quic_stream = quic_stream;
 
-    /* Record quic_stream under lock so SHUTDOWN_COMPLETE can find the slot.
-     * active_streams was already incremented at slot-reservation time. */
+    /* Record quic_stream under lock so SHUTDOWN_COMPLETE can find the slot. */
     sm_lock(mgr);
     mgr->streams[slot].quic_stream = quic_stream;
     sm_unlock(mgr);
@@ -544,12 +553,10 @@ int32_t wt_stream_manager_send(
     status = MsQuic->StreamStart(quic_stream,
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamStart failed: 0x%x", status);
-        /* MsQuic does NOT guarantee SHUTDOWN_COMPLETE fires for a stream
-         * that never successfully started. Clean up the slot, sctx, and
-         * active_streams counter inline to prevent a permanent leak.
-         * SetCallbackHandler is called below (only on success), so
-         * StreamClose here won't trigger SHUTDOWN_COMPLETE — safe. */
+        WT_LOG_ERROR("StreamStart failed: 0x%x stream_id=%llu",
+                     status, (unsigned long long)stream_id);
+        /* Handler is already registered — shutdown should fire SHUTDOWN_COMPLETE
+         * which frees sctx. If not, free here after StreamClose. */
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].quic_stream = NULL;
@@ -560,9 +567,6 @@ int32_t wt_stream_manager_send(
         MsQuic->StreamClose(quic_stream);
         return WT_ERR_SEND_FAILED;
     }
-
-    MsQuic->SetCallbackHandler(quic_stream,
-                                (void*)(uintptr_t)k_stream_handler, sctx);
 
     /* Send data — copy to ensure lifetime across async send.
      * Browser WebTransport: WEBTRANSPORT_STREAM = Type 0x41 + Session ID
@@ -582,7 +586,7 @@ int32_t wt_stream_manager_send(
     uint8_t* copy = (uint8_t*)malloc(header_len + (size_t)length);
     if (!copy) {
         /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
-         * StreamShutdown will handle slot cleanup. */
+         * StreamShutdown will handle slot cleanup (and free sctx). */
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         return WT_ERR_BUFFER_FULL;
@@ -599,7 +603,8 @@ int32_t wt_stream_manager_send(
                                  QUIC_SEND_FLAG_FIN, copy);
     /* `copy` is freed by stream_send_complete on SEND_COMPLETE event */
     if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamSend failed: 0x%x", status);
+        WT_LOG_ERROR("StreamSend failed: 0x%x stream_id=%llu",
+                     status, (unsigned long long)stream_id);
         free(copy);
         /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
          * StreamShutdown will handle slot cleanup. */
@@ -607,6 +612,16 @@ int32_t wt_stream_manager_send(
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         return WT_ERR_SEND_FAILED;
     }
+
+    WT_LOG_INFO(
+        "StreamOpen+Start+Send OK conn=%llu stream_id=%llu app_len=%d "
+        "wire_len=%u header_len=%zu stamp=SERVER_REPLY_STREAM_V1 "
+        "(ServerHandshake / app reply should reach client)",
+        (unsigned long long)mgr->conn_id,
+        (unsigned long long)stream_id,
+        length,
+        (unsigned)send_buf.Length,
+        header_len);
 
     /* Update send_closed under lock. */
     sm_lock(mgr);
