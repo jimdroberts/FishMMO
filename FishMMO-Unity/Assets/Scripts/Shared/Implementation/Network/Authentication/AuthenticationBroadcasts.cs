@@ -1,7 +1,5 @@
 using FishNet.Broadcast;
 using FishMMO.Auth.Core;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices;
 
 namespace FishMMO.Shared
 {
@@ -65,42 +63,6 @@ namespace FishMMO.Shared
 		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
 		/// </summary>
 		public const int CreateAccountMaxFieldSize = 2048;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for the encrypted Username field in SrpVerifyRequestBroadcast.
-		/// AES-GCM overhead (~28 bytes) + encrypted username (max 128 bytes plaintext) = generous cap at 512.
-		/// </summary>
-		public const int MaxSrpUsernameSize = 512;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for the encrypted PublicEphemeral field (SRP client A or server B).
-		/// SRP-6a 4096-bit ephemeral (512 bytes) + AES-GCM overhead (~28 bytes) = generous cap at 1024.
-		/// </summary>
-		public const int MaxSrpEphemeralSize = 1024;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for the encrypted Proof field (SrpProofBroadcast).
-		/// SRP-6a client proof M1 = 64 bytes (SHA-512) + AES-GCM overhead (~28 bytes) = generous cap at 256.
-		/// </summary>
-		public const int MaxSrpProofSize = 256;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for the encrypted Salt field (SrpVerifyResponseBroadcast).
-		/// SRP-6a salt (max 64 bytes) + AES-GCM overhead (~28 bytes) = generous cap at 256.
-		/// </summary>
-		public const int MaxSrpSaltSize = 256;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for the encrypted Token field in TokenAuthBroadcast.
-		/// AES-GCM encrypted signed auth token = generous cap at 1024.
-		/// </summary>
-		public const int MaxTokenAuthSize = 1024;
-
-		/// <summary>
-		/// Maximum allowed size in bytes for the encrypted Code field in TwoFactorVerifyBroadcast.
-		/// Encrypted 6-digit TOTP code + AES-GCM overhead (~28 bytes) = generous cap at 128.
-		/// </summary>
-		public const int MaxTotpCodeSize = 128;
 	}
 
 	/// <summary>
@@ -185,28 +147,11 @@ namespace FishMMO.Shared
 	/// Broadcast sent by the server to complete the handshake, containing the server's
 	/// X25519 public key for ECDH key agreement and the negotiated protocol version.
 	/// </summary>
-	/// <summary>
-	/// Broadcast sent by the server to complete the handshake, containing the server's
-	/// X25519 public key for ECDH key agreement and the negotiated protocol version.
-	/// </summary>
-	/// <remarks>
-	/// <para><see cref="PublicKey"/> and <see cref="Cookie"/> are mutually exclusive:
-	/// <list type="bullet">
-	/// <item><description>A cookie challenge has <c>PublicKey == null</c> and <c>Cookie != null</c>.
-	/// Use <see cref="IsChallenge"/> to test for this.</description></item>
-	/// <item><description>The final handshake response has <c>PublicKey != null</c> and <c>Cookie == null</c>.
-	/// Use <see cref="IsHandshakeResponse"/> to test for this.</description></item>
-	/// </list>
-	/// Consumers MUST use the helper properties instead of null-checking directly,
-	/// so that any future wire-format changes remain isolated to this struct.
-	/// </para>
-	/// </remarks>
 	public struct ServerHandshake : IBroadcast
 	{
 		/// <summary>
 		/// Server's ephemeral X25519 public key (32 bytes).
 		/// Null when this message is a cookie challenge (proof-of-reachability).
-		/// Use <see cref="IsChallenge"/> or <see cref="IsHandshakeResponse"/> to discriminate.
 		/// </summary>
 		public byte[] PublicKey;
 
@@ -214,7 +159,6 @@ namespace FishMMO.Shared
 		/// Stateless HMAC challenge cookie. The client must echo this in a subsequent
 		/// <see cref="ClientHandshake"/> to prove it can receive replies from the server.
 		/// Null when this message contains the final handshake response.
-		/// Use <see cref="IsChallenge"/> or <see cref="IsHandshakeResponse"/> to discriminate.
 		/// </summary>
 		public byte[] Cookie;
 
@@ -223,18 +167,6 @@ namespace FishMMO.Shared
 		/// Both sides use this version in AAD and HKDF labels for all subsequent messages.
 		/// </summary>
 		public ushort AgreedVersion;
-
-		/// <summary>
-		/// Gets whether this message is a cookie challenge (proof-of-reachability).
-		/// Mutually exclusive with <see cref="IsHandshakeResponse"/>.
-		/// </summary>
-		public bool IsChallenge => PublicKey == null && Cookie != null;
-
-		/// <summary>
-		/// Gets whether this message is the final handshake response (ECDH key exchange).
-		/// Mutually exclusive with <see cref="IsChallenge"/>.
-		/// </summary>
-		public bool IsHandshakeResponse => PublicKey != null && Cookie == null;
 	}
 
 	/// <summary>
@@ -372,16 +304,15 @@ namespace FishMMO.Shared
 	/// <para><b>WARNING: Wire-protocol-dependent field order.</b>
 	/// FishNet serializes struct fields in declaration order regardless of CLR layout.
 	/// The actual order guarantee comes from FishNet's serializer, not the CLR.
-	/// <c>[StructLayout(LayoutKind.Sequential)]</c> is present for documentation purposes only:
-	/// for non-blittable structs (those with <c>byte[]</c> fields), the CLR ignores
-	/// Sequential layout and IL2CPP may reorder fields anyway. The attribute
-	/// would be misleading at runtime. See the file-level doc comment for details.
+	/// <!-- No [StructLayout(LayoutKind.Sequential)] here intentionally: for
+	///      non-blittable structs (those with byte[] fields), the CLR ignores
+	///      Sequential layout and IL2CPP may reorder fields anyway. The attribute
+	///      would be misleading. See the file-level doc comment for details. -->
 	/// The nonce-derivation protocol is therefore fragile and should ideally use an
 	/// explicit tagging scheme rather than declaration order.
 	/// TODO: Migrate to an explicit tagging scheme (e.g., a tagged union or per-field
 	/// nonce labels) to eliminate the declaration-order dependency.
 	/// Reordering these fields WILL break TOTP setup. DO NOT reorder.</para>
-	[StructLayout(LayoutKind.Sequential)] // Documentation only -- actual ordering is enforced by FishNet declaration-order serializer
 	public struct TwoFactorSetupBroadcast : IBroadcast
 	{
 		/// <summary>
@@ -394,7 +325,6 @@ namespace FishMMO.Shared
 		/// WARNING: Declaration order IS the wire protocol (see struct remarks).
 		/// This field MUST remain declared before <see cref="RecoveryCodes"/>.
 		/// </summary>
-		// WARNING: Field order is wire-protocol critical. DO NOT reorder.
 		public byte[] OtpauthUri;
 		/// <summary>
 		/// Encrypted newline-delimited plaintext recovery codes (AES-GCM, server->client).
@@ -402,7 +332,6 @@ namespace FishMMO.Shared
 		/// WARNING: Declaration order IS the wire protocol (see struct remarks).
 		/// This field MUST remain declared after <see cref="OtpauthUri"/>.
 		/// </summary>
-		// WARNING: Field order is wire-protocol critical. DO NOT reorder.
 		public byte[] RecoveryCodes;
 
 		/// <summary>

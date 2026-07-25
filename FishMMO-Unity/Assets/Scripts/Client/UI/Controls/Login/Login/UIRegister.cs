@@ -94,27 +94,61 @@ namespace FishMMO.Client
 		private string savedTwoFactorSetupPath;
 
 		/// <summary>
-		/// <summary>
-		/// Populates the age dropdown with options: index 0 = "Select your age",
-		/// index 1 = "13", index 2 = "14", ..., index 108 = "120".
-		/// Must be called before the dropdown is displayed so the user can select an age.
+		/// Populates the age dropdown and wires button callbacks.
+		/// ClientLoginGUI's UIRegister buttons historically had empty UnityEvent
+		/// OnClick lists, so Create Account / Back did nothing when clicked.
+		/// Wire listeners in code (same approach as UITKRegister) so the form works
+		/// even when the scene Inspector events are missing.
 		/// </summary>
 		public override void OnStarting()
 		{
-			// Wire button listeners programmatically so they survive
-			// scene/prefab reimports that would clear Inspector OnClick lists.
-			if (RegisterButton != null) RegisterButton.onClick.AddListener(OnClick_Register);
-			if (QuitToLoginButton != null) QuitToLoginButton.onClick.AddListener(OnClick_QuitToLogin);
+			if (AgeSelect != null)
+			{
+				AgeSelect.ClearOptions();
+				var options = new List<TMPro.TMP_Dropdown.OptionData>(109);
+				options.Add(new TMPro.TMP_Dropdown.OptionData("Select your age"));
+				for (int age = 13; age <= 120; age++)
+					options.Add(new TMPro.TMP_Dropdown.OptionData(age.ToString()));
+				AgeSelect.AddOptions(options);
+				AgeSelect.value = 0;
+			}
+			else
+			{
+				Log.Error("UIRegister", "AgeSelect is not assigned on UIRegister — age confirmation will fail.");
+			}
 
-			if (AgeSelect == null) return;
+			// Bind in code when the scene Inspector OnClick list is empty.
+			// ClientLoginGUI historically had m_Calls: [] on Create Account / Back.
+			// If the scene already has persistent calls, do not AddListener again
+			// (would double-fire discovery + Connect).
+			WireButtonOnce(RegisterButton, OnClick_Register, "RegisterButton", "Create Account");
+			WireButtonOnce(QuitToLoginButton, OnClick_QuitToLogin, "QuitToLoginButton", "Back");
+		}
 
-			AgeSelect.ClearOptions();
-			var options = new List<TMPro.TMP_Dropdown.OptionData>(109);
-			options.Add(new TMPro.TMP_Dropdown.OptionData("Select your age"));
-			for (int age = 13; age <= 120; age++)
-				options.Add(new TMPro.TMP_Dropdown.OptionData(age.ToString()));
-			AgeSelect.AddOptions(options);
-			AgeSelect.value = 0;
+		/// <summary>
+		/// Adds a runtime click listener only when the Button has no persistent
+		/// (scene/prefab) OnClick calls. Avoids double-firing registration.
+		/// </summary>
+		private static void WireButtonOnce(Button button, UnityEngine.Events.UnityAction handler,
+			string fieldName, string humanName)
+		{
+			if (button == null)
+			{
+				Log.Error("UIRegister", $"{fieldName} is not assigned — {humanName} will do nothing.");
+				return;
+			}
+
+			int persistent = button.onClick.GetPersistentEventCount();
+			if (persistent > 0)
+			{
+				Log.Info("UIRegister",
+					$"{humanName} already has {persistent} scene OnClick call(s); skipping runtime listener.");
+				return;
+			}
+
+			button.onClick.RemoveAllListeners();
+			button.onClick.AddListener(handler);
+			Log.Info("UIRegister", $"{humanName} wired at runtime (scene OnClick was empty).");
 		}
 
 		/// <summary>
@@ -125,6 +159,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.LoginAuthenticator.OnTwoFactorSetupReceived += OnTwoFactorSetupReceived;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut += OnConnectTimedOut;
 		}
 
 		/// <summary>
@@ -135,6 +171,21 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			Client.LoginAuthenticator.OnTwoFactorSetupReceived -= OnTwoFactorSetupReceived;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut -= OnConnectTimedOut;
+		}
+
+		/// <summary>
+		/// WebTransport/QUIC connect timed out — unlock form and clear stale discovery cache.
+		/// </summary>
+		private void OnConnectTimedOut(string host, ushort port, string message)
+		{
+			if (!isAuthFlowActive) return;
+			Log.Error("UIRegister", $"Connect timed out: {message}");
+			Client.InvalidateLoginServerCache();
+			if (StatusMessage != null)
+				StatusMessage.text = "";
+			OnRegistrationDialog(message);
 		}
 
 		/// <summary>
@@ -148,17 +199,6 @@ namespace FishMMO.Client
 			DeleteSavedTwoFactorSetupFile();
 			ClearAllFields();
 			SetFormLocked(false);
-		}
-
-		/// <summary>
-		/// Cleans up programmatically-wired button listeners to prevent leaks.
-		/// </summary>
-		public override void OnDestroying()
-		{
-			base.OnDestroying();
-
-			if (RegisterButton != null) RegisterButton.onClick.RemoveListener(OnClick_Register);
-			if (QuitToLoginButton != null) QuitToLoginButton.onClick.RemoveListener(OnClick_QuitToLogin);
 		}
 
 		/// <summary>
@@ -179,14 +219,6 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				// If the connection dropped while the user was in the middle of account
-				// creation (form locked, waiting for server response), surface an error
-				// so the player knows what happened instead of silently unlocking the form.
-				if (isAuthFlowActive)
-				{
-					ShowValidationError("Connection to login server lost. Please check your network and try again. " +
-						"If the problem persists, the login server may be temporarily down.");
-				}
 				StatusMessage.text = "";
 				SetFormLocked(false);
 				pendingVerifyUsername = null;
@@ -462,15 +494,26 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Register()
 		{
+			// This is the Create Account submit path (UGUI). Must set register=true
+			// credentials so post-handshake auth sends CreateAccountBroadcast, not SRP login.
+			Log.Info("UIRegister", "Create Account (OnClick_Register) clicked.");
+
+			if (Username == null || Password == null || Email == null)
+			{
+				Log.Error("UIRegister", "Register UI fields missing (Username/Password/Email not wired).");
+				ShowValidationError("Registration form is misconfigured. Contact support.");
+				return;
+			}
+
 			string username = Username.text;
 			string email = Email.text;
 			string password = Password.text;
 			// Reserved for future invite-key feature. Captured here so the field
 			// can be cleared immediately (see ClearAllFields). Not yet wired to backend.
 			string key = Key != null ? Key.text : string.Empty;
-			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13, etc.
-			int ageIndex = AgeSelect.value;
-			int age = ageIndex > 0 ? ageIndex + 12 : 0;
+			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13 → age = index + 12.
+			int ageIndex = AgeSelect != null ? AgeSelect.value : -1;
+			int age = ageIndex >= MinAgeSelectIndex ? ageIndex + 12 : 0;
 
 			ClearAllFields();
 
@@ -492,13 +535,17 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (ageIndex < MinAgeSelectIndex)
+			if (AgeSelect == null || ageIndex < MinAgeSelectIndex || age < 13 || age > 120)
 			{
 				ShowValidationError("You must confirm your age to register.");
 				return;
 			}
 
+			// Own the auth flow before discovery so results are not dropped.
 			SetFormLocked(true);
+
+			// Always re-fetch before register so ConnectionToken is fresh (60s TTL).
+			Client.InvalidateLoginServerCache();
 
 			StartCoroutine(Client.GetLoginServerList((error) =>
 			{
@@ -506,13 +553,21 @@ namespace FishMMO.Client
 				{
 					uiDialogBox.Open(error);
 				}
-				Log.Error("UIRegister", error);
+				Log.Error("UIRegister", $"Create Account discovery failed: {error}");
 				SetFormLocked(false);
 			},
 			(servers, token) =>
 			{
-				if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
+				if (string.IsNullOrEmpty(token))
+				{
+					OnRegistrationDialog("Login discovery returned no connection token. Check IPFetch and FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64.");
+					return;
+				}
+				Client.LoginAuthenticator.ConnectionToken = token;
 				pendingVerifyUsername = username;
+				Log.Info("UIRegister",
+					$"Create Account discovery OK ports={servers?.Count ?? 0} tokenLen={token.Length} " +
+					$"age={age} userLen={username?.Length ?? 0}; connecting with register=true...");
 				Connect(username, password, email, age);
 			}));
 		}
@@ -554,9 +609,20 @@ namespace FishMMO.Client
 				return;
 			}
 
-			StatusMessage.text = "Creating account...";
+			// register=true is required: after ECDH handshake the authenticator sends
+			// CreateAccountBroadcast. Login (register=false) only sends SRP verify.
+			if (!Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age))
+			{
+				ShowValidationError("Invalid registration credentials (username, password, email, or age).");
+				return;
+			}
 
-			Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age);
+			if (StatusMessage != null)
+				StatusMessage.text = "Creating account...";
+
+			Log.Info("UIRegister",
+				$"Create Account Connect host={Constants.Configuration.GetGameHostForPort(serverPort)} " +
+				$"port={serverPort} age={age} register=true (expect CreateAccountBroadcast after handshake)");
 			Client.ConnectToServer(serverPort);
 		}
 

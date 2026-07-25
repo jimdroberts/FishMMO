@@ -14,6 +14,6 @@ namespace FishMMO.Server.Implementation
 		/// as the connection identifier delegate.
 		/// </summary>
 		public TokenAccountManager()
-			: base(conn => conn?.ClientId.ToString() ?? "0") { }
+			: base(conn => conn.ClientId.ToString()) { }
 	}
 }

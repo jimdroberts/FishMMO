@@ -155,7 +155,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
-					await Log.Warning("ServerSelectSystem", $"Failed to fetch active servers: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
+					await Log.Warning("ServerSelectSystem", $"Failed to fetch active servers: {dbResult.ErrorMessage}");
 					SendEmptyServerList(conn);
 					return;
 				}

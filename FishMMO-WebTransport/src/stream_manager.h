@@ -67,12 +67,6 @@ typedef struct wt_stream_entry_s {
     bool            in_use;
     bool            send_closed;
     bool            recv_closed;
-    /* CAS gate — prevents concurrent StreamShutdown(GRACEFUL) from a
-     * QUIC callback (PEER_SEND_SHUTDOWN) and StreamShutdown(ABORT) from
-     * the poll thread (wt_stream_manager_shutdown) on the same handle.
-     * Set to true by whichever path wins the CAS; the loser skips the
-     * shutdown to avoid undefined behavior in MsQuic. */
-    atomic_bool     shutdown_initiated;
 } wt_stream_entry_t;
 
 typedef struct wt_stream_manager_s {
@@ -81,6 +75,13 @@ typedef struct wt_stream_manager_s {
     HQUIC               quic_conn;
     atomic_uint         active_streams;
     atomic_bool         shutting_down;
+
+    /* Browser WebTransport (HTTP/3): client/server-initiated data streams
+     * begin with a WEBTRANSPORT_STREAM capsule (type 0x41) carrying the
+     * CONNECT stream ID as session id. Native FishMMO clients send raw
+     * bytes — leave use_wt_stream_header false for them. */
+    bool                use_wt_stream_header;
+    uint64_t            wt_session_id;  /* CONNECT stream ID when framing on */
 
     void (*on_stream_data)(void* ctx, wt_connection_id_t conn_id,
                            wt_stream_id_t stream_id,

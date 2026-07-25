@@ -856,8 +856,8 @@ PlayerSettings:
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:
-    Server: 1
-    Standalone: 1
+    Server: 0
+    Standalone: 0
     WebGL: 1
   il2cppCompilerConfiguration:
     Server: 1

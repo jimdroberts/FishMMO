@@ -38,18 +38,6 @@ namespace FishMMO.Server.Implementation
 
 		private static readonly TimeSpan RevokeRateLimitDuration = TimeSpan.FromSeconds(5);
 
-		/// <summary>
-		/// Global secondary rate limiter for revocation, keyed by the string "global".
-		/// Acts as a safety net when the per-IP limiter falls back to conn:{clientId}
-		/// (e.g. behind an L4 proxy where real IP lookup fails).  Without this global
-		/// cap, an attacker could open many connections and send one revoke per connection
-		/// per 5 seconds — bounded by total connection slots.  This global limiter caps
-		/// total revocations at 10/second regardless of connection count.
-		/// </summary>
-		private readonly ExpiringKeyTracker<string> revokeGlobalRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
-
-		private static readonly TimeSpan RevokeGlobalRateLimitDuration = TimeSpan.FromMilliseconds(100);
-
 		/// <summary>The SRP-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
 		private ServerAuthenticatorCore core;
 
@@ -228,9 +216,6 @@ namespace FishMMO.Server.Implementation
 			// Sweep expired entries from the per-IP revoke rate limiter to prevent
 			// unbounded memory growth under sustained token-revoke traffic.
 			revokeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
-			// Global revocation limiter has only one entry ("global") so sweeping
-			// is cheap — just remove expired entries.
-			revokeGlobalRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 1, maxRemove: 1);
 		}
 
 		#endregion
@@ -239,41 +224,15 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Routes an incoming <see cref="SrpVerifyRequestBroadcast"/> to the core SRP verify channel.</summary>
 		internal void OnServerSrpVerifyBroadcastReceived(NetworkConnection conn, SrpVerifyRequestBroadcast msg, Channel channel)
-		{
-			// Validate wire-format bounds before any allocation or crypto work.
-			// Reject oversized payloads on the network thread.
-			if (msg.Username == null || msg.Username.Length > AuthSizeLimits.MaxSrpUsernameSize ||
-				msg.PublicEphemeral == null || msg.PublicEphemeral.Length > AuthSizeLimits.MaxSrpEphemeralSize)
-			{
-				conn.Disconnect(true);
-				return;
-			}
-			core?.OnSrpVerifyReceived(conn, msg.Username, msg.PublicEphemeral, msg.Seq);
-		}
+			=> core?.OnSrpVerifyReceived(conn, msg.Username, msg.PublicEphemeral, msg.Seq);
 
 		/// <summary>Routes an incoming <see cref="SrpProofBroadcast"/> to the core SRP proof channel.</summary>
 		internal void OnServerSrpProofBroadcastReceived(NetworkConnection conn, SrpProofBroadcast msg, Channel channel)
-		{
-			// Validate wire-format bounds before any allocation or crypto work.
-			if (msg.Proof == null || msg.Proof.Length > AuthSizeLimits.MaxSrpProofSize)
-			{
-				conn.Disconnect(true);
-				return;
-			}
-			core?.OnSrpProofReceived(conn, msg.Proof, msg.Seq);
-		}
+			=> core?.OnSrpProofReceived(conn, msg.Proof, msg.Seq);
 
 		/// <summary>Routes an incoming <see cref="TwoFactorVerifyBroadcast"/> to the core TOTP verification handler.</summary>
 		internal void OnServerTwoFactorVerifyBroadcastReceived(NetworkConnection conn, TwoFactorVerifyBroadcast msg, Channel channel)
-		{
-			// Validate wire-format bounds before any allocation or crypto work.
-			if (msg.Code == null || msg.Code.Length > AuthSizeLimits.MaxTotpCodeSize)
-			{
-				conn.Disconnect(true);
-				return;
-			}
-			core?.OnTwoFactorVerifyReceived(conn, msg.Code, msg.Seq);
-		}
+			=> core?.OnTwoFactorVerifyReceived(conn, msg.Code, msg.Seq);
 
 		/// <summary>
 		/// Handles an incoming <see cref="RevokeTokenBroadcast"/> from a client that is explicitly
@@ -285,21 +244,6 @@ namespace FishMMO.Server.Implementation
 		{
 			// Validate payload bounds up front on the network thread; defer DB work to a Task.
 			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > 4096)
-			{
-				return;
-			}
-
-			// Reject revocation requests from connections that have not started the
-			// authentication process.  This broadcast is registered with
-			// requiresAuthentication:false to allow authenticated clients to revoke
-			// tokens after the auth channel is torn down on logout, but completely
-			// unauthenticated connections (those that never sent a ClientHandshake)
-			// must not trigger DB queries.
-			//
-			// connectionStartTimes is populated on RemoteConnectionState.Started and
-			// removed on Stopped.  A connection that never started the auth process
-			// will not have an entry here.
-			if (!connectionStartTimes.ContainsKey(conn.ClientId))
 			{
 				return;
 			}
@@ -316,16 +260,6 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			// Global secondary rate limit: even if the per-IP limiter uses a per-connection
-			// fallback key (conn:{clientId}), this global cap prevents an attacker from
-			// saturating the DB with revocation queries across many connections.
-			// Limits total revocations to 10/sec regardless of connection count.
-			if (!revokeGlobalRateLimiter.TryBegin("global", DateTime.UtcNow, RevokeGlobalRateLimitDuration))
-			{
-				_ = Log.Warning(LogPrefix, "Revoke token globally rate limited.");
-				return;
-			}
-
 			// Copy so the deserialized buffer is not mutated by FishNet after we hand off.
 			byte[] tokenCopy = new byte[msg.Token.Length];
 			Buffer.BlockCopy(msg.Token, 0, tokenCopy, 0, tokenCopy.Length);
@@ -334,11 +268,6 @@ namespace FishMMO.Server.Implementation
 			{
 				try
 				{
-					// Check cancellation before any DB work.  If the server is shutting
-					// down, bail immediately rather than competing with teardown.
-					if (ShutdownToken.IsCancellationRequested)
-						return;
-
 					string tokenHash = null;
 					try
 					{
@@ -354,20 +283,11 @@ namespace FishMMO.Server.Implementation
 						return;
 					}
 
-					// Re-check cancellation before accessing Server.Database, which
-					// may already be nulled by PerformShutdown during teardown.
-					if (ShutdownToken.IsCancellationRequested)
-						return;
-
 					if (Server?.Database?.ServiceRegistry == null ||
 						!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
 					{
 						return;
 					}
-
-					// One final cancellation check before the DB call.
-					if (ShutdownToken.IsCancellationRequested)
-						return;
 
 					try
 					{
@@ -392,15 +312,11 @@ namespace FishMMO.Server.Implementation
 						await Log.Warning(LogPrefix, $"Exception during client-initiated token revoke: {ex.Message}");
 					}
 				}
-				catch (OperationCanceledException)
-				{
-					/* Server is shutting down — expected, no action needed. */
-				}
 				catch (Exception ex)
 				{
 					await Log.Error(LogPrefix, $"Unhandled exception in token revocation task: {ex.Message}");
 				}
-			}, ShutdownToken);
+			});
 		}
 
 		#endregion

@@ -24,14 +24,10 @@
       <Link>logging.json</Link>
     </None>
   </ItemGroup>
-  <!-- Copy-and-rename config files from FishMMO-Setup/ to output. -->
+  <!-- Copy-and-rename config files from FishMMO-Setup/Development/ to output. -->
   <Target Name="CopyFishMMOConfig" AfterTargets="Build">
     <Copy SourceFiles="..\..\FishMMO-Setup\Development\appsettings.AppHealthMonitor.json"
           DestinationFiles="$(OutDir)appsettings.json"
           SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\FishMMO-Setup\Production\appsettings.AppHealthMonitor.json"
-          DestinationFiles="$(OutDir)appsettings.Production.json"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\..\FishMMO-Setup\Production\appsettings.AppHealthMonitor.json')" />
   </Target>
 </Project>

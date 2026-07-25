@@ -114,23 +114,48 @@ namespace FishMMO.Shared
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public const string APIHost = "https://api.fishmmo.com/";
+			// Local deployment overlay (eqbrowser) — not upstream fishmmo.com defaults.
+			public const string APIHost = "https://ipfetch.eqbrowser.com/";
 
 			/// <summary>
-			/// Game server hostname. All clients (standalone + WebGL) connect via
-			/// WebTransport (QUIC/HTTP3) to https://GameHost:{port}. NGINX forwards
-			/// raw UDP to the correct backend game server on loopback.
-			///
-			/// <para>
-			/// This is a <c>const</c> — the canonical deployment domain is baked
-			/// at compile time. Changing the deployment domain requires a rebuild.
-			/// For development/testing against different servers, use the
-			/// <see cref="GlobalSettings"/> override mechanism (see
-			/// <c>ApiHostResolver</c>) instead of modifying this constant.
-			/// </para>
+			/// Login server hostname for WebTransport (QUIC) connections.
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public const string GameHost = "game.fishmmo.com";
+			public const string GameHost = "loginserver.eqbrowser.com";
+
+			/// <summary>
+			/// World server hostname for WebTransport (QUIC) connections.
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public const string WorldGameHost = "worldserver.eqbrowser.com";
+
+			/// <summary>
+			/// Scene server hostname for WebTransport (QUIC) connections.
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public const string SceneGameHost = "sceneserver.eqbrowser.com";
+
+			/// <summary>Default LoginServer listen / public QUIC port.</summary>
+			public const int LoginServerPort = 7770;
+
+			/// <summary>Default WorldServer listen / public QUIC port.</summary>
+			public const int WorldServerPort = 7780;
+
+			/// <summary>Default SceneServer listen / public QUIC port.</summary>
+			public const int SceneServerPort = 7790;
+
+			/// <summary>
+			/// Picks the game hostname for a connection port using the standard
+			/// port bands: Login 7770-7779, World 7780-7789, Scene 7790+.
+			/// </summary>
+			public static string GetGameHostForPort(ushort port)
+			{
+				if (port >= LoginServerPort && port < WorldServerPort)
+					return GameHost;
+				if (port >= WorldServerPort && port < SceneServerPort)
+					return WorldGameHost;
+				return SceneGameHost;
+			}
 
 			/// <summary>
 			/// Root path for Unity scene assets.
@@ -199,7 +224,7 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask DefaultLayer = SafeGetLayerMask("Default");
+			public static readonly LayerMask DefaultLayer = 1 << LayerMask.NameToLayer("Default");
 
 			/// <summary>
 			/// Ignore Raycast layer, used for UI and non-interactive objects.
@@ -208,7 +233,7 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask IgnoreRaycast = SafeGetLayerMask("Ignore Raycast");
+			public static readonly LayerMask IgnoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");
 
 			/// <summary>
 			/// Ground layer, used for terrain and walkable surfaces.
@@ -217,7 +242,7 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask Ground = SafeGetLayerMask("Ground");
+			public static readonly LayerMask Ground = 1 << LayerMask.NameToLayer("Ground");
 
 			/// <summary>
 			/// Obstruction layer mask combining Default and Ground layers,
@@ -236,22 +261,8 @@ namespace FishMMO.Shared
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask Player = SafeGetLayerMask("Player");
+			public static readonly LayerMask Player = 1 << LayerMask.NameToLayer("Player");
 
-			/// <summary>
-			/// Calls <see cref="LayerMask.NameToLayer"/> and converts the result to a bit mask.
-			/// Returns 0 (empty mask) instead of 0x80000000 when the layer name is not found.
-			/// This prevents <c>1 &lt;&lt; -1</c> which produces an incorrect sign-extended bit.
-			/// </summary>
-			/// <param name="layerName">The name of the layer.</param>
-			/// <returns>A bit mask with the layer bit set, or 0 if the layer was not found.</returns>
-			private static int SafeGetLayerMask(string layerName)
-			{
-				int layer = LayerMask.NameToLayer(layerName);
-				if (layer < 0) return 0;
-				return 1 << layer;
-			}
-			
 			static Layers()
 			{
 				var missing = Validate();

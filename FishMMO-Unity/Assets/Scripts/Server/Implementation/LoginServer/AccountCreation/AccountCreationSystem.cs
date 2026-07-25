@@ -325,7 +325,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			Server.NetworkWrapper.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
 			Server.NetworkWrapper.RegisterBroadcast<AccountVerifyBroadcast>(OnServerAccountVerifyBroadcastReceived, false);
 
-			Log.Debug("AccountCreationSystem", $"Initialized (RateLimit={ipRateLimitSeconds}s, MaxFailures={maxFailedAttempts}, BlockDuration={ipBlockDurationSeconds}s)");
+			// Info (not Debug): production logs must prove CreateAccountBroadcast is live.
+			Log.Info("AccountCreationSystem",
+				$"Initialized (CreateAccountBroadcast+AccountVerifyBroadcast registered; " +
+				$"RateLimit={ipRateLimitSeconds}s, MaxFailures={maxFailedAttempts}, BlockDuration={ipBlockDurationSeconds}s)");
 
 			// Operational warning: ClientId-keyed rate limiting only makes sense behind a
 			// trusted proxy that prevents arbitrary client reconnection. On a direct-Internet
@@ -392,9 +395,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg, Channel channel)
 		{
+			Log.Info("AccountCreationSystem",
+				$"CreateAccountBroadcast received from conn={conn?.ClientId}");
+
 			// Already-authenticated connections should not be creating accounts.
 			if (conn.IsAuthenticated)
 			{
+				Log.Warning("AccountCreationSystem", $"Reject CreateAccount: conn={conn.ClientId} already authenticated.");
 				conn.Disconnect(true);
 				return;
 			}
@@ -402,6 +409,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Fast validation - don't block network thread
 			if (!ResolveEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
+				Log.Warning("AccountCreationSystem", $"Reject CreateAccount: no encryption data for conn={conn.ClientId}.");
 				conn.Disconnect(true);
 				return;
 			}
@@ -413,6 +421,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				msg.Salt == null || msg.Salt.Length > MaxEncryptedFieldSize ||
 				msg.Verifier == null || msg.Verifier.Length > MaxEncryptedFieldSize)
 			{
+				Log.Warning("AccountCreationSystem", $"Reject CreateAccount: oversized fields conn={conn.ClientId}.");
 				conn.Disconnect(true);
 				return;
 			}
@@ -422,7 +431,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			string? ipAddress = ResolveIpAddress(conn);
 			if (string.IsNullOrEmpty(ipAddress))
 			{
-				_ = Log.Warning("AccountCreationSystem", $"Rejecting account creation: no real IP for connection {conn.ClientId}.");
+				_ = Log.Warning("AccountCreationSystem", $"Rejecting account creation: no real IP for connection {conn.ClientId} (ConnectionToken missing/invalid).");
 				conn.Disconnect(true);
 				return;
 			}
@@ -809,9 +818,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 						return;
 					}
 
-					// Validate age range. Must be at least 13 (matching the client dropdown floor).
-					if (age < 13 || age > 200)
+					// Validate age range (client UI allows 13–120; reject under-age / garbage).
+					if (age < 13 || age > 120)
 					{
+						await Log.Warning("AccountCreationSystem",
+							$"Reject CreateAccount: invalid age={age} (expected 13–120).");
 						result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
 						NetworkConnection earlyConn = request.Connection;

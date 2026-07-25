@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishNet.Connection;
+// HashSet used to de-dupe behaviours registered under multiple keys
 
 namespace FishMMO.Server.Implementation
 {
@@ -28,7 +29,7 @@ namespace FishMMO.Server.Implementation
 			if (components == null || components.Count == 0)
 				return;
 
-			Log.Debug(RegistryName, "Initializing all behaviours");
+			Log.Info(RegistryName, $"Initializing {components.Count} registered behaviour key(s)...");
 
 			// Cast to the specific server type needed for behaviour initialization
 			var typedServer = server as IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>;
@@ -38,21 +39,33 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
+			int ok = 0;
+			int fail = 0;
+			var seen = new HashSet<IServerBehaviour>();
 			foreach (var component in components.Values)
 			{
-				if (component is ServerBehaviour behaviour)
+				if (component is ServerBehaviour behaviour && seen.Add(behaviour))
 				{
-					ServerComponentInitializationStatus initializationStatus = 
+					ServerComponentInitializationStatus initializationStatus =
 						behaviour.InternalInitializeOnce(typedServer, typedServer.NetworkWrapper.NetworkManager.ServerManager);
 
 					if (initializationStatus != ServerComponentInitializationStatus.Initialized)
 					{
-						Log.Warning(RegistryName, $"Behaviour '{behaviour.name}' failed to initialize: {initializationStatus}");
+						fail++;
+						// Ship-blocker for Login: missing AccountCreation / LoginServerSystem must be loud.
+						Log.Error(RegistryName,
+							$"Behaviour '{behaviour.name}' ({behaviour.GetType().Name}) failed to initialize: {initializationStatus}");
+					}
+					else
+					{
+						ok++;
+						Log.Info(RegistryName,
+							$"Behaviour '{behaviour.name}' ({behaviour.GetType().Name}) Initialized");
 					}
 				}
 			}
 
-			Log.Debug(RegistryName, "Initialization Complete");
+			Log.Info(RegistryName, $"Initialization Complete — {ok} ok, {fail} failed");
 		}
 
 		/// <summary>

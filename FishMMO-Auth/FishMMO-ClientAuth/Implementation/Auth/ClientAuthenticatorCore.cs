@@ -147,6 +147,11 @@ namespace FishMMO.Auth.Implementation
 			if (register && (string.IsNullOrWhiteSpace(email) || !IsAllowedEmailUsername(email)))
 				return false;
 
+			// Registration requires a real calendar age (UI maps dropdown index → 13..120).
+			// Passing the raw dropdown index (e.g. 1 for "13") is a client bug and must fail here.
+			if (register && (age < 13 || age > 120))
+				return false;
+
 			this.username = username;
 			this.password = password;
 			this.register = register;
@@ -529,10 +534,12 @@ namespace FishMMO.Auth.Implementation
 					}
 				}
 
-				OnAuthResultCallback(
-					result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null
-						? ClientAuthenticationResult.TokenDecryptFailed
-						: result);
+				OnAuthResultCallback(result);
+
+				if (result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null)
+				{
+					OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+				}
 
 				_ = Log.Debug(LogPrefix, result.ToString());
 

@@ -1,10 +1,11 @@
 {
   "LoggingManager": {
-    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical"],
+    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical", "Debug"],
     "FileSink": {
-      "Description": "File logging enabled for production. Disable in development if console output is sufficient. Production-ready: enabled by default with 100MB rolling files. Adjust Path as needed for deployment. Log rotation: FileSizeLimitMb caps individual log files at 100MB; MaxFileCount=10 keeps at most 10 rotated files. For centralized log aggregation in production, configure a log shipper (Fluentd, Logstash, Vector) tailing /var/log/fishmmo/*.log and forwarding to an external store (Elasticsearch, Loki, Grafana Cloud).",
+      "Description": "File logging enabled for production. Disable in development if console output is sufficient. File logging for production. Production-ready: enabled by default with 100MB rolling files. Adjust Path as needed for deployment. Log rotation: FileSizeLimitMb caps individual log files at 100MB; MaxFileCount=10 keeps at most 10 rotated files. For centralized log aggregation in production, configure a log shipper (Fluentd, Logstash, Vector) tailing /var/log/fishmmo/*.log and forwarding to an external store (Elasticsearch, Loki, Grafana Cloud). Alternatively, Docker logging drivers (fluentd, gelf, syslog) configured in docker-compose.yml bypass file logs entirely and send structured output straight to the aggregation endpoint.",
       "_enabled": true,
-      "Path": "/var/log/fishmmo/server.log",
+      "_comment_path": "Use a distinct path per process (LoginServer.log / WorldServer.log / SceneServer.log) when three GameServers share a host — a single shared file can contend under concurrent start.",
+      "Path": "/var/log/fishmmo/GameServer.log",
       "FileSizeLimitMb": 100,
       "MaxFileCount": 10,
       "AllowedLevels": ["Warning", "Error", "Critical"]

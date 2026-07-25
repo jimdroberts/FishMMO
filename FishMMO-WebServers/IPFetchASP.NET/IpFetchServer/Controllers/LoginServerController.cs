@@ -160,24 +160,30 @@ public class LoginServerController : ControllerBase
 
 	/// <summary>
 	/// Resolves the shared HMAC key for connection token signing.
-	/// Order: ConnectionToken:HmacKey in appsettings.json, then
-	/// FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.
-	/// Returns null if neither is configured.
+	/// Prefers FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 env, then ConnectionToken:HmacKey.
+	/// Empty / unexpanded ${VAR} templates are ignored so env fallback works.
 	/// </summary>
 	private byte[]? GetConnectionTokenHmacKey()
 	{
-		var b64 = configuration["ConnectionToken:HmacKey"];
-		if (string.IsNullOrWhiteSpace(b64))
-			b64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
-		if (string.IsNullOrWhiteSpace(b64))
+		string? b64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
+		if (IsUnsetSecretTemplate(b64))
+			b64 = configuration["ConnectionToken:HmacKey"];
+		if (IsUnsetSecretTemplate(b64))
 			return null;
 		try
 		{
-			return Convert.FromBase64String(b64.Trim());
+			return Convert.FromBase64String(b64!.Trim());
 		}
 		catch (FormatException)
 		{
 			return null;
 		}
+	}
+
+	private static bool IsUnsetSecretTemplate(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value)) return true;
+		string t = value.Trim();
+		return t.StartsWith("${", StringComparison.Ordinal) && t.EndsWith("}", StringComparison.Ordinal);
 	}
 }

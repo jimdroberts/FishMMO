@@ -425,10 +425,14 @@ namespace FishMMO.Shared
 
 					// Synchronize the entire dictionary replacement under a single write lock
 					// to avoid nested locking with Set() and to keep the replacement atomic.
+					// IMPORTANT: assign the private fileName field directly — the FileName
+					// property setter also takes a write lock, and ReaderWriterLockSlim
+					// defaults to NoRecursion (throws "Recursive write lock acquisitions
+					// not allowed" under concurrent Login/World/Scene startups).
 					settingsLock.EnterWriteLock();
 					try
 					{
-						FileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
+						fileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
 
 						// Clears all existing settings before populating with new ones from the file.
 						this.settings.Clear();
@@ -496,11 +500,11 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Sets a string value for a given setting name.
-		/// Throws an <see cref="ArgumentNullException"/> if the setting name is null or whitespace,
-		/// or if the <paramref name="value"/> is null.
+		/// Throws an <see cref="ArgumentNullException"/> if the setting name is null or whitespace.
+		/// If the <paramref name="value"/> is null, an empty string is stored.
 		/// </summary>
 		/// <param name="name">The name of the setting.</param>
-		/// <param name="value">The string value to set. Must not be null.</param>
+		/// <param name="value">The string value to set.</param>
 		public void Set(string name, string value)
 		{
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
@@ -508,37 +512,10 @@ namespace FishMMO.Shared
 			{
 				throw new ArgumentNullException(nameof(name), "Setting name cannot be null or empty.");
 			}
-			if (value == null)
-				throw new ArgumentNullException(nameof(value), $"Configuration key '{name}' cannot be set to null.");
 			settingsLock.EnterWriteLock();
 			try
 			{
-				this.settings[name] = value;
-			}
-			finally
-			{
-				settingsLock.ExitWriteLock();
-			}
-		}
-
-		/// <summary>
-		/// Sets a string value for a given setting name, allowing null values.
-		/// If <paramref name="value"/> is null, an empty string is stored.
-		/// Throws an <see cref="ArgumentNullException"/> if the setting name is null or whitespace.
-		/// </summary>
-		/// <param name="name">The name of the setting.</param>
-		/// <param name="value">The string value to set, or null to store an empty string.</param>
-		public void SetOptional(string name, string? value)
-		{
-			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
-			if (string.IsNullOrWhiteSpace(name))
-			{
-				throw new ArgumentNullException(nameof(name), "Setting name cannot be null or empty.");
-			}
-			settingsLock.EnterWriteLock();
-			try
-			{
-				this.settings[name] = value ?? string.Empty;
+				this.settings[name] = value ?? string.Empty; // Assigns the value; if 'value' is null, it stores an empty string.
 			}
 			finally
 			{

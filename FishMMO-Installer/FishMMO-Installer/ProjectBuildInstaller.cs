@@ -40,7 +40,16 @@ namespace FishMMO.Installer
 		/// </summary>
 		public static async Task BuildAllProjectsInSelectedRootAsync()
 		{
-			Console.Clear();
+			// Console.Clear throws IOException ("The handle is invalid") when no
+			// interactive console is attached (piped stdin, CI, headless agents).
+			try
+			{
+				if (!Console.IsOutputRedirected)
+					Console.Clear();
+			}
+			catch (IOException) { /* no console */ }
+			catch (InvalidOperationException) { /* no console */ }
+
 			await Log.Info("FishMMOInstaller", "--- Build All C# Projects ---");
 
 			string defaultRootDirectory = ResolveDefaultRootDirectory();
@@ -299,6 +308,13 @@ namespace FishMMO.Installer
 		/// <returns>Selected root directory.</returns>
 		private static string PromptRootDirectory(string defaultRootDirectory)
 		{
+			// --accept-defaults / non-interactive: use monorepo root without blocking on stdin.
+			if (InstallerProcessHelper.AcceptDefaults)
+			{
+				Console.WriteLine($"Enter project hierarchy root directory [{defaultRootDirectory}]: {defaultRootDirectory} [auto-accepted]");
+				return defaultRootDirectory;
+			}
+
 			string? input = InstallerProcessHelper.PromptForInput($"Enter project hierarchy root directory [{defaultRootDirectory}]: ");
 			if (string.IsNullOrWhiteSpace(input))
 			{

@@ -58,13 +58,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private const int MinAgeSelectIndex = 1;
 
-		/// <summary>
-		/// True when this panel has an active registration/verification flow.
-		/// Used to gate auth-result handling and prevent cross-talk with UITKLogin,
-		/// which shares the same <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event.
-		/// </summary>
-		private bool isAuthFlowActive;
-
 		private TextField username;
 		private TextField email;
 		private TextField password;
@@ -86,12 +79,13 @@ namespace FishMMO.Client
 		private string savedTwoFactorSetupPath;
 
 		/// <summary>
-		/// Resolves and caches visual elements, populates age dropdown, and wires up button callbacks.
+		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
 		{
 			if (Root == null)
 			{
+				Log.Error("UITKRegister", "OnStarting: Root is null — register UI will not work.");
 				return;
 			}
 
@@ -109,20 +103,30 @@ namespace FishMMO.Client
 				password.isPasswordField = true;
 			}
 
-			// Populate age dropdown: index 0 = "Select your age", index 1 = "13", ..., index 108 = "120".
+			// UXML leaves DropdownField empty — must populate like UIRegister (TMP).
+			// index 0 = "Select your age", 1 = 13, ..., 108 = 120 → age = index + 12.
 			if (ageSelect != null)
 			{
-				var choices = new System.Collections.Generic.List<string>(109);
-				choices.Add("Select your age");
+				var choices = new System.Collections.Generic.List<string>(109) { "Select your age" };
 				for (int age = 13; age <= 120; age++)
 					choices.Add(age.ToString());
 				ageSelect.choices = choices;
 				ageSelect.index = 0;
 			}
+			else
+			{
+				Log.Error("UITKRegister",
+					$"Age dropdown '{AGE_SELECT_NAME}' not found — registration age cannot be set.");
+			}
 
 			if (registerButton != null)
 			{
 				registerButton.clicked += OnClick_Register;
+			}
+			else
+			{
+				Log.Error("UITKRegister",
+					$"Register button '{REGISTER_BUTTON_NAME}' not found — Create Account will do nothing.");
 			}
 			if (quitToLoginButton != null)
 			{
@@ -138,6 +142,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.LoginAuthenticator.OnTwoFactorSetupReceived += OnTwoFactorSetupReceived;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut += OnConnectTimedOut;
 		}
 
 		/// <summary>
@@ -148,6 +154,21 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			Client.LoginAuthenticator.OnTwoFactorSetupReceived -= OnTwoFactorSetupReceived;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut -= OnConnectTimedOut;
+		}
+
+		private void OnConnectTimedOut(string host, ushort port, string message)
+		{
+			Log.Error("UITKRegister", $"Connect timed out: {message}");
+			Client.InvalidateLoginServerCache();
+			if (statusMessage != null)
+				statusMessage.text = "";
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
+				uiDialogBox.Open(message);
+			pendingVerifyUsername = null;
+			DeleteSavedTwoFactorSetupFile();
+			SetFormLocked(false);
 		}
 
 		/// <summary>
@@ -200,12 +221,6 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
-			// Only process auth results when this panel owns the active flow.
-			// Without this guard, hidden panels would still react to auth results
-			// intended for the other panel (e.g., UITKRegister force-disconnecting
-			// on InvalidUsernameOrPassword during UITKLogin's login attempt).
-			if (!isAuthFlowActive) return;
-
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:
@@ -382,21 +397,21 @@ namespace FishMMO.Client
 		private void OnVersionMismatch()
 			{
 				string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+				{
+					uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
+				}
+				pendingVerifyUsername = null;
+				DeleteSavedTwoFactorSetupFile();
+				Client.ForceDisconnect();
+				SetFormLocked(false);
 			}
-			pendingVerifyUsername = null;
-			DeleteSavedTwoFactorSetupFile();
-			Client.ForceDisconnect();
-			SetFormLocked(false);
-		}
 
-		/// <summary>
-		/// Shows a dialog box for registration feedback and disconnects the client.
-		/// </summary>
-		/// <param name="message">The message to display.</param>
-		private void OnRegistrationDialog(string message)
+			/// <summary>
+			/// Shows a dialog box for registration feedback and disconnects the client.
+			/// </summary>
+			/// <param name="message">The message to display.</param>
+			private void OnRegistrationDialog(string message)
 		{
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{
@@ -460,13 +475,16 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Register()
 		{
+			Log.Info("UITKRegister", "Register button clicked.");
+
 			string usernameText = username != null ? username.value : null;
 			string emailText = email != null ? email.value : null;
 			string passwordText = password != null ? password.value : null;
-			int ageIndex = ageSelect != null ? ageSelect.index : 0;
-			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13, etc.
-			int age = ageIndex > 0 ? ageIndex + 12 : 0;
+			// Dropdown index 0 = placeholder; index 1 = age 13 → age = index + 12.
+			int ageIndex = ageSelect != null ? ageSelect.index : -1;
+			int age = ageIndex >= MinAgeSelectIndex ? ageIndex + 12 : 0;
 
+			// Capture before ClearAllFields wipes the UI.
 			ClearAllFields();
 
 			if (!Authentication.IsAllowedUsername(usernameText))
@@ -487,13 +505,14 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (ageIndex < MinAgeSelectIndex)
+			if (ageIndex < MinAgeSelectIndex || age < 13 || age > 120)
 			{
 				ShowValidationError("You must confirm your age to register.");
 				return;
 			}
 
 			SetFormLocked(true);
+			Client.InvalidateLoginServerCache();
 
 			StartCoroutine(Client.GetLoginServerList((error) =>
 			{
@@ -506,8 +525,15 @@ namespace FishMMO.Client
 			},
 			(servers, token) =>
 			{
+				if (string.IsNullOrEmpty(token))
+				{
+					ShowValidationError("Login discovery returned no connection token. Check IPFetch secrets.");
+					return;
+				}
 				pendingVerifyUsername = usernameText;
-					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
+				Client.LoginAuthenticator.ConnectionToken = token;
+				Log.Info("UITKRegister",
+					$"Discovery OK ports={servers?.Count ?? 0} tokenLen={token.Length} age={age}; connecting for create account...");
 				Connect(usernameText, passwordText, emailText, age);
 			}));
 		}
@@ -535,20 +561,31 @@ namespace FishMMO.Client
 		/// <param name="age">The selected age value.</param>
 		private void Connect(string usernameText, string passwordText, string emailText, int age)
 		{
-			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Client.TryGetRandomLoginServerPort(out ushort serverPort))
+			if (!Client.IsConnectionReady(LocalConnectionState.Stopped))
 			{
-				if (statusMessage != null)
-				{
-					statusMessage.text = "Creating account...";
-				}
-				Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age);
-				Client.ConnectToServer(serverPort);
+				ShowValidationError("Connection already in progress. Please wait.");
+				return;
 			}
-			else
+
+			if (!Client.TryGetRandomLoginServerPort(out ushort serverPort))
 			{
-				SetFormLocked(false);
+				ShowValidationError("No login servers available. Ensure LoginServer is running and IPFetch can list it.");
+				return;
 			}
+
+			if (!Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age))
+			{
+				ShowValidationError("Invalid registration credentials (username, password, email, or age).");
+				return;
+			}
+
+			if (statusMessage != null)
+			{
+				statusMessage.text = "Creating account...";
+			}
+			Log.Info("UITKRegister",
+				$"Connect host={Constants.Configuration.GetGameHostForPort(serverPort)} port={serverPort} age={age}");
+			Client.ConnectToServer(serverPort);
 		}
 
 		/// <summary>
@@ -593,16 +630,10 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the locked state of all form controls (enables/disables interactivity).
-		/// Also manages the <see cref="isAuthFlowActive"/> flag: locking marks
-		/// the start of a registration flow; unlocking marks its termination.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetFormLocked(bool locked)
 		{
-			// Track auth-flow ownership: locking = start of flow, unlocking = end.
-			if (locked) isAuthFlowActive = true;
-			else isAuthFlowActive = false;
-
 			if (registerButton != null)
 			{
 				registerButton.SetEnabled(!locked);

@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using FishMMO.Auth.Core;
 using FishMMO.Shared;
 using FishMMO.Auth.Implementation;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -53,6 +54,10 @@ namespace FishMMO.Client
 			/// </summary>
 			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion, string gameVersion)
 			{
+				Log.Info("ClientLoginAuthenticator",
+					$"Send ClientHandshake pubKeyLen={publicKey?.Length ?? 0} cookieLen={cookie?.Length ?? 0} " +
+					$"tokenLen={connectionToken?.Length ?? 0} gameVersion={gameVersion ?? "?"} " +
+					"(post-WT FishNet auth start)");
 				Client.Broadcast(new ClientHandshake()
 				{
 					PublicKey = publicKey,
@@ -111,6 +116,11 @@ namespace FishMMO.Client
 				byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
 				byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
 			{
+				Log.Info("ClientLoginAuthenticator",
+					$"Send CreateAccountBroadcast seq={seq} " +
+					$"userEnc={encryptedUsername?.Length ?? 0} emailEnc={encryptedEmail?.Length ?? 0} " +
+					$"ageEnc={encryptedAge?.Length ?? 0} saltEnc={encryptedSalt?.Length ?? 0} " +
+					$"verifierEnc={encryptedVerifier?.Length ?? 0} (register path after ECDH)");
 				Client.Broadcast(new CreateAccountBroadcast()
 				{
 					Username = encryptedUsername,

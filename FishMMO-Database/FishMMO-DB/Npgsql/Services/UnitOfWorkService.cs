@@ -83,7 +83,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to commit the unit of work ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to commit the unit of work: {ex.Message}", isTransient: true);
 				}
 				finally
 				{
@@ -122,7 +122,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to roll back the unit of work ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to roll back the unit of work: {ex.Message}", isTransient: true);
 				}
 				finally
 				{
@@ -227,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 			catch (Exception ex)
 			{
-				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to create database context ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to create database context: {ex.Message}", isTransient: true);
 			}
 
 			var scopeToken = DatabaseExecutionScope.Enter(context, isTransactionScope: true);
@@ -247,7 +247,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				scopeToken.Dispose();
 				context.Dispose();
-				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to begin transaction ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to begin transaction: {ex.Message}", isTransient: true);
 			}
 
 			return DatabaseResult<IUnitOfWork>.Success(new NpgsqlUnitOfWork(context, transaction, scopeToken));

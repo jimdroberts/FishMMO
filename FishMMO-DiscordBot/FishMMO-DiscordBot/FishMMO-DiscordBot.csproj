@@ -22,15 +22,11 @@
     <ProjectReference Include="..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
   </ItemGroup>
 
-  <!-- Copy-and-rename config from FishMMO-Setup/ to output. -->
+  <!-- Copy-and-rename config from FishMMO-Setup/Development/ to output. -->
   <Target Name="CopyFishMMOConfig" AfterTargets="Build">
     <Copy SourceFiles="..\..\FishMMO-Setup\Development\appsettings.DiscordBot.json"
           DestinationFiles="$(OutDir)appsettings.json"
           SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\FishMMO-Setup\Production\appsettings.DiscordBot.json"
-          DestinationFiles="$(OutDir)appsettings.Production.json"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\..\FishMMO-Setup\Production\appsettings.DiscordBot.json')" />
   </Target>
 
 </Project>

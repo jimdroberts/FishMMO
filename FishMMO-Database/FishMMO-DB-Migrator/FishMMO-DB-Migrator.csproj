@@ -36,20 +36,15 @@
 		<IsEFBuild Condition="Exists('../../FishMMO-Installer.exe') Or Exists('../../FishMMO-Installer')">true</IsEFBuild>
 	</PropertyGroup>
 	
-	<!-- Copy appsettings.Database.json to output when building from the
-	     monorepo source tree (the relative path only resolves there).  When
-	     building from the Installer output copy the file won't exist so
-	     the copy is skipped; the Installer provides its own appsettings.json
-	     via its build and the design-time factory treats it as optional. -->
+	<!-- Move the appsettings.json to the build directory. -->
 	<Target Name="FishMMOAppSettings" AfterTargets="Build" Condition="'$(IsEFBuild)' == 'true'">
 
+		<!-- Define the source directory based on the build configuration -->
 		<ItemGroup>
-			<SourceDir Include="../../FishMMO-Setup/Development/appsettings.Database.json"
-			           Condition="Exists('../../FishMMO-Setup/Development/appsettings.Database.json')" />
+			<SourceDir Include="../../FishMMO-Setup/Development/appsettings.Database.json" />
 		</ItemGroup>
 
-		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)"
-		      Condition="'@(SourceDir)' != ''" />
+		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>
 
 </Project>

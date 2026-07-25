@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using UnityEngine.Serialization;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -15,6 +16,7 @@ using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation
@@ -89,7 +91,13 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// List of all server behaviours attached to the server.
 		/// </summary>
+		/// <remarks>
+		/// Scenes were serialized under the British spelling <c>serverBehaviours</c>.
+		/// Without <see cref="FormerlySerializedAsAttribute"/> the list loads empty
+		/// at runtime → RegisterAllBehaviours 0/0 (no LoginServerSystem, no create/pulse).
+		/// </remarks>
 		[SerializeField]
+		[FormerlySerializedAs("serverBehaviours")]
 		private List<ServerBehaviour> serverBehaviors = new List<ServerBehaviour>();
 
 		/// <summary>
@@ -306,6 +314,22 @@ namespace FishMMO.Server.Implementation
 				throw new InvalidOperationException(
 					"Server: Authenticator does not implement IServerAuthenticator.");
 
+			// B1 (production): SrpAuthenticatorCore.InitializeWorkersCore hard-throws if
+			// TotpMasterKey is null/wrong length. LoginServerSystem used to assign TotpMasterKey
+			// only after BehaviourRegistry.InitializeAll — which runs AFTER AttachLoginAuthenticator
+			// starts workers. Pre-bootstrap the process-local signing key + derived TotpMasterKey
+			// here; LoginServerSystem reuses TokenSigningKey when already set (no second generate).
+			if (authenticator is ServerAuthenticator srpAuth)
+			{
+				byte[] signingKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+				srpAuth.TokenSigningKey = signingKey;
+				using (var localKms = new LocalDeriveKmsProvider(signingKey))
+				{
+					srpAuth.TotpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
+				}
+				Log.Debug("Server", "Pre-bootstrapped TokenSigningKey + TotpMasterKey before InitializeWorkers.");
+			}
+
 			NetworkWrapper.ApplyTransportConfiguration(AddressOverride, PortOverride > 0 ? PortOverride : null);
 			NetworkWrapper.AttachLoginAuthenticator(this);
 			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
@@ -467,17 +491,6 @@ namespace FishMMO.Server.Implementation
 
 			this.periodicCallbacks.Clear();
 
-			// 0. Cancel the external-IP-fetch timeout coroutine.  If the server
-			//    is destroyed before the external IP fetch completes (e.g. early
-			//    play-mode exit, invalid config), the coroutine would otherwise
-			//    fire after 30s and call OnFinalizeSetup on a destroyed GameObject,
-			//    producing MissingReferenceException or silent zombie-object access.
-			if (externalIpTimeoutCoroutine != null)
-			{
-				StopCoroutine(externalIpTimeoutCoroutine);
-				externalIpTimeoutCoroutine = null;
-			}
-
 			// 1. Signal worker cancellation FIRST — in-flight auth operations can
 			//    finish broadcasting before the transport is stopped.
 			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)
@@ -542,18 +555,42 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private void RegisterAllBehaviours()
 		{
-			if (this.serverBehaviors != null && this.BehaviourRegistry != null)
+			if (this.serverBehaviors == null || this.BehaviourRegistry == null)
 			{
-				// Register in order
-				for (int i = 0; i < this.serverBehaviors.Count; i++)
+				Log.Error("Server",
+					"RegisterAllBehaviours: serverBehaviors or BehaviourRegistry is null — " +
+					"LoginServerSystem/AccountCreationSystem will not run. Check Server scene Inspector list.");
+				return;
+			}
+
+			int registered = 0;
+			for (int i = 0; i < this.serverBehaviors.Count; i++)
+			{
+				var behaviour = this.serverBehaviors[i];
+				if (behaviour != null && !behaviour.Initialized)
 				{
-					var behaviour = this.serverBehaviors[i];
-					if (behaviour != null && !behaviour.Initialized)
-					{
-						// Register to registry before initializing
-						this.BehaviourRegistry.Register(behaviour);
-					}
+					this.BehaviourRegistry.Register(behaviour);
+					registered++;
 				}
+				else if (behaviour == null)
+				{
+					Log.Warning("Server", $"RegisterAllBehaviours: null entry at index {i}");
+				}
+			}
+
+			Log.Info("Server",
+				$"RegisterAllBehaviours: {registered}/{this.serverBehaviors.Count} behaviour asset(s) registered " +
+				$"(expect LoginServerSystem + AccountCreationSystem on Login role).");
+
+			if (registered == 0)
+			{
+				// Ship-blocker: empty list usually means serialized field rename mismatch
+				// (serverBehaviours vs serverBehaviors) so Inspector assets never loaded.
+				Log.Error("Server",
+					"FATAL: zero ServerBehaviour assets registered. " +
+					"Login cannot pulse DB or handle CreateAccount. " +
+					"Check Server.serverBehaviors list on the Login/World/Scene scene " +
+					"(FormerlySerializedAs serverBehaviours). Rebuild GameServer after fix.");
 			}
 		}
 

@@ -15,7 +15,6 @@ namespace FishNet.Transporting.WebTransport
 	/// double-return to the pool, corrupting it. Always treat Packet
 	/// as single-owner and dispose exactly once per dequeue.</para>
 	/// </summary>
-	[Obsolete("Packet is a mutable struct \u2014 pass by reference (in/ref) to avoid copy issues.", false)]
 	internal struct Packet
 	{
 		/// <summary>
@@ -62,12 +61,6 @@ namespace FishNet.Transporting.WebTransport
 				this.owned = false;
 				ByteArrayPool.Store(this.Data);
 				this.Data = null;
-				this.Length = 0;
-			}
-			else if (!this.owned && this.Data == null)
-			{
-				this.Length = 0;
-				System.Diagnostics.Debug.WriteLine("[WebTransport] Packet double-dispose detected.");
 			}
 		}
 	}

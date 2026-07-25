@@ -71,32 +71,47 @@ namespace FishMMO.Client
 		private string pendingVerifyUsername;
 
 		/// <summary>
-		/// Called when the client is set. Subscribes to connection and authentication events.
+		/// Wire Sign In / Register buttons in code when scene OnClick lists are empty.
+		/// Skip if the scene already has persistent calls (avoids double-fire).
 		/// </summary>
 		public override void OnStarting()
 		{
-			base.OnStarting();
-
-			// Wire button listeners programmatically so they survive
-			// scene/prefab reimports that would clear Inspector OnClick lists.
-			if (RegisterButton != null) RegisterButton.onClick.AddListener(OnClick_OnRegister);
-			if (SignInButton != null) SignInButton.onClick.AddListener(OnClick_Login);
+			WireButtonOnce(RegisterButton, OnClick_OnRegister, "RegisterButton", "open Create Account");
+			WireButtonOnce(SignInButton, OnClick_Login, "SignInButton", "Sign In");
 		}
 
-		/// <inheritdoc/>
-		public override void OnDestroying()
+		private static void WireButtonOnce(Button button, UnityEngine.Events.UnityAction handler,
+			string fieldName, string humanName)
 		{
-			base.OnDestroying();
+			if (button == null)
+			{
+				Log.Error("UILogin", $"{fieldName} is not assigned — {humanName} will do nothing.");
+				return;
+			}
 
-			if (RegisterButton != null) RegisterButton.onClick.RemoveListener(OnClick_OnRegister);
-			if (SignInButton != null) SignInButton.onClick.RemoveListener(OnClick_Login);
+			int persistent = button.onClick.GetPersistentEventCount();
+			if (persistent > 0)
+			{
+				Log.Info("UILogin",
+					$"{humanName} already has {persistent} scene OnClick call(s); skipping runtime listener.");
+				return;
+			}
+
+			button.onClick.RemoveAllListeners();
+			button.onClick.AddListener(handler);
+			Log.Info("UILogin", $"{humanName} wired at runtime (scene OnClick was empty).");
 		}
 
+		/// <summary>
+		/// Called when the client is set. Subscribes to connection and authentication events.
+		/// </summary>
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut += OnConnectTimedOut;
 		}
 
 		/// <summary>
@@ -107,6 +122,19 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed -= ClientManager_OnReconnectFailed;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut -= OnConnectTimedOut;
+		}
+
+		private void OnConnectTimedOut(string host, ushort port, string message)
+		{
+			if (!isAuthFlowActive) return;
+			Log.Error("UILogin", $"Connect timed out: {message}");
+			Client.InvalidateLoginServerCache();
+			HandshakeMSG.text = message;
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+				uiDialogBox.Open(message);
+			SetSignInLocked(false);
 		}
 
 		/// <summary>
@@ -400,6 +428,13 @@ namespace FishMMO.Client
 				Hide();
 				uiRegister.Show();
 			}
+			else
+			{
+				// Silent failure previously looked like "Register does nothing".
+				Log.Error("UILogin", "UIRegister is not registered with UIManager — cannot open Create Account panel.");
+				if (HandshakeMSG != null)
+					HandshakeMSG.text = "Registration UI is unavailable.";
+			}
 		}
 
 		/// <summary>
@@ -461,6 +496,8 @@ namespace FishMMO.Client
 			}
 
 			SetSignInLocked(true);
+			// Fresh token every login attempt (IPFetch token TTL 60s).
+			Client.InvalidateLoginServerCache();
 
 			string password = Password.text;
 
@@ -475,7 +512,17 @@ namespace FishMMO.Client
 			},
 			(servers, token) =>
 			{
-					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
+				if (string.IsNullOrEmpty(token))
+				{
+					HandshakeMSG.text = "Login discovery returned no connection token.";
+					if (UIManager.TryGet("UIDialogBox", out UIDialogBox box))
+						box.Open(HandshakeMSG.text);
+					SetSignInLocked(false);
+					return;
+				}
+				Client.LoginAuthenticator.ConnectionToken = token;
+				Log.Info("UILogin",
+					$"Discovery OK ports={servers?.Count ?? 0} tokenLen={token.Length}; connecting...");
 				Connect("Connecting...", identifier, password);
 			}));
 		}

@@ -136,6 +136,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut += OnConnectTimedOut;
 		}
 
 		/// <summary>
@@ -146,6 +148,19 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed -= ClientManager_OnReconnectFailed;
+			if (Client.Connection != null)
+				Client.Connection.OnConnectTimedOut -= OnConnectTimedOut;
+		}
+
+		private void OnConnectTimedOut(string host, ushort port, string message)
+		{
+			Log.Error("UITKLogin", $"Connect timed out: {message}");
+			Client.InvalidateLoginServerCache();
+			if (handshakeMessage != null)
+				handshakeMessage.text = message;
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
+				uiDialogBox.Open(message);
+			SetSignInLocked(false);
 		}
 
 		/// <summary>
@@ -435,6 +450,12 @@ namespace FishMMO.Client
 				Hide();
 				uiRegister.Show();
 			}
+			else
+			{
+				Log.Error("UITKLogin", "UITKRegister is not registered with UIManager — cannot open Create Account panel.");
+				if (handshakeMessage != null)
+					handshakeMessage.text = "Registration UI is unavailable.";
+			}
 		}
 
 		/// <summary>
@@ -510,6 +531,7 @@ namespace FishMMO.Client
 			}
 
 			SetSignInLocked(true);
+			Client.InvalidateLoginServerCache();
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
 			{
@@ -522,7 +544,18 @@ namespace FishMMO.Client
 			},
 			(servers, token) =>
 			{
-					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
+				if (string.IsNullOrEmpty(token))
+				{
+					if (handshakeMessage != null)
+						handshakeMessage.text = "Login discovery returned no connection token.";
+					if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox box))
+						box.Open(handshakeMessage != null ? handshakeMessage.text : "No connection token.");
+					SetSignInLocked(false);
+					return;
+				}
+				Client.LoginAuthenticator.ConnectionToken = token;
+				Log.Info("UITKLogin",
+					$"Discovery OK ports={servers?.Count ?? 0} tokenLen={token.Length}; connecting...");
 				Connect("Connecting...", identifier, passwordText);
 			}));
 		}

@@ -73,12 +73,6 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator SendWebRequestWithRetries(WebRequestConfig config)
 		{
-			if (config == null || string.IsNullOrWhiteSpace(config.URL))
-			{
-				Log.Error("UnityWebRequestService", "Request URL is null or empty.");
-				yield break;
-			}
-			
 			for (int i = 0; i < config.MaxRetries + 1; i++)
 			{
 				using (UnityWebRequest request = new UnityWebRequest(config.URL, config.Method))

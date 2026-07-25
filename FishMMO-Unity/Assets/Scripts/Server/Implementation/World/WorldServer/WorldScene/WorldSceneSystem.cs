@@ -229,23 +229,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Blocking call during shutdown with timeout to prevent indefinite hang
 				try
 				{
-					var deleteTask = Task.Run(() => sceneService.DeleteByWorldServerAsync(worldData.ID));
-					if (!deleteTask.Wait(5000))
-					{
-						Log.Warning("WorldSceneSystem", $"World scene deletion timed out after 5000ms (WorldServerID={worldData.ID})");
-					}
-					else
-					{
-						DatabaseResult<int> deleteResult = deleteTask.GetAwaiter().GetResult();
-						if (!deleteResult.IsSuccess)
-						{
-							Log.Warning("WorldSceneSystem", $"Failed to delete world scenes during shutdown (WorldServerID={worldData.ID}): [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
-						}
-					}
+					Task.Run(() => sceneService.DeleteByWorldServerAsync(worldData.ID)).Wait(5000);
 				}
 				catch (Exception ex)
 				{
-					Log.Error("WorldSceneSystem", $"Failed to delete world scenes during shutdown: {ex}");
+					Log.Error("WorldSceneSystem", $"Failed to delete world scenes during shutdown: {ex.Message}");
 				}
 			}
 		}

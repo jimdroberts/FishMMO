@@ -224,7 +224,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						catch (Exception ex)
 						{
-							Log.Error("CharacterSystem", $"OnDeinitialize: Failed to snapshot character {character.ID}: {ex}");
+							Log.Error("CharacterSystem", $"OnDeinitialize: Failed to snapshot character {character.ID}: {ex.Message}");
 						}
 					}
 
@@ -246,7 +246,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 							catch (Exception ex)
 							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {charData.ID}: {ex}");
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {charData.ID}: {ex.Message}");
 							}
 						}
 
@@ -259,7 +259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 							catch (Exception ex)
 							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to release session for character {kvp.Key}: {ex}");
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to release session for character {kvp.Key}: {ex.Message}");
 							}
 						}
 					}).GetAwaiter().GetResult();

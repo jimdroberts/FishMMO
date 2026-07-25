@@ -31,20 +31,7 @@ namespace FishMMO.WebShared
         // requires proportionally increasing NonceCacheCapacity to maintain the
         // same eviction headroom.
         private const int MaxSkewSeconds = 30;
-        // Increased from 20 000 to 100 000 to reduce the probability of capacity-driven
-        // eviction under normal load. The sampling-based eviction fallback (when the
-        // cache does exceed capacity) can evict still-valid nonces under extreme
-        // pressure, enabling replay attacks against those evicted nonces. Raising the
-        // capacity significantly reduces the window in which an attacker can exploit
-        // this: the cache can absorb a larger burst before eviction is triggered.
-        // Theoretical attack: an attacker floods the server with valid signed requests
-        // at a rate exceeding NonceCacheCapacity / MaxSkewSeconds, forcing eviction
-        // of still-valid nonces, then replays previously-captured legitimate requests
-        // against those evicted nonces within their validity window. With 100 000
-        // capacity and a 30-second window, an attacker would need ~3333 valid
-        // signatures per second to trigger eviction — well above typical client
-        // density, making this a practical concern only under DoS conditions.
-        private const int NonceCacheCapacity = 100_000;
+        private const int NonceCacheCapacity = 20_000;
         // Minimum HMAC secret length in bytes. Anything shorter
         // is rejected at startup regardless of environment — a short shared secret
         // defeats the entire gate by being brute-forceable offline.
@@ -119,6 +106,14 @@ namespace FishMMO.WebShared
             return app.Use(async (ctx, next) =>
             {
                 string path = ctx.Request.Path.HasValue ? ctx.Request.Path.Value! : "/";
+
+                // CORS preflight: browsers never send X-FishMMO-Client on OPTIONS.
+                // Must pass through so UseCors can answer; gate only real methods.
+                if (HttpMethods.IsOptions(ctx.Request.Method))
+                {
+                    await next();
+                    return;
+                }
 
                 // Bypass: liveness/operational endpoints we don't want to bind to the gate.
                 foreach (string prefix in bypass)
@@ -208,31 +203,16 @@ namespace FishMMO.WebShared
                     return;
                 }
 
-                // Secondary time-based check: re-verify the timestamp is within the validity
-                // window using a fresh clock read. The initial timestamp validation (above)
-                // happened before the HMAC computation, which can be CPU-intensive under
-                // load. This catch ensures a nonce isn't accepted after its validity window
-                // has closed due to processing delay, and guarantees the expiry stored below
-                // is relative to the correct current time.
-                long insertNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                long insertDiff = insertNow - ts;
-                long insertSkew = insertDiff < 0 ? (insertDiff == long.MinValue ? long.MaxValue : -insertDiff) : insertDiff;
-                if (insertSkew > MaxSkewSeconds)
-                {
-                    await Reject(ctx, $"timestamp skew {insertSkew}s exceeds {MaxSkewSeconds}s (post-HMAC)");
-                    return;
-                }
-
                 // Anti-replay: insert the nonce into the cache with an expiry past the
                 // skew window. TryAdd returns false if it's already present.
-                long expiry = insertNow + MaxSkewSeconds + 5;
+                long expiry = now + MaxSkewSeconds + 5;
                 if (!seenNonces.TryAdd(nonce, expiry))
                 {
                     await Reject(ctx, "nonce replay");
                     return;
                 }
 
-                MaybePruneNonceCache(insertNow);
+                MaybePruneNonceCache(now);
                 await next();
             });
         }
@@ -303,17 +283,8 @@ namespace FishMMO.WebShared
                 // flood of fresh nonces to evict legitimate still-valid nonces and enable
                 // replay of those previously-seen nonces until their original expiry.
                 // Sampling-based eviction bounds memory while keeping eviction O(1)
-                // instead of O(n log n), eliminating the DoS vector from sorting all
+                // instead of O(n log n), eliminating the DoS vector from sorting all 20K
                 // entries under lock.
-                //
-                // WARNING — Theoretical attack: sampling-based eviction can remove
-                // still-valid nonces from the sample, allowing their replay. This is
-                // a deliberate trade-off: under sustained memory pressure (DoS), we
-                // accept a bounded number of replays rather than allowing the cache
-                // to grow unboundedly and OOM the process. The 100 000 capacity means
-                // eviction is extremely rare under normal load. Future work should
-                // replace this with a time-bucketed eviction strategy that removes
-                // entire expired-second buckets, guaranteeing no valid nonce is evicted.
                 int over = seenNonces.Count - NonceCacheCapacity;
                 if (over > 0)
                 {
@@ -326,7 +297,7 @@ namespace FishMMO.WebShared
                     // management while eliminating the latency spike that a full sort
                     // would cause on the hot request thread.
                     var evictSnapshot = seenNonces.ToArray();
-                    int sampleSize = Math.Min(500, evictSnapshot.Length);
+                    int sampleSize = Math.Min(100, evictSnapshot.Length);
                     var rng = Random.Shared;
                     // Fisher-Yates partial shuffle: select 'sampleSize' random elements
                     // into the first positions of the array, then sort just that subset.

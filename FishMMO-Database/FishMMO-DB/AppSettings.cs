@@ -34,12 +34,24 @@ namespace FishMMO.Database
 		/// <summary>
 		/// Gets or sets the PostgreSQL database name.
 		/// </summary>
-		public string Database { get; set; } = "fishmmo";
+		public string Database { get; set; } = "fish_mmo_postgresql";
 
 		/// <summary>
 		/// Gets or sets the database schema name.
 		/// </summary>
 		public string Schema { get; set; } = "public";
+
+		/// <summary>
+		/// Gets or sets the database username.
+		/// Default is empty to cause fail-fast errors if not configured.
+		/// </summary>
+		public string Username { get; set; } = string.Empty;
+
+		/// <summary>
+		/// Gets or sets the database password.
+		/// Default is empty to cause fail-fast errors if not configured.
+		/// </summary>
+		public string Password { get; set; } = string.Empty;
 
 		/// <summary>
 		/// Gets or sets the command timeout in seconds.

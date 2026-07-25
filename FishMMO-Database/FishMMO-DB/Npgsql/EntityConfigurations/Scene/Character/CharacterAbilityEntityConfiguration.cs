@@ -34,7 +34,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasDefaultValueSql("''")
 				.HasConversion(new ValueConverter<List<int>, string>(
 					v => string.Join(",", v),
-					v => string.IsNullOrEmpty(v) ? new List<int>() : new List<int>(Array.ConvertAll(v.Split(','), int.Parse))));
+					v => ParseCsvInts(v)));
 
 			builder.Property(e => e.Cooldown)
 				.IsRequired()
@@ -52,6 +52,19 @@ namespace FishMMO.Database.Npgsql.Entities
 				.WithMany(c => c.Abilities)
 				.HasForeignKey(e => e.CharacterID)
 				.OnDelete(DeleteBehavior.NoAction);
+		}
+
+		/// <summary>
+		/// Static helper for EF ValueConverter — expression trees cannot call methods with optional args (CS0854).
+		/// </summary>
+		private static List<int> ParseCsvInts(string v)
+		{
+			if (string.IsNullOrEmpty(v)) return new List<int>();
+			string[] parts = v.Split(new char[] { ',' }, StringSplitOptions.None);
+			var list = new List<int>(parts.Length);
+			for (int i = 0; i < parts.Length; i++)
+				list.Add(int.Parse(parts[i]));
+			return list;
 		}
 	}
 }

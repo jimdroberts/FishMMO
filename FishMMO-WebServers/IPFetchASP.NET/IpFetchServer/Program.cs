@@ -204,11 +204,12 @@ namespace FishMMO.WebServer
 						});
 
 						app.UseFishMMOSecurityHeaders(context.HostingEnvironment);
-						// Client gate runs BEFORE the rate limiter so forged requests
-						// from generic crawlers don't consume per-IP tokens. Loopback
-						// /healthz is exempted so monitoring works without the secret.
-						app.UseFishMMOClientGate(context.HostingEnvironment, "/healthz");
+						// CORS before ClientGate so OPTIONS preflight is not 401'd
+						// (browsers never send X-FishMMO-Client on preflight).
+						// ClientGate still skips OPTIONS; gate runs next so forged
+						// requests don't consume rate-limit tokens. /healthz exempt.
 						app.UseCors("Public");
+						app.UseFishMMOClientGate(context.HostingEnvironment, "/healthz");
 						app.UseRateLimiter();
 						app.UseRouting();
 						app.UseAuthorization();

@@ -36,14 +36,10 @@
     To add production-specific appsettings.*.json files, update this target
     or deploy a separate configuration file as described above.
   -->
-  <!-- Copy-and-rename config from FishMMO-Setup/ to output. -->
+  <!-- Copy-and-rename config from FishMMO-Setup/Development/ to output. -->
   <Target Name="CopyFishMMOConfig" AfterTargets="Build">
     <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.WebGLServer.json"
           DestinationFiles="$(OutDir)appsettings.json"
           SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\..\FishMMO-Setup\Production\appsettings.WebGLServer.json"
-          DestinationFiles="$(OutDir)appsettings.Production.json"
-          SkipUnchangedFiles="true"
-          Condition="Exists('..\..\..\FishMMO-Setup\Production\appsettings.WebGLServer.json')" />
   </Target>
 </Project>

@@ -5,13 +5,11 @@ using Npgsql;
 
 Console.WriteLine("FishMMO DB Migrator starting...");
 
-// NOTE: Connection string is resolved from environment variables.
-// Priority order:
-//   1. FISHMMO_CONNECTION_STRING (full DSN)
-//   2. ConnectionStrings__NpgsqlConnection (full DSN)
-//   3. Individual FISHMMO_DB_* env vars (assembled into a DSN)
-// The Migrator does NOT read appsettings.json for credentials — use
-// /etc/fishmmo/db-secrets.env or environment variables.
+// NOTE: Connection string is read directly from environment variable and bypasses NpgsqlDbConfiguration validation.
+// Migrator is a standalone tool with minimal dependencies — configuration validation is deferred to runtime.
+// See FishMMO.Database.Npgsql.NpgsqlDbConfiguration for the canonical connection-string validation logic
+// used by the host application (server processes). The Migrator does not reuse that class to avoid
+// pulling in the full database-layer assembly's configuration pipeline.
 string? connectionString = Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_STRING");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -19,67 +17,23 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    // Build connection string from individual env vars (preferred for security).
-    string? dbHost = Environment.GetEnvironmentVariable("FISHMMO_DB_HOST") ?? "127.0.0.1";
-    string? dbPort = Environment.GetEnvironmentVariable("FISHMMO_DB_PORT") ?? "5432";
-    string? dbName = Environment.GetEnvironmentVariable("FISHMMO_DB_NAME") ?? "fishmmo";
-    string? dbUser = Environment.GetEnvironmentVariable("FISHMMO_DB_USERNAME");
-    string? dbPass = Environment.GetEnvironmentVariable("FISHMMO_DB_PASSWORD");
-
-    if (string.IsNullOrWhiteSpace(dbUser) || string.IsNullOrWhiteSpace(dbPass))
-    {
-        Console.Error.WriteLine("FATAL: No database credentials configured.");
-        Console.Error.WriteLine("  Set either:");
-        Console.Error.WriteLine("    FISHMMO_CONNECTION_STRING=\"Host=127.0.0.1;Port=5432;Database=fishmmo;Username=...;Password=...\"");
-        Console.Error.WriteLine("  Or individual env vars:");
-        Console.Error.WriteLine("    FISHMMO_DB_HOST=127.0.0.1");
-        Console.Error.WriteLine("    FISHMMO_DB_PORT=5432");
-        Console.Error.WriteLine("    FISHMMO_DB_NAME=fishmmo");
-        Console.Error.WriteLine("    FISHMMO_DB_USERNAME=fishmmo_app");
-        Console.Error.WriteLine("    FISHMMO_DB_PASSWORD=...");
-        Console.Error.WriteLine("  Or source /etc/fishmmo/db-secrets.env in your service unit.");
-        return 1;
-    }
-
-    var csb = new NpgsqlConnectionStringBuilder
-    {
-        Host = dbHost,
-        Port = int.TryParse(dbPort, out int p) ? p : 5432,
-        Database = dbName,
-        Username = dbUser,
-        Password = dbPass,
-    };
-    connectionString = csb.ConnectionString;
-    Console.WriteLine("Connection string built from FISHMMO_DB_* environment variables.");
+    Console.Error.WriteLine("FATAL: Neither FISHMMO_CONNECTION_STRING nor ConnectionStrings__NpgsqlConnection "
+        + "environment variable is set. The Migrator requires a database connection string to apply migrations. "
+        + "Example: FISHMMO_CONNECTION_STRING=\"Host=127.0.0.1;Port=5432;Database=fish_mmo;Username=fishmmo;Password=...\"");
+    return 1;
 }
 
 // Determine the database schema to use for migrations.
-// Priority (first non-empty source wins):
-//   1. FISHMMO_DB_SCHEMA environment variable
-//   2. Npgsql:Schema in appsettings.Database.json
-//   3. Npgsql:Schema in appsettings.json
-//   4. "public" (PostgreSQL default)
+// Priority: FISHMMO_DB_SCHEMA env var > appsettings.Database.json (Npgsql:Schema) > "public"
 //
 // WARNING — Schema divergence risk:
-// The Migrator reads schema from FISHMMO_DB_SCHEMA env var then falls back
-// to appsettings.Database.json and appsettings.json.
-// The host application (server processes) reads schema from the Npgsql:Schema
-// config key via NpgsqlDbConfiguration.  If these sources differ, the Migrator
-// will create/migrate tables in schema "A" while the application reads/writes
-// tables in schema "B".  Deployments MUST set both FISHMMO_DB_SCHEMA and
-// Npgsql:Schema to the same value.
+// The Migrator reads schema from FISHMMO_DB_SCHEMA env var (or appsettings.Database.json).
+// The host application (server processes) reads schema from the Npgsql:Schema config key
+// via NpgsqlDbConfiguration.  If these two sources differ, the Migrator will create/migrate
+// tables in schema "A" while the application reads/writes tables in schema "B".
+// Deployments MUST set both FISHMMO_DB_SCHEMA and Npgsql:Schema to the same value.
 // See FishMMO.Database.Npgsql.NpgsqlDbConfiguration for the canonical schema resolution.
-string schema;
-string? schemaSource = null;
-
-// Source 1: FISHMMO_DB_SCHEMA environment variable
-schema = Environment.GetEnvironmentVariable("FISHMMO_DB_SCHEMA") ?? "";
-if (!string.IsNullOrWhiteSpace(schema))
-{
-    schemaSource = "FISHMMO_DB_SCHEMA env var";
-}
-
-// Source 2: appsettings.Database.json (Npgsql:Schema section)
+string schema = Environment.GetEnvironmentVariable("FISHMMO_DB_SCHEMA") ?? "";
 if (string.IsNullOrWhiteSpace(schema))
 {
     try
@@ -89,48 +43,18 @@ if (string.IsNullOrWhiteSpace(schema))
             .AddJsonFile("appsettings.Database.json", optional: true)
             .Build();
         schema = config["Npgsql:Schema"] ?? "";
-        if (!string.IsNullOrWhiteSpace(schema))
-        {
-            schemaSource = "appsettings.Database.json (Npgsql:Schema)";
-        }
-    }
-    catch
-    {
-        // Ignore config read errors; fall through to next source.
-    }
-}
-
-// Source 3: appsettings.json (Npgsql:Schema section)
-// This mirrors the file that server processes read via NpgsqlDbConfiguration,
-// reducing the risk of schema divergence between migration and runtime.
-if (string.IsNullOrWhiteSpace(schema))
-{
-    try
-    {
-        var config = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: true)
-            .Build();
-        schema = config["Npgsql:Schema"] ?? "";
-        if (!string.IsNullOrWhiteSpace(schema))
-        {
-            schemaSource = "appsettings.json (Npgsql:Schema)";
-        }
     }
     catch
     {
         // Ignore config read errors; fall through to default.
     }
 }
-
-// Source 4: PostgreSQL default
 if (string.IsNullOrWhiteSpace(schema))
 {
     schema = "public";
-    schemaSource = "default (public)";
 }
 
-Console.WriteLine($"Using database schema: \"{schema}\" (resolved from: {schemaSource})");
+Console.WriteLine($"Using database schema: \"{schema}\"");
 
 const int maxRetries = 3;
 const int retryDelayMs = 2000;

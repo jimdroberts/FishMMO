@@ -13,7 +13,6 @@ using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Exceptions;
-using Npgsql;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -245,7 +244,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return (
 				DatabaseErrorCodes.RollbackFailed,
-				$"{RollbackFailedMessage} Original error: {originalCode} - {originalMessage}. Rollback error: {SanitizeExceptionMessage(rollbackException.Message)} ({rollbackException.GetType().Name})"
+				$"{RollbackFailedMessage} Original error: {originalCode} - {originalMessage}. Rollback error: {rollbackException.Message}"
 			);
 		}
 
@@ -494,7 +493,7 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						return DatabaseResult<TResult>.Failure(
 							DatabaseErrorCodes.RollbackFailed,
-							$"{RollbackFailedMessage} Original error: {exResult.ErrorCode} - {exResult.ErrorMessage}. Rollback error: {SanitizeExceptionMessage(rollbackException.Message)} ({rollbackException.GetType().Name})");
+							$"{RollbackFailedMessage} Original error: {exResult.ErrorCode} - {exResult.ErrorMessage}. Rollback error: {rollbackException.Message}");
 					}
 
 					return exResult;
@@ -633,7 +632,7 @@ namespace FishMMO.Database.Npgsql.Services
 								var (originalCode, originalMessage, _) = MapExceptionOutcome(ex, ClassifyException(ex, sqlStateRb));
 								return DatabaseResult<TResult>.Failure(
 									DatabaseErrorCodes.RollbackFailed,
-									$"{RollbackFailedMessage} Original error: {originalCode} - {originalMessage}. Rollback error: {SanitizeExceptionMessage(rbEx.Message)} ({rbEx.GetType().Name})");
+									$"{RollbackFailedMessage} Original error: {originalCode} - {originalMessage}. Rollback error: {rbEx.Message}");
 							}
 						}
 						var sqlState = TryGetPostgresSqlState(ex);
@@ -926,42 +925,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return (DatabaseErrorCodes.InvalidOperation, SanitizeExceptionMessage(invEx.Message), false);
 			}
 
-			// Sanitize the outermost exception message to strip .NET parameter-name annotations
-			// while keeping the useful diagnostic content (error description, type info).
-			// The exception type chain is appended for disambiguation — it helps distinguish
-			// Npgsql mapping failures from constraint violations without exposing raw SQL.
-			//
-			// For PostgresException with a known SqlState, the sqlState was already handled
-			// above (UniqueViolation, ForeignKeyViolation, etc.).  For unrecognised SqlStates,
-			// the sanitized message preserves the PostgreSQL error text while the type chain
-			// gives the protocol-level code for operators to look up.
+			// Avoid leaking internal DB details (SQL text, schema names, constraint names, etc.).
+			// If the failure is likely transient, callers may choose to retry.
 			var isTransient = IsTransientDatabaseFailure(ex, sqlState);
-			var sanitizedMessage = SanitizeExceptionMessage(ex.Message);
-			var typeChain = BuildSafeExceptionDiagnostic(ex);
-			return (DatabaseErrorCodes.DatabaseError, $"A database error occurred. {sanitizedMessage} ({typeChain}).", isTransient);
+			return (DatabaseErrorCodes.DatabaseError, "A database error occurred.", isTransient);
 		}
-
-		/// <summary>
-		/// Builds a safe, human-readable diagnostic string from an exception chain for inclusion
-		/// in <see cref="DatabaseResult.ErrorMessage"/>.
-		/// </summary>
-		/// <remarks>
-		/// Walks the exception chain up to 3 levels deep and emits:
-		/// <list type="bullet">
-		///   <item>CLR exception type names — safe, never contain SQL/data</item>
-		///   <item><c>PostgresException.SqlState</c> — safe, 5-char protocol-level code</item>
-		/// </list>
-		/// This method explicitly NEVER emits exception messages, stack traces, or data values.
-		/// Messages from Npgsql/PostgresException can contain column names, constraint names,
-		/// SQL fragments, and connection details that must not be exposed to clients.
-		/// </remarks>
-		/// <param name="ex">The outermost exception.</param>
-		/// <returns>
-		/// A diagnostic string like <c>"InvalidCastException → NpgsqlException → PostgresException[42703]"</c>
-		/// or just the outer type name for single-level exceptions.
-		/// </returns>
-		private static string BuildSafeExceptionDiagnostic(Exception ex)
-			=> ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex);
 
 		/// <summary>
 		/// Strips parameter names and internal details from .NET exception messages to prevent
@@ -973,7 +941,23 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </para>
 		/// </summary>
 		private static string SanitizeExceptionMessage(string message)
-			=> ExceptionDiagnosticHelper.SanitizeExceptionMessage(message);
+		{
+			if (string.IsNullOrEmpty(message))
+				return message;
+
+			// Strip .NET 5+ trailing parameter annotation: " (Parameter 'paramName')"
+			message = SanitizePatternRegex.Replace(message, string.Empty);
+
+			// Strip .NET Framework "Parameter name: xxx" and optional "Actual value was yyy." lines
+			int paramNameIdx = message.IndexOf("Parameter name: ", StringComparison.Ordinal);
+			if (paramNameIdx >= 0)
+			{
+				message = message.Substring(0, paramNameIdx).TrimEnd();
+			}
+
+			// Strip newline trailing from Framework format if present after stripping
+			return message.TrimEnd();
+		}
 
 		/// <summary>
 		/// Determines whether an exception represents a transient failure that is safe to retry.
@@ -1155,6 +1139,13 @@ namespace FishMMO.Database.Npgsql.Services
 		private static readonly Regex ParameterPlaceholderRegex =
 			new Regex(@"\{(\d+)\}", RegexOptions.Compiled);
 
+		/// <summary>
+		/// Matches the .NET 5+ trailing parameter annotation pattern appended to exception messages,
+		/// e.g. <c>"Value cannot be null. (Parameter 'name')"</c>. Stripping this prevents leaking
+		/// method parameter names to remote callers.
+		/// </summary>
+		private static readonly Regex SanitizePatternRegex =
+			new Regex(@"\s*\(Parameter\s+'[^']*'\)\s*$", RegexOptions.Compiled);
 
 		/// <summary>
 		/// Executes a raw SQL query that returns a single integer scalar value using ADO.NET,

@@ -26,26 +26,19 @@ namespace FishMMO.Client
 	internal static class ClientApiSecret
 	{
 		/// <summary>
-		/// The shared secret. Long, opaque, and high-entropy.
-		///
-		/// <para>
-		/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		/// WARNING: THIS IS A PLACEHOLDER. IT MUST BE REPLACED BEFORE SHIPPING.
-		/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-		/// </para>
-		///
-		/// <para>
-		/// The value committed here is a well-known default so the project
-		/// compiles and can be tested in the editor / dev builds.  If you ship
-		/// a public binary with this default, every user will have the same
-		/// secret — recovery from the binary is trivial — and the gate provides
-		/// zero protection.  Rotate the secret by changing this literal AND
-		/// setting the matching server-side value via the
-		/// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable.
-		/// </para>
+		/// Well-known committed default used only for local/dev detection.
+		/// Do NOT put your production secret here — if <see cref="secretLiteral"/>
+		/// still equals this string, release builds log the security hold.
 		/// </summary>
-		private const string secretLiteral =
+		private const string PlaceholderSecret =
 			"FishMMO-default-client-gate-secret-replace-before-release-d8b1c4a6e7f23519";
+
+		/// <summary>
+		/// Compiled-in shared secret. Must match the IPFetch/Patcher process env
+		/// <c>FISHMMO_CLIENT_GATE_SECRET</c> exactly (UTF-8 string, same value).
+		/// Replace before shipping a production client binary.
+		/// </summary>
+		private const string secretLiteral = PlaceholderSecret;
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
 		/// <summary>
@@ -56,6 +49,13 @@ namespace FishMMO.Client
 
 		static ClientApiSecret()
 		{
+			// Hold only when secretLiteral was never rotated away from the known default.
+			IsPlaceholderSecret = string.Equals(secretLiteral, PlaceholderSecret, StringComparison.Ordinal);
+			if (!IsPlaceholderSecret)
+			{
+				return;
+			}
+
 			UnityEngine.Debug.LogError(
 				"[ClientApiSecret] *******************************************************\n" +
 				"[ClientApiSecret] *  SECURITY HOLD: The placeholder default secret is    *\n" +
@@ -67,9 +67,6 @@ namespace FishMMO.Client
 				"[ClientApiSecret] *  This binary's gate secret is PUBLIC and provides    *\n" +
 				"[ClientApiSecret] *  NO protection against general crawler traffic.      *\n" +
 				"[ClientApiSecret] *******************************************************");
-			// Alert other security code (e.g. ClientSecurityBuildValidator) that the
-			// default placeholder API secret is still active in a release build.
-			IsPlaceholderSecret = true;
 		}
 #endif
 

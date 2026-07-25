@@ -44,17 +44,9 @@ namespace FishMMO.Database.Npgsql
 		public string ConnectionString { get; }
 
 		/// <summary>
-		/// Gets the resolved database username (from env vars or secrets file).
-		/// </summary>
-		public string? Username => _resolvedUsername;
-
-		/// <summary>
 		/// Gets a value indicating whether sensitive EF Core logging is enabled.
 		/// </summary>
 		public bool EnableLogging { get; }
-
-		private readonly string? _resolvedUsername;
-		private readonly string? _resolvedPassword;
 
 		/// <summary>
 		/// Gets the configured schema name.
@@ -100,30 +92,8 @@ namespace FishMMO.Database.Npgsql
 
 			EnableLogging = enableLogging;
 
-			// Bind non-sensitive settings from the Npgsql section.
-			// Username and Password are NOT in appsettings.json — they are
-			// resolved exclusively from environment variables or the platform
-			// secrets file via DatabaseSecrets.
+			// Bind directly from the Npgsql section
 			Settings = configuration.GetSection("Npgsql").Get<NpgsqlSettings>() ?? new NpgsqlSettings();
-
-			// Resolve credentials from secure sources only.
-			// No IConfiguration fallback — appsettings.json MUST NOT contain credentials.
-			_resolvedUsername = DatabaseSecrets.TryResolveUsername();
-			_resolvedPassword = DatabaseSecrets.TryResolvePassword();
-
-			// Non-sensitive connection params: env vars / secrets file override appsettings.json.
-			// This allows Docker/k8s deployments to configure the DB entirely via env vars.
-			string? envHost = DatabaseSecrets.TryResolveHost();
-			if (envHost != "127.0.0.1" || string.IsNullOrEmpty(Settings.Host))
-				Settings.Host = envHost;
-
-			int envPort = DatabaseSecrets.TryResolvePort();
-			if (envPort != 5432 || string.IsNullOrEmpty(Settings.Port))
-				Settings.Port = envPort.ToString();
-
-			string envDb = DatabaseSecrets.TryResolveDbName();
-			if (envDb != "fishmmo" || string.IsNullOrEmpty(Settings.Database))
-				Settings.Database = envDb;
 
 			// Apply runtime overrides
 			if (commandTimeoutOverride.HasValue)
@@ -145,7 +115,7 @@ namespace FishMMO.Database.Npgsql
 			}
 
 			PerformanceConfiguration = MapPerformanceConfiguration(Settings.QueryPerformanceTracking);
-			ConnectionString = BuildConnectionString(Settings, _resolvedUsername, _resolvedPassword);
+			ConnectionString = BuildConnectionString(Settings);
 		}
 
 		private static FishMMO.Database.Npgsql.Monitoring.Diagnostics.QueryPerformanceConfiguration MapPerformanceConfiguration(global::FishMMO.Database.QueryPerformanceConfiguration source)
@@ -160,15 +130,15 @@ namespace FishMMO.Database.Npgsql
 			};
 		}
 
-		private static string BuildConnectionString(NpgsqlSettings s, string? username, string? password)
+		private static string BuildConnectionString(NpgsqlSettings s)
 		{
 			return new NpgsqlConnectionStringBuilder
 			{
 				Host = s.Host,
 				Port = ResolvePort(s.Port),
 				Database = s.Database,
-				Username = username ?? string.Empty,
-				Password = password ?? string.Empty,
+				Username = s.Username,
+				Password = s.Password,
 				Pooling = true,
 				MinPoolSize = s.MinPoolSize,
 				MaxPoolSize = s.MaxPoolSize,

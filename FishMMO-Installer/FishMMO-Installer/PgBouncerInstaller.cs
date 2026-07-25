@@ -185,7 +185,7 @@ namespace FishMMO.Installer
 			string dbName = appSettings.Npgsql?.Database ?? "fishmmo";
 			string dbHost = appSettings.Npgsql?.Host ?? "127.0.0.1";
 			string dbPort = appSettings.Npgsql?.Port ?? "5432";
-			string dbUser = DatabaseSecrets.TryResolveUsername() ?? "fishmmo";
+			string dbUser = appSettings.Npgsql?.Username ?? "fishmmo";
 
 			_ = Log.Info("FishMMOInstaller", "PgBouncer next-step checklist:");
 			_ = Log.Info("FishMMOInstaller", $" - Listen on localhost:{InstallationConstants.PgBouncerDefaultPort}");
@@ -229,13 +229,13 @@ namespace FishMMO.Installer
 			if (string.IsNullOrWhiteSpace(superUser))
 				superUser = InstallationConstants.PostgreSQLDefaultSuperuser;
 
-			string superPassword = InstallerProcessHelper.PromptForRequiredPassword(
+			string superPassword = InstallerProcessHelper.PromptForPassword(
 				$"Enter password for PostgreSQL superuser '{superUser}': ");
 
 			string dbHost = appSettings.Npgsql?.Host ?? "127.0.0.1";
 			string dbPort = appSettings.Npgsql?.Port ?? "5432";
 			string dbName = appSettings.Npgsql?.Database ?? "fishmmo";
-			string dbUser = DatabaseSecrets.TryResolveUsername() ?? "fishmmo";
+			string dbUser = appSettings.Npgsql?.Username ?? "fishmmo";
 
 			string connectionString =
 				$"Host={dbHost};Port={dbPort};Username={superUser};Password={superPassword};Database={InstallationConstants.PostgreSQLDefaultAdminDb};Pooling=false";

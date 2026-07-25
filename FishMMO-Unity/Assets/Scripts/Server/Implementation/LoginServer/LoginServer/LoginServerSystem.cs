@@ -71,21 +71,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// H13: Disable core dumps and unprivileged ptrace as early as possible so subsequent
 			// allocations of TOTP/signing-key material are not exposed via /proc/<pid>/mem or core
 			// files. Failure is non-fatal on platforms without prctl (Windows, macOS).
-			//
-			// Set FISHMMO_ALLOW_COREDUMPS=1 to skip this hardening step — required for
-			// debugging native crashes (SEGV, SIGBUS) in libfishmmo_webtransport or MsQuic.
-			// Core dumps MUST be re-disabled before returning to production.
-			bool allowCoredumps = string.Equals(
-				Environment.GetEnvironmentVariable("FISHMMO_ALLOW_COREDUMPS"),
-				"1", StringComparison.OrdinalIgnoreCase);
-			if (allowCoredumps)
-			{
-				Log.Warning("LoginServerSystem",
-					"FISHMMO_ALLOW_COREDUMPS=1 — core dumps are ENABLED. " +
-					"Key material may be exposed in core files. " +
-					"Unset this variable before returning to production.");
-			}
-			else if (ProcessHardening.TryDisableCoreDumpAndPtrace(out string hardeningStatus))
+			if (ProcessHardening.TryDisableCoreDumpAndPtrace(out string hardeningStatus))
 			{
 				Log.Debug("LoginServerSystem", $"Process hardening: {hardeningStatus}");
 			}
@@ -95,7 +81,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-			if (Server.Configuration.TryGetBool("AutoVerifyAccounts", out bool autoVerify) && autoVerify)
+			// IServerConfiguration exposes TryGetString (not TryGetBool).
+			if (Server.Configuration.TryGetString("AutoVerifyAccounts", out string autoVerifyStr)
+				&& bool.TryParse(autoVerifyStr, out bool autoVerify)
+				&& autoVerify)
 			{
 				Log.Error("LoginServerSystem",
 					"FATAL: AutoVerifyAccounts=true is not allowed in production builds. " +
@@ -152,7 +141,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!dbResult.IsSuccess)
 			{
-				Log.Error("LoginServerSystem", $"Failed to register login server in database: [{dbResult.ErrorCode}] {dbResult.ErrorMessage} (IsTransient={dbResult.IsTransient})");
+				Log.Error("LoginServerSystem", $"Failed to register login server in database: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -166,7 +155,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			byte[] hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+			// Prefer the process-local signing key pre-bootstrapped in Server.OnFinalizeSetup
+			// (required so TotpMasterKey exists before InitializeWorkers). Only generate a
+			// fresh key if one was not already assigned.
+			byte[] hmacKey = null;
+			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator existingAuth
+				&& existingAuth.TokenSigningKey != null
+				&& existingAuth.TokenSigningKey.Length == CryptoHelper.HmacKeyLength)
+			{
+				hmacKey = existingAuth.TokenSigningKey;
+				Log.Debug("LoginServerSystem", "Reusing pre-bootstrapped TokenSigningKey for persistence.");
+			}
+			else
+			{
+				hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+			}
 
 			// Load the deployment-shared KEK and wrap the signing key before persistence.
 			// A DB-only attacker (read or write) cannot recover or forge usable signing keys
@@ -198,7 +201,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!keyResult.IsSuccess)
 			{
-				Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: [{keyResult.ErrorCode}] {keyResult.ErrorMessage}");
+				Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: {keyResult.ErrorMessage}");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -224,18 +227,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// Wire the same TOTP master key to the account creation system.
 				// Each consumer gets its own copy so a ZeroMemory on one does not
 				// corrupt the other's key material.
-				if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem))
+				if (Server.BehaviourRegistry.TryGet<IAccountCreationSystem<FishNet.Connection.NetworkConnection>>(out var accountSystem) &&
+					accountSystem is AccountCreationSystem concreteAccountSystem)
 				{
-					if (accountSystem is AccountCreationSystem concreteAccountSystem)
-					{
-						byte[] totpMasterKeyCopy = new byte[totpMasterKey.Length];
-						Buffer.BlockCopy(totpMasterKey, 0, totpMasterKeyCopy, 0, totpMasterKeyCopy.Length);
-						concreteAccountSystem.TotpMasterKey = totpMasterKeyCopy;
-					}
-					else
-					{
-						Log.Warning("LoginServerSystem", "accountSystem is not AccountCreationSystem -- TOTP master key not forwarded.");
-					}
+					byte[] totpMasterKeyCopy = new byte[totpMasterKey.Length];
+					Buffer.BlockCopy(totpMasterKey, 0, totpMasterKeyCopy, 0, totpMasterKeyCopy.Length);
+					concreteAccountSystem.TotpMasterKey = totpMasterKeyCopy;
 				}
 			}
 			else
@@ -250,7 +247,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
 
-			Log.Debug("LoginServerSystem", $"Initialized (ServerID={runtimeData.ID}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
+			// Info (not Debug): production FileSink often omits Debug; ops must see this every boot.
+			Log.Info("LoginServerSystem",
+				$"Initialized (ServerID={runtimeData.ID}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -315,23 +314,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 						// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
 						// At this point the server is shutting down, so blocking the main thread momentarily
 						// is acceptable and ensures the DB cleanup completes before process exit.
-						var keyDeleteTask = Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID));
-						if (!keyDeleteTask.Wait(5000))
+						if (!Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID)).Wait(5000))
 						{
 							Log.Warning("LoginServerSystem", $"Signing key deletion timed out after 5000ms");
-						}
-						else
-						{
-							DatabaseResult keyDeleteResult = keyDeleteTask.GetAwaiter().GetResult();
-							if (!keyDeleteResult.IsSuccess)
-							{
-								Log.Warning("LoginServerSystem", $"Failed to delete signing key from DB: [{keyDeleteResult.ErrorCode}] {keyDeleteResult.ErrorMessage}");
-							}
 						}
 					}
 					catch (Exception ex)
 					{
-						Log.Error("LoginServerSystem", $"Failed to delete signing key from DB: {ex}");
+						Log.Error("LoginServerSystem", $"Failed to delete signing key from DB: {ex.Message}");
 					}
 				}
 
@@ -340,23 +330,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 					try
 					{
 						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL (see comment above).
-						var deregisterTask = Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID));
-						if (!deregisterTask.Wait(5000))
+						if (!Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID)).Wait(5000))
 						{
 							Log.Warning("LoginServerSystem", $"Login server deregistration timed out after 5000ms");
-						}
-						else
-						{
-							DatabaseResult deregisterResult = deregisterTask.GetAwaiter().GetResult();
-							if (!deregisterResult.IsSuccess)
-							{
-								Log.Warning("LoginServerSystem", $"Failed to deregister login server from DB: [{deregisterResult.ErrorCode}] {deregisterResult.ErrorMessage}");
-							}
 						}
 					}
 					catch (Exception ex)
 					{
-						Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex}");
+						Log.Error("LoginServerSystem", $"Failed to deregister login server from DB: {ex.Message}");
 					}
 				}
 			}
@@ -368,7 +349,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
+			if (!Initialized || Server == null)
+			{
+				return;
+			}
+			// Still pulse while Starting so last_pulse advances before/while WT binds;
+			// skip only when fully Stopped so a down server does not look "alive" in IPFetch.
+			if (Server.ServerState == ConnectionState.Stopped ||
+				Server.ServerState == ConnectionState.Stopping)
 			{
 				return;
 			}
@@ -434,7 +422,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!keyResult.IsSuccess)
 				{
 					CryptographicOperationsCompat.ZeroMemory(newHmacKey);
-					await Log.Warning("LoginServerSystem", $"Signing key rotation persistence failed: [{keyResult.ErrorCode}] {keyResult.ErrorMessage}");
+					await Log.Warning("LoginServerSystem", $"Signing key rotation persistence failed: {keyResult.ErrorMessage}");
 					return;
 				}
 
@@ -491,8 +479,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!dbResult.IsSuccess)
 				{
-					await Log.Warning("LoginServerSystem", $"Pulse failed: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
+					await Log.Warning("LoginServerSystem", $"Pulse failed: {dbResult.ErrorMessage}");
 				}
+				// Success: quiet at Debug only — ops validate via SQL last_pulse age.
 			}
 			catch (Exception ex)
 			{

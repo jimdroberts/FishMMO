@@ -405,7 +405,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   AddressOverride: 
   PortOverride: 0
-  serverBehaviours:
+  serverBehaviors:
   - {fileID: 11400000, guid: 7c1ca08ef1e69c690af41b67d7b5167e, type: 2}
   - {fileID: 11400000, guid: 6879c81059fb59d4aaae79190fc5c262, type: 2}
   - {fileID: 11400000, guid: 57662a393a0b3c42fb835c4b66b3710f, type: 2}
