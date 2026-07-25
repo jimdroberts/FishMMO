@@ -263,7 +263,9 @@ namespace FishMMO.Client
 					OnVersionMismatch();
 					break;
 				case ClientAuthenticationResult.TokenDecryptFailed:
-					OnLoginAuthenticationDialog("Authentication failed. Please log in again.");
+					// Stay on Login panel — never open Create Account on this path.
+					OnLoginAuthenticationDialog(
+						"Login failed: could not decrypt session token. Please try again.");
 					break;
 				// Not applicable during login flow.
 				case ClientAuthenticationResult.SrpVerify:

@@ -586,6 +586,38 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistMarkVerifiedAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				// Idempotent: already-verified accounts still "succeed" (rows may be 0).
+				var sql = $@"UPDATE {TableName}
+					SET verified = true, verify_code = 0, verify_code_expires_utc = NULL
+					WHERE name_lowercase = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					// Account missing, or concurrent delete.
+					throw new DatabaseException(
+						"Account not found for AutoVerify mark.",
+						errorCode: DatabaseErrorCodes.NotFound);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistVerifiedAsync(
 			string accountName,
 			int verifyCode,

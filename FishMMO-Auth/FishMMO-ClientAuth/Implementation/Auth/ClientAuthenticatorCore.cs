@@ -539,37 +539,54 @@ namespace FishMMO.Auth.Implementation
 
 			if (srpData.Verify(proof, out string _))
 			{
-
-				if (result == ClientAuthenticationResult.LoginSuccess &&
-					encryptedToken != null && encryptedToken.Length > 0)
+				// LoginSuccess requires a decryptable auth token for world handoff.
+				// Decrypt first; never emit LoginSuccess if the token cannot be stored
+				// (avoids CharacterSelect + spurious LoginSuccess then TokenDecryptFailed).
+				if (result == ClientAuthenticationResult.LoginSuccess)
 				{
+					if (encryptedToken == null || encryptedToken.Length == 0)
+					{
+						_ = Log.Warning(LogPrefix,
+							"LoginSuccess received without encrypted auth token.");
+						storedAuthToken = null;
+						OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+						_ = Log.Debug(LogPrefix, ClientAuthenticationResult.TokenDecryptFailed.ToString());
+						srpData.Clear();
+						srpData = null;
+						return;
+					}
+
 					try
 					{
-						storedAuthToken = SrpService.ClientDecryptAuthToken(encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
+						storedAuthToken = SrpService.ClientDecryptAuthToken(
+							encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
 						if (storedAuthToken == null || storedAuthToken.Length == 0)
 						{
 							if (storedAuthToken != null)
-							{
 								CryptographicOperations.ZeroMemory(storedAuthToken);
-							}
 							storedAuthToken = null;
 							_ = Log.Warning(LogPrefix, "Decrypted auth token is null or empty.");
+							OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+							_ = Log.Debug(LogPrefix, ClientAuthenticationResult.TokenDecryptFailed.ToString());
+							srpData.Clear();
+							srpData = null;
+							return;
 						}
 					}
 					catch (CryptographicException tokenEx)
 					{
-						_ = Log.Warning(LogPrefix, $"Failed to decrypt auth token (non-fatal): {tokenEx.Message}");
+						_ = Log.Warning(LogPrefix,
+							$"Failed to decrypt auth token: {tokenEx.Message}");
 						storedAuthToken = null;
+						OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+						_ = Log.Debug(LogPrefix, ClientAuthenticationResult.TokenDecryptFailed.ToString());
+						srpData.Clear();
+						srpData = null;
+						return;
 					}
 				}
 
 				OnAuthResultCallback(result);
-
-				if (result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null)
-				{
-					OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
-				}
-
 				_ = Log.Debug(LogPrefix, result.ToString());
 
 				srpData.Clear();

@@ -900,27 +900,39 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// Clear failure tracker on success
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 
-							// Determine whether to auto-verify (skip 2FA/email).
-							// Controlled by a compile-time guard AND a runtime AutoVerifyAccounts config flag.
-							// Account is created, immediately verified, and has no TOTP requirement when enabled.
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-							// In development builds, check the runtime AutoVerifyAccounts config.
-							// Default to true when the config key is absent (dev convention).
+							// Auto-verify when LoginServer.cfg AutoVerifyAccounts=true
+							// (WebGL / production without SMTP). Marks DB verified and skips
+							// email queue + mandatory 2FA setup on create.
 							bool shouldAutoVerify = false;
 							if (Server.Configuration.TryGetString("AutoVerifyAccounts", out string autoVerifyStr))
 							{
 								bool.TryParse(autoVerifyStr, out shouldAutoVerify);
 							}
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+							// Dev convention: default true when the config key is absent.
 							else
 							{
 								shouldAutoVerify = true;
 							}
-#else
-							bool shouldAutoVerify = false;
 #endif
 							if (shouldAutoVerify)
 							{
-								result = ClientAuthenticationResult.AccountVerified;
+								DatabaseResult markVerified = await accountService.PersistMarkVerifiedAsync(username);
+								if (markVerified.IsSuccess)
+								{
+									await Log.Info("AccountCreationSystem",
+										$"AutoVerify: account '{username}' marked verified=true " +
+										"(AutoVerifyAccounts=true; SMTP skipped).");
+									result = ClientAuthenticationResult.AccountVerified;
+								}
+								else
+								{
+									await Log.Error("AccountCreationSystem",
+										$"AutoVerify: failed to mark '{username}' verified: " +
+										$"{markVerified.ErrorCode} - {markVerified.ErrorMessage}. " +
+										"Client will need email verify path.");
+									result = ClientAuthenticationResult.AccountCreated;
+								}
 							}
 							else
 							{

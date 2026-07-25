@@ -771,9 +771,38 @@ namespace FishMMO.Client
 		{
 			switch (r)
 			{
-				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
-				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
-				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; DismissLoadingScreen(true); OnEnterGameWorld?.Invoke(); break;
+				case ClientAuthenticationResult.LoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.Login;
+					break;
+				case ClientAuthenticationResult.WorldLoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.World;
+					break;
+				case ClientAuthenticationResult.SceneLoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.Scene;
+					DismissLoadingScreen(true);
+					OnEnterGameWorld?.Invoke();
+					break;
+				// Expected intermediate / failure codes — UI panels own presentation.
+				case ClientAuthenticationResult.TokenDecryptFailed:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.AccountCreated:
+				case ClientAuthenticationResult.AccountVerified:
+				case ClientAuthenticationResult.AccountUnverified:
+				case ClientAuthenticationResult.InvalidUsernameOrPassword:
+				case ClientAuthenticationResult.AlreadyOnline:
+				case ClientAuthenticationResult.Banned:
+				case ClientAuthenticationResult.ServerFull:
+				case ClientAuthenticationResult.ServerBusy:
+				case ClientAuthenticationResult.VersionMismatch:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.NoCharacterSelected:
+					Log.Info("Client", $"Auth result: {r}");
+					break;
 				default:
 					Log.Warning("Client", $"Unhandled auth result: {r}");
 					break;

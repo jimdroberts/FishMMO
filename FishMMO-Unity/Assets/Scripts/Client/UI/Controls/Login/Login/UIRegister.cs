@@ -189,16 +189,19 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Called when quitting to login. Shows and unlocks the registration panel.
+		/// Called when quitting to login. Clears registration state and hides this panel
+		/// so Login is shown alone (never leave Create Account open after a login failure).
 		/// </summary>
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
 
 			pendingVerifyUsername = null;
+			isAuthFlowActive = false;
 			DeleteSavedTwoFactorSetupFile();
 			ClearAllFields();
 			SetFormLocked(false);
+			Hide();
 		}
 
 		/// <summary>
@@ -409,19 +412,20 @@ namespace FishMMO.Client
 		private void OnAccountVerified()
 		{
 			pendingVerifyUsername = null;
-			// Keep the 2FA setup file — user may want it as safe storage.
-			// They are prompted in the dialog to delete it manually when ready.
+			isAuthFlowActive = false;
+			// Keep the 2FA setup file if one was written — user may want it as safe storage.
 			Client.ForceDisconnect();
 			SetFormLocked(false);
 
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
 			{
-				uiDialogBox.Open("Your account has been verified! You may now log in.\n\nThe 2FA setup file has been kept for your records. Please delete it manually when you no longer need it.");
+				uiDialogBox.Open(
+					"Your account has been created and verified! You may now log in.");
 			}
 			if (UIManager.TryGet("UILogin", out UILogin uiLogin))
 			{
 				Hide();
-				uiLogin.HandshakeMSG.text = "Account verified! You may now log in.";
+				uiLogin.HandshakeMSG.text = "Account created & verified — you may log in.";
 				uiLogin.Show();
 			}
 		}

@@ -225,6 +225,24 @@ int32_t wt_session_send_datagram(
     if (!session || !session->quic_conn) return WT_ERR_INVALID_STATE;
     if (!data || length <= 0) return WT_ERR_SEND_FAILED;
 
+    /* SAFE_SHUTDOWN_V3: never call DatagramSend after peer/transport teardown
+     * began. LoginServer production SIGSEGV (rc=139) was in
+     * QuicDatagramFrameEncodeEx ← QuicSendFlush after auth token stream
+     * reply when the browser closed mid-flush. */
+    if (atomic_load(&session->released))
+        return WT_ERR_INVALID_STATE;
+    if (session->stream_mgr && atomic_load(&session->stream_mgr->conn_closed))
+        return WT_ERR_INVALID_STATE;
+
+    if ((uint32_t)length > (uint32_t)WT_DGRAM_MAX_SIZE) {
+        WT_LOG_ERROR(
+            "DatagramSend rejected: len=%d > WT_DGRAM_MAX_SIZE=%d (conn=%llu) "
+            "stamp=SAFE_SHUTDOWN_V3",
+            length, (int)WT_DGRAM_MAX_SIZE,
+            (unsigned long long)session->conn_id);
+        return WT_ERR_SEND_FAILED;
+    }
+
     /* Allocate a wrapper struct that includes both the data payload
      * (flexible array member) and an ownership flag.  The struct pointer
      * is passed as ClientContext to DatagramSend so the callback can
@@ -237,16 +255,24 @@ int32_t wt_session_send_datagram(
     ctx->owned_by_msquic = false;
     memcpy(ctx->data, data, (size_t)length);
 
+    HQUIC qconn = session->quic_conn;
+    if (!qconn) {
+        free(ctx);
+        return WT_ERR_INVALID_STATE;
+    }
+
     QUIC_BUFFER dgram_buf;
     dgram_buf.Buffer = ctx->data;
     dgram_buf.Length = (uint32_t)length;
 
     QUIC_STATUS status = MsQuic->DatagramSend(
-        session->quic_conn, &dgram_buf, 1,
+        qconn, &dgram_buf, 1,
         QUIC_SEND_FLAG_NONE, ctx);
 
     if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("DatagramSend failed: 0x%x", status);
+        WT_LOG_ERROR(
+            "DatagramSend failed: 0x%x len=%d conn=%llu stamp=SAFE_SHUTDOWN_V3",
+            status, length, (unsigned long long)session->conn_id);
         /* Only free if the callback hasn't already claimed ownership */
         if (!ctx->owned_by_msquic) free(ctx);
         return WT_ERR_SEND_FAILED;

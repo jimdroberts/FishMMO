@@ -969,6 +969,13 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             (unsigned long long)sconn->id, st, ec, why,
             h3_state, settings_sent, peer_h3, handshake_done,
             handshake_done);
+        /* Stop app-layer sends immediately (datagram encode crash fix). */
+        atomic_store(&sconn->state, WT_CONN_STATE_DISCONNECTING);
+        {
+            wt_session_t* sess = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (sess && sess->stream_mgr)
+                wt_stream_manager_mark_conn_closed(sess->stream_mgr);
+        }
         break;
     }
 
@@ -1017,6 +1024,13 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             (unsigned long long)sconn->id, ec, why,
             h3_state, settings_sent, peer_h3, handshake_done,
             handshake_done);
+        /* Stop app-layer sends immediately (datagram encode crash fix). */
+        atomic_store(&sconn->state, WT_CONN_STATE_DISCONNECTING);
+        {
+            wt_session_t* sess = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (sess && sess->stream_mgr)
+                wt_stream_manager_mark_conn_closed(sess->stream_mgr);
+        }
         break;
     }
 

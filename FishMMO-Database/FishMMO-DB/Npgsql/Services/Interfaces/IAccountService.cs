@@ -262,6 +262,17 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Marks an account as email-verified without a verify code (AutoVerifyAccounts path).
+		/// Clears any pending verify_code fields. Idempotent if already verified.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistMarkVerifiedAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Sets the verification code for an account, along with the UTC expiry timestamp
 		/// after which the code is no longer redeemable.
 		/// </summary>

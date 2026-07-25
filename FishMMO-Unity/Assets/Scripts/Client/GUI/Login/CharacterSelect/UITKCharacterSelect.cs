@@ -217,6 +217,7 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.TokenExpired:
 				case ClientAuthenticationResult.TokenRevoked:
 				case ClientAuthenticationResult.TokenDecryptFailed:
+					// Return to Login only — do not open Create Account.
 					Client.QuitToLogin();
 					break;
 				case ClientAuthenticationResult.LoginSuccess:

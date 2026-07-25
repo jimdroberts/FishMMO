@@ -178,16 +178,19 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Shows and unlocks the registration panel when quitting to login.
+		/// Clears registration state and hides this panel when quitting to login
+		/// so Login is shown alone (never leave Create Account open after a login failure).
 		/// </summary>
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
 
 			pendingVerifyUsername = null;
+			isAuthFlowActive = false;
 			DeleteSavedTwoFactorSetupFile();
 			ClearAllFields();
 			SetFormLocked(false);
+			Hide();
 		}
 
 		/// <summary>
@@ -409,13 +412,15 @@ namespace FishMMO.Client
 		private void OnAccountVerified()
 		{
 			pendingVerifyUsername = null;
+			isAuthFlowActive = false;
 			DeleteSavedTwoFactorSetupFile();
 			Client.ForceDisconnect();
 			SetFormLocked(false);
 
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{
-				uiDialogBox.Open("Your account has been verified! You may now log in.");
+				uiDialogBox.Open(
+					"Your account has been created and verified! You may now log in.");
 			}
 			if (UIManager.TryGetTK("UILogin", out UITKLogin uiLogin))
 			{

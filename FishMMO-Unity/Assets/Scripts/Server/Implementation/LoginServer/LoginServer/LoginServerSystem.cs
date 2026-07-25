@@ -80,19 +80,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Log.Warning("LoginServerSystem", $"Process hardening skipped: {hardeningStatus}");
 			}
 
-#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-			// IServerConfiguration exposes TryGetString (not TryGetBool).
-			if (Server.Configuration.TryGetString("AutoVerifyAccounts", out string autoVerifyStr)
-				&& bool.TryParse(autoVerifyStr, out bool autoVerify)
-				&& autoVerify)
+			// AutoVerifyAccounts is allowed in production (WebGL / no-SMTP deployments).
+			// When true, AccountCreationSystem marks new accounts verified and skips email.
+			if (Server.Configuration.TryGetString("AutoVerifyAccounts", out string autoVerifyBootStr)
+				&& bool.TryParse(autoVerifyBootStr, out bool autoVerifyBoot)
+				&& autoVerifyBoot)
 			{
-				Log.Error("LoginServerSystem",
-					"FATAL: AutoVerifyAccounts=true is not allowed in production builds. " +
-					"Set AutoVerifyAccounts=false in the server .cfg file.");
-				throw new InvalidOperationException(
-					"AutoVerifyAccounts must be false in production builds.");
+				Log.Warning("LoginServerSystem",
+					"AutoVerifyAccounts=true — new accounts skip email verification " +
+					"(SMTP not required). Set false when SMTP verification is configured.");
 			}
-#endif
 
 			if (!Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
