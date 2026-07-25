@@ -11,6 +11,8 @@
  * Packaging note (Unity / modern Emscripten):
  * Keep the helper as a `$`-prefixed library dependency and declare
  * `__deps` / `autoAddDeps` so Emscripten includes it and rewrites references.
+ * A bare top-level `var FishWebTransport = {}` is NOT available at runtime
+ * and causes: ReferenceError: FishWebTransport is not defined.
  */
 
 var LibraryFishWebTransport = {
@@ -131,6 +133,51 @@ var LibraryFishWebTransport = {
                 pump();
             }
             startPump();
+        },
+
+        /**
+         * Pump readable side of a client-opened bidi stream (SAME_STREAM_REPLY_V1).
+         * LoginServer replies on the same stream the client created — not via
+         * incomingBidirectionalStreams.
+         */
+        _readOwnBidiStream: function(session, stream, seq) {
+            try {
+                var ownReader = stream.readable.getReader();
+                function readOwnStream() {
+                    ownReader.read().then(function(sr) {
+                        if (session._closed) {
+                            try { ownReader.releaseLock(); } catch (_) {}
+                            return;
+                        }
+                        if (sr.done) {
+                            try { ownReader.releaseLock(); } catch (_) {}
+                            console.log('[FishWT] own bidi readable done seq=' + (seq || 0));
+                            return;
+                        }
+                        var chunk = new Uint8Array(sr.value);
+                        console.log('[FishWT] own bidi RECV len=' + chunk.length +
+                            ' seq=' + (seq || 0) + ' stamp=SAME_STREAM_REPLY_V1');
+                        var ptr = _malloc(chunk.length);
+                        if (!ptr) {
+                            console.warn('[FishWT] malloc failed for own-stream data (' +
+                                chunk.length + ' bytes), dropping');
+                            readOwnStream();
+                            return;
+                        }
+                        HEAPU8.set(chunk, ptr);
+                        FishWebTransport._dynCall('viii', session.onStream,
+                            [session._index, ptr, chunk.length]);
+                        _free(ptr);
+                        readOwnStream();
+                    }).catch(function(e) {
+                        console.warn('[FishWT] own bidi read error: ' + e.message);
+                        try { ownReader.releaseLock(); } catch (_) {}
+                    });
+                }
+                readOwnStream();
+            } catch (re) {
+                console.warn('[FishWT] own bidi readable pump failed: ' + re.message);
+            }
         },
 
         _readDatagrams: function(session) {
@@ -265,7 +312,7 @@ var LibraryFishWebTransport = {
             var msg = (err && err.message) ? err.message : String(err);
             session._connected = false;
             session._closed = true;
-            if (session._closed || (msg && msg.indexOf('close() is called while connecting') >= 0)) {
+            if (msg && msg.indexOf('close() is called while connecting') >= 0) {
                 console.warn('[FishWT] closed after client teardown index=' + index +
                     ' url=' + url + ' (ignore if you already hit connect timeout)');
             } else {
@@ -282,6 +329,7 @@ var LibraryFishWebTransport = {
 
     /**
      * Send data over a reusable persistent bidirectional stream.
+     * Also pumps stream.readable for SAME_STREAM_REPLY_V1 (ServerHandshake).
      */
     WTSendStream__deps: ['$FishWebTransport'],
     WTSendStream: function(index, dataPtr, length) {
@@ -362,6 +410,13 @@ var LibraryFishWebTransport = {
                 var writer = stream.writable.getWriter();
                 session._streamWriter = writer;
                 session._streamWriterPending = false;
+
+                /*
+                 * CRITICAL (create-account / ServerHandshake):
+                 * LoginServer replies on the SAME client-opened bidi stream
+                 * (SAME_STREAM_REPLY_V1). Pump readable into onStream.
+                 */
+                FishWebTransport._readOwnBidiStream(session, stream, n);
 
                 var queue = session._sendQueue || [];
                 session._sendQueue = [];
@@ -457,9 +512,7 @@ var LibraryFishWebTransport = {
         FishWebTransport._remove(index);
     },
 
-    /**
-     * Returns true if our session flag says connected (not wt.readyState).
-     */
+    /** @deprecated Reserved for future use — currently not called from C#. */
     WTIsConnected__deps: ['$FishWebTransport'],
     WTIsConnected: function(index) {
         var session = FishWebTransport._get(index);

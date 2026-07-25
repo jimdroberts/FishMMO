@@ -311,6 +311,12 @@ namespace FishMMO.Server.Implementation
 			// The token bridges the real IP from the HTTP layer into the QUIC layer.
 			// We await resolution because rate limiting requires a verified real IP —
 			// falling back to proxy IP or ClientId is not acceptable for DoS protection.
+			//
+			// ConnectionToken is required on the *first* ClientHandshake only.
+			// Later handshakes intentionally omit it:
+			//   • Phase-1 cookie echo (ClientAuthenticatorCore) — Cookie set, token null
+			//   • Queue-admit RetryHandshakeAsync — token already consumed, IP already bound
+			// Reject only when there is no token AND no real IP already bound to this conn.
 			if (!string.IsNullOrEmpty(msg.ConnectionToken))
 			{
 				try
@@ -328,13 +334,21 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 			}
-			else
+			else if (ResolveRateLimitKey(conn) == null)
 			{
-				// No connection token provided — client is not coming through the
-				// IPFetch proxy path. Disconnect immediately.
-				await Log.Warning(LogPrefix, $"Connection {conn.ClientId} rejected: no connection token.");
+				// First contact without IPFetch token — not allowed behind L4 proxy.
+				await Log.Warning(LogPrefix,
+					$"Connection {conn.ClientId} rejected: no connection token " +
+					$"(and no real IP bound yet). cookieLen={msg.Cookie?.Length ?? 0}");
 				conn.Disconnect(true);
 				return;
+			}
+			else
+			{
+				await Log.Debug(LogPrefix,
+					$"Connection {conn.ClientId}: ClientHandshake without token accepted " +
+					$"(cookie-echo or re-handshake; real IP already bound). " +
+					$"cookieLen={msg.Cookie?.Length ?? 0}");
 			}
 
 			if (Core == null)

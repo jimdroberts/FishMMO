@@ -443,6 +443,8 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         {
             wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&cli->session);
             if (old_session) {
+                if (old_session->stream_mgr)
+                    wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
                 atomic_ptr_store(&cli->session, NULL);
 
                 /* Defer shutdown to poll (application thread) to guarantee

@@ -67,6 +67,10 @@ typedef struct wt_stream_entry_s {
     bool            in_use;
     bool            send_closed;
     bool            recv_closed;
+    /* True if this stream was accepted from the peer (client-opened bidi).
+     * Server replies prefer these so Chrome receives data on the same
+     * WebTransport stream the client already owns (readable half). */
+    bool            peer_initiated;
 } wt_stream_entry_t;
 
 typedef struct wt_stream_manager_s {
@@ -75,6 +79,11 @@ typedef struct wt_stream_manager_s {
     HQUIC               quic_conn;
     atomic_uint         active_streams;
     atomic_bool         shutting_down;
+    /* Set when the QUIC connection is already closed/shutting down.
+     * wt_stream_manager_shutdown must NOT call MsQuic StreamShutdown /
+     * StreamClose on handles once this is true — that path was
+     * quic_bugcheck → LoginServer SIGABRT (rc=134). */
+    atomic_bool         conn_closed;
 
     /* Browser WebTransport (HTTP/3): client/server-initiated data streams
      * begin with a WEBTRANSPORT_STREAM capsule (type 0x41) carrying the
@@ -131,6 +140,13 @@ void wt_stream_manager_init(
     void* callback_ctx);
 
 void wt_stream_manager_shutdown(wt_stream_manager_t* mgr);
+
+/**
+ * Mark the parent QUIC connection as closed. Call from connection
+ * SHUTDOWN_COMPLETE *before* ConnectionClose / session free so stream
+ * manager teardown never issues MsQuic stream ops on dead handles.
+ */
+void wt_stream_manager_mark_conn_closed(wt_stream_manager_t* mgr);
 
 int32_t wt_stream_manager_send(
     wt_stream_manager_t* mgr, const uint8_t* data, int32_t length);

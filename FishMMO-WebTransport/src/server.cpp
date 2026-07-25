@@ -1025,6 +1025,12 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         {
             wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&sconn->session);
             if (old_session) {
+                /* Mark stream manager: connection handles are about to die.
+                 * Must happen BEFORE ConnectionClose and before deferred
+                 * wt_session_shutdown → StreamShutdown (quic_bugcheck fix). */
+                if (old_session->stream_mgr)
+                    wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
+
                 atomic_ptr_store(&sconn->session, NULL);
 
                 /* Defer shutdown to poll (application thread) to guarantee
