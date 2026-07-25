@@ -207,8 +207,8 @@ namespace FishMMO.Installer
 		/// Copies FishMMO-Database and FishMMO-SharedUtility source trees from the build root
 		/// into the installer's runtime directory so migration services can resolve them at runtime.
 		/// Skips bin, obj, .git and .vs subdirectories.
-		/// Migration files inside FishMMO-Database/FishMMO-DB/Migrations/ are preserved across copies
-		/// so that previously-created migrations are not lost when the source tree is refreshed.
+		/// Migration files live at the monorepo level (<see cref="InstallationConstants.MigrationsOutputDirectory"/>)
+		/// and are not part of these source trees — no stash/restore is needed.
 		/// </summary>
 		/// <param name="rootDirectory">The root directory that was scanned for projects.</param>
 		private static async Task CopyRuntimeSourceDirectoriesAsync(string rootDirectory)
@@ -229,20 +229,6 @@ namespace FishMMO.Installer
 
 				await Log.Info("FishMMOInstaller", $"Copying {dirName} to runtime directory...");
 
-				// Snapshot any migration files before wiping the destination so they survive the refresh.
-				var savedMigrations = new Dictionary<string, byte[]>();
-				if (dirName.Equals("FishMMO-Database", StringComparison.OrdinalIgnoreCase) && Directory.Exists(destDir))
-				{
-					string migrationsDir = Path.Combine(destDir, "FishMMO-DB", InstallationConstants.MigrationsOutputDirectory);
-					if (Directory.Exists(migrationsDir))
-					{
-						foreach (string file in Directory.EnumerateFiles(migrationsDir, "*", SearchOption.AllDirectories))
-						{
-							savedMigrations[Path.GetRelativePath(destDir, file)] = File.ReadAllBytes(file);
-						}
-					}
-				}
-
 				if (Directory.Exists(destDir))
 				{
 					Directory.Delete(destDir, recursive: true);
@@ -250,18 +236,6 @@ namespace FishMMO.Installer
 
 				await Task.Run(() => CopyDirectoryRecursive(sourceDir, destDir));
 				await Log.Info("FishMMOInstaller", $"Copied {dirName} → {destDir}");
-
-				// Restore migration files that were present before the copy.
-				if (savedMigrations.Count > 0)
-				{
-					foreach (var (relativePath, content) in savedMigrations)
-					{
-						string restoredPath = Path.Combine(destDir, relativePath);
-						Directory.CreateDirectory(Path.GetDirectoryName(restoredPath)!);
-						File.WriteAllBytes(restoredPath, content);
-					}
-					await Log.Info("FishMMOInstaller", $"Restored {savedMigrations.Count} migration file(s) in {dirName}.");
-				}
 			}
 		}
 

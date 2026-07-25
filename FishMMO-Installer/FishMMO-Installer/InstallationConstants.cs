@@ -215,13 +215,6 @@ namespace FishMMO.Installer
 		/// </summary>
 		public static readonly string StartupProject = Path.Combine(".", "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj");
 
-		/// <summary>
-		/// Directory name for EF Core migration output, relative to the FishMMO-DB project file.
-		/// EF Core resolves this against the project directory, placing generated files inside
-		/// FishMMO-Database/FishMMO-DB/Migrations/ so they are compiled into the project assembly
-		/// and discovered by dotnet ef database update.
-		/// </summary>
-		public const string MigrationsOutputDirectory = "Migrations";
 
 
 		// ---------------------------------------------------------------------
@@ -254,6 +247,14 @@ namespace FishMMO.Installer
 		/// Falls back to ~/Dev/FishMMO-Dev if the root cannot be auto-detected.
 		/// </summary>
 		public static readonly string FishMMOMonorepoRoot = FindMonorepoRoot();
+
+		/// <summary>
+		/// Absolute path to the shared EF Core Migrations directory at the monorepo root.
+		/// Migrations live here rather than inside the FishMMO-DB project so they survive
+		/// clean builds, database drops, and Installer rebuilds without stashing/restoring.
+		/// </summary>
+		/// <remarks>MUST come after <see cref="FishMMOMonorepoRoot"/> — static init order matters.</remarks>
+		public static readonly string MigrationsOutputDirectory = Path.Combine(FishMMOMonorepoRoot, "FishMMO", "Migrations");
 
 		/// <summary>Path to the FishMMO-Setup directory containing canonical nginx.conf, .cfg files, and environment overlays.</summary>
 		public static readonly string FishMMOSetupPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Setup");

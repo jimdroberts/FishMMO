@@ -77,10 +77,14 @@ namespace FishMMO.Client
 		{
 			base.OnStarting();
 
-			// Wire button listeners programmatically so they survive
-			// scene/prefab reimports that would clear Inspector OnClick lists.
-			if (RegisterButton != null) RegisterButton.onClick.AddListener(OnClick_OnRegister);
-			if (SignInButton != null) SignInButton.onClick.AddListener(OnClick_Login);
+			// Wire button listeners programmatically only if the scene does not
+			// already have persistent OnClick bindings (avoids double-fire when
+			// Inspector wiring is present, while surviving scene/prefab reimports
+			// that clear Inspector OnClick lists).
+			if (RegisterButton != null && RegisterButton.onClick.GetPersistentEventCount() == 0)
+				RegisterButton.onClick.AddListener(OnClick_OnRegister);
+			if (SignInButton != null && SignInButton.onClick.GetPersistentEventCount() == 0)
+				SignInButton.onClick.AddListener(OnClick_Login);
 		}
 
 		/// <inheritdoc/>

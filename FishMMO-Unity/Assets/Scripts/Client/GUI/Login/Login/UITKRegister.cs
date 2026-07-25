@@ -467,6 +467,8 @@ namespace FishMMO.Client
 			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13, etc.
 			int age = ageIndex > 0 ? ageIndex + 12 : 0;
 
+			Log.Info("UITKRegister", $"Create Account clicked: username='{usernameText}', email='{emailText}', age={age}, register=true");
+
 			ClearAllFields();
 
 			if (!Authentication.IsAllowedUsername(usernameText))
@@ -542,6 +544,7 @@ namespace FishMMO.Client
 				{
 					statusMessage.text = "Creating account...";
 				}
+				Log.Info("UITKRegister", $"SetLoginCredentials: username='{usernameText}', password=***, register=true, email='{emailText}', age={age}");
 				Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age);
 				Client.ConnectToServer(serverPort);
 			}

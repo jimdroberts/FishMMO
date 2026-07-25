@@ -141,10 +141,9 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Runs a dotnet ef migrations add command for the given migration name.
-		/// Targets the <b>runtime copy</b> of FishMMO-Database inside the
-		/// Installer's output directory so that generated migration files land in
-		/// <c>bin/.../FishMMO-Database/FishMMO-DB/Migrations/</c> rather than
-		/// polluting the monorepo source tree.
+		/// Generated migration files land in the shared
+		/// <see cref="InstallationConstants.MigrationsOutputDirectory"/> at the
+		/// monorepo root rather than inside the FishMMO-DB project directory.
 		/// </summary>
 		/// <param name="migrationName">Name of the migration to create.</param>
 		/// <returns>True if the command succeeded, otherwise false.</returns>
@@ -156,14 +155,12 @@ namespace FishMMO.Installer
 				return false;
 			}
 
-			// Use the runtime copy in the Installer's output directory so
-			// generated migrations stay out of the monorepo source tree.
-			// The output copy includes the full project tree (minus bin/obj)
-			// and relative ProjectReferences resolve correctly because
-			// FishMMO-SharedUtility is also copied to the output.
-			string baseDir = InstallerProcessHelper.GetWorkingDirectory();
-			string projectPath = Path.GetFullPath(Path.Combine(baseDir, "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj"));
-			string startupProject = Path.GetFullPath(Path.Combine(baseDir, "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj"));
+			// Target the source project.  Migration files are written to the
+			// monorepo-level Migrations dir (not the project dir), so there is no
+			// risk of polluting the source tree.
+			string root = InstallationConstants.FishMMOMonorepoRoot;
+			string projectPath = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj"));
+			string startupProject = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj"));
 
 			return await RunDotNetCommandAsync(
 				$"ef migrations add {migrationName} -p \"{projectPath}\" -s \"{startupProject}\" --output-dir \"{InstallationConstants.MigrationsOutputDirectory}\"");
@@ -171,15 +168,13 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Runs a dotnet ef database update command to apply pending migrations.
-		/// Targets the runtime copy of FishMMO-Database inside the Installer's
-		/// output directory.
 		/// </summary>
 		/// <returns>True if the command succeeded, otherwise false.</returns>
 		public static async Task<bool> RunEFDatabaseUpdateAsync(string? superuserConnectionString = null)
 		{
-			string baseDir = InstallerProcessHelper.GetWorkingDirectory();
-			string projectPath = Path.GetFullPath(Path.Combine(baseDir, "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj"));
-			string startupProject = Path.GetFullPath(Path.Combine(baseDir, "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj"));
+			string root = InstallationConstants.FishMMOMonorepoRoot;
+			string projectPath = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj"));
+			string startupProject = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj"));
 
 			string connectionArg = string.IsNullOrEmpty(superuserConnectionString)
 				? ""

@@ -460,12 +460,7 @@ namespace FishMMO.Installer
 					// Check if migration files already exist (e.g. from a previous run).
 					// If they do, skip 'migrations add' to avoid "The name 'Initial' is used
 					// by an existing migration" errors and go straight to 'database update'.
-					// Check the runtime copy in the Installer's output directory,
-					// not the monorepo source — migrations are now generated there.
-					string migrationsDir = Path.Combine(
-						InstallerProcessHelper.GetWorkingDirectory(),
-						"FishMMO-Database", "FishMMO-DB",
-						InstallationConstants.MigrationsOutputDirectory);
+					string migrationsDir = InstallationConstants.MigrationsOutputDirectory;
 					bool migrationFilesExist = Directory.Exists(migrationsDir)
 						&& Directory.GetFiles(migrationsDir, "*.cs", SearchOption.TopDirectoryOnly).Length > 0;
 
@@ -534,11 +529,7 @@ namespace FishMMO.Installer
 			// Check for duplicate migration name before prompting for credentials.
 			// EF Core names files as <timestamp>_<Name>.cs — if any file matches
 			// the pattern *_<name>.cs, the migration already exists.
-			// Check the runtime copy, not the monorepo source.
-			string migrationsDir = Path.Combine(
-				InstallerProcessHelper.GetWorkingDirectory(),
-				"FishMMO-Database", "FishMMO-DB",
-				InstallationConstants.MigrationsOutputDirectory);
+			string migrationsDir = InstallationConstants.MigrationsOutputDirectory;
 			if (Directory.Exists(migrationsDir))
 			{
 				string pattern = $"*_{migrationName}.cs";

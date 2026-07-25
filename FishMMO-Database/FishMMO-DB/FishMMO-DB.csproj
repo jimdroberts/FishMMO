@@ -49,7 +49,8 @@
     <ProjectReference Include="..\..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Migrations\" />
+    <Folder Include="..\..\FishMMO\Migrations\" />
+    <Compile Include="..\..\FishMMO\Migrations\*.cs" />
   </ItemGroup>
   <!-- Define a custom property based on the existence of the marker file -->
   <PropertyGroup>

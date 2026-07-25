@@ -101,10 +101,14 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
-			// Wire button listeners programmatically so they survive
-			// scene/prefab reimports that would clear Inspector OnClick lists.
-			if (RegisterButton != null) RegisterButton.onClick.AddListener(OnClick_Register);
-			if (QuitToLoginButton != null) QuitToLoginButton.onClick.AddListener(OnClick_QuitToLogin);
+			// Wire button listeners programmatically only if the scene does not
+			// already have persistent OnClick bindings (avoids double-fire when
+			// Inspector wiring is present, while surviving scene/prefab reimports
+			// that clear Inspector OnClick lists).
+			if (RegisterButton != null && RegisterButton.onClick.GetPersistentEventCount() == 0)
+				RegisterButton.onClick.AddListener(OnClick_Register);
+			if (QuitToLoginButton != null && QuitToLoginButton.onClick.GetPersistentEventCount() == 0)
+				QuitToLoginButton.onClick.AddListener(OnClick_QuitToLogin);
 
 			if (AgeSelect == null) return;
 
@@ -472,6 +476,8 @@ namespace FishMMO.Client
 			int ageIndex = AgeSelect.value;
 			int age = ageIndex > 0 ? ageIndex + 12 : 0;
 
+			Log.Info("UIRegister", $"Create Account clicked: username='{username}', email='{email}', age={age}, register=true");
+
 			ClearAllFields();
 
 			if (!Authentication.IsAllowedUsername(username))
@@ -556,6 +562,7 @@ namespace FishMMO.Client
 
 			StatusMessage.text = "Creating account...";
 
+			Log.Info("UIRegister", $"SetLoginCredentials: username='{username}', password=***, register=true, email='{email}', age={age}");
 			Client.LoginAuthenticator.SetLoginCredentials(username, password, true, email, age);
 			Client.ConnectToServer(serverPort);
 		}
