@@ -175,6 +175,13 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			SanitizeChannel(ref channelId);
+#if UNITY_WEBGL && !UNITY_EDITOR
+			// Browser: never use QUIC DATAGRAM for FishNet channel 1. Datagrams have
+			// caused H3_FRAME_ERROR / session drop after LoginSuccess. Prefer the
+			// persistent reliable bidi stream (channel 0).
+			if (channelId == 1)
+				channelId = 0;
+#endif
 			if (channelId == 1 && segment.Count > MTU)
 			{
 				base.NetworkManager.LogWarning(

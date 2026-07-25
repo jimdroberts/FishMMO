@@ -117,20 +117,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCharacterRequestListBroadcastReceived(NetworkConnection conn, CharacterRequestListBroadcast msg, Channel channel)
 		{
+			Log.Info("CharacterSelectSystem",
+				$"CharacterRequestList received conn={conn?.ClientId} " +
+				$"authenticated={conn?.IsAuthenticated} active={conn?.IsActive}");
+
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
-				{
-					// character is requesting character list before authentication completes, disconnect them...
-					try
-					{
-						conn.Disconnect(true);
-					}
-					catch (Exception ex)
-					{
-						Log.Warning("CharacterSelectSystem", $"conn.Disconnect threw: {ex.Message}");
-					}
-				}
+			{
+				// Do NOT hard-disconnect: post-LoginSuccess list request can race
+				// FishNet Authenticated by a frame. Reject softly so the client can retry.
+				Log.Warning("CharacterSelectSystem",
+					$"CharacterRequestList before account mapping for conn={conn?.ClientId} " +
+					"— sending empty list (not disconnect).");
+				if (conn != null && conn.IsActive)
+					SendEmptyCharacterList(conn);
+			}
 			else if (conn.IsActive)
 			{
+				Log.Info("CharacterSelectSystem",
+					$"CharacterRequestList for account '{accountName}' conn={conn.ClientId}");
 				if (!TryBeginInFlightRequest(conn))
 				{
 					return;

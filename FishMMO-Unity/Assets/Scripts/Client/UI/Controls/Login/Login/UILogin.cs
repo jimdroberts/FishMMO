@@ -70,6 +70,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private string pendingVerifyUsername;
 
+		/// <summary>True while waiting for Character Select after LoginSuccess.</summary>
+		private bool awaitingCharacterSelect;
+
+		/// <summary>Active post-login character-list coroutine.</summary>
+		private Coroutine postLoginRoutine;
+
 		/// <summary>
 		/// Wire Sign In / Register buttons in code when scene OnClick lists are empty.
 		/// Skip if the scene already has persistent calls (avoids double-fire).
@@ -168,8 +174,21 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
-				HandshakeMSG.text = "";
-				SetSignInLocked(false);
+				if (awaitingCharacterSelect)
+				{
+					// Remote stop after LoginSuccess (forceDisconnect=False / H3_FRAME_ERROR).
+					OnPostLoginDisconnected();
+					if (postLoginRoutine != null)
+					{
+						StopCoroutine(postLoginRoutine);
+						postLoginRoutine = null;
+					}
+				}
+				else
+				{
+					HandshakeMSG.text = "";
+					SetSignInLocked(false);
+				}
 				pendingVerifyUsername = null;
 			}
 		}
@@ -393,31 +412,113 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnLoginSuccess()
 		{
-			HandshakeMSG.text = "Connected";
+			HandshakeMSG.text = "Connected — loading characters...";
+			awaitingCharacterSelect = true;
 
 			OnLoginSuccessStart?.Invoke();
 
-			Client.StartCoroutine(OnProcessLoginSuccess());
+			// Stop any prior post-login coroutine (reconnect / double result).
+			if (postLoginRoutine != null)
+				StopCoroutine(postLoginRoutine);
+			// Run on this UIControl so StopCoroutine targets the same host.
+			postLoginRoutine = StartCoroutine(OnProcessLoginSuccess());
 		}
 
 		/// <summary>
-		/// Coroutine for post-login processing, requests character list after delay.
+		/// After LoginSuccess, request character list while still connected.
+		/// Do not wait 1s — that raced the session drop (H3_FRAME_ERROR) and never
+		/// reached CharacterRequestList on the server.
 		/// </summary>
-		/// <returns>IEnumerator for coroutine.</returns>
 		IEnumerator OnProcessLoginSuccess()
 		{
-			// Wait 1 second before requesting the character list
-			yield return new WaitForSeconds(1.0f);
+			// One frame so FishNet can apply Authenticated / transport flush first.
+			yield return null;
 
-			Hide();
+			if (Client == null || Client.Connection == null ||
+				Client.Connection.ClientState != LocalConnectionState.Started)
+			{
+				Log.Error("UILogin",
+					"Post-login: connection not Started — cannot request character list. " +
+					"Showing disconnect (not Create Account).");
+				OnPostLoginDisconnected();
+				postLoginRoutine = null;
+				yield break;
+			}
 
-			// Request the character list after login is successfully finished
+			Log.Info("UILogin",
+				"Post-login: sending CharacterRequestListBroadcast (ch=Reliable) " +
+				$"state={Client.Connection.ClientState}");
+
+			// Request character list while socket is still Started.
 			CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
 			Client.Broadcast(requestCharacterList, Channel.Reliable);
 
-			OnLoginSuccessEnd?.Invoke();
+			// Brief settle; CharacterSelect UI opens when list arrives (or timeout below).
+			float deadline = Time.realtimeSinceStartup + 8f;
+			while (Time.realtimeSinceStartup < deadline)
+			{
+				if (Client.Connection.ClientState != LocalConnectionState.Started)
+				{
+					Log.Error("UILogin",
+						"Post-login: connection dropped before Character Select " +
+						$"(state={Client.Connection.ClientState}). forceDisconnect path if any is separate.");
+					OnPostLoginDisconnected();
+					postLoginRoutine = null;
+					yield break;
+				}
+				// Character select panel becomes visible when list is received.
+				if (UIManager.TryGet("UICharacterSelect", out UICharacterSelect charSelect)
+					&& charSelect != null && charSelect.Visible)
+				{
+					Hide();
+					awaitingCharacterSelect = false;
+					OnLoginSuccessEnd?.Invoke();
+					SetSignInLocked(false);
+					postLoginRoutine = null;
+					yield break;
+				}
+				yield return null;
+			}
 
+			// Timeout: still connected but no select UI — hide login, leave list request done.
+			if (Client.Connection.ClientState == LocalConnectionState.Started)
+			{
+				Log.Warning("UILogin",
+					"Post-login: Character Select UI not visible after 8s; hiding login " +
+					"(list request was sent — check CharacterSelectSystem logs).");
+				Hide();
+			}
+			else
+			{
+				OnPostLoginDisconnected();
+			}
+
+			awaitingCharacterSelect = false;
+			OnLoginSuccessEnd?.Invoke();
 			SetSignInLocked(false);
+			postLoginRoutine = null;
+		}
+
+		/// <summary>
+		/// Remote stop after LoginSuccess: stay on Login with a clear error — never Create Account.
+		/// </summary>
+		private void OnPostLoginDisconnected()
+		{
+			awaitingCharacterSelect = false;
+			SetSignInLocked(false);
+			Show();
+			if (HandshakeMSG != null)
+				HandshakeMSG.text = "Disconnected after login";
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox box))
+			{
+				box.Open(
+					"Disconnected after login before Character Select. " +
+					"Please try again. (If this keeps happening, the LoginServer " +
+					"WebTransport reply path may have aborted the session.)");
+			}
+			// Ensure Create Account is not left open from a prior flow.
+			if (UIManager.TryGet("UIRegister", out UIRegister reg) && reg != null && reg.Visible)
+				reg.Hide();
 		}
 
 		/// <summary>

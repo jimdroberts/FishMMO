@@ -83,6 +83,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private string pendingVerifyUsername;
 
+		/// <summary>True while waiting for Character Select after LoginSuccess.</summary>
+		private bool awaitingCharacterSelect;
+
+		/// <summary>Active post-login character-list coroutine.</summary>
+		private Coroutine postLoginRoutine;
+
 		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
@@ -197,11 +203,21 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
-				if (handshakeMessage != null)
+				if (awaitingCharacterSelect)
 				{
-					handshakeMessage.text = "";
+					OnPostLoginDisconnected();
+					if (postLoginRoutine != null)
+					{
+						StopCoroutine(postLoginRoutine);
+						postLoginRoutine = null;
+					}
 				}
-				SetSignInLocked(false);
+				else
+				{
+					if (handshakeMessage != null)
+						handshakeMessage.text = "";
+					SetSignInLocked(false);
+				}
 				pendingVerifyUsername = null;
 			}
 		}
@@ -413,33 +429,98 @@ namespace FishMMO.Client
 		private void OnLoginSuccess()
 		{
 			if (handshakeMessage != null)
-			{
-				handshakeMessage.text = "Connected";
-			}
+				handshakeMessage.text = "Connected — loading characters...";
+			awaitingCharacterSelect = true;
 
 			OnLoginSuccessStart?.Invoke();
 
-			Client.StartCoroutine(OnProcessLoginSuccess());
+			if (postLoginRoutine != null)
+				StopCoroutine(postLoginRoutine);
+			postLoginRoutine = StartCoroutine(OnProcessLoginSuccess());
 		}
 
 		/// <summary>
-		/// Coroutine for post-login processing, requests character list after delay.
+		/// After LoginSuccess, request character list while still connected (no 1s delay race).
 		/// </summary>
-		/// <returns>IEnumerator for coroutine.</returns>
 		private IEnumerator OnProcessLoginSuccess()
 		{
-			// Wait 1 second before requesting the character list.
-			yield return new WaitForSeconds(1.0f);
+			yield return null;
 
-			Hide();
+			if (Client == null || Client.Connection == null ||
+				Client.Connection.ClientState != LocalConnectionState.Started)
+			{
+				Log.Error("UITKLogin",
+					"Post-login: connection not Started — cannot request character list.");
+				OnPostLoginDisconnected();
+				postLoginRoutine = null;
+				yield break;
+			}
 
-			// Request the character list after login is successfully finished.
+			Log.Info("UITKLogin",
+				"Post-login: sending CharacterRequestListBroadcast (ch=Reliable) " +
+				$"state={Client.Connection.ClientState}");
+
 			CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
 			Client.Broadcast(requestCharacterList, Channel.Reliable);
 
-			OnLoginSuccessEnd?.Invoke();
+			float deadline = Time.realtimeSinceStartup + 8f;
+			while (Time.realtimeSinceStartup < deadline)
+			{
+				if (Client.Connection.ClientState != LocalConnectionState.Started)
+				{
+					Log.Error("UITKLogin",
+						"Post-login: connection dropped before Character Select.");
+					OnPostLoginDisconnected();
+					postLoginRoutine = null;
+					yield break;
+				}
+				if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect charSelect)
+					&& charSelect != null && charSelect.Visible)
+				{
+					Hide();
+					awaitingCharacterSelect = false;
+					OnLoginSuccessEnd?.Invoke();
+					SetSignInLocked(false);
+					postLoginRoutine = null;
+					yield break;
+				}
+				yield return null;
+			}
 
+			if (Client.Connection.ClientState == LocalConnectionState.Started)
+			{
+				Log.Warning("UITKLogin",
+					"Post-login: Character Select UI not visible after 8s; hiding login.");
+				Hide();
+			}
+			else
+			{
+				OnPostLoginDisconnected();
+			}
+
+			awaitingCharacterSelect = false;
+			OnLoginSuccessEnd?.Invoke();
 			SetSignInLocked(false);
+			postLoginRoutine = null;
+		}
+
+		/// <summary>
+		/// Remote stop after LoginSuccess: Login panel + clear error — never Create Account.
+		/// </summary>
+		private void OnPostLoginDisconnected()
+		{
+			awaitingCharacterSelect = false;
+			SetSignInLocked(false);
+			Show();
+			if (handshakeMessage != null)
+				handshakeMessage.text = "Disconnected after login";
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox box))
+			{
+				box.Open(
+					"Disconnected after login before Character Select. Please try again.");
+			}
+			if (UIManager.TryGetTK("UIRegister", out UITKRegister reg) && reg != null && reg.Visible)
+				reg.Hide();
 		}
 
 		/// <summary>

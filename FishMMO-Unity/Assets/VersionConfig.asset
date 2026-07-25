@@ -13,6 +13,6 @@ MonoBehaviour:
   m_Name: VersionConfig
   m_EditorClassIdentifier: 
   Major: 0
-  Minor: 0
+  Minor: 1
   Patch: 0
   PreRelease: 

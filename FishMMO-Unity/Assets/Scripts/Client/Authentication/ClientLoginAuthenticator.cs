@@ -900,15 +900,30 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
-			serverHandshakeReceived = true;
-			// Token no longer needed for resend once server replied.
-			pendingHandshakeConnectionToken = null;
-			StopServerHandshakeWatchdog();
-			LogWireStats("server-handshake-received");
-			Log.Info("ClientLoginAuthenticator",
-				$"ServerHandshake received pubKeyLen={msg.PublicKey?.Length ?? 0} " +
-				$"cookieLen={msg.Cookie?.Length ?? 0} agreedVersion={msg.AgreedVersion} " +
-				"(app payload path confirmed — ECDH / CreateAccount can proceed)");
+			// Phase 1 cookie challenge: PublicKey null/empty + Cookie set, agreedVersion often 0.
+			// Phase 2 ECDH complete: PublicKey 32 bytes, agreedVersion negotiated.
+			// Both are intentional — not mis-routed frames.
+			bool isCookieChallenge = msg.PublicKey == null || msg.PublicKey.Length == 0;
+			if (isCookieChallenge)
+			{
+				// Do not stop the ServerHandshake watchdog yet — wait for phase-2 ECDH.
+				Log.Info("ClientLoginAuthenticator",
+					$"ServerHandshake PHASE1 cookie-challenge pubKeyLen=0 " +
+					$"cookieLen={msg.Cookie?.Length ?? 0} agreedVersion={msg.AgreedVersion} " +
+					"(expected — client will echo cookie; ECDH on next ServerHandshake)");
+			}
+			else
+			{
+				serverHandshakeReceived = true;
+				// Token no longer needed for resend once server completed ECDH.
+				pendingHandshakeConnectionToken = null;
+				StopServerHandshakeWatchdog();
+				LogWireStats("server-handshake-received");
+				Log.Info("ClientLoginAuthenticator",
+					$"ServerHandshake PHASE2 ECDH pubKeyLen={msg.PublicKey?.Length ?? 0} " +
+					$"cookieLen={msg.Cookie?.Length ?? 0} agreedVersion={msg.AgreedVersion} " +
+					"(app payload path confirmed — session keys / CreateAccount / SRP can proceed)");
+			}
 			core.OnServerHandshakeReceived(msg.PublicKey, msg.Cookie, msg.AgreedVersion);
 		}
 

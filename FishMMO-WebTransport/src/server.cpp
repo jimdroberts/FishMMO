@@ -602,6 +602,10 @@ int32_t wt_server_send_datagram_impl(
 {
     if (!server || !data || length <= 0) return WT_ERR_SEND_FAILED;
 
+    /* Browser WebTransport sessions (use_wt_stream_header): route "datagram"
+     * traffic over the reliable same-stream path. DatagramSend near login
+     * completion has caused QuicDatagramFrameEncodeEx SIGSEGV (rc=139) and
+     * peer H3_FRAME_ERROR (0x106). Auth / char-select only need reliable. */
     if (conn_id == WT_BROADCAST_ALL) {
         int32_t worst = WT_OK;
         for (uint32_t i = 1; i <= server->max_clients; i++) {
@@ -617,7 +621,11 @@ int32_t wt_server_send_datagram_impl(
                 wt_session_release(session);
                 continue;
             }
-            int32_t r = wt_session_send_datagram(session, data, length);
+            int32_t r;
+            if (session->stream_mgr && session->stream_mgr->use_wt_stream_header)
+                r = wt_session_send_stream(session, data, length);
+            else
+                r = wt_session_send_datagram(session, data, length);
             if (r != WT_OK) worst = r;
             wt_session_release(session);
         }
@@ -643,7 +651,16 @@ int32_t wt_server_send_datagram_impl(
             return WT_ERR_NOT_FOUND;
         }
 
-        int32_t result = wt_session_send_datagram(session, data, length);
+        int32_t result;
+        if (session->stream_mgr && session->stream_mgr->use_wt_stream_header) {
+            WT_LOG_INFO(
+                "Browser client: datagram→stream reroute conn=%llu len=%d "
+                "stamp=NO_DGRAM_BROWSER_V1",
+                (unsigned long long)conn_id, length);
+            result = wt_session_send_stream(session, data, length);
+        } else {
+            result = wt_session_send_datagram(session, data, length);
+        }
         wt_session_release(session);
         return result;
     }

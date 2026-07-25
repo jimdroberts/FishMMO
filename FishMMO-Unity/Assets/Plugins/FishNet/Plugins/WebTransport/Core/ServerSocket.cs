@@ -648,7 +648,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				return;
 
 			int result;
-			if (packet.Channel == 1) // Unreliable → datagram
+			if (packet.Channel == 1) // Unreliable → datagram (native reroutes browser → stream)
 			{
 				result = WebTransportNative.wt_server_send_datagram(
 					this.serverHandle, nativeId, packet.Data, packet.Length);

@@ -823,14 +823,37 @@ int32_t wt_stream_manager_send(
             if (r == WT_OK)
                 return WT_OK;
             WT_LOG_WARN(
-                "SAME_STREAM_REPLY failed conn=%llu stream_id=%llu — "
-                "falling back to new server stream",
+                "SAME_STREAM_REPLY failed conn=%llu stream_id=%llu st=%d "
+                "stamp=SAME_STREAM_REPLY_V1",
                 (unsigned long long)mgr->conn_id,
-                (unsigned long long)reuse_id);
+                (unsigned long long)reuse_id,
+                (int)r);
+            /* Browser sessions: NEVER open a server-initiated bidi stream.
+             * Chrome rejects WEBTRANSPORT_STREAM on server StreamOpen with
+             * H3_FRAME_UNEXPECTED / H3_FRAME_ERROR and tears down the session
+             * right after LoginSuccess (post-auth Authenticated packet). */
+            if (mgr->use_wt_stream_header) {
+                WT_LOG_ERROR(
+                    "Browser client: refusing server StreamOpen fallback "
+                    "conn=%llu len=%d stamp=NO_SERVER_STREAM_OPEN_V1",
+                    (unsigned long long)mgr->conn_id, length);
+                return WT_ERR_SEND_FAILED;
+            }
+            WT_LOG_WARN(
+                "SAME_STREAM_REPLY failed conn=%llu — falling back to new "
+                "server stream (native client only)",
+                (unsigned long long)mgr->conn_id);
+        } else if (mgr->use_wt_stream_header) {
+            /* No open peer stream yet — cannot reply to Chrome safely. */
+            WT_LOG_ERROR(
+                "Browser client: no peer stream for reply conn=%llu len=%d "
+                "stamp=NO_SERVER_STREAM_OPEN_V1",
+                (unsigned long long)mgr->conn_id, length);
+            return WT_ERR_SEND_FAILED;
         }
     }
 
-    /* ── Fallback: open a new server-initiated bidi stream ─────────── */
+    /* ── Fallback: open a new server-initiated bidi stream (native only) ── */
     int slot = -1;
     sm_lock(mgr);
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
