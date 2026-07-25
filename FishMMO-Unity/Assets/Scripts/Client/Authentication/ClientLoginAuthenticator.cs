@@ -538,11 +538,13 @@ namespace FishMMO.Client
 			if (lastHandshakeSendSucceeded)
 			{
 				initialClientHandshakeSent = true;
-				pendingHandshakeConnectionToken = null;
+				// Keep pendingHandshakeConnectionToken until ServerHandshake arrives so a
+				// 2s resend still has tokenLen>0 (IPFetch token was already consumed once).
+				pendingHandshakeConnectionToken = token;
 				StopWaitForManagerReadyRoutine();
 				Log.Info("ClientLoginAuthenticator",
-					$"ClientHandshake Broadcast returned ({source}) managerState=Started — " +
-					"NOT progress until [FishWT] WIRE SEND OK + ServerHandshake received");
+					$"ClientHandshake Broadcast returned ({source}) managerState=Started " +
+					$"tokenLenKept={token?.Length ?? 0} — NOT progress until WIRE SEND OK + ServerHandshake");
 				LogWireStats("post-broadcast");
 				// Only start watchdog once per connection (resend reuses it).
 				if (serverHandshakeWatchdogRoutine == null && !serverHandshakeReceived)
@@ -670,21 +672,19 @@ namespace FishMMO.Client
 			LogWireStats("timeout");
 			Log.Error("ClientLoginAuthenticator",
 				$"NO ServerHandshake within {ServerHandshakeTimeoutSeconds:0}s after ClientHandshake. " +
-				"Transport silent / LoginServer has zero app payload (session establish only). " +
-				"Not ServerBusy — handshake never completed. " +
-				"Check [FishWT] WIRE SEND OK vs DROP; LoginServer for 'deliver N bytes' / ClientHandshake.");
+				"Wire send failed or transport silent (not server busy). " +
+				"Check [FishWT] WIRE SEND OK / wireSentOk; LoginServer for FIRST_APP_PAYLOAD. " +
+				"CreateAccount cannot run without ServerHandshake.");
 
-			// Surface explicit failure (not generic "busy") so UI unlocks with a real message path.
+			// Do NOT map to ServerBusy — that misleads the player. Unlock via disconnect.
 			try
 			{
-				// ServerBusy is the least-wrong existing code that register UI shows a dialog for;
-				// the log line above is the authoritative diagnosis.
-				OnClientAuthenticationResult?.Invoke(ClientAuthenticationResult.ServerBusy);
+				Client?.ForceDisconnect();
 			}
 			catch (Exception ex)
 			{
 				Log.Warning("ClientLoginAuthenticator",
-					$"Failed to raise handshake-timeout auth result: {ex.Message}");
+					$"ForceDisconnect after handshake timeout failed: {ex.Message}");
 			}
 		}
 
@@ -901,7 +901,10 @@ namespace FishMMO.Client
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
 			serverHandshakeReceived = true;
+			// Token no longer needed for resend once server replied.
+			pendingHandshakeConnectionToken = null;
 			StopServerHandshakeWatchdog();
+			LogWireStats("server-handshake-received");
 			Log.Info("ClientLoginAuthenticator",
 				$"ServerHandshake received pubKeyLen={msg.PublicKey?.Length ?? 0} " +
 				$"cookieLen={msg.Cookie?.Length ?? 0} agreedVersion={msg.AgreedVersion} " +
