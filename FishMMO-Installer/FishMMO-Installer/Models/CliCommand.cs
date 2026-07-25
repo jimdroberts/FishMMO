@@ -39,6 +39,12 @@ namespace FishMMO.Installer
         public bool ListComponents { get; init; }
 
         /// <summary>Path to write log output in addition to console.</summary>
+
+		/// <summary>
+		/// Comma-separated list of region IDs for --configure-server-secrets.
+		/// Each region gets its own keyId + HMAC key pair.
+		/// </summary>
+		public string? DeploymentSecretsRegions { get; init; }
         public string? LogFilePath { get; init; }
 
         /// <summary>True when no CLI flags were provided — enter interactive menu.</summary>
@@ -46,6 +52,6 @@ namespace FishMMO.Installer
                                 && !ValidateMode && !GenerateChecksums && !Quickstart
                                 && !AcceptDefaults && !ListComponents
                                 && ComponentName == null && ConfigFilePath == null
-                                && LogFilePath == null;
+								&& LogFilePath == null && DeploymentSecretsRegions == null;
     }
 }

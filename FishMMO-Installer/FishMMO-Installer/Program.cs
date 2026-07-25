@@ -65,7 +65,24 @@ namespace FishMMO.Installer
                 await DownloadHelper.GenerateChecksumsAsync();
                 return;
             }
-
+		// --configure-server-secrets: generate keys and store in database
+		if (cliCommand.DeploymentSecretsRegions != null)
+		{
+			string superUser = InstallationConstants.PostgreSQLDefaultSuperuser;
+			string? superPass = Environment.GetEnvironmentVariable("FISHMMO_PG_SUPERUSER_PASSWORD");
+			if (string.IsNullOrEmpty(superPass))
+			{
+				superPass = InstallerProcessHelper.PromptForRequiredPassword(
+					$"Enter PostgreSQL superuser password (user '{superUser}'): ");
+			}
+			else
+			{
+				await Log.Info("FishMMOInstaller",
+					"Using PostgreSQL superuser password from FISHMMO_PG_SUPERUSER_PASSWORD environment variable.");
+			}
+			await SecurityKeyInstaller.ConfigureDatabaseKeysAsync(superUser, superPass, appSettings, cliCommand.AcceptDefaults);
+			return;
+		}
             // --quickstart: shortcut for unattended install using the quickstart template
             if (cliCommand.Quickstart)
             {
@@ -497,6 +514,7 @@ namespace FishMMO.Installer
                 Console.WriteLine("6 : Grant User Permissions on Database");
                 Console.WriteLine("7 : Delete FishMMO Database (DANGEROUS!)");
                 Console.WriteLine("8 : Configure PgBouncer (Linux)");
+			Console.WriteLine("9 : Configure Server Keys (DB-backed deployment secrets)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -540,6 +558,12 @@ namespace FishMMO.Installer
                     case ConsoleKey.D8:
                         await PgBouncerInstaller.ConfigurePgBouncerLinuxAsync(appSettings);
                         break;
+					case ConsoleKey.D9:
+						await HandleWithSuperuser(
+							s => s.Npgsql?.Database,
+							"Npgsql database",
+							(u, p, s) => SecurityKeyInstaller.ConfigureDatabaseKeysAsync(u, p, s));
+						break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:
                         return;
@@ -660,7 +684,6 @@ namespace FishMMO.Installer
                 Console.WriteLine("1 : Configure Web Server Settings (IPFetch, Patcher, WebGL)");
                 Console.WriteLine("2 : Configure Discord Bot Settings");
                 Console.WriteLine("3 : Configure CMS Server Settings");
-                Console.WriteLine("4 : Configure Client Security Files (gate secret + cert pins)");
                 Console.WriteLine("0 : Back");
 
                 ConsoleKeyInfo key = Console.ReadKey(true);
@@ -676,9 +699,6 @@ namespace FishMMO.Installer
                         break;
                     case ConsoleKey.D3:
                         await AppSettingsInstaller.ConfigureCmsComponent();
-                        break;
-                    case ConsoleKey.D4:
-                        await AppSettingsInstaller.ConfigureClientSecurityFiles();
                         break;
                     case ConsoleKey.D0:
                     case ConsoleKey.NumPad0:
@@ -731,5 +751,7 @@ namespace FishMMO.Installer
             string superPassword = InstallerProcessHelper.PromptForRequiredPassword($"Enter PostgreSQL Superuser Password (username is '{superUsername}'): ");
             await handler(superUsername, superPassword, appSettings);
         }
-    }
+
+
+	}
 }

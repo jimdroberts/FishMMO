@@ -33,10 +33,12 @@ namespace FishMMO.DiscordBot
 			var config = host.Services.GetRequiredService<IConfiguration>();
 			var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
-			string? discordToken = config.GetSection("Discord")["Token"];
+			// Read the bot token from environment variable only — never from appsettings.json.
+			// The token is a full authentication credential and must not appear in config files.
+			string? discordToken = Environment.GetEnvironmentVariable("FISHMMO_DISCORD_TOKEN");
 			if (string.IsNullOrWhiteSpace(discordToken))
 			{
-				logger.LogCritical("Discord token is missing in appsettings.json. Bot cannot connect.");
+				logger.LogCritical("FISHMMO_DISCORD_TOKEN environment variable is not set. Bot cannot connect.");
 				return;
 			}
 

@@ -448,11 +448,11 @@ namespace FishMMO.Installer
 						await GrantPrivileges(connection, dbUsername, appSettings.Npgsql.Database);
 						await Log.Info("FishMMOInstaller", "Privileges granted successfully.");
 
-					// Credentials are NOT written here — use 'Configure Database Secrets'
-					// (Step 1) to write /etc/fishmmo/db-secrets.env.
-				}
+						// Credentials are NOT written here — use 'Configure Database Secrets'
+						// (Step 1) to write /etc/fishmmo/db-secrets.env.
+					}
 
-				await Log.Info("FishMMOInstaller", "FishMMO Database components installed/configured.");
+					await Log.Info("FishMMOInstaller", "FishMMO Database components installed/configured.");
 				}
 
 				if (InstallerProcessHelper.PromptForYesNo("Create Initial Migration and apply to database?"))
@@ -679,31 +679,7 @@ namespace FishMMO.Installer
 					await Log.Info("FishMMOInstaller", $"Successfully connected to database '{dbName}' as superuser.");
 
 					await Log.Info("FishMMOInstaller", $"Granting comprehensive permissions to '{usernameToGrant}' on '{dbName}'...");
-
-					string formatSql =
-						"SELECT format('" +
-						"GRANT ALL PRIVILEGES ON DATABASE %I TO %I; " +
-						"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I; " +
-						"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I; " +
-						"GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO %I; " +
-						"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO %I; " +
-						"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO %I; " +
-						"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO %I', " +
-						"@dbName, @username, @username, @username, @username, @username, @username, @username)";
-
-					string batchSql;
-					using (var formatCommand = new NpgsqlCommand(formatSql, connection))
-					{
-						formatCommand.Parameters.AddWithValue("dbName", dbName);
-						formatCommand.Parameters.AddWithValue("username", usernameToGrant);
-						batchSql = (string)(await formatCommand.ExecuteScalarAsync())!;
-					}
-
-					using (var cmd = new NpgsqlCommand(batchSql, connection))
-					{
-						await cmd.ExecuteNonQueryAsync();
-					}
-
+					await GrantPrivileges(connection, usernameToGrant, dbName);
 					await Log.Info("FishMMOInstaller", $"Successfully granted comprehensive permissions to user '{usernameToGrant}' on database '{dbName}'.");
 				}
 			}
@@ -734,7 +710,7 @@ namespace FishMMO.Installer
 				var result = await cmd.ExecuteScalarAsync();
 				if (result is true)
 				{
-					await Log.Info("FishMMOInstaller", 
+					await Log.Info("FishMMOInstaller",
 						"WARNING: pg_hba.conf has 'trust' authentication for TCP/network connections. " +
 						"Passwords for those entries are NOT verified by the server. " +
 						"Consider changing pg_hba.conf to 'scram-sha-256' for security.");
@@ -799,8 +775,9 @@ namespace FishMMO.Installer
 		}
 
 		/// <summary>
-		/// Grants all privileges on the specified database to the specified user
-		/// and transfers database ownership.
+		/// Grants comprehensive privileges on the specified database to the specified user,
+		/// covering database-level access, all existing tables/sequences/functions in the
+		/// public schema, and default privileges for future objects.
 		/// </summary>
 		/// <param name="connection">Open NpgsqlConnection.</param>
 		/// <param name="username">Username to grant privileges to.</param>
@@ -810,7 +787,17 @@ namespace FishMMO.Installer
 			ValidateIdentifier(username, nameof(username), "username");
 			ValidateIdentifier(dbName, nameof(dbName), "database name");
 
-			string formatSql = "SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I; ALTER DATABASE %I OWNER TO %I', @dbName, @username, @dbName, @username)";
+			string formatSql =
+				"SELECT format('" +
+				"GRANT ALL PRIVILEGES ON DATABASE %I TO %I; " +
+				"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %I; " +
+				"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO %I; " +
+				"GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO %I; " +
+				"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO %I; " +
+				"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO %I; " +
+				"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO %I', " +
+				"@dbName, @username, @username, @username, @username, @username, @username, @username)";
+
 			string commandText;
 
 			using (var formatCommand = new NpgsqlCommand(formatSql, connection))
@@ -825,6 +812,5 @@ namespace FishMMO.Installer
 				await cmd.ExecuteNonQueryAsync();
 			}
 		}
-
-		}
+	}
 }

@@ -64,6 +64,7 @@
         Exclude="
           $(FishMMODatabaseSource)\**\bin\**;
           $(FishMMODatabaseSource)\**\obj\**;
+          $(FishMMODatabaseSource)\**\Migrations\**;
           $(FishMMODatabaseSource)\.vs\**" />
     </ItemGroup>
 

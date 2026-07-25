@@ -479,7 +479,7 @@ namespace FishMMO.Auth.Implementation
 			ushort agreedVersion)
 		{
 			var (tokenNonce, tokenRseq) = receiveNonceCtx.NextNonce();
-			byte[] tokenAad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.SrpSuccess, agreedVersion, tokenRseq);
+			byte[] tokenAad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TokenTransfer, agreedVersion, tokenRseq);
 			return CryptoHelper.DecryptAES(serverToClientKey, tokenNonce, encryptedToken, tokenAad);
 		}
 

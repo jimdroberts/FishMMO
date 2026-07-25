@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Configuration;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
 
 
@@ -19,7 +19,7 @@ public class LoginServerController : ControllerBase
 {
 	private readonly NpgsqlDbContextFactory dbContextFactory;
 	private readonly IMemoryCache memoryCache;
-	private readonly IConfiguration configuration;
+	private readonly IConnectionTokenKeyService? connectionTokenKeyService;
 
 	/// <summary>
 	/// Per-process gate that serialises the cache-miss DB load. Without it, a burst of
@@ -33,11 +33,12 @@ public class LoginServerController : ControllerBase
 	/// </summary>
 	/// <param name="dbContextFactory">Factory used to create instances of <see cref="NpgsqlDbContext"/>.</param>
 	/// <param name="memoryCache">In-memory cache used to store and retrieve cached login server lists.</param>
-	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache, IConfiguration configuration)
+	/// <param name="connectionTokenKeyService">Service for registering connection token HMAC keys in the database.</param>
+	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache, IConnectionTokenKeyService? connectionTokenKeyService = null)
 	{
 		this.dbContextFactory = dbContextFactory;
 		this.memoryCache = memoryCache;
-		this.configuration = configuration;
+		this.connectionTokenKeyService = connectionTokenKeyService;
 	}
 
 	/// <summary>
@@ -128,18 +129,33 @@ public class LoginServerController : ControllerBase
 		// verifies the HMAC to recover the real IP — no database round-trip needed.
 		//
 		// Token format: base64url(payload).base64url(hmac)
-		//   payload = realIp + '|' + expiryUnixSeconds
+		//   payload = [keyId ':'] realIp '|' expiryUnixSeconds
 		//   hmac    = HMAC-SHA256(sharedKey, payload)
+		//
+		// When keyId is configured, it is included in the payload so the receiving
+		// game server can select the correct verification key for multi-region
+		// deployments.  Legacy deployments without a keyId are still supported.
 		var hmacKey = GetConnectionTokenHmacKey();
 		if (hmacKey == null)
 		{
 			await Log.Error("LoginServerController", "ConnectionToken HMAC key not configured.");
 			return StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error.");
 		}
+		if (hmacKey.Length < 32)
+		{
+			await Log.Error("LoginServerController",
+				$"ConnectionToken HMAC key is too short ({hmacKey.Length} bytes). " +
+				"Minimum 32 bytes (after Base64 decode) is required for HMAC-SHA256.");
+			return StatusCode(StatusCodes.Status500InternalServerError, "Server configuration error.");
+		}
 
+		var keyId = GetConnectionTokenKeyId();
 		var realIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 		long expiryUnix = DateTimeOffset.UtcNow.AddSeconds(60).ToUnixTimeSeconds();
-		var payload = System.Text.Encoding.UTF8.GetBytes($"{realIp}|{expiryUnix}");
+		var payloadStr = string.IsNullOrEmpty(keyId)
+			? $"{realIp}|{expiryUnix}"
+			: $"{keyId}:{realIp}|{expiryUnix}";
+		var payload = System.Text.Encoding.UTF8.GetBytes(payloadStr);
 
 		byte[] signature;
 		using (var hmac = new System.Security.Cryptography.HMACSHA256(hmacKey))
@@ -153,31 +169,80 @@ public class LoginServerController : ControllerBase
 		await Log.Debug("LoginServerController",
 			$"Issued stateless connection token for IP {realIp} (expires in 60s)");
 
+		// Register the signing key in the database so game servers can discover it
+		// for verification. The database is the sole source for keys.
+		if (connectionTokenKeyService != null)
+		{
+			_ = RegisterConnectionTokenKeyAsync(keyId ?? "shared", hmacKey, HttpContext.RequestAborted);
+		}
+
 		// Wrap in a "Ports" envelope so Unity's JsonUtility can deserialize
 		// the response without manual string rewriting on the client.
 		return Ok(new { Ports = loginServerPorts, ConnectionToken = token });
 	}
 
 	/// <summary>
+	/// Registers the connection token HMAC key in the database so game servers
+	/// (Login/World/Scene) can discover and use it for token verification without
+	/// environment variable coordination.
+	/// This is a best-effort operation — failures are logged but never propagated
+	/// to the client. The database is the sole source for this key.
+	/// </summary>
+	/// <param name="keyId">The logical key identifier (e.g., region code, or "default").</param>
+	/// <param name="hmacKey">The raw HMAC-SHA256 key bytes.</param>
+	/// <param name="ct">Cancellation token.</param>
+	private async Task RegisterConnectionTokenKeyAsync(string keyId, byte[] hmacKey, CancellationToken ct)
+	{
+		if (connectionTokenKeyService == null) return;
+
+		try
+		{
+			var result = await connectionTokenKeyService.UpsertAsync(keyId, hmacKey, ct);
+			if (result.IsSuccess)
+			{
+				await Log.Debug("LoginServerController",
+					$"Registered connection token key '{keyId}' in database.");
+			}
+			else
+			{
+				await Log.Warning("LoginServerController",
+					$"Failed to register connection token key '{keyId}' in database: {result.ErrorMessage}");
+			}
+		}
+		catch (OperationCanceledException)
+		{
+			// Shutdown or request aborted — not actionable.
+		}
+		catch (Exception ex)
+		{
+			await Log.Warning("LoginServerController",
+				$"Could not register connection token key '{keyId}' in database: {ex.Message}");
+		}
+	}
+
+	/// <summary>
 	/// Resolves the shared HMAC key for connection token signing.
-	/// Order: ConnectionToken:HmacKey in appsettings.json, then
-	/// FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.
-	/// Returns null if neither is configured.
+	/// Loaded from the connection_token_keys database table (key_id='shared').
+	/// All IpFetchServers share one key. No environment variable fallback.
+	/// Returns null if the database is unavailable or the key is not found.
 	/// </summary>
 	private byte[]? GetConnectionTokenHmacKey()
 	{
-		var b64 = configuration["ConnectionToken:HmacKey"];
-		if (string.IsNullOrWhiteSpace(b64))
-			b64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
-		if (string.IsNullOrWhiteSpace(b64))
-			return null;
+		if (connectionTokenKeyService == null) return null;
 		try
 		{
-			return Convert.FromBase64String(b64.Trim());
+			var result = connectionTokenKeyService.FetchByKeyIdAsync("shared", HttpContext.RequestAborted)
+				.GetAwaiter().GetResult();
+			if (result.IsSuccess && result.Data.HmacKey is byte[] dbKey && dbKey.Length >= 32)
+				return dbKey;
 		}
-		catch (FormatException)
-		{
-			return null;
-		}
+		catch { /* DB unavailable */ }
+		return null;
 	}
+
+	/// <summary>
+	/// Returns null — all IpFetchServers share one key in the database.
+	/// No per-region keyId is needed for single shared-key deployments.
+	/// </summary>
+	private static string? GetConnectionTokenKeyId() => null;
 }

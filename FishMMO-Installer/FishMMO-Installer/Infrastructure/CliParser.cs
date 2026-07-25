@@ -50,6 +50,10 @@ namespace FishMMO.Installer
                     case "--quickstart":
                         cmd = cmd with { Quickstart = true };
                         break;
+                    case "--configure-server-secrets":
+                        if (++i < args.Length) cmd = cmd with { DeploymentSecretsRegions = args[i] };
+                        else cmd = cmd with { ShowHelp = true };
+                        break;
 
                     case "--accept-defaults":
                     case "-y":

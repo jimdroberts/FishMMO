@@ -80,6 +80,9 @@ namespace FishMMO.WebShared
         /// </summary>
         public static IApplicationBuilder UseFishMMOClientGate(this IApplicationBuilder app, IHostEnvironment environment, params string[] bypassPaths)
         {
+            // DEPRECATED: The env var is now set by the DB loading code at startup.
+            // The database is the sole source for this key.
+            // This legacy path remains for backward compatibility during the transition.
             string? secretText = Environment.GetEnvironmentVariable(SecretEnvVar);
             if (string.IsNullOrEmpty(secretText))
             {

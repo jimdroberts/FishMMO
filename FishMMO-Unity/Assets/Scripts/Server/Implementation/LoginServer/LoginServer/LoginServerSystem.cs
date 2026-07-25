@@ -168,16 +168,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			byte[] hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
 
-			// Load the deployment-shared KEK and wrap the signing key before persistence.
+			// Load the deployment-shared KEK from the deployment_secrets database table.
+			// The database is the ONLY source — no environment variable or .cfg file fallbacks.
 			// A DB-only attacker (read or write) cannot recover or forge usable signing keys
 			// without also possessing the KEK, which is provisioned out-of-band.
-			if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out signingKeyKek, out string kekError))
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var secretService) ||
+				!SigningKeyKekProvider.TryLoadFromDatabase(secretService, out signingKeyKek, out string kekError))
 			{
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 				Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
 				signingKeyKek = null;
 #else
-				Log.Error("LoginServerSystem", $"Signing-key KEK is REQUIRED in production. {kekError}");
+				Log.Error("LoginServerSystem", $"Signing-key KEK is REQUIRED in production. KEK must be in the deployment_secrets database table with key='signing_key_kek'. {kekError}");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 #endif
 			}

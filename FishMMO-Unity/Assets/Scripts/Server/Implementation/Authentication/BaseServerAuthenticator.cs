@@ -185,45 +185,48 @@ namespace FishMMO.Server.Implementation
 					"Set GameVersion in the MainBootstrap prefab to enable version enforcement.");
 			}
 #endif
-			// Validate connection token HMAC key is configured.
-			// Without this key, connection token verification will fail and all
-			// proxy-authenticated clients will be rejected.
+			// Validate that the IConnectionTokenKeyService is available in the
+			// database service registry. Connection token HMAC keys come SOLELY
+			// from the database — no environment variable or .cfg file fallbacks.
+			// If the service is not registered, the server will be unable to verify
+			// connection tokens from proxy-authenticated clients.
 			{
-				string? hmacKeyB64 = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
-				if (string.IsNullOrWhiteSpace(hmacKeyB64))
-				{
-					// Also check .cfg file fallback
-					if (Server?.Configuration != null)
-						Server.Configuration.TryGetString("ConnectionTokenHmacKeyBase64", out hmacKeyB64);
-				}
+				bool serviceAvailable = Server?.Database?.ServiceRegistry != null &&
+					Server.Database.ServiceRegistry.TryGet<IConnectionTokenKeyService>(out _);
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-				if (string.IsNullOrWhiteSpace(hmacKeyB64))
+				if (!serviceAvailable)
 				{
 					_ = Log.Error(LogPrefix,
-						"FATAL: ConnectionTokenHmacKeyBase64 is not configured. " +
-						"Clients will be unable to authenticate. " +
-						"Set ConnectionTokenHmacKeyBase64 in the server .cfg file " +
-						"or FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.");
+						"FATAL: IConnectionTokenKeyService is not registered in the database service registry. " +
+						"Clients will be unable to authenticate through the proxy. " +
+						"Connection token HMAC keys must come from the database — no environment variable or " +
+						".cfg file fallbacks are supported. Ensure the database service assembly is loaded.");
 					throw new InvalidOperationException(
-						"ConnectionTokenHmacKeyBase64 is not configured. " +
-						"The server cannot start without a valid HMAC key for connection token verification. " +
-						"Set ConnectionTokenHmacKeyBase64 in the server .cfg file " +
-						"or FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 environment variable.");
+						"IConnectionTokenKeyService is not registered. " +
+						"The server cannot start without a valid database-backed connection token key service. " +
+						"Connection token HMAC keys must come from the database — no environment variable or " +
+						".cfg file fallbacks are supported.");
 				}
 #else
-				if (string.IsNullOrWhiteSpace(hmacKeyB64))
+				if (!serviceAvailable)
 				{
 					_ = Log.Warning(LogPrefix,
-						"ConnectionTokenHmacKeyBase64 is not configured. " +
-						"Connection token verification will fail -- clients connecting " +
-						"through the proxy will be rejected. For local testing, ensure " +
-						"clients connect directly (not through the HTTP IPFetch flow).");
+						"IConnectionTokenKeyService is not registered in the database service registry. " +
+						"Connection token verification will fail — clients connecting through the proxy " +
+						"will be rejected. For local testing, ensure clients connect directly " +
+						"(not through the HTTP IPFetch flow).");
 				}
 #endif
 			}
 			workerCts = new CancellationTokenSource();
 			shutdownToken = workerCts.Token;
 			Core.InitializeWorkers(workerCts.Token);
+
+			// Start DB-backed connection token key loading and periodic refresh.
+			// The initial load populates the key map; the refresh loop polls every 60s.
+			// The database is the ONLY source — no env var or .cfg file fallbacks exist.
+			_ = LoadConnectionTokenKeysFromDbAsync();
+			_ = KeyRefreshLoop(shutdownToken);
 
 		}
 
@@ -683,9 +686,9 @@ namespace FishMMO.Server.Implementation
 				!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
 				return false;
 
-			// Try stateless HMAC verification first (new format: payloadB64.sigB64).
-			// Falls back to DB lookup for legacy tokens or if HMAC key not configured.
-			string? realIp = TryVerifyStatelessConnectionToken(rawToken, server.Configuration);
+			// Try stateless HMAC verification (format: payloadB64.sigB64).
+			// Uses the database-backed key map — no environment variable or .cfg file fallbacks.
+			string? realIp = TryVerifyStatelessConnectionToken(rawToken);
 			if (realIp != null)
 			{
 				StoreRealIpForConnection(clientId, realIp);
@@ -728,19 +731,141 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Attempts to verify a stateless HMAC-signed connection token.
-		/// Token format: base64url(realIp|expiryUnix).base64url(HMAC-SHA256(key, payload))
-		/// Returns the real IP on success, null if the token is invalid/expired
-		/// or the HMAC key is not configured.
+		/// Thread-safe store for connection token keys loaded from the database.
+		/// Populated by <see cref="LoadConnectionTokenKeysFromDbAsync"/> and refreshed
+		/// every 60 seconds by <see cref="KeyRefreshLoop"/>.
+		/// The database is the ONLY source — no environment variable or .cfg file fallbacks.
 		/// </summary>
-		private static string? TryVerifyStatelessConnectionToken(string rawToken, IServerConfiguration? config)
+		private static volatile Dictionary<string, byte[]>? s_dbConnectionTokenKeyMap;
+		private static readonly object s_dbConnectionTokenKeyMapLock = new();
+
+
+		/// <summary>
+		/// Loads all active connection token keys from the database into the
+		/// <see cref="s_dbConnectionTokenKeyMap"/> static field. Uses the
+		/// <see cref="IConnectionTokenKeyService"/> resolved from the server's
+		/// database service registry.
+		/// This is called once on startup and then periodically by <see cref="KeyRefreshLoop"/>.
+		/// The database is the ONLY source — no environment variable or .cfg file fallbacks exist.
+		/// If the database is unavailable, connection token verification will fail.
+		/// </summary>
+		private async Task LoadConnectionTokenKeysFromDbAsync()
+		{
+			try
+			{
+				var server = Server;
+				if (server?.Database?.ServiceRegistry == null)
+				{
+					await Log.Debug(LogPrefix, "Database not available yet — skipping connection token key load.");
+					return;
+				}
+
+				if (!server.Database.ServiceRegistry.TryGet<IConnectionTokenKeyService>(out var service))
+				{
+					await Log.Error(LogPrefix,
+						"CRITICAL: IConnectionTokenKeyService not registered in database service registry. " +
+						"Connection token keys must come from the database — no environment variable or " +
+						".cfg file fallbacks exist. Ensure the service assembly is loaded.");
+					return;
+				}
+
+				// Check cancellation before the DB call.
+				var ct = shutdownToken;
+				if (ct.IsCancellationRequested) return;
+
+				var result = await service.FetchAllActiveAsync(ct);
+				if (result.IsSuccess && result.Data != null && result.Data.Length > 0)
+				{
+					var map = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+					foreach (var keyData in result.Data)
+					{
+						if (keyData.HmacKey != null && keyData.HmacKey.Length >= 32)
+						{
+							map[keyData.KeyId] = keyData.HmacKey;
+						}
+						else
+						{
+							await Log.Warning(LogPrefix,
+								$"Skipping connection token key '{keyData.KeyId}' from database: " +
+								$"HMAC key is {(keyData.HmacKey == null ? "null" : $"too short ({keyData.HmacKey.Length} bytes)")}.");
+						}
+					}
+
+					lock (s_dbConnectionTokenKeyMapLock)
+					{
+						s_dbConnectionTokenKeyMap = map;
+					}
+					await Log.Debug(LogPrefix, $"Loaded {map.Count} active connection token key(s) from database.");
+				}
+				else if (result.IsSuccess)
+				{
+					// No active keys in DB — clear any stale map so we don't use rotated-out keys.
+					lock (s_dbConnectionTokenKeyMapLock)
+					{
+						s_dbConnectionTokenKeyMap = null;
+					}
+					await Log.Warning(LogPrefix,
+						"Database returned zero active connection token keys. " +
+						"No connection token keys are available — token verification will fail.");
+				}
+				else
+				{
+					await Log.Warning(LogPrefix,
+						$"Failed to fetch connection token keys from database: " +
+						$"[{result.ErrorCode}] {result.ErrorMessage}. " +
+						"No connection token keys are available — token verification will fail.");
+				}
+			}
+			catch (OperationCanceledException)
+			{
+				// Shutdown in progress — not actionable.
+			}
+			catch (Exception ex)
+			{
+				await Log.Warning(LogPrefix,
+					$"Exception loading connection token keys from database: {ex.Message}. " +
+					"No connection token keys are available — token verification will fail.");
+			}
+		}
+
+		/// <summary>
+		/// Periodic background loop that refreshes the DB-loaded connection token key map
+		/// every 60 seconds. Runs for the lifetime of the server, cooperatively cancelling
+		/// via <paramref name="ct"/>.
+		/// </summary>
+		private async Task KeyRefreshLoop(CancellationToken ct)
+		{
+			while (!ct.IsCancellationRequested)
+			{
+				try
+				{
+					await Task.Delay(TimeSpan.FromSeconds(60), ct);
+					await LoadConnectionTokenKeysFromDbAsync();
+				}
+				catch (OperationCanceledException)
+				{
+					break;
+				}
+				catch (Exception ex)
+				{
+					await Log.Error(LogPrefix,
+						$"Unhandled exception in connection token key refresh loop: {ex.Message}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Attempts to verify a stateless HMAC-signed connection token.
+		/// Supports format: base64url(keyId:realIp|expiryUnix).base64url(HMAC-SHA256(key, payload))
+		/// The keyId is used to look up the verification key from the database-backed key map.
+		/// Returns the real IP on success, null if the token is invalid/expired
+		/// or the HMAC key is not available.
+		/// </summary>
+		private static string? TryVerifyStatelessConnectionToken(string rawToken)
 		{
 			if (string.IsNullOrEmpty(rawToken)) return null;
 			int dotIdx = rawToken.LastIndexOf('.');
 			if (dotIdx <= 0 || dotIdx >= rawToken.Length - 1) return null;
-
-			var hmacKey = ResolveConnectionTokenHmacKey(config);
-			if (hmacKey == null) return null;
 
 			try
 			{
@@ -753,16 +878,51 @@ namespace FishMMO.Server.Implementation
 				var payload = Convert.FromBase64String(payloadB64);
 				var expectedSig = Convert.FromBase64String(sigB64);
 
+				var payloadStr = Encoding.UTF8.GetString(payload);
+				int pipeIdx = payloadStr.LastIndexOf('|');
+				if (pipeIdx <= 0) return null;
+
+				// Determine token format by checking for a keyId prefix.
+				// Format: "keyId:realIp|expiryUnix" - first colon separates
+				// keyId from IP (keyId is looked up in the database-backed key map).
+				// Safe for IPv6: we only treat the prefix as a keyId if it is
+				// actually found in the key map.  This avoids rejecting tokens where an
+				// IPv6 address segment happens to be separated by a colon.
+				int colonIdx = payloadStr.IndexOf(':');
+				bool hasKeyId = false;
+
+				byte[]? hmacKey;
+				if (colonIdx > 0 && colonIdx < pipeIdx)
+				{
+					string potentialKeyId = payloadStr.Substring(0, colonIdx);
+					// Keys come SOLELY from the database — no environment variable or
+					// .cfg file fallbacks.
+					var keyMap = s_dbConnectionTokenKeyMap;
+					hasKeyId = keyMap != null && keyMap.TryGetValue(potentialKeyId, out hmacKey);
+				}
+				else
+				{
+					hmacKey = null;
+				}
+
+				if (hmacKey == null) return null;
+
 				using var hmac = new HMACSHA256(hmacKey);
 				var computedSig = hmac.ComputeHash(payload);
 				if (!CryptographicOperations.FixedTimeEquals(computedSig, expectedSig))
 					return null;
 
-				var payloadStr = Encoding.UTF8.GetString(payload);
-				int pipeIdx = payloadStr.LastIndexOf('|');
-				if (pipeIdx <= 0) return null;
+				// Extract the real IP from the payload.
+				string realIp;
+				if (hasKeyId)
+				{
+					realIp = payloadStr.Substring(colonIdx + 1, pipeIdx - colonIdx - 1);
+				}
+				else
+				{
+					realIp = payloadStr.Substring(0, pipeIdx);
+				}
 
-				var realIp = payloadStr.Substring(0, pipeIdx);
 				if (!long.TryParse(payloadStr.Substring(pipeIdx + 1), out long expiryUnix))
 					return null;
 
@@ -775,28 +935,6 @@ namespace FishMMO.Server.Implementation
 			{
 				return null;
 			}
-		}
-
-		/// <summary>
-		/// Resolves the shared HMAC key for connection token verification.
-		/// Order: ConnectionTokenHmacKeyBase64 in server .cfg, then
-		/// FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64 env var.
-		/// </summary>
-		private static byte[]? ResolveConnectionTokenHmacKey(IServerConfiguration? config)
-		{
-			string? b64 = null;
-			if (config != null && config.TryGetString("ConnectionTokenHmacKeyBase64", out var cfgValue) &&
-				!string.IsNullOrWhiteSpace(cfgValue))
-				b64 = cfgValue.Trim();
-			else
-			{
-				var envValue = System.Environment.GetEnvironmentVariable("FISHMMO_CONNECTION_TOKEN_HMAC_KEY_BASE64");
-				if (!string.IsNullOrWhiteSpace(envValue))
-					b64 = envValue.Trim();
-			}
-			if (string.IsNullOrEmpty(b64)) return null;
-			try { return Convert.FromBase64String(b64); }
-			catch { return null; }
 		}
 
 		/// <summary>

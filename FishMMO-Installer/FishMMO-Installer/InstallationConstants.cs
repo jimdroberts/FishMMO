@@ -254,7 +254,7 @@ namespace FishMMO.Installer
 		/// clean builds, database drops, and Installer rebuilds without stashing/restoring.
 		/// </summary>
 		/// <remarks>MUST come after <see cref="FishMMOMonorepoRoot"/> — static init order matters.</remarks>
-		public static readonly string MigrationsOutputDirectory = Path.Combine(FishMMOMonorepoRoot, "FishMMO", "Migrations");
+		public static readonly string MigrationsOutputDirectory = Path.Combine(FishMMOMonorepoRoot, "Migrations");
 
 		/// <summary>Path to the FishMMO-Setup directory containing canonical nginx.conf, .cfg files, and environment overlays.</summary>
 		public static readonly string FishMMOSetupPath = Path.Combine(FishMMOMonorepoRoot, "FishMMO-Setup");

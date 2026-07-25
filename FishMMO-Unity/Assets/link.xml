@@ -71,6 +71,16 @@
   </assembly>
 
   <!--
+    HtmlAgilityPack relies on reflection for HTML document parsing,
+    type resolution, and XPath evaluation.  Under IL2CPP the managed
+    code linker strips unreferenced types, causing runtime failures
+    in HTML parsing operations.
+
+    Referenced by: WebTransport/WebGL HTTP response handling.
+  -->
+  <assembly fullname="HtmlAgilityPack" preserve="all"/>
+
+  <!--
     WebTransport native types must be preserved for FishNet's WebTransport
     plugin to function at runtime on IL2CPP platforms.  The plugin relies
     on P/Invoke and native struct interop.  Missing types cause silent

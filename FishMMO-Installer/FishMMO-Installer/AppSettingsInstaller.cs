@@ -1044,7 +1044,7 @@ namespace FishMMO.Installer
 		Console.WriteLine("Copy this file to every server in the deployment cluster.");
 	}
 
-		private static async Task ApplySecurePermissions(string filePath)
+		internal static async Task ApplySecurePermissions(string filePath)
 		{
 			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 			{

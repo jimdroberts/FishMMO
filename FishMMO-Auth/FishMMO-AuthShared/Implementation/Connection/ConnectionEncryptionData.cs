@@ -12,6 +12,13 @@ namespace FishMMO.Auth.Implementation
 	public class ConnectionEncryptionData : IDisposable
 	{
 		/// <summary>
+		/// True for the original instance that owns the <see cref="GcmNonceContext"/>
+		/// instances. Clones share nonce context references and must never dispose them.
+		/// Set to false by <see cref="CloneForAsyncWorker"/>.
+		/// </summary>
+		private bool ownsNonceContexts;
+
+		/// <summary>
 		/// The client's X25519 public key received during the handshake.
 		/// </summary>
 		public byte[]? PublicKey { get; private set; }
@@ -71,6 +78,7 @@ namespace FishMMO.Auth.Implementation
 			SendNonceCtx = null;
 			ReceiveNonceCtx = null;
 			AgreedVersion = CryptoHelper.ProtocolVersion;
+			ownsNonceContexts = true;
 		}
 
 		/// <summary>
@@ -199,10 +207,13 @@ namespace FishMMO.Auth.Implementation
 			}
 			lock (clearLock)
 			{
-				SendNonceCtx?.Dispose();
-				SendNonceCtx = null;
-				ReceiveNonceCtx?.Dispose();
-				ReceiveNonceCtx = null;
+				if (ownsNonceContexts)
+				{
+					SendNonceCtx?.Dispose();
+					ReceiveNonceCtx?.Dispose();
+				}
+					SendNonceCtx = null;
+					ReceiveNonceCtx = null;
 			}
 			if (PublicKey != null)
 			{
@@ -218,11 +229,12 @@ namespace FishMMO.Auth.Implementation
 
 		/// <summary>
 		/// Zeroes all sensitive key material and disposes nonce contexts.
-		/// Called by the finalizer as a safety net; <see cref="Dispose"/> suppresses finalization.
+		/// Called by the finalizer as a safety net on the ORIGINAL instance only.
+		/// Clones share nonce context references — their finalizer must NOT dispose them.
 		/// </summary>
 		~ConnectionEncryptionData()
 		{
-			Clear();
+			if (ownsNonceContexts) Clear();
 		}
 
 		/// <summary>
@@ -291,6 +303,9 @@ namespace FishMMO.Auth.Implementation
 				SendNonceCtx = SendNonceCtx,
 				ReceiveNonceCtx = ReceiveNonceCtx,
 			};
+
+			// Clones must never dispose the shared nonce contexts — only the original owns them.
+			clone.ownsNonceContexts = false;
 
 			System.Diagnostics.Debug.Assert(
 				object.ReferenceEquals(clone.SendNonceCtx, this.SendNonceCtx) &&

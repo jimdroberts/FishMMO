@@ -141,9 +141,11 @@ namespace FishMMO.Installer
 
 		/// <summary>
 		/// Runs a dotnet ef migrations add command for the given migration name.
-		/// Generated migration files land in the shared
-		/// <see cref="InstallationConstants.MigrationsOutputDirectory"/> at the
-		/// monorepo root rather than inside the FishMMO-DB project directory.
+		/// EF Core 5.x writes migration files and the model snapshot to the
+		/// project-local Migrations/ directory.  After the command succeeds,
+		/// generated .cs files are copied to the shared output directory
+		/// (<see cref="InstallationConstants.MigrationsOutputDirectory"/>) so
+		/// they survive build cleans.
 		/// </summary>
 		/// <param name="migrationName">Name of the migration to create.</param>
 		/// <returns>True if the command succeeded, otherwise false.</returns>
@@ -155,15 +157,68 @@ namespace FishMMO.Installer
 				return false;
 			}
 
-			// Target the source project.  Migration files are written to the
-			// monorepo-level Migrations dir (not the project dir), so there is no
-			// risk of polluting the source tree.
-			string root = InstallationConstants.FishMMOMonorepoRoot;
-			string projectPath = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj"));
-			string startupProject = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj"));
+			// Resolve project paths against the build output directory — the
+			// FishMMO-Database tree is copied alongside the installer at build
+			// time by CopyFishMMODatabase, so we always use the deployed snapshot.
+			string appDir = AppContext.BaseDirectory;
+			string projectPath = Path.GetFullPath(Path.Combine(appDir, InstallationConstants.ProjectPath));
+			string startupProject = Path.GetFullPath(Path.Combine(appDir, InstallationConstants.StartupProject));
 
-			return await RunDotNetCommandAsync(
-				$"ef migrations add {migrationName} -p \"{projectPath}\" -s \"{startupProject}\" --output-dir \"{InstallationConstants.MigrationsOutputDirectory}\"");
+			// EF Core 5.x does not fully respect --output-dir for the model
+			// snapshot, so we let dotnet ef write everything to the project-local
+			// Migrations/ directory and then copy the generated .cs files to the
+			// shared output directory.  The build output is ephemeral (cleaned on
+			// rebuild); the shared directory is the persistent source of truth.
+			string outputDir = InstallationConstants.MigrationsOutputDirectory;
+			if (!Directory.Exists(outputDir))
+			{
+				Directory.CreateDirectory(outputDir);
+				await Log.Info("FishMMOInstaller", $"Created migrations output directory: {outputDir}");
+			}
+
+			bool success = await RunDotNetCommandAsync(
+				$"ef migrations add {migrationName} -p \"{projectPath}\" -s \"{startupProject}\"");
+
+			if (success)
+				await CopyLocalMigrationFilesToOutputAsync(projectPath, outputDir);
+
+			return success;
+		}
+
+		/// <summary>
+		/// Copies generated migration .cs files from the project-local Migrations/
+		/// directory to the shared output directory so they survive build clean.
+		/// Never deletes or overwrites existing files — new files are added,
+		/// existing files with the same name are skipped with a warning.
+		/// </summary>
+		private static async Task CopyLocalMigrationFilesToOutputAsync(string projectPath, string outputDir)
+		{
+			string projectDir = Path.GetDirectoryName(projectPath)!;
+			string localMigrationsDir = Path.Combine(projectDir, "Migrations");
+
+			if (!Directory.Exists(localMigrationsDir))
+			{
+				await Log.Warning("FishMMOInstaller",
+					"dotnet ef did not produce a project-local Migrations/ directory.");
+				return;
+			}
+
+			foreach (string file in Directory.GetFiles(localMigrationsDir, "*.cs"))
+			{
+				string fileName = Path.GetFileName(file);
+				string destFile = Path.Combine(outputDir, fileName);
+
+				if (File.Exists(destFile))
+				{
+					await Log.Warning("FishMMOInstaller",
+						$"Skipped copy of '{fileName}' — already exists in shared output directory.");
+					continue;
+				}
+
+				File.Copy(file, destFile);
+				await Log.Info("FishMMOInstaller",
+					$"Copied {fileName} to shared migrations directory.");
+			}
 		}
 
 		/// <summary>
@@ -172,9 +227,9 @@ namespace FishMMO.Installer
 		/// <returns>True if the command succeeded, otherwise false.</returns>
 		public static async Task<bool> RunEFDatabaseUpdateAsync(string? superuserConnectionString = null)
 		{
-			string root = InstallationConstants.FishMMOMonorepoRoot;
-			string projectPath = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB", "FishMMO-DB.csproj"));
-			string startupProject = Path.GetFullPath(Path.Combine(root, "FishMMO-Database", "FishMMO-DB-Migrator", "FishMMO-DB-Migrator.csproj"));
+			string appDir = AppContext.BaseDirectory;
+			string projectPath = Path.GetFullPath(Path.Combine(appDir, InstallationConstants.ProjectPath));
+			string startupProject = Path.GetFullPath(Path.Combine(appDir, InstallationConstants.StartupProject));
 
 			string connectionArg = string.IsNullOrEmpty(superuserConnectionString)
 				? ""

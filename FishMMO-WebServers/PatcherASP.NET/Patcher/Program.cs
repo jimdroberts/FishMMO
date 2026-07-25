@@ -1,4 +1,7 @@
 using System.Threading.RateLimiting;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Services;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using FishMMO.Logging;
@@ -88,6 +91,13 @@ namespace FishMMO.WebServer
 					.ConfigureServices((context, services) =>
 					{
 						_ = Log.Info("Services", "Registering services...");
+
+						ValidateNpgsqlSslMode(context.Configuration, context.HostingEnvironment);
+
+						services.AddSingleton(new NpgsqlDbConfiguration(context.Configuration));
+						services.AddSingleton<NpgsqlDbContextFactory>();
+						services.AddSingleton<INpgsqlDbContextFactory>(sp => sp.GetRequiredService<NpgsqlDbContextFactory>());
+						services.AddScoped<IDeploymentSecretService, DeploymentSecretService>();
 
 						services.AddSingleton<PatchVersionService>();
 						services.AddControllers();
@@ -252,6 +262,39 @@ namespace FishMMO.WebServer
 
 
 
+
+
+		private static void ValidateNpgsqlSslMode(IConfiguration configuration, IHostEnvironment environment)
+		{
+			if (!environment.IsProduction()) return;
+
+			bool allowInsecure = configuration.GetValue("ConnectionStrings:AllowInsecureNpgsql", false);
+			if (allowInsecure) return;
+
+			string? connectionString = configuration.GetConnectionString("NpgsqlConnection");
+			if (string.IsNullOrWhiteSpace(connectionString))
+				return; // Other startup code will fail with clearer error
+
+			try
+			{
+				var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+				if (builder.SslMode != Npgsql.SslMode.Require)
+				{
+					throw new InvalidOperationException(
+						"In Production, the Npgsql ConnectionStrings:NpgsqlConnection must use " +
+						"'Ssl Mode=Require'. The default 'Prefer' silently " +
+						"falls back to plaintext, exposing credentials. Set " +
+						"ConnectionStrings:AllowInsecureNpgsql=true to deliberately allow an " +
+						"unencrypted connection (e.g., loopback Unix socket). NOTE: Upgrade to Npgsql 6.0+ for VerifyCA and VerifyFull modes.");
+				}
+			}
+			catch (InvalidOperationException) { throw; }
+			catch (Exception ex)
+			{
+				throw new InvalidOperationException(
+					$"Failed to parse Npgsql connection string for SSL validation: {ex.Message}", ex);
+			}
+		}
 
 	}
 }

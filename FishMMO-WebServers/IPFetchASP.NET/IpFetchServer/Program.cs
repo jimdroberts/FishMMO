@@ -1,5 +1,7 @@
 using System.Threading.RateLimiting;
 using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Services;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.WebShared;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -34,7 +36,21 @@ namespace FishMMO.WebServer
 
 			try
 			{
-				CreateHostBuilder(args).Build().Run();
+				var host = CreateHostBuilder(args).Build();
+			// Load gate secret from database (deployment_secrets table).
+			// This is the ONLY source — no env var or .env file fallback.
+			using (var scope = host.Services.CreateScope())
+			{
+				var svc = scope.ServiceProvider.GetRequiredService<IDeploymentSecretService>();
+				var result = await svc.FetchAsync("client_gate_secret", CancellationToken.None);
+				if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))
+					throw new InvalidOperationException(
+						"Gate secret not found in deployment_secrets database table. " +
+						"Run 'fishmmo-installer → Database → Configure Server Keys' to populate it.");
+				Environment.SetEnvironmentVariable("FISHMMO_CLIENT_GATE_SECRET", result.Data);
+				await Log.Info("Program", "Gate secret loaded from database.");
+			}
+			host.Run();
 			}
 			catch (Exception ex)
 			{
@@ -92,6 +108,11 @@ namespace FishMMO.WebServer
 
 						services.AddSingleton(new NpgsqlDbConfiguration(context.Configuration));
 						services.AddSingleton<NpgsqlDbContextFactory>();
+						// Register INpgsqlDbContextFactory so services with that dependency can resolve it.
+						services.AddSingleton<INpgsqlDbContextFactory>(sp => sp.GetRequiredService<NpgsqlDbContextFactory>());
+						// Register the connection token key service for DB-based key registration.
+						services.AddScoped<IDeploymentSecretService, DeploymentSecretService>();
+						services.AddScoped<IConnectionTokenKeyService, ConnectionTokenKeyService>();
 						services.AddMemoryCache();
 
 						services.AddControllers()

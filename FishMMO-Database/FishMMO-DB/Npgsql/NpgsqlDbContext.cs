@@ -65,7 +65,10 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
 		/// <summary>Email queue.</summary>
 		public DbSet<EmailQueueEntity> EmailQueue { get; set; }
-
+		/// <summary>Connection token verification keys (per-region HMAC keys).</summary>
+		public DbSet<ConnectionTokenKeyEntity> ConnectionTokenKeys { get; set; }
+		/// <summary>Deployment-global secrets (loaded at startup instead of env files).</summary>
+		public DbSet<DeploymentSecretEntity> DeploymentSecrets { get; set; }
 		/// <summary>Player characters.</summary>
 		public DbSet<CharacterEntity> Characters { get; set; }
 		/// <summary>Character abilities.</summary>

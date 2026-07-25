@@ -279,7 +279,7 @@ namespace FishMMO.Auth.Implementation
 					// World/Scene servers behind an L4 proxy see 127.0.0.1 from
 					// conn.GetAddress(). If the IP is missing or unverified,
 					// disconnect immediately — no fallback to proxy IP or ClientId.
-					if (verifyResult.RealIp == null)
+					if (string.IsNullOrEmpty(verifyResult.RealIp))
 					{
 						await Log.Warning(LogPrefix, $"Token for '{verifyResult.AccountName}' missing real IP — rejecting.");
 						RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
