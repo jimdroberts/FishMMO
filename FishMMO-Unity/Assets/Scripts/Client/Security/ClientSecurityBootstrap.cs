@@ -8,10 +8,9 @@ namespace FishMMO.Client.Security
 	/// Initialises <see cref="ClientCertificatePinning"/> before any scene loads
 	/// or <c>UnityWebRequest</c> is dispatched. Pin sources, in order:
 	///
-	///   1. <c>CertificatePins.generated.cs</c> — IL-embedded pins injected at
-	///      build time from FISHMMO_PIN_ACTIVE / FISHMMO_PIN_BACKUP env vars.
-	///      The committed source contains sentinel placeholders; CI substitutes
-	///      real values before invoking Unity.
+		///   1. <c>CertificatePins.generated.cs</c> — IL-embedded pins written by
+		///      FishMMO &gt; Security &gt; Fetch Certificate Pins. The committed
+		///      source contains sentinel placeholders; the editor tool overwrites them.
 	///
 	///   2. API pin update manifest (optional, async) — fetched from
 	///      <c>GET {APIHost}config/pins</c>, verified against an Ed25519

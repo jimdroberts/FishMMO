@@ -120,25 +120,12 @@ namespace FishMMO.Client.Security.Editor
 
 			EditorGUILayout.Space();
 
-			// ── CI export ─────────────────────────────────────────────
+			// ── Build-time embedding note ────────────────────────────
 
-			if (discoveredPins.Count > 0)
-			{
-				EditorGUILayout.LabelField("CI Environment Variables", EditorStyles.boldLabel);
-				EditorGUILayout.HelpBox(
-					"export FISHMMO_PIN_ACTIVE=\"" + (discoveredPins.Count > 0 ? discoveredPins[0] : "") + "\"\n" +
-					"export FISHMMO_PIN_BACKUP=\"" + (discoveredPins.Count > 1 ? discoveredPins[1] : "") + "\"",
-					MessageType.None);
-
-				if (GUILayout.Button("Copy CI Export to Clipboard"))
-				{
-					var sb = new StringBuilder();
-					for (int i = 0; i < discoveredPins.Count; i++)
-						sb.AppendLine("export FISHMMO_PIN_" + (i == 0 ? "ACTIVE" : "BACKUP") +
-							"=\"" + discoveredPins[i] + "\"");
-					EditorGUIUtility.systemCopyBuffer = sb.ToString();
-				}
-			}
+			EditorGUILayout.HelpBox(
+				"Pins are written directly to CertificatePins.generated.cs and IL-embedded " +
+				"at compile time. No CI environment variables or substitution scripts are needed.",
+				MessageType.Info);
 
 			EditorGUILayout.Space();
 
@@ -295,15 +282,15 @@ namespace FishMMO.Client.Security.Editor
 				sb.AppendLine("\t/// build time by CI. The committed sentinel values are intentionally");
 				sb.AppendLine("\t/// invalid so pinning cannot accidentally ship with empty values.");
 				sb.AppendLine("\t/// </summary>");
-				sb.AppendLine("\tinternal static class GeneratedPinSet");
+				sb.AppendLine("\tpublic static class GeneratedPinSet");
 				sb.AppendLine("\t{");
-				sb.AppendLine("\t\tinternal const string SentinelMarker = \"FISHMMO_SENTINEL_PLACEHOLDER\";");
+				sb.AppendLine("\t\tpublic const string SentinelMarker = \"FISHMMO_SENTINEL_PLACEHOLDER\";");
 				sb.AppendLine();
 				sb.AppendLine("\t\t/// <summary>");
 				sb.AppendLine("\t\t/// SHA-256 SPKI pins (base64). Minimum 2 entries required for");
 				sb.AppendLine("\t\t/// release builds.");
 				sb.AppendLine("\t\t/// </summary>");
-				sb.AppendLine("\t\tinternal static readonly string[] Pins =");
+				sb.AppendLine("\t\tpublic static readonly string[] Pins =");
 				sb.AppendLine("\t\t{");
 
 				for (int i = 0; i < discoveredPins.Count; i++)
@@ -318,7 +305,7 @@ namespace FishMMO.Client.Security.Editor
 				sb.AppendLine("\t\t/// Ed25519 public key (base64) for verifying signed pin update");
 				sb.AppendLine("\t\t/// manifests from the API. Empty string disables runtime updates.");
 				sb.AppendLine("\t\t/// </summary>");
-				sb.AppendLine("\t\tinternal const string ManifestPublicKeyBase64 = \"\";");
+				sb.AppendLine("\t\tpublic const string ManifestPublicKeyBase64 = \"\";");
 				sb.AppendLine("\t}");
 				sb.AppendLine("}");
 

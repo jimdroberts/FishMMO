@@ -37,20 +37,21 @@ namespace FishMMO.WebServer
 			try
 			{
 				var host = CreateHostBuilder(args).Build();
-			// Load gate secret from database (deployment_secrets table).
-			// This is the ONLY source — no env var or .env file fallback.
-			using (var scope = host.Services.CreateScope())
-			{
-				var svc = scope.ServiceProvider.GetRequiredService<IDeploymentSecretService>();
-				var result = await svc.FetchAsync("client_gate_secret", CancellationToken.None);
-				if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))
+				// Load gate secret from database (deployment_secrets table).
+				// This is the ONLY source — no env var or .env file fallback.
+				using (var scope = host.Services.CreateScope())
+				{
+					var svc = scope.ServiceProvider.GetRequiredService<IDeploymentSecretService>();
+					var result = await svc.FetchAsync("client_gate_secret", CancellationToken.None);
+					if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))
 					throw new InvalidOperationException(
 						"Gate secret not found in deployment_secrets database table. " +
 						"Run 'fishmmo-installer → Database → Configure Server Keys' to populate it.");
-				Environment.SetEnvironmentVariable("FISHMMO_CLIENT_GATE_SECRET", result.Data);
-				await Log.Info("Program", "Gate secret loaded from database.");
-			}
-			host.Run();
+					var holder = scope.ServiceProvider.GetRequiredService<GateSecretHolder>();
+					holder.Secret = result.Data;
+					await Log.Info("Program", "Gate secret loaded from database.");
+				}
+				host.Run();
 			}
 			catch (Exception ex)
 			{
@@ -114,6 +115,7 @@ namespace FishMMO.WebServer
 						services.AddScoped<IDeploymentSecretService, DeploymentSecretService>();
 						services.AddScoped<IConnectionTokenKeyService, ConnectionTokenKeyService>();
 						services.AddMemoryCache();
+							services.AddSingleton<GateSecretHolder>();
 
 						services.AddControllers()
 							.AddJsonOptions(options =>
@@ -228,7 +230,8 @@ namespace FishMMO.WebServer
 						// Client gate runs BEFORE the rate limiter so forged requests
 						// from generic crawlers don't consume per-IP tokens. Loopback
 						// /healthz is exempted so monitoring works without the secret.
-						app.UseFishMMOClientGate(context.HostingEnvironment, "/healthz");
+						var gateSecret = app.ApplicationServices.GetRequiredService<GateSecretHolder>().Secret;
+						app.UseFishMMOClientGate(context.HostingEnvironment, gateSecret, "/healthz");
 						app.UseCors("Public");
 						app.UseRateLimiter();
 						app.UseRouting();
@@ -318,5 +321,15 @@ namespace FishMMO.WebServer
 					$"Failed to parse Npgsql connection string for SSL validation: {ex.Message}", ex);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Holds the gate secret loaded from the database at startup.
+	/// Registered as a singleton so the secret can be populated after the host is built
+	/// but before it starts running, and consumed by middlewares configured during build.
+	/// </summary>
+	internal sealed class GateSecretHolder
+	{
+		public string? Secret { get; set; }
 	}
 }

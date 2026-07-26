@@ -53,11 +53,17 @@ Browser
      | HTTP (localhost:8000)
 +----v---------------------------------------+
 |  Kestrel (WebGLServer)                    |
+|  +-- Exception handler middleware         |
 |  +-- ForwardedHeaders middleware          |
+|  +-- Null-IP rejection middleware         |
+|  +-- FishMMOSecurityHeaders               |
+|  |   (COOP/COEP/CSP for SharedArrayBuffer)|
 |  +-- CORS (Public)               |
-|  +-- UseDefaultFiles + UseStaticFiles     |
+|  +-- Rate Limiter (token bucket)          |
 |  +-- UseResponseCompression               |
-|  +-- MapControllers                       |
+|  +-- UseDefaultFiles + UseStaticFiles     |
+|  |   (range requests natively supported)  |
+|  +-- MapControllers + /healthz            |
 +--------------------------------------------+
 ```
 
@@ -74,12 +80,16 @@ The content root path is configured via `WebClient:ContentRootPath` in appsettin
 
 ## Middleware Pipeline
 
-1. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
-2. **`UseCors`** — allows cross-origin requests from `play.fishmmo.com` (required for WebGL).
-3. **`UseDefaultFiles`** — serves `index.html` for root requests.
-4. **`UseStaticFiles`** — serves files from the configured content root with custom MIME type mappings (`.wasm`, `.unityweb`, `.bundle`, `.bin`, `.data`, `.hash`, `.webmanifest`).
-5. **`UseResponseCompression`** — compresses wasm/octet-stream/gzip MIME types.
-6. **`UseRouting` + `MapControllers`** — standard ASP.NET routing (for health checks and future API endpoints).
+1. **`UseExceptionHandler`** — catches unhandled exceptions, returns structured error responses.
+2. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX.
+3. **Null-IP rejection middleware** — returns 400 if `RemoteIpAddress` is null after forwarding (proxy misconfiguration guard).
+4. **`UseFishMMOSecurityHeaders`** — adds standard security headers plus `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`, and a comprehensive `Content-Security-Policy` enabling Unity 6 WebGL multi-threading (SharedArrayBuffer).
+5. **`UseCors`** — allows cross-origin requests from `play.fishmmo.com` (required for WebGL).
+6. **`UseRateLimiter`** — token-bucket rate limiting (60 req/s replenishment, 120 burst, partitioned by real client IP).
+7. **`UseResponseCompression`** — compresses wasm/octet-stream/gzip MIME types.
+8. **`UseDefaultFiles`** — serves `index.html` for root requests.
+9. **`UseStaticFiles`** — serves files from the configured content root with custom MIME type mappings (`.wasm`, `.unityweb`, `.bundle`, `.bin`, `.data`, `.hash`, `.webmanifest`). Supports HTTP range requests natively.
+10. **`UseRouting` + `MapControllers`** — standard ASP.NET routing (for health checks and future API endpoints).
 
 **Note:** The legacy `RangeRequestMiddleware` and `UnityOnlyMiddleware` referenced in older documentation no longer exist. ASP.NET Core's built-in `UseStaticFiles` handles range requests natively. The `ClientGate` HMAC middleware used by IPFetch/Patcher is intentionally absent here — browsers cannot add custom headers to static resource requests.
 
@@ -111,10 +121,12 @@ The server applies COOP (`same-origin`), COEP (`require-corp`), and a comprehens
 
 ## Security
 
+- **SecurityHeaders** — applies `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`, and a comprehensive `Content-Security-Policy` to enable Unity 6 WebGL multi-threading via `SharedArrayBuffer`.
 - **CORS** (`Public`) allows cross-origin access from `play.fishmmo.com` for `.wasm` and `.data` files.
 - **ForwardedHeaders** ensures correct client IP logging when behind NGINX.
-- Kestrel binds to **localhost only** - not directly accessible from the internet.
-- No authentication middleware - static content is publicly served (access control is at the NGINX layer).
+- **Rate limiting** (token bucket: 60 req/s replenish, 120 burst, partitioned by real client IP) prevents abuse.
+- Kestrel binds to **localhost only** — not directly accessible from the internet.
+- No authentication middleware — static content is publicly served (access control is at the NGINX layer). The `ClientGate` HMAC middleware used by IPFetch/Patcher is intentionally absent here; browsers cannot add custom headers to static resource requests.
 
 ## Deployment
 
@@ -144,8 +156,12 @@ flowchart LR
     Nginx -->|"HTTP localhost:8000"| Kestrel[Kestrel]
     subgraph Server[WebGLServer]
         Kestrel --> Fwd[ForwardedHeaders]
-        Fwd --> Cors[CORS Public]
-        Cors[CORS Public] --> Defaults[UseDefaultFiles index.html]
+        Fwd --> NullGuard[Null-IP Rejection]
+        NullGuard --> SecHdr[SecurityHeaders\nCOOP/COEP/CSP]
+        SecHdr --> Cors[CORS Public]
+        Cors --> RateLimit[Rate Limiter]
+        RateLimit --> Compress[ResponseCompression]
+        Compress --> Defaults[UseDefaultFiles index.html]
         Defaults --> Static[UseStaticFiles\n(range requests natively supported)]
         Static -->|file found| OK[200 full / 206 partial]
         Static -->|not found| NF[404]

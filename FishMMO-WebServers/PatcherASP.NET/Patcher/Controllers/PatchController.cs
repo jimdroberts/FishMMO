@@ -114,7 +114,7 @@ public class PatchController : ControllerBase
 		Response.Headers["ETag"] = etag;
 		Response.Headers["Cache-Control"] = "public, max-age=30";
 
-		// HMAC-sign the version manifest using the shared FISHMMO_CLIENT_GATE_SECRET.
+		// HMAC-sign the version manifest using the shared gate secret.
 		// The canonical content is derived from the response payload fields.
 		// The client can verify the signature using the same shared secret to
 		// confirm the manifest was produced by an authentic patcher server

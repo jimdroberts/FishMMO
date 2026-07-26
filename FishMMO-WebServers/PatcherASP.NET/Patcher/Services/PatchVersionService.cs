@@ -56,14 +56,14 @@ public class PatchVersionService : IDisposable
 
 	/// <summary>
 	/// HMAC signing key for version manifest responses, derived from the
-	/// FISHMMO_CLIENT_GATE_SECRET environment variable. Null if unconfigured.
+	/// gate secret passed via the constructor (loaded from database). Null if unconfigured.
 	/// </summary>
 	private readonly byte[]? signingKey;
 
 	private static readonly Regex patchFileNameRegex =
 		new Regex(@"^(\d{1,9}\.\d{1,9}\.\d{1,9}(?:\.[A-Za-z0-9\-]{1,32})?)-(\d{1,9}\.\d{1,9}\.\d{1,9}(?:\.[A-Za-z0-9\-]{1,32})?)\.zip$", RegexOptions.Compiled);
 
-	public PatchVersionService(IHostEnvironment env, IConfiguration config)
+	public PatchVersionService(IHostEnvironment env, IConfiguration config, string? gateSecret = null)
 	{
 		this.env = env;
 		this.config = config;
@@ -73,11 +73,10 @@ public class PatchVersionService : IDisposable
 		debounceInterval = TimeSpan.FromSeconds(Math.Max(debounceSecs, 1));
 		searchPattern = config.GetValue<string>("Patches:SearchPattern") ?? "*.zip";
 
-		// Read the FISHMMO_CLIENT_GATE_SECRET for HMAC-signing version manifest responses.
-		// This is the same shared secret used by ClientGate middleware. We take the first
-		// key (before any comma) for signing; if the secret is unconfigured the version
-		// manifest will not be signed.
-		string? secretText = Environment.GetEnvironmentVariable("FISHMMO_CLIENT_GATE_SECRET");
+		// Gate secret for HMAC-signing version manifest responses, passed via constructor (loaded from database).
+		// We take the first key (before any comma) for signing; if the secret is unconfigured
+		// the version manifest will not be signed.
+		string? secretText = gateSecret;
 		if (!string.IsNullOrEmpty(secretText))
 		{
 			string firstKey = secretText.Split(',', StringSplitOptions.RemoveEmptyEntries)[0].Trim();
@@ -307,7 +306,7 @@ public class PatchVersionService : IDisposable
 	}
 
 	/// <summary>
-	/// HMAC-SHA256 signs the given content using the FISHMMO_CLIENT_GATE_SECRET
+	/// HMAC-SHA256 signs the given content using the gate secret (loaded from database)
 	/// and returns the signature as a base64url-encoded string.
 	/// Returns null if no signing key is configured.
 	/// The client can verify this signature to confirm the version manifest

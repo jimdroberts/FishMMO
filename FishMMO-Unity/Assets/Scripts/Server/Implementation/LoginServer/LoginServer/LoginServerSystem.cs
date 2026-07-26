@@ -172,11 +172,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// The database is the ONLY source — no environment variable or .cfg file fallbacks.
 			// A DB-only attacker (read or write) cannot recover or forge usable signing keys
 			// without also possessing the KEK, which is provisioned out-of-band.
+			string kekError = "KEK provisioning failed — deployment_secrets table may be missing the signing_key_kek row.";
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var secretService) ||
-				!SigningKeyKekProvider.TryLoadFromDatabase(secretService, out signingKeyKek, out string kekError))
+				!SigningKeyKekProvider.TryLoadFromDatabase(secretService, out signingKeyKek, out kekError))
 			{
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+	#if UNITY_EDITOR || DEVELOPMENT_BUILD
 				Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
 				signingKeyKek = null;
 #else

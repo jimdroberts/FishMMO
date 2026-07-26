@@ -109,14 +109,6 @@ namespace FishMMO.Installer
         /// <summary>
         /// Generates a systemd .service file content for an ASP.NET Core application.
         /// </summary>
-		/// <summary>
-		/// Path to the system-wide FishMMO secrets file shared by all services.
-		/// All systemd units reference this single file so secrets (gate secret,
-		/// HMAC key, KEK) are identical across IpFetchServer, Patcher, WebGLServer,
-		/// and the AppHealthMonitor (which passes them to Login/World/Scene servers).
-		/// </summary>
-		internal const string SystemWideSecretsPath = "/etc/fishmmo/secrets.env";
-
 		private static string GenerateSystemdUnit(string serviceName, string dllPath, string description)
 		{
 			string workingDir = Path.GetDirectoryName(dllPath) ?? "/opt/fishmmo";
@@ -135,7 +127,6 @@ namespace FishMMO.Installer
 			        User={user}
 			        Environment=ASPNETCORE_ENVIRONMENT=Production
 			        Environment=FISHMMO_ENVIRONMENT=Production
-			        EnvironmentFile=-{SystemWideSecretsPath}
 			        EnvironmentFile=-/etc/fishmmo/db-secrets.env
 
 			        [Install]
@@ -369,7 +360,6 @@ namespace FishMMO.Installer
 				$"Environment=ASPNETCORE_ENVIRONMENT={envName}\n" +
 				$"Environment=DOTNET_ENVIRONMENT={envName}\n" +
 				$"Environment=FISHMMO_ENVIRONMENT={envName}\n" +
-				$"EnvironmentFile=-{SystemWideSecretsPath}\n" +
 				$"EnvironmentFile=-/etc/fishmmo/db-secrets.env\n" +
 				$"\n" +
 				$"[Install]\n" +

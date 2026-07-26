@@ -516,29 +516,31 @@ dotnet run
 
 Set the environment via `FISHMMO_ENVIRONMENT` (preferred), `DOTNET_ENVIRONMENT`, or `ASPNETCORE_ENVIRONMENT`.
 
-**Environment variable overrides:**
+**Environment variable overrides for database credentials:**
+
+DB credentials are resolved by the `DatabaseSecrets` class, checking environment variables first, then the platform secrets file (`/etc/fishmmo/db-secrets.env` on Linux, `%ProgramData%\FishMMO\db-secrets.env` on Windows):
 
 | Variable | Maps To |
 |---|---|
 | `FISHMMO_ENVIRONMENT` | Environment name (`Development`, `Production`) |
-| `Npgsql__Host` | PostgreSQL host |
-| `Npgsql__Port` | PostgreSQL port |
-| `Npgsql__Database` | Database name |
-| `Npgsql__Username` | Database user |
-| `Npgsql__Password` | Database password |
+| `FISHMMO_DB_HOST` | PostgreSQL host |
+| `FISHMMO_DB_PORT` | PostgreSQL port |
+| `FISHMMO_DB_NAME` | Database name |
+| `FISHMMO_DB_USERNAME` | Database user |
+| `FISHMMO_DB_PASSWORD` | Database password |
 
 Example (fish shell):
 
 ```fish
 set -Ux FISHMMO_ENVIRONMENT Production
-set -Ux Npgsql__Password super_secret
+set -Ux FISHMMO_DB_PASSWORD super_secret
 ```
 
 Example (bash):
 
 ```bash
 export FISHMMO_ENVIRONMENT=Production
-export Npgsql__Password=super_secret
+export FISHMMO_DB_PASSWORD=super_secret
 ```
 
 ---
@@ -773,13 +775,13 @@ All projects share a single canonical `logging.json` at [`FishMMO-Setup/logging.
 }
 ```
 
-> **Security:** Keep SMTP credentials out of source control. Load secrets from environment variables or a separate secrets file. See [FishMMO-Logger README](FishMMO-Logger/README.md) for full configuration details.
+> **Security:** Keep SMTP credentials out of source control. Load them via environment variables (e.g., `FISHMMO_SMTP_PASSWORD`). Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database — see [FishMMO-Auth — Signing Keys & KEK](#fishmmo-auth--signing-keys--kek). See [FishMMO-Logger README](FishMMO-Logger/README.md) for full configuration details.
 
 **Runtime override:** Place a modified `logging.json` in the working directory — it takes precedence over the bundled copy. The log level can also be overridden via the `FISHMMO_LOG_LEVEL` environment variable (e.g. `Debug`, `Verbose`).
 
 ### Configuration Files — `FishMMO-Setup/`
 
-All project configuration lives in [`FishMMO-Setup/`](FishMMO-Setup/) as the single source of truth. **Non-sensitive defaults (host, port, database name) are stored in JSON. Secrets (passwords, tokens, API keys) are set via environment variables** and override the JSON values at runtime. Each template includes a `_comment` field listing the env var names to set.
+All project configuration lives in [`FishMMO-Setup/`](FishMMO-Setup/) as the single source of truth. **Non-sensitive defaults (host, port, database name) are stored in JSON. Database credentials are set via environment variables (`FISHMMO_DB_*`) or the platform secrets file (`/etc/fishmmo/db-secrets.env`). Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database and loaded by each server at startup — no env vars or secrets files are needed for them.** Each template includes a `_comment` field listing the env var names to set.
 
 **Directory structure:**
 
@@ -816,11 +818,9 @@ FishMMO-Setup/
 
 ```json
 {
-  "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username",
+  "_comment": "Non-sensitive defaults only. Username and Password are resolved from FISHMMO_DB_USERNAME / FISHMMO_DB_PASSWORD env vars or /etc/fishmmo/db-secrets.env (chmod 600). NEVER put credentials in this file.",
   "Npgsql": {
     "Database": "fishmmo",
-    "Username": "",
-    "Password": "",
     "Host": "127.0.0.1",
     "Port": "5432"
   }
@@ -831,11 +831,9 @@ FishMMO-Setup/
 
 ```json
 {
-  "_comment": "Non-sensitive defaults only. Override secrets via env vars: Npgsql__Password, Npgsql__Username",
+  "_comment": "Non-sensitive defaults only. Username and Password are resolved from FISHMMO_DB_USERNAME / FISHMMO_DB_PASSWORD env vars or /etc/fishmmo/db-secrets.env (chmod 600). NEVER put credentials in this file.",
   "Npgsql": {
     "Database": "fishmmo",
-    "Username": "",
-    "Password": "",
     "Host": "127.0.0.1",
     "Port": "5432"
   }
@@ -854,27 +852,17 @@ The authentication system uses HMAC-SHA256 for token signing. In production, sig
 
 #### Setting the KEK
 
-Set the environment variable `FISHMMO_SIGNING_KEY_KEK_BASE64` to a 32-byte base64-encoded AES-256 key:
+The KEK is stored in the `deployment_secrets` database table under the key `signing_key_kek`. It is generated and stored by the FishMMO-Installer's **SecurityKeyInstaller**:
 
 ```bash
-# Generate a new KEK (do this once, store securely)
-KEK=$(openssl rand -base64 32)
-echo "Your KEK: $KEK"
+# From the Installer interactive menu:
+# Database > Configure Server Keys
 
-# Set it in your environment
-export FISHMMO_SIGNING_KEY_KEK_BASE64="$KEK"
+# Or via CLI:
+FishMMO-Installer --configure-server-secrets
 ```
 
-**Linux (systemd):** Add to your service unit file:
-```ini
-[Service]
-Environment=FISHMMO_SIGNING_KEY_KEK_BASE64=your_base64_kek_here
-```
-
-**Linux (fish shell, persistent):**
-```fish
-set -Ux FISHMMO_SIGNING_KEY_KEK_BASE64 your_base64_kek_here
-```
+All game servers load the KEK from the database at startup via `IDeploymentSecretService`. No environment variable or secrets file is needed to distribute the KEK between machines.
 
 #### How It Works
 
@@ -884,7 +872,7 @@ set -Ux FISHMMO_SIGNING_KEY_KEK_BASE64 your_base64_kek_here
 4. World/Scene servers fetch and unwrap the signing key to validate client tokens.
 5. Keys are rotated each time the LoginServer restarts.
 
-> **Without a KEK:** If `FISHMMO_SIGNING_KEY_KEK_BASE64` is not set, the LoginServer will log a warning and tokens will not be issued. Client authentication will fail on World/Scene servers.
+> **Without a KEK:** If the `signing_key_kek` row is missing from the `deployment_secrets` table, the LoginServer will log a warning and tokens will not be issued. Client authentication will fail on World/Scene servers. Run the Installer's **Database > Configure Server Keys** to populate it.
 
 #### Auth Protocol Constants
 
@@ -1173,21 +1161,16 @@ The certbot deploy hook at `FishMMO-Setup/deploy-hooks/certbot-fishmmo.sh` runs 
 The IPFetch and Patcher web servers use a **ClientGate** middleware that validates the `X-FishMMO-Client` header on every request. This prevents generic crawlers and unauthorized clients from accessing the API.
 
 **How it works:**
-- An HMAC-SHA256 shared secret is read from the `FISHMMO_CLIENT_GATE_SECRET` environment variable
+- An HMAC-SHA256 shared secret is loaded from the `deployment_secrets` database table (key `client_gate_secret`) at startup via `IDeploymentSecretService` and held in `GateSecretHolder`
 - The header format is: `v1.<timestamp>.<nonce>.<base64url-hmac>`
 - Replay protection via a 20,000-entry nonce cache with a 30-second timestamp window
 - The secret must be at least 32 bytes; comma-separated values enable key rotation
 
-**In Production:** The server **refuses to start** if `FISHMMO_CLIENT_GATE_SECRET` is not set.
+**In Production:** The server **refuses to start** if the `client_gate_secret` row is not present in the `deployment_secrets` table.
 **In Development:** Logs a warning and passes all requests through.
 **WebGL Server:** Does not use ClientGate (static content, publicly accessible).
 
-Generate a secret:
-```bash
-openssl rand -base64 32
-# Set it:
-export FISHMMO_CLIENT_GATE_SECRET="your_base64_secret_here"
-```
+The gate secret is generated and stored by the FishMMO-Installer's SecurityKeyInstaller (Database menu > Configure Server Keys, or CLI `--configure-server-secrets`). The client-side copy is obtained via the Unity Editor tool at **FishMMO > Security > Fetch Client Secrets**.
 
 ### Web Server Security & Environment Variables
 
@@ -1198,11 +1181,11 @@ All three web servers (IPFetch, Patcher, WebGL) run on Kestrel bound to **`127.0
 | Variable | Used By | Purpose |
 |---|---|---|
 | `FISHMMO_ENVIRONMENT` | All servers | Sets `DOTNET_ENVIRONMENT` and `ASPNETCORE_ENVIRONMENT` |
-| `FISHMMO_CLIENT_GATE_SECRET` | IPFetch, Patcher | HMAC shared secret for API request signing (**required in Production**) |
-| `ConnectionStrings__NpgsqlConnection` | IPFetch | PostgreSQL connection string |
+
+> **Application secrets (gate secret, KEK, connection token HMAC key) are NOT configured via environment variables.** They are stored in the database (`deployment_secrets` and `connection_token_keys` tables) and loaded by each server at startup via `IDeploymentSecretService` and `IConnectionTokenKeyService`. See [FishMMO-Auth -- Signing Keys & KEK](#fishmmo-auth--signing-keys--kek) and [ClientGate Middleware](#clientgate-middleware).
 
 **Production safety checks** (refuse to start if unmet):
-- `FISHMMO_CLIENT_GATE_SECRET` must be set (IPFetch, Patcher)
+- The `client_gate_secret` row must exist in the `deployment_secrets` table (IPFetch, Patcher)
 - Trusted proxy IPs/networks must be configured in `ForwardedHeaders` (or set `ForwardedHeaders:AllowUnconfigured=true` to bypass)
 - Npgsql connection must use `Ssl Mode=Require` or stricter (IPFetch)
 
@@ -1300,7 +1283,7 @@ FishMMO-Installer --component systemd-services
 FishMMO-Installer --component windows-services
 ```
 
-This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`, `FISHMMO_CLIENT_GATE_SECRET`, etc.), and log file capture. See the [Installer README](FishMMO-Installer/README.MD) for details.
+This configures automatic startup, crash recovery, environment variables (`FISHMMO_ENVIRONMENT=Production`, `FISHMMO_DB_PASSWORD`, etc.), and log file capture. See the [Installer README](FishMMO-Installer/README.MD) for details.
 
 **For development:**
 
@@ -1588,34 +1571,14 @@ Place `appsettings.json` with database connection details alongside the executab
 
 ### Client TLS Certificate Pinning
 
-The client pins TLS certificates to prevent man-in-the-middle attacks on API and WebSocket connections.
-
-**Configuration file:** `FishMMO-Unity/Assets/StreamingAssets/client-security.json`
-
-```json
-{
-  "pins": [
-    {
-      "host": "api.fishmmo.com",
-      "spkiHashes": [
-        "base64_sha256_spki_hash_1",
-        "base64_sha256_spki_hash_2"
-      ]
-    },
-    {
-      "host": "game.fishmmo.com",
-      "spkiHashes": [
-        "base64_sha256_spki_hash_1"
-      ]
-    }
-  ]
-}
-```
+The client pins TLS certificates to prevent man-in-the-middle attacks on API and WebSocket connections. Pins are **IL-embedded at compile time** via `FishMMO-Unity/Assets/Scripts/Client/Security/CertificatePins.generated.cs` -- no separate configuration file is needed.
 
 > **Development builds:** Empty pins are allowed (TOFU / trust-on-first-use mode).
-> **Release builds:** At least one pin per host is **required**. The build will fail otherwise.
+> **Release builds:** At least 2 pins (active + backup) are **required**. The build will fail if fewer than 2 valid pins are configured or if sentinel placeholders are still present.
 
-To generate SPKI pin hashes from your certificate:
+**Generating pins via Unity Editor:** Use the tool at **FishMMO > Security > Fetch Certificate Pins**. It connects to your live hosts over TLS, extracts SPKI SHA-256 hashes, and writes them directly to `CertificatePins.generated.cs`. This embeds the pins at compile time -- no separate config file or CI substitution is needed.
+
+To generate SPKI pin hashes manually from your certificate:
 
 ```bash
 # From a live server
@@ -1702,7 +1665,6 @@ ExecStart=/opt/fishmmo/LoginServer/GameServer LOGIN
 Restart=on-failure
 RestartSec=5
 Environment=FISHMMO_ENVIRONMENT=Production
-Environment=FISHMMO_SIGNING_KEY_KEK_BASE64=your_kek_here
 
 [Install]
 WantedBy=multi-user.target
@@ -1762,14 +1724,14 @@ sudo systemctl enable --now apphealthmonitor
 
 #### Web Server Systemd Services (Installer-Generated)
 
-The installer can automatically generate and register systemd units for the ASP.NET web servers (Web Server menu, option `5`, or CLI `--component systemd-services`). It finds each server's publish directory, generates a `.service` file with the correct working directory, `ExecStart`, `User`, and `EnvironmentFile`, and runs `systemctl enable --now`.
+The installer can automatically generate and register systemd units for the ASP.NET web servers (Web Server menu, option `5`, or CLI `--component systemd-services`). It finds each server's publish directory, generates a `.service` file with the correct working directory, `ExecStart`, `User`, and `EnvironmentFile`/`Environment` entries, and runs `systemctl enable --now`.
 
 Generated services:
 - **`fishmmo-ipfetch.service`** — IPFetch Web Server on port 8080
 - **`fishmmo-patcher.service`** — Patcher Web Server on port 8090
 - **`fishmmo-webgl.service`** — WebGL Web Server on port 8000
 
-Each service unit includes `EnvironmentFile=-/path/to/fishmmo-secrets.env` so database passwords, signing keys, and the ClientGate secret are never baked into the unit file. Generate the env file via the Configuration menu, option `1` → choose a component → `3` (Generate secrets environment-variable file).
+The generated service units include `Environment=FISHMMO_ENVIRONMENT=Production` for environment selection. Application secrets (gate secret, KEK, connection token HMAC key) are **not** set via environment variables or env files -- they are loaded from the database at startup by each server. Database credentials can be provided via `EnvironmentFile=-/etc/fishmmo/db-secrets.env` or the `FISHMMO_DB_*` environment variables.
 
 ```bash
 # Verify after installer-generated registration:

@@ -49,7 +49,6 @@ namespace FishMMO.WebShared
         // is rejected at startup regardless of environment — a short shared secret
         // defeats the entire gate by being brute-forceable offline.
         private const int MinSecretBytes = 32;
-        private const string SecretEnvVar = "FISHMMO_CLIENT_GATE_SECRET";
         private const string LogChannel = "ClientGate";
 
         // Nonce -> expiry unix seconds. ConcurrentDictionary is the simplest
@@ -68,31 +67,31 @@ namespace FishMMO.WebShared
             new System.Text.RegularExpressions.Regex("/{2,}", System.Text.RegularExpressions.RegexOptions.Compiled);
 
         /// <summary>
-        /// Adds the gate middleware. Reads the shared secret from the
-        /// <c>FISHMMO_CLIENT_GATE_SECRET</c> environment variable. If the
-        /// secret is missing in Production the host refuses to start; in
+        /// Adds the gate middleware. The shared secret is loaded from the database
+        /// and passed via the <paramref name="gateSecret"/> parameter. If the
+        /// secret is <c>null</c> in Production the host refuses to start; in
         /// other environments it logs loudly and lets requests through so
-        /// local dev isn't blocked by an unconfigured laptop.
+        /// local dev isn't blocked by an unconfigured database.
         ///
         /// Paths in <paramref name="bypassPaths"/> (case-insensitive, prefix
         /// match) skip the gate. Use this for liveness probes that must work
         /// without the shared secret (e.g., /healthz on loopback).
         /// </summary>
-        public static IApplicationBuilder UseFishMMOClientGate(this IApplicationBuilder app, IHostEnvironment environment, params string[] bypassPaths)
+        public static IApplicationBuilder UseFishMMOClientGate(this IApplicationBuilder app, IHostEnvironment environment, string? gateSecret, params string[] bypassPaths)
         {
-            // DEPRECATED: The env var is now set by the DB loading code at startup.
-            // The database is the sole source for this key.
-            // This legacy path remains for backward compatibility during the transition.
-            string? secretText = Environment.GetEnvironmentVariable(SecretEnvVar);
+            // The gate secret is passed directly from the caller, which loads it
+            // from the deployment_secrets database table at startup.
+            // This is the sole source — no env var or .env file fallback.
+            string? secretText = gateSecret;
             if (string.IsNullOrEmpty(secretText))
             {
                 if (environment.IsProduction())
                 {
                     throw new InvalidOperationException(
-                        $"{SecretEnvVar} must be set in Production. The client gate cannot " +
+                        "Client gate secret must be set in Production. The client gate cannot " +
                         "verify request signatures without a shared secret.");
                 }
-                Log.Warning(LogChannel, $"{SecretEnvVar} is unset in {environment.EnvironmentName}; client gate is permissive (all requests pass).");
+                Log.Warning(LogChannel, $"Client gate secret is unset in {environment.EnvironmentName}; client gate is permissive (all requests pass).");
                 return app;
             }
 
@@ -108,14 +107,14 @@ namespace FishMMO.WebShared
                 if (s.Length < MinSecretBytes)
                 {
                     throw new InvalidOperationException(
-                        $"{SecretEnvVar} entry #{i + 1} is only {s.Length} bytes; minimum is {MinSecretBytes}. " +
+                        $"Client gate secret entry #{i + 1} is only {s.Length} bytes; minimum is {MinSecretBytes}. " +
                         "A short shared secret defeats the gate.");
                 }
                 secrets[i] = s;
             }
             if (secrets.Length == 0)
             {
-                throw new InvalidOperationException($"{SecretEnvVar} contained no usable entries after parsing.");
+                throw new InvalidOperationException("Client gate secret contained no usable entries after parsing.");
             }
             string[] bypass = bypassPaths ?? Array.Empty<string>();
 

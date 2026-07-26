@@ -47,12 +47,12 @@ Unity Client
      | HTTP (localhost:8080)
 +----v---------------------------------------+
 |  Kestrel (IPFetchServer)                  |
+|  +-- Exception handler middleware         |
 |  +-- ForwardedHeaders middleware          |
 |  +-- Null-IP rejection middleware         |
 |  +-- FishMMOSecurityHeaders middleware    |
-|  +-- Exception handler middleware         |
+|  +-- ClientGate (HMAC, key from DB)       |
 |  +-- CORS (configurable origins)          |
-|  +-- ClientGate (HMAC request signing)    |
 |  +-- Rate Limiting (token bucket)         |
 |  +-- LoginServerController                |
 |       +-- PostgreSQL (via EF Core)        |
@@ -78,7 +78,7 @@ IpFetchServer/
 2. **`UseForwardedHeaders`** — trusts `X-Forwarded-For` / `X-Forwarded-Proto` from NGINX (ForwardLimit=1).
 3. **Null-IP rejection middleware** — returns 400 if `RemoteIpAddress` is null after forwarding (proxy misconfiguration guard).
 4. **`UseFishMMOSecurityHeaders`** — adds `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, etc.
-5. **`UseFishMMOClientGate`** — validates `X-FishMMO-Client` HMAC-signed header (shared `ClientGate` middleware from FishMMO-WebShared). Rejects requests with invalid/missing/replayed signatures.
+5. **`UseFishMMOClientGate`** — validates `X-FishMMO-Client` HMAC-signed header (shared `ClientGate` middleware from FishMMO-WebShared). The shared secret is loaded from the `deployment_secrets` database table at startup (via `IDeploymentSecretService` + `GateSecretHolder`) — no environment variable or configuration file fallback. Loopback paths (`/healthz`) are exempted for monitoring. Rejects requests with invalid/missing/replayed signatures.
 6. **`UseCors`** — configurable CORS policy (default deny, configured via `Cors:AllowedOrigins`).
 7. **`UseRateLimiter`** — token-bucket rate limiting (10 req/s replenishment, 30 burst, partitioned by real client IP).
 8. **`UseRouting` + `MapControllers`** — standard ASP.NET routing.
@@ -89,7 +89,7 @@ IpFetchServer/
 | Component | Responsibility |
 |---|---|
 | `LoginServerController` | Single-endpoint controller backing `GET /loginserver`. Reads active login servers from PostgreSQL via EF Core, returns `{ Ports, ConnectionToken }` envelope. Uses `SemaphoreSlim(1,1)` single-flight cache-stampede protection with 60s TTL + 0-10s random jitter. Issues stateless HMAC-SHA256 connection tokens — no database storage required. |
-| `ClientGate` (FishMMO-WebShared) | HMAC-SHA256 request signing validation with timestamp (±30s window) and nonce LRU replay protection (20,000 entries). Shared across IPFetch, Patcher, and WebGL servers. |
+| `ClientGate` (FishMMO-WebShared) | HMAC-SHA256 request signing validation with timestamp (±30s window) and nonce LRU replay protection (100,000 entries). Shared across IPFetch and Patcher web servers. Intentionally absent on WebGLServer (browsers cannot add custom headers to static resource requests). |
 | `IMemoryCache` (built-in) | 60-second TTL cache with jitter to prevent thundering-herd on cache expiry. Won't cache empty results (allows fast recovery when LoginServers register). |
 
 ## Endpoints
@@ -176,9 +176,36 @@ export WebServer__HttpPort=8080
 
 - The code explicitly configures JSON files, environment variables, and command-line args. `Host.CreateDefaultBuilder` already provides similar behavior; this project makes the sources explicit.
 
+### Gate Secret (ClientGate)
+
+The HMAC shared secret for `ClientGate` request signing is a separate concern from the connection token key above. It is loaded **exclusively** from the `deployment_secrets` database table at startup:
+
+1. After building the host, the application opens a DI scope and resolves `IDeploymentSecretService`.
+2. The service fetches the record with key `"client_gate_secret"`.
+3. The value is stored in a singleton `GateSecretHolder`.
+4. The `Configure` callback reads `GateSecretHolder.Secret` and passes it to `UseFishMMOClientGate(environment, gateSecret, bypassPaths)`.
+
+**Sources:** This value is **not** configurable via environment variables, `appsettings.json`, command-line arguments, or any other configuration source. The database is the sole source.
+
+**Setup:** Operators must run the `fishmmo-installer → Database → Configure Server Keys` workflow to populate it, or insert a row directly:
+
+```sql
+INSERT INTO deployment_secrets (key, value, created_at, updated_at)
+VALUES ('client_gate_secret', 'your-32+byte-secret', NOW(), NOW());
+```
+
+**Behaviour if missing:** In Production the host refuses to start with a clear error; in Development the gate logs a warning and passes all requests through, so local dev works without a configured database.
+
+**Shared secret:** The same secret must be shared across all servers that validate `X-FishMMO-Client`:
+- **IPFetchServer** (via `GateSecretHolder`)
+- **Patcher** (via `GateSecretHolder`; also used by `PatchVersionService` to HMAC-sign version manifest responses)
+- **Unity client** (embedded via Unity Editor: **FishMMO > Security > Fetch Client Secrets**, which writes `ClientApiSecret.generated.cs`)
+
+The `client_gate_secret` is a single value (or a comma-separated set for rotation). If a comma-separated keyset is provided, all keys are tried during verification so old clients continue to work during rotation.
+
 ## Security
 
-- **ClientGate** validates HMAC-SHA256 request signatures with timestamp and nonce replay protection.
+- **ClientGate** validates HMAC-SHA256 request signatures with timestamp and nonce replay protection. The shared secret is loaded from the `deployment_secrets` database table at startup — not from environment variables or configuration files.
 - **CORS policy** is configurable via `Cors:AllowedOrigins` array; defaults to deny-all.
 - **ForwardedHeaders** (ForwardLimit=1) ensures correct client IP when behind a single trusted NGINX proxy.
 - **Rate limiting** (token bucket: 10 req/s replenish, 30 burst, partitioned by real client IP) prevents DDoS.
@@ -197,6 +224,7 @@ export WebServer__HttpPort=8080
 - PostgreSQL database with `LoginServers` table
 - NGINX reverse proxy (recommended for production)
 - Shared HMAC key provisioned on both IPFetch and Login Server for connection token signing
+- Gate secret populated in `deployment_secrets` database table (via `fishmmo-installer → Database → Configure Server Keys`)
 
 ## Flow Diagram
 
@@ -208,15 +236,16 @@ flowchart LR
         Kestrel --> Fwd[ForwardedHeaders]
         Fwd --> NullGuard[Null-IP Rejection]
         NullGuard --> SecHdr[SecurityHeaders]
-        SecHdr --> Cors[CORS]
-        Cors --> Gate[ClientGate]
-        Gate --> RateLimit[Rate Limiter]
+        SecHdr --> Gate[ClientGate]
+        Gate --> Cors[CORS]
+        Cors --> RateLimit[Rate Limiter]
         RateLimit --> Ctrl[LoginServerController]
         Ctrl -->|"cache hit (60s TTL)"| Cache[IMemoryCache]
         Ctrl -->|cache miss| EF[EF Core / Npgsql]
-        EF --> DB[("PostgreSQL LoginServers table")]
+        EF --> DB1[("PostgreSQL LoginServers")]
         Ctrl -->|"HMAC-SHA256"| Token["Stateless Connection Token"]
+        DB2[("PostgreSQL\ndeployment_secrets")] -.->|"startup\nIDeploymentSecretService"| Gate
     end
     Cache -. "{ Ports, ConnectionToken }" .-> Client
-    DB -. populate cache .-> Cache
+    DB1 -. populate cache .-> Cache
 ```

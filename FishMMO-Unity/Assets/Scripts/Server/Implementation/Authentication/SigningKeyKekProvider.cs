@@ -30,21 +30,6 @@ namespace FishMMO.Server.Implementation
 		public const int KekLength = 32;
 
 		/// <summary>
-		/// DEPRECATED: use <see cref="TryLoadFromDatabase"/> instead.
-		/// This method always returns false. Environment variable and .cfg file fallbacks
-		/// are no longer supported. Keys must come SOLELY from the database.
-		/// </summary>
-		[Obsolete("Use TryLoadFromDatabase(IDeploymentSecretService, ...) instead. Keys must come from the database.")]
-		public static bool TryLoad(IServerConfiguration configuration, out byte[] kek, out string error)
-		{
-			kek = null;
-			error = "Signing-key KEK must come from the deployment_secrets database table. " +
-					"No environment variable or .cfg file fallbacks are supported. " +
-					"Use TryLoadFromDatabase with an IDeploymentSecretService instead.";
-			return false;
-		}
-
-		/// <summary>
 		/// Loads the signing-key KEK from the <c>deployment_secrets</c> database table
 		/// using <paramref name="secretService"/>. The value for key 'signing_key_kek'
 		/// must be a Base64-encoded 32-byte AES-256 key.

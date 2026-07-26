@@ -859,10 +859,10 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 ### Common Troubleshooting
 
 - **Server fails to start ("Initialization Complete" not logged):** Check the `.cfg` file path and format. Verify `CertificatePath` and `PrivateKeyPath` exist and are readable. Ensure `Address`/`Port` are not already in use.
-- **Client gets "Token Invalid" on World/Scene connect:** The auth token has expired (default 10 min lifetime) or the signing key was rotated. The client must re-authenticate through the LoginServer. Check that the LoginServer's `SigningKeyKekBase64` is identical across all servers in the deployment.
+- **Client gets "Token Invalid" on World/Scene connect:** The auth token has expired (default 10 min lifetime) or the signing key was rotated. The client must re-authenticate through the LoginServer. Verify that a `signing_key_kek` row exists in the `deployment_secrets` database table -- all servers load the KEK from the database at startup via `IDeploymentSecretService`.
 - **WebGL client cannot connect:** Verify the browser supports WebTransport (Chromium 97+). Check that CSP headers on `play.fishmmo.com` include `connect-src https://game.fishmmo.com:*`. The server must be compiled with HTTP/3 support enabled.
 - **TLS handshake fails between client and game server:** Ensure the server's certificate is valid for the `game.fishmmo.com` hostname. If using a self-signed cert for development, the client must skip certificate validation (not supported in production builds due to TLS certificate pinning).
-- **Database connection errors:** Verify PostgreSQL is running on `localhost:5432` and pgBouncer on `localhost:6432`. Check the `FISHMMO_CONNECTION_STRING` environment variable or the default connection string in the server configuration.
+- **Database connection errors:** Verify PostgreSQL is running on `localhost:5432` and pgBouncer on `localhost:6432`. Check the `FISHMMO_DB_HOST`/`FISHMMO_DB_PASSWORD` environment variables or `/etc/fishmmo/db-secrets.env` file, and verify the database connection string in the server configuration.
 
 ---
 
@@ -897,20 +897,24 @@ All FishMMO servers read configuration from `.cfg` files in the working director
 
 ### Secret Keys (not stored in .cfg files)
 
-These keys are configured via environment variables only and must never be committed to version control or stored in `.cfg` files.
+These keys are stored in the database and loaded by each server at startup. They must never be committed to version control or stored in `.cfg` files.
 
-| Key | Env Variable | Type | Servers | Description |
-|-----|-------------|------|---------|-------------|
-| `SigningKeyKekBase64` | `FISHMMO_SIGNING_KEY_KEK_BASE64` | string (base64) | All | 32-byte AES-256 key encryption key (KEK) used to wrap per-LoginServer HMAC signing keys at rest. Must decode to exactly 32 bytes. Must be identical across all servers in the deployment. |
+| Key | DB Table / Key | Type | Servers | Description |
+|-----|---------------|------|---------|-------------|
+| `GateSecret` | `deployment_secrets` / `client_gate_secret` | string (base64) | IPFetch, Patcher | HMAC-SHA256 shared secret for `X-FishMMO-Client` API request signing. Must decode to at least 32 bytes. Loaded at startup via `IDeploymentSecretService`. |
+| `SigningKeyKekBase64` | `deployment_secrets` / `signing_key_kek` | string (base64) | Login, World, Scene | 32-byte AES-256 key encryption key (KEK) used to wrap per-LoginServer HMAC signing keys at rest. Must decode to exactly 32 bytes. All servers load it from the database at startup. |
+| `ConnectionTokenHmacKey` | `connection_token_keys` / key_id=`shared` | string (base64) | IPFetch, Login | Shared HMAC key for one-time connection tokens that bridge the real client IP from the HTTP layer into the QUIC/WebTransport layer. Loaded via `IConnectionTokenKeyService`. |
 
 ### Configuration Precedence
 
 Values are resolved in the following priority order (highest wins):
 
-1. **Specific environment variable** (e.g., `FISHMMO_SMTP_HOST` for SMTP settings, `FISHMMO_SIGNING_KEY_KEK_BASE64` for the KEK)
+1. **Specific environment variable** (e.g., `FISHMMO_SMTP_HOST` for SMTP settings, `FISHMMO_DB_PASSWORD` for database credentials)
 2. **Generic environment variable** (`FISHMMO_CONFIG_{KEY}` where key separators become underscores, e.g., `FISHMMO_CONFIG_SMTP_HOST`)
 3. **`.cfg` file value** from the server's config file in the working directory
 4. **Code-level default** (hardcoded in `CoreServer.cs`, `FishNetNetworkWrapper.cs`, `SmtpService.cs`, etc.)
+
+> **Application secrets (gate secret, KEK, connection token HMAC key) are NOT resolved through this precedence chain.** They are loaded exclusively from the database via `IDeploymentSecretService` / `IConnectionTokenKeyService` at startup. See [FishMMO README -- FishMMO-Auth -- Signing Keys & KEK](README.md#fishmmo-auth--signing-keys--kek) and [FishMMO README -- ClientGate Middleware](README.md#clientgate-middleware).
 
 ---
 

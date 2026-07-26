@@ -891,7 +891,7 @@ namespace FishMMO.Server.Implementation
 				int colonIdx = payloadStr.IndexOf(':');
 				bool hasKeyId = false;
 
-				byte[]? hmacKey;
+				byte[]? hmacKey = null;
 				if (colonIdx > 0 && colonIdx < pipeIdx)
 				{
 					string potentialKeyId = payloadStr.Substring(0, colonIdx);
@@ -902,7 +902,20 @@ namespace FishMMO.Server.Implementation
 				}
 				else
 				{
-					hmacKey = null;
+					// No keyId prefix in the payload — use the default shared key.
+					// This is the path taken when IpFetchServer.GetConnectionTokenKeyId()
+					// returns null/empty and the payload is simply "realIp|expiryUnix".
+					//
+					// NOTE: IPv6 addresses in the realIp position contain colons that
+					// would be caught by the keyId branch above.  The first colon is
+					// interpreted as a keyId separator, and when TryGetValue fails
+					// (because "2001" is not a registered keyId), hmacKey stays null.
+					// For single-region deployments, setting GetConnectionTokenKeyId()
+					// to "shared" (non-null) produces "shared:2001:db8::1|..." —
+					// unambiguous regardless of IP version.
+					var keyMap = s_dbConnectionTokenKeyMap;
+					hmacKey = keyMap != null && keyMap.TryGetValue("shared", out var defaultKey)
+						? defaultKey : null;
 				}
 
 				if (hmacKey == null) return null;

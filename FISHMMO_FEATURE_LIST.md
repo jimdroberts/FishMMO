@@ -250,7 +250,7 @@
 31. **Linux Config Hardening** — Secure file permissions (`chmod 600`), core dump disabling, ptrace hardening for production Linux deployments.  
 32. **PostgreSQL Hardening** — Rewrites `pg_hba.conf` to require `scram-sha-256` on all TCP connections, sets `password_encryption` and `listen_addresses` in `postgresql.conf`, reloads via `pg_reload_conf()`. Idempotent via managed markers.  
 33. **PgBouncer Configuration Generation** — Generates `pgbouncer.ini` (transaction pooling, scram-sha-256) and `userlist.txt` (with SCRAM hash from `pg_shadow`) with secure file permissions.  
-34. **Secrets Environment Files** — Generates `fishmmo-secrets.env` (systemd/docker `EnvironmentFile`) and `~/.config/fish/conf.d/fishmmo-secrets.fish` (fish shell snippet) so passwords never live in plain-text JSON.  
+34. **Database Credentials File** — Generates `/etc/fishmmo/db-secrets.env` (systemd `EnvironmentFile`) and `~/.config/fish/conf.d/fishmmo-secrets.fish` (fish shell snippet) so database passwords never live in plain-text JSON. Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database, not in env files.  
 35. **AppSettings Secure Wizard** — Interactive configuration wizard for all FishMMO components (Database, IPFetch, Patcher, WebGL, Discord Bot, CMS). Preserves unmanaged JSON keys across writes. Applies `chmod 600` on all output files.
 
 ### Build Automation
@@ -400,7 +400,7 @@
 
 ### Security
 25. **TLS Certificate Pinning** — SHA-256(SPKI) base64 pinning via BouncyCastle for UnityWebRequest. Constant-time pin comparison. Release builds fail-closed when pins are not configured.  
-26. **StreamingAssets Pin Configuration** — Pins loaded from `client-security.json` with compile-time defaults.  
+26. **IL-Embedded Pin Configuration** — Pins are compiled into the assembly from `CertificatePins.generated.cs`, not loaded from StreamingAssets. Generated via Unity Editor tool at **FishMMO > Security > Fetch Certificate Pins**.  
 27. **TOFU Mode** — Development/editor builds allow empty pins (trust-on-first-use with loud warnings).  
 28. **Build-Time Validation** — `IPreprocessBuildWithReport` warns on release builds without TLS pins (at least 2 required).  
 29. **Dynamic Pin Update Scaffold** — `IPinUpdateSidecar` interface for out-of-band signed manifest updates with UTC validity windows.  
@@ -512,7 +512,7 @@
 17. **BaseServerAuthenticator** — Abstract MonoBehaviour bridging FishNet transport to engine-independent `BaseAuthenticatorCore`. Handles: handshake routing, cookie challenges, rate-limit key resolution, main-thread action queue.  
 18. **ServerAuthenticator (SRP)** — LoginServer SRP-6a authenticator: SRP verify/proof, TOTP/recovery code verification, token issuance, kick request processing.  
 19. **TokenServerAuthenticator** — World/Scene token authenticator: decrypt + verify + revocation check, one-retry with linear backoff for DB blips.  
-20. **Signing Key KEK Provider** — Static utility loading AES-256 KEK from config/env, building 8-byte AAD bound to LoginServer ID, wrapping/unwrapping HMAC signing keys.  
+20. **Signing Key KEK Provider** — Static utility loading AES-256 KEK from the `deployment_secrets` database table (key `signing_key_kek`), building 8-byte AAD bound to LoginServer ID, wrapping/unwrapping HMAC signing keys. No environment variable or .cfg file fallback.  
 21. **Account Managers** — `AccountManager`, `SrpAccountManager`, `TokenAccountManager` wrapping FishMMO-Auth cores for Unity/FishNet.
 
 ### LoginServer Features
