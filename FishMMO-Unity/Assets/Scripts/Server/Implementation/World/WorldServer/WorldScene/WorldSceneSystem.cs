@@ -323,6 +323,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				SweepSceneCaches(runtimeData);
 			}
 
+			// Tick the wait-queue timer every frame. Without this decrement, NextWaitQueueUpdate
+			// is set to WaitQueueRateSeconds after the first pass and never becomes <= 0 again,
+			// so open-world enqueue/assign never runs after boot (scenes table stays empty).
+			runtimeData.NextWaitQueueUpdate -= deltaTime;
 			if (runtimeData.NextWaitQueueUpdate <= 0)
 			{
 				runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
@@ -338,8 +342,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					List<NetworkConnection> instanceConns = new List<NetworkConnection>(mappingData.InstanceConnectionScenes.Count);
 					instanceConns.AddRange(mappingData.InstanceConnectionScenes.Keys);
 
+					// Skip empty work when nobody is waiting (still re-arm the timer above).
+					if (openWorldSceneNames.Count < 1 && instanceConns.Count < 1)
+					{
+						return;
+					}
+
 					if (runtimeData.TryBeginProcessing())
 					{
+						Log.Debug("WorldSceneSystem",
+							$"Processing wait queues: openWorldScenes={openWorldSceneNames.Count} " +
+							$"instanceConns={instanceConns.Count}");
 						if (!TryEnqueueAsyncWork(() => ProcessQueuesAsync(openWorldSceneNames, instanceConns)))
 						{
 							runtimeData.EndProcessing();
@@ -666,6 +679,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private async Task CleanupAndEnqueueNewSceneIfNeededAsync(string sceneName, long worldServerID, ISceneService sceneService)
 		{
 			bool needsNewScene = false;
+			int waitingCount = 0;
 			if (!await RunOnMainThreadAsync(() =>
 			{
 				if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
@@ -680,6 +694,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 				else
 				{
+					waitingCount = connections.Count;
 					needsNewScene = true;
 				}
 			}))
@@ -689,10 +704,26 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (needsNewScene)
 			{
+				if (worldServerID <= 0)
+				{
+					await Log.Error("WorldSceneSystem",
+						$"Cannot enqueue scene '{sceneName}' — WorldServerID is {worldServerID} (not registered?). " +
+						$"{waitingCount} connection(s) still waiting.");
+					return;
+				}
+
 				DatabaseResult<long> enqueueResult = await sceneService.EnqueueAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld);
 				if (!enqueueResult.IsSuccess)
 				{
-					await Log.Warning("WorldSceneSystem", $"CleanupAndEnqueueNewSceneIfNeededAsync DB error (Scene={sceneName}): {enqueueResult.ErrorCode} - {enqueueResult.ErrorMessage}");
+					await Log.Warning("WorldSceneSystem",
+						$"EnqueueAsync failed Scene={sceneName} world={worldServerID} waiting={waitingCount}: " +
+						$"{enqueueResult.ErrorCode} - {enqueueResult.ErrorMessage}");
+				}
+				else
+				{
+					await Log.Info("WorldSceneSystem",
+						$"Enqueued Pending scene load: id={enqueueResult.Data} Scene={sceneName} " +
+						$"world={worldServerID} waiting={waitingCount}");
 				}
 			}
 		}
@@ -1001,6 +1032,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			Log.Info("WorldSceneSystem",
+				$"Auth OK conn={conn.ClientId} account={accountName} — routing to instance/open-world scene.");
+
 			if (!TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn, skipDebounce: true), conn.ClientId))
 			{
 				Kick(conn, "Failed to enqueue instance connection processing");
@@ -1240,6 +1274,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
 					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+					Log.Info("WorldSceneSystem",
+						$"Queued open-world scene '{sceneName}' for conn={conn.ClientId} account={accountName} " +
+						$"(char={selectedChar.ID}).");
+				}
+				// Force the next wait-queue tick ASAP so EnqueueAsync / assign does not wait
+				// a full WaitQueueRateSeconds after auth (timer may also have been stuck).
+				if (Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+				{
+					runtimeData.NextWaitQueueUpdate = 0f;
 				}
 			});
 		}
