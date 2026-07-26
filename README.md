@@ -480,7 +480,7 @@ After building all C# projects and the WebTransport native library, open the Uni
 
 The FishMMO-Installer automates database creation (Database menu, option `3`), but here is what happens under the hood:
 
-1. **PostgreSQL Installation** — The installer installs PostgreSQL via your platform's package manager (option `1`).
+1. **PostgreSQL Installation** — The installer installs PostgreSQL via your platform's package manager (option `2`).
 2. **Database + User Creation** — Creates the `fishmmo` database and a dedicated `fishmmo` user role (option `3`).
 3. **EF Core Migration** — Creates and applies an initial Entity Framework Core migration (option `3`).
 4. **Permissions** — Grants the user full privileges on the `public` schema (options `3` and `5`).
@@ -583,52 +583,65 @@ Before building the client, you must generate two security files from within Uni
 
 This caches important game world details (spawn points, teleporters, boundaries, scene metadata) for both clients and servers. **Run this whenever you add or modify a scene.**
 
-**Unity Menu:** `FishMMO → Build → Rebuild World Scene Details`
+**Unity Menu:** `FishMMO → FishMMO Dashboard` → Select **World Scene Details** in the World category, or use the Dashboard's Build panel
 
 This generates `WorldSceneDetailsCache` assets that are loaded at runtime by the WorldServer and SceneServer for scene routing and character placement.
 
 ### Versioning
 
-Manage the project's semantic versioning from the Unity Editor.
+Manage the project's semantic versioning from the **FishMMO Dashboard**.
 
-**Unity Menu:** `FishMMO → Version → ...`
+**Unity Menu:** `FishMMO → FishMMO Dashboard` (Ctrl+Shift+D) → Select **Version** in the Core category
 
-| Option | Effect |
+The Version panel provides:
+
+| Control | Effect |
 |---|---|
-| Increment Major | Increases the major version number |
-| Increment Minor | Increases the minor version number |
-| Increment Patch | Increases the patch version number |
-| Reset Version | Resets all version fields to zero |
+| **Increment Major** | Major++, resets Minor and Patch to 0 |
+| **Increment Minor** | Minor++, resets Patch to 0 |
+| **Increment Patch** | Patch++ |
+| **Pre-Release Tag** | Free-text tag (e.g., `alpha`, `beta`, `rc1`) appended to the version |
+| **Reset to 0.0.0** | Resets all version fields to zero (with confirmation) |
 
-Each action updates `VersionConfig.asset` and Unity's bundle version. The final version is written to `version.txt` in the build output directory.
-
-> **Optional:** Enable automatic patch increments by uncommenting the `UpdateBuildVersion()` call in `OnPostprocessBuild`.
+The panel also shows the current full version, asset path, and Addressable registration status. The `VersionConfig.asset` is automatically registered as an Addressable under the `Shared_Static_Permanent` group and label. The final version is written to `version.txt` in the build output directory during the build process.
 
 ### FishMMO Builds
 
-Use the custom build menu in Unity to create clients, servers, and Addressables.
+Use the **FishMMO Dashboard** to configure and execute builds.
 
-**Unity Menu:** `FishMMO → Build → ...`
+**Unity Menu:** `FishMMO → FishMMO Dashboard` (Ctrl+Shift+D) → Select **Build** in the Core category
 
-The FishMMO Dashboard provides a comprehensive build interface:
+The Build panel provides:
 
-| Build Option | Description |
+**Configuration:**
+| Setting | Options | Description |
+|---|---|---|
+| **Build Type** | Server / Client | Selects which executable to build |
+| **OS Target** | Windows x64 / Linux x64 / WebGL | Target platform for the build |
+| **Environment** | Development / Production | Controls `.cfg` and `appsettings.json` copy source and loopback binding |
+
+**Actions:**
+| Button | Description |
 |---|---|
-| **Build Client** | Standalone client executable (Windows/Linux/macOS) |
-| **Build Server** | Headless server executable (Login/World/Scene from one binary) |
+| **Apply Platform Settings** | Switches the Unity Editor to the selected build target |
 | **Build Addressables** | Builds all Addressable asset bundles required by client and server |
-| **Build All** | Builds Addressables, then client, then server in sequence |
+| **Build Game** | Executes the build for the selected Build Type, OS Target, and Environment |
+| **Update Linker** | Regenerates the IL2CPP link.xml file |
+
+The Dashboard also shows the current build settings, active build target, and background task progress (compilation, asset import).
+
+**Build Settings via Menu:** Individual build settings can also be changed via `FishMMO → Build → Build Type`, `FishMMO → Build → OS Target`, and `FishMMO → Build → Environment`.
 
 **Build Environments:**
 
 | Environment | Address Binding | Use Case |
 |---|---|---|
 | **Development** | `127.0.0.1` (loopback) | Local testing — all servers on the same machine |
-| **Release** | Configurable via `.cfg` files | Production deployment — default is `127.0.0.1` (behind NGINX); change to server's network IP only if NGINX is on a separate machine |
+| **Production** | Configurable via `.cfg` files | Production deployment — default is `127.0.0.1` (behind NGINX); change to server's network IP only if NGINX is on a separate machine |
 
 The build process copies the appropriate `.cfg` and `appsettings.json` files from `FishMMO-Setup/Development/` or `FishMMO-Setup/Production/` into the build output.
 
-> **Important:** Build Addressables first, then build client/server. The client and server depend on the Addressable bundles produced in the first step.
+> **Important:** Build Addressables first, then build the game. The game build depends on the Addressable bundles produced in the first step.
 
 ### Patching — PatchGenerator and Updater
 

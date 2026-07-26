@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -31,10 +28,8 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.Abilities)
 				.IsRequired()
-				.HasDefaultValueSql("''")
-				.HasConversion(new ValueConverter<List<int>, string>(
-					v => string.Join(",", v),
-					v => string.IsNullOrEmpty(v) ? new List<int>() : new List<int>(Array.ConvertAll(v.Split(','), int.Parse))));
+				.HasColumnType("integer[]")
+				.HasDefaultValueSql("'{}'");
 
 			builder.Property(e => e.Spawned)
 				.IsRequired()

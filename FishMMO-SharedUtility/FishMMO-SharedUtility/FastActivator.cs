@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 			private static ActivatorDelegate BuildConstructor()
 			{
 				var ctor = typeof(TResult).GetConstructor(Type.EmptyTypes);
-				if (ctor == null) return () => default;
+				if (ctor == null) return () => default!;
 				if (TypeExtensions.UseExpressionCompilation)
 				{
 					try
@@ -80,7 +80,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported on this platform (IL2CPP AOT, etc.), fall back to Activator.CreateInstance
 					}
 				}
-				return () => (TResult?)Activator.CreateInstance(typeof(TResult));
+				return () => (TResult)Activator.CreateInstance(typeof(TResult))!;
 			}
 		}
 
@@ -108,7 +108,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg a) => (TResult?)ctor.Invoke(new object?[] { a });
+				return (TArg a) => (TResult)ctor.Invoke(new object?[] { a })!;
 			}
 		}
 
@@ -136,7 +136,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2) => (TResult?)ctor.Invoke(new object?[] { a1, a2 });
+				return (TArg1 a1, TArg2 a2) => (TResult)ctor.Invoke(new object?[] { a1, a2 })!;
 			}
 		}
 
@@ -164,7 +164,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3 })!;
 			}
 		}
 
@@ -192,7 +192,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4 })!;
 			}
 		}
 
@@ -220,7 +220,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5 })!;
 			}
 		}
 
@@ -248,7 +248,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6 })!;
 			}
 		}
 
@@ -276,7 +276,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7 })!;
 			}
 		}
 
@@ -304,7 +304,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8 })!;
 			}
 		}
 
@@ -332,7 +332,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9 })!;
 			}
 		}
 
@@ -360,7 +360,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 })!;
 			}
 		}
 
@@ -388,7 +388,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 })!;
 			}
 		}
 
@@ -416,7 +416,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 })!;
 			}
 		}
 
@@ -444,7 +444,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13 })!;
 			}
 		}
 
@@ -472,7 +472,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13, TArg14 a14) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13, TArg14 a14) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14 })!;
 			}
 		}
 
@@ -500,7 +500,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13, TArg14 a14, TArg15 a15) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13, TArg14 a14, TArg15 a15) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15 })!;
 			}
 		}
 
@@ -528,7 +528,7 @@ namespace FishMMO.Shared
 						// Expression.Compile() not supported, fall back to ConstructorInfo.Invoke
 					}
 				}
-				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13, TArg14 a14, TArg15 a15, TArg16 a16) => (TResult?)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16 });
+				return (TArg1 a1, TArg2 a2, TArg3 a3, TArg4 a4, TArg5 a5, TArg6 a6, TArg7 a7, TArg8 a8, TArg9 a9, TArg10 a10, TArg11 a11, TArg12 a12, TArg13 a13, TArg14 a14, TArg15 a15, TArg16 a16) => (TResult)ctor.Invoke(new object?[] { a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16 })!;
 			}
 		}
 	}

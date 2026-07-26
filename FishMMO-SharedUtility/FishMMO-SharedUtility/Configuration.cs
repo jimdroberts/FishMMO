@@ -949,7 +949,7 @@ namespace FishMMO.Shared
 			this.disposed = true;
 			GC.SuppressFinalize(this);
 			this.settingsLock?.Dispose();
-			this.settingsLock = null;
+			this.settingsLock = default!;
 		}
 	}
 }

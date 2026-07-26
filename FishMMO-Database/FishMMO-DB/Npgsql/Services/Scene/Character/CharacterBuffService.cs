@@ -134,8 +134,8 @@ namespace FishMMO.Database.Npgsql.Services
 						{{0}}::bigint[],
 						{{1}}::integer[],
 						{{2}}::bigint[],
-						{{3}}::real[],
-						{{4}}::real[],
+						{{3}}::double precision[],
+						{{4}}::double precision[],
 						{{5}}::integer[],
 						{{6}}::integer[]
 					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count)

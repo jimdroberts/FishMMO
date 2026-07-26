@@ -53,7 +53,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string email, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
-					.FirstOrDefault(a => a.Email.ToLower() == email.ToLower()));
+					.FirstOrDefault(a => a.Email != null && a.Email.ToLower() == email.ToLower()));
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -77,7 +77,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string email, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
-					.Where(a => a.Email.ToLower() == email.ToLower())
+					.Where(a => a.Email != null && a.Email.ToLower() == email.ToLower())
 					.Select(a => (DateTime?)a.LastLogin)
 					.FirstOrDefault());
 #pragma warning restore CS8619
