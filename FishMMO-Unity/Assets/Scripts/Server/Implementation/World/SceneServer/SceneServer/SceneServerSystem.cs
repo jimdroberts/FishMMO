@@ -736,7 +736,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// If the load was unsuccessful, args.LoadedScenes will be empty.
 			if (args.LoadedScenes == null || args.LoadedScenes.Length < 1)
 			{
-				Log.Debug("SceneServerSystem", $"Failed to load Database Scene[{sceneData.ID}].");
+				Log.Warning("SceneServerSystem", $"Failed to load Database Scene[{sceneData.ID}] name={sceneData.SceneName} (LoadedScenes empty).");
 				if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
 				{
 					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update: SceneID={sceneData.ID}. Firing directly.");
@@ -747,19 +747,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Scene scene = args.LoadedScenes[0];
 
-				// Process the scene by adding it to the world dictionary mappings.
-				ProcessScene(scene, sceneType, sceneData.WorldServerID);
-
-				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID))
+				try
 				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={scene.name}:{scene.handle}. Firing directly.");
-					// Fire-and-forget is safe here: SetSceneReadyAsync has its own
-					// try-catch with error logging (see method body). The task is
-					// discarded with _ = to suppress the compiler warning; any DB
-					// or network failure will be logged internally without crashing
-					// the scene-load callback.
-					_ = SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle);
+					// Process the scene by adding it to the world dictionary mappings.
+					// ObjectSpawner/network init may log warnings for missing client-only
+					// assets, but must not prevent Ready registration.
+					ProcessScene(scene, sceneType, sceneData.WorldServerID);
+
+					Log.Info("SceneServerSystem",
+						$"Scene load OK {sceneType} '{scene.name}' handle={scene.handle} " +
+						$"dbId={sceneData.ID} world={sceneData.WorldServerID} — setting Ready.");
+					if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID))
+					{
+						Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={scene.name}:{scene.handle}. Firing directly.");
+						// Fire-and-forget is safe here: SetSceneReadyAsync has its own
+						// try-catch with error logging (see method body). The task is
+						// discarded with _ = to suppress the compiler warning; any DB
+						// or network failure will be logged internally without crashing
+						// the scene-load callback.
+						_ = SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle);
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Error("SceneServerSystem",
+						$"ProcessScene failed for '{scene.name}' handle={scene.handle} dbId={sceneData.ID}: {ex}");
+					if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
+					{
+						_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
+					}
 				}
 			}
 		}
@@ -819,6 +835,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("SceneServerSystem", $"SetSceneReadyAsync DB error (SceneServerID={sceneServerId}, Scene={sceneName}:{sceneHandle}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
+				else
+				{
+					// scene_status = 2 (Ready) — World can now hand clients into this instance.
+					await Log.Info("SceneServerSystem",
+						$"Scene Ready: '{sceneName}' handle={sceneHandle} sceneServer={sceneServerId} world={worldServerId}");
 				}
 			}
 			catch (Exception ex)

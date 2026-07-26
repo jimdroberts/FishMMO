@@ -1,6 +1,6 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using FishNet.Object;
-using System;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
@@ -42,6 +42,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Validates the spawnable settings, ensuring the network object is spawnable and calculates YOffset from its collider.
+		/// Safe on dedicated servers where renderers/shaders may be stripped — never throws.
 		/// </summary>
 		public virtual void OnValidate()
 		{
@@ -50,25 +51,37 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Ensure the network object is marked as spawnable.
-			if (!NetworkObject.GetIsSpawnable())
+			try
 			{
-				Log.Error("SpawnableSettings", $"{NetworkObject.name} is not spawnable. Mark it as spawnable and re-assign the object.");
-				NetworkObject = null;
-				return;
-			}
-
-			// Get the collider and calculate YOffset for proper placement.
-			Collider collider = NetworkObject.GetComponent<Collider>();
-			if (collider != null)
-			{
-				collider.TryGetDimensions(out float height, out float radius);
-				YOffset = height;
-				// If the collider is a sphere, use its radius for YOffset.
-				if (collider is SphereCollider)
+				// Ensure the network object is marked as spawnable.
+				if (!NetworkObject.GetIsSpawnable())
 				{
-					YOffset = radius;
+					Log.Error("SpawnableSettings", $"{NetworkObject.name} is not spawnable. Mark it as spawnable and re-assign the object.");
+					NetworkObject = null;
+					return;
 				}
+
+				// Get the collider and calculate YOffset for proper placement.
+				// Collider-only: no materials/shaders (safe under Dedicated Server Optimizations).
+				Collider collider = NetworkObject.GetComponent<Collider>();
+				if (collider != null)
+				{
+					collider.TryGetDimensions(out float height, out float radius);
+					YOffset = height;
+					// If the collider is a sphere, use its radius for YOffset.
+					if (collider is SphereCollider)
+					{
+						YOffset = radius;
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				// Dedicated server builds can surface unexpected missing-type/prefab issues;
+				// clear the ref so ObjectSpawner can sanitize and continue scene Ready.
+				Log.Warning("SpawnableSettings",
+					$"OnValidate failed for '{NetworkObject?.name}': {ex.Message}. Clearing NetworkObject.");
+				NetworkObject = null;
 			}
 		}
 
