@@ -86,6 +86,31 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				// Open-world: if a Pending or Loading row already exists for this world+name,
+				// reuse it instead of inserting another (World spam-enqueue protection).
+				// Instanced scenes keep characterId and always create a new row.
+				if (characterId <= 0)
+				{
+					int pending = (int)SceneStatus.Pending;
+					int loading = (int)SceneStatus.Loading;
+					var inFlight = await dbContext.Scenes
+						.AsNoTracking()
+						.Where(s =>
+							s.WorldServerID == worldServerId &&
+							s.SceneName == sceneName &&
+							s.SceneType == (int)sceneType &&
+							(s.SceneStatus == pending || s.SceneStatus == loading) &&
+							s.CharacterID <= 0)
+						.OrderBy(s => s.TimeCreated)
+						.ThenBy(s => s.ID)
+						.FirstOrDefaultAsync(cancellationToken)
+						.ConfigureAwait(false);
+					if (inFlight != null)
+					{
+						return inFlight;
+					}
+				}
+
 				var entity = new SceneEntity
 				{
 					WorldServerID = worldServerId,
@@ -409,10 +434,30 @@ var claimSql = $@"WITH claimable_scene AS (
 				return DatabaseResult<IReadOnlyList<SceneData>>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
 			}
 
+			// maxClients must be at least 1 or CharacterCount < maxClients never matches empty scenes.
+			if (maxClients < 1)
+			{
+				maxClients = 1;
+			}
+
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await fetchAvailableQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, cancellationToken).ConfigureAwait(false);
+				// Prefer direct LINQ over compiled query so filters (server_id/handle) stay explicit
+				// and matchmaking cannot silently miss Ready rows due to compile/param edge cases.
+				var scenes = await dbContext.Scenes
+					.AsNoTracking()
+					.Where(s =>
+						s.WorldServerID == worldServerId &&
+						s.SceneName == sceneName &&
+						s.SceneStatus == readyStatus &&
+						s.CharacterCount < maxClients &&
+						s.SceneServerID > 0 &&
+						s.SceneHandle != 0)
+					.OrderBy(s => s.CharacterCount)
+					.ThenBy(s => s.TimeCreated)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);

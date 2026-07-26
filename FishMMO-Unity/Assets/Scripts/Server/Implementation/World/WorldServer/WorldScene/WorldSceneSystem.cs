@@ -430,13 +430,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			int maxClientsPerInstance = GetMaxClients(sceneName);
 			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
 
-			// Fetch available scene instances (cache-aware)
-			var availableScenes = await FetchAvailableScenesAsync(sceneService, runtimeData, worldServerID, sceneName, maxClientsPerInstance);
+			// Always hit DB for matchmaking (do not use stale empty cache while clients wait).
+			// Force-refresh so a Ready row that appeared after the last empty poll is visible.
+			var availableScenes = await FetchAvailableScenesAsync(
+				sceneService, runtimeData, worldServerID, sceneName, maxClientsPerInstance, forceRefresh: true);
+
 			if (availableScenes == null || availableScenes.Count < 1)
 			{
+				await Log.Debug("WorldSceneSystem",
+					$"No Ready capacity for '{sceneName}' world={worldServerID} maxClients={maxClientsPerInstance} — enqueue if needed.");
 				await CleanupAndEnqueueNewSceneIfNeededAsync(sceneName, worldServerID, sceneService);
 				return;
 			}
+
+			await Log.Info("WorldSceneSystem",
+				$"Found {availableScenes.Count} Ready instance(s) for '{sceneName}' world={worldServerID} " +
+				$"(first handle={availableScenes[0].SceneHandle} server={availableScenes[0].SceneServerID} chars={availableScenes[0].CharacterCount}).");
 
 			// Resolve all scene server addresses upfront and build a capacity tracker.
 			// instanceHandles preserves insertion order for deterministic fallback assignment.
@@ -452,15 +461,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			foreach (var sceneData in availableScenes)
 			{
 				long serverId = sceneData.SceneServerID;
+				if (serverId <= 0)
+				{
+					continue;
+				}
 
 				// Try cache first
 				if (serverTtl > TimeSpan.Zero &&
 					runtimeData.SceneServerAddressCache.TryGet(serverId, serverTtl, out var cachedAddr))
 				{
 					int handle = sceneData.SceneHandle;
+					// Skip duplicate handles (keep first) so dict capacity stays consistent.
+					if (serverInfoByHandle.ContainsKey(handle))
+					{
+						continue;
+					}
 					instanceHandles.Add(handle);
 					serverInfoByHandle[handle] = cachedAddr;
-					capacityByHandle[handle] = maxClientsPerInstance - sceneData.CharacterCount;
+					capacityByHandle[handle] = Math.Max(0, maxClientsPerInstance - sceneData.CharacterCount);
 					continue;
 				}
 
@@ -481,6 +499,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					foreach (var serverData in batchResult.Data)
 					{
+						if (serverData.Port <= 0 || serverData.Port > ushort.MaxValue)
+						{
+							await Log.Warning("WorldSceneSystem",
+								$"SceneServer id={serverData.ID} has invalid port={serverData.Port}.");
+							continue;
+						}
 						ushort serverPort = (ushort)serverData.Port;
 						if (serverTtl > TimeSpan.Zero)
 						{
@@ -492,9 +516,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 							foreach (var sd in scenes)
 							{
 								int handle = sd.SceneHandle;
+								if (serverInfoByHandle.ContainsKey(handle))
+								{
+									continue;
+								}
 								instanceHandles.Add(handle);
 								serverInfoByHandle[handle] = serverPort;
-								capacityByHandle[handle] = maxClientsPerInstance - sd.CharacterCount;
+								capacityByHandle[handle] = Math.Max(0, maxClientsPerInstance - sd.CharacterCount);
 							}
 						}
 					}
@@ -506,12 +534,55 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					{
 						runtimeData.SceneServerAddressCache?.Invalidate(serverId);
 					}
+					await Log.Warning("WorldSceneSystem",
+						$"FetchSceneServersByIDsAsync failed for {uncachedServerIds.Count} id(s): " +
+						$"{batchResult.ErrorCode} - {batchResult.ErrorMessage}");
+				}
+
+				// Fallback: individual fetch for any server id still unresolved.
+				foreach (long serverId in uncachedServerIds)
+				{
+					if (serverTtl > TimeSpan.Zero &&
+						runtimeData.SceneServerAddressCache.TryGet(serverId, serverTtl, out _))
+					{
+						continue;
+					}
+					var one = await sceneServerService.FetchAsync(serverId);
+					if (!one.IsSuccess || one.Data.Port <= 0 || one.Data.Port > ushort.MaxValue)
+					{
+						await Log.Warning("WorldSceneSystem",
+							$"SceneServer FetchAsync failed id={serverId}: {one.ErrorCode} - {one.ErrorMessage}");
+						continue;
+					}
+					ushort port = (ushort)one.Data.Port;
+					if (serverTtl > TimeSpan.Zero)
+					{
+						runtimeData.SceneServerAddressCache.Set(serverId, port);
+					}
+					if (scenesByServerId.TryGetValue(serverId, out var scenes))
+					{
+						foreach (var sd in scenes)
+						{
+							int handle = sd.SceneHandle;
+							if (serverInfoByHandle.ContainsKey(handle))
+							{
+								continue;
+							}
+							instanceHandles.Add(handle);
+							serverInfoByHandle[handle] = port;
+							capacityByHandle[handle] = Math.Max(0, maxClientsPerInstance - sd.CharacterCount);
+						}
+					}
 				}
 			}
 
 			if (instanceHandles.Count < 1)
 			{
-				await CleanupAndEnqueueNewSceneIfNeededAsync(sceneName, worldServerID, sceneService);
+				// Ready rows exist but we cannot resolve scene-server ports — do NOT spam-enqueue
+				// more OpenWorld instances. Leave waiters queued for the next cycle.
+				await Log.Error("WorldSceneSystem",
+					$"Ready scenes exist for '{sceneName}' (count={availableScenes.Count}) but no SceneServer " +
+					$"ports resolved — not enqueuing another load. Check scene_servers for ids on Ready rows.");
 				return;
 			}
 
@@ -585,11 +656,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// before disconnect so the world server routes back to the chosen channel.
 			// Preferred assignments never need a DB update (assignedHandle == charData.SceneHandle).
 			var unassigned = new List<(NetworkConnection conn, string accountName, CharacterData charData)>();
+			int assignedCount = 0;
 			for (int i = 0; i < waitingConnections.Count; ++i)
 			{
 				var (conn, accountName) = waitingConnections[i];
 				if (!charDataByConn.TryGetValue(conn, out var charData))
 				{
+					// Character row missing / not selected — re-queue so we do not drop the client.
+					await Log.Warning("WorldSceneSystem",
+						$"No selected character data for account={accountName} conn={conn.ClientId} — re-queuing.");
+					TryEnqueueMainThread(() =>
+					{
+						if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
+						{
+							AddToQueue(conn, sceneName, md.WaitingOpenWorldConnections, md.OpenWorldConnectionScenes);
+						}
+					});
 					continue;
 				}
 
@@ -612,6 +694,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					}
 
 					BroadcastSceneConnect(conn, prefServer);
+					assignedCount++;
 				}
 				else
 				{
@@ -633,6 +716,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					}
 				}
 
+				if (capacityHeap.Count < 1)
+				{
+					await Log.Warning("WorldSceneSystem",
+						$"Ready instances for '{sceneName}' have zero remaining capacity " +
+						$"(handles={instanceHandles.Count}) — re-queuing {unassigned.Count} waiter(s) and considering enqueue.");
+				}
+
 				for (int i = 0; i < unassigned.Count; ++i)
 				{
 					var (conn, accountName, charData) = unassigned[i];
@@ -651,21 +741,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						continue;
 					}
 
-					// Fallback handles always differ from the character's saved handle
-					if (charData.SceneHandle != assignedHandle)
+					// Always persist assigned handle so scene server can validate entry.
+					DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, sceneName, assignedHandle);
+					if (!updateResult.IsSuccess)
 					{
-						DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, sceneName, assignedHandle);
-						if (!updateResult.IsSuccess)
-						{
-							await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-						}
+						await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
 					}
 
+					await Log.Info("WorldSceneSystem",
+						$"Assign open-world conn={conn.ClientId} account={accountName} char={charData.ID} " +
+						$"scene='{sceneName}' handle={assignedHandle} port={serverPort}");
 					BroadcastSceneConnect(conn, serverPort);
+					assignedCount++;
 				}
 			}
 
-			// Clean up empty queue entries and request a new scene if connections are still waiting
+			await Log.Info("WorldSceneSystem",
+				$"Open-world routing done scene='{sceneName}': waiters={waitingConnections.Count} assigned={assignedCount} " +
+				$"readyInstances={instanceHandles.Count}");
+
+			// Only enqueue another load when waiters remain AND existing Ready instances had no capacity.
+			// (EnqueueAsync is also idempotent for Pending/Loading open-world rows.)
 			await CleanupAndEnqueueNewSceneIfNeededAsync(sceneName, worldServerID, sceneService);
 		}
 
@@ -1386,24 +1482,43 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Falls through to <c>ISceneService.FetchAvailableAsync</c> on cache miss or when
 		/// caching is disabled (<see cref="sceneInstanceCacheTtlSeconds"/> = 0).
 		/// </summary>
-		/// <returns>The list of available <see cref="SceneData"/>, or <c>null</c> on failure.</returns>
+		/// <param name="forceRefresh">When true, bypasses the available-scene cache (used while waiters are present).</param>
+		/// <returns>The list of available <see cref="SceneData"/>, or <c>null</c> on failure / empty.</returns>
 		private async Task<IReadOnlyList<SceneData>> FetchAvailableScenesAsync(
 			ISceneService sceneService,
 			WorldSceneSystemRuntimeData runtimeData,
 			long worldServerID,
 			string sceneName,
-			int maxClients)
+			int maxClients,
+			bool forceRefresh = false)
 		{
 			TimeSpan ttl = TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds);
-			if (ttl > TimeSpan.Zero &&
-				runtimeData.AvailableSceneCache.TryGet(sceneName, ttl, out var cached))
+			if (!forceRefresh &&
+				ttl > TimeSpan.Zero &&
+				runtimeData.AvailableSceneCache.TryGet(sceneName, ttl, out var cached) &&
+				cached != null &&
+				cached.Count > 0)
 			{
 				return cached;
 			}
 
-			var result = await sceneService.FetchAvailableAsync(worldServerID, sceneName, maxClients);
-			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			if (forceRefresh)
 			{
+				runtimeData.AvailableSceneCache?.Invalidate(sceneName);
+			}
+
+			var result = await sceneService.FetchAvailableAsync(worldServerID, sceneName, maxClients);
+			if (!result.IsSuccess)
+			{
+				await Log.Warning("WorldSceneSystem",
+					$"FetchAvailableAsync failed scene='{sceneName}' world={worldServerID}: " +
+					$"{result.ErrorCode} - {result.ErrorMessage}");
+				return null;
+			}
+
+			if (result.Data == null || result.Data.Count < 1)
+			{
+				// Never cache empty results — Ready rows often appear seconds later.
 				return null;
 			}
 
