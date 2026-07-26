@@ -48,6 +48,19 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
+		/// <summary>
+		/// Serializes int IDs to CSV text — must match EF ValueConverter (string.Join(",", list)).
+		/// Column type is text NOT NULL; empty list = "". Do not bind as integer[] / integer[][].
+		/// </summary>
+		private static string FormatIntListAsCsv(IList<int> values)
+		{
+			if (values == null || values.Count == 0)
+			{
+				return string.Empty;
+			}
+			return string.Join(",", values);
+		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> CountAsync(long characterId, CancellationToken cancellationToken = default)
 		{
@@ -92,7 +105,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var now = DateTime.UtcNow;
-				var abilityEvents = abilityData.AbilityEvents?.ToArray() ?? Array.Empty<int>();
+				var abilityEventsCsv = FormatIntListAsCsv(abilityData.AbilityEvents);
 				var sql = $@"
 					WITH upserted AS (
 						INSERT INTO {TableName}
@@ -115,7 +128,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { abilityData.CharacterID, abilityData.TemplateID, abilityData.Version, abilityEvents, abilityData.Cooldown, now },
+					new object[] { abilityData.CharacterID, abilityData.TemplateID, abilityData.Version, abilityEventsCsv, abilityData.Cooldown, now },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -246,8 +259,9 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeExistingItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeExistingItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeExistingItems.Select(a => a.Version).ToArray();
+					// ability_events is text CSV (EF ValueConverter), not integer[].
 					var abilityEventsArray = activeExistingItems
-						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
+						.Select(a => FormatIntListAsCsv(a.AbilityEvents))
 						.ToArray();
 					var cooldownArray = activeExistingItems.Select(a => a.Cooldown).ToArray();
 
@@ -266,7 +280,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{1}}::bigint[],
 							{{2}}::integer[],
 							{{3}}::bigint[],
-							{{4}}::integer[][],
+							{{4}}::text[],
 							{{5}}::real[]
 						) AS u(id, character_id, template_id, version, ability_events, cooldown)
 						WHERE t.id = u.id
@@ -286,8 +300,9 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeNewItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeNewItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeNewItems.Select(a => a.Version).ToArray();
+					// ability_events is text CSV (EF ValueConverter), not integer[].
 					var abilityEventsArray = activeNewItems
-						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
+						.Select(a => FormatIntListAsCsv(a.AbilityEvents))
 						.ToArray();
 					var cooldownArray = activeNewItems.Select(a => a.Cooldown).ToArray();
 
@@ -307,7 +322,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::integer[][],
+							{{3}}::text[],
 							{{4}}::real[]
 						) AS u(character_id, template_id, version, ability_events, cooldown)
 						ON CONFLICT (character_id, template_id)

@@ -561,18 +561,13 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_SEND_STATE_CHANGED:
     {
-        /* Free the wrapper struct only if msquic claimed ownership.
-         * The owned_by_msquic flag prevents double-free if msquic were
-         * to fire this callback synchronously from within DatagramSend. */
+        /* Exactly-once free of send context on FINAL (CAS inside helper). */
         void* ctx = event->DATAGRAM_SEND_STATE_CHANGED.ClientContext;
         if (ctx &&
             QUIC_DATAGRAM_SEND_STATE_IS_FINAL(
                 event->DATAGRAM_SEND_STATE_CHANGED.State)) {
-            wt_dgram_send_ctx_t* send_ctx = (wt_dgram_send_ctx_t*)ctx;
-            if (send_ctx->owned_by_msquic) {
-                free(send_ctx);
-            }
             event->DATAGRAM_SEND_STATE_CHANGED.ClientContext = NULL;
+            wt_dgram_send_ctx_free(ctx, "datagram_final");
         }
         break;
     }

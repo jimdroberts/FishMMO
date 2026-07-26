@@ -92,6 +92,14 @@ typedef struct wt_stream_manager_s {
     bool                use_wt_stream_header;
     uint64_t            wt_session_id;  /* CONNECT stream ID when framing on */
 
+    /* True for server-side sessions. Controls stream reuse policy in
+     * wt_stream_manager_send:
+     *   server: prefer peer-initiated (client-opened) streams for replies
+     *   client: only reuse locally-opened streams; never write on
+     *           server-initiated streams (those often hit INVALID_STATE
+     *           after the peer FINs and PEER_SEND_SHUTDOWN). */
+    bool                is_server;
+
     void (*on_stream_data)(void* ctx, wt_connection_id_t conn_id,
                            wt_stream_id_t stream_id,
                            const uint8_t* data, int32_t length);

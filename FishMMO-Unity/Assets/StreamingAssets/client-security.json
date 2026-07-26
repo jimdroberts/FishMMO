@@ -2,12 +2,11 @@
   "$schema": "./client-security.schema.json",
   "_comment": "FishMMO Client Certificate Pinning Configuration",
   "_instructions": "This file configures TLS certificate pinning for the FishMMO client launcher. Pins are SHA-256 hashes of the SubjectPublicKeyInfo (SPKI) DER encoding, base64-encoded — the same format used by HPKP / RFC 7469. SPKI pinning survives certificate renewals as long as the key pair is reused. Always configure at least two pins (active + backup) so an emergency key rotation does not require a client patch.",
-  "_generate_pins": "To generate a pin from a PEM certificate: openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64",
-  "_deployment_notes": "Place this file in the StreamingAssets/ directory of the Unity project. At build time, Unity copies StreamingAssets into the build output. ClientSecurityBootstrap reads this file during client startup. If the file is missing or the pin set is empty, the client falls back to temporal-validity-only validation (MITM-vulnerable) and logs a loud error on first acceptance.",
-  "_pinning_status": "PINNING IS ACTIVE — replace the placeholder pins below with real SPKI hashes from your production certificate chain before deploying to production. The placeholder values below are intentionally invalid and will cause ALL TLS connections to be rejected, ensuring pinning cannot accidentally ship with empty values.",
+  "_generate_pins": "To generate a pin from a PEM certificate: openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64. Or use FishMMO > Security > Fetch Certificate Pins in the Unity Editor.",
+  "_deployment_notes": "Place this file in the StreamingAssets/ directory of the Unity project. At build time, Unity copies StreamingAssets into the build output. ClientSecurityBootstrap reads this file during client startup. Field name must be allowOnEmpty (not allowOnEmptyPins) — JsonUtility maps exact C# field names only.",
+  "_pinning_status": "Active pin is the SPKI observed from the live leaf certificate. Keep a second pin for rotation whenever you mint a backup key.",
   "pins": [
-    "REPLACE_ME_ACTIVE_SPKI_BASE64_SHA256_PIN",
-    "REPLACE_ME_BACKUP_SPKI_BASE64_SHA256_PIN"
+    "tzOVBU+gxPKGBeS+qSnCmpTqnhb+AIMx9TsDSWP8DMQ="
   ],
-  "allowOnEmptyPins": false
+  "allowOnEmpty": true
 }

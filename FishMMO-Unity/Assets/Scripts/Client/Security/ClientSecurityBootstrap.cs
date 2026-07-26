@@ -178,13 +178,9 @@ namespace FishMMO.Client.Security
 				if (request.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
 				{
 					string json = request.downloadHandler.text;
-					var parsed = JsonUtility.FromJson<PinConfigPayload>(json);
-					if (parsed != null)
+					if (TryParsePinConfig(json, out var pins, out var allowOnEmpty))
 					{
-						var pins = new List<string>();
-						if (parsed.pins != null)
-							pins.AddRange(parsed.pins);
-						ClientCertificatePinning.Configure(pins, parsed.allowOnEmpty);
+						ClientCertificatePinning.Configure(pins, allowOnEmpty);
 						Log.Debug(logChannel,
 							$"Loaded {pins.Count} pin(s) from StreamingAssets/{configFileName}.");
 						yield break;
@@ -217,6 +213,24 @@ namespace FishMMO.Client.Security
 			}
 
 			string json = File.ReadAllText(path);
+			if (!TryParsePinConfig(json, out pins, out allowOnEmpty))
+			{
+				return false;
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Parses <c>client-security.json</c>, drops placeholder / blank pins, and
+		/// resolves <c>allowOnEmpty</c>. Editor / development builds force
+		/// allow-on-empty when no real pins remain so Play Mode is not bricked by
+		/// unreplaced <c>REPLACE_ME_*</c> templates.
+		/// </summary>
+		private static bool TryParsePinConfig(string json, out List<string> pins, out bool allowOnEmpty)
+		{
+			pins = null;
+			allowOnEmpty = DefaultAllowOnEmpty;
+
 			var parsed = JsonUtility.FromJson<PinConfigPayload>(json);
 			if (parsed == null)
 			{
@@ -224,19 +238,69 @@ namespace FishMMO.Client.Security
 			}
 
 			pins = new List<string>();
+			int rawCount = 0;
+			int droppedPlaceholders = 0;
 			if (parsed.pins != null)
 			{
-				pins.AddRange(parsed.pins);
+				foreach (string raw in parsed.pins)
+				{
+					if (string.IsNullOrWhiteSpace(raw))
+					{
+						continue;
+					}
+
+					rawCount++;
+					string pin = raw.Trim();
+					if (IsPlaceholderPin(pin))
+					{
+						droppedPlaceholders++;
+						continue;
+					}
+
+					pins.Add(pin);
+				}
 			}
-			allowOnEmpty = parsed.allowOnEmpty;
+
+			// JsonUtility maps exact field names only. Older templates used
+			// allowOnEmptyPins; honour either so config cannot silently force-fail.
+			allowOnEmpty = parsed.allowOnEmpty || parsed.allowOnEmptyPins;
+
+			if (droppedPlaceholders > 0)
+			{
+				Log.Warning(logChannel,
+					$"Ignored {droppedPlaceholders} placeholder pin(s) in {configFileName} " +
+					$"(raw entries={rawCount}, usable={pins.Count}). " +
+					"Replace REPLACE_ME_* values with real SPKI hashes (FishMMO > Security > Fetch Certificate Pins).");
+			}
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+			// Unreplaced templates used to count as "configured pins" and reject every
+			// HTTPS call in the Editor. If nothing usable remains, fall back to the
+			// editor-friendly empty-pin policy instead of pin-mismatch fail-closed.
+			if (pins.Count == 0)
+			{
+				allowOnEmpty = true;
+			}
+#endif
 			return true;
+		}
+
+		/// <summary>
+		/// True for intentionally invalid template pins shipped in the repo.
+		/// </summary>
+		private static bool IsPlaceholderPin(string pin)
+		{
+			return pin.StartsWith("REPLACE_ME", StringComparison.OrdinalIgnoreCase);
 		}
 
 		[Serializable]
 		private class PinConfigPayload
 		{
 			public string[] pins;
+			/// <summary>Canonical field written by CertificatePinTool / docs.</summary>
 			public bool allowOnEmpty;
+			/// <summary>Legacy / docs field name; treated the same as <see cref="allowOnEmpty"/>.</summary>
+			public bool allowOnEmptyPins;
 		}
 
 		/// <summary>

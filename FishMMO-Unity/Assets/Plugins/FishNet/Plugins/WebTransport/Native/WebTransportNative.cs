@@ -226,7 +226,32 @@ namespace FishNet.Transporting.WebTransport.Native
 			if (initialized) { initGuard = 0; return true; }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
-			int result = wt_init();
+			int result;
+			try
+			{
+				result = wt_init();
+			}
+			catch (DllNotFoundException ex)
+			{
+				// Windows/macOS native binaries are not checked into the repo.
+				// Editor Play Mode needs Plugins/windows_x86_64/fishmmo_webtransport.dll
+				// (and usually msquic.dll next to it). WebGL does not use this path.
+				UnityEngine.Debug.LogError(
+					"[WebTransport] Native library 'fishmmo_webtransport' was not found. " +
+					"Unity Editor and standalone clients need a platform build of FishMMO-WebTransport.\n" +
+					"  Windows:  cd FishMMO-WebTransport && powershell -File build_windows.ps1\n" +
+					"  Output:   Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64/\n" +
+					"  Details:  " + ex.Message);
+				initGuard = 0;
+				return false;
+			}
+			catch (Exception ex)
+			{
+				UnityEngine.Debug.LogError($"[WebTransport] wt_init() threw: {ex.GetType().Name}: {ex.Message}");
+				initGuard = 0;
+				return false;
+			}
+
 			if (result != 0)
 			{
 				UnityEngine.Debug.LogError($"[WebTransport] wt_init() failed: {ErrorString((WTError)result)}");

@@ -80,6 +80,19 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
+		/// <summary>
+		/// Serializes int IDs to CSV text — must match EF ValueConverter (string.Join(",", list)).
+		/// Column type is text NOT NULL; empty list = "". Do not bind as integer[] / integer[][].
+		/// </summary>
+		private static string FormatIntListAsCsv(IList<int> values)
+		{
+			if (values == null || values.Count == 0)
+			{
+				return string.Empty;
+			}
+			return string.Join(",", values);
+		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistAsync(CharacterPetData petData, CancellationToken cancellationToken = default)
 		{
@@ -107,7 +120,8 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var abilities = petData.Abilities?.ToArray() ?? Array.Empty<int>();
+				// abilities is text CSV (EF ValueConverter), not integer[].
+				var abilitiesCsv = FormatIntListAsCsv(petData.Abilities);
 				var characterTableName = dbContext.GetTableName<CharacterEntity>();
 				var sql = $@"
 					WITH active_character AS (
@@ -156,7 +170,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return await ExecuteScalarIntAsync(
 					dbContext,
 					sql,
-					new object[] { petData.CharacterID, petData.TemplateID, petData.Version, abilities, petData.Spawned, now, petData.ID },
+					new object[] { petData.CharacterID, petData.TemplateID, petData.Version, abilitiesCsv, petData.Spawned, now, petData.ID },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -300,8 +314,9 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeUpdates.Select(p => p.CharacterID).ToArray();
 					var templateIdArray = activeUpdates.Select(p => p.TemplateID).ToArray();
 					var versionArray = activeUpdates.Select(p => p.Version).ToArray();
+					// abilities is text CSV (EF ValueConverter), not integer[].
 					var abilitiesArray = activeUpdates
-						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
+						.Select(p => FormatIntListAsCsv(p.Abilities))
 						.ToArray();
 					var spawnedArray = activeUpdates.Select(p => p.Spawned).ToArray();
 
@@ -320,7 +335,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{1}}::bigint[],
 							{{2}}::integer[],
 							{{3}}::bigint[],
-							{{4}}::integer[][],
+							{{4}}::text[],
 							{{5}}::boolean[]
 						) AS u(id, character_id, template_id, version, abilities, spawned)
 						WHERE t.id = u.id
@@ -340,8 +355,9 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeInserts.Select(p => p.CharacterID).ToArray();
 					var templateIdArray = activeInserts.Select(p => p.TemplateID).ToArray();
 					var versionArray = activeInserts.Select(p => p.Version).ToArray();
+					// abilities is text CSV (EF ValueConverter), not integer[].
 					var abilitiesArray = activeInserts
-						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
+						.Select(p => FormatIntListAsCsv(p.Abilities))
 						.ToArray();
 					var spawnedArray = activeInserts.Select(p => p.Spawned).ToArray();
 
@@ -361,7 +377,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::integer[][],
+							{{3}}::text[],
 							{{4}}::boolean[]
 						) AS u(character_id, template_id, version, abilities, spawned)
 						ON CONFLICT (character_id)

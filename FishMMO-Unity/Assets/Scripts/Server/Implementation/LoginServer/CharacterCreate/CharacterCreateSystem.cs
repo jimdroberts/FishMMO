@@ -210,6 +210,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 				!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
 				!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 			{
+				string missing =
+					registry == null ? "ServiceRegistry is null (Server.Database not ready)" :
+					!registry.TryGet<ICharacterService>(out _) ? "ICharacterService" :
+					!registry.TryGet<ICharacterFactionService>(out _) ? "ICharacterFactionService" :
+					!registry.TryGet<ICharacterAbilityService>(out _) ? "ICharacterAbilityService" :
+					!registry.TryGet<ICharacterInventoryService>(out _) ? "ICharacterInventoryService" :
+					!registry.TryGet<ICharacterEquipmentService>(out _) ? "ICharacterEquipmentService" :
+					!registry.TryGet<ICharacterAttributeService>(out _) ? "ICharacterAttributeService" :
+					"IUnitOfWorkService";
+				Log.Error("CharacterCreateSystem",
+					$"Character create rejected with Error: required DB service missing or unavailable " +
+					$"({missing}). conn={conn.ClientId} account='{accountName}' name='{msg.CharacterName}'.");
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
 					Result = CharacterCreateResult.Error,
@@ -315,8 +327,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 			);
 
 			// --- Dispatch DTO construction + DB work to async ---
-			if (!TryBeginCreateRequest(conn))
+			if (!TryBeginCreateRequest(conn, out string beginCreateFailureReason))
 			{
+				Log.Error("CharacterCreateSystem",
+					$"Character create rejected with Error: could not begin create request " +
+					$"({beginCreateFailureReason}). conn={conn.ClientId} account='{accountName}' " +
+					$"name='{msg.CharacterName}' race='{raceTemplateName}' " +
+					$"scene='{msg.SceneName}' spawner='{msg.SpawnerName}'.");
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
 					Result = CharacterCreateResult.Error,
@@ -335,6 +352,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 				unitOfWorkService), conn.ClientId))
 			{
 				EndCreateRequest(conn);
+				Log.Error("CharacterCreateSystem",
+					$"Character create rejected with Error: failed to enqueue async create work " +
+					$"(async worker queue full or unavailable). conn={conn.ClientId} " +
+					$"account='{accountName}' name='{msg.CharacterName}' race='{raceTemplateName}' " +
+					$"scene='{msg.SceneName}' spawner='{msg.SpawnerName}'.");
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
 					Result = CharacterCreateResult.Error,
@@ -1003,13 +1025,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <returns><c>true</c> if the in-flight slot was acquired; otherwise <c>false</c>.</returns>
 		private bool TryBeginCreateRequest(NetworkConnection conn)
 		{
+			return TryBeginCreateRequest(conn, out _);
+		}
+
+		/// <summary>
+		/// Attempts to claim the per-connection create slot and reports why it failed when denied.
+		/// </summary>
+		private bool TryBeginCreateRequest(NetworkConnection conn, out string failureReason)
+		{
+			failureReason = null;
 			if (conn == null)
 			{
+				failureReason = "connection is null";
 				return false;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
+				failureReason = "CharacterCreateSystemRuntimeData not found in DataContainerRegistry";
 				return false;
 			}
 
@@ -1017,10 +1050,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 			DateTime nowUtc = DateTime.UtcNow;
 			if (runtimeData.NextAllowedCreateUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
 			{
+				double remainingMs = (nextAllowed - nowUtc).TotalMilliseconds;
+				failureReason =
+					$"create cooldown active ({createRequestCooldownMilliseconds}ms policy; " +
+					$"~{Math.Max(0, remainingMs):F0}ms remaining)";
 				return false;
 			}
 
-			return runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0);
+			if (!runtimeData.InFlightRequests.TryAdd(conn.ClientId, 0))
+			{
+				failureReason = "create request already in-flight for this connection";
+				return false;
+			}
+
+			return true;
 		}
 
 		/// <summary>

@@ -385,15 +385,29 @@ cd FishMMO-WebTransport
 
 #### Windows (Native Build)
 
-**Prerequisites:**
-- Visual Studio 2022 with C++ workload
-- CMake 3.20+ (`winget install Kitware.CMake`)
-- OpenSSL (`vcpkg install openssl:x64-windows`)
+**Default (fast):** Schannel + prebuilt msquic NuGet — only compiles the wrapper
+sources. Prefer this for day-to-day iteration.
 
-**Build:**
+**Prerequisites (default):**
+- Visual Studio 2022+ with C++ desktop workload
+
+**Build (recommended):**
 ```powershell
 cd FishMMO-WebTransport
 .\build_windows.ps1
+# or incremental:
+.\rebuild_only.bat
+```
+
+**Static msquic (slow first build)** — full CMake + quictls; use when you need a
+fully static link. Prefer Ninja over NMake:
+
+```powershell
+winget install Kitware.CMake
+winget install Ninja-build.Ninja
+cd FishMMO-WebTransport
+.\build_windows.ps1 -Static -Clean   # first time / leave old NMake tree
+.\build_windows.ps1 -Static          # incremental static rebuild
 ```
 
 **Output:** `fishmmo_webtransport.dll` + `msquic.dll` in `.../Plugins/windows_x86_64/`

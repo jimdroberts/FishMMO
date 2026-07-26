@@ -51,6 +51,10 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
     session->parent.server = sconn->owner;
     wt_session_wire_callbacks(session);
 
+    /* Server sessions prefer peer-initiated stream reuse for replies. */
+    if (session->stream_mgr)
+        session->stream_mgr->is_server = true;
+
     /* Browser CONNECT sessions need WEBTRANSPORT_STREAM framing on data
      * streams so Chrome associates them with the WT session. Native raw
      * clients leave use_wt_stream_header=false (default). */
@@ -896,6 +900,8 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             atomic_ptr_store(&sconn->session, session);
             session->parent_type = WT_PARENT_SERVER;
             session->parent.server = sconn->owner;
+            if (session->stream_mgr)
+                session->stream_mgr->is_server = true;
             wt_session_wire_callbacks(session);
             fire_connect(sconn);
         } else {
@@ -1326,19 +1332,13 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_SEND_STATE_CHANGED:
     {
-        /* Free the wrapper struct only if msquic claimed ownership.
-         * The owned_by_msquic flag prevents double-free if msquic were
-         * to fire this callback synchronously from within DatagramSend
-         * (which it currently does not guarantee by contract). */
+        /* Exactly-once free of send context on FINAL (CAS inside helper). */
         void* ctx = event->DATAGRAM_SEND_STATE_CHANGED.ClientContext;
         if (ctx &&
             QUIC_DATAGRAM_SEND_STATE_IS_FINAL(
                 event->DATAGRAM_SEND_STATE_CHANGED.State)) {
-            wt_dgram_send_ctx_t* send_ctx = (wt_dgram_send_ctx_t*)ctx;
-            if (send_ctx->owned_by_msquic) {
-                free(send_ctx);
-            }
             event->DATAGRAM_SEND_STATE_CHANGED.ClientContext = NULL;
+            wt_dgram_send_ctx_free(ctx, "datagram_final");
         }
         break;
     }

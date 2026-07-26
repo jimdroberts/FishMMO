@@ -117,7 +117,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>Timestamp of the last save operation (UTC).</summary>
 		public DateTime LastSaved { get; set; }
 		/// <summary>Soft delete flag.</summary>
-		public bool Deleted { get; set; }
+		public bool Deleted { get; set; } = false;
 		/// <summary>Timestamp when the character was soft-deleted (UTC), or null if not deleted.</summary>
 		public DateTime? TimeDeleted { get; set; }
 

@@ -44,7 +44,31 @@ namespace FishMMO.Client.Security.Editor
 			try
 			{
 				var parsed = JsonUtility.FromJson<PinConfigPayload>(File.ReadAllText(path));
-				return parsed?.pins != null && parsed.pins.Length >= 2;
+				if (parsed?.pins == null)
+				{
+					return false;
+				}
+
+				int usable = 0;
+				foreach (string raw in parsed.pins)
+				{
+					if (string.IsNullOrWhiteSpace(raw))
+					{
+						continue;
+					}
+
+					string pin = raw.Trim();
+					// Match ClientSecurityBootstrap.IsPlaceholderPin — template values
+					// must not satisfy the production pin gate.
+					if (pin.StartsWith("REPLACE_ME", StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
+					usable++;
+				}
+
+				return usable >= 1;
 			}
 			catch (Exception)
 			{

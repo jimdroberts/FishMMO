@@ -283,15 +283,23 @@ namespace FishMMO.Client
 			SetCreateButtonLocked(false);
 			if (msg.Result == CharacterCreateResult.Success)
 			{
+				Log.Info("UITKCharacterCreate",
+					$"Character create result=Success name='{CharacterName}' raceIndex={RaceIndex} modelIndex={ModelIndex} spawnIndex={SelectedSpawnPosition}.");
 				Hide();
 				if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect characterSelect))
 				{
 					characterSelect.Show();
 				}
 			}
-			else if (resultLabel != null)
+			else
 			{
-				resultLabel.text = msg.Result.ToString();
+				Log.Error("UITKCharacterCreate",
+					$"Character create result={msg.Result} name='{CharacterName}' raceIndex={RaceIndex} modelIndex={ModelIndex} spawnIndex={SelectedSpawnPosition}. " +
+					"See LoginServer CharacterCreateSystem logs for the server-side reason.");
+				if (resultLabel != null)
+				{
+					resultLabel.text = msg.Result.ToString();
+				}
 			}
 		}
 

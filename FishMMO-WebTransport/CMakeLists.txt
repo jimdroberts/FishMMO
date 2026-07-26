@@ -44,7 +44,33 @@ else()
 endif()
 
 # ── Find OpenSSL (required by msquic for TLS) ─────────────────
-find_package(OpenSSL REQUIRED)
+# OpenSSL 3.x/4.x Windows installs (ShiningLight) keep import libs under
+# lib/VC/x64/MD/, which stock FindOpenSSL often fails to locate. Honour
+# explicit OPENSSL_* cache vars, then fall back to find_package.
+if(OPENSSL_INCLUDE_DIR AND OPENSSL_CRYPTO_LIBRARY AND OPENSSL_SSL_LIBRARY
+	AND EXISTS "${OPENSSL_INCLUDE_DIR}"
+	AND EXISTS "${OPENSSL_CRYPTO_LIBRARY}"
+	AND EXISTS "${OPENSSL_SSL_LIBRARY}")
+	if(NOT TARGET OpenSSL::Crypto)
+		add_library(OpenSSL::Crypto UNKNOWN IMPORTED)
+		set_target_properties(OpenSSL::Crypto PROPERTIES
+			IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}")
+	endif()
+	if(NOT TARGET OpenSSL::SSL)
+		add_library(OpenSSL::SSL UNKNOWN IMPORTED)
+		set_target_properties(OpenSSL::SSL PROPERTIES
+			IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+			INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
+	endif()
+	set(OPENSSL_FOUND TRUE)
+	message(STATUS "Using explicit OpenSSL: include=${OPENSSL_INCLUDE_DIR}")
+	message(STATUS "  crypto=${OPENSSL_CRYPTO_LIBRARY}")
+	message(STATUS "  ssl=${OPENSSL_SSL_LIBRARY}")
+else()
+	find_package(OpenSSL REQUIRED)
+endif()
 
 # ── Source files ──────────────────────────────────────────────
 set(WT_SOURCES

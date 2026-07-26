@@ -73,6 +73,8 @@ typedef struct {
     /* Outbound payload waiting for START_COMPLETE before StreamSend.
      * NULL after ownership transfers to StreamSend ClientContext. */
     sm_send_req_t*       pending_send;
+    /* 1 = send with QUIC_SEND_FLAG_FIN (one-shot); 0 = keep send open. */
+    int                  pending_send_fin;
 } stream_ctx_t;
 
 static sm_send_req_t* sm_send_req_alloc(const uint8_t* header, size_t header_len,
@@ -225,6 +227,8 @@ static bool sm_looks_like_wt_capsule(const uint8_t* buf, size_t len)
 
 static QUIC_STATUS stream_cb(HQUIC stream, void* ctx,
                                QUIC_STREAM_EVENT* event);
+static void sm_mark_send_closed(
+    wt_stream_manager_t* mgr, wt_stream_id_t stream_id, HQUIC quic_stream);
 
 /* ── Stream callback (function pointer type) ────────────────── */
 
@@ -395,7 +399,14 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
     }
 
     case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN: {
-        /* Peer finished sending. Deliver any residual buffer. */
+        /* Peer finished sending. Deliver any residual buffer.
+         *
+         * Do NOT StreamShutdown our send side here. On a bidi stream the peer
+         * FIN only means they will not write more; FishNet clients still need
+         * to send subsequent reliable packets on their own open streams.
+         * Auto-graceful-shutdown left send_closed=false while the handle was
+         * no longer writable → StreamSend INVALID_STATE (0x8007139f) and
+         * later msquic worker access violations after login. */
         if (sctx->recv_buf && sctx->recv_offset > 0 &&
             sctx->mgr->on_stream_data && sctx->mgr->callback_ctx) {
             const uint8_t* app = sctx->recv_buf;
@@ -436,12 +447,6 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             }
         }
         sm_unlock(sctx->mgr);
-
-        /* Only graceful-shutdown our send side if not already force-closed. */
-        if (!sctx->close_done) {
-            MsQuic->StreamShutdown(stream,
-                                    QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
-        }
         return QUIC_STATUS_SUCCESS;
     }
 
@@ -481,21 +486,26 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         }
         /* Transfer ownership to StreamSend ClientContext before call. */
         sctx->pending_send = NULL;
+        QUIC_SEND_FLAGS send_flags = sctx->pending_send_fin
+            ? QUIC_SEND_FLAG_FIN
+            : QUIC_SEND_FLAG_NONE;
 
         QUIC_STATUS st = MsQuic->StreamSend(
             stream,
             &req->buf,
             1,
-            QUIC_SEND_FLAG_FIN,
+            send_flags,
             req);
         if (QUIC_FAILED(st)) {
             WT_LOG_ERROR(
                 "StreamSend failed after START_COMPLETE st=0x%x "
-                "stream_id=%llu len=%u — free now (no SEND_COMPLETE)",
+                "stream_id=%llu len=%u fin=%d — free now (no SEND_COMPLETE)",
                 st,
                 (unsigned long long)sctx->stream_id,
-                req->length);
+                req->length,
+                sctx->pending_send_fin ? 1 : 0);
             sm_send_req_free(req, "send_failed");
+            sm_mark_send_closed(sctx->mgr, sctx->stream_id, stream);
             if (!sctx->close_done) {
                 MsQuic->StreamShutdown(
                     stream,
@@ -508,9 +518,10 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         WT_LOG_INFO(
             "StreamSend queued after START_COMPLETE stream_id=%llu len=%u "
-            "stamp=SEND_AFTER_START_V1 (free only on SEND_COMPLETE)",
+            "fin=%d stamp=SEND_AFTER_START_V2 (free only on SEND_COMPLETE)",
             (unsigned long long)sctx->stream_id,
-            req->length);
+            req->length,
+            sctx->pending_send_fin ? 1 : 0);
         return QUIC_STATUS_SUCCESS;
     }
 
@@ -530,6 +541,18 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         free(sctx->recv_buf);
         sctx->recv_buf = NULL;
         sctx->recv_offset = 0;
+        /* Peer aborted — mark both directions unusable so send will not
+         * reuse this handle (StreamSend would return INVALID_STATE). */
+        sm_lock(sctx->mgr);
+        for (int i = 0; i < WT_MAX_STREAMS; i++) {
+            if (sctx->mgr->streams[i].id == sctx->stream_id ||
+                sctx->mgr->streams[i].quic_stream == stream) {
+                sctx->mgr->streams[i].recv_closed = true;
+                sctx->mgr->streams[i].send_closed = true;
+                break;
+            }
+        }
+        sm_unlock(sctx->mgr);
         if (!sctx->close_done) {
             MsQuic->StreamShutdown(stream,
                                     QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
@@ -737,11 +760,29 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
     free(pending);
 }
 
+/* Mark a stream unusable for further StreamSend after a hard failure. */
+static void sm_mark_send_closed(
+    wt_stream_manager_t* mgr, wt_stream_id_t stream_id, HQUIC quic_stream)
+{
+    if (!mgr) return;
+    sm_lock(mgr);
+    for (int i = 0; i < WT_MAX_STREAMS; i++) {
+        if (!mgr->streams[i].in_use)
+            continue;
+        if ((stream_id != 0 && mgr->streams[i].id == stream_id) ||
+            (quic_stream && mgr->streams[i].quic_stream == quic_stream)) {
+            mgr->streams[i].send_closed = true;
+            break;
+        }
+    }
+    sm_unlock(mgr);
+}
+
 /**
- * Send on an already-started stream (peer-initiated preferred path).
+ * Send on an already-started stream (peer-initiated preferred path on server).
  * No WEBTRANSPORT_STREAM header: capsule was already on the client open;
  * subsequent server writes on the same bidi stream are raw app bytes.
- * Does NOT set FIN so the client can keep writing on the same stream.
+ * Does NOT set FIN so the peer can keep writing on the same stream.
  */
 static int32_t sm_send_on_open_stream(
     wt_stream_manager_t* mgr,
@@ -754,6 +795,13 @@ static int32_t sm_send_on_open_stream(
     if (!req)
         return WT_ERR_BUFFER_FULL;
 
+    /* Bail if connection already dead — avoids StreamSend into free'd msquic state. */
+    if (atomic_load(&mgr->conn_closed) || atomic_load(&mgr->shutting_down)) {
+        sm_send_req_free(req, "same_stream_conn_dead");
+        sm_mark_send_closed(mgr, stream_id, quic_stream);
+        return WT_ERR_INVALID_STATE;
+    }
+
     QUIC_STATUS st = MsQuic->StreamSend(
         quic_stream,
         &req->buf,
@@ -763,19 +811,21 @@ static int32_t sm_send_on_open_stream(
     if (QUIC_FAILED(st)) {
         WT_LOG_ERROR(
             "StreamSend on existing stream failed st=0x%x conn=%llu "
-            "stream_id=%llu len=%d stamp=SAME_STREAM_REPLY_V1",
+            "stream_id=%llu len=%d stamp=SAME_STREAM_REPLY_V2",
             st,
             (unsigned long long)mgr->conn_id,
             (unsigned long long)stream_id,
             length);
         sm_send_req_free(req, "same_stream_send_failed");
+        /* CRITICAL: never retry this handle. INVALID_STATE (0x8007139f) means
+         * the send side is already shut down; reusing it crashes msquic workers. */
+        sm_mark_send_closed(mgr, stream_id, quic_stream);
         return WT_ERR_SEND_FAILED;
     }
 
     WT_LOG_INFO(
         "SAME_STREAM_REPLY ok conn=%llu stream_id=%llu app_len=%d "
-        "stamp=SAME_STREAM_REPLY_V1 (no new StreamOpen; no FIN; "
-        "client must pump stream.readable)",
+        "stamp=SAME_STREAM_REPLY_V2 (no new StreamOpen; no FIN)",
         (unsigned long long)mgr->conn_id,
         (unsigned long long)stream_id,
         length);
@@ -790,13 +840,18 @@ int32_t wt_stream_manager_send(
     if (atomic_load(&mgr->conn_closed)) return WT_ERR_INVALID_STATE;
 
     /*
-     * Prefer reply on a peer-initiated bidi stream that still has send open.
+     * Stream reuse policy (stamp=STREAM_REUSE_POLICY_V2):
      *
-     * Why: Chrome create-account path failed with H3_FRAME_UNEXPECTED when
-     * we StreamOpen'd a *server-initiated* bidi + WEBTRANSPORT_STREAM capsule
-     * for ServerHandshake. Client already owns a bidi stream (writes OK);
-     * replying on that stream's send half is accepted by Chrome and delivered
-     * to stream.readable (jslib must pump it — see WebTransport.jslib).
+     * Server:
+     *   Prefer peer-initiated bidi streams (client-opened) so browser/native
+     *   clients receive replies on the stream they already own. Chrome rejects
+     *   server StreamOpen + WEBTRANSPORT_STREAM (H3_FRAME_UNEXPECTED).
+     *
+     * Client (native Editor/standalone):
+     *   Only reuse locally-opened streams (!peer_initiated). Writing on a
+     *   server-initiated stream after the peer FINs yields StreamSend
+     *   INVALID_STATE and can AV inside msquic. If none available, open a
+     *   new client-initiated stream (fallback below).
      */
     {
         HQUIC reuse = NULL;
@@ -807,12 +862,23 @@ int32_t wt_stream_manager_send(
                 continue;
             if (mgr->streams[i].send_closed)
                 continue;
-            /* Prefer peer-initiated; fall back to any open send side. */
-            if (mgr->streams[i].peer_initiated || reuse == NULL) {
+
+            if (mgr->is_server) {
+                /* Prefer peer-initiated; fall back to any open send side. */
+                if (mgr->streams[i].peer_initiated || reuse == NULL) {
+                    reuse = mgr->streams[i].quic_stream;
+                    reuse_id = mgr->streams[i].id;
+                    if (mgr->streams[i].peer_initiated)
+                        break;
+                }
+            } else {
+                /* Client: never reuse peer-initiated (server-opened) streams. */
+                if (mgr->streams[i].peer_initiated)
+                    continue;
+                /* Prefer the first locally-owned open stream. */
                 reuse = mgr->streams[i].quic_stream;
                 reuse_id = mgr->streams[i].id;
-                if (mgr->streams[i].peer_initiated)
-                    break;
+                break;
             }
         }
         sm_unlock(mgr);
@@ -824,11 +890,12 @@ int32_t wt_stream_manager_send(
                 return WT_OK;
             WT_LOG_WARN(
                 "SAME_STREAM_REPLY failed conn=%llu stream_id=%llu st=%d "
-                "stamp=SAME_STREAM_REPLY_V1",
+                "is_server=%d stamp=SAME_STREAM_REPLY_V2",
                 (unsigned long long)mgr->conn_id,
                 (unsigned long long)reuse_id,
-                (int)r);
-            /* Browser sessions: NEVER open a server-initiated bidi stream.
+                (int)r,
+                mgr->is_server ? 1 : 0);
+            /* Browser server sessions: NEVER open a server-initiated bidi stream.
              * Chrome rejects WEBTRANSPORT_STREAM on server StreamOpen with
              * H3_FRAME_UNEXPECTED / H3_FRAME_ERROR and tears down the session
              * right after LoginSuccess (post-auth Authenticated packet). */
@@ -841,7 +908,7 @@ int32_t wt_stream_manager_send(
             }
             WT_LOG_WARN(
                 "SAME_STREAM_REPLY failed conn=%llu — falling back to new "
-                "server stream (native client only)",
+                "local stream (native) stamp=STREAM_REUSE_POLICY_V2",
                 (unsigned long long)mgr->conn_id);
         } else if (mgr->use_wt_stream_header) {
             /* No open peer stream yet — cannot reply to Chrome safely. */
@@ -947,30 +1014,46 @@ int32_t wt_stream_manager_send(
         return WT_ERR_BUFFER_FULL;
     }
     sctx->pending_send = req;
+    /* Client: keep bidi open for many FishNet reliable packets.
+     * Server fallback (rare native): one-shot FIN after first payload. */
+    sctx->pending_send_fin = mgr->is_server ? 1 : 0;
 
     status = MsQuic->StreamStart(quic_stream,
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("StreamStart failed: 0x%x stream_id=%llu",
                      status, (unsigned long long)stream_id);
+        sctx->pending_send = NULL;
+        sm_send_req_free(req, "stream_start_failed");
         MsQuic->StreamClose(quic_stream);
+        sm_lock(mgr);
+        mgr->streams[slot].in_use = false;
+        mgr->streams[slot].quic_stream = NULL;
+        mgr->streams[slot].id = 0;
+        atomic_fetch_sub(&mgr->active_streams, 1);
+        sm_unlock(mgr);
+        free(sctx);
         return WT_ERR_SEND_FAILED;
     }
 
     WT_LOG_INFO(
         "StreamOpen+Start OK conn=%llu stream_id=%llu app_len=%d "
-        "wire_len=%u header_len=%zu pending_send=1 stamp=SERVER_REPLY_STREAM_V3 "
-        "(fallback path — prefer SAME_STREAM_REPLY when peer stream open)",
+        "wire_len=%u header_len=%zu pending_send=1 fin=%d "
+        "stamp=LOCAL_STREAM_OPEN_V2 is_server=%d",
         (unsigned long long)mgr->conn_id,
         (unsigned long long)stream_id,
         length,
         (unsigned)req->length,
-        header_len);
+        header_len,
+        sctx->pending_send_fin ? 1 : 0,
+        mgr->is_server ? 1 : 0);
 
-    /* Fallback still FINs on START_COMPLETE (one-shot server stream). */
-    sm_lock(mgr);
-    mgr->streams[slot].send_closed = true;
-    sm_unlock(mgr);
+    /* Server one-shot fallback FINs; client keeps send open for reuse. */
+    if (sctx->pending_send_fin) {
+        sm_lock(mgr);
+        mgr->streams[slot].send_closed = true;
+        sm_unlock(mgr);
+    }
     return WT_OK;
 }
 

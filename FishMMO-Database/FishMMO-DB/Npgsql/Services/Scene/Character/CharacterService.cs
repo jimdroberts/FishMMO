@@ -189,7 +189,9 @@ namespace FishMMO.Database.Npgsql.Services
 							flags,
 							version,
 							time_created,
-							last_saved
+							last_saved,
+							deleted,
+							time_deleted
 						)
 						VALUES (
 							{{0}},
@@ -227,7 +229,9 @@ namespace FishMMO.Database.Npgsql.Services
 							{{30}},
 							1,
 							{{31}},
-							{{32}}
+							{{32}},
+							FALSE,
+							NULL
 						)
 						ON CONFLICT (name_lowercase)
 						DO NOTHING
