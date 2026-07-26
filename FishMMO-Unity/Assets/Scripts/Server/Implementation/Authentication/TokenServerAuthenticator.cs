@@ -429,14 +429,11 @@ namespace FishMMO.Server.Implementation
 			protected override void StoreClientRealIp(NetworkConnection conn, string realIp)
 			{
 				// Store the real IP recovered from the auth token for rate limiting.
-				// This is essential for World/Scene servers behind an L4 proxy where
-				// conn.GetAddress() returns 127.0.0.1.
-				if (outer.Server?.DataContainerRegistry != null &&
-					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
-					rt.ConnectionIpCache != null)
-				{
-					rt.ConnectionIpCache.Upsert(conn.ClientId, realIp, DateTime.UtcNow);
-				}
+				// Essential for World/Scene behind L4 proxy (conn.GetAddress() is loopback).
+				// Uses authenticator-local cache so World/Scene work without AccountCreation.
+				if (conn == null || string.IsNullOrEmpty(realIp))
+					return;
+				outer.StoreRealIpForConnection(conn.ClientId, realIp);
 			}
 
 			/// <inheritdoc/>

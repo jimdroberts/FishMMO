@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -220,6 +221,8 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Called when the connect button is clicked. Initiates connection to selected server.
+		/// Fetches a fresh IPFetch connection token first — World rejects the first
+		/// ClientHandshake without one (cookieLen=0 / no real IP bound).
 		/// </summary>
 		public void OnClick_ConnectToServer()
 		{
@@ -228,8 +231,19 @@ namespace FishMMO.Client
 			{
 				SetConnectToServerLocked(true);
 
-				// Connect to the world server
-				Client.ConnectToServer(selectedServer.Details.Port, true);
+				ushort port = selectedServer.Details.Port;
+				Client.InvalidateLoginServerCache();
+				StartCoroutine(Client.ConnectToServerWithConnectionToken(
+					port,
+					isWorldServer: true,
+					onFail: (err) =>
+					{
+						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+							uiDialogBox.Open(err ?? "Failed to fetch world connection token.");
+						else
+							Log.Warning("UIServerSelect", err ?? "Failed to fetch world connection token.");
+						SetConnectToServerLocked(false);
+					}));
 			}
 		}
 

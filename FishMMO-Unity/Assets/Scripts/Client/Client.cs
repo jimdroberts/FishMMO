@@ -244,6 +244,14 @@ namespace FishMMO.Client
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
 			Connection = new ClientConnectionManager(NetworkManager);
+			// World/Scene reconnect must re-stage an IPFetch HMAC token on ClientHandshake.
+			Connection.ReconnectConnectOverride = (address, port) =>
+			{
+				InvalidateLoginServerCache();
+				StartCoroutine(ConnectToServerWithConnectionToken(port, isWorldServer: true,
+					onFail: (err) => Log.Error("Client",
+						$"Reconnect token fetch failed for {address}:{port}: {err}")));
+			};
 
 			// Initialize the OnReconnectFailed -> OnQuitToLogin forwarding delegate.
 			this.onReconnectFailedQuitToLogin = () => OnQuitToLogin?.Invoke();
@@ -432,15 +440,103 @@ namespace FishMMO.Client
 		/// (login / world / scene) via <see cref="Constants.Configuration.GetGameHostForPort"/>.
 		/// With WebTransport, the port is a QUIC connection parameter, not a URL path.
 		/// </summary>
+		/// <remarks>
+		/// Login UI must set <see cref="ClientLoginAuthenticator.ConnectionToken"/> from IPFetch
+		/// before calling this. World/Scene hops that omit a token automatically re-fetch one
+		/// via <see cref="ConnectToServerWithConnectionToken"/> so WorldServerAuthenticator
+		/// does not reject the first ClientHandshake with cookieLen=0.
+		/// </remarks>
 		/// <param name="port">The server port.</param>
 		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
 		public void ConnectToServer(ushort port, bool isWorldServer = false)
 		{
+			// World/scene reconnect and server-select often call Connect without re-staging
+			// the IPFetch HMAC token. Login already set ConnectionToken before connect.
+			if (LoginAuthenticator != null && string.IsNullOrEmpty(LoginAuthenticator.ConnectionToken))
+			{
+				Log.Info("Client",
+					$"ConnectToServer port={port} isWorld={isWorldServer}: " +
+					"no staged connection token — fetching fresh IPFetch token first");
+				StartCoroutine(ConnectToServerWithConnectionToken(port, isWorldServer));
+				return;
+			}
+
 			string host = Constants.Configuration.GetGameHostForPort(port);
 			Log.Info("Client",
 				$"ConnectToServer host={host} port={port} isWorld={isWorldServer} " +
 				$"tokenPresent={!string.IsNullOrEmpty(LoginAuthenticator?.ConnectionToken)} " +
 				$"tokenLen={LoginAuthenticator?.ConnectionToken?.Length ?? 0}");
+			Connection?.ConnectToServer(host, port, isWorldServer);
+		}
+
+		/// <summary>
+		/// Fetches a fresh IPFetch HMAC connection token, stages it on
+		/// <see cref="LoginAuthenticator"/>, then connects to the given port.
+		/// Required for Login → World and World → Scene hops behind an L4 UDP proxy:
+		/// the first ClientHandshake must carry ConnectionToken so the server can
+		/// recover the real client IP (otherwise World rejects with cookieLen=0).
+		/// </summary>
+		/// <param name="port">Server port (world or scene).</param>
+		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
+		/// <param name="onFail">Optional failure callback (IPFetch / empty token).</param>
+		public IEnumerator ConnectToServerWithConnectionToken(
+			ushort port,
+			bool isWorldServer = false,
+			Action<string> onFail = null)
+		{
+			// Always re-fetch: login may have consumed the prior token hours ago, and
+			// IPFetch tokens expire (~60s). Cache hit with a still-valid token is fine.
+			bool ok = false;
+			string failMsg = null;
+
+			// Prefer a still-valid cached token; otherwise hit IPFetch.
+			if (!ShouldRefreshLoginServerList()
+				&& !string.IsNullOrEmpty(this.cachedConnectionToken)
+				&& LoginAuthenticator != null)
+			{
+				LoginAuthenticator.ConnectionToken = this.cachedConnectionToken;
+				ok = true;
+				Log.Info("Client",
+					$"ConnectToServerWithConnectionToken: reusing cached token " +
+					$"len={this.cachedConnectionToken.Length} port={port} isWorld={isWorldServer}");
+			}
+			else
+			{
+				// Drop stale cache so GetLoginServerList always hits IPFetch for a new HMAC.
+				this.loginServerPorts = null;
+				this.loginServerPortsFetchedAt = DateTime.MinValue;
+				this.cachedConnectionToken = null;
+
+				yield return GetLoginServerList(
+					(e) => { failMsg = e; },
+					(ports, token) =>
+					{
+						if (string.IsNullOrEmpty(token))
+						{
+							failMsg = "IPFetch response missing ConnectionToken.";
+							return;
+						}
+						if (LoginAuthenticator != null)
+							LoginAuthenticator.ConnectionToken = token;
+						ok = true;
+						Log.Info("Client",
+							$"ConnectToServerWithConnectionToken: fresh token len={token.Length} " +
+							$"port={port} isWorld={isWorldServer}");
+					});
+			}
+
+			if (!ok || LoginAuthenticator == null || string.IsNullOrEmpty(LoginAuthenticator.ConnectionToken))
+			{
+				string msg = failMsg ?? "Failed to obtain connection token for world/scene handoff.";
+				Log.Error("Client", msg);
+				onFail?.Invoke(msg);
+				yield break;
+			}
+
+			string host = Constants.Configuration.GetGameHostForPort(port);
+			Log.Info("Client",
+				$"ConnectToServer (after token) host={host} port={port} isWorld={isWorldServer} " +
+				$"tokenLen={LoginAuthenticator.ConnectionToken.Length}");
 			Connection?.ConnectToServer(host, port, isWorldServer);
 		}
 
@@ -672,7 +768,23 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The world scene connect message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) ConnectToServer(msg.Port); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch)
+		{
+			try
+			{
+				if (!IsConnectionReady())
+					return;
+				// Scene hop is a new WT session — need a fresh IPFetch connection token
+				// just like Login → World (WorldSceneConnect only carries the port).
+				InvalidateLoginServerCache();
+				StartCoroutine(ConnectToServerWithConnectionToken(msg.Port, isWorldServer: false,
+					onFail: (err) => Log.Error("Client", $"Scene connect token fetch failed: {err}")));
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnWorldSceneConnect: {ex}");
+			}
+		}
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>

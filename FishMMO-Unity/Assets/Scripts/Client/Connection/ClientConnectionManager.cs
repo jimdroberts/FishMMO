@@ -68,6 +68,14 @@ namespace FishMMO.Client
 		/// </summary>
 		public event Action<string, ushort, string> OnConnectTimedOut;
 
+		/// <summary>
+		/// Optional override for reconnect connects. When set, <see cref="TryReconnect"/>
+		/// invokes this instead of <see cref="ConnectToServer"/> so the client can
+		/// re-fetch an IPFetch HMAC connection token before the World/Scene handshake.
+		/// Args: address, port.
+		/// </summary>
+		public Action<string, ushort> ReconnectConnectOverride;
+
 		/// <summary>Returns true if the current connection type supports reconnection (World or Scene).</summary>
 		public bool CanReconnect =>
 				CurrentConnectionType == ServerConnectionType.World ||
@@ -147,7 +155,12 @@ namespace FishMMO.Client
 				{
 					ReconnectsAttempted++;
 					OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
-					ConnectToServer(lastWorldAddress, lastWorldPort);
+					// Prefer override so Client can stage a fresh IPFetch connection token
+					// (World/Scene reject first ClientHandshake without one behind L4 proxy).
+					if (ReconnectConnectOverride != null)
+						ReconnectConnectOverride(lastWorldAddress, lastWorldPort);
+					else
+						ConnectToServer(lastWorldAddress, lastWorldPort);
 				}
 			}
 			else

@@ -497,17 +497,9 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override string? ResolveClientRealIp(NetworkConnection conn)
 			{
-				if (conn == null) return null;
-				// Look up the real IP that was recovered from the connection token
-				// (or stateless HMAC token) during the ClientHandshake.
-				if (outer.Server?.DataContainerRegistry != null &&
-					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
-					rt.ConnectionIpCache != null)
-				{
-					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ip))
-						return ip;
-				}
-				return null;
+				// Real IP recovered from the connection token during ClientHandshake
+				// (authenticator-local cache; works on Login/World/Scene).
+				return outer.ResolveRateLimitKey(conn);
 			}
 
 			/// <inheritdoc/>

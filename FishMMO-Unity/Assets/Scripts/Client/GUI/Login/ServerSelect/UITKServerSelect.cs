@@ -328,6 +328,8 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Initiates connection to the selected world server.
+		/// Fetches a fresh IPFetch connection token first — World rejects the first
+		/// ClientHandshake without one (cookieLen=0 / no real IP bound).
 		/// </summary>
 		public void OnClick_ConnectToServer()
 		{
@@ -336,8 +338,19 @@ namespace FishMMO.Client
 			{
 				SetConnectToServerLocked(true);
 
-				// Connect to the world server.
-				Client.ConnectToServer(selectedServer.Details.Port, true);
+				ushort port = selectedServer.Details.Port;
+				// Drop any leftover login token cache so handoff always gets a fresh HMAC
+				// (login already consumed the prior token; TTL is ~60s).
+				Client.InvalidateLoginServerCache();
+				StartCoroutine(Client.ConnectToServerWithConnectionToken(
+					port,
+					isWorldServer: true,
+					onFail: (err) =>
+					{
+						if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
+							uiDialogBox.Open(err ?? "Failed to fetch world connection token.");
+						SetConnectToServerLocked(false);
+					}));
 			}
 		}
 

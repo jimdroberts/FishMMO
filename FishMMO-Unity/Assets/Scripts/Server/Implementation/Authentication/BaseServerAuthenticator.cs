@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Auth.Core;
 using FishMMO.Auth.Implementation;
+using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Shared;
@@ -48,6 +49,14 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Cached handler delegate for ClientHandshake broadcast registration/unregistration.</summary>
 		private Action<NetworkConnection, ClientHandshake, Channel> clientHandshakeHandler;
+
+		/// <summary>
+		/// Per-connection real-IP cache recovered from HMAC connection tokens (and auth tokens).
+		/// Lives on the authenticator so Login, World, and Scene servers all work behind L4 proxies
+		/// without requiring Login-only <see cref="IAccountCreationSystemRuntimeData"/>.
+		/// </summary>
+		private readonly LastSeenCacheTracker<int, string> connectionIpByClientId =
+			new LastSeenCacheTracker<int, string>();
 
 		/// <summary>The engine-independent authenticator core. Created by <see cref="InitializeCoreInstance"/>.</summary>
 		protected abstract BaseAuthenticatorCore<NetworkConnection> Core { get; }
@@ -271,10 +280,17 @@ namespace FishMMO.Server.Implementation
 			// Look up the real IP recovered from the connection/auth token.
 			// Never fall back to conn.GetAddress() (which returns 127.0.0.1
 			// behind an L4 proxy) or conn.ClientId (which resets on reconnect).
+			if (connectionIpByClientId.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? realIp)
+				&& !string.IsNullOrEmpty(realIp))
+			{
+				return HandshakeService.NormalizeIp(realIp);
+			}
+			// Login server may also mirror IPs into AccountCreation runtime data.
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 				rt.ConnectionIpCache != null &&
-				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? realIp))
+				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out realIp)
+				&& !string.IsNullOrEmpty(realIp))
 			{
 				return HandshakeService.NormalizeIp(realIp);
 			}
@@ -372,12 +388,12 @@ namespace FishMMO.Server.Implementation
 			if (ct.IsCancellationRequested) return false;
 
 			var server = Server;
-			if (server?.DataContainerRegistry == null ||
-				!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
+			// World/Scene authenticators do not host AccountCreationSystem — only need
+			// Server.Configuration (or env) for the shared HMAC key.
+			if (server == null)
 				return false;
 
-			// Try stateless HMAC verification first (new format: payloadB64.sigB64).
-			// Falls back to DB lookup for legacy tokens or if HMAC key not configured.
+			// Stateless HMAC verification (payloadB64.sigB64). Shared key with IPFetch.
 			string? realIp = TryVerifyStatelessConnectionToken(rawToken, server.Configuration);
 			if (realIp != null)
 			{
@@ -388,7 +404,7 @@ namespace FishMMO.Server.Implementation
 
 			// Legacy DB-backed token path removed (IConnectionTokenService deleted
 			// when connection tokens migrated to stateless HMAC).
-			await Log.Warning(LogPrefix, $"Legacy connection token not supported for {conn.ClientId}.");
+			await Log.Warning(LogPrefix, $"Connection token invalid/expired/unsigned for {conn.ClientId}.");
 			return false;
 		}
 
@@ -477,9 +493,17 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Stores the real client IP for a connection so that rate-limiting and
 		/// logging use the actual address instead of the proxy's loopback IP.
+		/// Always writes the authenticator-local cache (Login/World/Scene). When
+		/// present, also mirrors into AccountCreation runtime data for login-only
+		/// account-creation rate limits.
 		/// </summary>
-		private void StoreRealIpForConnection(int clientId, string realIp)
+		protected void StoreRealIpForConnection(int clientId, string realIp)
 		{
+			if (string.IsNullOrEmpty(realIp))
+				return;
+
+			connectionIpByClientId.Upsert(clientId, realIp, DateTime.UtcNow);
+
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
@@ -493,6 +517,7 @@ namespace FishMMO.Server.Implementation
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
 				Core?.HandleConnectionStopped(conn);
+				connectionIpByClientId.Remove(conn.ClientId);
 				// Immediately notify the login queue so dead connections
 				// don't consume admission ticks for up to 10 seconds.
 				if (Server?.BehaviourRegistry != null &&
