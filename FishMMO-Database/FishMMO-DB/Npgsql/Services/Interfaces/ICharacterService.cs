@@ -157,16 +157,26 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="characterId">The character ID.</param>
 		/// <param name="sceneName">The scene name.</param>
 		/// <param name="sceneHandle">The scene handle.</param>
+		/// <param name="worldServerId">
+		/// World server ID the character is entering. Must be set before SceneServer load so
+		/// <c>TryGetSceneInstanceDetails(world, scene, handle)</c> matches the loaded instance.
+		/// Pass 0 to leave <c>world_server_id</c> unchanged (legacy).
+		/// </param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses atomic UPDATE to set scene_name and scene_handle in one operation.
+		/// Uses atomic UPDATE to set scene_name, scene_handle, and optionally world_server_id.
 		/// Updates last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> UpdateSceneAsync(
+			long characterId,
+			string sceneName,
+			int sceneHandle,
+			long worldServerId = 0,
+			CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves the selected character for each of the specified accounts in batches.

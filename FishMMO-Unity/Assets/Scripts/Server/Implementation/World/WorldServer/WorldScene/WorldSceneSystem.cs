@@ -683,15 +683,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					capacityByHandle[preferredHandle] = prefRemaining - 1;
 
-					// After a World restart, the character's saved world_server_id or scene
-					// may be stale. Rebind to the current world instance before broadcasting
-					// so the Scene server accepts the connection (world+scene+handle must match).
-					// This mirrors the Pass 2 rebind logic below.
-					if (charData.SceneHandle != preferredHandle || charData.WorldServerID != worldServerID)
+					// MUST await world_server_id + scene rebind before BroadcastSceneConnect.
+					// SceneServer loads character with world from DB; mismatch →
+					// TryGetSceneInstanceDetails(world=0, ...) fails forever.
+					DatabaseResult rebind = await charService.UpdateSceneAsync(
+						charData.ID, sceneName, preferredHandle, worldServerID);
+					if (!rebind.IsSuccess)
 					{
-						_ = charService.UpdateSceneAsync(charData.ID, sceneName, preferredHandle);
-						Log.Info("WorldSceneSystem", $"Pass1 rebind: Character {charData.ID} world={charData.WorldServerID}->{worldServerID} scene={charData.SceneHandle}->{preferredHandle}");
+						await Log.Warning("WorldSceneSystem",
+							$"Pass1 UpdateSceneAsync failed CharID={charData.ID}: {rebind.ErrorCode} - {rebind.ErrorMessage}");
+						TryEnqueueMainThread(() =>
+						{
+							if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
+							{
+								AddToQueue(conn, sceneName, md.WaitingOpenWorldConnections, md.OpenWorldConnectionScenes);
+							}
+						});
+						continue;
 					}
+					await Log.Info("WorldSceneSystem",
+						$"Pass1 rebind CharID={charData.ID} world={charData.WorldServerID}->{worldServerID} " +
+						$"handle={preferredHandle} port={prefServer}");
 
 					BroadcastSceneConnect(conn, prefServer);
 					assignedCount++;
@@ -741,16 +753,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						continue;
 					}
 
-					// Always persist assigned handle so scene server can validate entry.
-					DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, sceneName, assignedHandle);
+					// Persist scene + world_server_id BEFORE connect. SceneServer uses
+					// char.WorldServerID from DB for TryGetSceneInstanceDetails.
+					DatabaseResult updateResult = await charService.UpdateSceneAsync(
+						charData.ID, sceneName, assignedHandle, worldServerID);
 					if (!updateResult.IsSuccess)
 					{
-						await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+						await Log.Warning("WorldSceneSystem",
+							$"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+						TryEnqueueMainThread(() =>
+						{
+							if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
+							{
+								AddToQueue(conn, sceneName, md.WaitingOpenWorldConnections, md.OpenWorldConnectionScenes);
+							}
+						});
+						continue;
 					}
 
 					await Log.Info("WorldSceneSystem",
 						$"Assign open-world conn={conn.ClientId} account={accountName} char={charData.ID} " +
-						$"scene='{sceneName}' handle={assignedHandle} port={serverPort}");
+						$"scene='{sceneName}' handle={assignedHandle} world={worldServerID} port={serverPort}");
 					BroadcastSceneConnect(conn, serverPort);
 					assignedCount++;
 				}

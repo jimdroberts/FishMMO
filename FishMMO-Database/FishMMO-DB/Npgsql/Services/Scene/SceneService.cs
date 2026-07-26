@@ -84,57 +84,91 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
 			}
 
+			// Use raw INSERT RETURNING (saveChanges: false) so we do not depend on EF
+			// change-tracking / Version concurrency defaults for a simple queue insert.
+			// Cold-start EnqueueAsync previously failed with generic DATABASE_ERROR when
+			// EF Add+SaveChanges hit schema/version edge cases on scenes.
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				// Open-world: if a Pending or Loading row already exists for this world+name,
-				// reuse it instead of inserting another (World spam-enqueue protection).
-				// Instanced scenes keep characterId and always create a new row.
+				int pending = (int)SceneStatus.Pending;
+				int loading = (int)SceneStatus.Loading;
+				int type = (int)sceneType;
+
+				// Open-world: reuse existing Pending/Loading row for same world+name.
+				// SELECT with no rows returns null — do not use ExecuteScalarLongAsync (throws on null).
 				if (characterId <= 0)
 				{
-					int pending = (int)SceneStatus.Pending;
-					int loading = (int)SceneStatus.Loading;
-					var inFlight = await dbContext.Scenes
-						.AsNoTracking()
-						.Where(s =>
-							s.WorldServerID == worldServerId &&
-							s.SceneName == sceneName &&
-							s.SceneType == (int)sceneType &&
-							(s.SceneStatus == pending || s.SceneStatus == loading) &&
-							s.CharacterID <= 0)
-						.OrderBy(s => s.TimeCreated)
-						.ThenBy(s => s.ID)
-						.FirstOrDefaultAsync(cancellationToken)
-						.ConfigureAwait(false);
-					if (inFlight != null)
+					var existingId = await ExecuteReturningOrDefaultAsync(
+						dbContext,
+						$@"SELECT id FROM {TableName}
+						WHERE world_server_id = {{0}}
+							AND scene_name = {{1}}
+							AND scene_type = {{2}}
+							AND scene_status IN ({{3}}, {{4}})
+							AND character_id <= 0
+						ORDER BY time_created, id
+						LIMIT 1",
+						new object[] { worldServerId, sceneName, type, pending, loading },
+						reader => reader.GetInt64(0),
+						cancellationToken).ConfigureAwait(false);
+					if (existingId > 0)
 					{
-						return inFlight;
+						return existingId;
 					}
 				}
 
-				var entity = new SceneEntity
+				// Explicit columns — scene_server_id/handle start at 0 until SetReady.
+				// Prefer including version=1 (IVersionedEntity). If the column is missing on
+				// older DBs, fall back to an insert without version.
+				var now = DateTime.UtcNow;
+				try
 				{
-					WorldServerID = worldServerId,
-					SceneName = sceneName,
-					SceneType = (int)sceneType,
-					SceneStatus = (int)SceneStatus.Pending,
-					CharacterID = characterId,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.Scenes.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+					var idWithVersion = await ExecuteReturningOrDefaultAsync(
+						dbContext,
+						$@"INSERT INTO {TableName}
+							(world_server_id, scene_server_id, scene_name, scene_handle,
+							 scene_status, scene_type, character_id, character_count, time_created, version)
+						VALUES
+							({{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, 1)
+						RETURNING id",
+						new object[] { worldServerId, sceneName, pending, type, characterId, now },
+						reader => reader.GetInt64(0),
+						cancellationToken).ConfigureAwait(false);
+					if (idWithVersion > 0)
+					{
+						return idWithVersion;
+					}
+				}
+				catch (Exception)
+				{
+					// Fall through to insert without version (e.g. undefined_column version).
+				}
+
+				var id = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					$@"INSERT INTO {TableName}
+						(world_server_id, scene_server_id, scene_name, scene_handle,
+						 scene_status, scene_type, character_id, character_count, time_created)
+					VALUES
+						({{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}})
+					RETURNING id",
+					new object[] { worldServerId, sceneName, pending, type, characterId, now },
+					reader => reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+				return id;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
 				return DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
-			if (result.Data.ID <= 0)
+			if (result.Data <= 0)
 			{
-				return DatabaseResult<long>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to enqueue scene.", isTransient: true);
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.DatabaseError, "Failed to enqueue scene (RETURNING id was 0).", isTransient: true);
 			}
 
-			return DatabaseResult<long>.Success(result.Data.ID);
+			return DatabaseResult<long>.Success(result.Data);
 		}
 
 		/// <inheritdoc/>

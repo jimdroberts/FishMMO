@@ -885,7 +885,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <para>If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
 		/// and pass the incoming version as a parameter.</para>
 		/// </remarks>
-		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> UpdateSceneAsync(
+			long characterId,
+			string sceneName,
+			int sceneHandle,
+			long worldServerId = 0,
+			CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -896,16 +901,21 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var now = DateTime.UtcNow;
 				var tableName = dbContext.GetTableName<CharacterEntity>();
+				// Always rebind world when provided so SceneServer
+				// TryGetSceneInstanceDetails(world, name, handle) matches the live instance.
+				// world_server_id = CASE WHEN {3} > 0 THEN {3} ELSE world_server_id END
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"UPDATE {tableName}
 					SET
 						scene_name = {{0}},
 						scene_handle = {{1}},
+						world_server_id = CASE WHEN {{3}} > 0 THEN {{3}} ELSE world_server_id END,
 						last_saved = {{2}}
-					WHERE id = {{3}} AND deleted = FALSE",
+					WHERE id = {{4}} AND deleted = FALSE",
 					sceneName ?? string.Empty,
 					sceneHandle,
 					now,
+					worldServerId,
 					characterId).ConfigureAwait(false);
 
 				if (rowsAffected <= 0)
