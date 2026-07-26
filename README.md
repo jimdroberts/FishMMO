@@ -219,13 +219,15 @@ Run with no arguments to enter the menu:
 #### Sub-Menu: Database
 
 ```
-1 : Install PostgreSQL
-2 : Install PgBouncer (Connection Pooler)
-3 : Install FishMMO Database (User/Schema/Initial Migration)
-4 : Create New Database Migration
-5 : Grant User Permissions on Database
-6 : Delete FishMMO Database (DANGEROUS!)
-7 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)
+1 : Configure Database Secrets (DB credentials — username, password, host)
+2 : Install PostgreSQL
+3 : Install PgBouncer (Connection Pooler)
+4 : Install FishMMO Database (User/Schema/Initial Migration)
+5 : Create New Database Migration
+6 : Grant User Permissions on Database
+7 : Delete FishMMO Database (DANGEROUS!)
+8 : Configure PgBouncer (generate pgbouncer.ini + userlist.txt, Linux)
+9 : Configure Server Keys (gate secret, HMAC key, KEK → database)
 0 : Back
 ```
 
@@ -253,7 +255,9 @@ Run with no arguments to enter the menu:
 #### Sub-Menu: Configuration
 
 ```
-1 : Configure appsettings.json
+1 : Configure appsettings.json (web servers — IPFetch, Patcher, WebGL)
+2 : Configure Discord Bot
+3 : Configure CMS
 0 : Back
 ```
 
@@ -333,17 +337,25 @@ The full template maps to:
 | 4 | Unity & Build | Build all C# Projects | Yes | Yes |
 | 5 | Unity & Build | Install Unity Hub | Yes | Yes |
 | 6 | Unity & Build | Install Unity Editor (+Modules) | Yes | Yes |
-| 7 | Database | Install PostgreSQL | Yes | Yes |
-| 8 | Database | Install FishMMO Database | Yes | Yes |
-| 9 | Database | Install PgBouncer | Yes | Yes |
-| 10 | Database | Configure PgBouncer | *(manual)* | Yes |
-| 11 | Web Server | Install NGINX | Yes | Yes |
-| 12 | Web Server | Deploy FishMMO nginx.conf | Yes | Yes |
-| 13 | Web Server | Configure Firewall Rules | Yes | Yes |
-| 14 | Web Server | Install/Renew Let's Encrypt Certificate | Optional | Optional |
-| 15 | Web Server | Register FishMMO Web Services | Optional | Yes |
-| 16 | Configuration | Configure appsettings.json | Yes | Yes |
+| 7 | Database | Configure Database Secrets (DB credentials) | Yes | Yes |
+| 8 | Database | Install PostgreSQL | Yes | Yes |
+| 9 | Database | Install FishMMO Database | Yes | Yes |
+| 10 | Database | Install PgBouncer | Yes | Yes |
+| 11 | Database | Configure PgBouncer | *(manual)* | Yes |
+| 12 | Database | **Configure Server Keys** (REQUIRED) | Yes | Yes |
+| 13 | Web Server | Install NGINX | Yes | Yes |
+| 14 | Web Server | Deploy FishMMO nginx.conf | Yes | Yes |
+| 15 | Web Server | Configure Firewall Rules | Yes | Yes |
+| 16 | Web Server | Install/Renew Let's Encrypt Certificate | Optional | Optional |
+| 17 | Web Server | Register FishMMO Web Services | Optional | Yes |
+| 18 | Configuration | Configure appsettings.json (web servers) | Yes | Yes |
 
+> **"Configure Server Keys" (step 12) is required.** Without the gate secret, KEK, and connection token HMAC key in the database, game servers and web servers will refuse to start. This step runs `SecurityKeyInstaller` which generates all three keys and stores them in the `deployment_secrets` and `connection_token_keys` tables.
+>
+> **After the Installer, open Unity and run these Editor tools** (see [Unity Project Setup](#unity-project-setup)):
+> - `FishMMO > Security > Fetch Client Secrets` — pulls the gate secret from the database and writes `ClientApiSecret.generated.cs`
+> - `FishMMO > Security > Fetch Certificate Pins` — connects to your live servers and writes `CertificatePins.generated.cs`
+>
 > **"Build all C# Projects"** discovers and builds all `.csproj` files under the repository root, including:
 > - `FishMMO-Dependencies` — copies 54 dependency DLLs into `FishMMO-Unity/Assets/Dependencies/`
 > - `FishMMO-Auth` — authentication library (copies DLL to Unity Dependencies)
@@ -383,6 +395,8 @@ cd FishMMO-WebTransport
 
 **Output:** `libfishmmo_webtransport.so` placed directly into `../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/linux_x86_64/`
 
+> **The Linux binary is committed to the repository.** If you're deploying on Linux, you can skip this build step. Windows and macOS binaries must be built on their respective platforms.
+
 #### Windows (Native Build)
 
 **Prerequisites:**
@@ -396,7 +410,7 @@ cd FishMMO-WebTransport
 .\build_windows.ps1
 ```
 
-**Output:** `fishmmo_webtransport.dll` + `msquic.dll` in `.../Plugins/windows_x86_64/`
+**Output:** `fishmmo_webtransport.dll` in `.../Plugins/windows_x86_64/` (msquic is statically linked — no separate `msquic.dll` needed)
 
 #### Windows Cross-Compile from Linux (Zig)
 
@@ -420,7 +434,7 @@ This script:
 2. Extracts headers and DLL from the NuGet package
 3. Compiles all `.cpp` files with `zig c++ -target x86_64-windows-gnu`
 4. Links into a DLL importing `msquic.dll`
-5. Copies both `fishmmo_webtransport.dll` and `msquic.dll` to the Unity plugins directory
+5. Copies both `fishmmo_webtransport.dll` and `msquic.dll` to the Unity plugins directory (cross-compile requires `msquic.dll` alongside the main DLL — unlike native VS builds where msquic is statically linked)
 
 #### macOS (Native Build)
 
@@ -546,6 +560,24 @@ export FISHMMO_DB_PASSWORD=super_secret
 ---
 
 ## Unity Project Setup
+
+### Client Security Setup (REQUIRED before building)
+
+Before building the client, you must generate two security files from within Unity:
+
+**1. Fetch Client Secrets:** `FishMMO > Security > Fetch Client Secrets`
+- Reads the gate secret from the `deployment_secrets` database table
+- Writes `ClientApiSecret.generated.cs` — the shared secret for `X-FishMMO-Client` HMAC header signing
+- Requires database access (uses the same `FISHMMO_DB_*` credentials)
+- Run once per deployment or when the gate secret is rotated
+
+**2. Fetch Certificate Pins:** `FishMMO > Security > Fetch Certificate Pins`
+- Connects to your live game servers over TLS to download leaf certificates
+- Computes SHA-256 SPKI hashes and writes `CertificatePins.generated.cs`
+- Minimum 2 pins (active + backup) required for release builds
+- Run whenever TLS certificates are renewed with new key pairs
+
+> **Without these files, release client builds will fail.** The build validator blocks any build with missing or sentinel-placeholder values. Development builds are exempt.
 
 ### Build World Scene Details
 
