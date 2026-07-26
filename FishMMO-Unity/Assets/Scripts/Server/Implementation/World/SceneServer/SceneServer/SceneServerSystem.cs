@@ -747,34 +747,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Scene scene = args.LoadedScenes[0];
 
+				// Capture Unity Scene fields on the main thread. Async workers must not
+				// touch Scene.name / Scene.handle (GetNameInternal is main-thread only) —
+				// that previously aborted SetReady and left scene_status stuck at Loading.
+				string loadedSceneName = scene.name;
+				int loadedSceneHandle = scene.handle;
+				long sceneServerId = runtimeData.ID;
+				long worldServerId = sceneData.WorldServerID;
+				long sceneDbId = sceneData.ID;
+
 				try
 				{
 					// Process the scene by adding it to the world dictionary mappings.
 					// ObjectSpawner/network init may log warnings for missing client-only
 					// assets, but must not prevent Ready registration.
-					ProcessScene(scene, sceneType, sceneData.WorldServerID);
+					ProcessScene(scene, sceneType, worldServerId);
 
 					Log.Info("SceneServerSystem",
-						$"Scene load OK {sceneType} '{scene.name}' handle={scene.handle} " +
-						$"dbId={sceneData.ID} world={sceneData.WorldServerID} — setting Ready.");
-					if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID))
+						$"Scene load OK {sceneType} '{loadedSceneName}' handle={loadedSceneHandle} " +
+						$"dbId={sceneDbId} world={worldServerId} — setting Ready.");
+					// Closure uses only primitives/strings — safe on async DB worker.
+					if (!TryEnqueueAsyncWork(
+						() => SetSceneReadyAsync(sceneServerId, worldServerId, loadedSceneName, loadedSceneHandle),
+						sceneServerId))
 					{
-						Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={scene.name}:{scene.handle}. Firing directly.");
+						Log.Warning("SceneServerSystem",
+							$"Failed to enqueue async SetSceneReady: Scene={loadedSceneName}:{loadedSceneHandle}. Firing directly.");
 						// Fire-and-forget is safe here: SetSceneReadyAsync has its own
 						// try-catch with error logging (see method body). The task is
 						// discarded with _ = to suppress the compiler warning; any DB
 						// or network failure will be logged internally without crashing
 						// the scene-load callback.
-						_ = SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle);
+						_ = SetSceneReadyAsync(sceneServerId, worldServerId, loadedSceneName, loadedSceneHandle);
 					}
 				}
 				catch (Exception ex)
 				{
 					Log.Error("SceneServerSystem",
-						$"ProcessScene failed for '{scene.name}' handle={scene.handle} dbId={sceneData.ID}: {ex}");
-					if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed), sceneData.ID))
+						$"ProcessScene failed for '{loadedSceneName}' handle={loadedSceneHandle} dbId={sceneDbId}: {ex}");
+					if (!TryEnqueueAsyncWork(() => UpdateSceneStatusAsync(sceneDbId, SceneStatus.Failed), sceneDbId))
 					{
-						_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
+						_ = UpdateSceneStatusAsync(sceneDbId, SceneStatus.Failed);
 					}
 				}
 			}
