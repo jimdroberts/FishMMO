@@ -4,90 +4,73 @@
  * JavaScript bridge for the W3C WebTransport API (browser).
  * Channel mapping: Streams → channel 0 (Reliable), Datagrams → channel 1 (Unreliable)
  *
- * IMPORTANT — Emscripten packaging:
- *   The helper object is defined as $FishWebTransport INSIDE the library map
- *   (the "$" prefix tells Emscripten this is a JS library symbol, not a C
- *   export).  Every exported function declares __deps: ['$FishWebTransport'],
- *   and autoAddDeps provides a belt-and-suspenders guarantee that the helper
- *   is never stripped from the final framework.js build.
+ * CRITICAL: WebTransport is NOT WebSocket. There is no standard
+ * `wt.readyState === 'connected'`. Chrome reports readyState as undefined.
+ * We track liveness with session._connected (set when wt.ready resolves).
  *
- *   The previous pattern of a free-floating `var FishWebTransport = {...}`
- *   outside `LibraryManager.library` caused Emscripten to silently drop the
- *   helper object at link time while keeping the WTConnect/WTSendStream/etc.
- *   call sites — producing `ReferenceError: FishWebTransport is not defined`
- *   at runtime in WebGL builds.
+ * Packaging note (Unity / modern Emscripten):
+ * Keep the helper as a `$`-prefixed library dependency and declare
+ * `__deps` / `autoAddDeps` so Emscripten includes it and rewrites references.
+ * A bare top-level `var FishWebTransport = {}` is NOT available at runtime
+ * and causes: ReferenceError: FishWebTransport is not defined.
  */
 
 var LibraryFishWebTransport = {
-
-    // ------------------------------------------------------------------
-    //  Internal helper (Emscripten library symbol — emitted as
-    //  `var FishWebTransport` in the framework JS)
-    // ------------------------------------------------------------------
+    /**
+     * Session map + stream/datagram pumps. Emscripten exposes this as
+     * `FishWebTransport` after stripping the `$` prefix from the key.
+     */
     $FishWebTransport: {
         _transports: {},
-        _lastErrors: {},  // error messages keyed by index, persists after _remove
         _nextIndex: 1,
 
-        /** Compatible dynCall wrapper — uses wasmTable when available
-         *  (Emscripten 3.x+) and falls back to Module.dynCall / dynCall
-         *  (Emscripten 2.x).  This prevents breakage when Unity upgrades
-         *  its Emscripten toolchain. */
-        _dynCall: (typeof wasmTable !== 'undefined' && wasmTable.get)
-            ? function(sig, fn, args) {
+        /**
+         * Compatible dynCall wrapper — prefers wasmTable (Emscripten 3.x+)
+         * and falls back to Module.dynCall / dynCall (Emscripten 2.x).
+         */
+        _dynCall: function(sig, fn, args) {
+            if (typeof wasmTable !== 'undefined' && wasmTable.get) {
                 var func = wasmTable.get(fn);
-                if (!func) { console.error('[FishWT] Bad function pointer: ' + fn); return; }
-                func.apply(null, args);
-              }
-            : function(sig, fn, args) {
-                var dc = Module['dynCall'] || dynCall;
-                return dc(sig, fn, args);
-              },
+                if (!func) {
+                    console.error('[FishWT] Bad function pointer: ' + fn);
+                    return;
+                }
+                return func.apply(null, args);
+            }
+            var dc = (typeof Module !== 'undefined' && Module['dynCall'])
+                ? Module['dynCall']
+                : dynCall;
+            return dc(sig, fn, args);
+        },
 
         _get: function(index) {
             return FishWebTransport._transports[index] || null;
         },
+
         _remove: function(index) {
             delete FishWebTransport._transports[index];
-            // Keep _lastErrors for one extra retrieval cycle so
-            // WTGetLastErrorMessage can be called after _remove.
-            // The next WTGetLastErrorMessage call cleans it up.
         },
+
         _add: function(session) {
             var idx = FishWebTransport._nextIndex++;
             FishWebTransport._transports[idx] = session;
             return idx;
         },
 
-        /** Allocate WASM heap memory with retry. Under extreme memory pressure _malloc can
-         *  transiently return 0 (NULL). This helper retries up to maxAttempts times with
-         *  delayMs between each attempt, allowing the GC to free memory between retries.
-         *  Returns a Promise that resolves with the pointer (or null if all retries fail). */
-        _mallocRetry: function(size, maxAttempts, delayMs) {
-            return new Promise(function(resolve) {
-                function tryMalloc(attempt) {
-                    var ptr = _malloc(size);
-                    if (ptr) {
-                        resolve(ptr);
-                    } else if (attempt < maxAttempts) {
-                        setTimeout(function() { tryMalloc(attempt + 1); }, delayMs);
-                    } else {
-                        console.error('[FishWT] _malloc failed for ' + size + ' bytes after ' + maxAttempts + ' attempts');
-                        resolve(null);
-                    }
-                }
-                tryMalloc(1);
-            });
+        /**
+         * Session is live for send/receive: ready resolved, not closed, wt exists.
+         * Do NOT use wt.readyState — WebTransport has no WebSocket readyState.
+         */
+        _isLive: function(session) {
+            return !!(session && session.wt && session._connected && !session._closed);
         },
 
-        /** Read incoming bidirectional streams, deliver data via onStream callback.
-         *  Wraps the pump in a retry loop: if the reader becomes errored or the
-         *  pump fails, it waits 1s and re-creates the reader. This prevents a
-         *  single stream error from permanently killing all incoming stream data. */
+        /**
+         * Read incoming bidirectional streams, deliver data via onStream callback.
+         */
         _readBidiStreams: function(session) {
             function startPump() {
-                /* Guard: don't start a new pump if the session is already closed. */
-                if (!session.wt || session.wt.readyState !== 'connected') return;
+                if (!FishWebTransport._isLive(session)) return;
 
                 var reader;
                 try {
@@ -102,12 +85,6 @@ var LibraryFishWebTransport = {
                     reader.read().then(function(result) {
                         if (session._closed) { try { reader.releaseLock(); } catch (_) {} return; }
                         if (result.done) {
-                            /* Streams closed — retry with exponential backoff.
-                             * "done" can occur transiently during browser memory
-                             * pressure; a hard cut-off after a few retries would
-                             * permanently kill the pump. Back off exponentially
-                             * (1.5x per retry, capped at 30s, up to 100 retries)
-                             * and log a warning on each transient done. */
                             try { reader.releaseLock(); } catch (_) {}
                             session._doneRetries = (session._doneRetries || 0) + 1;
                             if (session._doneRetries <= 100) {
@@ -122,7 +99,7 @@ var LibraryFishWebTransport = {
                             }
                             return;
                         }
-                        session._doneRetries = 0;  /* reset on successful read */
+                        session._doneRetries = 0;
                         var stream = result.value;
                         var streamReader = stream.readable.getReader();
                         function readStream() {
@@ -130,21 +107,16 @@ var LibraryFishWebTransport = {
                                 if (session._closed) { try { streamReader.releaseLock(); } catch (_) {} return; }
                                 if (sr.done) { streamReader.releaseLock(); return; }
                                 var data = new Uint8Array(sr.value);
-                                // Retry _malloc up to 3 times with 10ms delay between attempts.
-                                // Under extreme WASM heap pressure, _malloc can transiently return
-                                // 0 (NULL). A brief delay allows GC to run and free memory.
-                                // If all retries fail, the chunk is dropped with a console.error
-                                // warning so the C# caller can respond to sustained data loss.
-                                return FishWebTransport._mallocRetry(data.length, 3, 10).then(function(ptr) {
-                                    if (ptr) {
-                                        HEAPU8.set(data, ptr);
-                                        FishWebTransport._dynCall('viii', session.onStream, [session._index, ptr, data.length]);
-                                        _free(ptr);
-                                    } else {
-                                        console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes) after 3 retries');
-                                    }
-                                    readStream();
-                                });
+                                var ptr = _malloc(data.length);
+                                if (!ptr) {
+                                    console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes), dropping');
+                                    streamReader.releaseLock();
+                                    return;
+                                }
+                                HEAPU8.set(data, ptr);
+                                FishWebTransport._dynCall('viii', session.onStream, [session._index, ptr, data.length]);
+                                _free(ptr);
+                                readStream();
                             }).catch(function(e) {
                                 console.warn('[FishWT] stream read error: ' + e.message);
                                 try { streamReader.releaseLock(); } catch (_) {}
@@ -155,8 +127,6 @@ var LibraryFishWebTransport = {
                     }).catch(function(e) {
                         console.error('[FishWT] bidi stream pump error: ' + e.message);
                         try { reader.releaseLock(); } catch (_) {}
-                        /* Restart the pump after a delay so we don't tight-loop on
-                         * persistent errors. */
                         setTimeout(function() { startPump(); }, 1000);
                     });
                 }
@@ -165,9 +135,54 @@ var LibraryFishWebTransport = {
             startPump();
         },
 
+        /**
+         * Pump readable side of a client-opened bidi stream (SAME_STREAM_REPLY_V1).
+         * LoginServer replies on the same stream the client created — not via
+         * incomingBidirectionalStreams.
+         */
+        _readOwnBidiStream: function(session, stream, seq) {
+            try {
+                var ownReader = stream.readable.getReader();
+                function readOwnStream() {
+                    ownReader.read().then(function(sr) {
+                        if (session._closed) {
+                            try { ownReader.releaseLock(); } catch (_) {}
+                            return;
+                        }
+                        if (sr.done) {
+                            try { ownReader.releaseLock(); } catch (_) {}
+                            console.log('[FishWT] own bidi readable done seq=' + (seq || 0));
+                            return;
+                        }
+                        var chunk = new Uint8Array(sr.value);
+                        console.log('[FishWT] own bidi RECV len=' + chunk.length +
+                            ' seq=' + (seq || 0) + ' stamp=SAME_STREAM_REPLY_V1');
+                        var ptr = _malloc(chunk.length);
+                        if (!ptr) {
+                            console.warn('[FishWT] malloc failed for own-stream data (' +
+                                chunk.length + ' bytes), dropping');
+                            readOwnStream();
+                            return;
+                        }
+                        HEAPU8.set(chunk, ptr);
+                        FishWebTransport._dynCall('viii', session.onStream,
+                            [session._index, ptr, chunk.length]);
+                        _free(ptr);
+                        readOwnStream();
+                    }).catch(function(e) {
+                        console.warn('[FishWT] own bidi read error: ' + e.message);
+                        try { ownReader.releaseLock(); } catch (_) {}
+                    });
+                }
+                readOwnStream();
+            } catch (re) {
+                console.warn('[FishWT] own bidi readable pump failed: ' + re.message);
+            }
+        },
+
         _readDatagrams: function(session) {
             function startPump() {
-                if (!session.wt || session.wt.readyState !== 'connected') return;
+                if (!FishWebTransport._isLive(session)) return;
 
                 var reader;
                 try {
@@ -182,9 +197,6 @@ var LibraryFishWebTransport = {
                     reader.read().then(function(result) {
                         if (session._closed) { try { reader.releaseLock(); } catch (_) {} return; }
                         if (result.done) {
-                            /* Guard against transient done reads (same pattern
-                             * as _readBidiStreams above). Exponential backoff
-                             * with up to 100 retries. */
                             try { reader.releaseLock(); } catch (_) {}
                             session._dgramDoneRetries = (session._dgramDoneRetries || 0) + 1;
                             if (session._dgramDoneRetries <= 100) {
@@ -199,20 +211,18 @@ var LibraryFishWebTransport = {
                             }
                             return;
                         }
-                        session._dgramDoneRetries = 0;  /* reset on successful read */
+                        session._dgramDoneRetries = 0;
                         var data = new Uint8Array(result.value);
-                        // Retry _malloc up to 3 times with 10ms delay between attempts.
-                        // Same pattern and rationale as _readBidiStreams.
-                        return FishWebTransport._mallocRetry(data.length, 3, 10).then(function(ptr) {
-                            if (ptr) {
-                                HEAPU8.set(data, ptr);
-                                FishWebTransport._dynCall('viii', session.onDatagram, [session._index, ptr, data.length]);
-                                _free(ptr);
-                            } else {
-                                console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes) after 3 retries');
-                            }
+                        var ptr = _malloc(data.length);
+                        if (!ptr) {
+                            console.warn('[FishWT] malloc failed for datagram (' + data.length + ' bytes), dropping');
                             pump();
-                        });
+                            return;
+                        }
+                        HEAPU8.set(data, ptr);
+                        FishWebTransport._dynCall('viii', session.onDatagram, [session._index, ptr, data.length]);
+                        _free(ptr);
+                        pump();
                     }).catch(function(e) {
                         console.error('[FishWT] dgram read error: ' + e.message);
                         try { reader.releaseLock(); } catch (_) {}
@@ -225,22 +235,24 @@ var LibraryFishWebTransport = {
         }
     },
 
-    // ------------------------------------------------------------------
-    //  Exported functions (callable from C# via [DllImport("__Internal")])
-    //  Each declares __deps so Emscripten never strips the helper.
-    // ------------------------------------------------------------------
-
     WTConnect__deps: ['$FishWebTransport'],
     WTConnect: function(urlPtr, onOpen, onClose, onStream, onDatagram, onError) {
         var url = UTF8ToString(urlPtr);
+        console.log('[FishWT] WTConnect url=' + url);
 
-        // Create the session object first so it's available for the
-        // "WebTransport not supported" check below (though no error is
-        // stored on the session — errors go to _lastErrors map).
+        if (typeof WebTransport === 'undefined') {
+            console.error('[FishWT] WebTransport not supported in this browser');
+            FishWebTransport._dynCall('vi', onError, [-1]);
+            return -1;
+        }
+
         var session = {
             wt: null,
             _index: -1,
+            _connected: false,
+            _closed: false,
             _errorFired: false,
+            _url: url,
             onOpen: onOpen,
             onClose: onClose,
             onStream: onStream,
@@ -248,46 +260,66 @@ var LibraryFishWebTransport = {
             onError: onError
         };
 
-        if (typeof WebTransport === 'undefined') {
-            console.error('[FishWT] WebTransport not supported');
-            FishWebTransport._lastErrors[-1] = 'WebTransport not supported';
-            FishWebTransport._dynCall('vi', onError, [-1]);
-            return -1;
-        }
-
         var index = FishWebTransport._add(session);
         session._index = index;
 
         try {
             session.wt = new WebTransport(url);
         } catch (e) {
-            console.error('[FishWT] Create failed: ' + e.message);
-            FishWebTransport._lastErrors[index] = 'Create failed: ' + e.message;
+            console.error('[FishWT] Create failed url=' + url + ': ' + e.message);
+            session._connected = false;
+            session._closed = true;
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
             return -1;
         }
 
         session.wt.ready.then(function() {
+            if (session._closed) {
+                console.warn('[FishWT] ready after teardown index=' + index + ' url=' + url);
+                return;
+            }
+            /* Own liveness flag — do NOT use wt.readyState (undefined on WebTransport). */
+            session._connected = true;
+            console.log('[FishWT] ready index=' + index + ' url=' + url +
+                ' _connected=true (WebTransport has no readyState)');
             FishWebTransport._dynCall('vi', onOpen, [index]);
             FishWebTransport._readBidiStreams(session);
             FishWebTransport._readDatagrams(session);
         }).catch(function(err) {
-            console.error('[FishWT] Ready failed: ' + err.message);
+            var msg = (err && err.message) ? err.message : String(err);
+            session._connected = false;
+            if (session._closed || (msg && msg.indexOf('close() is called while connecting') >= 0)) {
+                console.warn('[FishWT] Ready aborted after client teardown index=' + index +
+                    ' url=' + url + ': ' + msg);
+            } else {
+                console.error('[FishWT] Ready failed index=' + index + ' url=' + url + ': ' + msg);
+            }
             if (session._errorFired) return;
             session._errorFired = true;
-            FishWebTransport._lastErrors[index] = 'Ready failed: ' + (err.message || 'unknown');
+            session._closed = true;
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
         });
 
         session.wt.closed.then(function() {
+            console.log('[FishWT] closed index=' + index + ' url=' + url);
+            session._connected = false;
+            session._closed = true;
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onClose, [index]);
         }).catch(function(err) {
+            var msg = (err && err.message) ? err.message : String(err);
+            session._connected = false;
+            session._closed = true;
+            if (msg && msg.indexOf('close() is called while connecting') >= 0) {
+                console.warn('[FishWT] closed after client teardown index=' + index +
+                    ' url=' + url + ' (ignore if you already hit connect timeout)');
+            } else {
+                console.error('[FishWT] closed error index=' + index + ' url=' + url + ': ' + msg);
+            }
             if (session._errorFired) return;
             session._errorFired = true;
-            FishWebTransport._lastErrors[index] = 'Closed: ' + (err.message || 'unknown');
             FishWebTransport._remove(index);
             FishWebTransport._dynCall('vi', onError, [index]);
         });
@@ -295,27 +327,34 @@ var LibraryFishWebTransport = {
         return index;
     },
 
-    /** Send data over a reusable persistent bidirectional stream.
-     *  Creates one stream on first send and caches its writer for all
-     *  subsequent reliable sends.  A new stream is created only when
-     *  the existing writer becomes closed or errored
-     *  (desiredSize === null).
-     *
-     *  This eliminates the massive overhead + QUIC stream-limit
-     *  exhaustion of opening a new stream per packet (the previous
-     *  behaviour), which is critical for game RPCs at 20+ Hz.
-     *
-     *  The writer-caching pattern mirrors WTSendDatagram below. */
+    /**
+     * Send data over a reusable persistent bidirectional stream.
+     * Also pumps stream.readable for SAME_STREAM_REPLY_V1 (ServerHandshake).
+     */
     WTSendStream__deps: ['$FishWebTransport'],
     WTSendStream: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
-        if (!session || !session.wt) return false;
-        if (session.wt.readyState !== 'connected') return false;
+        if (!session || !session.wt) {
+            console.error('[FishWT] WTSendStream FAIL no session index=' + index + ' len=' + length);
+            return false;
+        }
+        if (!FishWebTransport._isLive(session)) {
+            console.error('[FishWT] WTSendStream FAIL not live _connected=' + !!session._connected +
+                ' _closed=' + !!session._closed +
+                ' index=' + index + ' len=' + length + ' url=' + (session._url || ''));
+            return false;
+        }
 
         var data = HEAPU8.slice(dataPtr, dataPtr + length);
+        session._wireSendN = (session._wireSendN || 0) + 1;
+        var n = session._wireSendN;
+        if (n <= 12 || (n % 50) === 0) {
+            console.log('[FishWT] WTSendStream HAND_TO_BROWSER #' + n +
+                ' index=' + index + ' len=' + length +
+                ' _connected=true url=' + (session._url || '') +
+                ' (LoginServer should see app stream next)');
+        }
 
-        /* Check cached writer — desiredSize is null when the
-         * underlying stream is closed or errored. */
         if (session._streamWriter) {
             try {
                 if (session._streamWriter.desiredSize === null) {
@@ -330,10 +369,14 @@ var LibraryFishWebTransport = {
         }
 
         if (session._streamWriter) {
-            /* Reuse the existing writer — no new stream created. */
             var writer = session._streamWriter;
-            writer.write(data).catch(function(e) {
-                console.warn('[FishWT] stream write error: ' + e.message);
+            writer.write(data).then(function() {
+                if (n <= 12) {
+                    console.log('[FishWT] WTSendStream write RESOLVED #' + n +
+                        ' index=' + index + ' len=' + length);
+                }
+            }).catch(function(e) {
+                console.warn('[FishWT] stream write error #' + n + ': ' + e.message);
                 if (session._streamWriter === writer) {
                     try { writer.releaseLock(); } catch (_) {}
                     session._streamWriter = null;
@@ -342,28 +385,39 @@ var LibraryFishWebTransport = {
             return true;
         }
 
-        /* If a createBidirectionalStream promise is already in-flight
-         * (e.g. from a rapid previous send before the promise resolved),
-         * queue this data to be flushed once the stream becomes available.
-         * This prevents exhausting the browser's stream limit (~100-200)
-         * by creating a new bidi stream on every rapid send. */
         if (session._streamWriterPending) {
             if (!session._sendQueue) session._sendQueue = [];
             session._sendQueue.push(data);
+            console.log('[FishWT] WTSendStream queued behind pending stream #' + n +
+                ' index=' + index + ' len=' + length + ' qlen=' + session._sendQueue.length);
             return true;
         }
 
-        /* No valid cached writer and no pending creation:
-         * start creating a new persistent bidirectional stream. */
         session._streamWriterPending = true;
+        console.log('[FishWT] WTSendStream createBidirectionalStream #' + n +
+            ' index=' + index + ' len=' + length + ' url=' + (session._url || ''));
         try {
             session.wt.createBidirectionalStream().then(function(stream) {
+                if (!FishWebTransport._isLive(session)) {
+                    console.warn('[FishWT] bidi opened after session dead index=' + index);
+                    try { stream.writable.getWriter().close(); } catch (_) {}
+                    session._streamWriterPending = false;
+                    session._sendQueue = [];
+                    return;
+                }
+                console.log('[FishWT] WTSendStream bidi stream OPENED #' + n +
+                    ' index=' + index + ' — writing app payload');
                 var writer = stream.writable.getWriter();
                 session._streamWriter = writer;
                 session._streamWriterPending = false;
 
-                /* Flush any data that was queued while the stream was
-                 * being created. */
+                /*
+                 * CRITICAL (create-account / ServerHandshake):
+                 * LoginServer replies on the SAME client-opened bidi stream
+                 * (SAME_STREAM_REPLY_V1). Pump readable into onStream.
+                 */
+                FishWebTransport._readOwnBidiStream(session, stream, n);
+
                 var queue = session._sendQueue || [];
                 session._sendQueue = [];
                 for (var i = 0; i < queue.length; i++) {
@@ -372,16 +426,21 @@ var LibraryFishWebTransport = {
                     });
                 }
 
-                /* Write the current data. */
-                writer.write(data).catch(function(e) {
-                    console.warn('[FishWT] stream write error: ' + e.message);
+                writer.write(data).then(function() {
+                    if (n <= 12) {
+                        console.log('[FishWT] WTSendStream first-write RESOLVED #' + n +
+                            ' index=' + index + ' len=' + length);
+                    }
+                }).catch(function(e) {
+                    console.warn('[FishWT] stream write error #' + n + ': ' + e.message);
                     if (session._streamWriter === writer) {
                         try { writer.releaseLock(); } catch (_) {}
                         session._streamWriter = null;
                     }
                 });
             }).catch(function(err) {
-                console.warn('[FishWT] createBidirectionalStream failed: ' + err.message);
+                console.error('[FishWT] createBidirectionalStream FAILED #' + n +
+                    ': ' + err.message + ' index=' + index);
                 session._streamWriterPending = false;
                 session._sendQueue = [];
             });
@@ -397,14 +456,14 @@ var LibraryFishWebTransport = {
     WTSendDatagram: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
         if (!session || !session.wt) return false;
-        if (session.wt.readyState !== 'connected') return false;
+        if (!FishWebTransport._isLive(session)) {
+            console.error('[FishWT] WTSendDatagram FAIL not live index=' + index +
+                ' _connected=' + !!session._connected + ' _closed=' + !!session._closed);
+            return false;
+        }
 
         var data = new Uint8Array(HEAPU8.slice(dataPtr, dataPtr + length));
         try {
-            /* Check for closed/errored writer before reusing.
-             * WritableStreamDefaultWriter.closed is a Promise (always truthy),
-             * so we cannot test it as a boolean.  Use desiredSize === null
-             * instead — it is null when the stream is errored or closed. */
             if (session._dgramWriter) {
                 try {
                     if (session._dgramWriter.desiredSize === null) {
@@ -418,13 +477,9 @@ var LibraryFishWebTransport = {
             if (!session._dgramWriter) {
                 session._dgramWriter = session.wt.datagrams.writable.getWriter();
             }
-            /* Clone the writer reference for this send — if another send
-             * nulls session._dgramWriter due to an error, this send's
-             * pending write still holds a valid reference. */
             var writer = session._dgramWriter;
             writer.write(data).catch(function(e) {
                 console.warn('[FishWT] dgram write: ' + e.message);
-                /* Only null the cached writer if it's still THIS writer */
                 if (session._dgramWriter === writer) {
                     try { writer.releaseLock(); } catch (_) {}
                     session._dgramWriter = null;
@@ -444,6 +499,7 @@ var LibraryFishWebTransport = {
         var session = FishWebTransport._get(index);
         if (session) {
             session._closed = true;
+            session._connected = false;
             if (session._sendQueue) { session._sendQueue.length = 0; delete session._sendQueue; }
             if (session.wt) {
                 try {
@@ -456,48 +512,18 @@ var LibraryFishWebTransport = {
         FishWebTransport._remove(index);
     },
 
-    /** @deprecated Reserved for future use — currently not called from C#.
-     *  Returns true if the WebTransport session is in the 'connected' state.
-     *  C# callers should track connection state locally instead. */
+    /** @deprecated Reserved for future use — currently not called from C#. */
     WTIsConnected__deps: ['$FishWebTransport'],
     WTIsConnected: function(index) {
         var session = FishWebTransport._get(index);
-        if (!session || !session.wt) return false;
-        return session.wt.readyState === 'connected';
+        return FishWebTransport._isLive(session) ? 1 : 0;
     },
 
     WTSetStreamThreshold__deps: ['$FishWebTransport'],
     WTSetStreamThreshold: function(index, threshold) {
         // Reserved for future stream congestion control.
-        // Currently not enforced -- streams are created on demand.
-    },
-
-    /** Retrieve the last error message stored for the given session index.
-     *  Reads from the _lastErrors map which persists after session _remove.
-     *  Cleans up the stored error entry after reading (one-shot).
-     *  Returns a pointer to a UTF-8 string allocated on the WASM heap.
-     *  The caller (C#) MUST free the returned pointer via _free() after
-     *  marshalling the string.
-     *  Returns 0 (NULL) if no error is stored for this index. */
-    WTGetLastErrorMessage__deps: ['$FishWebTransport'],
-    WTGetLastErrorMessage: function(index) {
-        var msg = FishWebTransport._lastErrors[index];
-        if (!msg) return 0;
-        // Clean up after read — one-shot retrieval.
-        delete FishWebTransport._lastErrors[index];
-        if (typeof msg !== 'string') msg = String(msg);
-        // Truncate to 1024 bytes to bound WASM heap allocation.
-        if (msg.length > 1024) msg = msg.substring(0, 1021) + '...';
-        // UTF-8 encode into the WASM heap.  _malloc / _free are provided
-        // by Emscripten and exported to C# via [DllImport("__Internal")].
-        var ptr = _malloc(msg.length + 1);
-        if (!ptr) return 0;
-        stringToUTF8(msg, ptr, msg.length + 1);
-        return ptr;
     }
 };
 
-// Belt-and-suspenders: autoAddDeps ensures $FishWebTransport is never
-// stripped, even if a future edit accidentally drops a __deps annotation.
 autoAddDeps(LibraryFishWebTransport, '$FishWebTransport');
 mergeInto(LibraryManager.library, LibraryFishWebTransport);

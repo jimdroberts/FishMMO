@@ -73,23 +73,6 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		/// </summary>
 		[DllImport("__Internal")]
 		internal static extern void WTSetStreamThreshold(int index, int threshold);
-
-		/// <summary>
-		/// Retrieves the last error message stored for the given session index.
-		/// Returns a pointer to a UTF-8 string allocated on the WASM heap,
-		/// or IntPtr.Zero if no error is available.
-		/// The caller MUST free the returned pointer via <see cref="WASMFree"/>.
-		/// </summary>
-		[DllImport("__Internal")]
-		internal static extern IntPtr WTGetLastErrorMessage(int index);
-
-		/// <summary>
-		/// Frees a pointer previously allocated on the WASM heap.
-		/// Maps to Emscripten's built-in _free() via EntryPoint.
-		/// Required to release memory returned by <see cref="WTGetLastErrorMessage"/>.
-		/// </summary>
-		[DllImport("__Internal", EntryPoint = "_free")]
-		internal static extern void WASMFree(IntPtr ptr);
 	}
 #else
 	/// <summary>
@@ -140,12 +123,6 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		{
 			// Reserved — no-op on non-WebGL platforms.
 		}
-
-		/// <summary>Stub — returns IntPtr.Zero on non-WebGL platforms.</summary>
-		internal static IntPtr WTGetLastErrorMessage(int index) => IntPtr.Zero;
-
-		/// <summary>Stub — no-op on non-WebGL platforms.</summary>
-		internal static void WASMFree(IntPtr ptr) { /* no-op */ }
 	}
 #endif
 }

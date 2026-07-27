@@ -45,15 +45,42 @@ Output: `libfishmmo_webtransport.so` in the Unity `linux_x86_64` plugin director
 
 ### Windows (native)
 
-Build directly on Windows with Visual Studio 2022.
+Build directly on Windows with Visual Studio 2022+.
+
+**Default (fast):** links the prebuilt `Microsoft.Native.Quic.MsQuic.Schannel`
+NuGet package and only compiles the 7 wrapper `.cpp` files. First run downloads
+msquic once; later runs are incremental (skips unchanged objects).
 
 ```powershell
-# Dependencies
-winget install Kitware.CMake
+# Daily / iterative builds (recommended)
+powershell -ExecutionPolicy Bypass -File build_windows.ps1
 
-# Build
-powershell -File build_windows.ps1
+# Incremental only (same as default when Schannel tree exists)
+rebuild_only.bat
 ```
+
+**Static msquic (slow first build):** fetches msquic + quictls via CMake and
+statically links. Prefer Ninja for parallel compiles:
+
+```powershell
+winget install Kitware.CMake
+winget install Ninja-build.Ninja   # recommended; avoids single-threaded NMake
+
+# Full static rebuild (wipe previous NMake/CMake tree if needed)
+powershell -ExecutionPolicy Bypass -File build_windows.ps1 -Static -Clean
+
+# Incremental static rebuild after the first -Static configure
+powershell -ExecutionPolicy Bypass -File build_windows.ps1 -Static
+```
+
+| Script / flag | When to use |
+|---|---|
+| `build_windows.ps1` | Default Windows build (Schannel, fast) |
+| `build_windows.ps1 -Static` | Full CMake + static msquic |
+| `build_windows.ps1 -Static -Clean` | Reconfigure static tree (e.g. leave NMake) |
+| `build_windows_schannel.ps1` | Same as default (called by `build_windows.ps1`) |
+| `rebuild_only.bat` / `rebuild_only.ps1` | Incremental; prefers Schannel, else CMake cache |
+| `build_local.bat` | Thin wrapper around `build_windows.ps1` |
 
 ### Windows (cross-compile from Linux)
 
@@ -158,7 +185,10 @@ and must be rebuilt per-deployment.
 FishMMO-WebTransport/
 ├── CMakeLists.txt              CMake project (fetches msquic via FetchContent)
 ├── build_linux.sh              Linux native build
-├── build_windows.ps1           Windows native build (PowerShell)
+├── build_windows.ps1           Windows build (default: Schannel; -Static for CMake)
+├── build_windows_schannel.ps1  Fast Windows path (NuGet msquic + wrapper only)
+├── rebuild_only.bat / .ps1     Incremental rebuild (prefers Schannel)
+├── build_local.bat             Thin wrapper around build_windows.ps1
 ├── build_windows_cross.sh      Windows cross-compile from Linux (Zig)
 ├── build_macos.sh              macOS native build
 ├── README.md

@@ -15,7 +15,7 @@ C++ project before starting the game server.
 | Platform | Directory | Build Command |
 |----------|-----------|---------------|
 | **Linux x86_64** | `linux_x86_64/` | `cd FishMMO-WebTransport && ./build_linux.sh` |
-| **Windows x86_64** | `windows_x86_64/` | `powershell -File build_windows.ps1` |
+| **Windows x86_64** | `windows_x86_64/` | `powershell -ExecutionPolicy Bypass -File build_windows_schannel.ps1` (recommended for Editor) or `powershell -File build_windows.ps1` (static msquic/quictls, needs Perl) |
 | **macOS x86_64** | `mac_x86_64/` | `./build_macos.sh` |
 
 ### Why build on the deployment server?
@@ -36,5 +36,21 @@ incompatibilities with the deployment server's libraries.
 
 During development on Linux, only `libfishmmo_webtransport.so` is typically
 present (built locally). Windows and macOS binaries must be built on their
-respective deployment hosts. The Unity Editor on Linux will load the `.so`
-automatically; testing on Windows/macOS requires building those binaries first.
+respective hosts. The Unity Editor on Windows requires:
+
+```
+Plugins/windows_x86_64/fishmmo_webtransport.dll
+Plugins/windows_x86_64/msquic.dll
+```
+
+Without those, Play Mode fails with `DllNotFoundException: fishmmo_webtransport`
+when connecting (WebGL is unaffected — it uses the browser WebTransport API).
+
+Recommended Windows Editor/local build (no OpenSSL/Perl):
+
+```powershell
+cd FishMMO-WebTransport
+powershell -ExecutionPolicy Bypass -File build_windows_schannel.ps1
+```
+
+Then refresh Unity Assets and enter Play Mode again.

@@ -165,9 +165,7 @@ typedef struct {
  * @param max_clients       Maximum concurrent client connections.
  * @param allowed_origins   Comma-separated list of allowed Origin header values
  *                          for CORS validation (e.g. "https://game.example.com").
- *                          Pass "*" to allow all origins (dev/testing).
- *                          Pass NULL or "" to require an Origin header (default
- *                          deny — browsers MUST send Origin per RFC 9220).
+ *                          Pass NULL or "" to allow all origins (dev/testing).
  * @param callbacks         Struct of callback function pointers.
  * @param context           Opaque user pointer passed to all callbacks.
  * @return Server handle, or NULL on failure.
@@ -298,28 +296,6 @@ WT_API int32_t wt_server_get_max_clients(WT_SERVER server);
  * @thread_safety Safe to call from any thread (atomic read).
  */
 WT_API int32_t wt_server_get_state(WT_SERVER server);
-
-/**
- * Set the expected :authority hostname for WebTransport CONNECT validation.
- * Must be called before wt_server_start().  When configured, browser CONNECT
- * requests must include a matching :authority pseudo-header.  This prevents
- * host-confusion attacks in multi-tenant deployments.  Empty string = skip
- * authority validation (default, backward compatible).
- *
- * @thread_safety Safe to call from any thread before wt_server_start.
- */
-WT_API void wt_server_set_expected_authority(WT_SERVER server, const char* authority);
-
-/**
- * Allow or deny native (raw-QUIC, non-HTTP/3) client connections.
- * Default is 1 (allow).  Set to 0 to reject native clients — use this
- * in production when allowed_origins is configured to prevent native
- * clients from bypassing origin-based access control.
- * Must be called before wt_server_start().
- *
- * @thread_safety Safe to call from any thread before wt_server_start.
- */
-WT_API void wt_server_set_allow_native_clients(WT_SERVER server, int32_t allow);
 
 /* ═══════════════════════════════════════════════════════════════
  * CLIENT API

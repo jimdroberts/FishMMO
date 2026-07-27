@@ -20,7 +20,7 @@
  * symbols are not portable. */
 const QUIC_API_TABLE* MsQuic = NULL;
 
-atomic_bool g_initialised = false;
+static atomic_bool g_initialised = false;
 atomic_int g_api_call_refcount = 0;
 
 /* ── Lifecycle ──────────────────────────────────────────────── */
@@ -66,12 +66,8 @@ WT_API void wt_deinit(void)
             return;
     }
 
-    /* Wait for all in-flight API calls to complete with a monotonic deadline.
-     * 3000 iterations × 10ms = 30 seconds max wait (up from 6s).  A monotonic
-     * deadline guarantees consistent maximum wait time regardless of system
-     * load during the spin loop, whereas the old fixed-retry-count approach
-     * could vary by ±50% depending on scheduling delays. */
-    int patience = 3000;
+    /* Wait for all in-flight API calls to complete (bounded spin-wait). */
+    int patience = 600; /* 600 * 10ms = 6 seconds max */
     while (atomic_load(&g_api_call_refcount) > 0 && patience-- > 0) {
 #if defined(WT_PLATFORM_WINDOWS)
         Sleep(10);
@@ -240,27 +236,6 @@ WT_API int32_t wt_server_get_state(WT_SERVER server)
     int32_t result = atomic_load(&((wt_server_s*)server)->state);
     wt_api_exit();
     return result;
-}
-
-WT_API void wt_server_set_expected_authority(WT_SERVER server, const char* authority)
-{
-    if (!wt_api_enter()) { WT_LOG_ERROR("wt_init() not called"); return; }
-    if (server && authority) {
-        wt_server_s* srv = (wt_server_s*)server;
-        strncpy(srv->expected_authority, authority,
-                sizeof(srv->expected_authority) - 1);
-        srv->expected_authority[sizeof(srv->expected_authority) - 1] = '\0';
-    }
-    wt_api_exit();
-}
-
-WT_API void wt_server_set_allow_native_clients(WT_SERVER server, int32_t allow)
-{
-    if (!wt_api_enter()) { WT_LOG_ERROR("wt_init() not called"); return; }
-    if (server) {
-        ((wt_server_s*)server)->allow_native_clients = (allow != 0);
-    }
-    wt_api_exit();
 }
 
 /* ═══════════════════════════════════════════════════════════════
