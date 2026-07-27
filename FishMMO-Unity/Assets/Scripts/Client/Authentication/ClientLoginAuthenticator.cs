@@ -3,11 +3,14 @@ using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
+using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using FishMMO.Auth.Core;
 using FishMMO.Shared;
 using FishMMO.Auth.Implementation;
+using FishMMO.Logging;
+using UnityEngine;
 
 namespace FishMMO.Client
 {
@@ -53,15 +56,41 @@ namespace FishMMO.Client
 			/// </summary>
 			protected override void SendClientHandshake(byte[] publicKey, byte[] cookie, string connectionToken, ushort minVersion, ushort maxVersion, string gameVersion)
 			{
-				Client.Broadcast(new ClientHandshake()
+				// Require full readiness: FishNet.ClientManager.Started AND managerState=Started.
+				// Sending when manager is still Starting was logging "sent OK" with zero server payload.
+				if (!outer.IsFullyReadyToBroadcast())
 				{
-					PublicKey = publicKey,
-					Cookie = cookie,
-					ConnectionToken = connectionToken,
-					MinVersion = minVersion,
-					MaxVersion = maxVersion,
-					GameVersion = gameVersion,
-				}, Channel.Reliable);
+					outer.lastHandshakeSendSucceeded = false;
+					Log.Warning("ClientLoginAuthenticator",
+						$"Send ClientHandshake deferred: fishNetStarted={outer.IsFishNetClientStarted()} " +
+						$"managerState={outer.GetManagerState()}. Need both Started.");
+					return;
+				}
+				Log.Info("ClientLoginAuthenticator",
+					$"Send ClientHandshake pubKeyLen={publicKey?.Length ?? 0} cookieLen={cookie?.Length ?? 0} " +
+					$"tokenLen={connectionToken?.Length ?? 0} gameVersion={gameVersion ?? "?"} " +
+					$"managerState={outer.GetManagerState()} (fully ready — Broadcast now)");
+				try
+				{
+					// Client.Broadcast is the static helper on FishMMO.Client.Client.
+					Client.Broadcast(new ClientHandshake()
+					{
+						PublicKey = publicKey,
+						Cookie = cookie,
+						ConnectionToken = connectionToken,
+						MinVersion = minVersion,
+						MaxVersion = maxVersion,
+						GameVersion = gameVersion,
+					}, Channel.Reliable);
+					outer.lastHandshakeSendSucceeded = true;
+				}
+				catch (Exception ex)
+				{
+					outer.lastHandshakeSendSucceeded = false;
+					// Do not rethrow: Client.OnLogMessage used to ForceDisconnect on network-stack
+					// exceptions, which produced establish → instant TRANSPORT shutdown.
+					Log.Error("ClientLoginAuthenticator", $"ClientHandshake Broadcast failed: {ex.Message}", ex);
+				}
 			}
 
 			/// <summary>
@@ -111,15 +140,35 @@ namespace FishMMO.Client
 				byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
 				byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
 			{
-				Client.Broadcast(new CreateAccountBroadcast()
+				if (!outer.IsFullyReadyToBroadcast())
 				{
-					Username = encryptedUsername,
-					Email = encryptedEmail,
-					Age = encryptedAge,
-					Salt = encryptedSalt,
-					Verifier = encryptedVerifier,
-					Seq = seq,
-				}, Channel.Reliable);
+					Log.Error("ClientLoginAuthenticator",
+						$"Send CreateAccountBroadcast aborted: fishNetStarted={outer.IsFishNetClientStarted()} " +
+						$"managerState={outer.GetManagerState()}");
+					return;
+				}
+				Log.Info("ClientLoginAuthenticator",
+					$"Send CreateAccountBroadcast seq={seq} " +
+					$"userEnc={encryptedUsername?.Length ?? 0} emailEnc={encryptedEmail?.Length ?? 0} " +
+					$"ageEnc={encryptedAge?.Length ?? 0} saltEnc={encryptedSalt?.Length ?? 0} " +
+					$"verifierEnc={encryptedVerifier?.Length ?? 0} (register path after ECDH — " +
+					"LoginServer must log CreateAccountBroadcast received)");
+				try
+				{
+					Client.Broadcast(new CreateAccountBroadcast()
+					{
+						Username = encryptedUsername,
+						Email = encryptedEmail,
+						Age = encryptedAge,
+						Salt = encryptedSalt,
+						Verifier = encryptedVerifier,
+						Seq = seq,
+					}, Channel.Reliable);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("ClientLoginAuthenticator", $"CreateAccountBroadcast failed: {ex.Message}", ex);
+				}
 			}
 
 			/// <summary>
@@ -206,6 +255,45 @@ namespace FishMMO.Client
 		private bool initialized;
 
 		/// <summary>
+		/// True after a successful initial <see cref="ClientHandshake"/> broadcast on this connection
+		/// while fully ready (FishNet + connection manager both Started).
+		/// Cleared on Stopped/Stopping so the next connect can send again.
+		/// </summary>
+		private bool initialClientHandshakeSent;
+
+		/// <summary>
+		/// Set by <see cref="LoginAuthenticatorCore.SendClientHandshake"/> so the outer can
+		/// know whether the last send actually went out (vs deferred/aborted).
+		/// </summary>
+		private bool lastHandshakeSendSucceeded;
+
+		/// <summary>
+		/// Connection token held until handshake send succeeds (survives deferred retry).
+		/// </summary>
+		private string pendingHandshakeConnectionToken;
+
+		/// <summary>
+		/// True once any <see cref="ServerHandshake"/> is received this connection.
+		/// "sent OK" alone is not progress — server must reply.
+		/// </summary>
+		private bool serverHandshakeReceived;
+
+		/// <summary>Coroutine waiting for connection-manager Started before first handshake.</summary>
+		private Coroutine waitForManagerReadyRoutine;
+
+		/// <summary>Coroutine watching for ServerHandshake after ClientHandshake send.</summary>
+		private Coroutine serverHandshakeWatchdogRoutine;
+
+		/// <summary>How long to wait for ClientConnectionManager.ClientState == Started after FishNet starts.</summary>
+		private const float ManagerReadyWaitSeconds = 10f;
+
+		/// <summary>How long after ClientHandshake send to wait for ServerHandshake before declaring failure.</summary>
+		private const float ServerHandshakeTimeoutSeconds = 12f;
+
+		/// <summary>Resend ClientHandshake once if no ServerHandshake after this many seconds (wire path verified).</summary>
+		private const float ClientHandshakeResendAfterSeconds = 2f;
+
+		/// <summary>
 		/// Client authentication event. Subscribe to receive authentication results from the server.
 		/// </summary>
 		public event Action<ClientAuthenticationResult> OnClientAuthenticationResult;
@@ -269,12 +357,14 @@ namespace FishMMO.Client
 		// the transport may have fired connection state callbacks (e.g., disconnect
 		// due to timeout, or the server dropped us). If we call OnConnected on a
 		// stopped connection, the core state machine will be in an inconsistent
-		// state. Only proceed if the connection is still valid.
-		if (Client == null || Client.Connection == null ||
-			Client.Connection.ClientState == LocalConnectionState.Stopped)
+		// state. Only proceed if FishNet is still Started.
+		if (!IsFishNetClientStarted())
 			return;
+		// Force a full re-handshake (queue admit path); token already recovered.
+		ResetHandshakeSessionState();
+		pendingHandshakeConnectionToken = null;
 		core.OnDisconnected();
-		core.OnConnected(connectionToken: null);
+		TrySendInitialClientHandshake("RetryHandshakeAsync");
 	}
 
 		/// <summary>
@@ -305,6 +395,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
+			UnsubscribeConnectionReady();
 			if (initialized && networkManager != null && networkManager.ClientManager != null)
 			{
 				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
@@ -321,12 +412,323 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Sets the client instance for broadcasting messages.
+		/// Subscribes to <see cref="ClientConnectionManager.OnConnectionSuccessful"/> so
+		/// ClientHandshake can be retried after the connection manager reaches Started
+		/// if the first attempt was deferred.
 		/// </summary>
 		/// <param name="client">The client instance.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetClient(Client client)
 		{
+			UnsubscribeConnectionReady();
 			Client = client;
+			if (Client?.Connection != null)
+				Client.Connection.OnConnectionSuccessful += OnConnectionManagerSuccessful;
+		}
+
+		private void UnsubscribeConnectionReady()
+		{
+			if (Client?.Connection != null)
+				Client.Connection.OnConnectionSuccessful -= OnConnectionManagerSuccessful;
+		}
+
+		/// <summary>
+		/// True when FishNet reports the client transport as Started (broadcasts allowed).
+		/// Prefers the cached networkManager from InitializeOnce; falls back to base.NetworkManager.
+		/// </summary>
+		private bool IsFishNetClientStarted()
+		{
+			var nm = networkManager ?? base.NetworkManager;
+			return nm != null
+				&& nm.ClientManager != null
+				&& nm.ClientManager.Started;
+		}
+
+		/// <summary>
+		/// True only when both FishNet and our connection manager report Started.
+		/// Sending while managerState is still Starting marks "sent OK" but LoginServer
+		/// often sees zero app payload — do not send until both are Started.
+		/// </summary>
+		private bool IsFullyReadyToBroadcast()
+		{
+			if (!IsFishNetClientStarted())
+				return false;
+			// When Client/Connection is wired, require managerState == Started.
+			if (Client?.Connection != null
+				&& Client.Connection.ClientState != LocalConnectionState.Started)
+				return false;
+			return true;
+		}
+
+		private LocalConnectionState GetManagerState()
+		{
+			return Client?.Connection?.ClientState ?? LocalConnectionState.Stopped;
+		}
+
+		/// <summary>
+		/// Capture ConnectionToken into pending so deferred handshake retries keep it.
+		/// </summary>
+		private void CapturePendingToken()
+		{
+			if (pendingHandshakeConnectionToken == null && !string.IsNullOrEmpty(ConnectionToken))
+			{
+				pendingHandshakeConnectionToken = ConnectionToken;
+				ConnectionToken = null;
+			}
+		}
+
+		/// <summary>
+		/// Backup path: ClientConnectionManager has applied Started. This is the preferred
+		/// send path — managerState is guaranteed Started when this fires.
+		/// </summary>
+		private void OnConnectionManagerSuccessful()
+		{
+			CapturePendingToken();
+			TrySendInitialClientHandshake("ClientConnection.OnConnectionSuccessful");
+		}
+
+		/// <summary>
+		/// Sends the initial ClientHandshake once per connection, only when fully ready
+		/// (FishNet.ClientManager.Started AND ClientConnectionManager.ClientState == Started).
+		/// </summary>
+		private void TrySendInitialClientHandshake(string source)
+		{
+			if (core == null || !initialized) return;
+			if (initialClientHandshakeSent)
+			{
+				Log.Debug("ClientLoginAuthenticator",
+					$"Skip ClientHandshake ({source}): already sent this connection");
+				return;
+			}
+
+			CapturePendingToken();
+
+			bool fishNet = IsFishNetClientStarted();
+			var managerState = GetManagerState();
+			if (!IsFullyReadyToBroadcast())
+			{
+				Log.Warning("ClientLoginAuthenticator",
+					$"Defer ClientHandshake ({source}): fishNetStarted={fishNet} " +
+					$"managerState={managerState} (need both Started — will retry on manager ready)");
+				// Poll until manager catches up (covers missing OnConnectionSuccessful race).
+				EnsureWaitForManagerReadyRoutine();
+				return;
+			}
+
+			string token = pendingHandshakeConnectionToken;
+			lastHandshakeSendSucceeded = false;
+
+			Log.Info("ClientLoginAuthenticator",
+				$"TrySendInitialClientHandshake source={source} tokenLen={token?.Length ?? 0} " +
+				$"fishNetStarted=true managerState={managerState} (fully ready)");
+
+			try
+			{
+				// Clear any partial crypto from a deferred prior attempt, then start clean.
+				core.OnDisconnected();
+				core.OnConnected(token);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("ClientLoginAuthenticator",
+					$"OnConnected/handshake failed ({source}): {ex.Message}", ex);
+				return;
+			}
+
+			if (lastHandshakeSendSucceeded)
+			{
+				initialClientHandshakeSent = true;
+				// Keep pendingHandshakeConnectionToken until ServerHandshake arrives so a
+				// 2s resend still has tokenLen>0 (IPFetch token was already consumed once).
+				pendingHandshakeConnectionToken = token;
+				StopWaitForManagerReadyRoutine();
+				Log.Info("ClientLoginAuthenticator",
+					$"ClientHandshake Broadcast returned ({source}) managerState=Started " +
+					$"tokenLenKept={token?.Length ?? 0} — NOT progress until WIRE SEND OK + ServerHandshake");
+				LogWireStats("post-broadcast");
+				// Only start watchdog once per connection (resend reuses it).
+				if (serverHandshakeWatchdogRoutine == null && !serverHandshakeReceived)
+					StartServerHandshakeWatchdog();
+			}
+			else
+			{
+				// Keep token for the next ready signal.
+				pendingHandshakeConnectionToken = token;
+				Log.Warning("ClientLoginAuthenticator",
+					$"ClientHandshake not sent ({source}); will retry on next fully-ready signal");
+				EnsureWaitForManagerReadyRoutine();
+			}
+		}
+
+		private void EnsureWaitForManagerReadyRoutine()
+		{
+			if (waitForManagerReadyRoutine != null) return;
+			if (!isActiveAndEnabled) return;
+			waitForManagerReadyRoutine = StartCoroutine(WaitForManagerReadyThenHandshake());
+		}
+
+		private void StopWaitForManagerReadyRoutine()
+		{
+			if (waitForManagerReadyRoutine == null) return;
+			StopCoroutine(waitForManagerReadyRoutine);
+			waitForManagerReadyRoutine = null;
+		}
+
+		/// <summary>
+		/// Polls until managerState == Started (or timeout/disconnect), then sends handshake once.
+		/// </summary>
+		private IEnumerator WaitForManagerReadyThenHandshake()
+		{
+			float deadline = Time.realtimeSinceStartup + ManagerReadyWaitSeconds;
+			while (Time.realtimeSinceStartup < deadline)
+			{
+				if (initialClientHandshakeSent)
+				{
+					waitForManagerReadyRoutine = null;
+					yield break;
+				}
+				if (!IsFishNetClientStarted())
+				{
+					Log.Warning("ClientLoginAuthenticator",
+						"WaitForManagerReady aborted: FishNet no longer Started");
+					waitForManagerReadyRoutine = null;
+					yield break;
+				}
+				if (IsFullyReadyToBroadcast())
+				{
+					waitForManagerReadyRoutine = null;
+					TrySendInitialClientHandshake("WaitForManagerReady.coroutine");
+					yield break;
+				}
+				yield return null;
+			}
+			waitForManagerReadyRoutine = null;
+			Log.Error("ClientLoginAuthenticator",
+				$"Timed out after {ManagerReadyWaitSeconds:0}s waiting for managerState=Started " +
+				$"(last managerState={GetManagerState()}). ClientHandshake never sent.");
+		}
+
+		private void StartServerHandshakeWatchdog()
+		{
+			serverHandshakeReceived = false;
+			if (serverHandshakeWatchdogRoutine != null)
+				StopCoroutine(serverHandshakeWatchdogRoutine);
+			if (!isActiveAndEnabled) return;
+			serverHandshakeWatchdogRoutine = StartCoroutine(ServerHandshakeWatchdog());
+		}
+
+		private void StopServerHandshakeWatchdog()
+		{
+			if (serverHandshakeWatchdogRoutine == null) return;
+			StopCoroutine(serverHandshakeWatchdogRoutine);
+			serverHandshakeWatchdogRoutine = null;
+		}
+
+		/// <summary>
+		/// After ClientHandshake is queued, require ServerHandshake within a timeout.
+		/// "Broadcast queued" is NOT success — prove ServerHandshake or wire silence.
+		/// Optional one resend at ~2s if still no reply.
+		/// </summary>
+		private IEnumerator ServerHandshakeWatchdog()
+		{
+			float start = Time.realtimeSinceStartup;
+			float deadline = start + ServerHandshakeTimeoutSeconds;
+			bool resendAttempted = false;
+
+			while (Time.realtimeSinceStartup < deadline)
+			{
+				if (serverHandshakeReceived)
+				{
+					serverHandshakeWatchdogRoutine = null;
+					yield break;
+				}
+				if (!IsFishNetClientStarted())
+				{
+					serverHandshakeWatchdogRoutine = null;
+					yield break;
+				}
+
+				// One resend after 2s if no ServerHandshake (only when still fully ready).
+				if (!resendAttempted
+					&& (Time.realtimeSinceStartup - start) >= ClientHandshakeResendAfterSeconds
+					&& IsFullyReadyToBroadcast())
+				{
+					resendAttempted = true;
+					LogWireStats("pre-resend");
+					Log.Warning("ClientLoginAuthenticator",
+						$"No ServerHandshake after {ClientHandshakeResendAfterSeconds:0.#}s — " +
+						"resending ClientHandshake once (wire path re-prove)");
+					// Allow TrySend to run again with same connection.
+					initialClientHandshakeSent = false;
+					lastHandshakeSendSucceeded = false;
+					TrySendInitialClientHandshake("ServerHandshakeWatchdog.resend");
+				}
+
+				yield return null;
+			}
+			serverHandshakeWatchdogRoutine = null;
+			if (serverHandshakeReceived) yield break;
+
+			LogWireStats("timeout");
+			Log.Error("ClientLoginAuthenticator",
+				$"NO ServerHandshake within {ServerHandshakeTimeoutSeconds:0}s after ClientHandshake. " +
+				"Wire send failed or transport silent (not server busy). " +
+				"Check [FishWT] WIRE SEND OK / wireSentOk; LoginServer for FIRST_APP_PAYLOAD. " +
+				"CreateAccount cannot run without ServerHandshake.");
+
+			// Do NOT map to ServerBusy — that misleads the player. Unlock via disconnect.
+			try
+			{
+				Client?.ForceDisconnect();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("ClientLoginAuthenticator",
+					$"ForceDisconnect after handshake timeout failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Log FishNet→WebTransport wire counters so we can see Broadcast queued vs WT send.
+		/// </summary>
+		private void LogWireStats(string tag)
+		{
+			try
+			{
+				var nm = networkManager ?? base.NetworkManager;
+				var wt = nm?.TransportManager?.Transport as FishNet.Transporting.WebTransport.WebTransport;
+				if (wt == null && nm?.TransportManager?.Transport is FishNet.Transporting.Multipass.Multipass mp)
+					wt = mp.ClientTransport as FishNet.Transporting.WebTransport.WebTransport;
+
+				if (wt == null)
+				{
+					Log.Warning("ClientLoginAuthenticator",
+						$"WireStats[{tag}]: WebTransport client transport not found");
+					return;
+				}
+				wt.GetClientWireStats(out long queued, out long sentOk, out long sentFail,
+					out long sentBytes, out long dropNotStarted);
+				Log.Info("ClientLoginAuthenticator",
+					$"WireStats[{tag}]: queued={queued} wireSentOk={sentOk} wireSentFail={sentFail} " +
+					$"wireBytes={sentBytes} dropNotStarted={dropNotStarted} " +
+					$"(if queued>0 && wireSentOk==0 → FishNet→WT glue bug)");
+				UnityEngine.Debug.Log(
+					$"[FishWT] WireStats[{tag}] queued={queued} sentOk={sentOk} sentFail={sentFail} " +
+					$"bytes={sentBytes} dropNotStarted={dropNotStarted}");
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("ClientLoginAuthenticator", $"WireStats[{tag}] failed: {ex.Message}");
+			}
+		}
+
+		private void ResetHandshakeSessionState()
+		{
+			initialClientHandshakeSent = false;
+			lastHandshakeSendSucceeded = false;
+			serverHandshakeReceived = false;
+			StopWaitForManagerReadyRoutine();
+			StopServerHandshakeWatchdog();
 		}
 
 		/// <summary>
@@ -374,6 +776,17 @@ namespace FishMMO.Client
 		public void ClearAuthToken()
 		{
 			core?.ClearAuthToken();
+		}
+
+		/// <summary>
+		/// Clears login/register credentials (username/password/email/register flag).
+		/// Safe after a terminal auth UI result or user cancel; do not call between
+		/// SetLoginCredentials and post-ECDH CreateAccount/SRP send.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void ClearCredentials()
+		{
+			core?.ClearCredentials();
 		}
 
 		/// <summary>
@@ -449,19 +862,33 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// FishNet callback invoked when the local client connection state changes.
-		/// Forwards <c>Started</c> to <see cref="ClientAuthenticatorCore.OnConnected"/> and
-		/// <c>Stopping</c>/<c>Stopped</c> to <see cref="ClientAuthenticatorCore.OnDisconnected"/>.
+		/// <c>Started</c> → send ClientHandshake (or schedule retry via connection-manager ready).
+		/// <c>Stopping</c>/<c>Stopped</c> → clear per-connection crypto; credentials kept.
 		/// </summary>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
+			Log.Info("ClientLoginAuthenticator",
+				$"ConnectionState={args.ConnectionState} fishNetStarted={IsFishNetClientStarted()} " +
+				$"managerState={GetManagerState()} handshakeSent={initialClientHandshakeSent} " +
+				$"serverHandshakeReceived={serverHandshakeReceived}");
+
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
 				args.ConnectionState == LocalConnectionState.Stopped)
 			{
+				// Crypto only — credentials intentionally survive for create-account race.
 				core.OnDisconnected();
+				ResetHandshakeSessionState();
+				// Drop pending token on full stop so a stale IPFetch token is not reused.
+				if (args.ConnectionState == LocalConnectionState.Stopped)
+					pendingHandshakeConnectionToken = null;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				core.OnConnected(ConnectionToken); ConnectionToken = null;
+				CapturePendingToken();
+				// Do NOT force-send here if managerState is still Starting — that was the
+				// "Broadcast logged OK / zero server payload" bug. Fully-ready gate defers
+				// until ClientConnection.OnConnectionSuccessful or the wait coroutine.
+				TrySendInitialClientHandshake("FishNet.OnClientConnectionState.Started");
 			}
 		}
 
@@ -473,6 +900,30 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
+			// Phase 1 cookie challenge: PublicKey null/empty + Cookie set, agreedVersion often 0.
+			// Phase 2 ECDH complete: PublicKey 32 bytes, agreedVersion negotiated.
+			// Both are intentional — not mis-routed frames.
+			bool isCookieChallenge = msg.PublicKey == null || msg.PublicKey.Length == 0;
+			if (isCookieChallenge)
+			{
+				// Do not stop the ServerHandshake watchdog yet — wait for phase-2 ECDH.
+				Log.Info("ClientLoginAuthenticator",
+					$"ServerHandshake PHASE1 cookie-challenge pubKeyLen=0 " +
+					$"cookieLen={msg.Cookie?.Length ?? 0} agreedVersion={msg.AgreedVersion} " +
+					"(expected — client will echo cookie; ECDH on next ServerHandshake)");
+			}
+			else
+			{
+				serverHandshakeReceived = true;
+				// Token no longer needed for resend once server completed ECDH.
+				pendingHandshakeConnectionToken = null;
+				StopServerHandshakeWatchdog();
+				LogWireStats("server-handshake-received");
+				Log.Info("ClientLoginAuthenticator",
+					$"ServerHandshake PHASE2 ECDH pubKeyLen={msg.PublicKey?.Length ?? 0} " +
+					$"cookieLen={msg.Cookie?.Length ?? 0} agreedVersion={msg.AgreedVersion} " +
+					"(app payload path confirmed — session keys / CreateAccount / SRP can proceed)");
+			}
 			core.OnServerHandshakeReceived(msg.PublicKey, msg.Cookie, msg.AgreedVersion);
 		}
 

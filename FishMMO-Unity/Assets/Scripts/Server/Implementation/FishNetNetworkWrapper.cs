@@ -147,9 +147,25 @@ namespace FishMMO.Server.Implementation
 			if (transport == null) return;
 
 			// Inspector/component overrides take precedence over .cfg file values.
+			// Production: Address must be the LISTEN bind (usually 127.0.0.1), not the
+			// public advertise IP — clients reach the host via DNAT/DNS separately.
 			string address = !string.IsNullOrWhiteSpace(addressOverride) ? addressOverride : config.GetString("Address", "127.0.0.1");
 			ushort port = portOverride.HasValue && portOverride.Value > 0 ? portOverride.Value : config.GetUShort("Port", 7777);
 			int maxClients = config.GetInt("MaximumClients", 100);
+
+			if (string.IsNullOrWhiteSpace(address))
+			{
+				Log.Error("FishNetNetworkWrapper", "Transport Address is empty — defaulting to 127.0.0.1");
+				address = "127.0.0.1";
+			}
+			if (port == 0)
+			{
+				Log.Error("FishNetNetworkWrapper", "Transport Port is 0 — server will not start. Set Port in the role .cfg.");
+			}
+
+			Log.Info("FishNetNetworkWrapper",
+				$"ApplyTransportConfiguration: bind={address} port={port} maxClients={maxClients} " +
+				$"(overrideAddr={!string.IsNullOrWhiteSpace(addressOverride)}, overridePort={portOverride.HasValue && portOverride.Value > 0})");
 
 			// IPv6 dual-stack support: when enabled, binds both IPv4 and IPv6 on the same port.
 			bool enableIPv6 = string.Equals(config.GetString("EnableIPv6", "false"), "true", StringComparison.OrdinalIgnoreCase);
@@ -186,17 +202,6 @@ namespace FishMMO.Server.Implementation
 						// Configure allowed origins for browser WebTransport CORS.
 						// Empty = allow all (dev); production MUST set this via .cfg.
 						string allowedOrigins = config.GetString("AllowedOrigins", "");
-#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-						if (string.IsNullOrEmpty(allowedOrigins))
-						{
-							Log.Warning("FishNetNetworkWrapper",
-								"AllowedOrigins is not configured. Browser WebTransport CORS " +
-								"validation is DISABLED — any website can open connections to " +
-								"this server. Set AllowedOrigins in the server .cfg file to a " +
-								"comma-separated list of allowed origins " +
-								"(e.g. \"https://play.fishmmo.com\").");
-						}
-#endif
 						wt.SetAllowedOrigins(allowedOrigins);
 						if (!ConfigureWebTransport(wt))
 							Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed for Multipass child — TLS certificates not loaded.");
@@ -217,15 +222,6 @@ namespace FishMMO.Server.Implementation
 				transport.SetPort(port);
 				transport.SetMaximumClients(maxClients);
 				string allowedOrigins = config.GetString("AllowedOrigins", "");
-#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-				if (string.IsNullOrEmpty(allowedOrigins))
-				{
-					Log.Warning("FishNetNetworkWrapper",
-						"AllowedOrigins is not configured. Browser WebTransport CORS " +
-						"validation is DISABLED — any website can open connections to " +
-						"this server. Set AllowedOrigins in the server .cfg file.");
-				}
-#endif
 				wt.SetAllowedOrigins(allowedOrigins);
 				if (!ConfigureWebTransport(wt))
 					Log.Warning("FishNetNetworkWrapper", "WebTransport configuration failed -- TLS certificates not loaded.");

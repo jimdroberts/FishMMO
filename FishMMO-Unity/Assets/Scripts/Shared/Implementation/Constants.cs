@@ -138,6 +138,42 @@ namespace FishMMO.Shared
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string GameHost = GeneratedHostConfig.GameHost;
 
+			/// <summary>
+			/// World server hostname for WebTransport (QUIC) hops.
+			/// Defaults to <see cref="GameHost"/> so single-hostname deploys keep working;
+			/// multi-host deployments can later specialize this independently.
+			/// </summary>
+			public static string WorldGameHost => GameHost;
+
+			/// <summary>
+			/// Scene server hostname for WebTransport (QUIC) hops.
+			/// Defaults to <see cref="GameHost"/> so single-hostname deploys keep working.
+			/// </summary>
+			public static string SceneGameHost => GameHost;
+
+			/// <summary>Default LoginServer listen / public QUIC port band start.</summary>
+			public const int LoginServerPort = 7770;
+
+			/// <summary>Default WorldServer listen / public QUIC port band start.</summary>
+			public const int WorldServerPort = 7780;
+
+			/// <summary>Default SceneServer listen / public QUIC port band start.</summary>
+			public const int SceneServerPort = 7790;
+
+			/// <summary>
+			/// Picks the game hostname for a connection port using standard port bands:
+			/// Login 7770–7779, World 7780–7789, Scene 7790+.
+			/// Used by client Login→World→Scene hops after IPFetch token staging.
+			/// </summary>
+			public static string GetGameHostForPort(ushort port)
+			{
+				if (port >= LoginServerPort && port < WorldServerPort)
+					return GameHost;
+				if (port >= WorldServerPort && port < SceneServerPort)
+					return WorldGameHost;
+				return SceneGameHost;
+			}
+
 				/// <summary>
 				/// Launcher HTML/news page URL.
 				///

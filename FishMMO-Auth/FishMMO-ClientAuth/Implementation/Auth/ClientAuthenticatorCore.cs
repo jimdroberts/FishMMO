@@ -147,6 +147,11 @@ namespace FishMMO.Auth.Implementation
 			if (register && (string.IsNullOrWhiteSpace(email) || !IsAllowedEmailUsername(email)))
 				return false;
 
+			// Registration requires a real calendar age (UI maps dropdown index → 13..120).
+			// Passing the raw dropdown index (e.g. 1 for "13") is a client bug and must fail here.
+			if (register && (age < 13 || age > 120))
+				return false;
+
 			this.username = username;
 			this.password = password;
 			this.register = register;
@@ -174,6 +179,23 @@ namespace FishMMO.Auth.Implementation
 			srpSuccessProcessed = 0;
 			cookieEchoed = 0;
 
+			_ = Log.Info(LogPrefix,
+				$"OnConnected register={register} hasUser={!string.IsNullOrEmpty(username)} " +
+				$"hasEmail={!string.IsNullOrEmpty(email)} age={age} " +
+				$"tokenLen={connectionToken?.Length ?? 0} hasAuthToken={storedAuthToken != null} " +
+				"(sending ClientHandshake; CreateAccount only after ECDH if register=true)");
+
+			// Credentials must survive the Stop→Start race. If they are missing on a
+			// login/register path, handshake still goes out but CreateAccount/SRP will fail later.
+			if (storedAuthToken == null &&
+				(string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password)))
+			{
+				_ = Log.Error(LogPrefix,
+					"OnConnected with empty credentials and no auth token — " +
+					"CreateAccount/SRP will fail after ECDH. " +
+					"Likely SetLoginCredentials was wiped before Started (credential race).");
+			}
+
 			SendClientHandshake(
 				ephemeralKeyPair.PublicKey,
 				cookie: null,
@@ -185,7 +207,9 @@ namespace FishMMO.Auth.Implementation
 
 		/// <summary>
 		/// Call when the transport connection stops or is stopped.
-		/// Clears all per-connection key material (not the stored auth token).
+		/// Clears per-connection crypto keys only — login/register credentials are kept
+		/// so a <c>StopConnection</c>→<c>StartConnection</c> race (used by every connect)
+		/// cannot wipe <c>register=true</c> before ECDH completes and CreateAccount is sent.
 		/// </summary>
 		public void OnDisconnected()
 		{
@@ -200,6 +224,7 @@ namespace FishMMO.Auth.Implementation
 			ephemeralKeyPair?.Dispose();
 			ephemeralKeyPair = null;
 			ClearKeyMaterial();
+			ClearCredentials();
 			ClearAuthToken();
 		}
 
@@ -353,6 +378,10 @@ namespace FishMMO.Auth.Implementation
 
 			if (register)
 			{
+				_ = Log.Info(LogPrefix,
+					$"ECDH complete — register path encrypting CreateAccount fields " +
+					$"(userLen={username?.Length ?? 0} emailLen={email?.Length ?? 0} age={age})");
+
 				srpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
 
 				byte[] encryptedEmail;
@@ -376,6 +405,11 @@ namespace FishMMO.Auth.Implementation
 				}
 
 				SendCreateAccount(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, createAccountSeq);
+
+				// Password/email no longer needed after CreateAccount is queued; keep username for verify UI.
+				password = null;
+				email = null;
+				_ = Log.Info(LogPrefix, "CreateAccount broadcast queued (await AccountCreationSystem server-side handle)");
 			}
 			else
 			{
@@ -505,35 +539,54 @@ namespace FishMMO.Auth.Implementation
 
 			if (srpData.Verify(proof, out string _))
 			{
-
-				if (result == ClientAuthenticationResult.LoginSuccess &&
-					encryptedToken != null && encryptedToken.Length > 0)
+				// LoginSuccess requires a decryptable auth token for world handoff.
+				// Decrypt first; never emit LoginSuccess if the token cannot be stored
+				// (avoids CharacterSelect + spurious LoginSuccess then TokenDecryptFailed).
+				if (result == ClientAuthenticationResult.LoginSuccess)
 				{
+					if (encryptedToken == null || encryptedToken.Length == 0)
+					{
+						_ = Log.Warning(LogPrefix,
+							"LoginSuccess received without encrypted auth token.");
+						storedAuthToken = null;
+						OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+						_ = Log.Debug(LogPrefix, ClientAuthenticationResult.TokenDecryptFailed.ToString());
+						srpData.Clear();
+						srpData = null;
+						return;
+					}
+
 					try
 					{
-						storedAuthToken = SrpService.ClientDecryptAuthToken(encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
+						storedAuthToken = SrpService.ClientDecryptAuthToken(
+							encryptedToken, serverToClientKey, receiveNonceCtx, agreedVersion);
 						if (storedAuthToken == null || storedAuthToken.Length == 0)
 						{
 							if (storedAuthToken != null)
-							{
 								CryptographicOperations.ZeroMemory(storedAuthToken);
-							}
 							storedAuthToken = null;
 							_ = Log.Warning(LogPrefix, "Decrypted auth token is null or empty.");
+							OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+							_ = Log.Debug(LogPrefix, ClientAuthenticationResult.TokenDecryptFailed.ToString());
+							srpData.Clear();
+							srpData = null;
+							return;
 						}
 					}
 					catch (CryptographicException tokenEx)
 					{
-						_ = Log.Warning(LogPrefix, $"Failed to decrypt auth token (non-fatal): {tokenEx.Message}");
+						_ = Log.Warning(LogPrefix,
+							$"Failed to decrypt auth token: {tokenEx.Message}");
 						storedAuthToken = null;
+						OnAuthResultCallback(ClientAuthenticationResult.TokenDecryptFailed);
+						_ = Log.Debug(LogPrefix, ClientAuthenticationResult.TokenDecryptFailed.ToString());
+						srpData.Clear();
+						srpData = null;
+						return;
 					}
 				}
 
-				OnAuthResultCallback(
-					result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null
-						? ClientAuthenticationResult.TokenDecryptFailed
-						: result);
-
+				OnAuthResultCallback(result);
 				_ = Log.Debug(LogPrefix, result.ToString());
 
 				srpData.Clear();
@@ -661,8 +714,10 @@ namespace FishMMO.Auth.Implementation
 		#region Key Material Cleanup
 
 		/// <summary>
-		/// Zeroes all per-connection key material and resets state.
-		/// Does NOT clear <see cref="storedAuthToken"/>.
+		/// Zeroes all per-connection crypto key material and resets handshake state.
+		/// Does NOT clear <see cref="storedAuthToken"/> or login/register credentials.
+		/// Credentials are intentionally preserved across transport Stop→Start so
+		/// create-account / login can complete after the connection is fully ready.
 		/// </summary>
 		public void ClearKeyMaterial()
 		{
@@ -685,6 +740,17 @@ namespace FishMMO.Auth.Implementation
 			receiveNonceCtx?.Dispose();
 			receiveNonceCtx = null;
 			agreedVersion = 0;
+			// NOTE: do not clear username/password/email/register/age here.
+			// ConnectToServer always StopConnection() first; that fired OnDisconnected
+			// and previously wiped register=true before ECDH → CreateAccount never sent.
+		}
+
+		/// <summary>
+		/// Clears login/register credentials from memory. Call on explicit cancel,
+		/// logout, dispose, or after a terminal auth failure the UI has handled.
+		/// </summary>
+		public void ClearCredentials()
+		{
 			username = null;
 			password = null;
 			email = null;

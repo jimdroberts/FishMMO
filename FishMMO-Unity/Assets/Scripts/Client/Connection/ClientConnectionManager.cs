@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using FishNet.Managing;
 using FishNet.Transporting;
+using FishNet.Transporting.Multipass;
+using FishNet.Transporting.WebTransport;
 using FishMMO.Logging;
 using FishMMO.Shared;
 using UnityEngine;
@@ -30,20 +32,6 @@ namespace FishMMO.Client
 		/// a defensive measure — it costs nothing on x86/ARM and documents the intent against future refactoring
 		/// that might introduce background-thread access.</remarks>
 		private int connectingGuard = 0;
-		/// <summary>
-		/// Timestamp (double precision, seconds since startup) of the most recent
-		/// successful connectingGuard acquisition. Used to detect and recover from a
-		/// leaked guard. Double precision prevents float loss after ~24h of client
-		/// uptime, which would cause guardAge to compute as zero.
-		/// </summary>
-		private double connectingGuardAcquiredAt = 0.0;
-		/// <summary>
-		/// ── FIX #10: Reference to the in-flight connection coroutine ──
-		/// Stored so ResetReconnectState can stop the coroutine before
-		/// releasing the connectingGuard.  Uses IEnumerator because
-		/// CoroutineRunner.Start/Stop accept IEnumerator, not UnityEngine.Coroutine.
-		/// </summary>
-		private System.Collections.IEnumerator inFlightConnectionCoroutine;
 		/// <summary>Thread-safe disconnect flag. Volatile for visibility across transport-worker callbacks.</summary>
 		private volatile bool forceDisconnect;
 		private string lastWorldAddress = "";
@@ -60,10 +48,18 @@ namespace FishMMO.Client
 		public float ReconnectAttemptWaitTime { get; set; } = 5f;
 		/// <summary>Maximum delay in seconds for exponential backoff. Default 60.</summary>
 		public float MaxReconnectDelay { get; set; } = 60f;
-		/// <summary>Timeout in seconds waiting for a connection to fully stop. Default 10.</summary>
-		public float ConnectionStopTimeoutSeconds { get; set; } = 10f;
-		/// <summary>Timeout in seconds waiting for a new connection to reach Started state. Default 20.</summary>
-		public float ConnectionEstablishTimeoutSeconds { get; set; } = 20f;
+		/// <summary>
+		/// Timeout in seconds waiting for a connection to fully stop before force-reset.
+		/// Default 3s (was 10s) — World→Scene must not stall on hung Editor native QUIC stop.
+		/// </summary>
+		public float ConnectionStopTimeoutSeconds { get; set; } = 3f;
+
+		/// <summary>
+		/// Max seconds to wait for <see cref="LocalConnectionState.Started"/> after
+		/// <c>StartConnection</c>. Prevents register/login UI from hanging forever when
+		/// WebTransport/QUIC never completes (UDP blocked, bad host, silent handshake fail).
+		/// </summary>
+		public float ConnectTimeoutSeconds { get; set; } = 20f;
 
 		/// <summary>Fired when a connection to the server is successfully established.</summary>
 		public event Action OnConnectionSuccessful;
@@ -71,8 +67,19 @@ namespace FishMMO.Client
 		public event Action<int, int> OnReconnectAttempt;
 		/// <summary>Fired when all reconnect attempts are exhausted without success.</summary>
 		public event Action OnReconnectFailed;
-		/// <summary>Fired when a non-reconnectable connection attempt fails (e.g. login server unreachable).</summary>
-		public event Action OnConnectionAttemptFailed;
+		/// <summary>
+		/// Fired when a connect attempt times out without reaching Started.
+		/// Args: address, port, message for UI.
+		/// </summary>
+		public event Action<string, ushort, string> OnConnectTimedOut;
+
+		/// <summary>
+		/// Optional override for reconnect connects. When set, <see cref="TryReconnect"/>
+		/// invokes this instead of <see cref="ConnectToServer"/> so the client can
+		/// re-fetch an IPFetch HMAC connection token before the World/Scene handshake.
+		/// Args: address, port.
+		/// </summary>
+		public Action<string, ushort> ReconnectConnectOverride;
 
 		/// <summary>Returns true if the current connection type supports reconnection (World or Scene).</summary>
 		public bool CanReconnect =>
@@ -124,12 +131,20 @@ namespace FishMMO.Client
 				Log.Warning("ClientConnection", "ConnectToServer already in progress; ignoring duplicate call.");
 				return;
 			}
-			connectingGuardAcquiredAt = (double)Time.realtimeSinceStartup;
-		if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
-			NetworkManager.ClientManager.StopConnection();
-			var routine = OnAwaitingConnectionReady(address, port, isWorldServer);
-			inFlightConnectionCoroutine = routine;
-			CoroutineRunner.Start(routine);
+			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
+			// Stop any prior session first — but only if not already Stopped.
+			// Unnecessary Stop+Start churn was producing double WTConnect (index=0 then index=1).
+			// Auth core must NOT wipe login/register credentials on Stop events.
+			Log.Info("ClientConnection",
+				$"ConnectToServer begin host={address} port={port} priorState={ClientState} " +
+				"(single StartConnection after clean stop — one WT session)");
+			if (ClientState != LocalConnectionState.Stopped)
+			{
+				Log.Info("ClientConnection",
+					$"Stopping prior connection state={ClientState} before new connect");
+				NetworkManager.ClientManager.StopConnection();
+			}
+			CoroutineRunner.Start(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
 
 		/// <summary>Attempts a reconnect with exponential backoff. The backoff delay is set in
@@ -145,7 +160,12 @@ namespace FishMMO.Client
 				{
 					ReconnectsAttempted++;
 					OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
-					ConnectToServer(lastWorldAddress, lastWorldPort);
+					// Prefer override so Client can stage a fresh IPFetch connection token
+					// (World/Scene reject first ClientHandshake without one behind L4 proxy).
+					if (ReconnectConnectOverride != null)
+						ReconnectConnectOverride(lastWorldAddress, lastWorldPort);
+					else
+						ConnectToServer(lastWorldAddress, lastWorldPort);
 				}
 			}
 			else
@@ -172,21 +192,10 @@ namespace FishMMO.Client
 			ReconnectsAttempted = 0; nextReconnect = -1;
 			CurrentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = ""; lastWorldPort = 0;
-			// ── FIX #10: Stop in-flight coroutine BEFORE releasing guard ──
-			// If a connection coroutine is suspended at a yield point,
-			// releasing the guard would allow a second ConnectToServer to
-			// start a concurrent coroutine on the same transport.  Stop the
-			// coroutine first, then release the guard.
-			if (inFlightConnectionCoroutine != null)
-			{
-				CoroutineRunner.Stop(inFlightConnectionCoroutine);
-				inFlightConnectionCoroutine = null;
-			}
 			// Reset the in-flight connection guard. If a coroutine was
 			// interrupted (e.g., StopAllCoroutines in QuitToLogin), the
 			// guard would otherwise be permanently stuck at 1, blocking
 			// all future ConnectToServer calls.
-			connectingGuardAcquiredAt = 0.0;
 			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 		}
 
@@ -215,6 +224,8 @@ namespace FishMMO.Client
 		private void OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			ClientState = args.ConnectionState;
+			Log.Info("ClientConnection",
+				$"State → {ClientState} forceDisconnect={forceDisconnect} type={CurrentConnectionType}");
 			switch (ClientState)
 			{
 				case LocalConnectionState.Stopped:
@@ -228,18 +239,86 @@ namespace FishMMO.Client
 						// once in TryReconnect() when the actual reconnect begins, so
 						// consumers don't receive duplicate events per cycle.
 					}
-					else if (!forceDisconnect)
-					{
-						// Non-reconnectable connection failed (e.g. login server).
-						// Fire so listeners can invalidate cached discovery data.
-						OnConnectionAttemptFailed?.Invoke();
-					}
 					CurrentConnectionType = ServerConnectionType.None;
 					break;
 				case LocalConnectionState.Started:
+					// FishNet is usable for broadcasts only after Started — not merely
+					// "WebTransport session established" on the wire.
+					Log.Info("ClientConnection",
+						"Started — FishNet ready for ClientHandshake / CreateAccountBroadcast");
 					OnConnectionSuccessful?.Invoke();
 					ReconnectsAttempted = 0; nextReconnect = -1; forceDisconnect = false;
 					break;
+			}
+		}
+
+		/// <summary>
+		/// Invokes FishNet <c>StartConnection</c> without yielding (safe inside try/catch).
+		/// </summary>
+		private bool TryStartConnection(string address, ushort port, out Exception error)
+		{
+			error = null;
+			try
+			{
+				return NetworkManager.ClientManager.StartConnection(address, port);
+			}
+			catch (Exception ex)
+			{
+				error = ex;
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Hard-stop WebTransport/FishNet client so a hop (Login→World, World→Scene) can
+		/// open a new session. Editor native QUIC has been observed stuck Started while
+		/// StopConnection never delivered Stopped — WebGL usually stops cleanly.
+		/// </summary>
+		private void ForceStopTransportForHop(string reason)
+		{
+			Log.Warning("ClientConnection",
+				$"ForceStopTransportForHop: {reason} (localState={ClientState})");
+
+			// Suppress auto-reconnect while we tear down for an intentional hop.
+			bool savedForce = forceDisconnect;
+			forceDisconnect = true;
+			nextReconnect = -1;
+
+			try
+			{
+				try { NetworkManager.ClientManager.StopConnection(); }
+				catch (Exception ex) { Log.Warning("ClientConnection", $"StopConnection: {ex.Message}"); }
+
+				Transport t = NetworkManager.TransportManager != null
+					? NetworkManager.TransportManager.Transport
+					: null;
+
+				if (t is Multipass multipass)
+				{
+					try { multipass.StopConnection(server: false); }
+					catch (Exception ex) { Log.Warning("ClientConnection", $"Multipass.Stop: {ex.Message}"); }
+
+					foreach (Transport nested in multipass.Transports)
+					{
+						if (nested is WebTransport nestedWt)
+						{
+							try { nestedWt.ForceStopClient(); }
+							catch (Exception ex) { Log.Warning("ClientConnection", $"ForceStop nested WT: {ex.Message}"); }
+						}
+					}
+				}
+				else if (t is WebTransport wt)
+				{
+					try { wt.ForceStopClient(); }
+					catch (Exception ex) { Log.Warning("ClientConnection", $"ForceStop WT: {ex.Message}"); }
+				}
+			}
+			finally
+			{
+				// Local state must read Stopped so StartConnection is allowed, even if
+				// FishNet never raised OnClientConnectionState(Stopped).
+				ClientState = LocalConnectionState.Stopped;
+				forceDisconnect = savedForce;
 			}
 		}
 
@@ -252,46 +331,24 @@ namespace FishMMO.Client
 				while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < deadline)
 				{
 					if (--maxWaitIters <= 0)
-					{
-						Log.Error("ClientConnection", "Connection stop wait iteration limit exceeded.");
-						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-						yield break;
-					}
+						break;
 					yield return null;
 				}
 				if (ClientState != LocalConnectionState.Stopped)
 				{
-					Log.Warning("ClientConnection", $"Timed out waiting for connection stop; forcing teardown.");
-					NetworkManager.ClientManager.StopConnection();
-					// Wait for the forced stop to complete before starting a new connection.
-					// Without this wait, StartConnection may fail because the transport
-					// is still in Stopping state.
-					float forcedDeadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
-					int maxForcedIters = 1000;
-					while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < forcedDeadline)
-					{
-						if (--maxForcedIters <= 0)
-						{
-							Log.Error("ClientConnection", "Forced stop wait iteration limit exceeded.");
-							System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-							yield break;
-						}
-						yield return null;
-					}
+					// Do NOT abort the hop — force the transport down and continue.
+					// Aborting here was the Editor-only World→Scene failure: never
+					// StartConnection to sceneserver:7790, no scene handshake.
+					ForceStopTransportForHop(
+						$"stop wait timed out after {ConnectionStopTimeoutSeconds:0.#}s " +
+						$"before connect {address}:{port}");
+					// One frame so any queued connection-state callbacks settle.
+					yield return null;
 					if (ClientState != LocalConnectionState.Stopped)
-					{
-						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");
-						forceDisconnect = false;
-						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-						yield break;
-					}
+						ClientState = LocalConnectionState.Stopped;
 				}
 			}
-			// Release the in-flight guard only after StartConnection has been called
-			// (force-disconnect path above releases early and exits because we don't
-			// want to start).  Releasing before StartConnection would allow a concurrent
-			// ConnectToServer call to acquire the guard and start a second connection
-			// while the first is still being set up.
+			// Intentional quit/force path — do not start a new session.
 			if (forceDisconnect)
 			{
 				forceDisconnect = false;
@@ -299,59 +356,110 @@ namespace FishMMO.Client
 				yield break;
 			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
-			try
+
+			// If still Starting/Started after force-stop, force again then proceed.
+			if (ClientState == LocalConnectionState.Starting || ClientState == LocalConnectionState.Started)
 			{
-				Log.Info("ClientConnection", $"StartConnection host={address} port={port} isWorld={isWorldServer} timeout={ConnectionEstablishTimeoutSeconds}s");
-				NetworkManager.ClientManager.StartConnection(address, port);
-			}
-			catch (System.Exception ex)
-			{
-				Log.Error("ClientConnection", $"StartConnection threw: {ex}");
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-				yield break;
+				Log.Warning("ClientConnection",
+					$"Still {ClientState} before StartConnection to {address}:{port} — force-stop and continue.");
+				ForceStopTransportForHop($"pre-Start still {ClientState}");
+				yield return null;
+				ClientState = LocalConnectionState.Stopped;
 			}
 
-			// Wait for the connection to reach Started or Stopped, with a timeout.
-			// The connectingGuard stays acquired during this wait to prevent
-			// concurrent ConnectToServer calls from starting a second connection
-			// while this one is still being established.
-			float connectDeadline = Time.realtimeSinceStartup + Mathf.Max(1f, ConnectionEstablishTimeoutSeconds);
-			int connectMaxIters = Mathf.CeilToInt(ConnectionEstablishTimeoutSeconds * 120f); // ~120 checks/s
-			while (ClientState == LocalConnectionState.Starting && Time.realtimeSinceStartup < connectDeadline)
+			Log.Info("ClientConnection",
+				$"StartConnection host={address} port={port} isWorld={isWorldServer} " +
+				$"priorState={ClientState} timeout={ConnectTimeoutSeconds:0.#}s " +
+				"(expect exactly one [FishWT] WTConnect BEGIN)");
+
+			// TryStartConnection cannot yield — keep try/catch free of yield (CS1626).
+			bool started = TryStartConnection(address, port, out Exception startEx);
+			if (startEx != null)
 			{
-				if (--connectMaxIters <= 0)
+				Log.Error("ClientConnection", $"StartConnection threw: {startEx.Message}", startEx);
+				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				OnConnectTimedOut?.Invoke(address, port,
+					$"Could not start connection to {address}:{port} — {startEx.Message}");
+				yield break;
+			}
+			if (!started)
+			{
+				// One more force-stop + retry — socket may still have been Starting.
+				Log.Warning("ClientConnection",
+					$"StartConnection returned false for {address}:{port}; force-stop and retry once.");
+				ForceStopTransportForHop("StartConnection returned false");
+				yield return null;
+				ClientState = LocalConnectionState.Stopped;
+				started = TryStartConnection(address, port, out startEx);
+				if (startEx != null)
 				{
-					Log.Error("ClientConnection", "Connection establish wait iteration limit exceeded.");
-					NetworkManager.ClientManager.StopConnection();
+					Log.Error("ClientConnection", $"StartConnection retry threw: {startEx.Message}", startEx);
 					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					OnConnectTimedOut?.Invoke(address, port,
+						$"Could not start connection to {address}:{port} — {startEx.Message}");
 					yield break;
 				}
+				if (!started)
+				{
+					Log.Error("ClientConnection",
+						$"StartConnection still false for {address}:{port} after force-stop retry");
+					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					OnConnectTimedOut?.Invoke(address, port,
+						$"Could not start WebTransport to {address}:{port} (StartConnection false)");
+					yield break;
+				}
+			}
+
+			// Guard released so ForceDisconnect / concurrent cleanup can proceed while
+			// we wait for Started (or timeout).
+			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+
+			// Wait until Started, Stopped, or hard timeout — never leave UI waiting forever.
+			float timeout = Mathf.Max(1f, ConnectTimeoutSeconds);
+			float connectDeadline = Time.realtimeSinceStartup + timeout;
+			while (ClientState != LocalConnectionState.Started
+				&& ClientState != LocalConnectionState.Stopped
+				&& Time.realtimeSinceStartup < connectDeadline)
+			{
+				if (forceDisconnect)
+					yield break;
 				yield return null;
+			}
+
+			if (ClientState == LocalConnectionState.Started)
+			{
+				Log.Info("ClientConnection", $"Connected to {address}:{port}");
+				yield break;
 			}
 
 			if (ClientState == LocalConnectionState.Stopped)
 			{
-				// The transport already reported an error (WebGlOnError / HandleNativeDisconnect).
-				// Log context and release the guard — the UI layer will surface the error.
-				Log.Error("ClientConnection", $"Connection to {address}:{port} failed before reaching Started state. " +
-					"The transport reported an error — check preceding [WebTransport Client] log lines for the specific reason.");
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				// Transport failed fast (WebTransport onError / create failed / handshake refused).
+				// Surface a UI message — previously only unlocked the form with no dialog.
+				string failMsg =
+					$"WebTransport failed to open https://{address}:{port} " +
+					"(server down, TLS/cert, origin, or browser WebTransport). " +
+					"See [FishWT] lines in the browser console.";
+				Log.Warning("ClientConnection",
+					$"Connection to {address}:{port} stopped before Started — {failMsg}");
+				OnConnectTimedOut?.Invoke(address, port, failMsg);
 				yield break;
 			}
 
-			if (ClientState != LocalConnectionState.Started)
-			{
-				// Still in Starting state — timed out waiting for the transport to connect.
-				string serverType = isWorldServer ? "world" : "login";
-				Log.Error("ClientConnection", $"Could not reach {serverType} server {address}:{port} " +
-					$"within {ConnectionEstablishTimeoutSeconds}s. " +
-					"Check network/UDP (QUIC), DNS resolution, and that the server is running and accepting connections on this port.");
-				NetworkManager.ClientManager.StopConnection();
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-				yield break;
-			}
-
-			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+			// Still Starting/Stopping past deadline — hard fail for UI.
+			// Typical when LoginServer is dead/SEGV, or QUIC_NETWORK_IDLE_TIMEOUT
+			// (handshake never completed). close() while connecting is fallout of this.
+			string msg =
+				$"Could not reach login server {address}:{port} within {timeout:0}s " +
+				$"(WebTransport URL https://{address}:{port}). " +
+				"LoginServer may have crashed (SEGV) or is not completing the QUIC handshake — " +
+				"check journalctl -u fishmmo-loginserver, UDP 7770, DNS (direct A, not Cloudflare), " +
+				"and browser console for [FishWT] Ready failed / QUIC_NETWORK_IDLE_TIMEOUT.";
+			Log.Error("ClientConnection", msg);
+			forceDisconnect = true;
+			try { NetworkManager.ClientManager.StopConnection(); }
+			catch (Exception ex) { Log.Warning("ClientConnection", $"Stop after timeout failed: {ex.Message}"); }
+			OnConnectTimedOut?.Invoke(address, port, msg);
 		}
 	}
 }

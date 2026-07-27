@@ -244,6 +244,14 @@ namespace FishMMO.Client
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
 			Connection = new ClientConnectionManager(NetworkManager);
+			// World/Scene reconnect must re-stage an IPFetch HMAC token on ClientHandshake.
+			Connection.ReconnectConnectOverride = (address, port) =>
+			{
+				InvalidateLoginServerCache();
+				StartCoroutine(ConnectToServerWithConnectionToken(port, isWorldServer: true,
+					onFail: (err) => Log.Error("Client",
+						$"Reconnect token fetch failed for {address}:{port}: {err}")));
+			};
 
 			// Initialize the OnReconnectFailed -> OnQuitToLogin forwarding delegate.
 			this.onReconnectFailedQuitToLogin = () => OnQuitToLogin?.Invoke();
@@ -260,19 +268,6 @@ namespace FishMMO.Client
 					Connection.OnConnectionSuccessful += (Action)d;
 
 			Connection.OnReconnectFailed += this.onReconnectFailedQuitToLogin;
-
-			// When a non-reconnectable connection fails (e.g. login server unreachable),
-			// invalidate the cached login server list so the next attempt re-fetches from
-			// IPFetch instead of retrying the same potentially dead server/port.
-			Connection.OnConnectionAttemptFailed += () =>
-			{
-				if (this.loginServerPorts != null)
-				{
-					Log.Info("Client", "Login server connection attempt failed — invalidating cached server list.");
-					this.loginServerPorts = null;
-					this.cachedConnectionToken = null;
-				}
-			};
 
 			this.combatDisplay = new ClientCombatDisplay();
 			this.combatDisplay.Initialize();
@@ -292,19 +287,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Unity Update. Delegates tick processing to the Connection manager.
 		/// </summary>
-		private void Update()
-		{
-			Connection?.Update();
-			
-			if (pendingErrorStackTrace != null)
-			{
-				string st = pendingErrorStackTrace;
-				pendingErrorStackTrace = null;
-				if (Connection?.ClientState == LocalConnectionState.Stopped) return;
-				try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
-				Connection?.ForceDisconnect();
-			}
-		}
+		private void Update() => Connection?.Update();
 
 		/// <summary>
 		/// Unity OnDestroy. Cleans up event subscriptions, managers, authenticator, connection, and settings.
@@ -347,22 +330,6 @@ namespace FishMMO.Client
 			UIManager.SetClient(null);
 			this.clientPostbootSystem?.UnsetClient(this);
 			Application.logMessageReceived -= OnLogMessage;
-
-#if UNITY_WEBGL || UNITY_IOS || UNITY_ANDROID
-			// ── FIX #5: Best-effort token revocation for WebGL/mobile ──
-			// OnApplicationQuit is not reliably called on these platforms.
-			// OnApplicationPause(true) sets wasApplicationPaused before
-			// OnDestroy fires during tab-close / app-kill.  This is a
-			// best-effort revocation; if the runtime is killed abruptly
-			// (force-quit, browser crash), the token remains valid until
-			// its natural TTL (default 10 min on server).  The auth token
-			// expiry window is the effective revocation delay.
-			if (wasApplicationPaused)
-			{
-				try { this.loginAuthenticator?.RevokeAndClearAuthToken(); }
-				catch { /* best effort — runtime may already be tearing down */ }
-			}
-#endif
 		}
 
 		// ── Init helpers ────────────────────────────────────────────────
@@ -469,14 +436,136 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Connects the client to a game server at the specified port.
-		/// Hostname is always <see cref="Constants.Configuration.GameHost"/>.
+		/// Hostname is chosen from the configured hosts by port band
+		/// (login / world / scene) via <see cref="Constants.Configuration.GetGameHostForPort"/>.
 		/// With WebTransport, the port is a QUIC connection parameter, not a URL path.
 		/// </summary>
+		/// <remarks>
+		/// Login UI must set <see cref="ClientLoginAuthenticator.ConnectionToken"/> from IPFetch
+		/// before calling this. World/Scene hops that omit a token automatically re-fetch one
+		/// via <see cref="ConnectToServerWithConnectionToken"/> so WorldServerAuthenticator
+		/// does not reject the first ClientHandshake with cookieLen=0.
+		/// </remarks>
 		/// <param name="port">The server port.</param>
 		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
 		public void ConnectToServer(ushort port, bool isWorldServer = false)
 		{
-			Connection?.ConnectToServer(Constants.Configuration.GameHost, port, isWorldServer);
+			// World/scene reconnect and server-select often call Connect without re-staging
+			// the IPFetch HMAC token. Login already set ConnectionToken before connect.
+			if (LoginAuthenticator != null && string.IsNullOrEmpty(LoginAuthenticator.ConnectionToken))
+			{
+				Log.Info("Client",
+					$"ConnectToServer port={port} isWorld={isWorldServer}: " +
+					"no staged connection token — fetching fresh IPFetch token first");
+				StartCoroutine(ConnectToServerWithConnectionToken(port, isWorldServer));
+				return;
+			}
+
+			string host = Constants.Configuration.GetGameHostForPort(port);
+			Log.Info("Client",
+				$"ConnectToServer host={host} port={port} isWorld={isWorldServer} " +
+				$"tokenPresent={!string.IsNullOrEmpty(LoginAuthenticator?.ConnectionToken)} " +
+				$"tokenLen={LoginAuthenticator?.ConnectionToken?.Length ?? 0}");
+			Connection?.ConnectToServer(host, port, isWorldServer);
+		}
+
+		/// <summary>
+		/// Fetches a fresh IPFetch HMAC connection token, stages it on
+		/// <see cref="LoginAuthenticator"/>, then connects to the given port.
+		/// Required for Login → World and World → Scene hops behind an L4 UDP proxy:
+		/// the first ClientHandshake must carry ConnectionToken so the server can
+		/// recover the real client IP (otherwise World rejects with cookieLen=0).
+		/// </summary>
+		/// <param name="port">Server port (world or scene).</param>
+		/// <param name="isWorldServer">If true, marks this as a world server connection.</param>
+		/// <param name="onFail">Optional failure callback (IPFetch / empty token).</param>
+		public IEnumerator ConnectToServerWithConnectionToken(
+			ushort port,
+			bool isWorldServer = false,
+			Action<string> onFail = null)
+		{
+			// Always re-fetch: login may have consumed the prior token hours ago, and
+			// IPFetch tokens expire (~60s). Cache hit with a still-valid token is fine.
+			bool ok = false;
+			string failMsg = null;
+
+			// Prefer a still-valid cached token; otherwise hit IPFetch.
+			if (!ShouldRefreshLoginServerList()
+				&& !string.IsNullOrEmpty(this.cachedConnectionToken)
+				&& LoginAuthenticator != null)
+			{
+				LoginAuthenticator.ConnectionToken = this.cachedConnectionToken;
+				ok = true;
+				Log.Info("Client",
+					$"ConnectToServerWithConnectionToken: reusing cached token " +
+					$"len={this.cachedConnectionToken.Length} port={port} isWorld={isWorldServer}");
+			}
+			else
+			{
+				// Drop stale cache so GetLoginServerList always hits IPFetch for a new HMAC.
+				this.loginServerPorts = null;
+				this.loginServerPortsFetchedAt = DateTime.MinValue;
+				this.cachedConnectionToken = null;
+
+				yield return GetLoginServerList(
+					(e) => { failMsg = e; },
+					(ports, token) =>
+					{
+						if (string.IsNullOrEmpty(token))
+						{
+							failMsg = "IPFetch response missing ConnectionToken.";
+							return;
+						}
+						if (LoginAuthenticator != null)
+							LoginAuthenticator.ConnectionToken = token;
+						ok = true;
+						Log.Info("Client",
+							$"ConnectToServerWithConnectionToken: fresh token len={token.Length} " +
+							$"port={port} isWorld={isWorldServer}");
+					});
+			}
+
+			if (!ok || LoginAuthenticator == null || string.IsNullOrEmpty(LoginAuthenticator.ConnectionToken))
+			{
+				string msg = failMsg ?? "Failed to obtain connection token for world/scene handoff.";
+				Log.Error("Client", msg);
+				onFail?.Invoke(msg);
+				yield break;
+			}
+
+			string host = Constants.Configuration.GetGameHostForPort(port);
+			Log.Info("Client",
+				$"ConnectToServer (after token) host={host} port={port} isWorld={isWorldServer} " +
+				$"tokenLen={LoginAuthenticator.ConnectionToken.Length}");
+			Connection?.ConnectToServer(host, port, isWorldServer);
+		}
+
+		/// <summary>
+		/// Clears cached login ports and connection token so the next discovery hits IPFetch.
+		/// Call when the user idles past token TTL or after connect timeout / token rejection.
+		/// </summary>
+		public void InvalidateLoginServerCache()
+		{
+			this.loginServerPorts = null;
+			this.loginServerPortsFetchedAt = DateTime.MinValue;
+			this.cachedConnectionToken = null;
+			if (LoginAuthenticator != null)
+				LoginAuthenticator.ConnectionToken = null;
+			Log.Info("Client", "Login server cache invalidated (ports + connection token).");
+		}
+
+		/// <summary>
+		/// True when the login-server cache is missing, past TTL, or lacks a connection token.
+		/// Token TTL on IPFetch is 60s; client cache is 55s — still force re-fetch if token empty.
+		/// </summary>
+		public bool ShouldRefreshLoginServerList()
+		{
+			if (this.loginServerPorts == null || this.loginServerPorts.Count == 0)
+				return true;
+			if (string.IsNullOrEmpty(this.cachedConnectionToken))
+				return true;
+			double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
+			return LoginServerCacheTtlSeconds > 0 && age >= LoginServerCacheTtlSeconds;
 		}
 		/// <summary>
 		/// Checks whether the client connection is ready (authenticated by default).
@@ -546,13 +635,19 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0)
+			// Require a non-empty connection token; empty token after cache hit forces re-fetch.
+			if (!ShouldRefreshLoginServerList())
 			{
-				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken); yield break; }
+				Log.Info("Client",
+					$"GetLoginServerList: cache hit ports={this.loginServerPorts.Count} tokenLen={this.cachedConnectionToken?.Length ?? 0}");
+				onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken);
+				yield break;
 			}
+
 			var candidates = ApiHostResolver.GetCandidates() ?? new List<string>();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
+			Log.Info("Client",
+				$"GetLoginServerList: probing {candidates.Count} APIHost candidate(s); first={candidates[0]}");
 			float stagger = this.probeStaggerInterval;
 			var pending = new List<PendingProbe>(candidates.Count);
 			float lastStart = float.NegativeInfinity;
@@ -564,6 +659,7 @@ namespace FishMMO.Client
 					if (next < candidates.Count && (pending.Count == 0 || Time.realtimeSinceStartup - lastStart >= stagger))
 					{
 						var url = candidates[next++] + "loginserver";
+						Log.Info("Client", $"GetLoginServerList: GET {url}");
 						var req = UnityWebRequest.Get(url);
 						req.certificateHandler = new ClientSSLCertificateHandler();
 						req.redirectLimit = -1; // -1 disables redirect following entirely
@@ -581,18 +677,33 @@ namespace FishMMO.Client
 						var done = pending[i]; pending[i] = default;
 						try
 						{
-							if (done.Request.result != UnityWebRequest.Result.Success) { lastErr = done.Request.error; continue; }
-							var parsed = JsonUtility.FromJson<ServerAddresses>(done.Request.downloadHandler.text);
-							if (parsed?.Ports == null) 
-							{ 
-								string rawText = done.Request.downloadHandler.text;
-								lastErr = "Parse failed.";
-								Log.Debug("Client", $"GetLoginServerList: JSON parse failed. Raw response (truncated): {(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
-								continue; 
+							long code = done.Request.responseCode;
+							if (done.Request.result != UnityWebRequest.Result.Success)
+							{
+								lastErr = $"HTTP {code}: {done.Request.error}";
+								Log.Warning("Client", $"GetLoginServerList: failed {done.Request.url} → {lastErr}");
+								continue;
 							}
-							// NOTE: Token not explicitly cleared in the cache path. TTL (55s) < server token TTL (60s), providing a 5s safety margin. Reset on QuitToLogin().
+							string rawText = done.Request.downloadHandler?.text;
+							var parsed = JsonUtility.FromJson<ServerAddresses>(rawText);
+							if (parsed?.Ports == null || parsed.Ports.Count == 0)
+							{
+								lastErr = "Parse failed or empty Ports.";
+								Log.Warning("Client",
+									$"GetLoginServerList: parse failed HTTP {code}. Raw (truncated): " +
+									$"{(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
+								continue;
+							}
+							if (string.IsNullOrEmpty(parsed.ConnectionToken))
+							{
+								lastErr = "IPFetch response missing ConnectionToken.";
+								Log.Warning("Client", "GetLoginServerList: empty ConnectionToken — cannot complete WT handshake.");
+								continue;
+							}
 							this.cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
+							Log.Info("Client",
+								$"GetLoginServerList: OK ports=[{string.Join(",", winner)}] tokenLen={parsed.ConnectionToken.Length}");
 							break;
 						}
 						finally { done.Request.Dispose(); }
@@ -657,7 +768,23 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The world scene connect message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) ConnectToServer(msg.Port); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch)
+		{
+			try
+			{
+				if (!IsConnectionReady())
+					return;
+				// Scene hop is a new WT session — need a fresh IPFetch connection token
+				// just like Login → World (WorldSceneConnect only carries the port).
+				InvalidateLoginServerCache();
+				StartCoroutine(ConnectToServerWithConnectionToken(msg.Port, isWorldServer: false,
+					onFail: (err) => Log.Error("Client", $"Scene connect token fetch failed: {err}")));
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnWorldSceneConnect: {ex}");
+			}
+		}
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>
@@ -726,23 +853,9 @@ namespace FishMMO.Client
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
 				d.Hide();
 
-			/* async void local function captures Unity's SynchronizationContext
-			 * so the continuation after await runs on the main thread.
-			 * ContinueWith would run on the ThreadPool, making Log.Error
-			 * and any future Unity API calls unsafe. */
-			async void RetryWithFaultHandling()
-			{
-				try
-				{
-					if (loginAuthenticator != null)
-						await loginAuthenticator.RetryHandshakeAsync();
-				}
-				catch (Exception ex)
-				{
-					Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
-				}
-			}
-			RetryWithFaultHandling();
+			_ = (loginAuthenticator?.RetryHandshakeAsync() ?? System.Threading.Tasks.Task.CompletedTask)
+				.ContinueWith(static t => Log.Error("Client", $"RetryHandshakeAsync failed: {t.Exception?.InnerException?.Message}"),
+					System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
 		}
 		else // position -1 = cancelled (timeout / shutdown)
 		{
@@ -770,9 +883,38 @@ namespace FishMMO.Client
 		{
 			switch (r)
 			{
-				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
-				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
-				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; DismissLoadingScreen(true); OnEnterGameWorld?.Invoke(); break;
+				case ClientAuthenticationResult.LoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.Login;
+					break;
+				case ClientAuthenticationResult.WorldLoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.World;
+					break;
+				case ClientAuthenticationResult.SceneLoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.Scene;
+					DismissLoadingScreen(true);
+					OnEnterGameWorld?.Invoke();
+					break;
+				// Expected intermediate / failure codes — UI panels own presentation.
+				case ClientAuthenticationResult.TokenDecryptFailed:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
+				case ClientAuthenticationResult.AccountCreated:
+				case ClientAuthenticationResult.AccountVerified:
+				case ClientAuthenticationResult.AccountUnverified:
+				case ClientAuthenticationResult.InvalidUsernameOrPassword:
+				case ClientAuthenticationResult.AlreadyOnline:
+				case ClientAuthenticationResult.Banned:
+				case ClientAuthenticationResult.ServerFull:
+				case ClientAuthenticationResult.ServerBusy:
+				case ClientAuthenticationResult.VersionMismatch:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.NoCharacterSelected:
+					Log.Info("Client", $"Auth result: {r}");
+					break;
 				default:
 					Log.Warning("Client", $"Unhandled auth result: {r}");
 					break;
@@ -780,19 +922,9 @@ namespace FishMMO.Client
 		}
 
 		// ── Log guard ───────────────────────────────────────────────────
-		
+
 		/// <summary>
-		/// Set by <see cref="OnLogMessage"/> on any thread when a networking-related
-		/// exception is logged.  Checked and cleared on the main thread in
-		/// <see cref="Update"/> so that Unity API calls (ForceDisconnect, auth
-		/// token revocation) always execute on the main thread.
-		/// </summary>
-		private volatile string pendingErrorStackTrace;
-		
-		/// <summary>
-		/// Handles Unity log messages. Thread-safe: stores the stack trace in a
-		/// volatile field for main-thread processing in <see cref="Update"/>.
-		/// Forces a disconnect on unhandled exceptions from the networking stack.
+		/// Handles Unity log messages. Forces a disconnect on unhandled exceptions from the networking stack.
 		/// </summary>
 		/// <param name="condition">The log message.</param>
 		/// <param name="stackTrace">The stack trace.</param>
@@ -800,9 +932,26 @@ namespace FishMMO.Client
 		private void OnLogMessage(string condition, string stackTrace, LogType type)
 		{
 			if (type != LogType.Exception) return;
-			Log.Error("Client", stackTrace);
+			Log.Error("Client",
+				$"Unhandled exception (will not auto-disconnect unless network stack): {condition}\n{stackTrace}");
+			if (Connection?.ClientState == LocalConnectionState.Stopped) return;
 			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkStack(stackTrace)) return;
-			pendingErrorStackTrace = stackTrace;
+			// Force-disconnecting on every network exception produces the production
+			// create-account signature: WT session established → instant TRANSPORT
+			// shutdown with zero CreateAccountBroadcast. Prefer logging + leave the
+			// connection up so auth can still complete; only kill on true transport faults.
+			bool isTransportFault =
+				stackTrace.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0 ||
+				stackTrace.IndexOf("WebTransport", StringComparison.Ordinal) >= 0;
+			if (!isTransportFault)
+			{
+				Log.Warning("Client",
+					"Network-adjacent exception during auth/game code — keeping connection open " +
+					"(avoids create-account hang from premature ForceDisconnect).");
+				return;
+			}
+			try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
+			Connection?.ForceDisconnect();
 		}
 		/// <summary>
 		/// Determines whether a stack trace originates from the networking layer.
@@ -818,37 +967,9 @@ namespace FishMMO.Client
 		/// kills WebGL tab blur / mobile sessions. Only revoke on explicit quit or logout.
 		/// </summary>
 		/// <param name="paused">True if the application is being paused.</param>
-		/// <summary>
-		/// Unity OnApplicationPause. Does NOT revoke the auth token — revoking on pause
-		/// kills WebGL tab blur / mobile sessions. On WebGL/mobile, flags the application
-		/// as terminating so <see cref="OnDestroy"/> can attempt best-effort revocation.
-		/// </summary>
-		/// <param name="paused">True if the application is being paused.</param>
-		private void OnApplicationPause(bool paused)
-		{
-			/* Auth token preserved across pause/unpause cycle.
-			 * ── FIX #5: Flag termination for OnDestroy fallback ──
-			 * On WebGL, iOS, and Android, Unity does not reliably call
-			 * OnApplicationQuit when the app is terminated (tab close,
-			 * app kill).  OnApplicationPause(true) is the closest signal
-			 * we get.  Flag wasApplicationPaused so OnDestroy can
-			 * attempt a best-effort token revocation. */
-#if UNITY_WEBGL || UNITY_IOS || UNITY_ANDROID
-			wasApplicationPaused = paused;
-#endif
-		}
-#if UNITY_WEBGL || UNITY_IOS || UNITY_ANDROID
-		/// <summary>
-		/// Set to true by OnApplicationPause when the app is backgrounded
-		/// (WebGL tab blur / mobile app suspend).  OnDestroy uses this flag
-		/// to decide whether to attempt best-effort token revocation.
-		/// </summary>
-		private bool wasApplicationPaused = false;
-#endif
+		private void OnApplicationPause(bool paused) { /* Auth token preserved across pause/unpause cycle. */ }
 		/// <summary>
 		/// Unity OnApplicationQuit. Revokes the auth token when the application exits.
-		/// NOTE: Not reliably called on WebGL or mobile platforms.
-		/// On those platforms, OnApplicationPause + OnDestroy provide a fallback.
 		/// </summary>
 		private void OnApplicationQuit() { try { this.loginAuthenticator?.RevokeAndClearAuthToken(); } catch { } }
 

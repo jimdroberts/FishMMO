@@ -465,7 +465,10 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Decrypts an auth token from a SRP success message.
+		/// Decrypts an auth token from a SRP success (or mid-session renewal) message.
+		/// Must use <see cref="CryptoHelper.AuthMessageType.TokenTransfer"/> AAD — the same
+		/// type used by <see cref="TokenService.EncryptTokenForSend"/>. Using SrpSuccess here
+		/// causes AES-GCM tag mismatch (<c>TokenDecryptFailed</c>) after a successful login.
 		/// </summary>
 		/// <param name="encryptedToken">AES-GCM encrypted token bytes.</param>
 		/// <param name="serverToClientKey">AES-256 key for server→client direction.</param>
@@ -479,7 +482,8 @@ namespace FishMMO.Auth.Implementation
 			ushort agreedVersion)
 		{
 			var (tokenNonce, tokenRseq) = receiveNonceCtx.NextNonce();
-			byte[] tokenAad = CryptoHelper.BuildAad((byte)CryptoHelper.AuthMessageType.TokenTransfer, agreedVersion, tokenRseq);
+			byte[] tokenAad = CryptoHelper.BuildAad(
+				(byte)CryptoHelper.AuthMessageType.TokenTransfer, agreedVersion, tokenRseq);
 			return CryptoHelper.DecryptAES(serverToClientKey, tokenNonce, encryptedToken, tokenAad);
 		}
 

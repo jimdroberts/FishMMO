@@ -715,35 +715,68 @@ namespace FishMMO.Shared
 				helper.StopAllCoroutines();
 			}
 
+			// During Editor Play Mode exit, Addressables also disposes handles — releasing
+			// here races PlayModeStateChangedCleanup ("invalid operation handle") and can
+			// contribute to native crashes. Clear bookkeeping only; let Addressables own dispose.
+#if UNITY_EDITOR
+			if (!Application.isPlaying)
+			{
+				loadedScenes.Clear();
+				loadedAssets.Clear();
+				loadedPrefabs.Clear();
+				return;
+			}
+#endif
+
 			foreach (var sceneHandle in loadedScenes.Values)
 			{
-				if (sceneHandle.IsValid())
+				try
 				{
-					OnSceneUnloaded?.Invoke(sceneHandle.Result.Scene.name);
-
-					Addressables.Release(sceneHandle);
+					if (sceneHandle.IsValid())
+					{
+						OnSceneUnloaded?.Invoke(sceneHandle.Result.Scene.name);
+						Addressables.Release(sceneHandle);
+					}
+				}
+				catch (System.Exception)
+				{
+					// Invalid/disposed handle during teardown — ignore.
 				}
 			}
 			loadedScenes.Clear();
 
 			foreach (var assetList in loadedAssets.Values)
 			{
-				if (assetList.IsValid())
+				try
 				{
-					foreach (var asset in assetList.Result)
+					if (assetList.IsValid())
 					{
-						OnAddressableUnloaded?.Invoke(asset);
+						foreach (var asset in assetList.Result)
+						{
+							OnAddressableUnloaded?.Invoke(asset);
+						}
+						Addressables.Release(assetList);
 					}
-					Addressables.Release(assetList);
+				}
+				catch (System.Exception)
+				{
+					// Invalid/disposed handle during teardown — ignore.
 				}
 			}
 			loadedAssets.Clear();
 
 			foreach (var prefabHandle in loadedPrefabs.Values)
 			{
-				if (prefabHandle.IsValid())
+				try
 				{
-					Addressables.Release(prefabHandle);
+					if (prefabHandle.IsValid())
+					{
+						Addressables.Release(prefabHandle);
+					}
+				}
+				catch (System.Exception)
+				{
+					// Invalid/disposed handle during teardown — ignore.
 				}
 			}
 			loadedPrefabs.Clear();

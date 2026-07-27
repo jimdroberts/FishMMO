@@ -3,6 +3,7 @@
     "rootNamespace": "FishMMO.Shared",
     "references": [
         "FishNet.Runtime",
+        "WebTransport",
         "GameKit.Dependencies",
         "KinematicCharacterController",
         "Unity.TextMeshPro",

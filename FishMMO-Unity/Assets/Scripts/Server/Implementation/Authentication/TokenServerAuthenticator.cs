@@ -50,9 +50,7 @@ namespace FishMMO.Server.Implementation
 		/// warning log; callers must fail closed.
 		/// Uses double-checked locking for thread safety: the outer null check avoids the
 		/// lock cost on the hot path; the inner null check under the lock ensures only one
-		/// thread calls <see cref="TryLoadKekFromDatabase"/>.
-		/// The database (deployment_secrets table) is the ONLY source for the KEK — no
-		/// environment variable or .cfg file fallbacks are supported.
+		/// thread calls <see cref="SigningKeyKekProvider.TryLoad"/>.
 		/// </summary>
 		private byte[] TryGetSigningKeyKek()
 		{
@@ -60,42 +58,13 @@ namespace FishMMO.Server.Implementation
 			lock (signingKeyKekLock)
 			{
 				if (this.signingKeyKek != null) return this.signingKeyKek;
-				byte[] kek = TryLoadKekFromDatabase();
-				if (kek == null)
+				if (!SigningKeyKekProvider.TryLoad(Server.Configuration, out byte[] kek, out string error))
 				{
-					_ = Log.Warning(LogPrefix,
-						"Signing-key KEK unavailable. " +
-						"The KEK must be in the deployment_secrets database table with key='signing_key_kek'. " +
-						"No environment variable or .cfg file fallbacks are supported.");
+					_ = Log.Warning(LogPrefix, $"Signing-key KEK unavailable: {error}");
 					return null;
 				}
 				this.signingKeyKek = kek;
 				return kek;
-			}
-		}
-
-		/// <summary>
-		/// Attempts to load the KEK from the deployment_secrets database table.
-		/// Returns null if the database is unavailable or the key is not found.
-		/// Uses <see cref="SigningKeyKekProvider.TryLoadFromDatabase"/> for the actual lookup.
-		/// </summary>
-		private byte[]? TryLoadKekFromDatabase()
-		{
-			try
-			{
-				var server = Server;
-				if (server?.Database?.ServiceRegistry == null) return null;
-				if (!server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var svc))
-					return null;
-				if (SigningKeyKekProvider.TryLoadFromDatabase(svc, out byte[] kek, out string error))
-					return kek;
-				_ = Log.Warning(LogPrefix, $"Failed to load KEK from deployment_secrets: {error}");
-				return null;
-			}
-			catch (Exception ex)
-			{
-				_ = Log.Warning(LogPrefix, $"Exception loading KEK from deployment_secrets: {ex.Message}");
-				return null;
 			}
 		}
 
@@ -187,16 +156,7 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>Routes an incoming <see cref="TokenAuthBroadcast"/> to the core token authentication channel.</summary>
 		internal void OnServerTokenAuthBroadcastReceived(NetworkConnection conn, TokenAuthBroadcast msg, Channel channel)
-		{
-			// Validate wire-format bounds before any allocation or crypto work.
-			// Reject oversized payloads on the network thread.
-			if (msg.Token == null || msg.Token.Length > AuthSizeLimits.MaxTokenAuthSize)
-			{
-				conn.Disconnect(true);
-				return;
-			}
-			core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
-		}
+			=> core?.OnTokenAuthReceived(conn, msg.Token, msg.Seq);
 
 		#endregion
 
@@ -295,9 +255,8 @@ namespace FishMMO.Server.Implementation
 		/// <param name="accountName">Account name extracted from the verified token.</param>
 		/// <param name="accessLevel">Access level extracted from the verified token.</param>
 		/// <param name="loginServerId">Originating LoginServer ID (used to look up the HMAC signing key).</param>
-		private async Task IssueRenewalTokenCoreAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId, CancellationToken ct)
+		private async Task IssueRenewalTokenCoreAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId)
 		{
-			ct.ThrowIfCancellationRequested();
 			if (conn == null || !conn.IsActive)
 				return;
 
@@ -312,12 +271,10 @@ namespace FishMMO.Server.Implementation
 			// during exactly the conditions that caused the blip. Make one short
 			// retry with linear backoff before giving up.
 			var currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
-			ct.ThrowIfCancellationRequested();
 			if (currentSigningKey.Key == null)
 			{
-				await Task.Delay(150, ct);
+				await Task.Delay(150);
 				if (!conn.IsActive) return;
-				ct.ThrowIfCancellationRequested();
 				currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
 			}
 			byte[] signingKey = currentSigningKey.Key;
@@ -332,13 +289,6 @@ namespace FishMMO.Server.Implementation
 			{
 				int expirationMinutes = Math.Max(1, (int)renewalTokenExpirationMinutes);
 
-				// NOTE: accessLevel is from the original token's HMAC payload, not a fresh
-				// DB lookup. If the account's access level changed between original token
-				// issuance and renewal, the renewed token carries the old (possibly higher)
-				// privileges. Mitigated by: short token lifetimes (10 min default), and the
-				// expectation that access-level changes accompany token revocation.
-				// A full fix would require an IAccountManager lookup here, but World/Scene
-				// servers may not have access to the accounts table in all deployments.
 				byte[] encryptedToken = TokenService.GenerateAndEncryptToken(
 					encryptionData,
 					accountName,
@@ -479,19 +429,16 @@ namespace FishMMO.Server.Implementation
 			protected override void StoreClientRealIp(NetworkConnection conn, string realIp)
 			{
 				// Store the real IP recovered from the auth token for rate limiting.
-				// This is essential for World/Scene servers behind an L4 proxy where
-				// conn.GetAddress() returns 127.0.0.1.
-				if (outer.Server?.DataContainerRegistry != null &&
-					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
-					rt.ConnectionIpCache != null)
-				{
-					rt.ConnectionIpCache.Upsert(conn.ClientId, realIp, DateTime.UtcNow);
-				}
+				// Essential for World/Scene behind L4 proxy (conn.GetAddress() is loopback).
+				// Uses authenticator-local cache so World/Scene work without AccountCreation.
+				if (conn == null || string.IsNullOrEmpty(realIp))
+					return;
+				outer.StoreRealIpForConnection(conn.ClientId, realIp);
 			}
 
 			/// <inheritdoc/>
 			protected override Task OnTokenAuthSuccessAsync(NetworkConnection conn, string accountName, AccessLevel accessLevel, long loginServerId) =>
-				outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId, outer.ShutdownToken);
+				outer.IssueRenewalTokenCoreAsync(conn, accountName, accessLevel, loginServerId);
 		}
 
 		#endregion
