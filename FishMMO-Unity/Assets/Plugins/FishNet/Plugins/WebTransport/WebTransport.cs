@@ -92,7 +92,36 @@ namespace FishNet.Transporting.WebTransport
 		#region Initialization and Unity
 		private void OnDestroy()
 		{
-			Shutdown();
+			// Always tear down sockets. In the Editor, do NOT call wt_deinit() here —
+			// Play Mode stop destroys this component while TimeManager may still tick once,
+			// and Deinitialize() races msquic (native/mono crash after Stop Play while connected).
+			try
+			{
+				ForceStopClient();
+			}
+			catch { /* best effort during teardown */ }
+			try
+			{
+				StopConnection(false);
+			}
+			catch { /* best effort */ }
+			try
+			{
+				StopConnection(true);
+			}
+			catch { /* best effort */ }
+
+#if UNITY_EDITOR
+			// Leave native library loaded for the next Play session (EnsureInitialized is idempotent).
+#else
+#if !UNITY_WEBGL
+			try
+			{
+				WebTransportNative.Deinitialize();
+			}
+			catch { /* best effort */ }
+#endif
+#endif
 		}
 		#endregion
 
@@ -431,10 +460,13 @@ namespace FishNet.Transporting.WebTransport
 
 		public override void Shutdown()
 		{
-			StopConnection(false);
-			StopConnection(true);
-#if !UNITY_WEBGL || UNITY_EDITOR
-			WebTransportNative.Deinitialize();
+			try { ForceStopClient(); } catch { /* best effort */ }
+			try { StopConnection(false); } catch { /* best effort */ }
+			try { StopConnection(true); } catch { /* best effort */ }
+			// Only full process quit should deinit the native library. Editor Play Mode
+			// stop uses OnDestroy without deinit (see OnDestroy).
+#if !UNITY_WEBGL && !UNITY_EDITOR
+			try { WebTransportNative.Deinitialize(); } catch { /* best effort */ }
 #endif
 		}
 

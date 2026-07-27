@@ -4,6 +4,10 @@ using FishMMO.Logging;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using FishNet.Managing;
+using FishNet.Transporting;
+using FishNet.Transporting.Multipass;
+using FishNet.Transporting.WebTransport;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -72,11 +76,79 @@ namespace FishMMO.Shared
 		/// <param name="state">The play mode state change event.</param>
 		private void OnEditorPlayModeStateChanged(PlayModeStateChange state)
 		{
-			// When exiting Play Mode, initiate shutdown.
 			if (state == PlayModeStateChange.ExitingPlayMode)
 			{
-				Debug.Log("[MainBootstrapSystem] Editor exiting Play Mode. Initiating shutdown...");
-				InitiateShutdown();
+				Debug.Log("[MainBootstrapSystem] Editor exiting Play Mode — force network stop (no blocking Wait).");
+				// Critical: kill WebTransport/FishNet BEFORE Unity tears down native plugins.
+				// Blocking Log.Shutdown().Wait() / Addressables.Release during exit caused
+				// wantsToQuit loops and native mono/msquic crashes while still connected.
+				// Do NOT Release Addressables handles here — Addressables.PlayModeStateChangedCleanup
+				// owns that and double-release throws "invalid operation handle".
+				ForceStopNetworkingForEditorExit();
+				try { UnityLoggerBridge.Shutdown(); } catch { /* ignore */ }
+				isInitiatingShutdown = true;
+				canQuitApplication = true;
+			}
+			else if (state == PlayModeStateChange.EnteredPlayMode)
+			{
+				// Fresh play session — reset static quit flags from last exit.
+				isInitiatingShutdown = false;
+				canQuitApplication = false;
+			}
+		}
+
+		/// <summary>
+		/// Stops all FishNet client/server sockets and WebTransport clients without deinit'ing
+		/// the native library (library stays loaded for the next Play session).
+		/// </summary>
+		private static void ForceStopNetworkingForEditorExit()
+		{
+			try
+			{
+				foreach (var nm in UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None))
+				{
+					if (nm == null) continue;
+					try
+					{
+						if (nm.ClientManager != null && nm.ClientManager.Started)
+							nm.ClientManager.StopConnection();
+					}
+					catch { /* best effort */ }
+					try
+					{
+						if (nm.ServerManager != null && nm.ServerManager.Started)
+							nm.ServerManager.StopConnection(true);
+					}
+					catch { /* best effort */ }
+
+					try
+					{
+						Transport t = nm.TransportManager != null ? nm.TransportManager.Transport : null;
+						if (t is Multipass mp)
+						{
+							foreach (Transport nested in mp.Transports)
+							{
+								if (nested is WebTransport nestedWt)
+									nestedWt.ForceStopClient();
+							}
+						}
+						else if (t is WebTransport wt)
+						{
+							wt.ForceStopClient();
+						}
+					}
+					catch { /* best effort */ }
+				}
+
+				// Any WebTransport components not reached via NetworkManager.
+				foreach (var wt in UnityEngine.Object.FindObjectsByType<WebTransport>(FindObjectsSortMode.None))
+				{
+					try { wt.ForceStopClient(); } catch { /* best effort */ }
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.LogWarning($"[MainBootstrapSystem] ForceStopNetworkingForEditorExit: {ex.Message}");
 			}
 		}
 #endif
@@ -87,6 +159,18 @@ namespace FishMMO.Shared
 		/// <returns>True if the application should quit, false to defer quitting.</returns>
 		private bool OnApplicationWantsToQuit()
 		{
+#if UNITY_EDITOR
+			// Play Mode Stop uses wantsToQuit in some Unity versions. Never block/defer here —
+			// ExitingPlayMode already force-stopped networking. Returning false re-entered a
+			// quit loop and crashed native code.
+			if (!canQuitApplication)
+			{
+				ForceStopNetworkingForEditorExit();
+				canQuitApplication = true;
+				isInitiatingShutdown = true;
+			}
+			return true;
+#else
 			Debug.Log("[MainBootstrapSystem] OnApplicationWantsToQuit called. (isInitiatingShutdown: " + isInitiatingShutdown + ", canQuitApplication: " + canQuitApplication + ")");
 			if (isInitiatingShutdown)
 			{
@@ -98,6 +182,7 @@ namespace FishMMO.Shared
 			Debug.Log("[MainBootstrapSystem] Application wants to quit. Delaying for asynchronous cleanup...");
 			InitiateShutdown();
 			return false; // Defer quitting
+#endif
 		}
 
 		/// <summary>
@@ -113,6 +198,13 @@ namespace FishMMO.Shared
 			}
 			isInitiatingShutdown = true;
 
+#if UNITY_EDITOR
+			// Editor: never .Wait() on the main thread during Play Mode exit.
+			ForceStopNetworkingForEditorExit();
+			try { UnityLoggerBridge.Shutdown(); } catch { /* ignore */ }
+			canQuitApplication = true;
+			return;
+#else
 			// Perform Graphics Cleanup.
 			Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
 			GraphicsCleanup().Wait();
@@ -121,22 +213,6 @@ namespace FishMMO.Shared
 			// Detach UnityLoggerBridge before async shutdown.
 			UnityLoggerBridge.Shutdown();
 
-#if UNITY_EDITOR
-			// Editor-specific shutdown logic
-			if (Log.IsInitialized)
-			{
-				Debug.Log("[MainBootstrapSystem] Editor shutdown: Awaiting synchronous Log.Shutdown().");
-				Log.Shutdown().Wait();
-				Debug.Log("[MainBootstrapSystem] Editor shutdown: Log system synchronously shut down.");
-			}
-			else
-			{
-				Debug.Log("[MainBootstrapSystem] Editor shutdown: Log manager not initialized or already shut down. Skipping synchronous Log.Shutdown().");
-			}
-			canQuitApplication = true;
-			Debug.Log("[MainBootstrapSystem] Editor shutdown: Setting canQuitApplication = true.");
-			return;
-#else
 			// For standalone builds or runtime quits, perform asynchronous shutdown.
 			Debug.Log("[MainBootstrapSystem] Standalone: Performing async shutdown.");
 			_ = PerformAsyncShutdown();
