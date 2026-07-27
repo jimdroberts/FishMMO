@@ -425,10 +425,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// FishNet spawns by PrefabId into DefaultPrefabObjects. If the race template's
+			// NetworkObject PrefabId does not resolve back to the same prefab, the client
+			// instantiates the wrong spawnable → RPCLink / PacketId desync (see
+			// FishMMO-UNITY-RPCLINK-512-FIX). Fail closed rather than ship a corrupt contract.
+			if (!raceTemplate.Prefab.TryGetComponent(out NetworkObject racePrefabNob))
+			{
+				Log.Error("CharacterSystem",
+					$"Race template '{raceTemplate.name}' prefab has no NetworkObject.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			var networkManager = Server.NetworkWrapper.NetworkManager;
+			if (networkManager == null || networkManager.SpawnablePrefabs == null)
+			{
+				Log.Error("CharacterSystem", "NetworkManager.SpawnablePrefabs is null during character load.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			int racePrefabId = racePrefabNob.PrefabId;
+			if (racePrefabId == NetworkObject.UNSET_PREFABID_VALUE)
+			{
+				Log.Error("CharacterSystem",
+					$"Race prefab '{racePrefabNob.name}' has unset PrefabId. " +
+					"Refresh DefaultPrefabObjects and ensure NetworkManager initialized SpawnablePrefabs.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			NetworkObject collectionPrefab = networkManager.SpawnablePrefabs.GetObject(asServer: true, racePrefabId);
+			if (collectionPrefab == null ||
+				collectionPrefab.AssetPathHash != racePrefabNob.AssetPathHash)
+			{
+				string collectionName = collectionPrefab != null ? collectionPrefab.name : "null";
+				Log.Error("CharacterSystem",
+					$"PrefabId contract broken for race '{raceTemplate.name}': " +
+					$"templatePrefab={racePrefabNob.name} PrefabId={racePrefabId} " +
+					$"collectionEntry={collectionName}. Client would spawn the wrong object " +
+					$"(RPCLink/PacketId desync). Align PrefabIds with DefaultPrefabObjects.");
+				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			int nbCount = racePrefabNob.NetworkBehaviours != null ? racePrefabNob.NetworkBehaviours.Count : 0;
+			Log.Info("CharacterSystem",
+				$"Character spawn contract OK name={charData.Name} id={charData.ID} " +
+				$"prefab={racePrefabNob.name} PrefabId={racePrefabId} NetworkBehaviours={nbCount}");
+
 			Vector3 position = new Vector3(charData.X, charData.Y, charData.Z);
 			Quaternion rotation = new Quaternion(charData.RotX, charData.RotY, charData.RotZ, charData.RotW);
 
-			NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(
+			NetworkObject nob = networkManager.GetPooledInstantiated(
 				raceTemplate.Prefab, position, rotation, true);
 			if (nob == null)
 			{
