@@ -13,12 +13,18 @@ namespace FishMMO.Client.Security
 	/// IL-embedded client gate secret. The real value is substituted at
 	/// build time by CI from the FISHMMO_CLIENT_GATE_SECRET env var.
 	/// </summary>
-	internal static class GeneratedClientSecret
+	/// <remarks>
+	/// Must be <c>public</c> so the Editor assembly
+	/// (<c>FishMMO.Client.Security.Editor</c> / <see cref="Editor.ClientSecurityBuildValidator"/>)
+	/// can read the sentinel. <c>internal</c> is assembly-scoped only and caused CS0122.
+	/// Matches <see cref="GeneratedPinSet"/> and ClientSecretTool output.
+	/// </remarks>
+	public static class GeneratedClientSecret
 	{
 		/// <summary>
 		/// Shared secret for X-FishMMO-Client HMAC header signing.
 		/// The committed value is a sentinel — CI must replace it.
 		/// </summary>
-		internal const string Secret = "FISHMMO_SENTINEL_PLACEHOLDER_CLIENT_GATE_SECRET";
+		public const string Secret = "FISHMMO_SENTINEL_PLACEHOLDER_CLIENT_GATE_SECRET";
 	}
 }
