@@ -208,8 +208,9 @@ namespace FishNet.Transporting.WebTransport
 			// Browser only: never use QUIC DATAGRAM for FishNet channel 1. Datagrams have
 			// caused H3_FRAME_ERROR / session drop after LoginSuccess. Prefer the
 			// persistent reliable bidi stream (channel 0).
-			// Do NOT remap on Editor/standalone native — forcing unreliable packets onto the
-			// reliable stream desyncs FishNet length headers (client saw PacketId 0 on world connect).
+			// Pair with TransportManager.CheckSetReliableChannel (WebGL forces Reliable
+			// *before* CreateRpc) so Replicate length headers match this stream path.
+			// Editor/native must NOT remap — that path uses real DATAGRAMs successfully.
 			if (channelId == 1)
 				channelId = 0;
 #endif

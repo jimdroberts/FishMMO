@@ -656,9 +656,19 @@ namespace FishNet.Managing.Transporting
             if (channel == Channel.Reliable)
                 return;
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            /* WebTransport.SendToServer remaps browser channel 1 (DATAGRAM) → stream (0)
+             * for H3 stability. FishNet Unreliable packets omit the Int32 length header
+             * that Reliable parse expects, so remapped Replicate traffic desyncs the
+             * dedicated server (PacketId 0 flood) while the client still "feels fine".
+             * Force Reliable *before* CreateRpc so wire format matches the stream. */
+            channel = Channel.Reliable;
+            return;
+#else
             bool requiresMultipleMessages = GetRequiredMessageCount((byte)channel, dataLength, out _) > 1;
             if (requiresMultipleMessages)
                 channel = Channel.Reliable;
+#endif
         }
 
         /// <summary>
