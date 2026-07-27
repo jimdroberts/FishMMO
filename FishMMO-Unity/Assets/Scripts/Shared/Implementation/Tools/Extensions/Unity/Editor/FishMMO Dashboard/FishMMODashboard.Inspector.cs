@@ -107,69 +107,6 @@ namespace FishMMO.Shared
 			inspectorContent.Add(openDefaultButton);
 		}
 
-		/// <summary>
-		/// Shows the Game Settings (Constants.cs) as a read-only view in the inspector panel.
-		/// </summary>
-		private void ShowGameSettingsInspector()
-		{
-			ClearInspector();
-
-			if (inspectorHeader != null)
-			{
-				inspectorHeader.text = "Game Settings (Constants.cs)";
-			}
-
-			// ── Configuration Section ──
-			VisualElement configSection = CreateConstantsSection("Configuration");
-			AddConstantRow(configSection, "Project Name", Constants.Configuration.ProjectName);
-			AddConstantRow(configSection, "Client Executable", Constants.Configuration.ClientExecutable);
-			AddConstantRow(configSection, "Updater Executable", Constants.Configuration.UpdaterExecutable);
-			AddConstantRow(configSection, "Setup Directory", Constants.Configuration.SetupDirectory);
-			AddConstantRow(configSection, "API Host", Constants.Configuration.APIHost);
-			AddConstantRow(configSection, "Game Host", Constants.Configuration.GameHost);
-			AddConstantRow(configSection, "Scene Path", Constants.Configuration.ScenePath);
-			AddConstantRow(configSection, "Bootstrap Scene Path", Constants.Configuration.BootstrapScenePath);
-			AddConstantRow(configSection, "Client Bootstrap Scene Path", Constants.Configuration.ClientBootstrapScenePath);
-			AddConstantRow(configSection, "Server Bootstrap Scene Path", Constants.Configuration.ServerBootstrapScenePath);
-			AddConstantRow(configSection, "World Scene Path", Constants.Configuration.WorldScenePath);
-			AddConstantRow(configSection, "Local Scene Path", Constants.Configuration.LocalScenePath);
-			AddConstantRow(configSection, "Maximum Player Hotkeys", Constants.Configuration.MaximumPlayerHotkeys.ToString());
-			inspectorContent.Add(configSection);
-
-			// ── Character Section ──
-			VisualElement charSection = CreateConstantsSection("Character");
-			AddConstantRow(charSection, "Walk Speed", Constants.Character.WalkSpeed.ToString("F1"));
-			AddConstantRow(charSection, "Run Speed", Constants.Character.RunSpeed.ToString("F1"));
-			AddConstantRow(charSection, "Sprint Speed", Constants.Character.SprintSpeed.ToString("F1"));
-			AddConstantRow(charSection, "Sprint Stamina Cost", Constants.Character.SprintStaminaCost.ToString("F1"));
-			AddConstantRow(charSection, "Crouch Speed", Constants.Character.CrouchSpeed.ToString("F1"));
-			AddConstantRow(charSection, "Jump Up Speed", Constants.Character.JumpUpSpeed.ToString("F1"));
-			AddConstantRow(charSection, "Jump Stamina Cost", Constants.Character.JumpStaminaCost.ToString("F1"));
-			AddConstantRow(charSection, "Gravity", Constants.Character.Gravity.ToString());
-			inspectorContent.Add(charSection);
-
-			// ── Layers Section ──
-			VisualElement layerSection = CreateConstantsSection("Layers");
-			AddConstantRow(layerSection, "Default", Constants.Layers.DefaultLayer.ToString());
-			AddConstantRow(layerSection, "Ignore Raycast", Constants.Layers.IgnoreRaycast.ToString());
-			AddConstantRow(layerSection, "Ground", Constants.Layers.Ground.ToString());
-			AddConstantRow(layerSection, "Obstruction", Constants.Layers.Obstruction.ToString());
-			AddConstantRow(layerSection, "Player", Constants.Layers.Player.ToString());
-			inspectorContent.Add(layerSection);
-
-			// ── Misc ──
-			VisualElement miscSection = CreateConstantsSection("Misc");
-			AddConstantRow(miscSection, "Shared Static Label", Constants.SharedStaticLabel);
-			inspectorContent.Add(miscSection);
-
-			// Info label
-			Label infoLabel = new Label("These values are defined in Constants.cs and are read-only.\nEdit Constants.cs directly to change them.");
-			infoLabel.style.marginTop = 12;
-			infoLabel.style.fontSize = 10;
-			infoLabel.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
-			infoLabel.style.whiteSpace = WhiteSpace.Normal;
-			inspectorContent.Add(infoLabel);
-		}
 
 		/// <summary>
 		/// Creates a section container with a header label.

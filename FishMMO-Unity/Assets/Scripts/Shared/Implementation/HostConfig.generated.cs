@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// AUTO-GENERATED — CI substitutes real values before release builds.
+// AUTO-GENERATED — written by FishMMO Dashboard > Game Settings.
 // Do NOT edit manually.  Use the FishMMO-Installer or set env vars in CI.
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -22,33 +22,33 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class GeneratedHostConfig
 	{
-		internal const string SentinelMarker = "FISHMMO_SENTINEL_PLACEHOLDER";
+		public const string SentinelMarker = "FISHMMO_SENTINEL_PLACEHOLDER";
 
 		/// <summary>API gateway URL with trailing slash (e.g. "https://api.fishmmo.com/").</summary>
-		internal const string ApiHost =
+		public const string ApiHost =
 			"https://FISHMMO_SENTINEL_PLACEHOLDER_API_HOST/";
 
 		/// <summary>Game server hostname for WebTransport/QUIC connections.</summary>
-		internal const string GameHost =
+		public const string GameHost =
 			"FISHMMO_SENTINEL_PLACEHOLDER_GAME_HOST";
 
 		/// <summary>WebGL client / player-facing hostname.</summary>
-		internal const string PlayHost =
+		public const string PlayHost =
 			"FISHMMO_SENTINEL_PLACEHOLDER_PLAY_HOST";
 
 		/// <summary>Root domain (no subdomain) for TLS certs and email.</summary>
-		internal const string RootDomain =
+		public const string RootDomain =
 			"FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN";
 
 		/// <summary>SMTP from address for verification emails.</summary>
-		internal const string SmtpFromAddress =
+		public const string SmtpFromAddress =
 			"noreply@FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN";
 
 		/// <summary>SMTP from display name.</summary>
-		internal const string SmtpFromName = "FishMMO";
+		public const string SmtpFromName = "FishMMO";
 
 		/// <summary>Launcher HTML/news page URL.</summary>
-		internal const string LauncherHtmlUrl =
+		public const string LauncherHtmlUrl =
 			"https://www.FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN/docs/introduction.html";
 	}
 }

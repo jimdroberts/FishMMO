@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// AUTO-GENERATED — written by FishMMO > Security > Fetch Certificate Pins.
+// AUTO-GENERATED — written by FishMMO Dashboard > Game Settings.
 // Do NOT edit manually.  Pins are fetched from live TLS connections and written
 // directly to this file by the Unity Editor tool.
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Sentinel check: the build validator (ClientSecurityBuildValidator) blocks
 // non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.
-// Run FishMMO > Security > Fetch Certificate Pins to replace the sentinels.
+// Run FishMMO Dashboard > Game Settings to replace the sentinels.
 
 namespace FishMMO.Client.Security
 {
@@ -37,6 +37,6 @@ namespace FishMMO.Client.Security
 		/// Ed25519 public key (base64) for verifying signed pin update
 		/// manifests from the API. Empty string disables runtime updates.
 		/// </summary>
-		internal const string ManifestPublicKeyBase64 = "";
+		public const string ManifestPublicKeyBase64 = "";
 	}
 }
