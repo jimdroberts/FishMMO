@@ -15,6 +15,7 @@ using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
+using FishMMO.Auth.Implementation;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation
@@ -305,6 +306,23 @@ namespace FishMMO.Server.Implementation
 			else
 				throw new InvalidOperationException(
 					"Server: Authenticator does not implement IServerAuthenticator.");
+
+			// SrpAuthenticatorCore.InitializeWorkersCore hard-throws if TotpMasterKey is null /
+			// wrong length. LoginServerSystem historically assigned TotpMasterKey only during
+			// BehaviourRegistry.InitializeAll — which runs AFTER AttachLoginAuthenticator
+			// starts workers. Pre-bootstrap a process-local signing key + derived TotpMasterKey
+			// here so Login can open the transport. LoginServerSystem reuses TokenSigningKey
+			// when already set (no second generate) and re-derives Totp after DB registration.
+			if (authenticator is ServerAuthenticator srpAuth)
+			{
+				byte[] signingKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+				srpAuth.TokenSigningKey = signingKey;
+				using (var localKms = new LocalDeriveKmsProvider(signingKey))
+				{
+					srpAuth.TotpMasterKey = localKms.DeriveKey("fishmmo-totp-master-key-v1");
+				}
+				Log.Debug("Server", "Pre-bootstrapped TokenSigningKey + TotpMasterKey before InitializeWorkers.");
+			}
 
 			NetworkWrapper.ApplyTransportConfiguration(AddressOverride, PortOverride > 0 ? PortOverride : null);
 			NetworkWrapper.AttachLoginAuthenticator(this);

@@ -166,7 +166,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			byte[] hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+			// Prefer the process-local signing key pre-bootstrapped in Server.OnFinalizeSetup
+			// (required so TotpMasterKey exists before InitializeWorkers). Only generate a
+			// fresh key if one was not already assigned.
+			byte[] hmacKey;
+			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator existingAuth
+				&& existingAuth.TokenSigningKey != null
+				&& existingAuth.TokenSigningKey.Length == CryptoHelper.HmacKeyLength)
+			{
+				hmacKey = existingAuth.TokenSigningKey;
+				Log.Debug("LoginServerSystem", "Reusing pre-bootstrapped TokenSigningKey for persistence.");
+			}
+			else
+			{
+				hmacKey = CryptoHelper.GenerateKey(CryptoHelper.HmacKeyLength);
+			}
 
 			// Load the deployment-shared KEK from the deployment_secrets database table.
 			// The database is the ONLY source — no environment variable or .cfg file fallbacks.
