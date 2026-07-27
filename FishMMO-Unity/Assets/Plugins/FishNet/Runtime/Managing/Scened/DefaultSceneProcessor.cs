@@ -68,7 +68,18 @@ namespace FishNet.Managing.Scened
         /// <param name = "sceneName">Scene name to load.</param>
         public override void BeginLoadAsync(string sceneName, UnityEngine.SceneManagement.LoadSceneParameters parameters)
         {
+            // Null when the scene is not in Build Settings (e.g. Addressables-only scenes).
+            // FishMMO clients must use AddressableSceneProcessor — this guards a miswired SceneManager.
             AsyncOperation ao = UnitySceneManager.LoadSceneAsync(sceneName, parameters);
+            if (ao == null)
+            {
+                SceneManager.NetworkManager.LogError(
+                    $"LoadSceneAsync returned null for scene '{sceneName}'. " +
+                    "Assign AddressableSceneProcessor on SceneManager when using Addressable scenes.");
+                CurrentAsyncOperation = null;
+                return;
+            }
+
             LoadingAsyncOperations.Add(ao);
 
             _lastLoadedScene = UnitySceneManager.GetSceneAt(UnitySceneManager.sceneCount - 1);
