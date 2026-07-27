@@ -236,7 +236,14 @@ namespace FishNet.Managing.Scened
         {
             UnitySceneManager.sceneUnloaded += SceneManager_SceneUnloaded;
             if (_sceneProcessor == null)
-                _sceneProcessor = gameObject.AddComponent<DefaultSceneProcessor>();
+            {
+                // Prefer an existing custom processor on this object (e.g. AddressableSceneProcessor)
+                // before adding DefaultSceneProcessor. DefaultSceneProcessor uses Build Settings
+                // LoadSceneAsync and returns null for Addressables-only scenes → NRE.
+                _sceneProcessor = GetComponent<SceneProcessorBase>();
+                if (_sceneProcessor == null)
+                    _sceneProcessor = gameObject.AddComponent<DefaultSceneProcessor>();
+            }
             _sceneProcessor.Initialize(this);
         }
 
