@@ -67,7 +67,9 @@ namespace FishMMO.Shared
 		void Awake()
 		{
 			// Set the region's layer to ignore raycasts.
-			gameObject.layer = Constants.Layers.IgnoreRaycast;
+			// Layer index 0–31, not LayerMask bitfield.
+			if (Constants.Layers.IgnoreRaycastIndex >= 0 && Constants.Layers.IgnoreRaycastIndex <= 31)
+				gameObject.layer = Constants.Layers.IgnoreRaycastIndex;
 
 			// Register this region as a child of its parent, if applicable.
 			if (Parent != null)

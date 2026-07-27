@@ -217,32 +217,45 @@ namespace FishMMO.Shared
 
 		public static class Layers
 		{
-			/// <summary>
-			/// DefaultLayer (Layer 0), used for most GameObjects.
-			/// </summary>
-			/// <remarks>
-			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
-			/// the editor to partially function with missing layer configuration during development.
-			/// </remarks>
-			public static readonly LayerMask DefaultLayer = 1 << LayerMask.NameToLayer("Default");
+			// Layer *indices* (0–31) for GameObject.layer assignment.
+			// Layer *masks* (bitfields) for Physics.Raycast / layerMask parameters.
+			// NameToLayer returns -1 when missing; mask becomes 0 and index stays -1.
+
+			/// <summary>Layer index for Default (use with <c>gameObject.layer</c>).</summary>
+			public static readonly int DefaultLayerIndex = LayerMask.NameToLayer("Default");
+			/// <summary>Layer index for Ignore Raycast.</summary>
+			public static readonly int IgnoreRaycastIndex = LayerMask.NameToLayer("Ignore Raycast");
+			/// <summary>Layer index for Ground.</summary>
+			public static readonly int GroundIndex = LayerMask.NameToLayer("Ground");
+			/// <summary>Layer index for Player.</summary>
+			public static readonly int PlayerIndex = LayerMask.NameToLayer("Player");
 
 			/// <summary>
-			/// Ignore Raycast layer, used for UI and non-interactive objects.
+			/// DefaultLayer mask, used for most GameObjects in physics queries.
 			/// </summary>
 			/// <remarks>
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask IgnoreRaycast = 1 << LayerMask.NameToLayer("Ignore Raycast");
+			public static readonly LayerMask DefaultLayer = DefaultLayerIndex >= 0 ? 1 << DefaultLayerIndex : 0;
 
 			/// <summary>
-			/// Ground layer, used for terrain and walkable surfaces.
+			/// Ignore Raycast layer mask, used for UI and non-interactive objects.
 			/// </summary>
 			/// <remarks>
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask Ground = 1 << LayerMask.NameToLayer("Ground");
+			public static readonly LayerMask IgnoreRaycast = IgnoreRaycastIndex >= 0 ? 1 << IgnoreRaycastIndex : 0;
+
+			/// <summary>
+			/// Ground layer mask, used for terrain and walkable surfaces.
+			/// </summary>
+			/// <remarks>
+			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
+			/// the editor to partially function with missing layer configuration during development.
+			/// </remarks>
+			public static readonly LayerMask Ground = GroundIndex >= 0 ? 1 << GroundIndex : 0;
 
 			/// <summary>
 			/// Obstruction layer mask combining Default and Ground layers,
@@ -255,13 +268,13 @@ namespace FishMMO.Shared
 			public static readonly LayerMask Obstruction = LayerMask.GetMask("Default", "Ground");
 
 			/// <summary>
-			/// Player layer, used for player characters.
+			/// Player layer mask, used for player characters in physics queries.
 			/// </summary>
 			/// <remarks>
 			/// NOTE: Does not throw on missing layers — only logs a warning. This allows
 			/// the editor to partially function with missing layer configuration during development.
 			/// </remarks>
-			public static readonly LayerMask Player = 1 << LayerMask.NameToLayer("Player");
+			public static readonly LayerMask Player = PlayerIndex >= 0 ? 1 << PlayerIndex : 0;
 
 			static Layers()
 			{

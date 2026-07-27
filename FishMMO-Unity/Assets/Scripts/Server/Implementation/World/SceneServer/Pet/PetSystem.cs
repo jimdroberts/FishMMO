@@ -756,7 +756,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Add the spawner position
 			origin += spawnPosition;
 
-			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, 1 << Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
+			// Ground is already a LayerMask bitfield — do not shift again.
+			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
 			{
 				spawnPosition = hit.point;
 			}

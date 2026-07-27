@@ -206,7 +206,9 @@ namespace FishMMO.Shared
 			Collider = this.gameObject.GetComponent<Collider>();
 
 			// Override default layer settings for player characters.
-			gameObject.layer = Constants.Layers.Player;
+			// Use layer *index* (0–31), not the LayerMask bitfield (1 << index).
+			if (Constants.Layers.PlayerIndex >= 0 && Constants.Layers.PlayerIndex <= 31)
+				gameObject.layer = Constants.Layers.PlayerIndex;
 
 			// Initialize all attached character behaviours.
 			ICharacterBehaviour[] c = gameObject.GetComponents<ICharacterBehaviour>();
