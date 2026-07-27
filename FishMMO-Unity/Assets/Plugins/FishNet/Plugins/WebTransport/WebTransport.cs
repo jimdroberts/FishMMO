@@ -182,12 +182,6 @@ namespace FishNet.Transporting.WebTransport
 			// Prefer the persistent reliable bidi stream (channel 0) on all client platforms.
 			if (channelId == 1)
 				channelId = 0;
-			if (channelId == 1 && segment.Count > MTU)
-			{
-				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
-				return;
-			}
 			this.clientSocket.SendToServer(channelId, segment);
 		}
 
