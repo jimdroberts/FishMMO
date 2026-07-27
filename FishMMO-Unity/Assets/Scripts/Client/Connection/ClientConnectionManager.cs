@@ -253,6 +253,23 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Invokes FishNet <c>StartConnection</c> without yielding (safe inside try/catch).
+		/// </summary>
+		private bool TryStartConnection(string address, ushort port, out Exception error)
+		{
+			error = null;
+			try
+			{
+				return NetworkManager.ClientManager.StartConnection(address, port);
+			}
+			catch (Exception ex)
+			{
+				error = ex;
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Hard-stop WebTransport/FishNet client so a hop (Login→World, World→Scene) can
 		/// open a new session. Editor native QUIC has been observed stuck Started while
 		/// StopConnection never delivered Stopped — WebGL usually stops cleanly.
@@ -355,44 +372,47 @@ namespace FishMMO.Client
 				$"priorState={ClientState} timeout={ConnectTimeoutSeconds:0.#}s " +
 				"(expect exactly one [FishWT] WTConnect BEGIN)");
 
-			try
+			// TryStartConnection cannot yield — keep try/catch free of yield (CS1626).
+			bool started = TryStartConnection(address, port, out Exception startEx);
+			if (startEx != null)
 			{
-				bool started = NetworkManager.ClientManager.StartConnection(address, port);
-				if (!started)
-				{
-					// One more force-stop + retry — socket may still have been Starting.
-					Log.Warning("ClientConnection",
-						$"StartConnection returned false for {address}:{port}; force-stop and retry once.");
-					ForceStopTransportForHop("StartConnection returned false");
-					yield return null;
-					ClientState = LocalConnectionState.Stopped;
-					started = NetworkManager.ClientManager.StartConnection(address, port);
-					if (!started)
-					{
-						Log.Error("ClientConnection",
-							$"StartConnection still false for {address}:{port} after force-stop retry");
-						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-						OnConnectTimedOut?.Invoke(address, port,
-							$"Could not start WebTransport to {address}:{port} (StartConnection false)");
-						yield break;
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				Log.Error("ClientConnection", $"StartConnection threw: {ex.Message}", ex);
+				Log.Error("ClientConnection", $"StartConnection threw: {startEx.Message}", startEx);
 				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
-				string failMsg = $"Could not start connection to {address}:{port} — {ex.Message}";
-				OnConnectTimedOut?.Invoke(address, port, failMsg);
+				OnConnectTimedOut?.Invoke(address, port,
+					$"Could not start connection to {address}:{port} — {startEx.Message}");
 				yield break;
 			}
-			finally
+			if (!started)
 			{
-				// Guard released so ForceDisconnect / concurrent cleanup can proceed while
-				// we wait for Started (or timeout). A second ConnectToServer during wait is
-				// still possible; UI locks should prevent that for login/register.
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				// One more force-stop + retry — socket may still have been Starting.
+				Log.Warning("ClientConnection",
+					$"StartConnection returned false for {address}:{port}; force-stop and retry once.");
+				ForceStopTransportForHop("StartConnection returned false");
+				yield return null;
+				ClientState = LocalConnectionState.Stopped;
+				started = TryStartConnection(address, port, out startEx);
+				if (startEx != null)
+				{
+					Log.Error("ClientConnection", $"StartConnection retry threw: {startEx.Message}", startEx);
+					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					OnConnectTimedOut?.Invoke(address, port,
+						$"Could not start connection to {address}:{port} — {startEx.Message}");
+					yield break;
+				}
+				if (!started)
+				{
+					Log.Error("ClientConnection",
+						$"StartConnection still false for {address}:{port} after force-stop retry");
+					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					OnConnectTimedOut?.Invoke(address, port,
+						$"Could not start WebTransport to {address}:{port} (StartConnection false)");
+					yield break;
+				}
 			}
+
+			// Guard released so ForceDisconnect / concurrent cleanup can proceed while
+			// we wait for Started (or timeout).
+			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 
 			// Wait until Started, Stopped, or hard timeout — never leave UI waiting forever.
 			float timeout = Mathf.Max(1f, ConnectTimeoutSeconds);
