@@ -389,14 +389,21 @@ namespace FishNet.Transporting.WebTransport.Client
 
 		internal bool StopConnection()
 		{
-			// Atomic guard — ensure StopConnection runs exactly once.
-			if (System.Threading.Interlocked.CompareExchange(ref stopGuard, 1, 0) != 0)
-				return false;
-
-			if (base.GetConnectionState() == LocalConnectionState.Stopped ||
-				base.GetConnectionState() == LocalConnectionState.Stopping)
+			// Already fully down — nothing to do.
+			if (base.GetConnectionState() == LocalConnectionState.Stopped)
 			{
-				stopGuard = 0;
+				System.Threading.Interlocked.Exchange(ref stopGuard, 0);
+				return false;
+			}
+
+			// If a prior stop left us stuck in Stopping (or stopGuard set without
+			// reaching Stopped), force-complete to Stopped so World→Scene hops can
+			// StartConnection. Editor native QUIC sometimes never delivered Stopped
+			// while tick datagrams kept flowing — WebGL path did not hit this.
+			bool guardTaken = System.Threading.Interlocked.CompareExchange(ref stopGuard, 1, 0) == 0;
+			if (!guardTaken && base.GetConnectionState() != LocalConnectionState.Stopping)
+			{
+				// Concurrent stop in progress; let the other call finish.
 				return false;
 			}
 
@@ -409,11 +416,49 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 			System.Threading.Interlocked.Exchange(ref this.incomingEventCount, 0);
 
-			base.SetConnectionState(LocalConnectionState.Stopping, false);
+			if (base.GetConnectionState() != LocalConnectionState.Stopping &&
+				base.GetConnectionState() != LocalConnectionState.Stopped)
+			{
+				base.SetConnectionState(LocalConnectionState.Stopping, false);
+			}
 
-			Dispose();
-			base.SetConnectionState(LocalConnectionState.Stopped, false);
+			try
+			{
+				Dispose();
+			}
+			catch (System.Exception ex)
+			{
+				LogTransportError($"[WebTransport Client] Dispose during StopConnection: {ex}");
+			}
+
+			// Always land on Stopped so FishNet + ClientConnectionManager can hop.
+			if (base.GetConnectionState() != LocalConnectionState.Stopped)
+				base.SetConnectionState(LocalConnectionState.Stopped, false);
+
+			// Allow a subsequent ForceStop / StartConnection cycle to re-enter stop.
+			// StartConnection also resets stopGuard; clearing here avoids stuck guard
+			// if Start is delayed after a forced hop.
+			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
 			return true;
+		}
+
+		/// <summary>
+		/// Hard-reset client socket to Stopped regardless of current state.
+		/// Used when World→Scene (or any hop) hangs waiting for a clean stop —
+		/// especially Unity Editor native QUIC vs WebGL.
+		/// </summary>
+		internal void ForceStopAndReset()
+		{
+			LogTransportWarning(
+				$"[FishWT] ForceStopAndReset priorState={base.GetConnectionState()} target={lastConnectTarget}");
+			// Clear guard so StopConnection can run even if a prior stop stalled.
+			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
+			StopConnection();
+			// Ensure ready for next StartConnection even if Dispose no-op'd.
+			System.Threading.Interlocked.Exchange(ref this.disposed, 0);
+			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
+			if (base.GetConnectionState() != LocalConnectionState.Stopped)
+				base.SetConnectionState(LocalConnectionState.Stopped, false);
 		}
 
 		/// <summary>

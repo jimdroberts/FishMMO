@@ -175,31 +175,29 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			SanitizeChannel(ref channelId);
-#if UNITY_WEBGL && !UNITY_EDITOR
-			// Browser: never use QUIC DATAGRAM for FishNet channel 1. Datagrams have
-			// caused H3_FRAME_ERROR / session drop after LoginSuccess. Prefer the
-			// persistent reliable bidi stream (channel 0).
+			// Never use QUIC DATAGRAM for FishNet client channel 1.
+			// WebGL: DATAGRAM caused H3_FRAME_ERROR / session drop after LoginSuccess.
+			// Editor native: DATAGRAM tick traffic kept flowing during StopConnection and
+			// left World→Scene hops hung waiting for Stopped (WebGL worked, Editor did not).
+			// Prefer the persistent reliable bidi stream (channel 0) on all client platforms.
 			if (channelId == 1)
 				channelId = 0;
-#endif
 			if (channelId == 1 && segment.Count > MTU)
 			{
 				base.NetworkManager.LogWarning(
 					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
 				return;
 			}
-			// FishNet TransportManager flushes bundles here during IterateOutgoing.
-			// Log first packets so we can tell "Broadcast queued" vs "transport accepted".
-			var sockState = this.clientSocket != null
-				? this.clientSocket.GetConnectionState()
-				: LocalConnectionState.Stopped;
-			if (segment.Count > 0)
-			{
-				UnityEngine.Debug.Log(
-					$"[FishWT] Transport.SendToServer ch={channelId} len={segment.Count} " +
-					$"clientSocketState={sockState}");
-			}
 			this.clientSocket.SendToServer(channelId, segment);
+		}
+
+		/// <summary>
+		/// Force the client socket to Stopped so a new <see cref="StartConnection"/> can run.
+		/// Call when FishNet StopConnection hangs (observed in Unity Editor World→Scene hops).
+		/// </summary>
+		public void ForceStopClient()
+		{
+			this.clientSocket?.ForceStopAndReset();
 		}
 
 		/// <summary>
@@ -473,7 +471,14 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool stopClient()
 		{
-			return this.clientSocket.StopConnection();
+			// Prefer normal stop; if it no-ops while still not Stopped, force reset.
+			bool ok = this.clientSocket.StopConnection();
+			if (this.clientSocket.GetConnectionState() != LocalConnectionState.Stopped)
+			{
+				this.clientSocket.ForceStopAndReset();
+				ok = this.clientSocket.GetConnectionState() == LocalConnectionState.Stopped;
+			}
+			return ok;
 		}
 
 		/// <summary>
