@@ -290,7 +290,6 @@ MonoBehaviour:
   - {fileID: 1966501389576177422}
   - {fileID: 218304821033608884}
   - {fileID: 4374908933606738023}
-  - {fileID: 0}
   - {fileID: 1974367592072420653}
   - {fileID: 7975244870159263472}
   - {fileID: 3124264775330692708}
@@ -299,6 +298,13 @@ MonoBehaviour:
   - {fileID: 6690946415020651589}
   - {fileID: 7810264000710710752}
   - {fileID: 34196052825852577}
+  - {fileID: -4700021757340413314}
+  - {fileID: 1440832647282045557}
+  - {fileID: 2604960689789808382}
+  - {fileID: 7334820797300942041}
+  - {fileID: 3444804090579496595}
+  - {fileID: 8478061901066445689}
+  - {fileID: 5707120537050968959}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}

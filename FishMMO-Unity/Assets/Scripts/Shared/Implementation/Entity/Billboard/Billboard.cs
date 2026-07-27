@@ -1,17 +1,25 @@
-﻿using UnityEngine;
+using UnityEngine;
 
-namespace FishMMO.Client
+namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Rotates the GameObject to face the main camera (nameplates, world labels).
+	/// Lives in <c>FishMMO.Shared</c> so dedicated server builds resolve the prefab
+	/// script reference (no missing-script holes). On <c>UNITY_SERVER</c> the
+	/// component is a no-op — servers have no camera / billboard rendering.
+	/// </summary>
 	public sealed class Billboard : MonoBehaviour
 	{
-		/// <summary>
-		/// Reference to the camera used for billboarding. The object's rotation matches this camera.
-		/// </summary>
-		private Camera targetCamera;
 		/// <summary>
 		/// If true, only the Y-axis (vertical) rotation is matched, creating a horizontal billboard effect.
 		/// </summary>
 		public bool PivotYAxis = false;
+
+#if !UNITY_SERVER
+		/// <summary>
+		/// Reference to the camera used for billboarding. The object's rotation matches this camera.
+		/// </summary>
+		private Camera targetCamera;
 
 		/// <summary>
 		/// Cached transform of the camera. Used for efficient access to camera orientation.
@@ -57,5 +65,12 @@ namespace FishMMO.Client
 			this.targetCamera = target;
 			Transform = this.targetCamera == null ? null : this.targetCamera.transform;
 		}
+#else
+		void Awake()
+		{
+			// Keep component present for prefab stability; no camera work on dedicated server.
+			enabled = false;
+		}
+#endif
 	}
 }
