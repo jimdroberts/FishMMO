@@ -26,7 +26,17 @@ namespace FishMMO.Client.Security.Editor
 		public void OnPreprocessBuild(BuildReport report)
 		{
 			// Only enforce for non-development client builds.
+			//
+			// Check both signals:
+			// 1) EditorUserBuildSettings.development — Player Settings / Build Window toggle
+			// 2) BuildOptions.Development on this BuildPlayer request — CustomBuildTool sets
+			//    this when Working Environment is Development, without always flipping the
+			//    EditorUser flag. Skipping only (1) incorrectly blocked Dashboard "Development"
+			//    builds that still had sentinel TLS pins (BuildFailedException pin gate).
 			if (EditorUserBuildSettings.development)
+				return;
+
+			if (report != null && (report.summary.options & BuildOptions.Development) != 0)
 				return;
 
 			int realPinCount = ClientSecurityBootstrap.DefaultPinCount;

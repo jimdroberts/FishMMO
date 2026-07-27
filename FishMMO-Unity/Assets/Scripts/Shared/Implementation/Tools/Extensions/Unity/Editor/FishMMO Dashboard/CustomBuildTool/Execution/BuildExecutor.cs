@@ -54,8 +54,21 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			folderName = folderName.Trim();
 			string buildPath = Path.Combine(rootPath, folderName);
 
+			// Align EditorUserBuildSettings.development with this build request.
+			// ClientSecurityBuildValidator gates TLS pins / secrets / hosts when
+			// development is false. CustomBuildTool may pass BuildOptions.Development
+			// and/or WorkingEnvironment=Development without flipping the EditorUser flag
+			// (and WebGL Development intentionally omits BuildOptions.Development).
+			// Without this sync, Development Dashboard builds still hit the production pin gate.
+			bool previousDevelopment = EditorUserBuildSettings.development;
+			bool isDevelopmentBuild =
+				(buildOptions & BuildOptions.Development) != 0 ||
+				WorkingEnvironmentOptions.GetWorkingEnvironmentState() == WorkingEnvironmentState.Development;
+
 			try
 			{
+				EditorUserBuildSettings.development = isDevelopmentBuild;
+
 				BuildPlayerOptions options = new BuildPlayerOptions()
 				{
 					locationPathName = Path.Combine(buildPath, executableName + ".exe"),
@@ -75,6 +88,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 					Log.Debug("BuildExecutor", $"Scenes Included: {string.Join(", ", bootstrapScenes)}");
 					Log.Debug("BuildExecutor", $"Build Target: {buildTarget}");
 					Log.Debug("BuildExecutor", $"Build Subtarget: {subTarget}");
+					Log.Debug("BuildExecutor", $"Development build (security gate skip): {isDevelopmentBuild}");
 					LogBuildSteps(report);
 
 					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
@@ -104,6 +118,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			}
 			finally
 			{
+				EditorUserBuildSettings.development = previousDevelopment;
 				Log.Debug("BuildExecutor", "Build finished.");
 			}
 		}
