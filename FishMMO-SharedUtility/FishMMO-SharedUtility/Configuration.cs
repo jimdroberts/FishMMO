@@ -425,10 +425,15 @@ namespace FishMMO.Shared
 
 					// Synchronize the entire dictionary replacement under a single write lock
 					// to avoid nested locking with Set() and to keep the replacement atomic.
+					// IMPORTANT: assign the private field fileName here — do NOT call the
+					// FileName property setter, which acquires EnterWriteLock again.
+					// ReaderWriterLockSlim defaults to non-recursive mode; nested write locks
+					// threw: "Recursive write lock acquisitions not allowed in this mode"
+					// when loading LoginServer.cfg / WorldServer.cfg / SceneServer.cfg.
 					settingsLock.EnterWriteLock();
 					try
 					{
-						FileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
+						fileName = Path.GetFileNameWithoutExtension(fullFileName); // Stores only the base name of the file (without its extension).
 
 						// Clears all existing settings before populating with new ones from the file.
 						this.settings.Clear();

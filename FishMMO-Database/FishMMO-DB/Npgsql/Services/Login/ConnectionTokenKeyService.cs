@@ -18,28 +18,6 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </summary>
 	public sealed class ConnectionTokenKeyService : BaseService<ConnectionTokenKeyEntity>, IConnectionTokenKeyService
 	{
-#pragma warning disable CS8619
-		/// <summary>
-		/// Compiled query for fetching all active keys without tracking, ordered by TimeCreated descending.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, CancellationToken, Task<List<ConnectionTokenKeyEntity>>> getAllActiveQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, CancellationToken ct) =>
-				context.ConnectionTokenKeys
-					.AsNoTracking()
-					.Where(k => k.IsActive)
-					.OrderByDescending(k => k.TimeCreated)
-					.ToList());
-
-		/// <summary>
-		/// Compiled query for fetching a single key by its logical key ID without tracking.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<ConnectionTokenKeyEntity?>> getByKeyIdQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string keyId, CancellationToken ct) =>
-				context.ConnectionTokenKeys
-					.AsNoTracking()
-					.FirstOrDefault(k => k.KeyId == keyId));
-#pragma warning restore CS8619
-
 		/// <summary>
 		/// Initializes a new instance of ConnectionTokenKeyService.
 		/// </summary>
@@ -54,9 +32,18 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<ConnectionTokenKeyData[]>> FetchAllActiveAsync(
 			CancellationToken cancellationToken = default)
 		{
+			// Do not use EF.CompileAsyncQuery with OrderByDescending(TimeCreated): on some
+			// EF Core / Npgsql versions the compiled form fails translation at runtime even
+			// though the same LINQ works via normal IQueryable, breaking World/Scene token
+			// key load while rows exist in connection_token_keys.
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getAllActiveQuery(dbContext, cancellationToken).ConfigureAwait(false);
+				List<ConnectionTokenKeyEntity> entities = await dbContext.ConnectionTokenKeys
+					.AsNoTracking()
+					.Where(k => k.IsActive)
+					.OrderByDescending(k => k.TimeCreated)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 				return entities.Select(MapEntityToDto).ToArray();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
@@ -75,7 +62,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entity = await getByKeyIdQuery(dbContext, keyId, cancellationToken).ConfigureAwait(false);
+				ConnectionTokenKeyEntity? entity = await dbContext.ConnectionTokenKeys
+					.AsNoTracking()
+					.FirstOrDefaultAsync(k => k.KeyId == keyId, cancellationToken)
+					.ConfigureAwait(false);
 				if (entity == null)
 				{
 					throw new DatabaseEntityNotFoundException("ConnectionTokenKey", keyId);
