@@ -681,10 +681,12 @@ namespace FishMMO.Shared
 
 			if (replicateReferenceTick == TimeManager.UNSET_TICK)
 			{
+				// Expected once at character load (DB buffs apply before first prediction tick).
+				// Debug only — reconcile translates; avoid WARNING spam on every scene spawn.
 				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
 				{
-					Log.Warning("BuffController",
-						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. ExpiryTick will be corrected by reconcile.");
+					Log.Debug("BuffController",
+						$"ResolveAuthoritativeTick before first OnReplicate; serverTick={serverTick} untranslated (corrected by reconcile).");
 					resolveAuthoritativeWarningLogged = true;
 				}
 				// LOAD-BEARING fallback — NOT a bug. Before the first replicate there is no

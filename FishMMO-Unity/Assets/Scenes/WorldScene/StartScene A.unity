@@ -420,16 +420,54 @@ MonoBehaviour:
   BoundingBoxSize: {x: 50, y: 5, z: 25}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
-  - rid: -2
-  - rid: -2
-  - rid: -2
+  - rid: 1000000000000000001
+  - rid: 1000000000000000002
+  - rid: 1000000000000000003
+  - rid: 1000000000000000004
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 1000000000000000001
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+          type: 3}
+        MinimumRespawnTime: 30
+        MaximumRespawnTime: 120
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 1000000000000000002
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
+          type: 3}
+        MinimumRespawnTime: 30
+        MaximumRespawnTime: 120
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 1000000000000000003
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+          type: 3}
+        MinimumRespawnTime: 30
+        MaximumRespawnTime: 120
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 1000000000000000004
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+          type: 3}
+        MinimumRespawnTime: 30
+        MaximumRespawnTime: 120
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
 --- !u!114 &70787373
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1530,15 +1568,43 @@ MonoBehaviour:
   BoundingBoxSize: {x: 75, y: 15, z: 65}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
-  - rid: -2
-  - rid: -2
+  - rid: 2000000000000000001
+  - rid: 2000000000000000002
+  - rid: 2000000000000000003
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 2000000000000000001
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+          type: 3}
+        MinimumRespawnTime: 45
+        MaximumRespawnTime: 180
+        SpawnChance: 0.4
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 2000000000000000002
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
+          type: 3}
+        MinimumRespawnTime: 45
+        MaximumRespawnTime: 180
+        SpawnChance: 0.35
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+    - rid: 2000000000000000003
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+          type: 3}
+        MinimumRespawnTime: 60
+        MaximumRespawnTime: 240
+        SpawnChance: 0.25
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
 --- !u!114 &784079646
 MonoBehaviour:
   m_ObjectHideFlags: 0

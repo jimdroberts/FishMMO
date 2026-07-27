@@ -564,7 +564,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73facf272d356ac42b96a3c8e10c36c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 9
+  _componentIndexCache: 8
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   onGuildJoinTriggers: []
@@ -581,7 +581,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd3cedcaf7281e042bd075ca3f84fc9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 10
+  _componentIndexCache: 9
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   onPartyJoinTriggers: []
@@ -598,7 +598,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3327546bbfe5c2a4cbb267dc49f40f6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 11
+  _componentIndexCache: 10
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!114 &4966316198463876083
@@ -613,7 +613,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef74936c7389fd247bbf0437fe619b20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 12
+  _componentIndexCache: 11
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   onDamageTriggers: []
@@ -638,7 +638,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a0d05cd6264eb1439b2e1f7f0112262, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 13
+  _componentIndexCache: 12
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   meshRoot: {fileID: 0}
@@ -707,7 +707,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d54339ff3d1e7f498b872ac6b1633a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 14
+  _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   isAggressive: 0
@@ -725,7 +725,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 15
+  _componentIndexCache: 14
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!114 &34196052825852577
@@ -740,7 +740,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb1bb90369a05a844b79d7695ce3681e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 16
+  _componentIndexCache: 15
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!114 &-4700021757340413314
@@ -755,7 +755,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6eb382409511904448ab4b46057e9150, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 16
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
   onPetSummonTriggers: []
@@ -772,7 +772,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d6e28c24136385cda2e72cbc080989d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.EquipmentController
-  _componentIndexCache: 255
+  _componentIndexCache: 17
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
   onEquipTriggers: []
@@ -789,7 +789,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a6c32020816b90a4693f218b72353287, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.BodyVisibilityManager
-  _componentIndexCache: 255
+  _componentIndexCache: 18
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
 --- !u!114 &7334820797300942041
@@ -804,7 +804,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 22bafa4cd1edd40d2ae2d25c5fcb8f47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAppearanceManager
-  _componentIndexCache: 255
+  _componentIndexCache: 19
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
 --- !u!114 &3444804090579496595
@@ -819,7 +819,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3fff7bdce6d64b37483064fdd4318ee6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.EquipmentVisualController
-  _componentIndexCache: 255
+  _componentIndexCache: 20
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
 --- !u!114 &8478061901066445689
@@ -834,7 +834,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1546cc7a45eb8fb2b12984901c73d94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAnimationController
-  _componentIndexCache: 255
+  _componentIndexCache: 21
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
 --- !u!114 &-5823274886434283089
@@ -849,7 +849,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: caae36f1c31918fb3b93631b89c69b12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
-  _componentIndexCache: 255
+  _componentIndexCache: 22
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
 --- !u!1 &5035121396218170946

@@ -155,12 +155,14 @@ namespace FishMMO.Shared
 				// Extents are always half of BoundingBoxSize
 				BoundingBoxExtents = BoundingBoxSize * 0.5f;
 
-				// Validate remaining spawnables (prefab spawnable flag, YOffset from collider).
+				// Runtime validate: refresh YOffset etc. but NEVER clear NetworkObject refs
+				// (allowClearInvalidRefs: false). Headless/dedicated builds were wiping every
+				// entry via GetIsSpawnable/strip failures → empty NPCSpawner/OrcSpawner.
 				for (int i = 0; i < Spawnables.Count; ++i)
 				{
 					try
 					{
-						Spawnables[i]?.OnValidate();
+						Spawnables[i]?.OnValidate(allowClearInvalidRefs: false);
 					}
 					catch (Exception ex)
 					{
@@ -169,12 +171,13 @@ namespace FishMMO.Shared
 					}
 				}
 
-				// Drop entries that became invalid during OnValidate (e.g. non-spawnable prefab cleared).
+				// Only drop true nulls / missing prefab refs — not "not spawnable" flags.
 				SanitizeSpawnables();
 				if (Spawnables == null || Spawnables.Count < 1)
 				{
 					Log.Warning("ObjectSpawner",
-						$"'{name}' has no valid spawnables after OnValidate — disabling.");
+						$"'{name}' has no valid spawnables after sanitize — disabling " +
+						"(check SerializeReference NetworkObject assignments on this spawner).");
 					enabled = false;
 					return;
 				}

@@ -461,10 +461,11 @@ namespace FishMMO.Shared
 
 			if (replicateReferenceTick == TimeManager.UNSET_TICK)
 			{
+				// Expected once at character load before first prediction tick — Debug not Warning.
 				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
 				{
-					Log.Warning("CooldownController",
-						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. StartTick will be corrected by reconcile.");
+					Log.Debug("CooldownController",
+						$"ResolveAuthoritativeTick before first OnReplicate; serverTick={serverTick} untranslated (corrected by reconcile).");
 					resolveAuthoritativeWarningLogged = true;
 				}
 				// CONSERVATIVE HARDENING: prefer the live TimeManager.LocalTick over the caller's

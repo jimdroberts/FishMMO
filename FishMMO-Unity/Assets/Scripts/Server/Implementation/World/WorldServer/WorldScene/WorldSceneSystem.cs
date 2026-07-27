@@ -98,6 +98,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		[SerializeField] private float sceneServerCacheTtlSeconds = 10.0f;
 
 		/// <summary>
+		/// Scene DB ids already logged at Info when enqueued/reused. Avoids 2s spam while
+		/// waiting for Ready (EnqueueAsync returns the same Pending/Loading id).
+		/// </summary>
+		private readonly HashSet<long> loggedOpenWorldEnqueueIds = new HashSet<long>();
+
+		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
 		private const int MaxClientsPerInstance = 500;
@@ -840,9 +846,20 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 				else
 				{
-					await Log.Info("WorldSceneSystem",
-						$"Enqueued Pending scene load: id={enqueueResult.Data} Scene={sceneName} " +
-						$"world={worldServerID} waiting={waitingCount}");
+					long sceneId = enqueueResult.Data;
+					// First sighting of this Pending/Loading id → Info; later WaitQueue polls → Debug only.
+					if (loggedOpenWorldEnqueueIds.Add(sceneId))
+					{
+						await Log.Info("WorldSceneSystem",
+							$"Enqueued Pending scene load: id={sceneId} Scene={sceneName} " +
+							$"world={worldServerID} waiting={waitingCount}");
+					}
+					else
+					{
+						await Log.Debug("WorldSceneSystem",
+							$"Reusing in-flight scene load id={sceneId} Scene={sceneName} " +
+							$"world={worldServerID} waiting={waitingCount} (still Loading/Pending).");
+					}
 				}
 			}
 		}
