@@ -92,6 +92,20 @@ namespace FishMMO.Shared
 					"Enable 'State Forwarding' on the NetworkObject's Prediction settings.");
 			}
 
+			// One-line spawn contract dump (client + server). Compare PrefabId / NB count /
+			// ComponentIndex of this controller after dual rebuild if PacketId spam returns.
+			if (base.NetworkObject != null)
+			{
+				int nbCount = base.NetworkObject.NetworkBehaviours != null
+					? base.NetworkObject.NetworkBehaviours.Count
+					: -1;
+				FishMMO.Logging.Log.Info(
+					"CharacterPredictionController",
+					$"Network contract asServer={base.IsServerStarted} name={base.NetworkObject.name} " +
+					$"PrefabId={base.NetworkObject.PrefabId} ObjectId={base.ObjectId} " +
+					$"ComponentIndex={base.ComponentIndex} NetworkBehaviours={nbCount}");
+			}
+
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnPreTick += TimeManager_OnPreTick;

@@ -48,6 +48,77 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Ensures each playable race prefab has a <see cref="FishNet.Component.Animating.NetworkAnimator"/>
+		/// NetworkBehaviour and rebuilds the NetworkObject NetworkBehaviours list + ComponentIndex
+		/// sequence so client and dedicated server share the same contract.
+		/// </summary>
+		[MenuItem("FishMMO/Validate/Ensure Player NetworkAnimator On Race Prefabs")]
+		public static void EnsurePlayerNetworkAnimator()
+		{
+			int fixedCount = 0;
+			foreach (string path in PlayableRacePrefabPaths)
+			{
+				GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				if (go == null)
+				{
+					Debug.LogError($"[FishMMO] Missing prefab {path}");
+					continue;
+				}
+
+				NetworkObject nob = go.GetComponent<NetworkObject>();
+				if (nob == null)
+				{
+					Debug.LogError($"[FishMMO] {path} has no NetworkObject");
+					continue;
+				}
+
+				var na = go.GetComponent<FishNet.Component.Animating.NetworkAnimator>();
+				bool added = false;
+				if (na == null)
+				{
+					na = go.AddComponent<FishNet.Component.Animating.NetworkAnimator>();
+					added = true;
+				}
+
+				// Rebuild NetworkBehaviours list from root GetComponents order and assign
+				// contiguous ComponentIndex 0..N-1 via SerializedObject (edit-mode safe).
+				NetworkBehaviour[] nbs = go.GetComponents<NetworkBehaviour>();
+				SerializedObject so = new SerializedObject(nob);
+				SerializedProperty listProp = so.FindProperty("NetworkBehaviours");
+				if (listProp == null || !listProp.isArray)
+				{
+					Debug.LogError($"[FishMMO] {go.name}: could not find NetworkBehaviours property");
+					continue;
+				}
+
+				listProp.arraySize = nbs.Length;
+				for (int i = 0; i < nbs.Length; i++)
+				{
+					listProp.GetArrayElementAtIndex(i).objectReferenceValue = nbs[i];
+					SerializedObject nbSo = new SerializedObject(nbs[i]);
+					SerializedProperty idxProp = nbSo.FindProperty("_componentIndexCache");
+					if (idxProp != null)
+					{
+						idxProp.intValue = i;
+						nbSo.ApplyModifiedPropertiesWithoutUndo();
+					}
+					EditorUtility.SetDirty(nbs[i]);
+				}
+
+				so.ApplyModifiedPropertiesWithoutUndo();
+				EditorUtility.SetDirty(nob);
+				EditorUtility.SetDirty(go);
+				fixedCount++;
+				Debug.Log(
+					$"[FishMMO] {go.name}: NetworkAnimator {(added ? "ADDED" : "present")}, " +
+					$"NetworkBehaviours rebuilt count={nbs.Length} (ComponentIndex 0..{nbs.Length - 1})");
+			}
+
+			AssetDatabase.SaveAssets();
+			Debug.Log($"[FishMMO] Ensure Player NetworkAnimator complete — {fixedCount} race prefab(s) processed.");
+		}
+
+		/// <summary>
 		/// Returns true when every spawnable PrefabId matches its collection index and
 		/// playable race prefabs have a clean NetworkBehaviour index sequence.
 		/// </summary>

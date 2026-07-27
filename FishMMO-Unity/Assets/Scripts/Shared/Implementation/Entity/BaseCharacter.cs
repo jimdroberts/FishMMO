@@ -232,11 +232,19 @@ namespace FishMMO.Shared
 		public virtual void OnAwake()
 		{
 #if !UNITY_SERVER
-			// Ensure NetworkAnimator exists for animation sync
+			// NetworkAnimator is a NetworkBehaviour with [ServerRpc] (ClientAuthoritative).
+			// It MUST exist on the prefab for BOTH client and dedicated server so FishNet
+			// ComponentIndex tables match. Never AddComponent at runtime on the client only —
+			// that produced ServerAnimatorUpdated traffic the server could not map, then a
+			// cascade of unhandled PacketId / RPCLink errors ~1s after spawn (model/animator live).
+			// Use: FishMMO → Validate → Ensure Player NetworkAnimator On Race Prefabs
 			NetworkAnimator = gameObject.GetComponent<NetworkAnimator>();
 			if (NetworkAnimator == null)
 			{
-				NetworkAnimator = gameObject.AddComponent<NetworkAnimator>();
+				Log.Warning("BaseCharacter",
+					$"{gameObject.name}: NetworkAnimator missing on prefab. " +
+					"Animation will not network-sync. Do not AddComponent at runtime — " +
+					"add NetworkAnimator on the race prefab (server+client) instead.");
 			}
 #endif
 		}
