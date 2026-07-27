@@ -1,6 +1,5 @@
 <linker>
   <assembly fullname="FishMMO.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.Billboard" preserve="all" />
     <type fullname="FishMMO.Client.BrightnessSettingOption" preserve="all" />
     <type fullname="FishMMO.Client.Cached3DLabel" preserve="all" />
     <type fullname="FishMMO.Client.CanvasCrawler" preserve="all" />
@@ -98,6 +97,7 @@
     <type fullname="FishMMO.Shared.BankController" preserve="all" />
     <type fullname="FishMMO.Shared.Banker" preserve="all" />
     <type fullname="FishMMO.Shared.BaseAttackingState" preserve="all" />
+    <type fullname="FishMMO.Shared.Billboard" preserve="all" />
     <type fullname="FishMMO.Shared.Bindstone" preserve="all" />
     <type fullname="FishMMO.Shared.BodyVisibilityManager" preserve="all" />
     <type fullname="FishMMO.Shared.BootstrapSystem" preserve="all" />
@@ -211,6 +211,7 @@
     <type fullname="FishMMO.Shared.NPCSpawnableSettings" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishNet.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.Component.Animating.NetworkAnimator" preserve="all" />
     <type fullname="FishNet.Component.Prediction.NetworkCollision" preserve="all" />
     <type fullname="FishNet.Component.Prediction.NetworkTrigger" preserve="all" />
     <type fullname="FishNet.Component.Transforming.Beta.NetworkTickSmoother" preserve="all" />

@@ -216,6 +216,7 @@ GameObject:
   - component: {fileID: 3444804090579496595}
   - component: {fileID: 8478061901066445689}
   - component: {fileID: -5823274886434283089}
+  - component: {fileID: -645378739623479791}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -252,29 +253,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  NetworkObserver: {fileID: 0}
-  _enablePrediction: 1
-  _predictionType: 0
-  _graphicalObject: {fileID: 0}
-  _detachGraphicalObject: 0
-  _enableStateForwarding: 1
-  _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
-  _ownerSmoothedProperties: 3
-  _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 3
-  _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 3
-  <PrefabId>k__BackingField: 2
-  <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 7271707456794944020
-  <SceneId>k__BackingField: 0
-  SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
   <IsNested>k__BackingField: 0
   WasActiveDuringEdit: 0
   WasActiveDuringEdit_Set1: 1
@@ -305,6 +283,7 @@ MonoBehaviour:
   - {fileID: 3444804090579496595}
   - {fileID: 8478061901066445689}
   - {fileID: -5823274886434283089}
+  - {fileID: -645378739623479791}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -315,6 +294,29 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 1
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 3
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 3
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 3
+  <PrefabId>k__BackingField: 2
+  <SpawnableCollectionId>k__BackingField: 0
+  <AssetPathHash>k__BackingField: 7271707456794944020
+  <SceneId>k__BackingField: 0
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!114 &961999050755331747
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -641,9 +643,9 @@ MonoBehaviour:
   _componentIndexCache: 12
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  meshRoot: {fileID: 0}
   characterNameLabel: {fileID: 0}
   characterGuildLabel: {fileID: 0}
+  meshRoot: {fileID: 0}
   equipmentViewCamera: {fileID: 0}
 --- !u!136 &4989737185595066850
 CapsuleCollider:
@@ -852,6 +854,28 @@ MonoBehaviour:
   _componentIndexCache: 22
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
+--- !u!114 &-645378739623479791
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8cac635f24954048aad3a6ff9110beb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Animating.NetworkAnimator
+  _componentIndexCache: 23
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  IgnoredParameters: []
+  _animator: {fileID: 0}
+  _synchronizeWhenDisabled: 0
+  _smoothFloats: 1
+  _interpolation: 2
+  _clientAuthoritative: 1
+  _sendToOwner: 0
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0
