@@ -92,7 +92,36 @@ namespace FishNet.Transporting.WebTransport
 		#region Initialization and Unity
 		private void OnDestroy()
 		{
-			Shutdown();
+			// Always tear down sockets. In the Editor, do NOT call wt_deinit() here —
+			// Play Mode stop destroys this component while TimeManager may still tick once,
+			// and Deinitialize() races msquic (native/mono crash after Stop Play while connected).
+			try
+			{
+				ForceStopClient();
+			}
+			catch { /* best effort during teardown */ }
+			try
+			{
+				StopConnection(false);
+			}
+			catch { /* best effort */ }
+			try
+			{
+				StopConnection(true);
+			}
+			catch { /* best effort */ }
+
+#if UNITY_EDITOR
+			// Leave native library loaded for the next Play session (EnsureInitialized is idempotent).
+#else
+#if !UNITY_WEBGL
+			try
+			{
+				WebTransportNative.Deinitialize();
+			}
+			catch { /* best effort */ }
+#endif
+#endif
 		}
 		#endregion
 
@@ -175,6 +204,16 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			SanitizeChannel(ref channelId);
+#if UNITY_WEBGL && !UNITY_EDITOR
+			// Browser only: never use QUIC DATAGRAM for FishNet channel 1. Datagrams have
+			// caused H3_FRAME_ERROR / session drop after LoginSuccess. Prefer the
+			// persistent reliable bidi stream (channel 0).
+			// Pair with TransportManager.CheckSetReliableChannel (WebGL forces Reliable
+			// *before* CreateRpc) so Replicate length headers match this stream path.
+			// Editor/native must NOT remap — that path uses real DATAGRAMs successfully.
+			if (channelId == 1)
+				channelId = 0;
+#endif
 			if (channelId == 1 && segment.Count > MTU)
 			{
 				base.NetworkManager.LogWarning(
@@ -182,6 +221,26 @@ namespace FishNet.Transporting.WebTransport
 				return;
 			}
 			this.clientSocket.SendToServer(channelId, segment);
+		}
+
+		/// <summary>
+		/// Force the client socket to Stopped so a new <see cref="StartConnection"/> can run.
+		/// Call when FishNet StopConnection hangs (observed in Unity Editor World->Scene hops).
+		/// </summary>
+		public void ForceStopClient()
+		{
+			this.clientSocket?.ForceStopAndReset();
+		}
+
+		/// <summary>
+		/// Wire-send counters for diagnostics (handshake / create-account).
+		/// </summary>
+		public void GetClientWireStats(out long queued, out long sentOk, out long sentFail, out long sentBytes, out long dropNotStarted)
+		{
+			if (clientSocket != null)
+				clientSocket.GetWireStats(out queued, out sentOk, out sentFail, out sentBytes, out dropNotStarted);
+			else
+				queued = sentOk = sentFail = sentBytes = dropNotStarted = 0;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -402,10 +461,13 @@ namespace FishNet.Transporting.WebTransport
 
 		public override void Shutdown()
 		{
-			StopConnection(false);
-			StopConnection(true);
-#if !UNITY_WEBGL || UNITY_EDITOR
-			WebTransportNative.Deinitialize();
+			try { ForceStopClient(); } catch { /* best effort */ }
+			try { StopConnection(false); } catch { /* best effort */ }
+			try { StopConnection(true); } catch { /* best effort */ }
+			// Only full process quit should deinit the native library. Editor Play Mode
+			// stop uses OnDestroy without deinit (see OnDestroy).
+#if !UNITY_WEBGL && !UNITY_EDITOR
+			try { WebTransportNative.Deinitialize(); } catch { /* best effort */ }
 #endif
 		}
 
@@ -444,7 +506,14 @@ namespace FishNet.Transporting.WebTransport
 
 		private bool stopClient()
 		{
-			return this.clientSocket.StopConnection();
+			// Prefer normal stop; if it no-ops while still not Stopped, force reset.
+			bool ok = this.clientSocket.StopConnection();
+			if (this.clientSocket.GetConnectionState() != LocalConnectionState.Stopped)
+			{
+				this.clientSocket.ForceStopAndReset();
+				ok = this.clientSocket.GetConnectionState() == LocalConnectionState.Stopped;
+			}
+			return ok;
 		}
 
 		/// <summary>

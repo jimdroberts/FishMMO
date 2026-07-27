@@ -319,6 +319,26 @@ namespace FishNet.Transporting.WebTransport.Server
 			this.pinnedCallbacksPtr = System.Runtime.InteropServices.Marshal.AllocHGlobal(cbSize);
 			System.Runtime.InteropServices.Marshal.StructureToPtr(this.pinnedCallbacks, this.pinnedCallbacksPtr, false);
 
+			if (string.IsNullOrWhiteSpace(bindAddress))
+			{
+				transport.NetworkManager?.LogError(
+					"[WebTransport Server] Bind address is null/empty — cannot start.");
+				base.SetConnectionState(LocalConnectionState.Stopped, true);
+				return false;
+			}
+			if (port == 0)
+			{
+				transport.NetworkManager?.LogError(
+					"[WebTransport Server] Port is 0 — ApplyTransportConfiguration may not have run. Cannot start.");
+				base.SetConnectionState(LocalConnectionState.Stopped, true);
+				return false;
+			}
+
+			string certForLog = useCustomCertificate ? (this.certificatePath ?? "") : "(self-signed)";
+			string keyForLog = useCustomCertificate ? (this.privateKeyPath ?? "") : "(none)";
+			transport.NetworkManager?.Log(
+				$"[WebTransport Server] Starting bind={bindAddress} port={port} maxClients={maximumClients} cert={certForLog} key={keyForLog} alpn={this.alpn}");
+
 			// Create native server
 			this.serverHandle = WebTransportNative.wt_server_create(
 				useCustomCertificate ? this.certificatePath : null,
@@ -332,6 +352,9 @@ namespace FishNet.Transporting.WebTransport.Server
 				IntPtr.Zero);
 			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 			{
+				transport.NetworkManager?.LogError(
+					$"[WebTransport Server] wt_server_create failed (null/invalid handle). " +
+					$"bind={bindAddress} port={port} cert={certForLog} key={keyForLog}");
 				// Free unmanaged callback table on error path.
 				if (this.pinnedCallbacksPtr != IntPtr.Zero)
 				{
@@ -345,6 +368,10 @@ namespace FishNet.Transporting.WebTransport.Server
 			int result = WebTransportNative.wt_server_start(this.serverHandle);
 			if (result != 0)
 			{
+				string errName = WebTransportNative.ErrorString((WebTransportNative.WTError)result);
+				transport.NetworkManager?.LogError(
+					$"[WebTransport Server] wt_server_start failed: code={result} ({errName}). " +
+					$"bind={bindAddress} port={port} cert={certForLog} key={keyForLog}");
 				WebTransportNative.wt_server_destroy(this.serverHandle);
 				this.serverHandle = null;
 				// Free unmanaged callback table on error path.
@@ -357,6 +384,8 @@ namespace FishNet.Transporting.WebTransport.Server
 				return false;
 			}
 
+			transport.NetworkManager?.Log(
+				$"[WebTransport Server] Started OK bind={bindAddress} port={port}");
 			base.SetConnectionState(LocalConnectionState.Started, true);
 			return true;
 		}

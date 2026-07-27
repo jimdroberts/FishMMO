@@ -7,12 +7,15 @@ namespace FishNet.Transporting.WebTransport
 	/// Internal packet for the outgoing queue.
 	/// Backed by ByteArrayPool to minimise GC allocations.
 	///
-	/// <para><b>IMPORTANT:</b> Packet is a reference type. It owns a leased
-	/// buffer from <see cref="ByteArrayPool"/> and must be disposed exactly
-	/// once after dequeue to return the buffer to the pool.  Disposing more
-	/// than once is safe (guarded by <c>owned</c>) and will log a warning.</para>
+	/// <para><b>IMPORTANT:</b> Packet is a mutable struct. Copying it (e.g.,
+	/// passing by value) creates independent copies that share the same
+	/// <see cref="Data"/> buffer reference. Both copies will have
+	/// <c>owned = true</c>. Disposing either copy returns the buffer
+	/// to <see cref="ByteArrayPool"/>; disposing the other copy will
+	/// double-return to the pool, corrupting it. Always treat Packet
+	/// as single-owner and dispose exactly once per dequeue.</para>
 	/// </summary>
-	internal sealed class Packet
+	internal struct Packet
 	{
 		/// <summary>
 		/// The connection ID of the sender (server) or target (client).
