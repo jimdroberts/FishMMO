@@ -76,6 +76,13 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// Reset to 0 at the start of each <see cref="StartConnection"/>.
 		/// </summary>
 		private int stopGuard = 0;
+
+		/// <summary>
+		/// Monotonic session id. Incremented on each <see cref="StartConnection"/>.
+		/// Native/JS callbacks capture the id and no-op if the session has been replaced
+		/// (prevents stale disconnect/data from a prior Login session killing World connect).
+		/// </summary>
+		private int sessionGeneration = 0;
 		/// <summary>
 		/// Atomic guard to ensure Dispose runs exactly once per session.
 		/// MUST be reset to 0 in <see cref="StartConnection"/> — otherwise reconnect
@@ -230,6 +237,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			// disposed=1 and the next Stop skips WTDisconnect (zombie sessions + double connect).
 			System.Threading.Interlocked.Exchange(ref this.disposed, 0);
 			stopGuard = 0;
+			// Invalidate any native/JS callbacks still in flight from the previous hop.
+			System.Threading.Interlocked.Increment(ref sessionGeneration);
 			System.Threading.Interlocked.Exchange(ref wireQueuedCount, 0);
 			System.Threading.Interlocked.Exchange(ref wireSentOkCount, 0);
 			System.Threading.Interlocked.Exchange(ref wireSentFailCount, 0);
@@ -238,9 +247,9 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			base.SetConnectionState(LocalConnectionState.Starting, false);
 
-			// Drain any stale incoming events from a previous session,
-			// INVOKING each action so that unmanaged memory held by native
-			// callbacks is properly freed via their finally blocks.
+			// Drain stale incoming events. Actions check sessionGeneration and no-op if
+			// they belong to a prior hop; stream/datagram handlers still free unmanaged
+			// memory in their finally blocks when invoked.
 			while (incomingEvents.TryDequeue(out Action act))
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
@@ -825,6 +834,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeConnect(IntPtr context)
 		{
+			int gen = sessionGeneration;
 			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
@@ -833,6 +843,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 			incomingEvents.Enqueue(() =>
 			{
+				if (gen != sessionGeneration)
+					return; // stale session (Login hop already replaced by World/Scene)
 				base.SetConnectionState(LocalConnectionState.Started, false);
 			});
 		}
@@ -844,6 +856,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeDisconnect(IntPtr context, int errorCode)
 		{
+			int gen = sessionGeneration;
 			if (System.Threading.Interlocked.Increment(ref this.incomingEventCount) > MaxIncomingEvents)
 			{
 				System.Threading.Interlocked.Decrement(ref this.incomingEventCount);
@@ -852,6 +865,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 			incomingEvents.Enqueue(() =>
 			{
+				if (gen != sessionGeneration)
+					return; // do not StopConnection on the new hop
 				if (errorCode != 0)
 					LogTransportWarning("[WebTransport Client] Disconnected: " + WebTransportNative.ErrorString((WebTransportNative.WTError)errorCode));
 				StopConnection();
@@ -870,6 +885,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
 				return;
 			}
+
+			int gen = sessionGeneration;
 
 			// Copy to unmanaged memory on the callback thread — managed
 			// allocations on QUIC threads can corrupt the IL2CPP GC.
@@ -891,6 +908,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				try
 				{
+					if (gen != sessionGeneration)
+						return;
 					if (base.GetConnectionState() != LocalConnectionState.Started)
 						return;
 
@@ -928,6 +947,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				return;
 			}
 
+			int gen = sessionGeneration;
+
 			IntPtr unmanagedCopy = System.Runtime.InteropServices.Marshal.AllocHGlobal(length);
 			unsafe
 			{
@@ -946,6 +967,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				try
 				{
+					if (gen != sessionGeneration)
+						return;
 					if (base.GetConnectionState() != LocalConnectionState.Started)
 						return;
 

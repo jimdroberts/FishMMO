@@ -175,13 +175,21 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			SanitizeChannel(ref channelId);
-			// Never use QUIC DATAGRAM for FishNet client channel 1.
-			// WebGL: DATAGRAM caused H3_FRAME_ERROR / session drop after LoginSuccess.
-			// Editor native: DATAGRAM tick traffic kept flowing during StopConnection and
-			// left World→Scene hops hung waiting for Stopped (WebGL worked, Editor did not).
-			// Prefer the persistent reliable bidi stream (channel 0) on all client platforms.
+#if UNITY_WEBGL && !UNITY_EDITOR
+			// Browser only: never use QUIC DATAGRAM for FishNet channel 1. Datagrams have
+			// caused H3_FRAME_ERROR / session drop after LoginSuccess. Prefer the
+			// persistent reliable bidi stream (channel 0).
+			// Do NOT remap on Editor/standalone native — forcing unreliable packets onto the
+			// reliable stream desyncs FishNet length headers (client saw PacketId 0 on world connect).
 			if (channelId == 1)
 				channelId = 0;
+#endif
+			if (channelId == 1 && segment.Count > MTU)
+			{
+				base.NetworkManager.LogWarning(
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
+				return;
+			}
 			this.clientSocket.SendToServer(channelId, segment);
 		}
 
