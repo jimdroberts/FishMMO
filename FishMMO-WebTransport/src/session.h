@@ -90,25 +90,46 @@ typedef struct wt_session_s {
     atomic_bool             released;     /* owner has released its reference */
 } wt_session_t;
 
-/* Wrapper for datagram send buffers -- ensures safe ownership transfer
- * between wt_session_send_datagram (allocation) and the
- * DATAGRAM_SEND_STATE_CHANGED callback (free).
+/* Wrapper for datagram send buffers — ownership is transferred to
+ * msquic via ClientContext and freed exactly once.
  *
- * msquic guarantees that DATAGRAM_SEND_STATE_CHANGED never fires
- * synchronously from within DatagramSend, but this flag makes the
- * ownership explicit and prevents a double-free should that guarantee
- * ever change (e.g. a future msquic version).
+ * Layout:
+ *   magic / freed gate / embedded QUIC_BUFFER / payload bytes
  *
- * The struct is allocated with space for the data payload at the end
- * (flexible array member).  The struct pointer is passed as
- * ClientContext to DatagramSend.  On success, owned_by_msquic is set
- * to true.  Both the callback and the failure path check the flag
- * before freeing: the callback frees only if true, the failure path
- * frees only if false. */
+ * The QUIC_BUFFER must outlive DatagramSend until FINAL state if
+ * msquic retains a pointer to it (do not put QUIC_BUFFER on the stack).
+ *
+ * Free is CAS-gated via `freed` so a sync DATAGRAM_SEND_STATE_CHANGED
+ * FINAL callback and the DatagramSend failure path cannot double-free
+ * (heap corruption → later AV inside MsQuicClose on a worker thread).
+ */
+#define WT_DGRAM_SEND_CTX_MAGIC  0x4447524Du  /* 'DGRM' */
+
 typedef struct {
-    bool owned_by_msquic;
-    uint8_t data[];
+    uint32_t    magic;
+    atomic_int  freed;      /* 0 = live, 1 = free claimed */
+    QUIC_BUFFER buf;        /* Buffer points at data[] */
+    uint8_t     data[1];    /* flexible: actual size = length */
 } wt_dgram_send_ctx_t;
+
+/* Exactly-once free for datagram send contexts (safe from any thread). */
+static inline void wt_dgram_send_ctx_free(void* client_ctx, const char* reason)
+{
+    wt_dgram_send_ctx_t* ctx = (wt_dgram_send_ctx_t*)client_ctx;
+    if (!ctx) return;
+    if (ctx->magic != WT_DGRAM_SEND_CTX_MAGIC) {
+        WT_LOG_ERROR("dgram free: bad magic 0x%x (%s)", ctx->magic,
+                     reason ? reason : "?");
+        return;
+    }
+    if (atomic_exchange(&ctx->freed, 1) != 0) {
+        /* Already freed — ignore (sync callback + failure path race). */
+        return;
+    }
+    ctx->magic = 0;
+    free(ctx);
+    (void)reason;
+}
 
 /* ── API ────────────────────────────────────────────────────── */
 

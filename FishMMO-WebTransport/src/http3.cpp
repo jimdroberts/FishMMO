@@ -611,7 +611,7 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
      * T=0 → static table, T=1 → dynamic table.
      * 6-bit prefix for the index (verified against QUICHE). */
     if ((first & 0x80) != 0) {
-        bool is_static = (first & 0x40) == 0;
+        bool is_static = (first & 0x40) != 0;
         if (!is_static) {
             /* Dynamic-table indexed — we don't maintain a dynamic table. */
             WT_LOG_WARN("QPACK: indexed dynamic table ref (byte 0x%02x) — "
@@ -625,10 +625,12 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
         const qpack_entry_t* entry = &kQpackStatic[idx];
         out->name_len = entry->name_len;
         memcpy(out->name, entry->name, out->name_len);
+        out->name[out->name_len] = '\0';
         out->value_len = entry->value_len;
         if (entry->value_len > 0) {
             memcpy(out->value, entry->value, entry->value_len);
         }
+        out->value[out->value_len] = '\0';
         return (int)nbytes;
     }
 
@@ -640,7 +642,7 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
      * T=0 → static table, T=1 → dynamic table.
      * 4-bit prefix for the name index (verified against QUICHE). */
     if ((first & 0xC0) == 0x40) {
-        bool is_static = (first & 0x20) == 0;  /* bit 5 = T */
+        bool is_static = (first & 0x10) != 0;  /* bit 4 = T, bit 5 = N */
         if (!is_static) {
             WT_LOG_WARN("QPACK: literal name ref to dynamic table (byte 0x%02x) — "
                         "no dynamic table, rejecting", first);
@@ -656,6 +658,7 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
             return -1;
         }
         memcpy(out->name, sname, out->name_len);
+        out->name[out->name_len] = '\0';
         /* Fall through to value reader below */
     }
     /* ── Literal Field Line Without Name Reference (RFC 9204 §4.3.3) ─
@@ -666,16 +669,29 @@ static int qpack_parse_field(const uint8_t* buf, size_t buf_len,
      * N=never-indexed, H=Huffman flag for name, 3-bit name-length prefix
      * (verified against QUICHE). */
     else if ((first & 0xE0) == 0x20) {
+        bool name_huffman = (first & 0x08) != 0;
         uint64_t name_len_val;
         uint8_t nbytes;
         if (qpack_varint_decode(buf, buf_len, &name_len_val, &nbytes, 3) < 0)
             return -1;
-        out->name_len = (uint8_t)name_len_val;
         consumed = nbytes;
-        if (consumed + out->name_len > buf_len) return -1;
-        if (out->name_len >= sizeof(out->name)) return -1;
-        memcpy(out->name, buf + consumed, out->name_len);
-        consumed += out->name_len;
+        if (consumed + name_len_val > buf_len) return -1;
+        if (name_len_val >= sizeof(out->name)) return -1;
+
+        if (name_huffman) {
+            uint8_t decoded[sizeof(out->name)];
+            int dlen = huffman_decode(buf + consumed, (size_t)name_len_val,
+                                      decoded, sizeof(decoded) - 1);
+            if (dlen < 0 || dlen >= (int)sizeof(out->name)) return -1;
+            memcpy(out->name, decoded, (size_t)dlen);
+            out->name_len = (uint8_t)dlen;
+            out->name[out->name_len] = '\0';
+        } else {
+            out->name_len = (uint8_t)name_len_val;
+            memcpy(out->name, buf + consumed, out->name_len);
+            out->name[out->name_len] = '\0';
+        }
+        consumed += (size_t)name_len_val;
         /* Fall through to value reader below */
     }
     /* ── Post-base / dynamic-only forms (RFC 9204 §4.3.4–§4.3.6) ──
@@ -826,6 +842,24 @@ static int h3_write_settings(uint8_t* out)
  * ═══════════════════════════════════════════════════════════════ */
 
 /**
+ * Encode one Literal Field Line with static Name Reference (RFC 9204 §4.5.4):
+ *   01 N=0 T=1 Index(4+) | H=0 ValueLen(7+) | Value
+ */
+static uint8_t* qpack_put_literal_static_name(
+    uint8_t* fp, uint64_t name_idx,
+    const char* value, size_t value_len)
+{
+    uint8_t nb[8], vb[8];
+    uint8_t nn = qpack_varint_encode(name_idx, nb, 4);
+    nb[0] |= 0x50; /* 01 N=0 T=1 */
+    memcpy(fp, nb, nn); fp += nn;
+    uint8_t vn = qpack_varint_encode(value_len, vb, 7); /* H=0 in bit7 */
+    memcpy(fp, vb, vn); fp += vn;
+    memcpy(fp, value, value_len); fp += value_len;
+    return fp;
+}
+
+/**
  * Write a complete HEADERS frame to `out`.
  *
  * For server response (STATUS):
@@ -849,39 +883,32 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
     uint8_t fields[2048];
     uint8_t* fp = fields;
 
+    /* Required Insert Count = 0, Delta Base = 0 (static table only). */
+    *fp++ = 0x00;
+    *fp++ = 0x00;
+
     bool is_response = (status_code > 0);
 
     if (is_response) {
-        /* :status: <status_code>
-         * Literal with static name ref (idx=24 for :status 200, but we
-         * use literal-with-name-ref idx=22 (:status) and encode the
-         * numeric value inline to support any status code. */
-        char s[4]; int slen = 0;
-        int sc = status_code;
-        if (sc >= 100) { s[slen++] = '0' + (sc / 100); sc %= 100; }
-        if (sc >= 10 || slen > 0) { s[slen++] = '0' + (sc / 10); sc %= 10; }
-        s[slen++] = '0' + sc;
-
-        /* Use static table idx=24 (:status 103) with literal value.
-         * 0101xxxx prefix + qpack_varint(24, 6).  Index 24 is the first
-         * :status entry in the QPACK static table (value "103" is
-         * ignored — we encode the actual status inline). */
-        *fp++ = 0x40 | 24;  /* literal + static name ref idx=24 (:status) */
-        uint8_t vb[8];
-        uint8_t vn = qpack_varint_encode((uint64_t)slen, vb, 7);
-        memcpy(fp, vb, vn); fp += vn;
-        memcpy(fp, s, (size_t)slen); fp += slen;
+        if (status_code == 200) {
+            /* Indexed static table entry 25 = :status 200 (RFC 9204 Appendix A). */
+            *fp++ = (uint8_t)(0xC0 | 25);
+        } else {
+            char s[4]; int slen = 0;
+            int sc = status_code;
+            if (sc >= 100) { s[slen++] = '0' + (sc / 100); sc %= 100; }
+            if (sc >= 10 || slen > 0) { s[slen++] = '0' + (sc / 10); sc %= 10; }
+            s[slen++] = '0' + sc;
+            fp = qpack_put_literal_static_name(fp, 24, s, (size_t)slen);
+        }
     }
     else {
-        /* :method: CONNECT — literal + static name ref idx=15 (:method CONNECT)
-         * 0101xxxx prefix + qpack_varint(15, 6).
-         * Value length uses qpack_varint_encode with 7-bit prefix. */
-        *fp++ = 0x40 | 15;
-        uint8_t vb[8]; uint8_t vn;
-        size_t mlen = strlen(method);
-        vn = qpack_varint_encode(mlen, vb, 7);
-        memcpy(fp, vb, vn); fp += vn;
-        memcpy(fp, method, mlen); fp += mlen;
+        /* :method: use indexed static entry when CONNECT (entry 15). */
+        if (method && strcmp(method, "CONNECT") == 0) {
+            *fp++ = (uint8_t)(0xC0 | 15);  /* indexed static 15 = :method CONNECT */
+        } else if (method) {
+            fp = qpack_put_literal_static_name(fp, 15, method, strlen(method));
+        }
 
         /* :protocol: webtransport — literal without name ref (never-indexed).
          * Format: 001 prefix with 4-bit name-length qpack varint
@@ -891,33 +918,23 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
          * Value length uses qpack_varint_encode with 7-bit prefix. */
         const char* proto = "webtransport";
         size_t plen = strlen(proto);
-        uint8_t nb[8];
+        uint8_t nb[8], vb[8];
         uint8_t nb_n = qpack_varint_encode(10, nb, 4);  /* ":protocol" = 10 bytes */
         nb[0] |= 0x20 | 0x10;  /* set bits 7-5 = 001, bit 4 = N (never-indexed) */
         memcpy(fp, nb, nb_n); fp += nb_n;
         memcpy(fp, ":protocol", 10); fp += 10;
-        vn = qpack_varint_encode(plen, vb, 7);
+        uint8_t vn = qpack_varint_encode(plen, vb, 7);
         memcpy(fp, vb, vn); fp += vn;
         memcpy(fp, proto, plen); fp += plen;
 
-        /* :path: <path> — literal + static name ref idx=1 (:path /).
-         * Value length uses qpack_varint_encode with 7-bit prefix. */
+        /* :path: <path> — literal + static name ref idx=1 (:path /). */
         if (path && path[0]) {
-            *fp++ = 0x40 | 1;
-            size_t pathlen = strlen(path);
-            vn = qpack_varint_encode(pathlen, vb, 7);
-            memcpy(fp, vb, vn); fp += vn;
-            memcpy(fp, path, pathlen); fp += pathlen;
+            fp = qpack_put_literal_static_name(fp, 1, path, strlen(path));
         }
 
-        /* :authority: <authority> — literal + static name ref idx=0 (:authority).
-         * Value length uses qpack_varint_encode with 7-bit prefix. */
+        /* :authority: <authority> — literal + static name ref idx=0 (:authority). */
         if (authority && authority[0]) {
-            *fp++ = 0x40 | 0;
-            size_t authlen = strlen(authority);
-            vn = qpack_varint_encode(authlen, vb, 7);
-            memcpy(fp, vb, vn); fp += vn;
-            memcpy(fp, authority, authlen); fp += authlen;
+            fp = qpack_put_literal_static_name(fp, 0, authority, strlen(authority));
         }
     }
 
@@ -1214,6 +1231,11 @@ typedef struct h3_send_only_ctx_s {
     h3_session_t*   h3;
     int             role;       /* 1 = server_control, 2 = client_control, 0 = other */
     volatile int    closed;     /* 0 = open, 1 = StreamClose done */
+    volatile int    send_freed; /* 1 after ClientContext free (once) — atomic */
+    /* Filled before StreamStart; sent from START_COMPLETE so we never
+     * StreamSend before the stream is fully started (QuicStreamSendBufferRequest crash). */
+    uint8_t*        pending_send;
+    uint32_t        pending_send_len;
 } h3_send_only_ctx_t;
 
 static void h3_send_only_clear_session_ref(h3_send_only_ctx_t* c, HQUIC stream)
@@ -1237,30 +1259,86 @@ static void h3_send_only_abort(HQUIC stream)
         0);
 }
 
+static int h3_send_only_do_send(h3_send_only_ctx_t* c)
+{
+    if (!c || !c->stream || !c->pending_send || c->pending_send_len == 0)
+        return -1;
+
+    QUIC_BUFFER buf;
+    buf.Buffer = c->pending_send;
+    buf.Length = c->pending_send_len;
+    /* Ownership of pending_send transfers to SEND_COMPLETE ClientContext. */
+    uint8_t* payload = c->pending_send;
+    uint32_t len = c->pending_send_len;
+    c->pending_send = NULL;
+    c->pending_send_len = 0;
+
+    QUIC_STATUS st = MsQuic->StreamSend(
+        c->stream, &buf, 1, QUIC_SEND_FLAG_NONE, payload);
+    if (QUIC_FAILED(st)) {
+        WT_LOG_ERROR("H3: send-only StreamSend failed role=%d st=0x%x stream=%p len=%u",
+                     c->role, st, (void*)c->stream, len);
+        free(payload);
+        return -1;
+    }
+    return 0;
+}
+
 static QUIC_STATUS QUIC_API
 h3_send_only_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
     h3_send_only_ctx_t* c = (h3_send_only_ctx_t*)ctx;
 
     switch (event->Type) {
-    case QUIC_STREAM_EVENT_SEND_COMPLETE:
-        /* Always free the app buffer once. If StreamSend failed, the
-         * caller already free'd and passed no ownership — ClientContext
-         * is only set on successful StreamSend. */
-        free(event->SEND_COMPLETE.ClientContext);
+    case QUIC_STREAM_EVENT_START_COMPLETE:
+        /* Stream is ready — flush deferred first send (never StreamSend before this). */
+        if (c && c->pending_send) {
+            if (event->START_COMPLETE.Status != 0 &&
+                QUIC_FAILED(event->START_COMPLETE.Status)) {
+                WT_LOG_ERROR("H3: send-only START_COMPLETE failed role=%d st=0x%x",
+                             c->role, event->START_COMPLETE.Status);
+                free(c->pending_send);
+                c->pending_send = NULL;
+                c->pending_send_len = 0;
+                h3_send_only_abort(stream);
+            } else {
+                if (h3_send_only_do_send(c) != 0)
+                    h3_send_only_abort(stream);
+            }
+        }
         break;
+
+    case QUIC_STREAM_EVENT_SEND_COMPLETE: {
+        /* Free app send buffer exactly once. */
+        void* app_buf = event->SEND_COMPLETE.ClientContext;
+        if (app_buf) {
+            int already = 0;
+            if (c) {
+#if defined(WT_PLATFORM_WINDOWS)
+                already = (int)InterlockedExchange((volatile LONG*)&c->send_freed, 1);
+#else
+                already = __sync_lock_test_and_set(&c->send_freed, 1);
+#endif
+            }
+            if (!already)
+                free(app_buf);
+        }
+        break;
+    }
 
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
         h3_send_only_clear_session_ref(c, stream);
-        /* Exactly one StreamClose for this handle. */
         if (c) {
+            if (c->pending_send) {
+                free(c->pending_send);
+                c->pending_send = NULL;
+            }
             if (!c->closed) {
                 c->closed = 1;
                 MsQuic->StreamClose(stream);
             }
             free(c);
         } else {
-            /* Legacy NULL ctx path — still only close once. */
             MsQuic->StreamClose(stream);
         }
         break;
@@ -1282,6 +1360,9 @@ static h3_send_only_ctx_t* h3_send_only_ctx_create(
     c->h3 = h3;
     c->role = role;
     c->closed = 0;
+    c->send_freed = 0;
+    c->pending_send = NULL;
+    c->pending_send_len = 0;
     return c;
 }
 
@@ -1462,6 +1543,78 @@ typedef struct {
     char    origin[256];
 } h3_parsed_headers_t;
 
+/** Forward decl for hex dump — defined below with HEADERS parser. */
+static void h3_hex_dump(const char* label, const uint8_t* data, size_t len);
+
+/** Log peer SETTINGS frame id/value pairs with human-readable names. */
+static void h3_log_peer_settings_frame(void* ctx, uint64_t frame_type,
+                                       const uint8_t* payload,
+                                       uint64_t payload_len)
+{
+    (void)ctx;
+    if (frame_type != H3_FRAME_SETTINGS) {
+        WT_LOG_INFO("H3: peer control frame type=0x%llx len=%llu",
+                    (unsigned long long)frame_type,
+                    (unsigned long long)payload_len);
+        return;
+    }
+
+    WT_LOG_INFO("H3: peer SETTINGS payload %llu bytes",
+                (unsigned long long)payload_len);
+
+    size_t off = 0;
+    int pairs = 0;
+    while (off < (size_t)payload_len) {
+        uint64_t id = 0, val = 0;
+        uint8_t ib = 0, vb = 0;
+        if (varint_decode(payload + off, (size_t)payload_len - off,
+                          &id, &ib) < 0)
+            break;
+        off += ib;
+        if (off >= (size_t)payload_len) break;
+        if (varint_decode(payload + off, (size_t)payload_len - off,
+                          &val, &vb) < 0)
+            break;
+        off += vb;
+        pairs++;
+
+        const char* name = NULL;
+        if (id == H3_SETTINGS_ENABLE_CONNECT_PROTOCOL)
+            name = "ENABLE_CONNECT_PROTOCOL";
+        else if (id == H3_SETTINGS_DATAGRAM)
+            name = "H3_DATAGRAM";
+        else if (id == H3_SETTINGS_DATAGRAM_DRAFT04)
+            name = "H3_DATAGRAM_DRAFT04";
+        else if (id == H3_SETTINGS_ENABLE_WEBTRANSPORT)
+            name = "ENABLE_WEBTRANSPORT";
+        else if (id == H3_SETTINGS_WT_MAX_SESSIONS_DRAFT07)
+            name = "WT_MAX_SESSIONS_DRAFT07";
+        else if (id == H3_SETTINGS_WT_MAX_SESSIONS_ALT)
+            name = "WT_MAX_SESSIONS_ALT";
+        else if (id == 0x06)
+            name = "MAX_FIELD_SECTION_SIZE";
+        else if (id == 0x01)
+            name = "QPACK_MAX_TABLE_CAPACITY";
+        else if (id == 0x07)
+            name = "QPACK_BLOCKED_STREAMS";
+
+        if (name) {
+            WT_LOG_INFO("H3: peer SETTINGS %s (0x%llx)=%llu",
+                        name,
+                        (unsigned long long)id,
+                        (unsigned long long)val);
+        } else {
+            WT_LOG_INFO("H3: peer SETTINGS id=0x%llx val=%llu",
+                        (unsigned long long)id,
+                        (unsigned long long)val);
+        }
+    }
+    if (pairs == 0 && payload_len > 0) {
+        WT_LOG_WARN("H3: peer SETTINGS present but no id/value pairs parsed");
+        h3_hex_dump("peer-SETTINGS", payload, (size_t)payload_len);
+    }
+}
+
 /** Log a hex+ascii dump at WT_LOG_INFO level (16 bytes/line). */
 static void h3_hex_dump(const char* label, const uint8_t* data, size_t len)
 {
@@ -1504,6 +1657,13 @@ static bool h3_parse_headers(const uint8_t* data, uint64_t data_len,
         if (qpack_varint_decode(data + parsed, (size_t)(data_len - parsed),
                                 &ric_val, &ric_nbytes, 8) == 0) {
             parsed += ric_nbytes;
+            if (ric_val != 0) {
+                WT_LOG_WARN("H3: QPACK Required Insert Count=%llu not supported "
+                            "(server is static-table only; peer must not block)",
+                            (unsigned long long)ric_val);
+                h3_hex_dump("HEADERS-RIC", data, (size_t)data_len);
+                return false;
+            }
         } else {
             WT_LOG_ERROR("QPACK: failed to decode Required Insert Count "
                          "(data_len=%llu)", data_len);
@@ -1738,10 +1898,15 @@ static int h3_server_bootstrap_settings(h3_session_t* h3, const char* reason)
     h3->server_control_ctx = send_ctx;
     H3_UNLOCK(h3);
 
+    /* Queue the payload for START_COMPLETE delivery — never StreamSend
+     * before the stream is fully started (QuicStreamSendBufferRequest crash). */
+    send_ctx->pending_send = srv_data;
+    send_ctx->pending_send_len = (uint32_t)(1 + settings_len);
+
     WT_LOG_INFO("H3: bootstrap: server control stream open %p (uni-only; no server QPACK)",
                 (void*)srv_ctrl);
 
-    /* Start control stream. */
+    /* Start control stream. StreamSend happens in START_COMPLETE. */
     st = MsQuic->StreamStart(srv_ctrl, QUIC_STREAM_START_FLAG_SHUTDOWN_ON_FAIL);
     if (QUIC_FAILED(st)) {
         WT_LOG_ERROR("H3: bootstrap: StreamStart server control failed: 0x%x", st);
@@ -1753,34 +1918,10 @@ static int h3_server_bootstrap_settings(h3_session_t* h3, const char* reason)
         H3_UNLOCK(h3);
         /* Detach h3 before async abort — same UAF guard as h3_session_free. */
         send_ctx->h3 = NULL;
-        free(srv_data);
+        free(send_ctx->pending_send);
+        send_ctx->pending_send = NULL;
         h3_send_only_abort(srv_ctrl);
         return -1;
-    }
-
-    /* Send SETTINGS inline after StreamStart.  Ownership of srv_data
-     * transfers to SEND_COMPLETE via ClientContext — freed there. */
-    {
-        QUIC_BUFFER buf;
-        buf.Buffer = srv_data;
-        buf.Length = (uint32_t)(1 + settings_len);
-        st = MsQuic->StreamSend(srv_ctrl, &buf, 1,
-                                 QUIC_SEND_FLAG_NONE, srv_data);
-        if (QUIC_FAILED(st)) {
-            /* StreamSend failed: we still own srv_data (no SEND_COMPLETE). */
-            free(srv_data);
-            H3_LOCK(h3);
-            if (h3->server_control_stream == srv_ctrl) {
-                h3->server_control_stream = NULL;
-                h3->server_control_ctx = NULL;
-            }
-            H3_UNLOCK(h3);
-            send_ctx->h3 = NULL;
-            WT_LOG_ERROR("H3: StreamSend server SETTINGS failed: 0x%x stream=%p",
-                         st, (void*)srv_ctrl);
-            h3_send_only_abort(srv_ctrl);
-            return -1;
-        }
     }
 
     h3->server_settings_sent = true;
@@ -2283,7 +2424,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                     size_t offset = 1; /* skip stream type byte */
                     h3_parse_frames(sctx->recv_buf + 1,
                                     sctx->recv_offset - 1,
-                                    &offset, NULL, NULL);
+                                    &offset, h3_log_peer_settings_frame, NULL);
                 }
                 return 0;
             }
@@ -2411,7 +2552,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
             size_t offset = 1;
             h3_parse_frames(sctx->recv_buf + 1,
                             sctx->recv_offset - 1,
-                            &offset, NULL, NULL);
+                            &offset, h3_log_peer_settings_frame, NULL);
         }
         return 0;
     }
@@ -2685,9 +2826,22 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     phdr.path[0] ? phdr.path : "(none)",
                                                     phdr.authority[0] ? phdr.authority : "(none)");
 
-                                        /* Record session metadata for WT stream framing */
+                                        /* Record session metadata for WT stream framing.
+                                         * Use MsQuic->GetParam to get the actual QUIC stream ID,
+                                         * not a locally-assigned counter. */
                                         h3->is_webtransport = true;
-                                        h3->connect_stream_id = sctx->stream_id;
+                                        {
+                                            uint64_t sid = 0;
+                                            uint32_t sid_len = sizeof(sid);
+                                            if (QUIC_SUCCEEDED(MsQuic->GetParam(
+                                                    sctx->quic_stream, QUIC_PARAM_STREAM_ID,
+                                                    &sid_len, &sid))) {
+                                                h3->connect_stream_id = sid;
+                                            } else {
+                                                h3->connect_stream_id = 0;
+                                                WT_LOG_WARN("H3: GetParam STREAM_ID failed for CONNECT stream");
+                                            }
+                                        }
 
                                         /* Copy path & authority for the on_ready callback */
                                         if (phdr.path[0])

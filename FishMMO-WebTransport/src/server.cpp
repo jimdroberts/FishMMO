@@ -890,7 +890,11 @@ int32_t wt_server_send_datagram_impl(
                 wt_session_release(session);
                 continue;
             }
-            int32_t r = wt_session_send_datagram(session, data, length);
+            int32_t r;
+            if (session->stream_mgr && session->stream_mgr->use_wt_stream_header)
+                r = wt_session_send_stream(session, data, length);
+            else
+                r = wt_session_send_datagram(session, data, length);
             if (r != WT_OK) worst = r;
             wt_session_release(session);
         }
@@ -916,7 +920,15 @@ int32_t wt_server_send_datagram_impl(
             return WT_ERR_NOT_FOUND;
         }
 
-        int32_t result = wt_session_send_datagram(session, data, length);
+        int32_t result;
+        /* Browser WebTransport sessions (use_wt_stream_header == true)
+         * route datagram traffic over the reliable stream path because
+         * datagram sends can cause crashes in msquic's datagram encoder
+         * near login completion.  Native clients use the normal path. */
+        if (session->stream_mgr && session->stream_mgr->use_wt_stream_header)
+            result = wt_session_send_stream(session, data, length);
+        else
+            result = wt_session_send_datagram(session, data, length);
         wt_session_release(session);
         return result;
     }
@@ -1544,11 +1556,154 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         break;
     }
 
+    case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT: {
+        /* ── FIX 25: Transport-initiated shutdown ──────────────
+         * msquic fires this event when the transport layer closes the
+         * connection (e.g., idle timeout, protocol error).  Decode the
+         * error code and mark the connection as disconnecting so no
+         * further sends are attempted. */
+        const unsigned long long ec =
+            (unsigned long long)event->SHUTDOWN_INITIATED_BY_TRANSPORT.ErrorCode;
+        const unsigned st =
+            (unsigned)event->SHUTDOWN_INITIATED_BY_TRANSPORT.Status;
+        const char* why = "unknown-transport";
+        /* Common msquic / QUIC close codes seen in WT handshakes. */
+        if (ec == 0x0) why = "NO_ERROR";
+        else if (ec == 0x1) why = "INTERNAL_ERROR";
+        else if (ec == 0x2) why = "CONNECTION_REFUSED";
+        else if (ec == 0x3) why = "FLOW_CONTROL_ERROR";
+        else if (ec == 0x4) why = "STREAM_LIMIT_ERROR";
+        else if (ec == 0x5) why = "STREAM_STATE_ERROR";
+        else if (ec == 0x6) why = "FINAL_SIZE_ERROR";
+        else if (ec == 0x7) why = "FRAME_ENCODING_ERROR";
+        else if (ec == 0x8) why = "TRANSPORT_PARAMETER_ERROR";
+        else if (ec == 0x9) why = "CONNECTION_ID_LIMIT_ERROR";
+        else if (ec == 0xa) why = "PROTOCOL_VIOLATION";
+        else if (ec == 0xb) why = "INVALID_TOKEN";
+        else if (ec == 0xc) why = "APPLICATION_ERROR";
+        else if (ec == 0xd) why = "CRYPTO_BUFFER_EXCEEDED";
+        else if (ec == 0xe) why = "KEY_UPDATE_ERROR";
+        else if (ec == 0xf) why = "AEAD_LIMIT_REACHED";
+        else if (ec == 0x10) why = "NO_VIABLE_PATH";
+        else if (ec == 0x100) why = "H3_NO_ERROR/QUIC_IDLE?";
+        else if (ec == 0x101) why = "H3_GENERAL_PROTOCOL_ERROR";
+        else if (ec == 0x102) why = "H3_INTERNAL_ERROR";
+        else if (ec == 0x103) why = "H3_STREAM_CREATION_ERROR";
+        else if (ec == 0x104) why = "H3_CLOSED_CRITICAL_STREAM";
+        else if (ec == 0x105) why = "H3_FRAME_UNEXPECTED";
+        else if (ec == 0x106) why = "H3_FRAME_ERROR";
+        else if (ec == 0x107) why = "H3_EXCESSIVE_LOAD";
+        else if (ec == 0x108) why = "H3_ID_ERROR";
+        else if (ec == 0x109) why = "H3_SETTINGS_ERROR";
+        else if (ec == 0x10a) why = "H3_MISSING_SETTINGS";
+        else if (ec == 0x10b) why = "H3_REQUEST_REJECTED";
+        else if (ec == 0x10c) why = "H3_REQUEST_CANCELLED";
+        else if (ec == 0x10d) why = "H3_REQUEST_INCOMPLETE";
+        else if (ec == 0x10e) why = "H3_MESSAGE_ERROR";
+        else if (ec == 0x10f) why = "H3_CONNECT_ERROR";
+        else if (ec == 0x110) why = "H3_VERSION_FALLBACK";
+        else if (ec == 0x200) why = "QPACK_DECOMPRESSION_FAILED";
+        else if (ec == 0x201) why = "QPACK_ENCODER_STREAM_ERROR";
+        else if (ec == 0x202) why = "QPACK_DECODER_STREAM_ERROR";
+
+        int h3_state = -1;
+        int settings_sent = 0;
+        int handshake_done = 0;
+        int peer_h3 = 0;
+        if (sconn->h3_session) {
+            h3_state = (int)sconn->h3_session->server_state;
+            settings_sent = sconn->h3_session->server_settings_sent ? 1 : 0;
+            handshake_done = sconn->h3_session->handshake_complete ? 1 : 0;
+            peer_h3 = sconn->h3_session->peer_h3_seen ? 1 : 0;
+        }
+        WT_LOG_WARN(
+            "Client %llu TRANSPORT shutdown status=0x%x error=0x%llx (%s) "
+            "h3_state=%d settings_sent=%d peer_h3=%d handshake_done=%d "
+            "connect_seen=%d (0=no Extended CONNECT yet)",
+            (unsigned long long)sconn->id, st, ec, why,
+            h3_state, settings_sent, peer_h3, handshake_done,
+            handshake_done);
+        /* Stop app-layer sends immediately */
+        atomic_store(&sconn->state, WT_CONN_STATE_DISCONNECTING);
+        {
+            wt_session_t* sess = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (sess && sess->stream_mgr)
+                wt_stream_manager_mark_conn_closed(sess->stream_mgr);
+        }
+        break;
+    }
+
+    case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER: {
+        /* ── FIX 26: Peer-initiated shutdown ────────────────────
+         * msquic fires this event when the peer (client) closes the
+         * connection.  Decode the application error code and mark
+         * the connection as disconnecting. */
+        const unsigned long long ec =
+            (unsigned long long)event->SHUTDOWN_INITIATED_BY_PEER.ErrorCode;
+        const char* why = "unknown-app/peer";
+        if (ec == 0x0) why = "NO_ERROR";
+        else if (ec == 0x100) why = "H3_NO_ERROR";
+        else if (ec == 0x101) why = "H3_GENERAL_PROTOCOL_ERROR";
+        else if (ec == 0x102) why = "H3_INTERNAL_ERROR";
+        else if (ec == 0x103) why = "H3_STREAM_CREATION_ERROR";
+        else if (ec == 0x104) why = "H3_CLOSED_CRITICAL_STREAM";
+        else if (ec == 0x105) why = "H3_FRAME_UNEXPECTED";
+        else if (ec == 0x106) why = "H3_FRAME_ERROR";
+        else if (ec == 0x107) why = "H3_EXCESSIVE_LOAD";
+        else if (ec == 0x108) why = "H3_ID_ERROR";
+        else if (ec == 0x109) why = "H3_SETTINGS_ERROR";
+        else if (ec == 0x10a) why = "H3_MISSING_SETTINGS";
+        else if (ec == 0x10b) why = "H3_REQUEST_REJECTED";
+        else if (ec == 0x10c) why = "H3_REQUEST_CANCELLED";
+        else if (ec == 0x10d) why = "H3_REQUEST_INCOMPLETE";
+        else if (ec == 0x10e) why = "H3_MESSAGE_ERROR";
+        else if (ec == 0x10f) why = "H3_CONNECT_ERROR";
+        else if (ec == 0x110) why = "H3_VERSION_FALLBACK";
+        else if (ec == 0x200) why = "QPACK_DECOMPRESSION_FAILED";
+        else if (ec == 0x201) why = "QPACK_ENCODER_STREAM_ERROR";
+        else if (ec == 0x202) why = "QPACK_DECODER_STREAM_ERROR";
+        else if (ec == 0x1c) why = "HTTP_REQUEST_CANCELLED?";
+        else if (ec == 0x010c) why = "H3_REQUEST_CANCELLED";
+
+        int h3_state = -1;
+        int settings_sent = 0;
+        int handshake_done = 0;
+        int peer_h3 = 0;
+        if (sconn->h3_session) {
+            h3_state = (int)sconn->h3_session->server_state;
+            settings_sent = sconn->h3_session->server_settings_sent ? 1 : 0;
+            handshake_done = sconn->h3_session->handshake_complete ? 1 : 0;
+            peer_h3 = sconn->h3_session->peer_h3_seen ? 1 : 0;
+        }
+        WT_LOG_WARN(
+            "Client %llu PEER shutdown error=0x%llx (%s) "
+            "h3_state=%d settings_sent=%d peer_h3=%d handshake_done=%d "
+            "connect_seen=%d (0=browser closed before Extended CONNECT)",
+            (unsigned long long)sconn->id, ec, why,
+            h3_state, settings_sent, peer_h3, handshake_done,
+            handshake_done);
+        /* Stop app-layer sends immediately */
+        atomic_store(&sconn->state, WT_CONN_STATE_DISCONNECTING);
+        {
+            wt_session_t* sess = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            if (sess && sess->stream_mgr)
+                wt_stream_manager_mark_conn_closed(sess->stream_mgr);
+        }
+        break;
+    }
+
     case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
         /* Atomic load — no non-atomic guard (avoids torn read on ARM). */
         {
             wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&sconn->session);
             if (old_session) {
+                /* ── FIX 27: Mark connection closed before ConnectionClose ─
+                 * Must happen BEFORE ConnectionClose — after ConnectionClose
+                 * the QUIC handle is invalid and any subsequent StreamShutdown
+                 * from wt_session_shutdown would trigger quic_bugcheck. */
+                if (old_session->stream_mgr)
+                    wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
+
                 atomic_ptr_store(&sconn->session, NULL);
 
                 /* Defer shutdown to poll (application thread) to guarantee
@@ -1851,19 +2006,13 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 
     case QUIC_CONNECTION_EVENT_DATAGRAM_SEND_STATE_CHANGED:
     {
-        /* Free the wrapper struct only if msquic claimed ownership.
-         * The owned_by_msquic flag prevents double-free if msquic were
-         * to fire this callback synchronously from within DatagramSend
-         * (which it currently does not guarantee by contract). */
+        /* Exactly-once free of send context on FINAL (CAS inside helper). */
         void* ctx = event->DATAGRAM_SEND_STATE_CHANGED.ClientContext;
         if (ctx &&
             QUIC_DATAGRAM_SEND_STATE_IS_FINAL(
                 event->DATAGRAM_SEND_STATE_CHANGED.State)) {
-            wt_dgram_send_ctx_t* send_ctx = (wt_dgram_send_ctx_t*)ctx;
-            if (send_ctx->owned_by_msquic) {
-                free(send_ctx);
-            }
             event->DATAGRAM_SEND_STATE_CHANGED.ClientContext = NULL;
+            wt_dgram_send_ctx_free(ctx, "datagram_final");
         }
         break;
     }

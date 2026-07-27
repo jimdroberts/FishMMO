@@ -225,32 +225,52 @@ int32_t wt_session_send_datagram(
     if (!session || !session->quic_conn) return WT_ERR_INVALID_STATE;
     if (!data || length <= 0) return WT_ERR_SEND_FAILED;
 
-    /* Allocate a wrapper struct that includes both the data payload
-     * (flexible array member) and an ownership flag.  The struct pointer
-     * is passed as ClientContext to DatagramSend so the callback can
-     * check the flag before freeing — eliminating double-free risk even
-     * if a future msquic version fires DATAGRAM_SEND_STATE_CHANGED
-     * synchronously. */
-    wt_dgram_send_ctx_t* ctx = (wt_dgram_send_ctx_t*)malloc(
-        sizeof(wt_dgram_send_ctx_t) + (size_t)length);
-    if (!ctx) return WT_ERR_SEND_FAILED;
-    ctx->owned_by_msquic = false;
-    memcpy(ctx->data, data, (size_t)length);
+    /* SAFE_SHUTDOWN_V4: never call DatagramSend after peer/transport teardown
+     * began. Prior AV was in MsQuicClose on a worker after DatagramSend races
+     * (stack QUIC_BUFFER + double-free ownership flag). */
+    if (atomic_load(&session->released))
+        return WT_ERR_INVALID_STATE;
+    if (session->stream_mgr && atomic_load(&session->stream_mgr->conn_closed))
+        return WT_ERR_INVALID_STATE;
 
-    QUIC_BUFFER dgram_buf;
-    dgram_buf.Buffer = ctx->data;
-    dgram_buf.Length = (uint32_t)length;
+    if ((uint32_t)length > (uint32_t)WT_DGRAM_MAX_SIZE) {
+        WT_LOG_ERROR(
+            "DatagramSend rejected: len=%d > WT_DGRAM_MAX_SIZE=%d (conn=%llu) "
+            "stamp=SAFE_SHUTDOWN_V4",
+            length, (int)WT_DGRAM_MAX_SIZE,
+            (unsigned long long)session->conn_id);
+        return WT_ERR_SEND_FAILED;
+    }
+
+    HQUIC qconn = session->quic_conn;
+    if (!qconn)
+        return WT_ERR_INVALID_STATE;
+
+    /* sizeof includes data[1]; allocate length-1 extra bytes. */
+    size_t bytes = offsetof(wt_dgram_send_ctx_t, data) + (size_t)length;
+    wt_dgram_send_ctx_t* ctx = (wt_dgram_send_ctx_t*)malloc(bytes);
+    if (!ctx) return WT_ERR_SEND_FAILED;
+    ctx->magic = WT_DGRAM_SEND_CTX_MAGIC;
+    atomic_init(&ctx->freed, 0);
+    memcpy(ctx->data, data, (size_t)length);
+    ctx->buf.Buffer = ctx->data;
+    ctx->buf.Length = (uint32_t)length;
 
     QUIC_STATUS status = MsQuic->DatagramSend(
-        session->quic_conn, &dgram_buf, 1,
+        qconn, &ctx->buf, 1,
         QUIC_SEND_FLAG_NONE, ctx);
 
     if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("DatagramSend failed: 0x%x", status);
-        /* Only free if the callback hasn't already claimed ownership */
-        if (!ctx->owned_by_msquic) free(ctx);
+        WT_LOG_ERROR(
+            "DatagramSend failed: 0x%x len=%d conn=%llu stamp=SAFE_SHUTDOWN_V4",
+            status, length, (unsigned long long)session->conn_id);
+        /* Exactly-once free (safe if a sync FINAL callback already ran). */
+        wt_dgram_send_ctx_free(ctx, "datagram_send_failed");
         return WT_ERR_SEND_FAILED;
     }
-    ctx->owned_by_msquic = true;
+
+    WT_LOG_INFO(
+        "DatagramSend queued len=%d conn=%llu stamp=SAFE_SHUTDOWN_V4",
+        length, (unsigned long long)session->conn_id);
     return WT_OK;
 }

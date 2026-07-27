@@ -5,6 +5,8 @@
 
 #include "stream_manager.h"
 #include <stdlib.h>
+#include <stddef.h>
+#include <string.h>
 
 /* ── Mutex helpers ────────────────────────────────────────────── */
 #if defined(WT_PLATFORM_WINDOWS)
@@ -45,6 +47,18 @@ static void sm_unlock_fn(wt_stream_manager_t* mgr)
 
 /* ── Per-stream context (attached to each QUIC stream) ──────── */
 
+/* Heap send request: QUIC_BUFFER + payload must outlive StreamSend until
+ * SEND_COMPLETE. Stack QUIC_BUFFER caused QuicStreamSendBufferRequest SIGSEGV. */
+#define SM_SEND_REQ_MAGIC  0x534E4442u  /* 'SNDB' */
+
+typedef struct sm_send_req_s {
+    uint32_t    magic;
+    int         freed;       /* 1 after free — detect double free */
+    uint32_t    length;      /* payload length in data[] */
+    QUIC_BUFFER buf;         /* buf.Buffer points at data[] */
+    uint8_t     data[1];     /* flexible: actual size = length */
+} sm_send_req_t;
+
 typedef struct {
     wt_stream_manager_t* mgr;
     wt_stream_id_t       stream_id;
@@ -54,7 +68,59 @@ typedef struct {
     /* True after we have handled the optional WEBTRANSPORT_STREAM capsule
      * at the start of a browser data stream (or decided none is present). */
     bool                 header_checked;
+    /* Prevent double StreamClose (mgr shutdown race vs SHUTDOWN_COMPLETE). */
+    bool                 close_done;
+    /* Outbound payload waiting for START_COMPLETE before StreamSend.
+     * NULL after ownership transfers to StreamSend ClientContext. */
+    sm_send_req_t*       pending_send;
+    /* 1 = send with QUIC_SEND_FLAG_FIN (one-shot); 0 = keep send open. */
+    int                  pending_send_fin;
 } stream_ctx_t;
+
+static sm_send_req_t* sm_send_req_alloc(const uint8_t* header, size_t header_len,
+                                        const uint8_t* data, int32_t length)
+{
+    if (length < 0) return NULL;
+    size_t total = header_len + (size_t)length;
+    /* sizeof(sm_send_req_t) already includes 1 byte of data[1] */
+    size_t bytes = offsetof(sm_send_req_t, data) + total;
+    sm_send_req_t* req = (sm_send_req_t*)malloc(bytes);
+    if (!req) return NULL;
+    req->magic = SM_SEND_REQ_MAGIC;
+    req->freed = 0;
+    req->length = (uint32_t)total;
+    req->buf.Buffer = req->data;
+    req->buf.Length = (uint32_t)total;
+    if (header_len > 0 && header)
+        memcpy(req->data, header, header_len);
+    if (length > 0 && data)
+        memcpy(req->data + header_len, data, (size_t)length);
+    return req;
+}
+
+static void sm_send_req_free(void* client_ctx, const char* reason)
+{
+    sm_send_req_t* req = (sm_send_req_t*)client_ctx;
+    if (!req) {
+        WT_LOG_WARN("SEND free: null ClientContext (%s)", reason ? reason : "?");
+        return;
+    }
+    if (req->magic != SM_SEND_REQ_MAGIC) {
+        WT_LOG_ERROR("SEND free: bad magic 0x%x (%s) — not our buffer",
+                     req->magic, reason ? reason : "?");
+        return;
+    }
+    if (req->freed) {
+        WT_LOG_ERROR("SEND free: DOUBLE FREE blocked len=%u (%s)",
+                     req->length, reason ? reason : "?");
+        return;
+    }
+    req->freed = 1;
+    req->magic = 0;
+    WT_LOG_INFO("SEND_COMPLETE free ok len=%u (%s)",
+                req->length, reason ? reason : "complete");
+    free(req);
+}
 
 /* WEBTRANSPORT_STREAM capsule type (draft-ietf-webtrans-http3). */
 #define WT_STREAM_CAPSULE_TYPE  0x41u
@@ -105,40 +171,64 @@ static size_t sm_varint_encode(uint64_t val, uint8_t* out)
 }
 
 /**
- * If buf starts with WEBTRANSPORT_STREAM (HTTP/3 frame type 0x41), skip it.
+ * If buf starts with WEBTRANSPORT_STREAM (type 0x41 as QUIC varint), skip it.
  *
- * Wire format (draft-ietf-webtrans-http3 / Chromium HttpDecoder):
- *   Type (i) = 0x41
+ * Wire format (draft-ietf-webtrans-http3 / Chromium):
+ *   Type (i) = 0x41          ← QUIC varint (Chrome may use 1-byte 0x41 OR
+ *                              2-byte 0x40 0x41; never assume single byte)
  *   Session ID (i)
- *   … remainder of stream is application data (no length field!).
+ *   … Stream Data (app)      ← no length field
  *
- * Returns byte offset of application data (0 if no capsule).
- * incomplete=true if the session-id varint is truncated.
+ * Production bug: first=40 41 00 11 was delivered whole because we only
+ * matched buf[0]==0x41 and ignored 2-byte varint type encoding → FishNet
+ * saw capsule garbage → disconnect → unsafe shutdown → quic_bugcheck.
+ *
+ * Returns byte offset of application data (0 if not a WT stream capsule).
+ * incomplete=true if type or session-id varint is truncated.
  */
 static size_t sm_skip_wt_stream_header(const uint8_t* buf, size_t len,
                                        bool* incomplete)
 {
     *incomplete = false;
     if (len < 1) { *incomplete = true; return 0; }
-    /* Type is always a 1-byte varint for 0x41. */
-    if (buf[0] != WT_STREAM_CAPSULE_TYPE)
-        return 0;
 
-    size_t off = 1;
-    uint64_t session_id = 0;
-    size_t nb = 0;
-    if (sm_varint_decode(buf + off, len - off, &session_id, &nb) < 0) {
+    uint64_t type = 0;
+    size_t type_n = 0;
+    if (sm_varint_decode(buf, len, &type, &type_n) < 0) {
         *incomplete = true;
         return 0;
     }
-    off += nb;
+    if (type != WT_STREAM_CAPSULE_TYPE)
+        return 0;
+
+    size_t off = type_n;
+    uint64_t session_id = 0;
+    size_t sid_n = 0;
+    if (sm_varint_decode(buf + off, len - off, &session_id, &sid_n) < 0) {
+        *incomplete = true;
+        return 0;
+    }
+    off += sid_n;
     return off;
+}
+
+/** True if buffer looks like a (possibly incomplete) WEBTRANSPORT_STREAM head. */
+static bool sm_looks_like_wt_capsule(const uint8_t* buf, size_t len)
+{
+    if (len < 1) return false;
+    uint64_t type = 0;
+    size_t type_n = 0;
+    if (sm_varint_decode(buf, len, &type, &type_n) < 0)
+        return true; /* incomplete multi-byte type — treat as possible capsule */
+    return type == WT_STREAM_CAPSULE_TYPE;
 }
 
 /* ── Forward ────────────────────────────────────────────────── */
 
 static QUIC_STATUS stream_cb(HQUIC stream, void* ctx,
                                QUIC_STREAM_EVENT* event);
+static void sm_mark_send_closed(
+    wt_stream_manager_t* mgr, wt_stream_id_t stream_id, HQUIC quic_stream);
 
 /* ── Stream callback (function pointer type) ────────────────── */
 
@@ -150,6 +240,11 @@ static QUIC_STATUS QUIC_API
 stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
     stream_ctx_t* sctx = (stream_ctx_t*)ctx;
+    if (!sctx || !sctx->mgr || !event) {
+        /* Never bugcheck the process — drop the event. */
+        WT_LOG_ERROR("stream_cb: null sctx/mgr/event — ignoring");
+        return QUIC_STATUS_INVALID_STATE;
+    }
 
     switch (event->Type) {
 
@@ -160,8 +255,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         if (total == 0) return QUIC_STATUS_SUCCESS;
 
-        /* Per-stream bound check — prevent OOM from unbounded receive buffer.
-         * Check for integer overflow first (defense in depth). */
+        /* Per-stream bound check — prevent OOM from unbounded receive buffer. */
         if (total > WT_MAX_STREAM_RECV_BUF ||
             sctx->recv_offset > WT_MAX_STREAM_RECV_BUF - total) {
             MsQuic->StreamShutdown(stream,
@@ -169,10 +263,6 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             return QUIC_STATUS_ABORTED;
         }
 
-        /* Per-connection total bound check — prevent multi-stream exhaustion.
-         * atomic_fetch_add returns the OLD value, so we check if the NEW value
-         * would exceed the limit. Use overflow-safe subtraction to prevent
-         * integer-wrapping bypass (prev_total near UINT32_MAX + total wraps). */
         {
             uint32_t prev_total = atomic_fetch_add(
                 &sctx->mgr->total_recv_bytes, total);
@@ -184,6 +274,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             }
         }
 
+        /* Append into recv_buf (may need prior partial WT header bytes). */
         uint32_t needed = sctx->recv_offset + total;
         uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, needed);
         if (!newbuf) {
@@ -197,41 +288,143 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                    bufs[i].Buffer, bufs[i].Length);
             sctx->recv_offset += bufs[i].Length;
         }
+
         /*
-         * ── CRITICAL: deliver on RECEIVE, not only on peer FIN ──
-         *
-         * Native FishMMO clients open one stream per packet and FIN it,
-         * so the old PEER_SEND_SHUTDOWN delivery path worked.
-         *
-         * Chrome WebGL uses a *persistent* bidirectional stream (jslib
-         * WTSendStream caches the writer and never closes). Waiting for
-         * FIN means data sits in recv_buf forever and never reaches
-         * FishNet — exactly the post-WT stall.
+         * Deliver on RECEIVE (Chrome keeps a persistent bidi stream open).
+         * Strip WEBTRANSPORT_STREAM capsule first so FishNet never sees 0x41.
          */
-        {
+        const uint8_t* app = sctx->recv_buf;
+        size_t app_len = sctx->recv_offset;
+
+        if (!sctx->header_checked) {
+            if (sctx->mgr->use_wt_stream_header) {
+                bool incomplete = false;
+                size_t skip = sm_skip_wt_stream_header(app, app_len, &incomplete);
+                if (incomplete) {
+                    /* Wait for more bytes to finish the capsule. */
+                    return QUIC_STATUS_SUCCESS;
+                }
+                if (skip > 0) {
+                    WT_LOG_INFO(
+                        "Stream %llu: stripped WEBTRANSPORT_STREAM capsule "
+                        "skip=%zu raw_first=%02x %02x %02x %02x "
+                        "app_payload=%zu app_first=%02x %02x %02x %02x "
+                        "stamp=WT_CAPSULE_VARINT_TYPE_V2",
+                        (unsigned long long)sctx->stream_id,
+                        skip,
+                        app_len > 0 ? app[0] : 0,
+                        app_len > 1 ? app[1] : 0,
+                        app_len > 2 ? app[2] : 0,
+                        app_len > 3 ? app[3] : 0,
+                        app_len - skip,
+                        app_len > skip ? app[skip] : 0,
+                        app_len > skip + 1 ? app[skip + 1] : 0,
+                        app_len > skip + 2 ? app[skip + 2] : 0,
+                        app_len > skip + 3 ? app[skip + 3] : 0);
+                    app += skip;
+                    app_len -= skip;
+                } else if (sm_looks_like_wt_capsule(app, app_len)) {
+                    /* Should have been incomplete or skip>0 — don't deliver garbage. */
+                    WT_LOG_ERROR(
+                        "Stream %llu: capsule expected but strip returned 0 "
+                        "raw_first=%02x %02x %02x %02x len=%zu — holding",
+                        (unsigned long long)sctx->stream_id,
+                        app_len > 0 ? app[0] : 0,
+                        app_len > 1 ? app[1] : 0,
+                        app_len > 2 ? app[2] : 0,
+                        app_len > 3 ? app[3] : 0,
+                        app_len);
+                    return QUIC_STATUS_SUCCESS;
+                }
+            }
+            sctx->header_checked = true;
+        }
+
+        if (app_len > 0 &&
+            sctx->mgr->on_stream_data &&
+            sctx->mgr->callback_ctx) {
+            /* Refuse to deliver if first byte still looks like unstripped capsule. */
+            if (sctx->mgr->use_wt_stream_header &&
+                sm_looks_like_wt_capsule(app, app_len) &&
+                app[0] == 0x40 /* 2-byte varint lead */ ) {
+                WT_LOG_ERROR(
+                    "Stream %llu: refusing deliver of likely unstripped capsule "
+                    "first=%02x %02x %02x %02x — abort stream only (not process)",
+                    (unsigned long long)sctx->stream_id,
+                    app_len > 0 ? app[0] : 0,
+                    app_len > 1 ? app[1] : 0,
+                    app_len > 2 ? app[2] : 0,
+                    app_len > 3 ? app[3] : 0);
+                atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
+                free(sctx->recv_buf);
+                sctx->recv_buf = NULL;
+                sctx->recv_offset = 0;
+                MsQuic->StreamShutdown(stream,
+                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                return QUIC_STATUS_ABORTED;
+            }
+            WT_LOG_INFO(
+                "Stream %llu: FIRST_APP_PAYLOAD_AFTER_SESSION deliver %zu bytes "
+                "to app (conn=%llu) first=%02x %02x %02x %02x "
+                "stamp=WT_CAPSULE_VARINT_TYPE_V2",
+                (unsigned long long)sctx->stream_id,
+                app_len,
+                (unsigned long long)sctx->mgr->conn_id,
+                app_len > 0 ? app[0] : 0,
+                app_len > 1 ? app[1] : 0,
+                app_len > 2 ? app[2] : 0,
+                app_len > 3 ? app[3] : 0);
+            sctx->mgr->on_stream_data(
+                sctx->mgr->callback_ctx,
+                sctx->mgr->conn_id,
+                sctx->stream_id,
+                app,
+                (int32_t)app_len);
+        } else if (app_len == 0) {
+            WT_LOG_INFO(
+                "Stream %llu: recv after header strip empty (conn=%llu) "
+                "raw_len=%u header_checked=%d",
+                (unsigned long long)sctx->stream_id,
+                (unsigned long long)sctx->mgr->conn_id,
+                (unsigned)sctx->recv_offset,
+                sctx->header_checked ? 1 : 0);
+        }
+
+        /* Data delivered (or empty after header strip) — free buffer. */
+        atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
+        free(sctx->recv_buf);
+        sctx->recv_buf = NULL;
+        sctx->recv_offset = 0;
+        return QUIC_STATUS_SUCCESS;
+    }
+
+    case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN: {
+        /* Peer finished sending. Deliver any residual buffer.
+         *
+         * Do NOT StreamShutdown our send side here. On a bidi stream the peer
+         * FIN only means they will not write more; FishNet clients still need
+         * to send subsequent reliable packets on their own open streams.
+         * Auto-graceful-shutdown left send_closed=false while the handle was
+         * no longer writable → StreamSend INVALID_STATE (0x8007139f) and
+         * later msquic worker access violations after login. */
+        if (sctx->recv_buf && sctx->recv_offset > 0 &&
+            sctx->mgr->on_stream_data && sctx->mgr->callback_ctx) {
             const uint8_t* app = sctx->recv_buf;
             size_t app_len = sctx->recv_offset;
-
-            if (!sctx->header_checked) {
-                if (sctx->mgr->use_wt_stream_header) {
-                    bool incomplete = false;
-                    size_t skip = sm_skip_wt_stream_header(
-                        app, app_len, &incomplete);
-                    if (incomplete) {
-                        /* Wait for more bytes to finish the capsule. */
-                        return QUIC_STATUS_SUCCESS;
-                    }
-                    if (skip > 0) {
-                        app += skip;
-                        app_len -= skip;
-                    }
+            if (!sctx->header_checked && sctx->mgr->use_wt_stream_header) {
+                bool incomplete = false;
+                size_t skip = sm_skip_wt_stream_header(app, app_len, &incomplete);
+                if (!incomplete && skip > 0) {
+                    app += skip;
+                    app_len -= skip;
                 }
                 sctx->header_checked = true;
             }
-
-            if (app_len > 0 &&
-                sctx->mgr->on_stream_data &&
-                sctx->mgr->callback_ctx) {
+            if (app_len > 0) {
+                WT_LOG_INFO(
+                    "Stream %llu: deliver %zu bytes on peer FIN first=%02x %02x",
+                    (unsigned long long)sctx->stream_id, app_len,
+                    app[0], app_len > 1 ? app[1] : 0);
                 sctx->mgr->on_stream_data(
                     sctx->mgr->callback_ctx,
                     sctx->mgr->conn_id,
@@ -239,153 +432,178 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                     app,
                     (int32_t)app_len);
             }
-
-            /* Data delivered — free buffer. */
-            atomic_fetch_sub(&sctx->mgr->total_recv_bytes,
-                             sctx->recv_offset);
-            free(sctx->recv_buf);
-            sctx->recv_buf = NULL;
-            sctx->recv_offset = 0;
         }
+
+        atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
+        free(sctx->recv_buf);
+        sctx->recv_buf = NULL;
+        sctx->recv_offset = 0;
+
+        sm_lock(sctx->mgr);
+        for (int i = 0; i < WT_MAX_STREAMS; i++) {
+            if (sctx->mgr->streams[i].id == sctx->stream_id) {
+                sctx->mgr->streams[i].recv_closed = true;
+                break;
+            }
+        }
+        sm_unlock(sctx->mgr);
         return QUIC_STATUS_SUCCESS;
     }
 
-    case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN: {
-        /* Peer finished sending. Deliver any residual buffer (e.g.
-         * partial WT header that never completed, or race with last
-         * RECEIVE). Most data was already delivered on RECEIVE above. */
-        {
-            wt_stream_manager_t* snap_mgr = sctx->mgr;
-            uint8_t* snap_buf = sctx->recv_buf;
-            uint32_t snap_len = sctx->recv_offset;
-            bool mgr_shutting_down =
-                atomic_load(&snap_mgr->shutting_down);
-
-            /* Check for unprocessed WT header on residual data. */
-            if (snap_buf && snap_len > 0 &&
-                snap_mgr->on_stream_data &&
-                snap_mgr->callback_ctx) {
-                const uint8_t* app = snap_buf;
-                size_t app_len = snap_len;
-                if (!sctx->header_checked &&
-                    snap_mgr->use_wt_stream_header) {
-                    bool incomplete = false;
-                    size_t skip = sm_skip_wt_stream_header(
-                        app, app_len, &incomplete);
-                    if (!incomplete && skip > 0) {
-                        app += skip;
-                        app_len -= skip;
-                    }
-                    sctx->header_checked = true;
-                }
-                if (app_len > 0 && !mgr_shutting_down) {
-                    snap_mgr->on_stream_data(
-                        snap_mgr->callback_ctx,
-                        snap_mgr->conn_id,
-                        sctx->stream_id,
-                        app, (int32_t)app_len);
-                }
+    case QUIC_STREAM_EVENT_START_COMPLETE: {
+        /*
+         * CRITICAL: never StreamSend until START_COMPLETE.
+         * Sending immediately after StreamStart races the msquic worker and
+         * hits QuicStreamSendBufferRequest on invalid stream state (SIGSEGV).
+         * Match http3.cpp send-only pattern: queue payload, flush here.
+         */
+        if (event->START_COMPLETE.Status != 0 &&
+            QUIC_FAILED(event->START_COMPLETE.Status)) {
+            WT_LOG_ERROR(
+                "Stream START_COMPLETE failed st=0x%x stream_id=%llu",
+                event->START_COMPLETE.Status,
+                (unsigned long long)sctx->stream_id);
+            if (sctx->pending_send) {
+                sm_send_req_free(sctx->pending_send, "start_failed");
+                sctx->pending_send = NULL;
             }
-
-            /* Clear sctx pointers before StreamShutdown. */
-            sctx->recv_buf = NULL;
-            sctx->recv_offset = 0;
-            atomic_fetch_sub(&snap_mgr->total_recv_bytes, snap_len);
-
-            /* Update recv_closed under lock. */
-            int slot_idx = -1;
-            sm_lock(snap_mgr);
-            for (int i = 0; i < WT_MAX_STREAMS; i++) {
-                if (snap_mgr->streams[i].id == sctx->stream_id) {
-                    snap_mgr->streams[i].recv_closed = true;
-                    slot_idx = i;
-                    break;
-                }
+            if (!sctx->close_done) {
+                MsQuic->StreamShutdown(
+                    stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT |
+                        QUIC_STREAM_SHUTDOWN_FLAG_IMMEDIATE,
+                    0);
             }
-            sm_unlock(snap_mgr);
-
-            /* CAS gate: prevent concurrent StreamShutdown. */
-            bool do_shutdown = true;
-            if (slot_idx >= 0) {
-                int expected = 0;
-                do_shutdown = atomic_compare_exchange_strong(
-                    &snap_mgr->streams[slot_idx].shutdown_initiated,
-                    &expected, 1);
-            }
-            if (do_shutdown) {
-                MsQuic->StreamShutdown(stream,
-                    QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
-            }
-
-            free(snap_buf);
+            return QUIC_STATUS_SUCCESS;
         }
+
+        sm_send_req_t* req = sctx->pending_send;
+        if (!req) {
+            WT_LOG_INFO(
+                "Stream START_COMPLETE stream_id=%llu (no pending send)",
+                (unsigned long long)sctx->stream_id);
+            return QUIC_STATUS_SUCCESS;
+        }
+        /* Transfer ownership to StreamSend ClientContext before call. */
+        sctx->pending_send = NULL;
+        QUIC_SEND_FLAGS send_flags = sctx->pending_send_fin
+            ? QUIC_SEND_FLAG_FIN
+            : QUIC_SEND_FLAG_NONE;
+
+        QUIC_STATUS st = MsQuic->StreamSend(
+            stream,
+            &req->buf,
+            1,
+            send_flags,
+            req);
+        if (QUIC_FAILED(st)) {
+            WT_LOG_ERROR(
+                "StreamSend failed after START_COMPLETE st=0x%x "
+                "stream_id=%llu len=%u fin=%d — free now (no SEND_COMPLETE)",
+                st,
+                (unsigned long long)sctx->stream_id,
+                req->length,
+                sctx->pending_send_fin ? 1 : 0);
+            sm_send_req_free(req, "send_failed");
+            sm_mark_send_closed(sctx->mgr, sctx->stream_id, stream);
+            if (!sctx->close_done) {
+                MsQuic->StreamShutdown(
+                    stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT |
+                        QUIC_STREAM_SHUTDOWN_FLAG_IMMEDIATE,
+                    0);
+            }
+            return QUIC_STATUS_SUCCESS;
+        }
+
+        WT_LOG_INFO(
+            "StreamSend queued after START_COMPLETE stream_id=%llu len=%u "
+            "fin=%d stamp=SEND_AFTER_START_V2 (free only on SEND_COMPLETE)",
+            (unsigned long long)sctx->stream_id,
+            req->length,
+            sctx->pending_send_fin ? 1 : 0);
         return QUIC_STATUS_SUCCESS;
     }
 
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
-        /* Free the copy buffer we malloc'd in wt_stream_manager_send */
-        free(event->SEND_COMPLETE.ClientContext);
+        /* Exactly one free per successful StreamSend ClientContext. */
+        if (event->SEND_COMPLETE.Canceled) {
+            WT_LOG_WARN(
+                "SEND_COMPLETE canceled stream_id=%llu — free buffer",
+                (unsigned long long)sctx->stream_id);
+        }
+        sm_send_req_free(event->SEND_COMPLETE.ClientContext,
+                         event->SEND_COMPLETE.Canceled ? "canceled" : "ok");
         return QUIC_STATUS_SUCCESS;
 
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
-        /* Peer aborted — discard any partial data.
-         * CAS-gate StreamShutdown to prevent racing with
-         * wt_stream_manager_shutdown's ABORT on the same handle.
-         * Capture sctx->mgr early: a synchronous SHUTDOWN_COMPLETE
-         * from the poll thread's ABORT may free sctx before we
-         * acquire the lock below (same pattern as PEER_SEND_SHUTDOWN). */
-        {
-            wt_stream_manager_t* snap_mgr = sctx->mgr;
-            wt_stream_id_t snap_sid = sctx->stream_id;
-
-            atomic_fetch_sub(&snap_mgr->total_recv_bytes, sctx->recv_offset);
-            free(sctx->recv_buf);
-            sctx->recv_buf = NULL;
-            sctx->recv_offset = 0;
-
-            bool do_shutdown = true;
-            sm_lock(snap_mgr);
-            for (int i = 0; i < WT_MAX_STREAMS; i++) {
-                if (snap_mgr->streams[i].id == snap_sid) {
-                    int expected = 0;
-                    do_shutdown = atomic_compare_exchange_strong(
-                        &snap_mgr->streams[i].shutdown_initiated,
-                        &expected, 1);
-                    break;
-                }
+        atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
+        free(sctx->recv_buf);
+        sctx->recv_buf = NULL;
+        sctx->recv_offset = 0;
+        /* Peer aborted — mark both directions unusable so send will not
+         * reuse this handle (StreamSend would return INVALID_STATE). */
+        sm_lock(sctx->mgr);
+        for (int i = 0; i < WT_MAX_STREAMS; i++) {
+            if (sctx->mgr->streams[i].id == sctx->stream_id ||
+                sctx->mgr->streams[i].quic_stream == stream) {
+                sctx->mgr->streams[i].recv_closed = true;
+                sctx->mgr->streams[i].send_closed = true;
+                break;
             }
-            sm_unlock(snap_mgr);
-
-            if (do_shutdown) {
-                MsQuic->StreamShutdown(stream,
-                                        QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
-            }
+        }
+        sm_unlock(sctx->mgr);
+        if (!sctx->close_done) {
+            MsQuic->StreamShutdown(stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
         }
         return QUIC_STATUS_SUCCESS;
 
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
         wt_stream_manager_t* mgr = sctx->mgr;
 
-        /* Clear the slot under lock — concurrent with send/accept. */
+        /* Free unsent pending buffer (never reached StreamSend). */
+        if (sctx->pending_send) {
+            sm_send_req_free(sctx->pending_send, "shutdown_before_send");
+            sctx->pending_send = NULL;
+        }
+
+        /* Clear the slot under lock — concurrent with send/accept/mgr shutdown. */
+        int found_slot = 0;
         sm_lock(mgr);
         for (int i = 0; i < WT_MAX_STREAMS; i++) {
-            if (mgr->streams[i].id == sctx->stream_id) {
+            if (mgr->streams[i].id == sctx->stream_id ||
+                mgr->streams[i].quic_stream == stream) {
                 mgr->streams[i].in_use = false;
                 mgr->streams[i].quic_stream = NULL;
+                mgr->streams[i].id = 0;
+                mgr->streams[i].peer_initiated = false;
+                mgr->streams[i].send_closed = false;
+                mgr->streams[i].recv_closed = false;
+                found_slot = 1;
                 break;
             }
         }
-        uint32_t prev = atomic_fetch_sub(&mgr->active_streams, 1);
+        /* Only decrement if we still own accounting (slot found OR active>0).
+         * Avoid underflow when mgr shutdown already zeroed active on conn_dead. */
+        uint32_t prev = 0;
+        if (found_slot || atomic_load(&mgr->active_streams) > 0)
+            prev = atomic_fetch_sub(&mgr->active_streams, 1);
         sm_unlock(mgr);
 
         atomic_fetch_sub(&mgr->total_recv_bytes, sctx->recv_offset);
         free(sctx->recv_buf);
-        free(sctx);
-        MsQuic->StreamClose(stream);
+        sctx->recv_buf = NULL;
 
-        /* If manager is shutting down and this was the last stream,
-         * fire the completion callback so the session can safely
-         * free the manager. */
+        /* Never StreamClose after parent connection is closed (handles invalid). */
+        if (!sctx->close_done && !atomic_load(&mgr->conn_closed)) {
+            sctx->close_done = true;
+            MsQuic->StreamClose(stream);
+        } else {
+            sctx->close_done = true;
+        }
+        free(sctx);
+
         if (prev == 1 && atomic_load(&mgr->shutting_down) && mgr->on_all_streams_done) {
             mgr->on_all_streams_done(mgr->done_ctx);
         }
@@ -418,6 +636,7 @@ void wt_stream_manager_init(
     atomic_init(&mgr->shutdown_complete, false);
     atomic_init(&mgr->freed, false);
     atomic_store(&mgr->shutting_down, false);
+    atomic_store(&mgr->conn_closed, false);
     atomic_init(&mgr->total_recv_bytes, 0);
 
 #if defined(WT_PLATFORM_WINDOWS)
@@ -437,70 +656,180 @@ void wt_stream_manager_init(
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
         mgr->streams[i].id = 0;
         mgr->streams[i].in_use = false;
-        atomic_init(&mgr->streams[i].shutdown_initiated, false);
+        mgr->streams[i].peer_initiated = false;
+        mgr->streams[i].send_closed = false;
+        mgr->streams[i].recv_closed = false;
+        mgr->streams[i].quic_stream = NULL;
     }
 
 }
 
+void wt_stream_manager_mark_conn_closed(wt_stream_manager_t* mgr)
+{
+    if (!mgr) return;
+    atomic_store(&mgr->conn_closed, true);
+}
+
 void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
 {
-    /* Collect in-use streams under the lock, then shut them down
-     * outside the lock. StreamShutdown can fire SHUTDOWN_COMPLETE
-     * synchronously, which also acquires the lock — deadlock if
-     * we held the lock across the MsQuic call. */
-    /* Heap allocation — WT_MAX_STREAMS (4096) entries of two pointers
-     * is ~64 KB on 64-bit.  A stack allocation of this size risks
-     * overflow on constrained systems. */
-    struct { HQUIC handle; int slot_idx; } *pending = NULL;
-    pending = (typeof(pending))malloc(
-        sizeof(*pending) * (size_t)WT_MAX_STREAMS);
-    if (!pending) {
-        WT_LOG_ERROR("wt_stream_manager_shutdown: malloc(%zu) failed — "
-                     "cannot collect stream handles for shutdown. "
-                     "Leaking %u active streams.",
-                     sizeof(*pending) * (size_t)WT_MAX_STREAMS,
-                     (unsigned)atomic_load(&mgr->active_streams));
-        return;
+    if (!mgr) return;
+
+    /*
+     * SAFE_SHUTDOWN_V2 (2026-07-25):
+     *
+     * Production crash (LoginServer rc=134 / SIGABRT):
+     *   PEER H3_FRAME_UNEXPECTED → connection SHUTDOWN_COMPLETE →
+     *   ConnectionClose → poll drains pending session →
+     *   wt_stream_manager_shutdown → MsQuicStreamShutdown → quic_bugcheck
+     *
+     * After the parent connection is closed, stream handles are invalid.
+     * Calling StreamShutdown/StreamClose on them aborts the process.
+     *
+     * Rules:
+     *  - If conn_closed: only clear local slots; never touch MsQuic.
+     *  - If connection still live: graceful StreamShutdown only (no
+     *    ABORT|IMMEDIATE combo — that was the assert path).
+     *  - StreamClose remains owned by SHUTDOWN_COMPLETE in stream_cb.
+     */
+    const int conn_dead = atomic_load(&mgr->conn_closed) ? 1 : 0;
+
+    HQUIC* pending = NULL;
+    int pending_count = 0;
+
+    if (!conn_dead) {
+        pending = (HQUIC*)malloc(sizeof(HQUIC) * (size_t)WT_MAX_STREAMS);
+        if (!pending) {
+            WT_LOG_ERROR(
+                "wt_stream_manager_shutdown: malloc failed — skip MsQuic "
+                "ops (conn=%llu active=%u) stamp=SAFE_SHUTDOWN_V2",
+                (unsigned long long)mgr->conn_id,
+                (unsigned)atomic_load(&mgr->active_streams));
+        }
     }
 
-    int pending_count = 0;
     sm_lock(mgr);
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
-        if (mgr->streams[i].in_use && mgr->streams[i].quic_stream) {
-            /* ── CAS gate: claim shutdown for this stream ───────
-             * If a QUIC callback thread is concurrently processing
-             * PEER_SEND_SHUTDOWN for this stream, it will also try
-             * to CAS shutdown_initiated 0→1.  Whichever path loses
-             * the CAS skips its StreamShutdown call, preventing
-             * dual StreamShutdown(GRACEFUL+ABORT) on the same
-             * HQUIC handle (undefined behavior in MsQuic). */
-            int expected = 0;
-            if (!atomic_compare_exchange_strong(
-                    &mgr->streams[i].shutdown_initiated,
-                    &expected, 1)) {
-                /* PEER_SEND_SHUTDOWN already claimed this stream.
-                 * Skip shutdown here — the GRACEFUL path will
-                 * handle cleanup. */
-                continue;
-            }
-            pending[pending_count].handle = mgr->streams[i].quic_stream;
-            pending[pending_count].slot_idx = i;
-            pending_count++;
-            mgr->streams[i].quic_stream = NULL;  /* NULL before unlock — prevents
-                SHUTDOWN_COMPLETE from finding this slot again */
+        if (!mgr->streams[i].in_use)
+            continue;
+        HQUIC h = mgr->streams[i].quic_stream;
+        if (h && pending && pending_count < WT_MAX_STREAMS) {
+            pending[pending_count++] = h;
         }
+        /* Drop ownership so concurrent SHUTDOWN_COMPLETE cannot double-op. */
+        mgr->streams[i].quic_stream = NULL;
+        if (conn_dead) {
+            /* Connection already gone — bookkeeping only; MsQuic owns teardown. */
+            mgr->streams[i].in_use = false;
+            mgr->streams[i].id = 0;
+            mgr->streams[i].peer_initiated = false;
+            mgr->streams[i].send_closed = false;
+            mgr->streams[i].recv_closed = false;
+        }
+    }
+    if (conn_dead) {
+        atomic_store(&mgr->active_streams, 0);
     }
     sm_unlock(mgr);
 
+    WT_LOG_INFO(
+        "wt_stream_manager_shutdown conn=%llu streams_to_abort=%d active=%u "
+        "conn_dead=%d stamp=SAFE_SHUTDOWN_V2",
+        (unsigned long long)mgr->conn_id,
+        pending_count,
+        (unsigned)atomic_load(&mgr->active_streams),
+        conn_dead);
+
+    if (conn_dead) {
+        /* Fire done callback so session free is not stuck waiting. */
+        if (mgr->on_all_streams_done)
+            mgr->on_all_streams_done(mgr->done_ctx);
+        free(pending);
+        return;
+    }
+
     for (int i = 0; i < pending_count; i++) {
-        MsQuic->StreamShutdown(pending[i].handle,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        /* StreamShutdown may fire SHUTDOWN_COMPLETE synchronously,
-         * which decrements active_streams, but the mgr is not freed
-         * here because shutdown_complete is not yet set. Safe to
-         * continue iterating. */
+        if (!pending[i])
+            continue;
+        /* Graceful only — never ABORT|IMMEDIATE after peer close races. */
+        MsQuic->StreamShutdown(
+            pending[i],
+            QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL,
+            0);
+        /* SHUTDOWN_COMPLETE (stream_cb) owns StreamClose + sctx free. */
     }
     free(pending);
+}
+
+/* Mark a stream unusable for further StreamSend after a hard failure. */
+static void sm_mark_send_closed(
+    wt_stream_manager_t* mgr, wt_stream_id_t stream_id, HQUIC quic_stream)
+{
+    if (!mgr) return;
+    sm_lock(mgr);
+    for (int i = 0; i < WT_MAX_STREAMS; i++) {
+        if (!mgr->streams[i].in_use)
+            continue;
+        if ((stream_id != 0 && mgr->streams[i].id == stream_id) ||
+            (quic_stream && mgr->streams[i].quic_stream == quic_stream)) {
+            mgr->streams[i].send_closed = true;
+            break;
+        }
+    }
+    sm_unlock(mgr);
+}
+
+/**
+ * Send on an already-started stream (peer-initiated preferred path on server).
+ * No WEBTRANSPORT_STREAM header: capsule was already on the client open;
+ * subsequent server writes on the same bidi stream are raw app bytes.
+ * Does NOT set FIN so the peer can keep writing on the same stream.
+ */
+static int32_t sm_send_on_open_stream(
+    wt_stream_manager_t* mgr,
+    HQUIC quic_stream,
+    wt_stream_id_t stream_id,
+    const uint8_t* data,
+    int32_t length)
+{
+    sm_send_req_t* req = sm_send_req_alloc(NULL, 0, data, length);
+    if (!req)
+        return WT_ERR_BUFFER_FULL;
+
+    /* Bail if connection already dead — avoids StreamSend into free'd msquic state. */
+    if (atomic_load(&mgr->conn_closed) || atomic_load(&mgr->shutting_down)) {
+        sm_send_req_free(req, "same_stream_conn_dead");
+        sm_mark_send_closed(mgr, stream_id, quic_stream);
+        return WT_ERR_INVALID_STATE;
+    }
+
+    QUIC_STATUS st = MsQuic->StreamSend(
+        quic_stream,
+        &req->buf,
+        1,
+        QUIC_SEND_FLAG_NONE, /* keep send side open for further replies */
+        req);
+    if (QUIC_FAILED(st)) {
+        WT_LOG_ERROR(
+            "StreamSend on existing stream failed st=0x%x conn=%llu "
+            "stream_id=%llu len=%d stamp=SAME_STREAM_REPLY_V2",
+            st,
+            (unsigned long long)mgr->conn_id,
+            (unsigned long long)stream_id,
+            length);
+        sm_send_req_free(req, "same_stream_send_failed");
+        /* CRITICAL: never retry this handle. INVALID_STATE (0x8007139f) means
+         * the send side is already shut down; reusing it crashes msquic workers. */
+        sm_mark_send_closed(mgr, stream_id, quic_stream);
+        return WT_ERR_SEND_FAILED;
+    }
+
+    WT_LOG_INFO(
+        "SAME_STREAM_REPLY ok conn=%llu stream_id=%llu app_len=%d "
+        "stamp=SAME_STREAM_REPLY_V2 (no new StreamOpen; no FIN)",
+        (unsigned long long)mgr->conn_id,
+        (unsigned long long)stream_id,
+        length);
+    return WT_OK;
 }
 
 int32_t wt_stream_manager_send(
@@ -508,8 +837,90 @@ int32_t wt_stream_manager_send(
 {
     if (!data || length <= 0) return WT_ERR_SEND_FAILED;
     if (atomic_load(&mgr->shutting_down)) return WT_ERR_INVALID_STATE;
+    if (atomic_load(&mgr->conn_closed)) return WT_ERR_INVALID_STATE;
 
-    /* Find free slot under lock — concurrent with accept on QUIC thread. */
+    /*
+     * Stream reuse policy (stamp=STREAM_REUSE_POLICY_V2):
+     *
+     * Server:
+     *   Prefer peer-initiated bidi streams (client-opened) so browser/native
+     *   clients receive replies on the stream they already own. Chrome rejects
+     *   server StreamOpen + WEBTRANSPORT_STREAM (H3_FRAME_UNEXPECTED).
+     *
+     * Client (native Editor/standalone):
+     *   Only reuse locally-opened streams (!peer_initiated). Writing on a
+     *   server-initiated stream after the peer FINs yields StreamSend
+     *   INVALID_STATE and can AV inside msquic. If none available, open a
+     *   new client-initiated stream (fallback below).
+     */
+    {
+        HQUIC reuse = NULL;
+        wt_stream_id_t reuse_id = 0;
+        sm_lock(mgr);
+        for (int i = 0; i < WT_MAX_STREAMS; i++) {
+            if (!mgr->streams[i].in_use || !mgr->streams[i].quic_stream)
+                continue;
+            if (mgr->streams[i].send_closed)
+                continue;
+
+            if (mgr->is_server) {
+                /* Prefer peer-initiated; fall back to any open send side. */
+                if (mgr->streams[i].peer_initiated || reuse == NULL) {
+                    reuse = mgr->streams[i].quic_stream;
+                    reuse_id = mgr->streams[i].id;
+                    if (mgr->streams[i].peer_initiated)
+                        break;
+                }
+            } else {
+                /* Client: never reuse peer-initiated (server-opened) streams. */
+                if (mgr->streams[i].peer_initiated)
+                    continue;
+                /* Prefer the first locally-owned open stream. */
+                reuse = mgr->streams[i].quic_stream;
+                reuse_id = mgr->streams[i].id;
+                break;
+            }
+        }
+        sm_unlock(mgr);
+
+        if (reuse) {
+            int32_t r = sm_send_on_open_stream(
+                mgr, reuse, reuse_id, data, length);
+            if (r == WT_OK)
+                return WT_OK;
+            WT_LOG_WARN(
+                "SAME_STREAM_REPLY failed conn=%llu stream_id=%llu st=%d "
+                "is_server=%d stamp=SAME_STREAM_REPLY_V2",
+                (unsigned long long)mgr->conn_id,
+                (unsigned long long)reuse_id,
+                (int)r,
+                mgr->is_server ? 1 : 0);
+            /* Browser server sessions: NEVER open a server-initiated bidi stream.
+             * Chrome rejects WEBTRANSPORT_STREAM on server StreamOpen with
+             * H3_FRAME_UNEXPECTED / H3_FRAME_ERROR and tears down the session
+             * right after LoginSuccess (post-auth Authenticated packet). */
+            if (mgr->use_wt_stream_header) {
+                WT_LOG_ERROR(
+                    "Browser client: refusing server StreamOpen fallback "
+                    "conn=%llu len=%d stamp=NO_SERVER_STREAM_OPEN_V1",
+                    (unsigned long long)mgr->conn_id, length);
+                return WT_ERR_SEND_FAILED;
+            }
+            WT_LOG_WARN(
+                "SAME_STREAM_REPLY failed conn=%llu — falling back to new "
+                "local stream (native) stamp=STREAM_REUSE_POLICY_V2",
+                (unsigned long long)mgr->conn_id);
+        } else if (mgr->use_wt_stream_header) {
+            /* No open peer stream yet — cannot reply to Chrome safely. */
+            WT_LOG_ERROR(
+                "Browser client: no peer stream for reply conn=%llu len=%d "
+                "stamp=NO_SERVER_STREAM_OPEN_V1",
+                (unsigned long long)mgr->conn_id, length);
+            return WT_ERR_SEND_FAILED;
+        }
+    }
+
+    /* ── Fallback: open a new server-initiated bidi stream (native only) ── */
     int slot = -1;
     sm_lock(mgr);
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
@@ -517,63 +928,32 @@ int32_t wt_stream_manager_send(
     }
     if (slot < 0) { sm_unlock(mgr); return WT_ERR_BUFFER_FULL; }
 
-    /* Reserve the slot immediately so accept doesn't grab it.
-     * Increment active_streams while under the lock so that the count
-     * is consistent with the reserved slot — shutdown logic checks
-     * active_streams against streams_done_flag to decide whether to
-     * free the mgr. Moving the increment here (vs. after StreamOpen)
-     * prevents a theoretical underflow if SHUTDOWN_COMPLETE raced
-     * between StreamOpen and the old increment. */
-	/* Generate unique stream ID. next_id is uint64_t — in practice
-	 * this never wraps (~584K years at 1M streams/s). On the off
-	 * chance it wraps to 0 (reserved), scan the active stream slots
-	 * for an unused ID.  We hold the lock so the slot table is stable. */
-	wt_stream_id_t stream_id = mgr->next_id++;
-	if (stream_id == 0) {
-	    stream_id = 1;
-	    mgr->next_id = WT_MAX_STREAMS + 2;  /* skip scan range for future allocs */
-	    for (;;) {
-	        bool conflict = false;
-	        for (int i = 0; i < WT_MAX_STREAMS; i++) {
-	            if (mgr->streams[i].in_use && mgr->streams[i].id == stream_id) {
-	                conflict = true;
-	                break;
-	            }
-	        }
-	        if (!conflict) break;
-	        if (++stream_id == 0) stream_id = 1;  /* still skip 0 */
-	    }
-	}
+    wt_stream_id_t stream_id = mgr->next_id++;
+    if (stream_id == 0) {
+        stream_id = 1;
+        mgr->next_id = WT_MAX_STREAMS + 2;
+        for (;;) {
+            bool conflict = false;
+            for (int i = 0; i < WT_MAX_STREAMS; i++) {
+                if (mgr->streams[i].in_use && mgr->streams[i].id == stream_id) {
+                    conflict = true;
+                    break;
+                }
+            }
+            if (!conflict) break;
+            if (++stream_id == 0) stream_id = 1;
+        }
+    }
     mgr->streams[slot].id = stream_id;
     mgr->streams[slot].in_use = true;
     mgr->streams[slot].send_closed = false;
-    atomic_store(&mgr->streams[slot].shutdown_initiated, false);
+    mgr->streams[slot].recv_closed = false;
+    mgr->streams[slot].peer_initiated = false;
     atomic_fetch_add(&mgr->active_streams, 1);
-    /* quic_stream set below after StreamOpen; SHUTDOWN_COMPLETE will
-     * see in_use=true but quic_stream=NULL and skip cleanup — that's
-     * fine because we haven't opened the stream yet. */
     sm_unlock(mgr);
-
-    /* Open bidirectional stream (no lock needed — MsQuic handles its own
-     * synchronisation). */
-    HQUIC quic_stream = NULL;
-    QUIC_STATUS status = MsQuic->StreamOpen(
-        mgr->quic_conn, QUIC_STREAM_OPEN_FLAG_NONE, NULL, NULL,
-        &quic_stream);
-    if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamOpen failed: 0x%x", status);
-        /* Release the reserved slot and undo the active_streams increment. */
-        sm_lock(mgr);
-        mgr->streams[slot].in_use = false;
-        mgr->streams[slot].id = 0;
-        atomic_fetch_sub(&mgr->active_streams, 1);
-        sm_unlock(mgr);
-        return WT_ERR_SEND_FAILED;
-    }
 
     stream_ctx_t* sctx = (stream_ctx_t*)calloc(1, sizeof(stream_ctx_t));
     if (!sctx) {
-        MsQuic->StreamClose(quic_stream);
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].id = 0;
@@ -583,26 +963,69 @@ int32_t wt_stream_manager_send(
     }
     sctx->mgr = mgr;
     sctx->stream_id = stream_id;
+    sctx->quic_stream = NULL;
     sctx->header_checked = true; /* outbound: no inbound WT capsule to strip */
-    sctx->mgr = mgr;
-    sctx->stream_id = stream_id;
+
+    HQUIC quic_stream = NULL;
+    QUIC_STATUS status = MsQuic->StreamOpen(
+        mgr->quic_conn,
+        QUIC_STREAM_OPEN_FLAG_NONE,
+        k_stream_handler,
+        sctx,
+        &quic_stream);
+    if (QUIC_FAILED(status)) {
+        WT_LOG_ERROR(
+            "StreamOpen failed: 0x%x (conn=%llu stream_id=%llu) — "
+            "ServerHandshake/app reply cannot leave host",
+            status,
+            (unsigned long long)mgr->conn_id,
+            (unsigned long long)stream_id);
+        free(sctx);
+        sm_lock(mgr);
+        mgr->streams[slot].in_use = false;
+        mgr->streams[slot].id = 0;
+        atomic_fetch_sub(&mgr->active_streams, 1);
+        sm_unlock(mgr);
+        return WT_ERR_SEND_FAILED;
+    }
     sctx->quic_stream = quic_stream;
 
-    /* Record quic_stream under lock so SHUTDOWN_COMPLETE can find the slot.
-     * active_streams was already incremented at slot-reservation time. */
     sm_lock(mgr);
     mgr->streams[slot].quic_stream = quic_stream;
     sm_unlock(mgr);
 
+    size_t header_len = 0;
+    uint8_t header[1 + 8];
+    if (mgr->use_wt_stream_header) {
+        header[0] = (uint8_t)WT_STREAM_CAPSULE_TYPE;
+        size_t sid_n = sm_varint_encode(mgr->wt_session_id, header + 1);
+        header_len = 1 + sid_n;
+        WT_LOG_INFO(
+            "Stream send: WEBTRANSPORT_STREAM session_id=%llu header_len=%zu "
+            "app_len=%d stamp=WT_CAPSULE_NO_LEN_V1",
+            (unsigned long long)mgr->wt_session_id, header_len, length);
+    }
+
+    sm_send_req_t* req = sm_send_req_alloc(
+        header_len > 0 ? header : NULL, header_len, data, length);
+    if (!req) {
+        MsQuic->StreamShutdown(quic_stream,
+                                QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
+        return WT_ERR_BUFFER_FULL;
+    }
+    sctx->pending_send = req;
+    /* Client: keep bidi open for many FishNet reliable packets.
+     * Server fallback (rare native): one-shot FIN after first payload. */
+    sctx->pending_send_fin = mgr->is_server ? 1 : 0;
+
     status = MsQuic->StreamStart(quic_stream,
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
     if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamStart failed: 0x%x", status);
-        /* MsQuic does NOT guarantee SHUTDOWN_COMPLETE fires for a stream
-         * that never successfully started. Clean up the slot, sctx, and
-         * active_streams counter inline to prevent a permanent leak.
-         * SetCallbackHandler is called below (only on success), so
-         * StreamClose here won't trigger SHUTDOWN_COMPLETE — safe. */
+        WT_LOG_ERROR("StreamStart failed: 0x%x stream_id=%llu",
+                     status, (unsigned long long)stream_id);
+        sctx->pending_send = NULL;
+        sm_send_req_free(req, "stream_start_failed");
+        MsQuic->StreamClose(quic_stream);
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].quic_stream = NULL;
@@ -610,57 +1033,27 @@ int32_t wt_stream_manager_send(
         atomic_fetch_sub(&mgr->active_streams, 1);
         sm_unlock(mgr);
         free(sctx);
-        MsQuic->StreamClose(quic_stream);
         return WT_ERR_SEND_FAILED;
     }
 
-    MsQuic->SetCallbackHandler(quic_stream,
-                                (void*)(uintptr_t)k_stream_handler, sctx);
+    WT_LOG_INFO(
+        "StreamOpen+Start OK conn=%llu stream_id=%llu app_len=%d "
+        "wire_len=%u header_len=%zu pending_send=1 fin=%d "
+        "stamp=LOCAL_STREAM_OPEN_V2 is_server=%d",
+        (unsigned long long)mgr->conn_id,
+        (unsigned long long)stream_id,
+        length,
+        (unsigned)req->length,
+        header_len,
+        sctx->pending_send_fin ? 1 : 0,
+        mgr->is_server ? 1 : 0);
 
-    /* Send data — copy to ensure lifetime across async send.
-     * Browser WebTransport: WEBTRANSPORT_STREAM = Type 0x41 + Session ID
-     * (no length). Wrong length framing breaks Chrome stream association. */
-    size_t header_len = 0;
-    uint8_t header[1 + 8];
-    if (mgr->use_wt_stream_header) {
-        header[0] = (uint8_t)WT_STREAM_CAPSULE_TYPE;
-        size_t sid_n = sm_varint_encode(mgr->wt_session_id, header + 1);
-        header_len = 1 + sid_n;
+    /* Server one-shot fallback FINs; client keeps send open for reuse. */
+    if (sctx->pending_send_fin) {
+        sm_lock(mgr);
+        mgr->streams[slot].send_closed = true;
+        sm_unlock(mgr);
     }
-
-    uint8_t* copy = (uint8_t*)malloc(header_len + (size_t)length);
-    if (!copy) {
-        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
-         * StreamShutdown will handle slot cleanup. */
-        MsQuic->StreamShutdown(quic_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        return WT_ERR_BUFFER_FULL;
-    }
-    if (header_len > 0)
-        memcpy(copy, header, header_len);
-    memcpy(copy + header_len, data, (size_t)length);
-
-    QUIC_BUFFER send_buf;
-    send_buf.Buffer = copy;
-    send_buf.Length = (uint32_t)(header_len + (size_t)length);
-
-    status = MsQuic->StreamSend(quic_stream, &send_buf, 1,
-                                 QUIC_SEND_FLAG_FIN, copy);
-    /* `copy` is freed by stream_send_complete on SEND_COMPLETE event */
-    if (QUIC_FAILED(status)) {
-        WT_LOG_ERROR("StreamSend failed: 0x%x", status);
-        free(copy);
-        /* Do NOT clear in_use or quic_stream — SHUTDOWN_COMPLETE from
-         * StreamShutdown will handle slot cleanup. */
-        MsQuic->StreamShutdown(quic_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        return WT_ERR_SEND_FAILED;
-    }
-
-    /* Update send_closed under lock. */
-    sm_lock(mgr);
-    mgr->streams[slot].send_closed = true;  /* FIN sent */
-    sm_unlock(mgr);
     return WT_OK;
 }
 
@@ -703,10 +1096,15 @@ void wt_stream_manager_accept_stream(
             if (++stream_id == 0) stream_id = 1;  /* still skip 0 */
         }
     }
+    /* CRITICAL: slot.id must match sctx->stream_id or SHUTDOWN_COMPLETE
+     * never clears the slot (id stayed 0) while still decrementing
+     * active_streams — active=0 with orphan handles → unsafe shutdown. */
+    mgr->streams[slot].id = stream_id;
     mgr->streams[slot].quic_stream = quic_stream;
     mgr->streams[slot].in_use = true;
-    mgr->streams[slot].id = stream_id;
-    atomic_store(&mgr->streams[slot].shutdown_initiated, false);
+    mgr->streams[slot].send_closed = false;
+    mgr->streams[slot].recv_closed = false;
+    mgr->streams[slot].peer_initiated = true;
     atomic_fetch_add(&mgr->active_streams, 1);
     sm_unlock(mgr);
 
@@ -717,16 +1115,23 @@ void wt_stream_manager_accept_stream(
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].quic_stream = NULL;
         mgr->streams[slot].id = 0;
+        mgr->streams[slot].peer_initiated = false;
         atomic_fetch_sub(&mgr->active_streams, 1);
         sm_unlock(mgr);
         MsQuic->StreamShutdown(quic_stream,
-                                QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                                QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
         MsQuic->StreamClose(quic_stream);  /* no sctx, so no callback to do this */
         return;
     }
     sctx->mgr = mgr;
     sctx->stream_id = stream_id;
     sctx->quic_stream = quic_stream;
+
+    WT_LOG_INFO(
+        "Accept peer stream conn=%llu stream_id=%llu peer_initiated=1 "
+        "stamp=ACCEPT_SLOT_ID_FIX_V1",
+        (unsigned long long)mgr->conn_id,
+        (unsigned long long)stream_id);
 
     /* SetCallbackHandler outside lock — safe because the slot is already
      * registered above. If SHUTDOWN_COMPLETE fires synchronously it will

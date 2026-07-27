@@ -67,12 +67,10 @@ typedef struct wt_stream_entry_s {
     bool            in_use;
     bool            send_closed;
     bool            recv_closed;
-    /* CAS gate — prevents concurrent StreamShutdown(GRACEFUL) from a
-     * QUIC callback (PEER_SEND_SHUTDOWN) and StreamShutdown(ABORT) from
-     * the poll thread (wt_stream_manager_shutdown) on the same handle.
-     * Set to true by whichever path wins the CAS; the loser skips the
-     * shutdown to avoid undefined behavior in MsQuic. */
-    atomic_bool     shutdown_initiated;
+    /* True if this stream was accepted from the peer (client-opened bidi).
+     * Server replies prefer these so Chrome receives data on the same
+     * WebTransport stream the client already owns (readable half). */
+    bool            peer_initiated;
 } wt_stream_entry_t;
 
 typedef struct wt_stream_manager_s {
@@ -81,12 +79,11 @@ typedef struct wt_stream_manager_s {
     HQUIC               quic_conn;
     atomic_uint         active_streams;
     atomic_bool         shutting_down;
-
-    void (*on_stream_data)(void* ctx, wt_connection_id_t conn_id,
-                           wt_stream_id_t stream_id,
-                           const uint8_t* data, int32_t length);
-    void*               callback_ctx;
-    wt_connection_id_t  conn_id;
+    /* Set when the QUIC connection is already closed/shutting down.
+     * wt_stream_manager_shutdown must NOT call MsQuic StreamShutdown /
+     * StreamClose on handles once this is true — that path was
+     * quic_bugcheck → LoginServer SIGABRT (rc=134). */
+    atomic_bool         conn_closed;
 
     /* Browser WebTransport (HTTP/3): client/server-initiated data streams
      * begin with a WEBTRANSPORT_STREAM capsule (type 0x41) carrying the
@@ -94,6 +91,20 @@ typedef struct wt_stream_manager_s {
      * bytes — leave use_wt_stream_header false for them. */
     bool                use_wt_stream_header;
     uint64_t            wt_session_id;  /* CONNECT stream ID when framing on */
+
+    /* True for server-side sessions. Controls stream reuse policy in
+     * wt_stream_manager_send:
+     *   server: prefer peer-initiated (client-opened) streams for replies
+     *   client: only reuse locally-opened streams; never write on
+     *           server-initiated streams (those often hit INVALID_STATE
+     *           after the peer FINs and PEER_SEND_SHUTDOWN). */
+    bool                is_server;
+
+    void (*on_stream_data)(void* ctx, wt_connection_id_t conn_id,
+                           wt_stream_id_t stream_id,
+                           const uint8_t* data, int32_t length);
+    void*               callback_ctx;
+    wt_connection_id_t  conn_id;
 
     /* Called when active_streams reaches 0 during shutdown.
      * The session uses this to defer free(mgr) until all streams are done. */
@@ -137,6 +148,13 @@ void wt_stream_manager_init(
     void* callback_ctx);
 
 void wt_stream_manager_shutdown(wt_stream_manager_t* mgr);
+
+/**
+ * Mark the parent QUIC connection as closed. Call from connection
+ * SHUTDOWN_COMPLETE *before* ConnectionClose / session free so stream
+ * manager teardown never issues MsQuic stream ops on dead handles.
+ */
+void wt_stream_manager_mark_conn_closed(wt_stream_manager_t* mgr);
 
 int32_t wt_stream_manager_send(
     wt_stream_manager_t* mgr, const uint8_t* data, int32_t length);

@@ -80,6 +80,14 @@ typedef int atomic_bool;
       __atomic_compare_exchange_n(p, expected, desired, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 #endif
 
+/* atomic_exchange -- exchange an int-sized atomic value.
+ * Used for CAS-gated free patterns (e.g. wt_dgram_send_ctx_free). */
+#if defined(_MSC_VER)
+  #define atomic_exchange(p, v) ((int)_InterlockedExchange((long*)(p), (long)(v)))
+#else
+  #define atomic_exchange(p, v) __atomic_exchange_n(p, v, __ATOMIC_SEQ_CST)
+#endif
+
 /* ── 64-bit atomics ──────────────────────────────────────────────
  * Used for counters that would overflow 32 bits within the server's
  * operational lifetime (e.g. ring-buffer head/tail indices in a
@@ -207,8 +215,11 @@ typedef enum {
    *     deployments disable it via WT_NO_LOGGING.
    * If production-grade signal-safe logging is ever needed, replace fprintf
    * with writev(2) to a dedicated log fd (preserving errno). */
-  #define WT_LOG(level, fmt, ...) \
-      fprintf(stderr, "[wt:%s] " fmt "\n", level, ##__VA_ARGS__)
+  /* fflush so lines survive Unity/EXCEPTION death (was losing crash context). */
+  #define WT_LOG(level, fmt, ...) do { \
+      fprintf(stderr, "[wt:%s] " fmt "\n", level, ##__VA_ARGS__); \
+      fflush(stderr); \
+  } while (0)
   #define WT_LOG_INFO(fmt, ...)  WT_LOG("INFO",  fmt, ##__VA_ARGS__)
   #define WT_LOG_WARN(fmt, ...)  WT_LOG("WARN",  fmt, ##__VA_ARGS__)
   #define WT_LOG_ERROR(fmt, ...) WT_LOG("ERROR", fmt, ##__VA_ARGS__)
