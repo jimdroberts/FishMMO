@@ -31,8 +31,13 @@
       <Link>logging.json</Link>
     </None>
   </ItemGroup>
-  <!-- Copy-and-rename config files from FishMMO-Setup/ to output. -->
-  <Target Name="CopyFishMMOConfig" AfterTargets="Build">
+  <!-- Copy-and-rename config files from FishMMO-Setup/ to output (Build + Publish). -->
+  <Target Name="CopyFishMMOConfig" AfterTargets="Build;Publish">
+    <PropertyGroup>
+      <_FishMMOConfigOut>$([System.String]::Copy('$(PublishDir)').TrimEnd('\').TrimEnd('/'))</_FishMMOConfigOut>
+      <_FishMMOConfigOut Condition="'$(_FishMMOConfigOut)' == ''">$(OutDir)</_FishMMOConfigOut>
+      <_FishMMOConfigOut Condition="'$(PublishDir)' == ''">$(OutDir)</_FishMMOConfigOut>
+    </PropertyGroup>
     <Copy SourceFiles="..\..\..\FishMMO-Setup\Development\appsettings.IpFetchServer.json"
           DestinationFiles="$(OutDir)appsettings.json"
           SkipUnchangedFiles="true" />
@@ -42,5 +47,10 @@
     <Copy SourceFiles="..\..\..\FishMMO-Setup\Production\appsettings.IpFetchServer.Production.json"
           DestinationFiles="$(OutDir)appsettings.Production.json"
           SkipUnchangedFiles="true" />
+    <!-- Also land Production appsettings next to published binaries when PublishDir is set. -->
+    <Copy SourceFiles="..\..\..\FishMMO-Setup\Production\appsettings.IpFetchServer.Production.json"
+          DestinationFiles="$(PublishDir)appsettings.Production.json"
+          SkipUnchangedFiles="true"
+          Condition="'$(PublishDir)' != ''" />
   </Target>
 </Project>
