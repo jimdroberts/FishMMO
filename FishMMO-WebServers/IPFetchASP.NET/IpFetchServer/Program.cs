@@ -107,15 +107,19 @@ namespace FishMMO.WebServer
 
 						ValidateNpgsqlSslMode(context.Configuration, context.HostingEnvironment);
 
+						// Explicit factory ctor — AddSingleton<NpgsqlDbContextFactory>() is ambiguous
+						// between .ctor(IConfiguration) and .ctor(NpgsqlDbConfiguration) and crashes
+						// IPFetch at startup (systemd CHDIR-ok but host never binds :8080 → nginx 502).
 						services.AddSingleton(new NpgsqlDbConfiguration(context.Configuration));
-						services.AddSingleton<NpgsqlDbContextFactory>();
-						// Register INpgsqlDbContextFactory so services with that dependency can resolve it.
-						services.AddSingleton<INpgsqlDbContextFactory>(sp => sp.GetRequiredService<NpgsqlDbContextFactory>());
+						services.AddSingleton(sp =>
+							new NpgsqlDbContextFactory(sp.GetRequiredService<NpgsqlDbConfiguration>()));
+						services.AddSingleton<INpgsqlDbContextFactory>(sp =>
+							sp.GetRequiredService<NpgsqlDbContextFactory>());
 						// Register the connection token key service for DB-based key registration.
 						services.AddScoped<IDeploymentSecretService, DeploymentSecretService>();
 						services.AddScoped<IConnectionTokenKeyService, ConnectionTokenKeyService>();
 						services.AddMemoryCache();
-							services.AddSingleton<GateSecretHolder>();
+						services.AddSingleton<GateSecretHolder>();
 
 						services.AddControllers()
 							.AddJsonOptions(options =>
