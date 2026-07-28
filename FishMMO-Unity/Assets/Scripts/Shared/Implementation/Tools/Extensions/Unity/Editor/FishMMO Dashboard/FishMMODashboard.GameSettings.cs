@@ -43,12 +43,16 @@ namespace FishMMO.Shared
 		// ══════════════════════════════════════════════════════════════════
 
 		private bool gs_pinApiHostEnabled = true;
-		private bool gs_pinGameHostEnabled = true;
+		// Game hosts (loginserver/world/scene) often only expose UDP/QUIC — not TCP:443 —
+		// so pin fetch to Game Host fails by default. Prefer API / custom HTTPS hosts.
+		private bool gs_pinGameHostEnabled = false;
 		private string gs_pinCustomHost = "";
 		private readonly List<string> gs_discoveredPins = new List<string>();
 		private readonly List<string> gs_pinErrors = new List<string>();
 		private Label gs_pinStatusLabel;
 		private VisualElement gs_pinListContainer;
+		private VisualElement gs_pinErrorContainer;
+		private Button gs_writePinsButton;
 
 		// ══════════════════════════════════════════════════════════════════
 		//  CLIENT SECRET STATE
@@ -135,7 +139,10 @@ namespace FishMMO.Shared
 					? Constants.Configuration.GameHost : gs_gameHost;
 
 				gs_pinApiHostEnabled = !IsSentinelOrEmpty(apiUrl);
-				gs_pinGameHostEnabled = !IsSentinelOrEmpty(gameHost);
+				// Do not auto-enable Game Host for pin fetch: many deploys have no HTTPS on that name.
+				// Operators can still tick Game Host manually if TCP:443 is available.
+				if (IsSentinelOrEmpty(gameHost))
+					gs_pinGameHostEnabled = false;
 			}
 			catch { /* use defaults */ }
 
@@ -374,9 +381,10 @@ namespace FishMMO.Shared
 
 			// Info
 			Label info = new Label(
-				"Fetch TLS certificate SPKI SHA-256 pins from your live hosts.\n" +
-				"Always configure at least two pins (active + backup).\n" +
-				"Pins are IL-embedded at compile time — no StreamingAssets file.");
+				"Fetch TLS certificate SPKI SHA-256 pins from hosts that speak HTTPS on port 443.\n" +
+				"Game/QUIC-only hostnames (loginserver/world/scene) usually fail — use API/IPFetch/play.\n" +
+				"After Fetch succeeds, click Write Pins to File (saves CertificatePins.generated.cs).\n" +
+				"Prefer at least two pins (active + backup) for release builds.");
 			info.style.fontSize = 10;
 			info.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
 			info.style.whiteSpace = WhiteSpace.Normal;
@@ -414,34 +422,22 @@ namespace FishMMO.Shared
 			RefreshPinListDisplay();
 
 			// Status
-			gs_pinStatusLabel = new Label("");
+			gs_pinStatusLabel = new Label(
+				"Step 1: Fetch Pins (HTTPS :443 hosts only). Step 2: Write Pins to File.");
 			gs_pinStatusLabel.style.marginTop = 4;
 			gs_pinStatusLabel.style.fontSize = 11;
 			gs_pinStatusLabel.style.whiteSpace = WhiteSpace.Normal;
+			gs_pinStatusLabel.style.color = new Color(0.65f, 0.65f, 0.65f, 1f);
 			section.Add(gs_pinStatusLabel);
 
-			// Errors
-			if (gs_pinErrors.Count > 0)
-			{
-				Label errHeader = new Label("Errors:");
-				errHeader.style.marginTop = 6;
-				errHeader.style.fontSize = 11;
-				errHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-				errHeader.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
-				section.Add(errHeader);
+			// Errors (updated after each fetch)
+			gs_pinErrorContainer = new VisualElement();
+			gs_pinErrorContainer.style.marginTop = 4;
+			section.Add(gs_pinErrorContainer);
+			RefreshPinErrorDisplay();
 
-				foreach (var err in gs_pinErrors)
-				{
-					Label errLabel = new Label(err);
-					errLabel.style.fontSize = 10;
-					errLabel.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
-					errLabel.style.whiteSpace = WhiteSpace.Normal;
-					errLabel.style.marginLeft = 8;
-					section.Add(errLabel);
-				}
-			}
-
-			// Buttons
+			// Buttons — Write is always visible (was only created when pins already
+			// existed at panel build time, so after Fetch the button never appeared).
 			VisualElement buttonRow = new VisualElement();
 			buttonRow.style.flexDirection = FlexDirection.Row;
 			buttonRow.style.marginTop = 8;
@@ -458,20 +454,21 @@ namespace FishMMO.Shared
 			fetchButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(fetchButton);
 
-			if (gs_discoveredPins.Count > 0)
-			{
-				Button writeButton = new Button(() => WriteCertificatePins());
-				writeButton.text = "Write Pins to File";
-				writeButton.style.height = 28;
-				writeButton.style.marginRight = 4;
-				writeButton.style.backgroundColor = new Color(0.24f, 0.43f, 0.24f, 1f);
-				writeButton.style.color = new Color(0.75f, 0.95f, 0.75f, 1f);
-				writeButton.style.borderTopLeftRadius = 4;
-				writeButton.style.borderTopRightRadius = 4;
-				writeButton.style.borderBottomLeftRadius = 4;
-				writeButton.style.borderBottomRightRadius = 4;
-				buttonRow.Add(writeButton);
-			}
+			gs_writePinsButton = new Button(() => WriteCertificatePins());
+			gs_writePinsButton.text = "Write Pins to File";
+			gs_writePinsButton.style.height = 28;
+			gs_writePinsButton.style.marginRight = 4;
+			gs_writePinsButton.style.backgroundColor = new Color(0.24f, 0.43f, 0.24f, 1f);
+			gs_writePinsButton.style.color = new Color(0.75f, 0.95f, 0.75f, 1f);
+			gs_writePinsButton.style.borderTopLeftRadius = 4;
+			gs_writePinsButton.style.borderTopRightRadius = 4;
+			gs_writePinsButton.style.borderBottomLeftRadius = 4;
+			gs_writePinsButton.style.borderBottomRightRadius = 4;
+			gs_writePinsButton.SetEnabled(gs_discoveredPins.Count > 0);
+			gs_writePinsButton.tooltip = gs_discoveredPins.Count > 0
+				? "Writes CertificatePins.generated.cs and refreshes assets."
+				: "Fetch at least one pin first (or load existing non-sentinel pins).";
+			buttonRow.Add(gs_writePinsButton);
 
 			section.Add(buttonRow);
 			inspectorContent.Add(section);
@@ -484,10 +481,14 @@ namespace FishMMO.Shared
 
 			if (gs_discoveredPins.Count == 0)
 			{
-				Label emptyLabel = new Label("No pins loaded. Fetch from live hosts or load existing.");
+				Label emptyLabel = new Label(
+					"No pins loaded. Enable API Host and/or Custom Host (HTTPS :443), " +
+					"click Fetch Pins, then Write Pins to File.");
 				emptyLabel.style.fontSize = 10;
 				emptyLabel.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
+				emptyLabel.style.whiteSpace = WhiteSpace.Normal;
 				gs_pinListContainer.Add(emptyLabel);
+				UpdateWritePinsButtonState();
 				return;
 			}
 
@@ -506,13 +507,52 @@ namespace FishMMO.Shared
 				pinLabel.AddToClassList("constants-value"); // monospace-ish
 				gs_pinListContainer.Add(pinLabel);
 			}
+
+			UpdateWritePinsButtonState();
+		}
+
+		private void RefreshPinErrorDisplay()
+		{
+			if (gs_pinErrorContainer == null) return;
+			gs_pinErrorContainer.Clear();
+
+			if (gs_pinErrors.Count == 0) return;
+
+			Label errHeader = new Label("Fetch errors:");
+			errHeader.style.marginTop = 2;
+			errHeader.style.fontSize = 11;
+			errHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
+			errHeader.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
+			gs_pinErrorContainer.Add(errHeader);
+
+			foreach (var err in gs_pinErrors)
+			{
+				Label errLabel = new Label(err);
+				errLabel.style.fontSize = 10;
+				errLabel.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
+				errLabel.style.whiteSpace = WhiteSpace.Normal;
+				errLabel.style.marginLeft = 8;
+				gs_pinErrorContainer.Add(errLabel);
+			}
+		}
+
+		private void UpdateWritePinsButtonState()
+		{
+			if (gs_writePinsButton == null) return;
+			bool canWrite = gs_discoveredPins.Count > 0;
+			gs_writePinsButton.SetEnabled(canWrite);
+			gs_writePinsButton.tooltip = canWrite
+				? "Writes CertificatePins.generated.cs and refreshes assets."
+				: "Fetch at least one pin first (or load existing non-sentinel pins).";
 		}
 
 		private void FetchCertificatePins()
 		{
 			gs_discoveredPins.Clear();
 			gs_pinErrors.Clear();
-			SetPinStatus("Fetching...", new Color(0.7f, 0.7f, 0.3f, 1f));
+			SetPinStatus("Fetching HTTPS SPKI pins…", new Color(0.7f, 0.7f, 0.3f, 1f));
+			RefreshPinErrorDisplay();
+			UpdateWritePinsButtonState();
 
 			string apiHost = string.IsNullOrEmpty(gs_apiHost)
 				? Constants.Configuration.APIHost : gs_apiHost;
@@ -529,8 +569,10 @@ namespace FishMMO.Shared
 
 			if (hostsToFetch.Count == 0)
 			{
-				SetPinStatus("No hosts selected.", new Color(0.95f, 0.6f, 0.3f, 1f));
+				SetPinStatus("No hosts selected. Enable API Host and/or enter a Custom Host with HTTPS :443.",
+					new Color(0.95f, 0.6f, 0.3f, 1f));
 				RefreshPinListDisplay();
+				RefreshPinErrorDisplay();
 				return;
 			}
 
@@ -555,17 +597,23 @@ namespace FishMMO.Shared
 
 			if (gs_discoveredPins.Count > 0)
 			{
-				SetPinStatus($"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostsToFetch.Count} host(s).",
-					new Color(0.4f, 0.85f, 0.4f, 1f));
+				string msg = $"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostsToFetch.Count} host(s). " +
+					"Click Write Pins to File to save CertificatePins.generated.cs.";
+				if (gs_pinErrors.Count > 0)
+					msg += $" ({gs_pinErrors.Count} host error(s) — see below.)";
+				SetPinStatus(msg, new Color(0.4f, 0.85f, 0.4f, 1f));
 			}
 			else
 			{
-				SetPinStatus("No pins fetched. Check errors.", new Color(0.95f, 0.4f, 0.4f, 1f));
+				SetPinStatus(
+					"No pins fetched. Hosts need HTTPS on TCP :443 (game QUIC-only hosts will fail). " +
+					"Use API Host / Custom Host (e.g. api.eqbrowser.com, ipfetch.eqbrowser.com).",
+					new Color(0.95f, 0.4f, 0.4f, 1f));
 			}
 
 			RefreshPinListDisplay();
-			// Rebuild section to show errors
-			// (errors are shown inline — the section already has error labels)
+			RefreshPinErrorDisplay();
+			UpdateWritePinsButtonState();
 		}
 
 		private void SetPinStatus(string message, Color color)
