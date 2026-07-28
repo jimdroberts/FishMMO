@@ -43,12 +43,15 @@ namespace FishMMO.Shared
 		// ══════════════════════════════════════════════════════════════════
 
 		private bool gs_pinApiHostEnabled = true;
-		private bool gs_pinGameHostEnabled = true;
+		// Game hosts often expose only UDP/QUIC — default pin-fetch off for Game Host.
+		private bool gs_pinGameHostEnabled = false;
 		private string gs_pinCustomHost = "";
 		private readonly List<string> gs_discoveredPins = new List<string>();
 		private readonly List<string> gs_pinErrors = new List<string>();
 		private Label gs_pinStatusLabel;
 		private VisualElement gs_pinListContainer;
+		private VisualElement gs_pinErrorContainer;
+		private Button gs_writePinsButton;
 
 		// ══════════════════════════════════════════════════════════════════
 		//  CLIENT SECRET STATE
@@ -58,6 +61,24 @@ namespace FishMMO.Shared
 		private Label gs_secretStatusLabel;
 
 		// ══════════════════════════════════════════════════════════════════
+		//  DRAFT PERSISTENCE (survives panel rebuild + domain reload)
+		// ══════════════════════════════════════════════════════════════════
+
+		// Unsaved typed/fetched values used to be wiped because ShowGameSettingsInspector
+		// always reloaded from disk (sentinels → empty fields) and AssetDatabase.Refresh
+		// after Write recompiles the domain (instance fields reset).
+		private const string PrefApiHost = "FishMMO.GameSettings.ApiHost";
+		private const string PrefGameHost = "FishMMO.GameSettings.GameHost";
+		private const string PrefPlayHost = "FishMMO.GameSettings.PlayHost";
+		private const string PrefRootDomain = "FishMMO.GameSettings.RootDomain";
+		private const string PrefPins = "FishMMO.GameSettings.Pins";
+		private const string PrefSecret = "FishMMO.GameSettings.Secret";
+		private const string PrefDirty = "FishMMO.GameSettings.Dirty";
+		private const string PrefPinApi = "FishMMO.GameSettings.PinApiEnabled";
+		private const string PrefPinGame = "FishMMO.GameSettings.PinGameEnabled";
+		private const string PrefPinCustom = "FishMMO.GameSettings.PinCustomHost";
+
+		// ══════════════════════════════════════════════════════════════════
 		//  ENTRY POINT
 		// ══════════════════════════════════════════════════════════════════
 
@@ -65,7 +86,11 @@ namespace FishMMO.Shared
 		/// Shows the Game Settings panel with Host Configuration, Certificate Pins,
 		/// Client Secret, and Constants sections.
 		/// </summary>
-		private void ShowGameSettingsInspector()
+		/// <param name="reloadFromDisk">
+		/// When true (Reload button only), discard draft and load generated files.
+		/// When false, prefer unsaved draft (EditorPrefs) so fields do not wipe.
+		/// </param>
+		private void ShowGameSettingsInspector(bool reloadFromDisk = false)
 		{
 			ClearInspector();
 
@@ -74,21 +99,34 @@ namespace FishMMO.Shared
 				inspectorHeader.text = "Game Settings";
 			}
 
-			LoadGameSettingsState();
+			LoadGameSettingsState(reloadFromDisk);
 
 			BuildHostConfigSection();
 			BuildCertificatePinsSection();
 			BuildClientSecretSection();
 			BuildConstantsSection();
 
-			SetStatus("Game Settings");
+			SetStatus(reloadFromDisk ? "Game Settings (reloaded from disk)" : "Game Settings");
 		}
 
 		/// <summary>
-		/// Loads current state from the generated files into the UI fields.
+		/// Loads UI state from disk and/or the EditorPrefs draft.
 		/// </summary>
-		private void LoadGameSettingsState()
+		/// <param name="forceFromFile">
+		/// True = force generated-file values (explicit Reload). Clears dirty draft.
+		/// False = if a dirty draft exists, restore it; otherwise load files.
+		/// </param>
+		private void LoadGameSettingsState(bool forceFromFile = false)
 		{
+			if (!forceFromFile && EditorPrefs.GetBool(PrefDirty, false))
+			{
+				LoadDraftFromPrefs();
+				return;
+			}
+
+			if (forceFromFile)
+				ClearDraftPrefs();
+
 			// ── Host Config ──────────────────────────────────────────
 			string hostPath = GetHostConfigFilePath();
 			if (File.Exists(hostPath))
@@ -126,16 +164,15 @@ namespace FishMMO.Shared
 				catch { /* leave empty on error */ }
 			}
 
-			// Set API/Game host values from generated host config
+			// Pin host toggles: enable API when we have a real host; leave Game Host
+			// off by default (QUIC-only game names often have no HTTPS :443).
 			try
 			{
 				string apiUrl = string.IsNullOrEmpty(gs_apiHost)
 					? Constants.Configuration.APIHost : gs_apiHost;
-				string gameHost = string.IsNullOrEmpty(gs_gameHost)
-					? Constants.Configuration.GameHost : gs_gameHost;
-
 				gs_pinApiHostEnabled = !IsSentinelOrEmpty(apiUrl);
-				gs_pinGameHostEnabled = !IsSentinelOrEmpty(gameHost);
+				if (IsSentinelOrEmpty(gs_gameHost) && IsSentinelOrEmpty(Constants.Configuration.GameHost))
+					gs_pinGameHostEnabled = false;
 			}
 			catch { /* use defaults */ }
 
@@ -154,6 +191,67 @@ namespace FishMMO.Shared
 				}
 				catch { gs_secretInput = ""; }
 			}
+
+			// Keep prefs in sync with clean disk load so domain reload still works.
+			SaveDraftToPrefs(dirty: false);
+		}
+
+		private void MarkGameSettingsDirty()
+		{
+			SaveDraftToPrefs(dirty: true);
+		}
+
+		private void SaveDraftToPrefs(bool dirty)
+		{
+			EditorPrefs.SetBool(PrefDirty, dirty);
+			EditorPrefs.SetString(PrefApiHost, gs_apiHost ?? "");
+			EditorPrefs.SetString(PrefGameHost, gs_gameHost ?? "");
+			EditorPrefs.SetString(PrefPlayHost, gs_playHost ?? "");
+			EditorPrefs.SetString(PrefRootDomain, gs_rootDomain ?? "");
+			EditorPrefs.SetString(PrefPins, string.Join("\n", gs_discoveredPins));
+			EditorPrefs.SetString(PrefSecret, gs_secretInput ?? "");
+			EditorPrefs.SetBool(PrefPinApi, gs_pinApiHostEnabled);
+			EditorPrefs.SetBool(PrefPinGame, gs_pinGameHostEnabled);
+			EditorPrefs.SetString(PrefPinCustom, gs_pinCustomHost ?? "");
+		}
+
+		private void LoadDraftFromPrefs()
+		{
+			gs_apiHost = EditorPrefs.GetString(PrefApiHost, gs_apiHost ?? "");
+			gs_gameHost = EditorPrefs.GetString(PrefGameHost, gs_gameHost ?? "");
+			gs_playHost = EditorPrefs.GetString(PrefPlayHost, gs_playHost ?? "");
+			gs_rootDomain = EditorPrefs.GetString(PrefRootDomain, gs_rootDomain ?? "");
+			gs_secretInput = EditorPrefs.GetString(PrefSecret, gs_secretInput ?? "");
+			gs_pinApiHostEnabled = EditorPrefs.GetBool(PrefPinApi, gs_pinApiHostEnabled);
+			gs_pinGameHostEnabled = EditorPrefs.GetBool(PrefPinGame, gs_pinGameHostEnabled);
+			gs_pinCustomHost = EditorPrefs.GetString(PrefPinCustom, gs_pinCustomHost ?? "");
+
+			gs_discoveredPins.Clear();
+			string pinsBlob = EditorPrefs.GetString(PrefPins, "");
+			if (!string.IsNullOrEmpty(pinsBlob))
+			{
+				foreach (string line in pinsBlob.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+				{
+					string p = line.Trim();
+					if (!string.IsNullOrEmpty(p) && !p.Contains(sentinelMarker))
+						gs_discoveredPins.Add(p);
+				}
+			}
+			gs_pinErrors.Clear();
+		}
+
+		private static void ClearDraftPrefs()
+		{
+			EditorPrefs.DeleteKey(PrefDirty);
+			EditorPrefs.DeleteKey(PrefApiHost);
+			EditorPrefs.DeleteKey(PrefGameHost);
+			EditorPrefs.DeleteKey(PrefPlayHost);
+			EditorPrefs.DeleteKey(PrefRootDomain);
+			EditorPrefs.DeleteKey(PrefPins);
+			EditorPrefs.DeleteKey(PrefSecret);
+			EditorPrefs.DeleteKey(PrefPinApi);
+			EditorPrefs.DeleteKey(PrefPinGame);
+			EditorPrefs.DeleteKey(PrefPinCustom);
 		}
 
 		// ══════════════════════════════════════════════════════════════════
@@ -178,28 +276,44 @@ namespace FishMMO.Shared
 			// API Host
 			TextField apiField = new TextField("API Host (e.g. https://api.fishmmo.com/)");
 			apiField.value = gs_apiHost;
-			apiField.RegisterValueChangedCallback(evt => gs_apiHost = evt.newValue ?? "");
+			apiField.RegisterValueChangedCallback(evt =>
+			{
+				gs_apiHost = evt.newValue ?? "";
+				MarkGameSettingsDirty();
+			});
 			apiField.style.marginBottom = 4;
 			section.Add(apiField);
 
 			// Game Host
 			TextField gameField = new TextField("Game Host (e.g. game.fishmmo.com)");
 			gameField.value = gs_gameHost;
-			gameField.RegisterValueChangedCallback(evt => gs_gameHost = evt.newValue ?? "");
+			gameField.RegisterValueChangedCallback(evt =>
+			{
+				gs_gameHost = evt.newValue ?? "";
+				MarkGameSettingsDirty();
+			});
 			gameField.style.marginBottom = 4;
 			section.Add(gameField);
 
 			// Play Host
 			TextField playField = new TextField("Play Host — WebGL client (e.g. play.fishmmo.com)");
 			playField.value = gs_playHost;
-			playField.RegisterValueChangedCallback(evt => gs_playHost = evt.newValue ?? "");
+			playField.RegisterValueChangedCallback(evt =>
+			{
+				gs_playHost = evt.newValue ?? "";
+				MarkGameSettingsDirty();
+			});
 			playField.style.marginBottom = 4;
 			section.Add(playField);
 
 			// Root Domain
 			TextField rootField = new TextField("Root Domain (e.g. fishmmo.com)");
 			rootField.value = gs_rootDomain;
-			rootField.RegisterValueChangedCallback(evt => gs_rootDomain = evt.newValue ?? "");
+			rootField.RegisterValueChangedCallback(evt =>
+			{
+				gs_rootDomain = evt.newValue ?? "";
+				MarkGameSettingsDirty();
+			});
 			rootField.style.marginBottom = 8;
 			section.Add(rootField);
 
@@ -243,18 +357,25 @@ namespace FishMMO.Shared
 			writeButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(writeButton);
 
-			Button loadButton = new Button(() =>
-			{
-				LoadGameSettingsState();
-				ShowGameSettingsInspector();
-			});
+			Button loadButton = new Button(() => ShowGameSettingsInspector(reloadFromDisk: true));
 			loadButton.text = "Reload from File";
+			loadButton.tooltip = "Discard unsaved draft and reload HostConfig / pins / secret from disk.";
 			loadButton.style.height = 28;
 			loadButton.style.borderTopLeftRadius = 4;
 			loadButton.style.borderTopRightRadius = 4;
 			loadButton.style.borderBottomLeftRadius = 4;
 			loadButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(loadButton);
+
+			if (EditorPrefs.GetBool(PrefDirty, false))
+			{
+				Label dirtyHint = new Label("Unsaved draft (kept across panel rebuild / script recompile). Write to disk when ready.");
+				dirtyHint.style.fontSize = 10;
+				dirtyHint.style.color = new Color(0.95f, 0.75f, 0.35f, 1f);
+				dirtyHint.style.whiteSpace = WhiteSpace.Normal;
+				dirtyHint.style.marginTop = 6;
+				section.Add(dirtyHint);
+			}
 
 			section.Add(buttonRow);
 			inspectorContent.Add(section);
@@ -351,6 +472,8 @@ namespace FishMMO.Shared
 				sb.AppendLine("}");
 
 				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+				// Persist draft before Refresh — domain reload drops instance fields.
+				SaveDraftToPrefs(dirty: false);
 				AssetDatabase.Refresh();
 
 				gs_hostStatusLabel.text = "Wrote host configuration to HostConfig.generated.cs";
@@ -374,9 +497,9 @@ namespace FishMMO.Shared
 
 			// Info
 			Label info = new Label(
-				"Fetch TLS certificate SPKI SHA-256 pins from your live hosts.\n" +
-				"Always configure at least two pins (active + backup).\n" +
-				"Pins are IL-embedded at compile time — no StreamingAssets file.");
+				"Fetch TLS SPKI pins from HTTPS :443 hosts, then Write Pins to File.\n" +
+				"Fetched/typed drafts are kept if the panel rebuilds or scripts recompile.\n" +
+				"Game/QUIC-only hosts usually fail pin fetch — use API / Custom Host.");
 			info.style.fontSize = 10;
 			info.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
 			info.style.whiteSpace = WhiteSpace.Normal;
@@ -391,19 +514,31 @@ namespace FishMMO.Shared
 
 			Toggle apiToggle = new Toggle("API Host:  " + ExtractHost(apiHost));
 			apiToggle.value = gs_pinApiHostEnabled;
-			apiToggle.RegisterValueChangedCallback(evt => gs_pinApiHostEnabled = evt.newValue);
+			apiToggle.RegisterValueChangedCallback(evt =>
+			{
+				gs_pinApiHostEnabled = evt.newValue;
+				MarkGameSettingsDirty();
+			});
 			apiToggle.style.marginBottom = 2;
 			section.Add(apiToggle);
 
 			Toggle gameToggle = new Toggle("Game Host: " + gameHost);
 			gameToggle.value = gs_pinGameHostEnabled;
-			gameToggle.RegisterValueChangedCallback(evt => gs_pinGameHostEnabled = evt.newValue);
+			gameToggle.RegisterValueChangedCallback(evt =>
+			{
+				gs_pinGameHostEnabled = evt.newValue;
+				MarkGameSettingsDirty();
+			});
 			gameToggle.style.marginBottom = 4;
 			section.Add(gameToggle);
 
 			TextField customField = new TextField("Custom Host:");
 			customField.value = gs_pinCustomHost;
-			customField.RegisterValueChangedCallback(evt => gs_pinCustomHost = evt.newValue ?? "");
+			customField.RegisterValueChangedCallback(evt =>
+			{
+				gs_pinCustomHost = evt.newValue ?? "";
+				MarkGameSettingsDirty();
+			});
 			customField.style.marginBottom = 8;
 			section.Add(customField);
 
@@ -414,34 +549,20 @@ namespace FishMMO.Shared
 			RefreshPinListDisplay();
 
 			// Status
-			gs_pinStatusLabel = new Label("");
+			gs_pinStatusLabel = new Label(
+				"Step 1: Fetch Pins. Step 2: Write Pins to File (saves CertificatePins.generated.cs).");
 			gs_pinStatusLabel.style.marginTop = 4;
 			gs_pinStatusLabel.style.fontSize = 11;
 			gs_pinStatusLabel.style.whiteSpace = WhiteSpace.Normal;
+			gs_pinStatusLabel.style.color = new Color(0.65f, 0.65f, 0.65f, 1f);
 			section.Add(gs_pinStatusLabel);
 
-			// Errors
-			if (gs_pinErrors.Count > 0)
-			{
-				Label errHeader = new Label("Errors:");
-				errHeader.style.marginTop = 6;
-				errHeader.style.fontSize = 11;
-				errHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
-				errHeader.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
-				section.Add(errHeader);
+			gs_pinErrorContainer = new VisualElement();
+			gs_pinErrorContainer.style.marginTop = 4;
+			section.Add(gs_pinErrorContainer);
+			RefreshPinErrorDisplay();
 
-				foreach (var err in gs_pinErrors)
-				{
-					Label errLabel = new Label(err);
-					errLabel.style.fontSize = 10;
-					errLabel.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
-					errLabel.style.whiteSpace = WhiteSpace.Normal;
-					errLabel.style.marginLeft = 8;
-					section.Add(errLabel);
-				}
-			}
-
-			// Buttons
+			// Write always visible (was missing after Fetch because it was only created at build time)
 			VisualElement buttonRow = new VisualElement();
 			buttonRow.style.flexDirection = FlexDirection.Row;
 			buttonRow.style.marginTop = 8;
@@ -458,20 +579,18 @@ namespace FishMMO.Shared
 			fetchButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(fetchButton);
 
-			if (gs_discoveredPins.Count > 0)
-			{
-				Button writeButton = new Button(() => WriteCertificatePins());
-				writeButton.text = "Write Pins to File";
-				writeButton.style.height = 28;
-				writeButton.style.marginRight = 4;
-				writeButton.style.backgroundColor = new Color(0.24f, 0.43f, 0.24f, 1f);
-				writeButton.style.color = new Color(0.75f, 0.95f, 0.75f, 1f);
-				writeButton.style.borderTopLeftRadius = 4;
-				writeButton.style.borderTopRightRadius = 4;
-				writeButton.style.borderBottomLeftRadius = 4;
-				writeButton.style.borderBottomRightRadius = 4;
-				buttonRow.Add(writeButton);
-			}
+			gs_writePinsButton = new Button(() => WriteCertificatePins());
+			gs_writePinsButton.text = "Write Pins to File";
+			gs_writePinsButton.style.height = 28;
+			gs_writePinsButton.style.marginRight = 4;
+			gs_writePinsButton.style.backgroundColor = new Color(0.24f, 0.43f, 0.24f, 1f);
+			gs_writePinsButton.style.color = new Color(0.75f, 0.95f, 0.75f, 1f);
+			gs_writePinsButton.style.borderTopLeftRadius = 4;
+			gs_writePinsButton.style.borderTopRightRadius = 4;
+			gs_writePinsButton.style.borderBottomLeftRadius = 4;
+			gs_writePinsButton.style.borderBottomRightRadius = 4;
+			gs_writePinsButton.SetEnabled(gs_discoveredPins.Count > 0);
+			buttonRow.Add(gs_writePinsButton);
 
 			section.Add(buttonRow);
 			inspectorContent.Add(section);
@@ -484,10 +603,13 @@ namespace FishMMO.Shared
 
 			if (gs_discoveredPins.Count == 0)
 			{
-				Label emptyLabel = new Label("No pins loaded. Fetch from live hosts or load existing.");
+				Label emptyLabel = new Label(
+					"No pins loaded. Fetch from HTTPS :443 hosts, then Write Pins to File.");
 				emptyLabel.style.fontSize = 10;
 				emptyLabel.style.color = new Color(0.5f, 0.5f, 0.5f, 1f);
+				emptyLabel.style.whiteSpace = WhiteSpace.Normal;
 				gs_pinListContainer.Add(emptyLabel);
+				UpdateWritePinsButtonState();
 				return;
 			}
 
@@ -506,13 +628,47 @@ namespace FishMMO.Shared
 				pinLabel.AddToClassList("constants-value"); // monospace-ish
 				gs_pinListContainer.Add(pinLabel);
 			}
+
+			UpdateWritePinsButtonState();
+		}
+
+		private void RefreshPinErrorDisplay()
+		{
+			if (gs_pinErrorContainer == null) return;
+			gs_pinErrorContainer.Clear();
+			if (gs_pinErrors.Count == 0) return;
+
+			Label errHeader = new Label("Fetch errors:");
+			errHeader.style.marginTop = 2;
+			errHeader.style.fontSize = 11;
+			errHeader.style.unityFontStyleAndWeight = FontStyle.Bold;
+			errHeader.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
+			gs_pinErrorContainer.Add(errHeader);
+
+			foreach (var err in gs_pinErrors)
+			{
+				Label errLabel = new Label(err);
+				errLabel.style.fontSize = 10;
+				errLabel.style.color = new Color(0.95f, 0.6f, 0.3f, 1f);
+				errLabel.style.whiteSpace = WhiteSpace.Normal;
+				errLabel.style.marginLeft = 8;
+				gs_pinErrorContainer.Add(errLabel);
+			}
+		}
+
+		private void UpdateWritePinsButtonState()
+		{
+			if (gs_writePinsButton == null) return;
+			gs_writePinsButton.SetEnabled(gs_discoveredPins.Count > 0);
 		}
 
 		private void FetchCertificatePins()
 		{
 			gs_discoveredPins.Clear();
 			gs_pinErrors.Clear();
-			SetPinStatus("Fetching...", new Color(0.7f, 0.7f, 0.3f, 1f));
+			SetPinStatus("Fetching HTTPS SPKI pins…", new Color(0.7f, 0.7f, 0.3f, 1f));
+			RefreshPinErrorDisplay();
+			UpdateWritePinsButtonState();
 
 			string apiHost = string.IsNullOrEmpty(gs_apiHost)
 				? Constants.Configuration.APIHost : gs_apiHost;
@@ -529,8 +685,10 @@ namespace FishMMO.Shared
 
 			if (hostsToFetch.Count == 0)
 			{
-				SetPinStatus("No hosts selected.", new Color(0.95f, 0.6f, 0.3f, 1f));
+				SetPinStatus("No hosts selected. Enable API Host and/or Custom Host (HTTPS :443).",
+					new Color(0.95f, 0.6f, 0.3f, 1f));
 				RefreshPinListDisplay();
+				RefreshPinErrorDisplay();
 				return;
 			}
 
@@ -555,17 +713,22 @@ namespace FishMMO.Shared
 
 			if (gs_discoveredPins.Count > 0)
 			{
-				SetPinStatus($"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostsToFetch.Count} host(s).",
-					new Color(0.4f, 0.85f, 0.4f, 1f));
+				string msg = $"Fetched {gs_discoveredPins.Count} unique pin(s). Click Write Pins to File.";
+				if (gs_pinErrors.Count > 0)
+					msg += $" ({gs_pinErrors.Count} host error(s) below.)";
+				SetPinStatus(msg, new Color(0.4f, 0.85f, 0.4f, 1f));
+				MarkGameSettingsDirty();
 			}
 			else
 			{
-				SetPinStatus("No pins fetched. Check errors.", new Color(0.95f, 0.4f, 0.4f, 1f));
+				SetPinStatus(
+					"No pins fetched. Hosts need HTTPS on TCP :443 (game QUIC-only names fail).",
+					new Color(0.95f, 0.4f, 0.4f, 1f));
 			}
 
 			RefreshPinListDisplay();
-			// Rebuild section to show errors
-			// (errors are shown inline — the section already has error labels)
+			RefreshPinErrorDisplay();
+			UpdateWritePinsButtonState();
 		}
 
 		private void SetPinStatus(string message, Color color)
@@ -690,6 +853,8 @@ namespace FishMMO.Shared
 				sb.AppendLine("}");
 
 				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+				// Draft survives domain reload after Refresh/recompile.
+				SaveDraftToPrefs(dirty: false);
 				AssetDatabase.Refresh();
 
 				SetPinStatus($"Wrote {gs_discoveredPins.Count} pin(s) to CertificatePins.generated.cs",
@@ -725,7 +890,11 @@ namespace FishMMO.Shared
 			// Secret input
 			TextField secretField = new TextField("Gate Secret (base64)");
 			secretField.value = gs_secretInput;
-			secretField.RegisterValueChangedCallback(evt => gs_secretInput = evt.newValue ?? "");
+			secretField.RegisterValueChangedCallback(evt =>
+			{
+				gs_secretInput = evt.newValue ?? "";
+				MarkGameSettingsDirty();
+			});
 			secretField.style.marginBottom = 4;
 			section.Add(secretField);
 
@@ -766,10 +935,10 @@ namespace FishMMO.Shared
 
 			Button loadButton = new Button(() =>
 			{
-				LoadGameSettingsState();
-				ShowGameSettingsInspector();
+				ShowGameSettingsInspector(reloadFromDisk: true);
 			});
 			loadButton.text = "Reload from File";
+			loadButton.tooltip = "Discard unsaved draft and reload from disk.";
 			loadButton.style.height = 28;
 			loadButton.style.borderTopLeftRadius = 4;
 			loadButton.style.borderTopRightRadius = 4;
@@ -811,6 +980,7 @@ namespace FishMMO.Shared
 				sb.AppendLine("}");
 
 				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+				SaveDraftToPrefs(dirty: false);
 				AssetDatabase.Refresh();
 
 				gs_secretStatusLabel.text = "Wrote secret to ClientApiSecret.generated.cs";
