@@ -34,7 +34,7 @@ namespace FishNet.Transporting.WebTransport.Client
 
 		/// <summary>
 		/// Full URL last passed to <see cref="WebTransportJSLib.WTConnect"/>
-		/// (e.g. https://loginserver.eqbrowser.com:7770).
+		/// (e.g. https://loginserver.fishmmo.com:7770).
 		/// </summary>
 		private string webglConnectUrl
 		{

@@ -607,7 +607,7 @@ namespace FishMMO.Shared
 			{
 				SetPinStatus(
 					"No pins fetched. Hosts need HTTPS on TCP :443 (game QUIC-only hosts will fail). " +
-					"Use API Host / Custom Host (e.g. api.eqbrowser.com, ipfetch.eqbrowser.com).",
+					"Use API Host / Custom Host (e.g. api.fishmmo.com, ipfetch.fishmmo.com).",
 					new Color(0.95f, 0.4f, 0.4f, 1f));
 			}
 

@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 	/// Client builds with an empty or loopback RuntimeBaseUrl do not register a rewrite:
 	/// Addressables.RuntimePath already resolves correctly (including WebGL, where
 	/// StreamingAssets is an absolute http(s) URL derived from the page origin, e.g.
-	/// https://eqbrowser.com/test/StreamingAssets/aa). Rewriting those IDs to a
+	/// https://fishmmo.com/test/StreamingAssets/aa). Rewriting those IDs to a
 	/// hardcoded host (or prefixing file://) breaks loads when the game is served from
 	/// a different domain or subpath.
 	/// </para>
@@ -148,7 +148,7 @@ namespace FishMMO.Shared
 			// Client: a real CDN / public host rewrites remote http(s) catalog IDs.
 			// Empty or loopback RuntimeBaseUrl means "use local StreamingAssets" — do not
 			// register InternalIdTransformFunc. On WebGL, RuntimePath is already an absolute
-			// URL under the page origin (e.g. https://eqbrowser.com/test/StreamingAssets/aa);
+			// URL under the page origin (e.g. https://fishmmo.com/test/StreamingAssets/aa);
 			// rewriting those IDs to a hardcoded host or file:// breaks loads.
 			if (!string.IsNullOrEmpty(RuntimeBaseUrl) && !IsLoopbackPlaceholder(RuntimeBaseUrl))
 			{
