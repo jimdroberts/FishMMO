@@ -86,6 +86,7 @@ namespace FishMMO.Server.Implementation
 			ServerEvents.OnWorldServerInitialized += () => Log.Debug("Server", "WorldServer initialized.");
 			ServerEvents.OnSceneServerInitialized += () => Log.Debug("Server", "SceneServer initialized.");
 
+			Configuration.SaveDefaultsIfMissing(gameObject.scene.name, "Unknown", Constants.GetWorkingDirectory());
 			string configuredAddress = Configuration.GetString("Address", null);
       		if (!string.IsNullOrWhiteSpace(configuredAddress) && NetHelper.IsLoopbackAddress(configuredAddress))
       			{
