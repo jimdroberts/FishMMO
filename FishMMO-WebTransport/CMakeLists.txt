@@ -108,6 +108,19 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     OpenSSL::Crypto
 )
 
+if(WIN32)
+    # Statically-linked msquic/quictls pulls in Winsock (socket I/O) and
+    # the Windows CryptoAPI/CNG certificate-store functions (cert_capi.c)
+    # that aren't otherwise linked by this target.
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        ws2_32
+        crypt32
+        ncrypt
+        ntdll
+        iphlpapi
+    )
+endif()
+
 # ── Platform-specific settings ────────────────────────────────
 # Output directly to the Unity project's plugin directory so no
 # manual copy step is needed after the build.

@@ -210,6 +210,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 				!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
 				!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 			{
+				Log.Error("CharacterCreateSystem", $"DEBUG services unavailable: registry={(registry == null ? "null" : "ok")} " +
+					$"CharacterService={registry?.TryGet<ICharacterService>(out _)} " +
+					$"FactionService={registry?.TryGet<ICharacterFactionService>(out _)} " +
+					$"AbilityService={registry?.TryGet<ICharacterAbilityService>(out _)} " +
+					$"InventoryService={registry?.TryGet<ICharacterInventoryService>(out _)} " +
+					$"EquipmentService={registry?.TryGet<ICharacterEquipmentService>(out _)} " +
+					$"AttributeService={registry?.TryGet<ICharacterAttributeService>(out _)} " +
+					$"UnitOfWorkService={registry?.TryGet<IUnitOfWorkService>(out _)}");
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
 					Result = CharacterCreateResult.Error,
@@ -317,6 +325,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// --- Dispatch DTO construction + DB work to async ---
 			if (!TryBeginCreateRequest(conn))
 			{
+				Log.Error("CharacterCreateSystem", $"DEBUG TryBeginCreateRequest failed for clientId={conn.ClientId} (duplicate/concurrent request?)");
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
 					Result = CharacterCreateResult.Error,
@@ -334,6 +343,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				inventoryService, equipmentService, attributeService,
 				unitOfWorkService), conn.ClientId))
 			{
+				Log.Error("CharacterCreateSystem", $"DEBUG TryEnqueueAsyncWork failed for clientId={conn.ClientId} (worker queue full?)");
 				EndCreateRequest(conn);
 				Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
 				{
@@ -472,6 +482,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					DatabaseResult<long> createResult = await characterService.CreateCharacterAsync(characterData);
 					if (!createResult.IsSuccess || createResult.Data <= 0)
 					{
+						await Log.Error("CharacterCreateSystem", $"DEBUG CreateCharacterAsync failed: IsSuccess={createResult.IsSuccess} Data={createResult.Data} " +
+							$"ErrorCode={createResult.ErrorCode} ErrorMessage={createResult.ErrorMessage}");
 						CharacterCreateResult clientResult = createResult.ErrorCode switch
 						{
 							DatabaseErrorCodes.AlreadyExists => CharacterCreateResult.CharacterNameTaken,

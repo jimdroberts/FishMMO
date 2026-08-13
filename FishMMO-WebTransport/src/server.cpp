@@ -90,6 +90,24 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
             (unsigned long long)session->stream_mgr->wt_session_id);
     }
 
+    /* ── CRITICAL: fire_connect BEFORE any stream-data replay ──
+     * The C# layer's OnConnect handler creates the FishNet
+     * NetworkConnection object for this client. Any stream data
+     * delivered via on_stream_data before OnConnect fires arrives for
+     * a connection the C# layer doesn't know exists yet, and gets
+     * silently dropped/misinterpreted (observed as FishNet logging
+     * "received an unhandled PacketId of 0" on the receiving side,
+     * and the sender's ServerAuthenticator/ClientHandshake handshake
+     * subsequently timing out even though the bytes were delivered
+     * correctly at the native layer). fire_connect was previously
+     * called at the end of this function, after both the immediate
+     * native-client replay and the deferred-stream replay below —
+     * moved here, immediately after the session is fully wired, so
+     * C# always learns about the connection before any of its data. */
+    WT_LOG_INFO("Client %llu WebTransport session established (path=%s)",
+                (unsigned long long)sconn->id, path ? path : "/");
+    fire_connect(sconn);
+
     /* ── CRITICAL: Native client data replay ──────────────────
      * If this session was created via native protocol detection
      * (first byte != 0x00), the first peer stream's data was
@@ -198,9 +216,9 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
             #define DEFERRED_STACK_MAX 8
             char stack_buf[DEFERRED_STACK_MAX * sizeof(*pending)];
             if ((size_t)pending_count <= DEFERRED_STACK_MAX) {
-                pending = (typeof(pending))stack_buf;
+                pending = (decltype(pending))stack_buf;
             } else {
-                pending = (typeof(pending))malloc(
+                pending = (decltype(pending))malloc(
                     (size_t)pending_count * sizeof(*pending));
             }
 
@@ -288,10 +306,6 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
         }
         #undef DEFERRED_STACK_MAX
     }
-
-    WT_LOG_INFO("Client %llu WebTransport session established (path=%s)",
-                (unsigned long long)sconn->id, path ? path : "/");
-    fire_connect(sconn);
 }
 
 static void on_h3_error(void* ctx, int error_code, const char* message)
@@ -771,6 +785,55 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
              * completes the handshake in that narrow window would be
              * spuriously disconnected. */
             if (atomic_ptr_load(&c->session) != NULL) continue;
+
+            /* ── Last-resort native fallback before giving up ──
+             * A native FishMMO client's first raw bytes can collide with
+             * one of H3's reserved sniff values (0x00 = control stream
+             * type, 0x01 = HEADERS frame type) and get routed into an H3
+             * protocol path that then waits forever for further H3
+             * elements that will never arrive. Critically, BOTH collision
+             * variants set peer_h3_seen = true as soon as the colliding
+             * byte is observed (before any further validation) — the
+             * 0x00 case explicitly, at the same point it classifies the
+             * stream as H3_STREAM_CONTROL — so gating this fallback on
+             * "!peer_h3_seen" misses exactly the cases it needs to catch.
+             * By the time this sweep runs, the H3 handshake has already
+             * timed out and the connection is about to be disconnected
+             * regardless — the only question is whether to try replaying
+             * whatever was buffered as native data first. There's no
+             * meaningful downside to trying: if it's genuinely leftover
+             * bytes from a hung/hostile H3 peer, native replay just fails
+             * harmlessly further up the stack (FishNet logs an unhandled
+             * PacketId and discards it, same as any other malformed
+             * packet). So gate only on handshake_complete (no verified WT
+             * session was ever established for this connection) and
+             * accept any stream — regardless of its current sniffed
+             * stream_type — that still has real buffered data. */
+            {
+                h3_session_t* h3 = c->h3_session;
+                h3_stream_ctx_t* fallback_sctx = NULL;
+                if (h3 && !h3->handshake_complete) {
+                    H3_LOCK(h3);
+                    h3_stream_ctx_t* ds = h3->stream_ctx_list;
+                    while (ds) {
+                        if (ds->quic_stream && ds->recv_offset > 0) {
+                            fallback_sctx = ds;
+                            break;
+                        }
+                        ds = ds->next;
+                    }
+                    H3_UNLOCK(h3);
+                }
+
+                if (fallback_sctx) {
+                    WT_LOG_INFO("Client %llu H3 handshake timed out with no "
+                                "confirmed H3 evidence — falling back to "
+                                "native protocol instead of disconnecting",
+                                (unsigned long long)c->id);
+                    h3_fallback_to_native_protocol(h3, fallback_sctx);
+                    continue;
+                }
+            }
 
             WT_LOG_WARN("Client %llu H3 handshake timed out — disconnecting",
                         (unsigned long long)c->id);

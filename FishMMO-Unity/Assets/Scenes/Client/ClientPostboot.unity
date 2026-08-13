@@ -150,10 +150,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c2edaa6d4e0fd4393eb1def39f4f2f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LoginServerAddresses: 
-  LoginServerCacheTtlSeconds: 300
-  LoginServerRequestTimeoutSeconds: 10
-  WorldPreloadScenes:
+  LoginServerAddresses:
+  loginServerCacheTtlSeconds: 300
+  loginServerRequestTimeoutSeconds: 10
+  worldPreloadScenes:
   - SceneName: ClientWorldGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1

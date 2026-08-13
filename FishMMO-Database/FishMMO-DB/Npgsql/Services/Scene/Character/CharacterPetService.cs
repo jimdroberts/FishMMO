@@ -38,6 +38,23 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterPetService : BaseService<CharacterPetEntity>, ICharacterPetService
 	{
 		/// <summary>
+		/// Encodes each row's variable-length abilities list as a JSON array string
+		/// (e.g. "[1,2,3]" or "[]"). Bulk UNNEST cannot carry a genuinely variable-length
+		/// per-row array as one of several zipped columns: passing a C# jagged int[][] is
+		/// rejected outright by Npgsql (no built-in conversion), and passing a padded
+		/// rectangular int[,] doesn't work either — PostgreSQL's multi-argument UNNEST
+		/// fully flattens a 2D array into scalar rows rather than preserving one
+		/// sub-array per row, so abilities resolves to scalar integer, not integer[].
+		/// Encoding as JSON text keeps this column a plain 1D text[] (fully compatible
+		/// with normal UNNEST zipping), and the SQL below reconstructs the actual
+		/// integer[] per row via jsonb_array_elements_text + array_agg.
+		/// </summary>
+		private static string[] ToJsonArrayStrings(IEnumerable<int[]> jagged)
+		{
+			return jagged.Select(row => "[" + string.Join(",", row) + "]").ToArray();
+		}
+
+		/// <summary>
 		/// Compiled query for checking whether a character exists and is not deleted.
 		/// Returns the character ID if active, otherwise 0.
 		/// </summary>
@@ -300,9 +317,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeUpdates.Select(p => p.CharacterID).ToArray();
 					var templateIdArray = activeUpdates.Select(p => p.TemplateID).ToArray();
 					var versionArray = activeUpdates.Select(p => p.Version).ToArray();
-					var abilitiesArray = activeUpdates
-						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
-						.ToArray();
+					var abilitiesJson = ToJsonArrayStrings(activeUpdates
+						.Select(p => (p.Abilities ?? new List<int>()).ToArray()));
 					var spawnedArray = activeUpdates.Select(p => p.Spawned).ToArray();
 
 					var sql = $@"
@@ -310,7 +326,10 @@ namespace FishMMO.Database.Npgsql.Services
 						SET
 							character_id = u.character_id,
 							template_id = u.template_id,
-							abilities = u.abilities,
+							abilities = COALESCE((
+								SELECT array_agg(elem::integer)
+								FROM jsonb_array_elements_text(u.abilities::jsonb) AS elem
+							), ARRAY[]::integer[]),
 							spawned = u.spawned,
 							deleted = FALSE,
 							time_deleted = NULL,
@@ -320,7 +339,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{1}}::bigint[],
 							{{2}}::integer[],
 							{{3}}::bigint[],
-							{{4}}::integer[][],
+							{{4}}::text[],
 							{{5}}::boolean[]
 						) AS u(id, character_id, template_id, version, abilities, spawned)
 						WHERE t.id = u.id
@@ -330,7 +349,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeUpdates.Count,
-						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilitiesArray, spawnedArray },
+						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray },
 						"One or more pets were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
@@ -340,9 +359,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeInserts.Select(p => p.CharacterID).ToArray();
 					var templateIdArray = activeInserts.Select(p => p.TemplateID).ToArray();
 					var versionArray = activeInserts.Select(p => p.Version).ToArray();
-					var abilitiesArray = activeInserts
-						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
-						.ToArray();
+					var abilitiesJson = ToJsonArrayStrings(activeInserts
+						.Select(p => (p.Abilities ?? new List<int>()).ToArray()));
 					var spawnedArray = activeInserts.Select(p => p.Spawned).ToArray();
 
 					var sql = $@"
@@ -352,7 +370,10 @@ namespace FishMMO.Database.Npgsql.Services
 							u.character_id,
 							u.template_id,
 							u.version,
-							u.abilities,
+							COALESCE((
+								SELECT array_agg(elem::integer)
+								FROM jsonb_array_elements_text(u.abilities::jsonb) AS elem
+							), ARRAY[]::integer[]),
 							u.spawned,
 							{{5}},
 							FALSE,
@@ -361,7 +382,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::integer[][],
+							{{3}}::text[],
 							{{4}}::boolean[]
 						) AS u(character_id, template_id, version, abilities, spawned)
 						ON CONFLICT (character_id)
@@ -379,7 +400,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeInserts.Count,
-						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesArray, spawnedArray, now },
+						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray, now },
 						"One or more pets were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}

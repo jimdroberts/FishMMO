@@ -327,6 +327,10 @@ namespace FishMMO.Shared
 				cachedTotalSpawnChance = 0f;
 				foreach (var spawnableSettings in Spawnables)
 				{
+					if (spawnableSettings == null)
+					{
+						continue;
+					}
 					cachedTotalSpawnChance += spawnableSettings.SpawnChance;
 				}
 				IsCacheDirty = false;
@@ -354,6 +358,10 @@ namespace FishMMO.Shared
 			// Iterate through the spawnables and select one based on the random value.
 			for (int i = 0; i < Spawnables.Count; ++i)
 			{
+				if (Spawnables[i] == null)
+				{
+					continue;
+				}
 				cumulativeChance += Spawnables[i].SpawnChance;
 
 				// If the random value is less than the cumulative chance, select this spawnable.

@@ -135,7 +135,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <summary>
 		/// Builds the game executable using the current Build Environment Options (Build Type and OS Target).
 		/// </summary>
-		public static void BuildGameWithEnvironmentOptions()
+		/// <param name="rootPath">
+		/// Output directory to build into. When null/empty, BuildExecutor falls back to an
+		/// interactive folder picker (EditorUtility.SaveFolderPanel), which does not work in
+		/// -batchmode. CLI callers must supply this explicitly.
+		/// </param>
+		public static void BuildGameWithEnvironmentOptions(string rootPath = null)
 		{
 			// Check if scripts are currently compiling
 			if (BuildEnvironmentOptions.IsCompiling())
@@ -167,7 +172,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				customBuildType,
 				GetBuildOptions(buildTarget),
 				buildSubtarget,
-				buildTarget);
+				buildTarget,
+				rootPath);
 		}
 
 		/// <summary>
@@ -291,7 +297,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 		}
 
-		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
+		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget, string rootPath = null)
 		{
 			InitializeLogger();
 
@@ -305,7 +311,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				buildTool.RunBuild(
 					linkerRootPath: assets,
 					linkerDirectoryPath: Path.Combine(assets, "Dependencies"),
-					rootPath: string.Empty,
+					rootPath: rootPath ?? string.Empty,
 					executableName: executableName,
 					bootstrapScenes: bootstrapScenes,
 					excludedAddressableGroups: customBuildType == CustomBuildType.Server ? clientAddressableGroups : serverAddressableGroups,
@@ -421,6 +427,28 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				BuildEnvironmentOptions.SetOSTarget(osTarget);
 				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
 
+				// Switching build target (e.g. Client -> Server) can trigger an async
+				// script recompile. Addressables/player builds below reject requests
+				// made while scripts are compiling, and -batchmode has no UI to wait
+				// on, so block synchronously here until compilation settles.
+				if (Application.isBatchMode)
+				{
+					int waitedMs = 0;
+					const int pollIntervalMs = 200;
+					const int maxWaitMs = 120000;
+					while (BuildEnvironmentOptions.IsCompiling() && waitedMs < maxWaitMs)
+					{
+						System.Threading.Thread.Sleep(pollIntervalMs);
+						waitedMs += pollIntervalMs;
+					}
+					if (BuildEnvironmentOptions.IsCompiling())
+					{
+						UnityEngine.Debug.LogError("[CustomBuildTool] Timed out waiting for script compilation before CLI build.");
+						EditorApplication.Exit(1);
+						return;
+					}
+				}
+
 				if (includeAddressables)
 				{
 					BuildAddressablesWithEnvironmentOptions();
@@ -428,7 +456,14 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				if (!addressablesOnly)
 				{
-					BuildGameWithEnvironmentOptions();
+					string outputPath;
+					if (!TryGetArg("-fishmmoOutputPath", out outputPath) || string.IsNullOrWhiteSpace(outputPath))
+					{
+						string projectRoot = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+						string subFolder = buildType == BuildTypeEnvironment.Server ? "Server" : "Client";
+						outputPath = Path.Combine(projectRoot, "Builds", subFolder);
+					}
+					BuildGameWithEnvironmentOptions(outputPath);
 				}
 
 				if (Application.isBatchMode)

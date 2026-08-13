@@ -169,6 +169,26 @@ namespace FishMMO.Server.Implementation
 			ServerEvents.OnWorldServerInitialized += worldServerInitializedLogHandler;
 			ServerEvents.OnSceneServerInitialized += sceneServerInitializedLogHandler;
 
+			// Skip the external IP lookup entirely when the operator has already
+			// configured a loopback Address (local/LAN dev deployments). The lookup
+			// hits an external HTTPS service (checkip.amazonaws.com); on some hosts
+			// UnityWebRequest can stall on that call indefinitely even though the
+			// 30s WaitForSeconds fallback below is meant to catch slow/unreachable
+			// responses, so avoid it altogether when it isn't needed.
+			//
+			// Configuration.GetString would normally return null here — the config
+			// file isn't loaded until CoreServer.Initialize() calls
+			// SaveDefaultsIfMissing(), which happens later inside OnFinalizeSetup.
+			// Force that same load early so the Address value is available now.
+			Configuration.SaveDefaultsIfMissing(gameObject.scene.name, "Unknown", Constants.GetWorkingDirectory());
+			string configuredAddress = Configuration.GetString("Address", null);
+			if (!string.IsNullOrWhiteSpace(configuredAddress) && NetHelper.IsLoopbackAddress(configuredAddress))
+			{
+				Log.Debug("Server", $"Configured Address '{configuredAddress}' is loopback; skipping external IP lookup.");
+				OnFinalizeSetup(configuredAddress);
+				return;
+			}
+
 			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
 
 			// Guard against indefinite hang if the external IP service is unreachable.

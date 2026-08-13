@@ -533,6 +533,28 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     }
 
     case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED: {
+        /* ── Raw/native mode: drop unidirectional peer streams ──
+         * The server always creates an h3_session and proactively sends
+         * its HTTP/3 SETTINGS bootstrap on a UNIDIRECTIONAL control
+         * stream (first byte 0x00), even for connections that later
+         * fall back to the native protocol. Game data is exclusively
+         * carried on BIDIRECTIONAL streams (wt_stream_manager opens
+         * with QUIC_STREAM_OPEN_FLAG_NONE) and datagrams. Without this
+         * filter the control stream's SETTINGS bytes are delivered to
+         * FishNet as game data — it logs "unhandled PacketId of 0" and
+         * PURGES the remaining queued data in that batch, which can
+         * drop real packets mid-session and kill the connection. */
+        if (!cli->h3_session &&
+            (event->PEER_STREAM_STARTED.Flags &
+             QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL)) {
+            WT_LOG_INFO("Ignoring peer uni stream in native mode "
+                        "(H3 control/QPACK chatter, not game data)");
+            MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT_RECEIVE, 0);
+            MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+            break;
+        }
+
         /* Acquire session refcount to prevent UAF — wt_session_shutdown
          * on the poll thread may concurrently set stream_mgr=NULL and
          * free it.  Holding a ref keeps the session (and its stream_mgr

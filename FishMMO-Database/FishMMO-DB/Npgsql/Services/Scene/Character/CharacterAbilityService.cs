@@ -20,6 +20,23 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterAbilityService : BaseService<CharacterAbilityEntity>, ICharacterAbilityService
 	{
 		/// <summary>
+		/// Encodes each row's variable-length ability_events list as a JSON array string
+		/// (e.g. "[1,2,3]" or "[]"). Bulk UNNEST cannot carry a genuinely variable-length
+		/// per-row array as one of several zipped columns: passing a C# jagged int[][] is
+		/// rejected outright by Npgsql (no built-in conversion), and passing a padded
+		/// rectangular int[,] doesn't work either — PostgreSQL's multi-argument UNNEST
+		/// fully flattens a 2D array into scalar rows rather than preserving one
+		/// sub-array per row, so ability_events resolves to scalar integer, not
+		/// integer[]. Encoding as JSON text keeps this column a plain 1D text[] (fully
+		/// compatible with normal UNNEST zipping), and the SQL below reconstructs the
+		/// actual integer[] per row via jsonb_array_elements_text + array_agg.
+		/// </summary>
+		private static string[] ToJsonArrayStrings(IEnumerable<int[]> jagged)
+		{
+			return jagged.Select(row => "[" + string.Join(",", row) + "]").ToArray();
+		}
+
+		/// <summary>
 		/// Compiled query for retrieving character abilities (hot path for character load).
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAbilityEntity>>> getAbilitiesQuery =
@@ -246,9 +263,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeExistingItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeExistingItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeExistingItems.Select(a => a.Version).ToArray();
-					var abilityEventsArray = activeExistingItems
-						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
-						.ToArray();
+					var abilityEventsJson = ToJsonArrayStrings(activeExistingItems
+						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray()));
 					var cooldownArray = activeExistingItems.Select(a => a.Cooldown).ToArray();
 
 					var sql = $@"
@@ -256,7 +272,10 @@ namespace FishMMO.Database.Npgsql.Services
 						SET
 							character_id = u.character_id,
 							template_id = u.template_id,
-							ability_events = u.ability_events,
+							ability_events = COALESCE((
+								SELECT array_agg(elem::integer)
+								FROM jsonb_array_elements_text(u.ability_events::jsonb) AS elem
+							), ARRAY[]::integer[]),
 							cooldown = u.cooldown,
 							deleted = FALSE,
 							time_deleted = NULL,
@@ -266,7 +285,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{1}}::bigint[],
 							{{2}}::integer[],
 							{{3}}::bigint[],
-							{{4}}::integer[][],
+							{{4}}::text[],
 							{{5}}::real[]
 						) AS u(id, character_id, template_id, version, ability_events, cooldown)
 						WHERE t.id = u.id
@@ -276,7 +295,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeExistingItems.Count,
-						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilityEventsArray, cooldownArray },
+						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilityEventsJson, cooldownArray },
 						"One or more abilities were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
@@ -286,9 +305,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeNewItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeNewItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeNewItems.Select(a => a.Version).ToArray();
-					var abilityEventsArray = activeNewItems
-						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
-						.ToArray();
+					var abilityEventsJson = ToJsonArrayStrings(activeNewItems
+						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray()));
 					var cooldownArray = activeNewItems.Select(a => a.Cooldown).ToArray();
 
 					var sql = $@"
@@ -298,7 +316,10 @@ namespace FishMMO.Database.Npgsql.Services
 							u.character_id,
 							u.template_id,
 							u.version,
-							u.ability_events,
+							COALESCE((
+								SELECT array_agg(elem::integer)
+								FROM jsonb_array_elements_text(u.ability_events::jsonb) AS elem
+							), ARRAY[]::integer[]),
 							u.cooldown,
 							{{5}},
 							FALSE,
@@ -307,7 +328,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::integer[][],
+							{{3}}::text[],
 							{{4}}::real[]
 						) AS u(character_id, template_id, version, ability_events, cooldown)
 						ON CONFLICT (character_id, template_id)
@@ -324,7 +345,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeNewItems.Count,
-						new object[] { characterIdArray, templateIdArray, versionArray, abilityEventsArray, cooldownArray, now },
+						new object[] { characterIdArray, templateIdArray, versionArray, abilityEventsJson, cooldownArray, now },
 						"One or more abilities were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}

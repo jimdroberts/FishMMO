@@ -758,16 +758,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Process the scene by adding it to the world dictionary mappings.
 				ProcessScene(scene, sceneType, sceneData.WorldServerID);
 
-				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle), runtimeData.ID))
+				// Capture Scene.name/handle on the main thread now. TryEnqueueAsyncWork
+				// runs its lambda on a background worker thread, and Unity's Scene.name
+				// getter (GetNameInternal) throws if called off the main thread — so the
+				// lambda below must close over these local copies, never `scene` itself.
+				string sceneName = scene.name;
+				int sceneHandle = scene.handle;
+
+				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {sceneName}:{sceneHandle} to the database.");
+				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle), runtimeData.ID))
 				{
-					Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={scene.name}:{scene.handle}. Firing directly.");
+					Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={sceneName}:{sceneHandle}. Firing directly.");
 					// Fire-and-forget is safe here: SetSceneReadyAsync has its own
 					// try-catch with error logging (see method body). The task is
 					// discarded with _ = to suppress the compiler warning; any DB
 					// or network failure will be logged internally without crashing
 					// the scene-load callback.
-					_ = SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, scene.name, scene.handle);
+					_ = SetSceneReadyAsync(runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle);
 				}
 			}
 		}

@@ -342,7 +342,11 @@ namespace FishMMO.Shared
 			if (renderer.SkinnedRenderer != null)
 			{
 				renderer.SkinnedRenderer.sharedMesh = null;
-				renderer.SkinnedRenderer.materials = null;
+				// Renderer.materials requires an actual array — assigning null throws
+				// ArgumentNullException (Renderer.SetMaterialArray), which was aborting
+				// this whole cleanup path (and everything after it, e.g. FishNet's own
+				// disconnect handling) partway through.
+				renderer.SkinnedRenderer.materials = System.Array.Empty<Material>();
 				renderer.SkinnedRenderer.enabled = false;
 			}
 			if (renderer.WeaponInstance != null)

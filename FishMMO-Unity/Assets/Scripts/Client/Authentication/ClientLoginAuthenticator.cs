@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using FishMMO.Auth.Core;
 using FishMMO.Shared;
 using FishMMO.Auth.Implementation;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -461,6 +462,7 @@ namespace FishMMO.Client
 			}
 			else if (args.ConnectionState == LocalConnectionState.Started)
 			{
+				Log.Debug("ClientLoginAuthenticator", $"ClientManager_OnClientConnectionState: Started, ConnectionToken isNullOrEmpty={string.IsNullOrEmpty(ConnectionToken)}");
 				core.OnConnected(ConnectionToken); ConnectionToken = null;
 			}
 		}

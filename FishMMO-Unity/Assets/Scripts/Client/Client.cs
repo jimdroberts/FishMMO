@@ -546,10 +546,21 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0)
+			// The connection token is single-use: ClientLoginAuthenticator clears it
+			// immediately after sending it in a handshake (Started -> OnConnected ->
+			// ConnectionToken = null). A cached token that has already been consumed
+			// must never be served again — doing so sends a null token on the next
+			// attempt, which the server rejects outright before checking credentials.
+			// Only the port list is safely reusable across attempts within the TTL.
+			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0 && !string.IsNullOrEmpty(this.cachedConnectionToken))
 			{
 				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken); yield break; }
+				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds)
+				{
+					Log.Debug("Client", $"GetLoginServerList: cache hit, age={age:F1}s tokenIsNullOrEmpty={string.IsNullOrEmpty(this.cachedConnectionToken)}");
+					onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken);
+					yield break;
+				}
 			}
 			var candidates = ApiHostResolver.GetCandidates() ?? new List<string>();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
@@ -591,6 +602,7 @@ namespace FishMMO.Client
 								continue; 
 							}
 							// NOTE: Token not explicitly cleared in the cache path. TTL (55s) < server token TTL (60s), providing a 5s safety margin. Reset on QuitToLogin().
+							Log.Debug("Client", $"GetLoginServerList: fresh fetch, tokenIsNullOrEmpty={string.IsNullOrEmpty(parsed.ConnectionToken)}");
 							this.cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
 							break;
@@ -665,6 +677,7 @@ namespace FishMMO.Client
 		/// <param name="ch">The network channel.</param>
 		private void OnValidatedScene(ClientValidatedSceneBroadcast msg, Channel ch)
 		{
+			Log.Warning("Client", $"DEBUG OnValidatedScene received: worldPreloadScenes.Count={this.worldPreloadScenes?.Count ?? -1}");
 			// Guard against duplicate broadcasts: unsubscribe first to prevent
 			// multiple subscriptions that would send duplicate responses.
 			AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress;
@@ -676,15 +689,16 @@ namespace FishMMO.Client
 		/// Called during world scene preload progress. Sends a validated scene broadcast when loading completes.
 		/// </summary>
 		/// <param name="p">Progress value from 0 to 1.</param>
-		private void OnValidatedSceneProgress(float p) 
-		{ 
+		private void OnValidatedSceneProgress(float p)
+		{
 			// Unsubscribe on completion (p >= 1) or error/failure (p < 0).
-			if (p >= 1f || p < 0f) 
-			{ 
-				AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress; 
-				if (p >= 1f) 
-					Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable); 
-			} 
+			if (p >= 1f || p < 0f)
+			{
+				Log.Warning("Client", $"DEBUG OnValidatedSceneProgress complete: p={p}");
+				AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress;
+				if (p >= 1f)
+					Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
+			}
 		}
 		/// <summary>
 		/// Handles a server busy broadcast by showing a dialog to the player.

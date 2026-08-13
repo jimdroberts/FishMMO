@@ -5780,6 +5780,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 1
+  m_UseReflectionProbes: 0
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
@@ -5817,7 +5818,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f3f450b75c99e824597d2a1b7f04dc36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  canvas: {fileID: 0}
+  canvas: {fileID: 978504969}
 --- !u!1 &1105371677
 GameObject:
   m_ObjectHideFlags: 0
@@ -7411,7 +7412,7 @@ MonoBehaviour:
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument:
+          m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
 --- !u!114 &1464554511
@@ -7510,7 +7511,7 @@ MonoBehaviour:
   IsAlwaysOpen: 0
   HasFocus: 0
   FocusOnSelect: 0
-  CloseOnQuitToMenu: 0
+  CloseOnQuitToMenu: 1
   CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 1
@@ -8075,7 +8076,7 @@ MonoBehaviour:
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
           m_IntArgument: 0
           m_FloatArgument: 0
-          m_StringArgument:
+          m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
 --- !u!114 &1702226165
@@ -8820,6 +8821,7 @@ Terrain:
   m_AllowAutoConnect: 1
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
+  m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
 --- !u!4 &1804527659
 Transform:
@@ -14524,7 +14526,7 @@ MonoBehaviour:
   ServerStatusLabel: {fileID: 5874879605221153458}
   Details:
     Name: 
-    Address: 
+    LastPulseUtcTicks: 0
     Port: 0
     CharacterCount: 0
     Locked: 0
@@ -21035,7 +21037,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1313084549837288661}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
@@ -21087,7 +21089,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -22184,7 +22186,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6086499326991594126}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 1
   m_Color: {r: 0.38039216, g: 0.38039216, b: 0.6313726, a: 1}
   m_Intensity: 1
@@ -22236,7 +22238,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1

@@ -7,6 +7,7 @@
 #include "server.h"
 #include "client.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 /* ── Stream manager lock helpers for session use ────────────────
  * We use the stream_manager's existing streams_lock to synchronize
@@ -34,6 +35,18 @@ static void session_on_stream_data(
     const uint8_t* data, int32_t length)
 {
     wt_session_t* session = (wt_session_t*)ctx;
+
+    WT_LOG_INFO("H3-DEBUG: session_on_stream_data parent=%s conn=%llu stream=%llu len=%d",
+                session->parent_type == WT_PARENT_SERVER ? "SERVER" : "CLIENT",
+                (unsigned long long)conn_id, (unsigned long long)stream_id, length);
+    if (data && length > 0) {
+        char linebuf[128];
+        int n = length < 32 ? length : 32;
+        int pos = 0;
+        for (int i = 0; i < n; i++)
+            pos += snprintf(linebuf + pos, sizeof(linebuf) - (size_t)pos, "%02x ", data[i]);
+        WT_LOG_INFO("H3-DEBUG:   first %d bytes: %s%s", n, linebuf, length > 32 ? "..." : "");
+    }
 
     if (session->parent_type == WT_PARENT_SERVER) {
         wt_server_s* srv = session->parent.server;

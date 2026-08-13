@@ -27,8 +27,19 @@ namespace FishMMO.UnitTests.Harness
 		/// <summary>Pair with the paired client (called by the harness after both are constructed).</summary>
 		public void Pair(TestClientCore clientCore) => client = clientCore;
 
+		/// <summary>
+		/// Optional resolver for <see cref="GetConnectionAddress"/>. Lets rate-limiter tests
+		/// simulate multiple connections behind one NAT IP (all resolve to the same address)
+		/// or verify that distinct source IPs are never grouped under one rate-limit key.
+		/// When unset, the default per-connection synthetic loopback address is used.
+		/// </summary>
+		public Func<int, string>? AddressResolver { get; set; }
+
 		/// <summary>True once <see cref="DisconnectConnection"/> has been called for any reason.</summary>
 		public bool WasDisconnected => disconnected;
+
+		/// <summary>Total number of <see cref="DisconnectConnection"/> calls (server-initiated disconnects).</summary>
+		public int DisconnectCount { get; private set; }
 
 		/// <summary>Most recent cookie issued via <see cref="BroadcastCookieChallenge"/>.</summary>
 		public byte[]? LastChallengeCookie { get; private set; }
@@ -52,7 +63,7 @@ namespace FishMMO.UnitTests.Harness
 		#region BaseAuthenticatorCore<int> abstracts
 
 		protected override bool IsConnectionAuthenticated(int conn) => false;
-		protected override string GetConnectionAddress(int conn) => $"127.0.0.{conn}";
+		protected override string GetConnectionAddress(int conn) => AddressResolver?.Invoke(conn) ?? $"127.0.0.{conn}";
 		protected override float AccountVerifyDebounceSeconds => 0f;
 		protected override int GetConnectionClientId(int conn) => conn;
 
@@ -78,6 +89,7 @@ namespace FishMMO.UnitTests.Harness
 		{
 			AuthTestTrace.Log("Server", "DisconnectConnection", $"conn={conn} graceful={graceful}");
 			disconnected = true;
+			DisconnectCount++;
 			client?.OnDisconnected();
 		}
 

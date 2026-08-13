@@ -136,6 +136,13 @@ namespace FishMMO.Server.Implementation
 		/// <inheritdoc/>
 		protected override BaseAuthenticatorCore<NetworkConnection> Core => core;
 
+		/// <summary>
+		/// World/Scene servers are connected to directly by IP:port (not through the
+		/// IPFetch/L4 proxy path used by the LoginServer), so the client never sends a
+		/// connection token — see <see cref="BaseServerAuthenticator.RequiresConnectionToken"/>.
+		/// </summary>
+		protected override bool RequiresConnectionToken => false;
+
 		#region Lifecycle
 
 		/// <inheritdoc/>
@@ -188,10 +195,12 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Routes an incoming <see cref="TokenAuthBroadcast"/> to the core token authentication channel.</summary>
 		internal void OnServerTokenAuthBroadcastReceived(NetworkConnection conn, TokenAuthBroadcast msg, Channel channel)
 		{
+			_ = Log.Warning(LogPrefix, $"DEBUG OnServerTokenAuthBroadcastReceived conn={conn.ClientId}: Token.Length={msg.Token?.Length.ToString() ?? "null"} Seq={msg.Seq}");
 			// Validate wire-format bounds before any allocation or crypto work.
 			// Reject oversized payloads on the network thread.
 			if (msg.Token == null || msg.Token.Length > AuthSizeLimits.MaxTokenAuthSize)
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnServerTokenAuthBroadcastReceived DEBUG-REJECT conn={conn.ClientId}: token null or too large (max={AuthSizeLimits.MaxTokenAuthSize}).");
 				conn.Disconnect(true);
 				return;
 			}
@@ -473,6 +482,9 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override Task<bool> CheckTokenRevocationAsync(string tokenHash) =>
 				outer.CheckTokenRevocationCoreAsync(tokenHash);
+
+			/// <inheritdoc/>
+			protected override bool RequiresRealIp => outer.RequiresConnectionToken;
 
 			/// <inheritdoc/>
 			/// <inheritdoc/>

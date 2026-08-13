@@ -1,9 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using FishNet.Connection;
+using FishNet.Managing.Predicting;
 using FishNet.Managing.Timing;
+using FishNet.Object;
 using FishNet.Serializing;
+using TMPro;
 using UnityEngine;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -715,6 +721,11 @@ namespace FishMMO.UnitTests
 				SetPrivateField(controller, "hasSeenFirstReplicate", true);
 				SetPrivateField(controller, "isReplayingTick", true);
 
+				// The production apply path gates on Character.IsFlagged(IsDead). Character
+				// is only assigned by InitializeOnce, so wire in a living character the way
+				// the spawn pipeline does instead of reaching for the backing field.
+				controller.InitializeOnce(new MockCharacter(42));
+
 				controller.ApplyAuthoritative(template, 105u);
 
 				Assert.IsTrue(controller.Buffs.TryGetValue(template.ID, out Buff buff),
@@ -828,6 +839,11 @@ namespace FishMMO.UnitTests
 
 				BuffController controller = gameObject.AddComponent<BuffController>();
 				SetPrivateField(controller, "tickDelta", TickDelta30);
+
+				// The production apply path gates on Character.IsFlagged(IsDead). Character
+				// is only assigned by InitializeOnce, so wire in a living character the way
+				// the spawn pipeline does instead of reaching for the backing field.
+				controller.InitializeOnce(new MockCharacter(42));
 
 				var writer = new Writer();
 				writer.WriteUInt32(serverReferenceTick);
@@ -1011,6 +1027,52 @@ namespace FishMMO.UnitTests
 		{
 			public override void OnApply(Buff buff, FishMMO.Shared.Core.ICharacter target) { }
 			public override void OnRemove(Buff buff, FishMMO.Shared.Core.ICharacter target) { }
+		}
+
+		/// <summary>
+		/// Minimal <see cref="ICharacter"/> stub for tests that exercise the production
+		/// apply path. <see cref="CharacterBehaviour.Character"/> is only assigned by
+		/// <see cref="CharacterBehaviour.InitializeOnce(ICharacter)"/>; the dead-character
+		/// gate on the apply path dereferences it, so these tests must initialize the
+		/// controller with a living character exactly as the spawn pipeline does.
+		/// </summary>
+		private sealed class MockCharacter : ICharacter
+		{
+			public MockCharacter(long id) => ID = id;
+
+			public long ID { get; set; }
+			public string Name => "MockCharacter";
+			public Transform Transform => null;
+			public GameObject GameObject => null;
+			public Collider Collider { get; set; }
+			public NetworkConnection Owner => null;
+			public NetworkObject NetworkObject => null;
+			public PredictionManager PredictionManager => null;
+			public HashSet<NetworkConnection> Observers { get; } = new HashSet<NetworkConnection>();
+			public bool IsTeleporting => false;
+			public bool IsSpawned => true;
+			public int Flags { get; set; }
+
+			public TextMeshPro CharacterNameLabel { get; set; }
+			public TextMeshPro CharacterGuildLabel { get; set; }
+			public Transform MeshRoot => null;
+
+#if !UNITY_SERVER
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
+#endif
+
+			public void EnableFlags(CharacterFlags flags) => Flags |= (int)flags;
+			public void DisableFlags(CharacterFlags flags) => Flags &= ~(int)flags;
+			public bool IsFlagged(CharacterFlags flags) => (Flags & (int)flags) != 0;
+			public void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
+			{
+				control = null;
+				return false;
+			}
+			public void Invoke(List<Trigger> triggers, EventData eventData) { }
 		}
 
 		/// <summary>

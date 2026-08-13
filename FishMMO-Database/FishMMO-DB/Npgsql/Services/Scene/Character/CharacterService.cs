@@ -229,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{{30}},
 							1,
 							{{31}},
-							{{32}}
+							{{32}},
 							FALSE,
 							NULL
 						)

@@ -335,6 +335,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				SweepSceneCaches(runtimeData);
 			}
 
+			runtimeData.NextWaitQueueUpdate -= deltaTime;
 			if (runtimeData.NextWaitQueueUpdate <= 0)
 			{
 				runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
@@ -368,10 +369,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private async Task ProcessQueuesAsync(List<string> openWorldSceneNames, List<NetworkConnection> instanceConns)
 		{
+			await Log.Warning("WorldSceneSystem", $"DEBUG ProcessQueuesAsync: openWorldSceneNames=[{string.Join(",", openWorldSceneNames)}] instanceConnCount={instanceConns.Count}");
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null)
 				{
+					await Log.Warning("WorldSceneSystem", "DEBUG ProcessQueuesAsync DEBUG-REJECT: Database ServiceRegistry null.");
 					return;
 				}
 
@@ -414,15 +417,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="sceneName">Name of the scene to process.</param>
 		private async Task ProcessOpenWorldQueueAsync(string sceneName)
 		{
+			await Log.Warning("WorldSceneSystem", $"DEBUG ProcessOpenWorldQueueAsync sceneName='{sceneName}'");
 			if (!TryGetDbService(out ISceneService sceneService) ||
 				!TryGetDbService(out ISceneServerService sceneServerService) ||
 				!TryGetDbService(out ICharacterService charService))
 			{
+				await Log.Warning("WorldSceneSystem", $"DEBUG ProcessOpenWorldQueueAsync DEBUG-REJECT sceneName='{sceneName}': TryGetDbService failed.");
 				return;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
+				await Log.Warning("WorldSceneSystem", $"DEBUG ProcessOpenWorldQueueAsync DEBUG-REJECT sceneName='{sceneName}': WorldSceneSystemRuntimeData not found.");
 				return;
 			}
 
@@ -431,6 +437,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Fetch available scene instances (cache-aware)
 			var availableScenes = await FetchAvailableScenesAsync(sceneService, runtimeData, worldServerID, sceneName, maxClientsPerInstance);
+			await Log.Warning("WorldSceneSystem", $"DEBUG ProcessOpenWorldQueueAsync sceneName='{sceneName}' worldServerID={worldServerID}: availableScenes count={availableScenes?.Count.ToString() ?? "null"}");
 			if (availableScenes == null || availableScenes.Count < 1)
 			{
 				await CleanupAndEnqueueNewSceneIfNeededAsync(sceneName, worldServerID, sceneService);
@@ -699,12 +706,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			await Log.Warning("WorldSceneSystem", $"DEBUG CleanupAndEnqueueNewSceneIfNeededAsync sceneName='{sceneName}' worldServerID={worldServerID}: needsNewScene={needsNewScene}");
 			if (needsNewScene)
 			{
 				DatabaseResult<long> enqueueResult = await sceneService.EnqueueAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld);
 				if (!enqueueResult.IsSuccess)
 				{
 					await Log.Warning("WorldSceneSystem", $"CleanupAndEnqueueNewSceneIfNeededAsync DB error (Scene={sceneName}): {enqueueResult.ErrorCode} - {enqueueResult.ErrorMessage}");
+				}
+				else
+				{
+					await Log.Warning("WorldSceneSystem", $"DEBUG CleanupAndEnqueueNewSceneIfNeededAsync DEBUG-SUCCESS sceneName='{sceneName}': enqueued scene id={enqueueResult.Data}.");
 				}
 			}
 		}
@@ -746,10 +758,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="skipDebounce">When true, skips per-account debounce check because the caller already reserved the lookup window.</param>
 		private async Task ProcessInstanceConnectionAsync(NetworkConnection conn, bool skipDebounce = false)
 		{
+			Log.Warning("WorldSceneSystem", $"DEBUG ProcessInstanceConnectionAsync conn={conn?.ClientId.ToString() ?? "null"} skipDebounce={skipDebounce}");
 			if (!TryGetDbService(out ICharacterService charService) ||
 				!TryGetDbService(out ISceneService sceneService) ||
 				!TryGetDbService(out ISceneServerService sceneServerService))
 			{
+				Log.Warning("WorldSceneSystem", "DEBUG ProcessInstanceConnectionAsync DEBUG-REJECT: TryGetDbService failed.");
 				return;
 			}
 
@@ -810,8 +824,31 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var charData = charResult.Data.Value;
 			int characterFlags = charData.Flags;
 
+			// Persist the current world server's ID onto the character now, before any
+			// scene routing decision. SceneServerSystem.TryGetSceneInstanceDetails matches
+			// scene instances by (WorldServerID, SceneName), reading WorldServerID from
+			// this same character row — if it's stale (e.g. left at 0 from character
+			// creation, or pointing at a previous world server instance from an earlier
+			// run), the lookup finds the scene registered under this world server's real
+			// ID but rejects it as "mismatched" and the character never loads in.
+			long currentWorldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldServerRuntimeData) ? worldServerRuntimeData.ID : 0;
+			if (currentWorldServerID > 0 && charData.WorldServerID != currentWorldServerID)
+			{
+				var updatedCharData = charData.WithWorldServerIdVersionAndTimestamp(currentWorldServerID, charData.Version + 1, DateTime.UtcNow);
+				DatabaseResult persistResult = await charService.PersistAsync(updatedCharData);
+				if (persistResult.IsSuccess)
+				{
+					charData = updatedCharData;
+				}
+				else
+				{
+					await Log.Warning("WorldSceneSystem", $"Failed to persist WorldServerID for account '{accountName}' (CharID={charData.ID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+				}
+			}
+
 			if (!characterFlags.IsFlagged(CharacterFlags.IsInInstance))
 			{
+				await Log.Warning("WorldSceneSystem", $"DEBUG ProcessInstanceConnectionAsync conn={conn?.ClientId.ToString() ?? "null"}: not in instance, falling back to world scene.");
 				await FallbackToWorldSceneAsync(conn, accountName);
 				return;
 			}
@@ -982,6 +1019,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="authenticated">True if client authenticated successfully.</param>
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
+			Log.Warning("WorldSceneSystem", $"DEBUG Authenticator_OnClientAuthenticationResult conn={conn?.ClientId.ToString() ?? "null"} authenticated={authenticated}");
 			if (!authenticated)
 			{
 				return;
@@ -1229,22 +1267,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			if (!TryGetDbService(out ICharacterService charService))
 			{
+				await Log.Warning("WorldSceneSystem", "DEBUG FallbackToWorldSceneAsync DEBUG-REJECT: TryGetDbService failed.");
 				return;
 			}
 
 			var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 			{
+				await Log.Warning("WorldSceneSystem", $"DEBUG FallbackToWorldSceneAsync DEBUG-REJECT: FetchByAccountAsync failed. IsSuccess={fetchResult.IsSuccess} HasValue={fetchResult.Data.HasValue}");
 				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
 				return;
 			}
 			var selectedChar = fetchResult.Data.Value;
 			if (selectedChar.ID <= 0 || string.IsNullOrEmpty(selectedChar.SceneName))
 			{
+				await Log.Warning("WorldSceneSystem", $"DEBUG FallbackToWorldSceneAsync DEBUG-REJECT: bad selected char. ID={selectedChar.ID} SceneName='{selectedChar.SceneName}'");
 				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
 				return;
 			}
 			string sceneName = selectedChar.SceneName;
+
+			await Log.Warning("WorldSceneSystem", $"DEBUG FallbackToWorldSceneAsync DEBUG-SUCCESS conn={conn?.ClientId.ToString() ?? "null"}: queuing for scene '{sceneName}'.");
 
 			TryEnqueueMainThread(() =>
 			{
@@ -1371,6 +1414,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			var result = await sceneService.FetchAvailableAsync(worldServerID, sceneName, maxClients);
+			await Log.Warning("WorldSceneSystem", $"DEBUG FetchAvailableScenesAsync worldServerID={worldServerID} sceneName='{sceneName}' maxClients={maxClients}: IsSuccess={result.IsSuccess} ErrorCode={result.ErrorCode} ErrorMessage='{result.ErrorMessage}' DataNull={result.Data == null} DataCount={result.Data?.Count.ToString() ?? "n/a"}");
 			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
 			{
 				return null;

@@ -344,6 +344,20 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
 int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 
 /**
+ * Falls back to native/raw protocol handling for a connection, given a
+ * stream context that has buffered but not-yet-classified data. Used both
+ * internally by h3_server_process_data (byte-collision detection) and
+ * externally by the H3 handshake timeout sweep (server.cpp) — a native
+ * client's raw bytes can happen to start with a byte value that collides
+ * with one of H3's reserved control values (0x00 = control stream type,
+ * 0x01 = HEADERS frame type), routing it into H3 protocol paths that then
+ * wait indefinitely for further H3 elements that a native client will
+ * never send. See h3_fallback_to_native_protocol's definition in http3.cpp
+ * for the full rationale.
+ */
+int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
+/**
  * Client-side: process received data on the CONNECT request stream.
  * Called from the stream RECEIVE callback during the HTTP/3 handshake.
  *

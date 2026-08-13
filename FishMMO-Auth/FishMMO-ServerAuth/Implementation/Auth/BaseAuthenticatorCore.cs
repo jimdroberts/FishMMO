@@ -35,8 +35,25 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Maximum number of concurrent pending authentication connections.</summary>
 		protected const int MaxPendingAuthConnections = 10000;
 
-		/// <summary>Minimum seconds between handshake attempts from the same remote IP (or connection ID).</summary>
-		protected const float HandshakeIpDebounceSeconds = 0.25f;
+		/// <summary>
+		/// Duration of the per-IP Phase-2 handshake measurement window.
+		/// Combined with <see cref="HandshakeIpBurstLimit"/> this sustains 4 completed
+		/// handshakes/second/IP (unchanged from the previous single-deadline debounce)
+		/// while allowing a burst of near-simultaneous completions from one IP.
+		/// </summary>
+		protected const float HandshakeIpWindowSeconds = 2f;
+
+		/// <summary>
+		/// Maximum Phase-2 handshake completions accepted from one IP inside
+		/// <see cref="HandshakeIpWindowSeconds"/>. The old fixed 0.25 s debounce keyed
+		/// the whole handshake round trip on one interval: any second completion inside
+		/// the window — a player behind the same NAT as another, or a re-login whose
+		/// connect+token+challenge cycle finishes faster than the window on a sub-10 ms
+		/// link — was silently disconnected. A burst of 8 covers the legitimate worst
+		/// case (a household logging in together, a fast reconnect loop) without
+		/// meaningfully weakening the sustained per-IP throttle the limiter exists for.
+		/// </summary>
+		protected const int HandshakeIpBurstLimit = 8;
 
 		/// <summary>Maximum X25519 handshakes accepted in a single 1-second window.</summary>
 		protected const int MaxGlobalHandshakesPerSecond = 500;
@@ -85,8 +102,32 @@ namespace FishMMO.Auth.Implementation
 		/// Guarded by <see cref="ttlGate"/>.</summary>
 		private readonly Dictionary<int, TConnection> authConnectionByClientId = new Dictionary<int, TConnection>();
 
-		/// <summary>Per-IP handshake rate limiter. Prevents X25519 CPU abuse from rapid handshake replay.</summary>
-		private readonly ConcurrentDictionary<string, DateTime> handshakeIpNextAllowedUtc = new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+		/// <summary>
+		/// Per-IP Phase-2 handshake limiter with a burst allowance. Tracks completed
+		/// X25519 handshakes per remote IP inside a fixed measurement window instead of
+		/// a single debounce deadline, so a burst of legitimate near-simultaneous
+		/// handshakes from one IP (players behind one NAT, a fast re-login on a
+		/// sub-10 ms link) is accepted while a sustained flood is still throttled.
+		/// See <see cref="HandshakeIpWindowSeconds"/> and <see cref="HandshakeIpBurstLimit"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<string, HandshakeIpWindow> handshakeIpWindows = new ConcurrentDictionary<string, HandshakeIpWindow>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Fixed-window burst state for one rate-limit key in <see cref="handshakeIpWindows"/>.
+		/// The window runs from <see cref="WindowStartUtc"/> to
+		/// <c>WindowStartUtc + HandshakeIpWindowSeconds</c> and does not move on acceptance,
+		/// so a boundary straddle can admit up to 2 × <see cref="HandshakeIpBurstLimit"/>
+		/// completions in ~2.01 s (the last of one window plus the first of the next). That
+		/// doubling is bounded upstream: every completion still requires a fresh one-time
+		/// connection token, a rate-limited Phase-1 handshake, and a valid cookie. A rejected
+		/// attempt never touches the window (no extension), mirroring the anti-hammer
+		/// property of the previous single-deadline debounce.
+		/// </summary>
+		private struct HandshakeIpWindow
+		{
+			public int Count;
+			public DateTime WindowStartUtc;
+		}
 
 		/// <summary>
 		/// HMAC-SHA256 key for stateless handshake cookies.
@@ -175,7 +216,7 @@ namespace FishMMO.Auth.Implementation
 				authOriginalStartByClientId.Clear();
 				authConnectionByClientId.Clear();
 			}
-			handshakeIpNextAllowedUtc.Clear();
+			handshakeIpWindows.Clear();
 		}
 
 		/// <summary>
@@ -350,26 +391,27 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Removes expired per-IP handshake rate-limit entries to prevent unbounded dictionary growth.
+		/// Removes expired per-IP handshake rate-limit windows to prevent unbounded dictionary growth.
 		/// </summary>
 		private void SweepExpiredHandshakeRateLimits()
 		{
-			if (handshakeIpNextAllowedUtc.Count == 0) return;
+			if (handshakeIpWindows.Count == 0) return;
 
 			DateTime now = DateTime.UtcNow;
+			TimeSpan window = TimeSpan.FromSeconds(HandshakeIpWindowSeconds);
 			int scanned = 0;
 			int removed = 0;
 
-			foreach (var kvp in handshakeIpNextAllowedUtc)
+			foreach (var kvp in handshakeIpWindows)
 			{
 				if (scanned >= HandshakeRateLimitSweepMaxScan || removed >= HandshakeRateLimitSweepMaxRemovals)
 					break;
 
 				scanned++;
 
-				if (now >= kvp.Value)
+				if (now >= kvp.Value.WindowStartUtc + window)
 				{
-					handshakeIpNextAllowedUtc.TryRemove(kvp.Key, out _);
+					handshakeIpWindows.TryRemove(kvp.Key, out _);
 					removed++;
 				}
 			}
@@ -396,19 +438,29 @@ namespace FishMMO.Auth.Implementation
 				publicKey == null ||
 				publicKey.Length != CryptoHelper.X25519PublicKeyLength)
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: " +
+					$"IsAuthenticated={IsConnectionAuthenticated(conn)} PublicKeyNull={publicKey == null} " +
+					$"PublicKeyLength={publicKey?.Length.ToString() ?? "null"} (expected {CryptoHelper.X25519PublicKeyLength})");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
 
 			if (AccountManager.GetConnectionEncryptionData(conn, out _))
+			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: GetConnectionEncryptionData already present.");
 				return;
+			}
 
 			if (AccountManager.IsAuthInProgress(conn))
+			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: IsAuthInProgress=true.");
 				return;
+			}
 
 			byte[]? hmacKeySnapshot = cookieHmacKey;
 			if (hmacKeySnapshot == null)
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: cookieHmacKey is null.");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -419,6 +471,7 @@ namespace FishMMO.Auth.Implementation
 			// private key, breaking ECDH forward secrecy entirely.
 			if (!CryptoHelper.IsValidX25519PublicKey(publicKey))
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: IsValidX25519PublicKey=false. Key(hex)={BitConverter.ToString(publicKey).Replace("-", "")}");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -431,8 +484,9 @@ namespace FishMMO.Auth.Implementation
 				{
 					CryptoHelper.NegotiateProtocolVersion(minVersion, maxVersion);
 				}
-				catch (CryptographicException)
+				catch (CryptographicException ex)
 				{
+					_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: NegotiateProtocolVersion threw: {ex.Message}");
 					DisconnectConnection(conn, graceful: true);
 					return;
 				}
@@ -459,6 +513,7 @@ namespace FishMMO.Auth.Implementation
 				// captured cookie cannot be replayed by another connection from the
 				// same IP (e.g. shared NAT / proxy).
 				byte[] challengeCookie = HandshakeService.ComputeHandshakeCookie(challengeIp, publicKey, HandshakeService.GetTimeBucket(), hmacKeySnapshot, GetConnectionClientId(conn));
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-SUCCESS conn={GetConnectionClientId(conn)}: broadcasting cookie challenge, ip={challengeIp}.");
 				BroadcastCookieChallenge(conn, challengeCookie);
 				return;
 			}
@@ -467,61 +522,87 @@ namespace FishMMO.Auth.Implementation
 			string remoteIp = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
 			if (!HandshakeService.VerifyHandshakeCookieWithRollover(cookie, remoteIp, publicKey, hmacKeySnapshot, GetConnectionClientId(conn)))
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: VerifyHandshakeCookieWithRollover failed. remoteIp={remoteIp} cookieLen={cookie?.Length.ToString() ?? "null"}");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
 
-			// ── Per-IP rate limit ─────────────────────────────────────────
+			// ── Per-IP rate limit (burst window) ────────────────────────
 			// Fail closed: if we cannot resolve a usable rate-limit key (no remote IP, parse
 			// failure, etc.), drop the connection rather than allowing it to bypass the
-			// per-IP debounce. Otherwise an attacker that strips remote-IP info from their
+			// per-IP throttle. Otherwise an attacker that strips remote-IP info from their
 			// transport could flood handshakes without ever hitting the rate limiter.
 			string rateLimitKey = ResolveRateLimitKey(conn);
 			if (string.IsNullOrEmpty(rateLimitKey))
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: ResolveRateLimitKey returned null/empty.");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
 			DateTime nowUtc = DateTime.UtcNow;
-			DateTime deadline = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
+			TimeSpan window = TimeSpan.FromSeconds(HandshakeIpWindowSeconds);
 
-			// Atomic per-IP rate-limit check-and-set via AddOrUpdate.
+			// Atomic per-IP check-and-set via AddOrUpdate over a burst window.
+			// The previous single-deadline debounce rejected every completion within
+			// HandshakeIpDebounceSeconds of another from the same IP — including the
+			// cookie echo of a client whose Phase-1 challenge was issued inside the
+			// window (every sub-10 ms / loopback client) and a second player behind the
+			// same NAT logging in alongside the first. The windowed counter accepts a
+			// burst of HandshakeIpBurstLimit completions per IP per window and only
+			// throttles the sustained flood the limiter exists to stop. Rejected
+			// attempts never touch the window (no sliding extension).
+			//
 			// The delegates capture 'rateLimited' to distinguish whether AddOrUpdate
-			// honoured the check (rate-limited) or actually set the new deadline.
+			// honoured the check (rate-limited) or actually recorded the attempt.
 			// Under extreme contention the add factory's side effect may survive into
 			// a retry, but the consequence is a single extra handshake — not a
 			// systematic bypass — and is negligible compared to the original TOCTOU race.
 			bool rateLimited = true;
-			handshakeIpNextAllowedUtc.AddOrUpdate(
+			handshakeIpWindows.AddOrUpdate(
 				rateLimitKey,
 				_ =>
 				{
 					rateLimited = false;
-					return deadline;
+					return new HandshakeIpWindow { Count = 1, WindowStartUtc = nowUtc };
 				},
 				(_, existing) =>
 				{
-					if (nowUtc < existing)
-						return existing;
-					rateLimited = false;
-					return deadline;
+					if (nowUtc >= existing.WindowStartUtc + window)
+					{
+						// Window expired — start a fresh one.
+						rateLimited = false;
+						return new HandshakeIpWindow { Count = 1, WindowStartUtc = nowUtc };
+					}
+					if (existing.Count < HandshakeIpBurstLimit)
+					{
+						rateLimited = false;
+						return new HandshakeIpWindow { Count = existing.Count + 1, WindowStartUtc = existing.WindowStartUtc };
+					}
+					// Burst exhausted — reject without touching the window.
+					return existing;
 				});
 			if (rateLimited)
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: per-IP rate limited. key={rateLimitKey}");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
 
 			// ── Global rate limit ─────────────────────────────────────────
 			if (!TryIncrementGlobalHandshakeCount())
+			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: TryIncrementGlobalHandshakeCount failed (global cap reached).");
 				return;
+			}
 
 			// Begin TTL tracking after all rate-limit gates have passed.
 			if (!TrackAuthStart(conn))
 			{
 				// Give the hosting environment a chance to defer (queue) the handshake
 				// rather than dropping it outright.  LoginQueueSystem overrides this.
-				if (!OnHandshakeDeferred(conn))
+				bool deferred = OnHandshakeDeferred(conn);
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: TrackAuthStart failed (pending auth cap). deferred={deferred}");
+				if (!deferred)
 				{
 					DateTime capNow = DateTime.UtcNow;
 					if (capNow >= nextPendingAuthCapWarningUtc)
@@ -538,6 +619,7 @@ namespace FishMMO.Auth.Implementation
 			var kaResult = HandshakeService.ServerPerformKeyAgreement(publicKey, minVersion, maxVersion);
 			if (!kaResult.Success)
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: ServerPerformKeyAgreement failed.");
 				DecrementGlobalHandshakeCount();
 				DisconnectConnection(conn, graceful: true);
 				return;
@@ -545,6 +627,7 @@ namespace FishMMO.Auth.Implementation
 
 			if (!AccountManager.TryAddConnectionEncryptionData(conn, publicKey))
 			{
+				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: TryAddConnectionEncryptionData failed (already present).");
 				// Do NOT call ClearTransientAuthState here — a concurrent handshake
 				// packet may have succeeded at TryAddConnectionEncryptionData and
 				// relies on the TTL tracking that TrackAuthStart established.
@@ -553,6 +636,8 @@ namespace FishMMO.Auth.Implementation
 				DecrementGlobalHandshakeCount();
 				return;
 			}
+
+			_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-SUCCESS conn={GetConnectionClientId(conn)}: Phase 2 complete, broadcasting ServerHandshake.");
 
 			if (AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
@@ -686,10 +771,6 @@ namespace FishMMO.Auth.Implementation
 		{
 			return HandshakeService.NormalizeIp(GetConnectionAddress(conn));
 		}
-
-		#endregion
-
-		#region Static Helpers
 
 		#endregion
 

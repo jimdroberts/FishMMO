@@ -167,8 +167,21 @@ extern "C" {
  * (SETTINGS + CONNECT exchange) after the QUIC connection is
  * established.  Clients that complete the TLS handshake but
  * never send an H3 control stream or CONNECT request are
- * disconnected after this deadline to prevent slot exhaustion. */
-#define WT_H3_HANDSHAKE_TIMEOUT_MS  15000  /* 15 seconds */
+ * disconnected after this deadline to prevent slot exhaustion.
+ *
+ * Also gates how long a native (non-browser) FishMMO client waits
+ * before the "no confirmed H3 evidence" fallback in the timeout
+ * sweep (see server.cpp) replays its buffered bytes as native
+ * protocol data. A native client's first bytes routinely collide
+ * with H3's reserved sniff values (0x00/0x01), gets misclassified
+ * as a genuine H3 peer, and then waits here for a CONNECT that a
+ * native client will never send — so this value directly delays
+ * every native connection by its full length. Kept short (well
+ * under any client-side connection-establish timeout, currently a
+ * few seconds) so the server's own fallback always wins that race;
+ * a real browser sending CONNECT does so within milliseconds of
+ * connecting, so this remains generous for the legitimate case. */
+#define WT_H3_HANDSHAKE_TIMEOUT_MS  1500  /* 1.5 seconds */
 
 /* ── Connection state enum ──────────────────────────────────── */
 

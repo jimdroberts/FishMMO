@@ -142,12 +142,47 @@ namespace FishMMO.Client
 		/// <param name="obj">Connection state arguments.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
+			Log.Debug("UILogin", $"[{GetInstanceID()}] ClientManager_OnClientConnectionState: state={obj.ConnectionState} isAuthFlowActive={isAuthFlowActive}");
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
 				HandshakeMSG.text = "";
-				SetSignInLocked(false);
 				pendingVerifyUsername = null;
+				// Deferred by a frame: the server may send a final auth result (e.g.
+				// InvalidUsernameOrPassword) and then close the connection in the same
+				// tick. That result is delivered via a queued main-thread callback that
+				// can arrive after this Stopped event. Unlocking synchronously here would
+				// clear isAuthFlowActive before Authenticator_OnClientAuthenticationResult
+				// processes that already-in-flight result, silently swallowing it.
+				// Coroutines can't start on an inactive GameObject — this handler fires
+				// for both UILogin and UIRegister regardless of which panel is shown, so
+				// fall back to an immediate unlock when hidden (isAuthFlowActive is
+				// already false there, since a hidden panel never initiated the flow).
+				if (gameObject.activeInHierarchy)
+				{
+					StartCoroutine(DeferredUnlockAfterDisconnect());
+				}
+				else
+				{
+					SetSignInLocked(false);
+				}
 			}
+		}
+
+		/// <summary>
+		/// Unlocks sign-in controls shortly after disconnect, giving an already-in-flight
+		/// auth result callback a chance to run first. A single frame is not enough — the
+		/// result is produced by server-side SRP verification and marshaled back to the
+		/// main thread, which can take longer than one Update tick. If the proper result
+		/// handler (e.g. <see cref="OnLoginAuthenticationDialog"/>) already ran and cleared
+		/// isAuthFlowActive by the time this check runs, this is a harmless no-op.
+		/// See <see cref="ClientManager_OnClientConnectionState"/>.
+		/// </summary>
+		private IEnumerator DeferredUnlockAfterDisconnect()
+		{
+			Log.Debug("UILogin", $"[{GetInstanceID()}] DeferredUnlockAfterDisconnect: started, isAuthFlowActive={isAuthFlowActive}");
+			yield return new WaitForSeconds(1.5f);
+			Log.Debug("UILogin", $"[{GetInstanceID()}] DeferredUnlockAfterDisconnect: resumed after wait, isAuthFlowActive={isAuthFlowActive}");
+			SetSignInLocked(false);
 		}
 
 		/// <summary>
@@ -172,6 +207,7 @@ namespace FishMMO.Client
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			Log.Debug("UILogin", $"[{GetInstanceID()}] Authenticator_OnClientAuthenticationResult: result={result} isAuthFlowActive={isAuthFlowActive}");
 			// Only process auth results when this panel owns the active flow.
 			// Without this guard, hidden panels would still react to auth results
 			// intended for the other panel (e.g., UILogin receiving AccountCreated
@@ -354,7 +390,9 @@ namespace FishMMO.Client
 			/// <param name="errorMsg">The error message to display.</param>
 			private void OnLoginAuthenticationDialog(string errorMsg)
 		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			bool found = UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox);
+			Log.Debug("UILogin", $"OnLoginAuthenticationDialog: found={found} msg={errorMsg}");
+			if (found)
 			{
 				uiDialogBox.Open(errorMsg);
 			}
@@ -479,6 +517,7 @@ namespace FishMMO.Client
 			},
 			(servers, token) =>
 			{
+					Log.Debug("UILogin", $"GetLoginServerList onDone: tokenIsNullOrEmpty={string.IsNullOrEmpty(token)}");
 					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				Connect("Connecting...", identifier, password);
 			}));

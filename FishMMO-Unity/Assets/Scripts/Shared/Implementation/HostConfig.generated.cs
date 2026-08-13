@@ -1,6 +1,7 @@
-// ═══════════════════════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════════════════════
 // AUTO-GENERATED — written by FishMMO Dashboard > Game Settings.
 // Do NOT edit manually.  Use the FishMMO-Installer or set env vars in CI.
+// Generated at: 2026-08-12T01:19:36.9471104Z
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Sentinel check: the build validator (ClientSecurityBuildValidator) blocks
@@ -26,29 +27,29 @@ namespace FishMMO.Shared
 
 		/// <summary>API gateway URL with trailing slash (e.g. "https://api.fishmmo.com/").</summary>
 		public const string ApiHost =
-			"https://FISHMMO_SENTINEL_PLACEHOLDER_API_HOST/";
+			"http://127.0.0.1:8888/";
 
 		/// <summary>Game server hostname for WebTransport/QUIC connections.</summary>
 		public const string GameHost =
-			"FISHMMO_SENTINEL_PLACEHOLDER_GAME_HOST";
+			"127.0.0.1";
 
 		/// <summary>WebGL client / player-facing hostname.</summary>
 		public const string PlayHost =
-			"FISHMMO_SENTINEL_PLACEHOLDER_PLAY_HOST";
+			"127.0.0.1";
 
 		/// <summary>Root domain (no subdomain) for TLS certs and email.</summary>
 		public const string RootDomain =
-			"FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN";
+			"localhost";
 
 		/// <summary>SMTP from address for verification emails.</summary>
 		public const string SmtpFromAddress =
-			"noreply@FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN";
+			"noreply@localhost";
 
 		/// <summary>SMTP from display name.</summary>
 		public const string SmtpFromName = "FishMMO";
 
 		/// <summary>Launcher HTML/news page URL.</summary>
 		public const string LauncherHtmlUrl =
-			"https://www.FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN/docs/introduction.html";
+			"https://www.localhost/docs/introduction.html";
 	}
 }

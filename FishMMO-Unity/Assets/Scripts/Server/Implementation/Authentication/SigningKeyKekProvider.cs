@@ -49,7 +49,14 @@ namespace FishMMO.Server.Implementation
 
 			try
 			{
-				var result = secretService.FetchAsync(DatabaseKey, System.Threading.CancellationToken.None)
+				// Escape Unity's SynchronizationContext via Task.Run before blocking with
+				// GetResult(). Awaiting FetchAsync directly on the main thread would deadlock:
+				// its continuation needs to resume on the main thread, which is the thread
+				// blocked waiting for it. Task.Run moves the await onto a thread-pool thread
+				// so its continuation doesn't need the main thread to complete. Same pattern
+				// used by the Task.Run(...).Wait(timeoutMs) calls in LoginServerSystem.
+				var result = System.Threading.Tasks.Task.Run(() =>
+					secretService.FetchAsync(DatabaseKey, System.Threading.CancellationToken.None))
 					.GetAwaiter().GetResult();
 
 				if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))

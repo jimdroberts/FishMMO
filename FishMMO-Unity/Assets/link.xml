@@ -1,92 +1,1939 @@
 <linker>
-  <!--
-    BouncyCastle relies on reflection for algorithm lookup, ASN.1 type
-    activation, and cryptographic service resolution.  On IL2CPP / AOT
-    platforms (WebGL, iOS, consoles) the managed-code linker strips
-    unreferenced types, causing runtime crashes in:
-      - X509CertificateParser.ReadCertificate()
-      - SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo()
-      - DigestUtilities / CipherUtilities / SignerUtilities algorithm lookups
-
-    Preserving the entire assembly is the only safe option; partial
-    namespace preservation still misses deeply-nested reflection chains.
-
-    Referenced by: ClientCertificatePinning.cs
-  -->
-  <assembly fullname="Org.BouncyCastle" preserve="all"/>
-
-  <!--
-    FishMMO-AuthShared provides authentication DTOs and enums
-    (e.g. ClientAuthenticationResult, ConnectionEncryptionData) used
-    across client, server, and shared broadcast structs.  The linker
-    strips these in IL2CPP builds because they are only referenced
-    indirectly through FishNet serialization paths.
-
-    Referenced by: AuthenticationBroadcasts.cs, HandshakeService.cs, etc.
-  -->
-  <assembly fullname="FishMMO-AuthShared">
-    <type fullname="FishMMO.Auth.Core.*" preserve="all"/>
+  <assembly fullname="mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="Internal.Cryptography" preserve="all" />
+    <type fullname="Internal.IO" preserve="all" />
+    <type fullname="Internal.Runtime.Augments" preserve="all" />
+    <type fullname="Internal.Runtime.CompilerServices" preserve="all" />
+    <type fullname="Internal.Threading.Tasks.Tracing" preserve="all" />
+    <type fullname="Microsoft.CodeAnalysis" preserve="all" />
+    <type fullname="Microsoft.Win32" preserve="all" />
+    <type fullname="Microsoft.Win32.SafeHandles" preserve="all" />
+    <type fullname="Mono" preserve="all" />
+    <type fullname="Mono.Globalization.Unicode" preserve="all" />
+    <type fullname="Mono.Interop" preserve="all" />
+    <type fullname="Mono.Math" preserve="all" />
+    <type fullname="Mono.Math.Prime" preserve="all" />
+    <type fullname="Mono.Math.Prime.Generator" preserve="all" />
+    <type fullname="Mono.Security" preserve="all" />
+    <type fullname="Mono.Security.Cryptography" preserve="all" />
+    <type fullname="Mono.Xml" preserve="all" />
+    <type fullname="System" preserve="all" />
+    <type fullname="System.Buffers" preserve="all" />
+    <type fullname="System.Buffers.Binary" preserve="all" />
+    <type fullname="System.Buffers.Text" preserve="all" />
+    <type fullname="System.Collections" preserve="all" />
+    <type fullname="System.Collections.Concurrent" preserve="all" />
+    <type fullname="System.Collections.Generic" preserve="all" />
+    <type fullname="System.Collections.ObjectModel" preserve="all" />
+    <type fullname="System.Configuration.Assemblies" preserve="all" />
+    <type fullname="System.Deployment.Internal" preserve="all" />
+    <type fullname="System.Diagnostics" preserve="all" />
+    <type fullname="System.Diagnostics.CodeAnalysis" preserve="all" />
+    <type fullname="System.Diagnostics.Contracts" preserve="all" />
+    <type fullname="System.Diagnostics.Contracts.Internal" preserve="all" />
+    <type fullname="System.Diagnostics.SymbolStore" preserve="all" />
+    <type fullname="System.Diagnostics.Tracing" preserve="all" />
+    <type fullname="System.Globalization" preserve="all" />
+    <type fullname="System.IO" preserve="all" />
+    <type fullname="System.IO.Enumeration" preserve="all" />
+    <type fullname="System.IO.IsolatedStorage" preserve="all" />
+    <type fullname="System.Numerics" preserve="all" />
+    <type fullname="System.Numerics.Hashing" preserve="all" />
+    <type fullname="System.Reflection" preserve="all" />
+    <type fullname="System.Reflection.Emit" preserve="all" />
+    <type fullname="System.Reflection.Metadata" preserve="all" />
+    <type fullname="System.Resources" preserve="all" />
+    <type fullname="System.Runtime" preserve="all" />
+    <type fullname="System.Runtime.CompilerServices" preserve="all" />
+    <type fullname="System.Runtime.ConstrainedExecution" preserve="all" />
+    <type fullname="System.Runtime.DesignerServices" preserve="all" />
+    <type fullname="System.Runtime.ExceptionServices" preserve="all" />
+    <type fullname="System.Runtime.Hosting" preserve="all" />
+    <type fullname="System.Runtime.InteropServices" preserve="all" />
+    <type fullname="System.Runtime.InteropServices.ComTypes" preserve="all" />
+    <type fullname="System.Runtime.InteropServices.Expando" preserve="all" />
+    <type fullname="System.Runtime.InteropServices.WindowsRuntime" preserve="all" />
+    <type fullname="System.Runtime.Remoting" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Activation" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Channels" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Contexts" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Lifetime" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Messaging" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Metadata" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Metadata.W3cXsd2001" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Proxies" preserve="all" />
+    <type fullname="System.Runtime.Remoting.Services" preserve="all" />
+    <type fullname="System.Runtime.Serialization" preserve="all" />
+    <type fullname="System.Runtime.Serialization.Formatters" preserve="all" />
+    <type fullname="System.Runtime.Serialization.Formatters.Binary" preserve="all" />
+    <type fullname="System.Runtime.Versioning" preserve="all" />
+    <type fullname="System.Security" preserve="all" />
+    <type fullname="System.Security.AccessControl" preserve="all" />
+    <type fullname="System.Security.Claims" preserve="all" />
+    <type fullname="System.Security.Cryptography" preserve="all" />
+    <type fullname="System.Security.Cryptography.X509Certificates" preserve="all" />
+    <type fullname="System.Security.Permissions" preserve="all" />
+    <type fullname="System.Security.Policy" preserve="all" />
+    <type fullname="System.Security.Principal" preserve="all" />
+    <type fullname="System.Security.Util" preserve="all" />
+    <type fullname="System.Text" preserve="all" />
+    <type fullname="System.Threading" preserve="all" />
+    <type fullname="System.Threading.Tasks" preserve="all" />
+    <type fullname="System.Threading.Tasks.Sources" preserve="all" />
+    <type fullname="Unity" preserve="all" />
   </assembly>
-
-  <!--
-    FishMMO.Shared contains network broadcast structs (auth handshake,
-    server select, world details), Constants (including GetWorkingDirectory
-    which calls System.AppContext), ServerAddress, WorldServerDetails,
-    and other types used across client and server assemblies.
-
-    Preserving the full assembly is safe since it is the primary shared
-    code assembly and all types are referenced at runtime.
-
-    Referenced by: Constants.cs, AuthenticationBroadcasts.cs, ServerAddress.cs,
-    WorldServerDetails.cs, and all shared network code.
-  -->
-  <assembly fullname="FishMMO.Shared" preserve="all"/>
-
-  <!--
-    FishMMO.Client contains client-side network handlers, UI controllers,
-    and security helpers that reference shared broadcast types.
-
-    Referenced by: all client-side code that sends/receives broadcasts.
-  -->
-  <assembly fullname="FishMMO.Client" preserve="all"/>
-
-  <!--
-    FishMMO.Server contains server-side systems that send world server
-    details, handle character select, and process network broadcasts.
-
-    Referenced by: ServerSelectSystem.cs, CharacterSelectSystem.cs, etc.
-  -->
-  <assembly fullname="FishMMO.Server" preserve="all"/>
-
-  <!--
-    System.AppContext is used by Constants.GetWorkingDirectory() to
-    obtain the application base directory via AppDomain.CurrentDomain
-    .BaseDirectory. Under IL2CPP the System.Runtime assembly is heavily
-    stripped and this type may be removed, causing a MissingMethodException.
-
-    Referenced by: Constants.cs
-  -->
-  <assembly fullname="System.Runtime">
-    <type fullname="System.AppContext" preserve="all"/>
+  <assembly fullname="UnityEngine, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditorInternal" preserve="all" />
+    <type fullname="UnityEngine" preserve="all" />
+    <type fullname="UnityEngine.Apple.TV" preserve="all" />
+    <type fullname="UnityEngine.Audio" preserve="all" />
+    <type fullname="UnityEngine.Bindings" preserve="all" />
+    <type fullname="UnityEngine.iOS" preserve="all" />
+    <type fullname="UnityEngine.Networking" preserve="all" />
+    <type fullname="UnityEngine.Profiling.Experimental" preserve="all" />
+    <type fullname="UnityEngine.Profiling.Memory.Experimental" preserve="all" />
+    <type fullname="UnityEngine.Rendering" preserve="all" />
+    <type fullname="UnityEngine.SearchService" preserve="all" />
   </assembly>
-
-  <!--
-    HtmlAgilityPack relies on reflection for HTML document parsing,
-    type resolution, and XPath evaluation.  Under IL2CPP the managed
-    code linker strips unreferenced types, causing runtime failures
-    in HTML parsing operations.
-
-    Referenced by: WebTransport/WebGL HTTP response handling.
-  -->
-  <assembly fullname="HtmlAgilityPack" preserve="all"/>
-
-  <!--
-    WebTransport native types must be preserved for FishNet's WebTransport
-    plugin to function at runtime on IL2CPP platforms.  The plugin relies
-    on P/Invoke and native struct interop.  Missing types cause silent
-    connection failures on WebGL builds.
-
-    Referenced by: FishNet WebTransport transport.
-  -->
-  <assembly fullname="WebTransport" preserve="all"/>
+  <assembly fullname="Unity.Scripting, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Scripting" preserve="all" />
+    <type fullname="Unity.Scripting.AssemblyManagement" preserve="all" />
+    <type fullname="Unity.Scripting.LifecycleManagement" preserve="all" />
+    <type fullname="Unity.Scripting.LifecycleManagement.CodeGen" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.AI" preserve="all" />
+    <type fullname="UnityEngine.Experimental.AI" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AMDModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.AMD" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.ARModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.XR.Tango" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AccessibilityModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Accessibility" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AdaptivePerformanceModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.AdaptivePerformance" preserve="all" />
+    <type fullname="UnityEngine.AdaptivePerformance.Basic" preserve="all" />
+    <type fullname="UnityEngine.AdaptivePerformance.Provider" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AndroidJNIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Android" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AnimationModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Animations" preserve="all" />
+    <type fullname="UnityEngine.Experimental.Animations" preserve="all" />
+    <type fullname="UnityEngine.Playables" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.AssetBundleModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.AudioModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Audio" preserve="all" />
+    <type fullname="UnityEngine.Experimental.Audio" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.ClothModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.ClusterInputModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.ClusterRendererModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.ContentLoadModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Loading" preserve="all" />
+    <type fullname="UnityEngine.Loading" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.CoreModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="AOT" preserve="all" />
+    <type fullname="JetBrains.Annotations" preserve="all" />
+    <type fullname="Unity.Baselib" preserve="all" />
+    <type fullname="Unity.Baselib.LowLevel" preserve="all" />
+    <type fullname="Unity.Burst" preserve="all" />
+    <type fullname="Unity.Burst.LowLevel" preserve="all" />
+    <type fullname="Unity.Collections" preserve="all" />
+    <type fullname="Unity.Collections.LowLevel.Unsafe" preserve="all" />
+    <type fullname="Unity.Content" preserve="all" />
+    <type fullname="Unity.DataModel" preserve="all" />
+    <type fullname="Unity.EntitiesLike" preserve="all" />
+    <type fullname="Unity.IntegerTime" preserve="all" />
+    <type fullname="Unity.IO.Archive" preserve="all" />
+    <type fullname="Unity.IO.LowLevel.Unsafe" preserve="all" />
+    <type fullname="Unity.Jobs" preserve="all" />
+    <type fullname="Unity.Jobs.LowLevel.Unsafe" preserve="all" />
+    <type fullname="Unity.Profiling" preserve="all" />
+    <type fullname="Unity.Profiling.LowLevel" preserve="all" />
+    <type fullname="Unity.Profiling.LowLevel.Unsafe" preserve="all" />
+    <type fullname="Unity.Profiling.Memory" preserve="all" />
+    <type fullname="UnityEditor.Experimental" preserve="all" />
+    <type fullname="UnityEngine._Scripting.APIUpdating" preserve="all" />
+    <type fullname="UnityEngine.Analytics" preserve="all" />
+    <type fullname="UnityEngine.Apple" preserve="all" />
+    <type fullname="UnityEngine.Apple.ReplayKit" preserve="all" />
+    <type fullname="UnityEngine.Assemblies" preserve="all" />
+    <type fullname="UnityEngine.Assertions" preserve="all" />
+    <type fullname="UnityEngine.Assertions.Comparers" preserve="all" />
+    <type fullname="UnityEngine.Assertions.Must" preserve="all" />
+    <type fullname="UnityEngine.Categorization" preserve="all" />
+    <type fullname="UnityEngine.DedicatedServer" preserve="all" />
+    <type fullname="UnityEngine.Device" preserve="all" />
+    <type fullname="UnityEngine.Diagnostics" preserve="all" />
+    <type fullname="UnityEngine.Events" preserve="all" />
+    <type fullname="UnityEngine.Experimental.GlobalIllumination" preserve="all" />
+    <type fullname="UnityEngine.Experimental.Playables" preserve="all" />
+    <type fullname="UnityEngine.Experimental.Rendering" preserve="all" />
+    <type fullname="UnityEngine.Experimental.U2D" preserve="all" />
+    <type fullname="UnityEngine.Internal" preserve="all" />
+    <type fullname="UnityEngine.IO" preserve="all" />
+    <type fullname="UnityEngine.Jobs" preserve="all" />
+    <type fullname="UnityEngine.LightTransport" preserve="all" />
+    <type fullname="UnityEngine.LightTransport.PostProcessing" preserve="all" />
+    <type fullname="UnityEngine.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.Lumin" preserve="all" />
+    <type fullname="UnityEngine.Networking.PlayerConnection" preserve="all" />
+    <type fullname="UnityEngine.PlayerLoop" preserve="all" />
+    <type fullname="UnityEngine.Pool" preserve="all" />
+    <type fullname="UnityEngine.Profiling" preserve="all" />
+    <type fullname="UnityEngine.Rendering.RendererUtils" preserve="all" />
+    <type fullname="UnityEngine.SceneManagement" preserve="all" />
+    <type fullname="UnityEngine.Scripting" preserve="all" />
+    <type fullname="UnityEngine.Scripting.APIUpdating" preserve="all" />
+    <type fullname="UnityEngine.Search" preserve="all" />
+    <type fullname="UnityEngine.Serialization" preserve="all" />
+    <type fullname="UnityEngine.Shaders" preserve="all" />
+    <type fullname="UnityEngine.Sprites" preserve="all" />
+    <type fullname="UnityEngine.TestTools" preserve="all" />
+    <type fullname="UnityEngine.tvOS" preserve="all" />
+    <type fullname="UnityEngine.U2D" preserve="all" />
+    <type fullname="UnityEngine.Windows" preserve="all" />
+    <type fullname="UnityEngine.Windows.Speech" preserve="all" />
+    <type fullname="UnityEngine.Windows.WebCam" preserve="all" />
+    <type fullname="UnityEngine.WSA" preserve="all" />
+    <type fullname="UnityEngineInternal" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.CrashReportingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.CrashReportHandler" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.DSPGraphModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.DirectorModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.GIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.GameCenterModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.SocialPlatforms" preserve="all" />
+    <type fullname="UnityEngine.SocialPlatforms.GameCenter" preserve="all" />
+    <type fullname="UnityEngine.SocialPlatforms.Impl" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.GraphicsStateCollectionSerializerModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.GridModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.HierarchyModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Hierarchy" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.HierarchyCoreModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.HotReloadModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.IMGUIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.IdentifiersModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Identifiers" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.ImageConversionModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.InputModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngineInternal.Input" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.InputForUIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.InputForUI" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.InputLegacyModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.InsightsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.JSONSerializeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.LocalizationModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.MarshallingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.MultiplayerModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Multiplayer.PlayMode" preserve="all" />
+    <type fullname="UnityEngine.Multiplayer.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.NVIDIAModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.NVIDIA" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.ParticleSystemModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.ParticleSystemJobs" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.PerformanceReportingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.LowLevelPhysics" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.Physics2DModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.LowLevelPhysics2D" preserve="all" />
+    <type fullname="UnityEngine.LowLevelPhysics2D" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.PhysicsBackendPhysXModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.PropertiesModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Properties" preserve="all" />
+    <type fullname="Unity.Properties.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.RenderAs2DModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.ScreenCaptureModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.ScriptingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.IL2CPP.CompilerServices" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.ShaderVariantAnalyticsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.SharedInternalsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.SpriteMaskModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.SpriteShapeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.StreamingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.SubstanceModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.SubsystemsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Subsystems" preserve="all" />
+    <type fullname="UnityEngine.SubsystemsImplementation" preserve="all" />
+    <type fullname="UnityEngine.SubsystemsImplementation.Extensions" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.TLSModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.TLS" preserve="all" />
+    <type fullname="Unity.TLS.LowLevel" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.TerrainModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.TerrainTools" preserve="all" />
+    <type fullname="UnityEngine.TerrainUtils" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.TerrainPhysicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.TextCoreFontEngineModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.TextCore" preserve="all" />
+    <type fullname="UnityEngine.TextCore.LowLevel" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.TextCoreTextEngineModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.TextCore.Text" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.TextRenderingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.TilemapModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Tilemaps" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UIElementsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.UIElements" preserve="all" />
+    <type fullname="UnityEngine.UIElements.Collections" preserve="all" />
+    <type fullname="UnityEngine.UIElements.Experimental" preserve="all" />
+    <type fullname="UnityEngine.UIElements.HierarchyV2" preserve="all" />
+    <type fullname="UnityEngine.UIElements.Internal" preserve="all" />
+    <type fullname="UnityEngine.UIElements.Layout" preserve="all" />
+    <type fullname="UnityEngine.UIElements.StyleSheets" preserve="all" />
+    <type fullname="UnityEngine.UIElements.StyleSheets.Syntax" preserve="all" />
+    <type fullname="UnityEngine.UIElements.UIR" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UmbraModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UnityAnalyticsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UnityAnalyticsCommonModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Analytics" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UnityConnectModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Advertisements" preserve="all" />
+    <type fullname="UnityEngine.Connect" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UnityConsentModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.UnityConsent" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UnityCurlModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Curl" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UnityWebRequestModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UnityWebRequestAssetBundleModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UnityWebRequestAudioModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UnityWebRequestTextureModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.UnityWebRequestWWWModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.VFXModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Experimental.VFX" preserve="all" />
+    <type fullname="UnityEngine.VFX" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.VRModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Experimental.XR" preserve="all" />
+    <type fullname="UnityEngine.XR" preserve="all" />
+    <type fullname="UnityEngine.XR.WSA" preserve="all" />
+    <type fullname="UnityEngine.XR.WSA.Input" preserve="all" />
+    <type fullname="UnityEngineInternal.XR.WSA" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.VectorGraphicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="ClipperLib" preserve="all" />
+    <type fullname="LibTessDotNet" preserve="all" />
+    <type fullname="Unity.VectorGraphics" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.VehiclesModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.VideoModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Experimental.Video" preserve="all" />
+    <type fullname="UnityEngine.Video" preserve="all" />
+    <type fullname="UnityEngineInternal.Video" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.VirtualTexturingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.VirtualTexturing" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.WindModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEngine.XRModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.XR.Provider" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor" preserve="all" />
+    <type fullname="UnityEditor.Build" preserve="all" />
+    <type fullname="UnityEditor.Localization.Editor" preserve="all" />
+    <type fullname="UnityEditor.SearchService" preserve="all" />
+    <type fullname="UnityEditor.Sprites" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.AccessibilityModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Accessibility" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.AdaptivePerformanceModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.AdaptivePerformance" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.Basic.Editor" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.Editor" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.Editor.Analytics" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.Editor.Analytics.Hooks" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.Editor.Metadata" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.Simulator.Editor" preserve="all" />
+    <type fullname="UnityEditor.AdaptivePerformance.UI.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.AssetComplianceModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.BuildProfileModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Build.Profile" preserve="all" />
+    <type fullname="UnityEditor.Build.Profile.AdaptivePerformance" preserve="all" />
+    <type fullname="UnityEditor.Build.Profile.Elements" preserve="all" />
+    <type fullname="UnityEditor.Build.Profile.Handlers" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.ClothModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.CoreBusinessMetricsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.CoreModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="NiceIO" preserve="all" />
+    <type fullname="Unity.CodeEditor" preserve="all" />
+    <type fullname="Unity.Motion.Editor.AnimationWindow" preserve="all" />
+    <type fullname="Unity.MPE" preserve="all" />
+    <type fullname="Unity.Profiling.Editor" preserve="all" />
+    <type fullname="Unity.Profiling.Editor.UI" preserve="all" />
+    <type fullname="Unity.Profiling.Memory.Editor" preserve="all" />
+    <type fullname="UnityEditor.Actions" preserve="all" />
+    <type fullname="UnityEditor.AddComponent" preserve="all" />
+    <type fullname="UnityEditor.Advertisements" preserve="all" />
+    <type fullname="UnityEditor.AI" preserve="all" />
+    <type fullname="UnityEditor.Android" preserve="all" />
+    <type fullname="UnityEditor.AnimatedValues" preserve="all" />
+    <type fullname="UnityEditor.Animations" preserve="all" />
+    <type fullname="UnityEditor.AnimationWindowBuiltin" preserve="all" />
+    <type fullname="UnityEditor.AssetImporters" preserve="all" />
+    <type fullname="UnityEditor.Audio" preserve="all" />
+    <type fullname="UnityEditor.Audio.Analytics" preserve="all" />
+    <type fullname="UnityEditor.Audio.UIElements" preserve="all" />
+    <type fullname="UnityEditor.BugReporting" preserve="all" />
+    <type fullname="UnityEditor.Build.Content" preserve="all" />
+    <type fullname="UnityEditor.Build.Player" preserve="all" />
+    <type fullname="UnityEditor.Build.Profile.Internal" preserve="all" />
+    <type fullname="UnityEditor.Build.Rendering" preserve="all" />
+    <type fullname="UnityEditor.Build.Reporting" preserve="all" />
+    <type fullname="UnityEditor.Callbacks" preserve="all" />
+    <type fullname="UnityEditor.Categorization" preserve="all" />
+    <type fullname="UnityEditor.CloudBuild" preserve="all" />
+    <type fullname="UnityEditor.Collaboration" preserve="all" />
+    <type fullname="UnityEditor.Compilation" preserve="all" />
+    <type fullname="UnityEditor.Connect" preserve="all" />
+    <type fullname="UnityEditor.CrashReporting" preserve="all" />
+    <type fullname="UnityEditor.DeploymentTargets" preserve="all" />
+    <type fullname="UnityEditor.EditorTools" preserve="all" />
+    <type fullname="UnityEditor.EngineDiagnostics" preserve="all" />
+    <type fullname="UnityEditor.Events" preserve="all" />
+    <type fullname="UnityEditor.Experimental.AssetImporters" preserve="all" />
+    <type fullname="UnityEditor.Experimental.Licensing" preserve="all" />
+    <type fullname="UnityEditor.Experimental.Rendering" preserve="all" />
+    <type fullname="UnityEditor.Experimental.SceneManagement" preserve="all" />
+    <type fullname="UnityEditor.Hardware" preserve="all" />
+    <type fullname="UnityEditor.IMGUI.Controls" preserve="all" />
+    <type fullname="UnityEditor.InsightsEditor" preserve="all" />
+    <type fullname="UnityEditor.InsightsEditor.EditorAnalytics" preserve="all" />
+    <type fullname="UnityEditor.Inspector" preserve="all" />
+    <type fullname="UnityEditor.Inspector.GraphicsSettingsInspectors" preserve="all" />
+    <type fullname="UnityEditor.Inspector.VisualElements.ProjectSettings" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Data.Events" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Data.Events.Base" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Events" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Events.Buttons" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Events.Handlers" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Events.Text" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Events.Windows" preserve="all" />
+    <type fullname="UnityEditor.Licensing.UI.Helper" preserve="all" />
+    <type fullname="UnityEditor.LightBaking" preserve="all" />
+    <type fullname="UnityEditor.Macros" preserve="all" />
+    <type fullname="UnityEditor.Macros.Utilities" preserve="all" />
+    <type fullname="UnityEditor.MemoryProfiler" preserve="all" />
+    <type fullname="UnityEditor.Modules" preserve="all" />
+    <type fullname="UnityEditor.Mono.BuildPipeline" preserve="all" />
+    <type fullname="UnityEditor.Mono.Inspector.GraphicsSettingsInspectors" preserve="all" />
+    <type fullname="UnityEditor.Mono.Scripting.RestrictedApisValidation" preserve="all" />
+    <type fullname="UnityEditor.Mono.Utils" preserve="all" />
+    <type fullname="UnityEditor.MPE" preserve="all" />
+    <type fullname="UnityEditor.Networking.PlayerConnection" preserve="all" />
+    <type fullname="UnityEditor.ObjectPool" preserve="all" />
+    <type fullname="UnityEditor.Overlays" preserve="all" />
+    <type fullname="UnityEditor.PackageManager" preserve="all" />
+    <type fullname="UnityEditor.PackageManager.Requests" preserve="all" />
+    <type fullname="UnityEditor.PackageManager.UI" preserve="all" />
+    <type fullname="UnityEditor.PackageManager.UI.Internal" preserve="all" />
+    <type fullname="UnityEditor.PackageManager.UnityLifecycle" preserve="all" />
+    <type fullname="UnityEditor.PlatformSupport" preserve="all" />
+    <type fullname="UnityEditor.Playables" preserve="all" />
+    <type fullname="UnityEditor.Presets" preserve="all" />
+    <type fullname="UnityEditor.Profiling" preserve="all" />
+    <type fullname="UnityEditor.Profiling.Analytics" preserve="all" />
+    <type fullname="UnityEditor.Profiling.Memory.Experimental" preserve="all" />
+    <type fullname="UnityEditor.Profiling.ModuleEditor" preserve="all" />
+    <type fullname="UnityEditor.ProjectWindowCallback" preserve="all" />
+    <type fullname="UnityEditor.Purchasing" preserve="all" />
+    <type fullname="UnityEditor.Remote" preserve="all" />
+    <type fullname="UnityEditor.Remoting" preserve="all" />
+    <type fullname="UnityEditor.Rendering" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Analytics" preserve="all" />
+    <type fullname="UnityEditor.Rendering.GraphicsSettingsInspectors" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Settings" preserve="all" />
+    <type fullname="UnityEditor.SceneManagement" preserve="all" />
+    <type fullname="UnityEditor.Scripting" preserve="all" />
+    <type fullname="UnityEditor.Scripting.APIUpdater" preserve="all" />
+    <type fullname="UnityEditor.Scripting.Compilers" preserve="all" />
+    <type fullname="UnityEditor.Scripting.ScriptCompilation" preserve="all" />
+    <type fullname="UnityEditor.ScriptUpdater" preserve="all" />
+    <type fullname="UnityEditor.ShaderKeywordFilter" preserve="all" />
+    <type fullname="UnityEditor.Shaders" preserve="all" />
+    <type fullname="UnityEditor.ShortcutManagement" preserve="all" />
+    <type fullname="UnityEditor.Snap" preserve="all" />
+    <type fullname="UnityEditor.SpeedTree.Importer" preserve="all" />
+    <type fullname="UnityEditor.StyleSheets" preserve="all" />
+    <type fullname="UnityEditor.Toolbars" preserve="all" />
+    <type fullname="UnityEditor.TreeViewExamples" preserve="all" />
+    <type fullname="UnityEditor.U2D" preserve="all" />
+    <type fullname="UnityEditor.U2D.Common" preserve="all" />
+    <type fullname="UnityEditor.U2D.Interface" preserve="all" />
+    <type fullname="UnityEditor.U2D.SpritePacking" preserve="all" />
+    <type fullname="UnityEditor.UIElements" preserve="all" />
+    <type fullname="UnityEditor.UIElements.ProjectSettings" preserve="all" />
+    <type fullname="UnityEditor.UIElements.StyleSheets" preserve="all" />
+    <type fullname="UnityEditor.UnityLinker" preserve="all" />
+    <type fullname="UnityEditor.Utils" preserve="all" />
+    <type fullname="UnityEditor.VersionControl" preserve="all" />
+    <type fullname="UnityEditor.VisualStudioIntegration" preserve="all" />
+    <type fullname="UnityEditor.Web" preserve="all" />
+    <type fullname="UnityEditorInternal.APIUpdating" preserve="all" />
+    <type fullname="UnityEditorInternal.FrameDebuggerInternal" preserve="all" />
+    <type fullname="UnityEditorInternal.Profiling" preserve="all" />
+    <type fullname="UnityEditorInternal.Profiling.Memory.Experimental" preserve="all" />
+    <type fullname="UnityEditorInternal.Profiling.Memory.Experimental.FileFormat" preserve="all" />
+    <type fullname="UnityEditorInternal.VersionControl" preserve="all" />
+    <type fullname="UnityEditorInternal.VR" preserve="all" />
+    <type fullname="UnityEngine.Rendering.VirtualTexturingEditor" preserve="all" />
+    <type fullname="UnityEngine.U2D.Interface" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.DeviceSimulatorModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.DeviceSimulation" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.DiagnosticsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.EditorToolbarModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Search" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.EmbreeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Embree" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.GIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.GraphToolkitModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.GraphToolkit" preserve="all" />
+    <type fullname="Unity.GraphToolkit.CSO" preserve="all" />
+    <type fullname="Unity.GraphToolkit.Editor" preserve="all" />
+    <type fullname="Unity.GraphToolkit.Editor.ContextualMenuItems" preserve="all" />
+    <type fullname="Unity.GraphToolkit.Editor.Implementation" preserve="all" />
+    <type fullname="Unity.GraphToolkit.Editor.Implementation.UI" preserve="all" />
+    <type fullname="Unity.GraphToolkit.InternalBridge" preserve="all" />
+    <type fullname="Unity.GraphToolkit.ItemLibrary.Editor" preserve="all" />
+    <type fullname="Unity.GraphToolsAuthoringFramework.InternalEditorBridge" preserve="all" />
+    <type fullname="UnityEditor.GraphToolkitEditor.InternalBridge.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.GraphViewModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Experimental.GraphView" preserve="all" />
+    <type fullname="UnityEditor.Experimental.UIElements.GraphView" preserve="all" />
+    <type fullname="UnityEditor.UIElements.GraphView" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.GraphicsStateCollectionSerializerModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.GridAndSnapModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.GridModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.HierarchyModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Hierarchy.Editor" preserve="all" />
+    <type fullname="Unity.Hierarchy.Editor.Tests" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.MediaModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Media" preserve="all" />
+    <type fullname="UnityEditorInternal.Media" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.MultiplayerModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Multiplayer.PlayMode.Editor" preserve="all" />
+    <type fullname="UnityEditor.Multiplayer.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.Physics2DModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.U2D.Physics2D" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.PhysicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.PhysicsEditor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.PlayModeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.PlayMode.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.PresetsUIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.ProjectAuditorModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.ProjectAuditor.Editor" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.AssemblyUtils" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.Build" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.CodeAnalysis" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.Core" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.InstructionAnalyzers" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.Modules" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.SettingsAnalysis" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.UI" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.UI.Framework" preserve="all" />
+    <type fullname="Unity.ProjectAuditor.Editor.Utils" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.PropertiesModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.QuickInstallModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.InAppPurchasing" preserve="all" />
+    <type fullname="UnityEditor.LevelPlay" preserve="all" />
+    <type fullname="UnityEditor.QuickInstall" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.QuickSearchModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Search.Providers" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.SafeModeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.SceneTemplateModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.SceneTemplate" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.SceneViewModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.ShaderBuildSettingsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.ShaderCompilationModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.ShaderFoundryModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.ShaderFoundry" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.SketchUpModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.SpriteMaskModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.SpriteShapeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.SubstanceModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.TerrainModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.TerrainTools" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.TextCoreFontEngineModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.TextCore.LowLevel" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.TextCoreTextEngineModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.TextCore.Text" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.TextRenderingModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.TilemapModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.TreeModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="TreeEditor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UIAutomationModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.UIAutomation" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UIBuilderModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.UI.Builder" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UIElementsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.UIElements.Editor" preserve="all" />
+    <type fullname="UnityEditor.UIElements.Bindings" preserve="all" />
+    <type fullname="UnityEditor.UIElements.Debugger" preserve="all" />
+    <type fullname="UnityEditor.UIElements.Experimental.Debugger" preserve="all" />
+    <type fullname="UnityEditor.UIElements.Experimental.UILayoutDebugger" preserve="all" />
+    <type fullname="UnityEditor.UIElements.GameObjects" preserve="all" />
+    <type fullname="UnityEditor.UIElements.Inspector" preserve="all" />
+    <type fullname="UnityEditor.UIElements.Text" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UIElementsSamplesModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.UIElements.Samples" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UIToolkitAuthoringModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.UIToolkit.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UmbraModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.UnityConnectModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Connect.Fallback" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.VFXModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.VFX" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.VectorGraphicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.VectorGraphics.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.VideoModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="UnityEditor.XRModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.XR" preserve="all" />
+  </assembly>
+  <assembly fullname="netstandard, Version=2.1.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
+  <assembly fullname="System.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="System.Diagnostics.Eventing" preserve="all" />
+    <type fullname="System.Diagnostics.Eventing.Reader" preserve="all" />
+    <type fullname="System.Diagnostics.PerformanceData" preserve="all" />
+    <type fullname="System.Dynamic" preserve="all" />
+    <type fullname="System.Dynamic.Utils" preserve="all" />
+    <type fullname="System.IO.MemoryMappedFiles" preserve="all" />
+    <type fullname="System.IO.Pipes" preserve="all" />
+    <type fullname="System.Linq" preserve="all" />
+    <type fullname="System.Linq.Expressions" preserve="all" />
+    <type fullname="System.Linq.Expressions.Compiler" preserve="all" />
+    <type fullname="System.Linq.Parallel" preserve="all" />
+    <type fullname="System.Management.Instrumentation" preserve="all" />
+    <type fullname="System.Net.Sockets" preserve="all" />
+  </assembly>
+  <assembly fullname="System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="Internal.Cryptography.Pal" preserve="all" />
+    <type fullname="Microsoft.CSharp" preserve="all" />
+    <type fullname="Microsoft.VisualBasic" preserve="all" />
+    <type fullname="Mono.Audio" preserve="all" />
+    <type fullname="Mono.Btls" preserve="all" />
+    <type fullname="Mono.Http" preserve="all" />
+    <type fullname="Mono.Net" preserve="all" />
+    <type fullname="Mono.Net.Dns" preserve="all" />
+    <type fullname="Mono.Net.Security" preserve="all" />
+    <type fullname="Mono.Net.Security.Private" preserve="all" />
+    <type fullname="Mono.Unity" preserve="all" />
+    <type fullname="Mono.Util" preserve="all" />
+    <type fullname="ObjCRuntimeInternal" preserve="all" />
+    <type fullname="System.CodeDom" preserve="all" />
+    <type fullname="System.CodeDom.Compiler" preserve="all" />
+    <type fullname="System.Collections.Specialized" preserve="all" />
+    <type fullname="System.ComponentModel" preserve="all" />
+    <type fullname="System.ComponentModel.Design" preserve="all" />
+    <type fullname="System.ComponentModel.Design.Serialization" preserve="all" />
+    <type fullname="System.Configuration" preserve="all" />
+    <type fullname="System.IO.Compression" preserve="all" />
+    <type fullname="System.IO.CoreFX" preserve="all" />
+    <type fullname="System.IO.Ports" preserve="all" />
+    <type fullname="System.Media" preserve="all" />
+    <type fullname="System.Net" preserve="all" />
+    <type fullname="System.Net.Cache" preserve="all" />
+    <type fullname="System.Net.Configuration" preserve="all" />
+    <type fullname="System.Net.Http" preserve="all" />
+    <type fullname="System.Net.Mail" preserve="all" />
+    <type fullname="System.Net.Mime" preserve="all" />
+    <type fullname="System.Net.NetworkInformation" preserve="all" />
+    <type fullname="System.Net.Security" preserve="all" />
+    <type fullname="System.Net.WebSockets" preserve="all" />
+    <type fullname="System.Security.Authentication" preserve="all" />
+    <type fullname="System.Security.Authentication.ExtendedProtection" preserve="all" />
+    <type fullname="System.Security.Authentication.ExtendedProtection.Configuration" preserve="all" />
+    <type fullname="System.Text.RegularExpressions" preserve="all" />
+    <type fullname="System.Timers" preserve="all" />
+    <type fullname="System.Web" preserve="all" />
+    <type fullname="System.Web.Util" preserve="all" />
+    <type fullname="System.Windows.Input" preserve="all" />
+    <type fullname="System.Windows.Markup" preserve="all" />
+  </assembly>
+  <assembly fullname="Mono.Security, Version=4.0.0.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756">
+    <type fullname="Mono.Security.Authenticode" preserve="all" />
+    <type fullname="Mono.Security.Interface" preserve="all" />
+    <type fullname="Mono.Security.Protocol.Ntlm" preserve="all" />
+    <type fullname="Mono.Security.X509" preserve="all" />
+    <type fullname="Mono.Security.X509.Extensions" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Configuration, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <type fullname="System.Configuration.Internal" preserve="all" />
+    <type fullname="System.Configuration.Provider" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Xml, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="MS.Internal.Xml.Cache" preserve="all" />
+    <type fullname="MS.Internal.Xml.XPath" preserve="all" />
+    <type fullname="System.Xml" preserve="all" />
+    <type fullname="System.Xml.Resolvers" preserve="all" />
+    <type fullname="System.Xml.Schema" preserve="all" />
+    <type fullname="System.Xml.Serialization" preserve="all" />
+    <type fullname="System.Xml.Serialization.Advanced" preserve="all" />
+    <type fullname="System.Xml.Serialization.Configuration" preserve="all" />
+    <type fullname="System.Xml.Utils" preserve="all" />
+    <type fullname="System.Xml.XmlConfiguration" preserve="all" />
+    <type fullname="System.Xml.XPath" preserve="all" />
+    <type fullname="System.Xml.Xsl" preserve="all" />
+    <type fullname="System.Xml.Xsl.IlGen" preserve="all" />
+    <type fullname="System.Xml.Xsl.Qil" preserve="all" />
+    <type fullname="System.Xml.Xsl.Runtime" preserve="all" />
+    <type fullname="System.Xml.Xsl.XPath" preserve="all" />
+    <type fullname="System.Xml.Xsl.Xslt" preserve="all" />
+    <type fullname="System.Xml.Xsl.XsltOld" preserve="all" />
+    <type fullname="System.Xml.Xsl.XsltOld.Debugger" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="Microsoft.SqlServer.Server" preserve="all" />
+    <type fullname="System.Data" preserve="all" />
+    <type fullname="System.Data.Common" preserve="all" />
+    <type fullname="System.Data.Odbc" preserve="all" />
+    <type fullname="System.Data.OleDb" preserve="all" />
+    <type fullname="System.Data.ProviderBase" preserve="all" />
+    <type fullname="System.Data.Sql" preserve="all" />
+    <type fullname="System.Data.SqlClient" preserve="all" />
+    <type fullname="System.Data.SqlClient.SNI" preserve="all" />
+    <type fullname="System.Data.SqlTypes" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Transactions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="System.Transactions" preserve="all" />
+    <type fullname="System.Transactions.Configuration" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Net.Http, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <type fullname="System.Net.Http.Headers" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Numerics, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
+  <assembly fullname="System.Runtime.Serialization, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="System.Runtime.Serialization.Configuration" preserve="all" />
+    <type fullname="System.Runtime.Serialization.Diagnostics" preserve="all" />
+    <type fullname="System.Runtime.Serialization.Diagnostics.Application" preserve="all" />
+    <type fullname="System.Runtime.Serialization.Json" preserve="all" />
+  </assembly>
+  <assembly fullname="System.ServiceModel.Internals, Version=0.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="System.Runtime.Collections" preserve="all" />
+    <type fullname="System.Runtime.Diagnostics" preserve="all" />
+    <type fullname="System.Runtime.Interop" preserve="all" />
+    <type fullname="System.ServiceModel.Internals" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Xml.Linq, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <type fullname="System.Xml.Linq" preserve="all" />
+  </assembly>
+  <assembly fullname="I18N, Version=4.0.0.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756">
+    <type fullname="I18N.Common" preserve="all" />
+  </assembly>
+  <assembly fullname="I18N.West, Version=4.0.0.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756">
+    <type fullname="I18N.West" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Cecil, Version=0.10.0.0, Culture=neutral, PublicKeyToken=fc15b93552389f74">
+    <type fullname="Mono.Cecil" preserve="all" />
+    <type fullname="Mono.Cecil.Cil" preserve="all" />
+    <type fullname="Mono.Cecil.Metadata" preserve="all" />
+    <type fullname="Mono.Cecil.PE" preserve="all" />
+    <type fullname="Mono.Collections.Generic" preserve="all" />
+  </assembly>
+  <assembly fullname="Bee.BeeDriver2, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Bee.BeeDriver" preserve="all" />
+    <type fullname="Bee.Core" preserve="all" />
+    <type fullname="Bee.Serialization" preserve="all" />
+    <type fullname="TinyJson" preserve="all" />
+    <type fullname="TinyJson.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="Bee.BinLog, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Bee.BinLog" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.Graphs, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Graphs" preserve="all" />
+    <type fullname="UnityEditor.Graphs.AnimationBlendTree" preserve="all" />
+    <type fullname="UnityEditor.Graphs.AnimationStateMachine" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.WindowsStandalone.Extensions, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.WindowsStandalone" preserve="all" />
+    <type fullname="WindowsStandaloneEditorExtensions" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UWP.Extensions, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.UWP" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.LinuxStandalone.Extensions, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.LinuxStandalone" preserve="all" />
+    <type fullname="UnityEditor.UnixCommon" preserve="all" />
+  </assembly>
+  <assembly fullname="Assembly-CSharp-Editor-firstpass, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="DreamTeamMobile" preserve="all" />
+  </assembly>
+  <assembly fullname="Assembly-CSharp-firstpass, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Water" preserve="all" />
+    <type fullname="FishNet.Serializing.Generated" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client" preserve="all" />
+    <type fullname="FishMMO.Client.Security" preserve="all" />
+    <type fullname="FishMMO.Shared" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Client.Input.Generated, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="FishMMO.Client.Security.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client.Security.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server" preserve="all" />
+    <type fullname="FishMMO.Server.Core" preserve="all" />
+    <type fullname="FishMMO.Server.Core.Authentication" preserve="all" />
+    <type fullname="FishMMO.Server.Core.Collections" preserve="all" />
+    <type fullname="FishMMO.Server.Core.LoginServer" preserve="all" />
+    <type fullname="FishMMO.Server.Core.Smtp" preserve="all" />
+    <type fullname="FishMMO.Server.Core.World.SceneServer" preserve="all" />
+    <type fullname="FishMMO.Server.Core.World.WorldServer" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.Smtp" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Character" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Shared, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Shared.Core" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Shared.Faction.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="FishMMO.Shared.SerializableDictionary.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="FishMMO.Shared.Tools.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Shared.CustomBuildTool" preserve="all" />
+    <type fullname="FishMMO.Shared.CustomBuildTool.Addressables" preserve="all" />
+    <type fullname="FishMMO.Shared.CustomBuildTool.Config" preserve="all" />
+    <type fullname="FishMMO.Shared.CustomBuildTool.Core" preserve="all" />
+    <type fullname="FishMMO.Shared.CustomBuildTool.Execution" preserve="all" />
+    <type fullname="FishMMO.Shared.CustomBuildTool.Linker" preserve="all" />
+    <type fullname="FishMMO.Shared.Patcher" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Shared.WorldSceneDetails.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="FishMMO.UnitTests, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.UnitTests" preserve="all" />
+    <type fullname="FishMMO.UnitTests.Harness" preserve="all" />
+  </assembly>
+  <assembly fullname="FishNet.Codegen.Cecil, Version=0.11.4.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="MonoFN" preserve="all" />
+    <type fullname="MonoFN.Cecil" preserve="all" />
+    <type fullname="MonoFN.Cecil.Cil" preserve="all" />
+    <type fullname="MonoFN.Cecil.Metadata" preserve="all" />
+    <type fullname="MonoFN.Cecil.PE" preserve="all" />
+    <type fullname="MonoFN.Cecil.Rocks" preserve="all" />
+    <type fullname="MonoFN.Collections.Generic" preserve="all" />
+    <type fullname="MonoFN.Security.Cryptography" preserve="all" />
+  </assembly>
+  <assembly fullname="FishNet.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet" preserve="all" />
+    <type fullname="FishNet.Authenticating" preserve="all" />
+    <type fullname="FishNet.Broadcast" preserve="all" />
+    <type fullname="FishNet.Broadcast.Helping" preserve="all" />
+    <type fullname="FishNet.CodeGenerating" preserve="all" />
+    <type fullname="FishNet.Component.Animating" preserve="all" />
+    <type fullname="FishNet.Component.Animating.Editing" preserve="all" />
+    <type fullname="FishNet.Component.ColliderRollback" preserve="all" />
+    <type fullname="FishNet.Component.Observing" preserve="all" />
+    <type fullname="FishNet.Component.Ownership" preserve="all" />
+    <type fullname="FishNet.Component.Prediction" preserve="all" />
+    <type fullname="FishNet.Component.Scenes" preserve="all" />
+    <type fullname="FishNet.Component.Spawning" preserve="all" />
+    <type fullname="FishNet.Component.Transforming" preserve="all" />
+    <type fullname="FishNet.Component.Transforming.Beta" preserve="all" />
+    <type fullname="FishNet.Component.Transforming.Beta.Editing" preserve="all" />
+    <type fullname="FishNet.Component.Transforming.Editing" preserve="all" />
+    <type fullname="FishNet.Component.Utility" preserve="all" />
+    <type fullname="FishNet.Configuring" preserve="all" />
+    <type fullname="FishNet.Configuring.Editing" preserve="all" />
+    <type fullname="FishNet.Configuring.EditorCloning" preserve="all" />
+    <type fullname="FishNet.Connection" preserve="all" />
+    <type fullname="FishNet.Documenting" preserve="all" />
+    <type fullname="FishNet.Editing" preserve="all" />
+    <type fullname="FishNet.Editing.Beta" preserve="all" />
+    <type fullname="FishNet.Editing.NewNetworkBehaviourScript" preserve="all" />
+    <type fullname="FishNet.Editing.PrefabCollectionGenerator" preserve="all" />
+    <type fullname="FishNet.Managing" preserve="all" />
+    <type fullname="FishNet.Managing.Client" preserve="all" />
+    <type fullname="FishNet.Managing.Client.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Debugging" preserve="all" />
+    <type fullname="FishNet.Managing.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Logging" preserve="all" />
+    <type fullname="FishNet.Managing.Logging.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Object" preserve="all" />
+    <type fullname="FishNet.Managing.Observing" preserve="all" />
+    <type fullname="FishNet.Managing.Observing.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Predicting" preserve="all" />
+    <type fullname="FishNet.Managing.Predicting.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Scened" preserve="all" />
+    <type fullname="FishNet.Managing.Server" preserve="all" />
+    <type fullname="FishNet.Managing.Server.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Statistic" preserve="all" />
+    <type fullname="FishNet.Managing.Timing" preserve="all" />
+    <type fullname="FishNet.Managing.Timing.Editing" preserve="all" />
+    <type fullname="FishNet.Managing.Transporting" preserve="all" />
+    <type fullname="FishNet.Managing.Utility" preserve="all" />
+    <type fullname="FishNet.Object" preserve="all" />
+    <type fullname="FishNet.Object.Delegating" preserve="all" />
+    <type fullname="FishNet.Object.Editing" preserve="all" />
+    <type fullname="FishNet.Object.Helping" preserve="all" />
+    <type fullname="FishNet.Object.Prediction" preserve="all" />
+    <type fullname="FishNet.Object.Prediction.Delegating" preserve="all" />
+    <type fullname="FishNet.Object.Synchronizing" preserve="all" />
+    <type fullname="FishNet.Object.Synchronizing.Internal" preserve="all" />
+    <type fullname="FishNet.Observing" preserve="all" />
+    <type fullname="FishNet.Serializing" preserve="all" />
+    <type fullname="FishNet.Serializing.Helping" preserve="all" />
+    <type fullname="FishNet.Transporting" preserve="all" />
+    <type fullname="FishNet.Transporting.Multipass" preserve="all" />
+    <type fullname="FishNet.Transporting.Tugboat" preserve="all" />
+    <type fullname="FishNet.Transporting.Tugboat.Client" preserve="all" />
+    <type fullname="FishNet.Transporting.Tugboat.Editing" preserve="all" />
+    <type fullname="FishNet.Transporting.Tugboat.Server" preserve="all" />
+    <type fullname="FishNet.Transporting.Yak" preserve="all" />
+    <type fullname="FishNet.Transporting.Yak.Client" preserve="all" />
+    <type fullname="FishNet.Transporting.Yak.Server" preserve="all" />
+    <type fullname="FishNet.Utility" preserve="all" />
+    <type fullname="FishNet.Utility.Extension" preserve="all" />
+    <type fullname="FishNet.Utility.Performance" preserve="all" />
+    <type fullname="FishNet.Utility.Template" preserve="all" />
+    <type fullname="LiteNetLib" preserve="all" />
+    <type fullname="LiteNetLib.Layers" preserve="all" />
+    <type fullname="LiteNetLib.Utils" preserve="all" />
+  </assembly>
+  <assembly fullname="GameKit.Dependencies, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="GameKit.Dependencies.Utilities" preserve="all" />
+    <type fullname="GameKit.Dependencies.Utilities.ObjectPooling" preserve="all" />
+    <type fullname="GameKit.Dependencies.Utilities.ObjectPooling.Examples" preserve="all" />
+    <type fullname="GameKit.Dependencies.Utilities.Types" preserve="all" />
+    <type fullname="GameKit.Dependencies.Utilities.Types.CanvasContainers" preserve="all" />
+    <type fullname="GameKit.Dependencies.Utilities.Types.Editing" preserve="all" />
+    <type fullname="GameKit.Dependencies.Utilities.Types.OptionMenuButtons" preserve="all" />
+    <type fullname="Sirenix.OdinInspector" preserve="all" />
+  </assembly>
+  <assembly fullname="KinematicCharacterController, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="KinematicCharacterController" preserve="all" />
+  </assembly>
+  <assembly fullname="KinematicCharacterController.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="QuickOutline, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.Addressables, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.AddressableAssets" preserve="all" />
+    <type fullname="UnityEngine.AddressableAssets.Initialization" preserve="all" />
+    <type fullname="UnityEngine.AddressableAssets.ResourceLocators" preserve="all" />
+    <type fullname="UnityEngine.AddressableAssets.ResourceProviders" preserve="all" />
+    <type fullname="UnityEngine.AddressableAssets.Utility" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.AsyncOperations" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Addressables.DocExampleCode.Editor.Tests, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="AddressableAssets.DocExampleCode" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Addressables.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.AddressableAssets" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build.AnalyzeRules" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build.BuildPipelineTasks" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build.CatalogBuilders" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build.DataBuilders" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build.DataBuilders.SchemaBuilders" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Build.Layout" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.BuildReportVisualizer" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Diagnostics" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.GUI" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.GUI.Adapters" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.GUIElements" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Settings" preserve="all" />
+    <type fullname="UnityEditor.AddressableAssets.Settings.GroupSchemas" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.AI.Navigation, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.AI.Navigation" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.AI.Navigation.Editor.ConversionSystem, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.AI.Navigation.Editor.Converter" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.AI.Navigation.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.AI.Navigation.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.AI.Navigation.Updater, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.AI.Navigation.Updater" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.AutoGroupGenerator.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="AutoGroupGenerator" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst.CodeGen, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Burst.Compiler.IL.Syntax" preserve="all" />
+    <type fullname="zzzUnity.Burst.CodeGen" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Burst.CompilerServices" preserve="all" />
+    <type fullname="Unity.Burst.Editor" preserve="all" />
+    <type fullname="Unity.Burst.Intrinsics" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.Cinemachine, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Cinemachine" preserve="all" />
+    <type fullname="Unity.Cinemachine.TargetTracking" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Cinemachine.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Cinemachine.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Collections.CodeGen, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Jobs.CodeGen" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Collections, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Collections.LowLevel.Unsafe.NotBurstCompatible" preserve="all" />
+    <type fullname="Unity.Collections.NotBurstCompatible" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Collections.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.EditorCoroutines.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.EditorCoroutines.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.FishNet.Codegen, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.CodeGenerating.Extension" preserve="all" />
+    <type fullname="FishNet.CodeGenerating.Helping" preserve="all" />
+    <type fullname="FishNet.CodeGenerating.Helping.Extension" preserve="all" />
+    <type fullname="FishNet.CodeGenerating.ILCore" preserve="all" />
+    <type fullname="FishNet.CodeGenerating.Processing" preserve="all" />
+    <type fullname="FishNet.CodeGenerating.Processing.Rpc" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.InputSystem, Version=1.19.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.XR.GoogleVr" preserve="all" />
+    <type fullname="Unity.XR.Oculus.Input" preserve="all" />
+    <type fullname="Unity.XR.OpenVR" preserve="all" />
+    <type fullname="UnityEngine.InputSystem" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Android" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Android.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Composites" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Controls" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.DualShock" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.DualShock.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Editor" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Editor.Lists" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.EnhancedTouch" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Haptics" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.HID" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.HID.Editor" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Interactions" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.iOS" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.iOS.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Layouts" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Linux" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.OnScreen" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.OSX" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.OSX.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Processors" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Switch" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Switch.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.UI" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.UI.Editor" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Users" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.Utilities" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.WebGL" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.WebGL.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.XInput" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.XInput.LowLevel" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.XR" preserve="all" />
+    <type fullname="UnityEngine.InputSystem.XR.Haptics" preserve="all" />
+    <type fullname="UnityEngine.XR.WindowsMR.Input" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.InputSystem.DocCodeSamples, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="DocCodeSamples.Tests" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.InputSystem.ForUI, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.InputSystem.Plugins.InputForUI" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.InputSystem.TestFramework, Version=1.19.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.InternalAPIEditorBridge.ShaderGraph.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.ShaderGraph.InternalBridge" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.InternalAPIEngineBridge.004, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="TMPro" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.InternalAPIEngineBridge.RenderPipelines.Core.Runtime.Shared, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.RenderPipelines.Core.Runtime.Shared.Bridge" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Mathematics, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Mathematics" preserve="all" />
+    <type fullname="Unity.Mathematics.Geometry" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Mathematics.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.Mathematics.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.MemoryProfiler, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.MemoryProfiler" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.MemoryProfiler.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.MemoryProfiler.Editor" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Analytics" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Containers" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Containers.Memory" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Containers.Unsafe" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Diagnostics" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.EnumerationUtilities" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Extensions" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Format" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Format.LowLevel.IO" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Format.QueriedSnapshot" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.Managed" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.UI" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.UI.PathsToRoot" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.Editor.UIContentData" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.MemoryProfiler.Editor.MemoryProfilerModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.MemoryProfiler.Editor.MemoryProfilerModule" preserve="all" />
+    <type fullname="Unity.MemoryProfiler.MemoryProfilerModule.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.PathTracing.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.PathTracing.Editor" preserve="all" />
+    <type fullname="UnityEditor.PathTracing.Debugging" preserve="all" />
+    <type fullname="UnityEditor.PathTracing.LightBakerBridge" preserve="all" />
+    <type fullname="UnityEngine.PathTracing.PostProcessing" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.PathTracing.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.PathTracing.Core" preserve="all" />
+    <type fullname="UnityEngine.PathTracing.Integration" preserve="all" />
+    <type fullname="UnityEngine.PathTracing.Lightmapping" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.PerformanceTesting, Version=3.4.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.PerformanceTesting" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Data" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Exceptions" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Measurements" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Meters" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Runtime" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Statistics" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.PerformanceTesting.Editor, Version=3.4.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.PerformanceTesting.Editor" preserve="all" />
+    <type fullname="Unity.PerformanceTesting.Editor.UIElements" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Postprocessing.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Rendering.PostProcessing" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Postprocessing.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.PostProcessing" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Profiling.Core, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.Rendering.LightTransport.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Rendering.UnifiedRayTracing" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipeline.Universal.ShaderLibrary, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.Universal" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Core.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Rendering.HighDefinition" preserve="all" />
+    <type fullname="UnityEditor.Rendering.LookDev" preserve="all" />
+    <type fullname="UnityEditor.Rendering.RenderGraphModule.Util" preserve="all" />
+    <type fullname="UnityEditor.Rendering.UI" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Utilities" preserve="all" />
+    <type fullname="UnityEngine.Rendering.RenderGraphModule" preserve="all" />
+    <type fullname="UnityEngine.Rendering.Tests" preserve="all" />
+    <type fullname="UnityEngine.Rendering.UI" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Core.Editor.Shared, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Rendering.Converter" preserve="all" />
+    <type fullname="UnityEditor.RenderPipelines.Core" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Core.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.LookDev" preserve="all" />
+    <type fullname="UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler" preserve="all" />
+    <type fullname="UnityEngine.Rendering.RenderGraphModule.Util" preserve="all" />
+    <type fullname="UnityEngine.Rendering.Sampling" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Core.Runtime.Shared, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.RenderPipelines.Core.Runtime.Shared" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Core.ShaderLibrary, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.RenderPipelines.GPUDriven.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.RenderPipelines.Universal.2D.Editor.Overrides, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Rendering.Universal" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Universal.2D.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.Universal.UTess" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Universal.Config.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.RenderPipelines.Universal.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="BIRPToURPConversionExtensions" preserve="all" />
+    <type fullname="Unity.Rendering.Universal" preserve="all" />
+    <type fullname="UnityEditor.Experimental.Rendering.Universal" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Universal.Analytics" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Universal.Internal" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Universal.ShaderGraph" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Universal.ShaderGUI" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph" preserve="all" />
+    <type fullname="UnityEngine.Experimental.Rendering.Universal" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Universal.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.Universal.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.RenderPipelines.Universal.Shaders, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.ResourceManager, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.ResourceManagement" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.Exceptions" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.Profiling" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.ResourceLocations" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.ResourceProviders" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.ResourceProviders.Simulation" preserve="all" />
+    <type fullname="UnityEngine.ResourceManagement.Util" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.ScriptableBuildPipeline, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Build.Pipeline.Utilities" preserve="all" />
+    <type fullname="UnityEngine.Build.Pipeline" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.ScriptableBuildPipeline.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Build.Pipeline" preserve="all" />
+    <type fullname="UnityEditor.Build.Pipeline.Injector" preserve="all" />
+    <type fullname="UnityEditor.Build.Pipeline.Interfaces" preserve="all" />
+    <type fullname="UnityEditor.Build.Pipeline.Tasks" preserve="all" />
+    <type fullname="UnityEditor.Build.Pipeline.Utilities.USerialize" preserve="all" />
+    <type fullname="UnityEditor.Build.Pipeline.WriteTypes" preserve="all" />
+    <type fullname="UnityEditor.Build.Profiler" preserve="all" />
+    <type fullname="UnityEditor.Build.Utilities" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Searcher.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Searcher" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Settings.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.SettingsManagement" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.ShaderGraph.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Graphing" preserve="all" />
+    <type fullname="UnityEditor.Graphing.Util" preserve="all" />
+    <type fullname="UnityEditor.Rendering.BuiltIn" preserve="all" />
+    <type fullname="UnityEditor.Rendering.BuiltIn.ShaderGraph" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Canvas.ShaderGraph" preserve="all" />
+    <type fullname="UnityEditor.Rendering.CustomRenderTexture.ShaderGraph" preserve="all" />
+    <type fullname="UnityEditor.Rendering.Fullscreen.ShaderGraph" preserve="all" />
+    <type fullname="UnityEditor.Rendering.UITK.ShaderGraph" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Configuration" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Colors" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Controls" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Inspector" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Inspector.PropertyDrawers" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Interfaces" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Slots" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Drawing.Views" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Internal" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Legacy" preserve="all" />
+    <type fullname="UnityEditor.ShaderGraph.Serialization" preserve="all" />
+    <type fullname="UnityEngine.Rendering.HighDefinition" preserve="all" />
+    <type fullname="UnityEngine.Rendering.ShaderGraph" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.ShaderGraph.Utilities, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.Splines, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Splines" preserve="all" />
+    <type fullname="UnityEngine.Splines.ExtrusionShapes" preserve="all" />
+    <type fullname="UnityEngine.Splines.Interpolators" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Splines.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Splines" preserve="all" />
+    <type fullname="UnityEditor.Splines.Editor.GUI" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.SurfaceCache.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.Sysroot.Linux_x86_64, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Il2Cpp" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.SysrootPackage.Editor, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="NiceIO.Sysroot" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.TextMeshPro, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="TMPro.SpriteAssetUtilities" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.TextMeshPro.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="TMPro.EditorUtilities" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Timeline, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Timeline" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Timeline.Editor, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.Timeline" preserve="all" />
+    <type fullname="UnityEditor.Timeline.Actions" preserve="all" />
+    <type fullname="UnityEditor.Timeline.Analytics" preserve="all" />
+    <type fullname="UnityEditor.Timeline.Signals" preserve="all" />
+    <type fullname="UnityEditor.Timeline.Utilities" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Toolchain.Linux-x86_64-Linux, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.UnifiedRayTracing.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.Rendering.RadeonRays" preserve="all" />
+    <type fullname="UnityEngine.Rendering.UnifiedRayTracing" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.VisualStudio.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Microsoft.Unity.VisualStudio.Editor" preserve="all" />
+    <type fullname="Microsoft.Unity.VisualStudio.Editor.Messaging" preserve="all" />
+    <type fullname="Microsoft.Unity.VisualStudio.Editor.Testing" preserve="all" />
+    <type fullname="SimpleJSON" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.VSCode.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="VSCodeEditor" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.TestRunner, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="TestRunner.Callbacks" preserve="all" />
+    <type fullname="UnityEditor.TestRunner" preserve="all" />
+    <type fullname="UnityEditor.TestRunner.CommandLineParser" preserve="all" />
+    <type fullname="UnityEditor.TestRunner.TestLaunchers" preserve="all" />
+    <type fullname="UnityEditor.TestRunner.UnityTestProtocol" preserve="all" />
+    <type fullname="UnityEditor.TestTools" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.Api" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.Api.Analytics" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.CommandLineTest" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.GUI" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.GUI.Controls" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.GUI.TestAssets" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.TestRun" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.TestRun.Tasks" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.TestRun.Tasks.Events" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.TestRun.Tasks.Platform" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.TestRun.Tasks.Player" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.TestRun.Tasks.Scene" preserve="all" />
+    <type fullname="UnityEditor.TestTools.TestRunner.UnityTestProtocol" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UI.Analytics, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.UI.Analytics" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEditor.UI, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEditor.EventSystems" preserve="all" />
+    <type fullname="UnityEditor.UI" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.TestRunner, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.TestRunner" preserve="all" />
+    <type fullname="UnityEngine.TestRunner.NUnitExtensions" preserve="all" />
+    <type fullname="UnityEngine.TestRunner.NUnitExtensions.Filters" preserve="all" />
+    <type fullname="UnityEngine.TestRunner.NUnitExtensions.Runner" preserve="all" />
+    <type fullname="UnityEngine.TestRunner.TestLaunchers" preserve="all" />
+    <type fullname="UnityEngine.TestRunner.TestProtocol" preserve="all" />
+    <type fullname="UnityEngine.TestRunner.Utils" preserve="all" />
+    <type fullname="UnityEngine.TestTools.Constraints" preserve="all" />
+    <type fullname="UnityEngine.TestTools.Logging" preserve="all" />
+    <type fullname="UnityEngine.TestTools.NUnitExtensions" preserve="all" />
+    <type fullname="UnityEngine.TestTools.TestRunner" preserve="all" />
+    <type fullname="UnityEngine.TestTools.TestRunner.Callbacks" preserve="all" />
+    <type fullname="UnityEngine.TestTools.TestRunner.GUI" preserve="all" />
+    <type fullname="UnityEngine.TestTools.Utils" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.UI, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.EventSystems" preserve="all" />
+    <type fullname="UnityEngine.UI" preserve="all" />
+    <type fullname="UnityEngine.UI.Collections" preserve="all" />
+    <type fullname="UnityEngine.UI.CoroutineTween" preserve="all" />
+  </assembly>
+  <assembly fullname="WebTransport, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.Transporting.WebTransport" preserve="all" />
+    <type fullname="FishNet.Transporting.WebTransport.Client" preserve="all" />
+    <type fullname="FishNet.Transporting.WebTransport.Native" preserve="all" />
+    <type fullname="FishNet.Transporting.WebTransport.Server" preserve="all" />
+    <type fullname="FishNet.Transporting.WebTransport.WebGL" preserve="all" />
+  </assembly>
+  <assembly fullname="WebTransport.Editor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.Transporting.WebTransport.Editor" preserve="all" />
+  </assembly>
+  <assembly fullname="srp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=91d1de3df99ea180">
+    <type fullname="SecureRemotePassword" preserve="all" />
+  </assembly>
+  <assembly fullname="ZString, Version=2.6.0.0, Culture=neutral, PublicKeyToken=df4c250b14d82627">
+    <type fullname="Cysharp.Text" preserve="all" />
+  </assembly>
+  <assembly fullname="Mono.Cecil.Pdb, Version=0.11.5.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e">
+    <type fullname="Microsoft.Cci.Pdb" preserve="all" />
+    <type fullname="Mono.Cecil.Pdb" preserve="all" />
+  </assembly>
+  <assembly fullname="BouncyCastle.Cryptography, Version=2.0.0.0, Culture=neutral, PublicKeyToken=072edcf4a5328938">
+    <type fullname="Org.BouncyCastle.Asn1" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Anssi" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.BC" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Bsi" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Cmp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Cms" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Cms.Ecc" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Crmf" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Cryptlib" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.CryptoPro" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Eac" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.EdEC" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Esf" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Ess" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.GM" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Gnu" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Iana" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Icao" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Isara" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.IsisMtt" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.IsisMtt.Ocsp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.IsisMtt.X509" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Kisa" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Microsoft" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Misc" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Mozilla" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Nist" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Nsri" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Ntt" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Ocsp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Oiw" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Pkcs" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Rosstandart" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Sec" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Smime" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.TeleTrust" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Tsp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.UA" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.Utilities" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.X500" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.X500.Style" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.X509" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.X509.Qualified" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.X509.SigI" preserve="all" />
+    <type fullname="Org.BouncyCastle.Asn1.X9" preserve="all" />
+    <type fullname="Org.BouncyCastle.Bcpg" preserve="all" />
+    <type fullname="Org.BouncyCastle.Bcpg.Attr" preserve="all" />
+    <type fullname="Org.BouncyCastle.Bcpg.OpenPgp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Bcpg.Sig" preserve="all" />
+    <type fullname="Org.BouncyCastle.Cmp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Cms" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crmf" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Agreement" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Agreement.JPake" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Agreement.Kdf" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Agreement.Srp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Digests" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.EC" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Encodings" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Engines" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Fpe" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Generators" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.IO" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Kems" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Kems.MLKem" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Macs" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Modes" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Modes.Gcm" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Operators" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Paddings" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Parameters" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Prng" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Prng.Drbg" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Signers" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Tls" preserve="all" />
+    <type fullname="Org.BouncyCastle.Crypto.Utilities" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Abc" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Custom.GM" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Custom.Sec" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Endo" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Multiplier" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Rfc7748" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.EC.Rfc8032" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.Field" preserve="all" />
+    <type fullname="Org.BouncyCastle.Math.Raw" preserve="all" />
+    <type fullname="Org.BouncyCastle.Mozilla" preserve="all" />
+    <type fullname="Org.BouncyCastle.Ocsp" preserve="all" />
+    <type fullname="Org.BouncyCastle.OpenSsl" preserve="all" />
+    <type fullname="Org.BouncyCastle.Operators" preserve="all" />
+    <type fullname="Org.BouncyCastle.Operators.Utilities" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pkcs" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pkix" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Asn1" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Bike" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Cmce" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Crystals.Dilithium" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Falcon" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Frodo" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Hqc" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Lms" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Ntru" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Ntru.Owcpa" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Ntru.ParameterSets" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Ntru.Polynomials" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.NtruPrime" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Picnic" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Saber" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.SphincsPlus" preserve="all" />
+    <type fullname="Org.BouncyCastle.Pqc.Crypto.Utilities" preserve="all" />
+    <type fullname="Org.BouncyCastle.Runtime.Intrinsics" preserve="all" />
+    <type fullname="Org.BouncyCastle.Runtime.Intrinsics.X86" preserve="all" />
+    <type fullname="Org.BouncyCastle.Security" preserve="all" />
+    <type fullname="Org.BouncyCastle.Security.Certificates" preserve="all" />
+    <type fullname="Org.BouncyCastle.Tls" preserve="all" />
+    <type fullname="Org.BouncyCastle.Tls.Crypto" preserve="all" />
+    <type fullname="Org.BouncyCastle.Tls.Crypto.Impl" preserve="all" />
+    <type fullname="Org.BouncyCastle.Tls.Crypto.Impl.BC" preserve="all" />
+    <type fullname="Org.BouncyCastle.Tsp" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.Bzip2" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.Collections" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.Date" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.Encoders" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.IO" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.IO.Compression" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.IO.Pem" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.Net" preserve="all" />
+    <type fullname="Org.BouncyCastle.Utilities.Zlib" preserve="all" />
+    <type fullname="Org.BouncyCastle.X509" preserve="all" />
+    <type fullname="Org.BouncyCastle.X509.Extension" preserve="all" />
+    <type fullname="Org.BouncyCastle.X509.Store" preserve="all" />
+  </assembly>
+  <assembly fullname="OpenAI_API, Version=1.7.2.0, Culture=neutral, PublicKeyToken=1b0a4c0430762146">
+    <type fullname="OpenAI_API" preserve="all" />
+    <type fullname="OpenAI_API.Chat" preserve="all" />
+    <type fullname="OpenAI_API.Completions" preserve="all" />
+    <type fullname="OpenAI_API.Embedding" preserve="all" />
+    <type fullname="OpenAI_API.Files" preserve="all" />
+    <type fullname="OpenAI_API.Images" preserve="all" />
+    <type fullname="OpenAI_API.Models" preserve="all" />
+    <type fullname="OpenAI_API.Moderation" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst.Cecil.Pdb, Version=0.11.6.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e" />
+  <assembly fullname="Unity.Collections.LowLevel.ILSupport, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="nunit.framework, Version=3.5.0.0, Culture=neutral, PublicKeyToken=2638cd05610744eb">
+    <type fullname="NUnit" preserve="all" />
+    <type fullname="NUnit.Compatibility" preserve="all" />
+    <type fullname="NUnit.Framework" preserve="all" />
+    <type fullname="NUnit.Framework.Api" preserve="all" />
+    <type fullname="NUnit.Framework.Constraints" preserve="all" />
+    <type fullname="NUnit.Framework.Interfaces" preserve="all" />
+    <type fullname="NUnit.Framework.Internal" preserve="all" />
+    <type fullname="NUnit.Framework.Internal.Builders" preserve="all" />
+    <type fullname="NUnit.Framework.Internal.Commands" preserve="all" />
+    <type fullname="NUnit.Framework.Internal.Execution" preserve="all" />
+    <type fullname="NUnit.Framework.Internal.Filters" preserve="all" />
+  </assembly>
+  <assembly fullname="System.IO.Pipelines, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
+    <type fullname="FxResources.System.IO.Pipelines" preserve="all" />
+    <type fullname="System.IO.Pipelines" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Collections.Immutable, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <type fullname="FxResources.System.Collections.Immutable" preserve="all" />
+    <type fullname="System.Collections.Frozen" preserve="all" />
+    <type fullname="System.Collections.Immutable" preserve="all" />
+  </assembly>
+  <assembly fullname="Npgsql.EntityFrameworkCore.PostgreSQL, Version=5.0.10.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7">
+    <type fullname="Microsoft.EntityFrameworkCore" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Diagnostics" preserve="all" />
+    <type fullname="Microsoft.Extensions.DependencyInjection" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Design.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Diagnostics.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Metadata" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.Conventions" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Migrations" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Migrations.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Migrations.Operations" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Query" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Query.Expressions.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Query.ExpressionTranslators.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Query.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Scaffolding.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.Mapping" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Storage.ValueConversion" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Update.Internal" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.Utilities" preserve="all" />
+    <type fullname="Npgsql.EntityFrameworkCore.PostgreSQL.ValueGeneration.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="FishNet.CodeAnalysis, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.CodeAnalysis.Annotations" preserve="all" />
+  </assembly>
+  <assembly fullname="System.ComponentModel.Annotations, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <type fullname="FxResources.System.ComponentModel.Annotations" preserve="all" />
+    <type fullname="System.ComponentModel.DataAnnotations" preserve="all" />
+    <type fullname="System.ComponentModel.DataAnnotations.Schema" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.EntityFrameworkCore.Relational, Version=5.0.17.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="Microsoft.EntityFrameworkCore.Design" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Diagnostics.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Infrastructure" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata.Builders" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata.Builders.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata.Conventions" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Migrations" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Migrations.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Migrations.Operations" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Migrations.Operations.Builders" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Query" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Query.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Query.SqlExpressions" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Scaffolding" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Scaffolding.Metadata" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Storage" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Storage.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Storage.ValueConversion" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Update" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Update.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Utilities" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.ValueGeneration" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.ValueGeneration.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Configuration.Json, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Configuration.Json" preserve="all" />
+    <type fullname="Microsoft.Extensions.Configuration" preserve="all" />
+    <type fullname="Microsoft.Extensions.Configuration.Json" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Primitives, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Primitives" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileProviders" preserve="all" />
+    <type fullname="Microsoft.Extensions.Internal" preserve="all" />
+    <type fullname="Microsoft.Extensions.Primitives" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.DependencyInjection, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.DependencyInjection" preserve="all" />
+    <type fullname="Microsoft.Extensions.DependencyInjection.ServiceLookup" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO-Dependencies, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="FishMMO-DB, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Database" preserve="all" />
+    <type fullname="FishMMO.Database.Data" preserve="all" />
+    <type fullname="FishMMO.Database.Data.Enums" preserve="all" />
+    <type fullname="FishMMO.Database.Exceptions" preserve="all" />
+    <type fullname="FishMMO.Database.Migrations" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Entities" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Monitoring.Diagnostics" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Monitoring.Health" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Monitoring.Metrics" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Services" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Services.Interfaces" preserve="all" />
+    <type fullname="FishMMO.Database.Npgsql.Services.Interfaces.Actions" preserve="all" />
+  </assembly>
+  <assembly fullname="StackExchange.Redis, Version=2.0.0.0, Culture=neutral, PublicKeyToken=c219ff1ca8c2ce46">
+    <type fullname="StackExchange.Redis" preserve="all" />
+    <type fullname="StackExchange.Redis.Configuration" preserve="all" />
+    <type fullname="StackExchange.Redis.KeyspaceIsolation" preserve="all" />
+    <type fullname="StackExchange.Redis.Maintenance" preserve="all" />
+    <type fullname="StackExchange.Redis.Profiling" preserve="all" />
+  </assembly>
+  <assembly fullname="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed">
+    <type fullname="Newtonsoft.Json" preserve="all" />
+    <type fullname="Newtonsoft.Json.Bson" preserve="all" />
+    <type fullname="Newtonsoft.Json.Converters" preserve="all" />
+    <type fullname="Newtonsoft.Json.Linq" preserve="all" />
+    <type fullname="Newtonsoft.Json.Linq.JsonPath" preserve="all" />
+    <type fullname="Newtonsoft.Json.Schema" preserve="all" />
+    <type fullname="Newtonsoft.Json.Serialization" preserve="all" />
+    <type fullname="Newtonsoft.Json.Utilities" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Logging.Abstractions, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Logging.Abstractions" preserve="all" />
+    <type fullname="Microsoft.Extensions.Logging" preserve="all" />
+    <type fullname="Microsoft.Extensions.Logging.Abstractions" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Diagnostics.DiagnosticSource, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
+    <type fullname="FxResources.System.Diagnostics.DiagnosticSource" preserve="all" />
+    <type fullname="Internal" preserve="all" />
+    <type fullname="System.Diagnostics.Metrics" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst.Cecil.Mdb, Version=0.11.6.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e">
+    <type fullname="Mono.Cecil.Mdb" preserve="all" />
+    <type fullname="Mono.CompilerServices.SymbolWriter" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst.Cecil, Version=0.11.6.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e" />
+  <assembly fullname="Mono.Cecil.Mdb, Version=0.11.5.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e" />
+  <assembly fullname="System.Text.Encodings.Web, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
+    <type fullname="FxResources.System.Text.Encodings.Web" preserve="all" />
+    <type fullname="System.Text.Encodings.Web" preserve="all" />
+    <type fullname="System.Text.Unicode" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.FileProviders.Abstractions, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.FileProviders.Abstractions" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO-ServerAuth, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Auth.Core" preserve="all" />
+    <type fullname="FishMMO.Auth.Core.Collections" preserve="all" />
+    <type fullname="FishMMO.Auth.Implementation" preserve="all" />
+  </assembly>
+  <assembly fullname="Pipelines.Sockets.Unofficial, Version=1.0.0.0, Culture=neutral, PublicKeyToken=42ea0a778e13fbe2">
+    <type fullname="Pipelines.Sockets.Unofficial" preserve="all" />
+    <type fullname="Pipelines.Sockets.Unofficial.Arenas" preserve="all" />
+    <type fullname="Pipelines.Sockets.Unofficial.Buffers" preserve="all" />
+    <type fullname="Pipelines.Sockets.Unofficial.Internal" preserve="all" />
+    <type fullname="Pipelines.Sockets.Unofficial.Threading" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Logging, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Logging" preserve="all" />
+  </assembly>
+  <assembly fullname="System.IO.Hashing, Version=9.0.0.4, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
+    <type fullname="FxResources.System.IO.Hashing" preserve="all" />
+    <type fullname="System.IO.Hashing" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Configuration.Abstractions, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Configuration.Abstractions" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Threading.Channels, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
+    <type fullname="FxResources.System.Threading.Channels" preserve="all" />
+    <type fullname="System.Threading.Channels" preserve="all" />
+  </assembly>
+  <assembly fullname="Otp.NET, Version=1.4.1.0, Culture=neutral, PublicKeyToken=38a48df817e173a6">
+    <type fullname="OtpNet" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.FileProviders.Physical, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.FileProviders.Physical" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileProviders.Internal" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileProviders.Physical" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileProviders.Physical.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="Humanizer, Version=2.14.0.0, Culture=neutral, PublicKeyToken=979442b78dfc278e">
+    <type fullname="Humanizer" preserve="all" />
+    <type fullname="Humanizer.Bytes" preserve="all" />
+    <type fullname="Humanizer.Configuration" preserve="all" />
+    <type fullname="Humanizer.DateTimeHumanizeStrategy" preserve="all" />
+    <type fullname="Humanizer.Inflections" preserve="all" />
+    <type fullname="Humanizer.Localisation" preserve="all" />
+    <type fullname="Humanizer.Localisation.CollectionFormatters" preserve="all" />
+    <type fullname="Humanizer.Localisation.DateToOrdinalWords" preserve="all" />
+    <type fullname="Humanizer.Localisation.Formatters" preserve="all" />
+    <type fullname="Humanizer.Localisation.GrammaticalNumber" preserve="all" />
+    <type fullname="Humanizer.Localisation.NumberToWords" preserve="all" />
+    <type fullname="Humanizer.Localisation.NumberToWords.Italian" preserve="all" />
+    <type fullname="Humanizer.Localisation.NumberToWords.Romanian" preserve="all" />
+    <type fullname="Humanizer.Localisation.Ordinalizers" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Options, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Options" preserve="all" />
+    <type fullname="Microsoft.Extensions.Options" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.DependencyInjection.Abstractions, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.DependencyInjection.Abstractions" preserve="all" />
+    <type fullname="Microsoft.Extensions.DependencyInjection.Extensions" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Caching.Memory, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Caching.Memory" preserve="all" />
+    <type fullname="Microsoft.Extensions.Caching.Distributed" preserve="all" />
+    <type fullname="Microsoft.Extensions.Caching.Memory" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Text.Json, Version=9.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51">
+    <type fullname="FxResources.System.Text.Json" preserve="all" />
+    <type fullname="System.Text.Json" preserve="all" />
+    <type fullname="System.Text.Json.Nodes" preserve="all" />
+    <type fullname="System.Text.Json.Reflection" preserve="all" />
+    <type fullname="System.Text.Json.Schema" preserve="all" />
+    <type fullname="System.Text.Json.Serialization" preserve="all" />
+    <type fullname="System.Text.Json.Serialization.Converters" preserve="all" />
+    <type fullname="System.Text.Json.Serialization.Metadata" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Configuration.FileExtensions, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Configuration.FileExtensions" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO-Logger, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Logging" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.EntityFrameworkCore, Version=5.0.17.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="Microsoft.EntityFrameworkCore.ChangeTracking" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.ChangeTracking.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Infrastructure.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Configuration.Binder, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Configuration.Binder" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.FileSystemGlobbing, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.FileSystemGlobbing" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing.Abstractions" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing.Internal" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing.Internal.PathSegments" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing.Internal.PatternContexts" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing.Internal.Patterns" preserve="all" />
+    <type fullname="Microsoft.Extensions.FileSystemGlobbing.Util" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.4, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
+  <assembly fullname="Microsoft.EntityFrameworkCore.Design, Version=5.0.17.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="Microsoft.EntityFrameworkCore.Design.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Migrations.Design" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Scaffolding.Internal" preserve="all" />
+    <type fullname="Microsoft.EntityFrameworkCore.Scaffolding.Metadata.Internal" preserve="all" />
+    <type fullname="Microsoft.Extensions.Hosting" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.Burst.Unsafe, Version=4.0.5.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="StackExchange.Redis.Extensions.Core, Version=10.0.0.0, Culture=neutral, PublicKeyToken=d7d863643bcd13ef">
+    <type fullname="StackExchange.Redis.Extensions.Core" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.Abstractions" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.Configuration" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.Extensions" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.Helpers" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.Implementations" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.Models" preserve="all" />
+    <type fullname="StackExchange.Redis.Extensions.Core.ServerIteration" preserve="all" />
+  </assembly>
+  <assembly fullname="EFCore.NamingConventions, Version=5.0.2.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7">
+    <type fullname="EFCore.NamingConventions.Internal" preserve="all" />
+  </assembly>
+  <assembly fullname="Mono.Cecil.Rocks, Version=0.11.5.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e">
+    <type fullname="Mono.Cecil.Rocks" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO-SharedUtility, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Mono.Cecil, Version=0.11.5.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e" />
+  <assembly fullname="FishMMO-ClientAuth, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Unity.Burst.Cecil.Rocks, Version=0.11.6.0, Culture=neutral, PublicKeyToken=50cebf1cceb9d05e" />
+  <assembly fullname="Microsoft.Extensions.Caching.Abstractions, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="Microsoft.Extensions.Caching.Hybrid" preserve="all" />
+  </assembly>
+  <assembly fullname="Npgsql, Version=5.0.18.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7">
+    <type fullname="Npgsql" preserve="all" />
+    <type fullname="Npgsql.BackendMessages" preserve="all" />
+    <type fullname="Npgsql.Logging" preserve="all" />
+    <type fullname="Npgsql.NameTranslation" preserve="all" />
+    <type fullname="Npgsql.PostgresTypes" preserve="all" />
+    <type fullname="Npgsql.Replication" preserve="all" />
+    <type fullname="Npgsql.Replication.Internal" preserve="all" />
+    <type fullname="Npgsql.Replication.PgOutput" preserve="all" />
+    <type fullname="Npgsql.Replication.PgOutput.Messages" preserve="all" />
+    <type fullname="Npgsql.Replication.TestDecoding" preserve="all" />
+    <type fullname="Npgsql.Schema" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.CompositeHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.DateTimeHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.FullTextSearchHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.GeometricHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.InternalTypeHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.NetworkHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandlers.NumericHandlers" preserve="all" />
+    <type fullname="Npgsql.TypeHandling" preserve="all" />
+    <type fullname="Npgsql.TypeMapping" preserve="all" />
+    <type fullname="Npgsql.Util" preserve="all" />
+    <type fullname="NpgsqlTypes" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Configuration, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Configuration" preserve="all" />
+    <type fullname="Microsoft.Extensions.Configuration.Memory" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Runtime.CompilerServices.Unsafe, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <assembly fullname="FishMMO-AuthShared, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="Microsoft.EntityFrameworkCore.Abstractions, Version=5.0.17.0, Culture=neutral, PublicKeyToken=adb9793829ddae60" />
+  <assembly fullname="Microsoft.Extensions.Http, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="FxResources.Microsoft.Extensions.Http" preserve="all" />
+    <type fullname="Microsoft.Extensions.Http" preserve="all" />
+    <type fullname="Microsoft.Extensions.Http.Logging" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.Extensions.Configuration.EnvironmentVariables, Version=9.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60">
+    <type fullname="Microsoft.Extensions.Configuration.EnvironmentVariables" preserve="all" />
+  </assembly>
+  <assembly fullname="HtmlAgilityPack, Version=1.11.61.0, Culture=neutral, PublicKeyToken=bd319b19eaf3b43a">
+    <type fullname="HtmlAgilityPack" preserve="all" />
+  </assembly>
+  <assembly fullname="Unity.CompilationPipeline.Common, Version=2022.2.0.1, Culture=neutral, PublicKeyToken=null">
+    <type fullname="Unity.CompilationPipeline.Common" preserve="all" />
+    <type fullname="Unity.CompilationPipeline.Common.Diagnostics" preserve="all" />
+    <type fullname="Unity.CompilationPipeline.Common.ILPostProcessing" preserve="all" />
+  </assembly>
+  <assembly fullname="System.Threading.Tasks.Extensions, Version=4.2.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
+  <assembly fullname="System.Memory, Version=4.0.99.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
+  <assembly fullname="System.Runtime, Version=4.1.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <assembly fullname="System.Web, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <type fullname="Mono.Web.Util" preserve="all" />
+    <type fullname="System.Data.Design" preserve="all" />
+    <type fullname="System.Web.Caching" preserve="all" />
+    <type fullname="System.Web.Compilation" preserve="all" />
+    <type fullname="System.Web.Configuration" preserve="all" />
+    <type fullname="System.Web.Configuration.Internal" preserve="all" />
+    <type fullname="System.Web.Configuration.nBrowser" preserve="all" />
+    <type fullname="System.Web.Globalization" preserve="all" />
+    <type fullname="System.Web.Handlers" preserve="all" />
+    <type fullname="System.Web.Hosting" preserve="all" />
+    <type fullname="System.Web.Instrumentation" preserve="all" />
+    <type fullname="System.Web.Mail" preserve="all" />
+    <type fullname="System.Web.Management" preserve="all" />
+    <type fullname="System.Web.ModelBinding" preserve="all" />
+    <type fullname="System.Web.Profile" preserve="all" />
+    <type fullname="System.Web.Properties" preserve="all" />
+    <type fullname="System.Web.Routing" preserve="all" />
+    <type fullname="System.Web.Security" preserve="all" />
+    <type fullname="System.Web.Security.AntiXss" preserve="all" />
+    <type fullname="System.Web.Security.Cryptography" preserve="all" />
+    <type fullname="System.Web.SessionState" preserve="all" />
+    <type fullname="System.Web.UI" preserve="all" />
+    <type fullname="System.Web.UI.Adapters" preserve="all" />
+    <type fullname="System.Web.UI.HtmlControls" preserve="all" />
+    <type fullname="System.Web.UI.WebControls" preserve="all" />
+    <type fullname="System.Web.UI.WebControls.Adapters" preserve="all" />
+    <type fullname="System.Web.UI.WebControls.WebParts" preserve="all" />
+    <type fullname="System.Web.WebSockets" preserve="all" />
+  </assembly>
+  <assembly fullname="Anonymously Hosted DynamicMethods Assembly, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="PlayerBuildProgramLibrary.Data, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="PlayerBuildProgramLibrary.Data" preserve="all" />
+  </assembly>
+  <assembly fullname="ExCSS.Unity, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="ExCSS" preserve="all" />
+    <type fullname="ExCSS.Conditions" preserve="all" />
+  </assembly>
+  <assembly fullname="Bee.TinyProfiler2, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+  <assembly fullname="BeeBuildProgramCommon.Data, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="BeeBuildProgramCommon.Data" preserve="all" />
+  </assembly>
+  <assembly fullname="ScriptCompilationBuildProgram.Data, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="ScriptCompilationBuildProgram.Data" preserve="all" />
+  </assembly>
+  <assembly fullname="WinPlayerBuildProgram.Data, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="WinPlayerBuildProgram.Data" preserve="all" />
+  </assembly>
 </linker>

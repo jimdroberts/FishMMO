@@ -172,6 +172,22 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+#if !UNITY_SERVER
+			// TryBindOwnerCamera only fires once, from OnStartClient/OnOwnershipClient,
+			// and relies on Camera.main — a scene tag lookup that can race with scene
+			// load/camera activation. If it missed that one attempt, CharacterCamera is
+			// left permanently null and every tick from here on would throw a
+			// NullReferenceException reading CharacterCamera.Transform. Retry here, on
+			// the tick that actually needs it, so a late-activating camera still binds.
+			if (CharacterCamera == null)
+			{
+				TryBindOwnerCamera();
+				if (CharacterCamera == null)
+				{
+					return;
+				}
+			}
+#endif
 			KCCInputReplicateData kccInput = OnHandleCharacterInput();
 			input.MoveAxisForward = kccInput.MoveAxisForward;
 			input.MoveAxisRight = kccInput.MoveAxisRight;

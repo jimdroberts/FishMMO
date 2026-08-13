@@ -96,6 +96,13 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only react while this panel is actually shown. Without this guard, this
+			// handler fires for every auth result client-wide — including ones meant for
+			// UILogin (e.g. wrong password on the initial login screen) — and calling
+			// OnClick_QuitToLogin() from here would reset UILogin's own in-flight lock
+			// before its handler runs, silently swallowing the result there.
+			if (!Visible) return;
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:

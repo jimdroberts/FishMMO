@@ -6,6 +6,7 @@ using FishMMO.Shared;
 using FishMMO.Auth.Core;
 using FishMMO.Logging;
 using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace FishMMO.Client
@@ -183,18 +184,50 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				// If the connection dropped while the user was in the middle of account
-				// creation (form locked, waiting for server response), surface an error
-				// so the player knows what happened instead of silently unlocking the form.
-				if (isAuthFlowActive)
-				{
-					ShowValidationError("Connection to login server lost. Please check your network and try again. " +
-						"If the problem persists, the login server may be temporarily down.");
-				}
 				StatusMessage.text = "";
-				SetFormLocked(false);
 				pendingVerifyUsername = null;
 				DeleteSavedTwoFactorSetupFile();
+				// Deferred by a frame: the server may send a final auth result (e.g.
+				// InvalidUsernameOrPassword) and then close the connection in the same
+				// tick. That result is delivered via a queued main-thread callback that
+				// can arrive after this Stopped event. Unlocking synchronously here would
+				// clear isAuthFlowActive before Authenticator_OnClientAuthenticationResult
+				// processes that already-in-flight result, silently swallowing it.
+				// Coroutines can't start on an inactive GameObject — this handler fires
+				// for both UILogin and UIRegister regardless of which panel is shown, so
+				// fall back to an immediate unlock when hidden (isAuthFlowActive is
+				// already false there, since a hidden panel never initiated the flow).
+				if (gameObject.activeInHierarchy)
+				{
+					StartCoroutine(DeferredUnlockAfterDisconnect());
+				}
+				else
+				{
+					SetFormLocked(false);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Unlocks the form shortly after disconnect, giving an already-in-flight auth
+		/// result callback a chance to run first. A single frame is not enough — the
+		/// result is produced by server-side SRP verification and marshaled back to the
+		/// main thread, which can take longer than one Update tick. If no result arrived
+		/// by then, surfaces a generic connection-lost error.
+		/// See <see cref="ClientManager_OnClientConnectionState"/>.
+		/// </summary>
+		private IEnumerator DeferredUnlockAfterDisconnect()
+		{
+			bool wasActive = isAuthFlowActive;
+			yield return new WaitForSeconds(1.5f);
+			if (wasActive && isAuthFlowActive)
+			{
+				ShowValidationError("Connection to login server lost. Please check your network and try again. " +
+					"If the problem persists, the login server may be temporarily down.");
+			}
+			else
+			{
+				SetFormLocked(false);
 			}
 		}
 

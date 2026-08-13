@@ -19,7 +19,7 @@ namespace FishMMO.UnitTests
 		private const BindingFlags PrivateInstanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
 
 		/// <summary>
-		/// Verifies empty containers are treated as occupied collision slots, not same-spawn retries.
+		/// Verifies null or empty containers are not treated as same-spawn retries.
 		/// </summary>
 		[Test]
 		public void IsSameSpawnContainer_EmptyContainer_ReturnsFalse()
@@ -27,13 +27,13 @@ namespace FishMMO.UnitTests
 			try
 			{
 				AuthTestTrace.LogTestStart(nameof(IsSameSpawnContainer_EmptyContainer_ReturnsFalse),
-					"A null or empty container must be treated as an occupied collision slot, not a same-spawn retry.")
+					"A null or empty container must not be treated as a same-spawn retry.")
 					.GetAwaiter().GetResult();
 
-				bool nullResult = IsSameSpawnContainer(null, 7, new PredictionTick(100u));
-				bool emptyResult = IsSameSpawnContainer(new Dictionary<int, AbilityObject>(), 7, new PredictionTick(100u));
+				bool nullResult = IsSameSpawn(null, 7, new PredictionTick(100u));
+				bool emptyResult = IsSameSpawn(new Dictionary<int, AbilityObject>(), 7, new PredictionTick(100u));
 				AuthTestTrace.Log("AbilityObjectContainerIdTests", "STEP",
-					$"IsSameSpawnContainer(null,seed=7,tick=100)={nullResult} | IsSameSpawnContainer(empty,seed=7,tick=100)={emptyResult}")
+					$"IsSameSpawn(null,seed=7,tick=100)={nullResult} | IsSameSpawn(empty,seed=7,tick=100)={emptyResult}")
 					.GetAwaiter().GetResult();
 
 				LogAssert.IsFalse(nullResult, "A null container must not be treated as a same-spawn retry.");
@@ -53,7 +53,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// Verifies non-empty containers are same-spawn only when every live object matches seed and tick.
+		/// Verifies a populated container is a same-spawn retry only when a live object matches seed and tick.
 		/// </summary>
 		[Test]
 		public void IsSameSpawnContainer_NonEmptyContainer_RequiresMatchingSeedAndTick()
@@ -61,7 +61,7 @@ namespace FishMMO.UnitTests
 			try
 			{
 				AuthTestTrace.LogTestStart(nameof(IsSameSpawnContainer_NonEmptyContainer_RequiresMatchingSeedAndTick),
-					"A populated container is a same-spawn retry only when every live object matches the seed and spawn tick.")
+					"A populated container is a same-spawn retry only when a live object matches the seed and spawn tick.")
 					.GetAwaiter().GetResult();
 
 				GameObject gameObject = new GameObject("AbilityObjectContainerIdTest");
@@ -78,11 +78,11 @@ namespace FishMMO.UnitTests
 						"Container seeded with one AbilityObject (seed=7, tick=100). Probing match/mismatch combinations.")
 						.GetAwaiter().GetResult();
 
-					LogAssert.IsTrue(IsSameSpawnContainer(container, 7, new PredictionTick(100u)),
+					LogAssert.IsTrue(IsSameSpawn(container, 7, new PredictionTick(100u)),
 						"Matching seed and tick must report a same-spawn container.");
-					LogAssert.IsFalse(IsSameSpawnContainer(container, 8, new PredictionTick(100u)),
+					LogAssert.IsFalse(IsSameSpawn(container, 8, new PredictionTick(100u)),
 						"A mismatched seed must not report a same-spawn container.");
-					LogAssert.IsFalse(IsSameSpawnContainer(container, 7, new PredictionTick(101u)),
+					LogAssert.IsFalse(IsSameSpawn(container, 7, new PredictionTick(101u)),
 						"A mismatched tick must not report a same-spawn container.");
 				}
 				finally
@@ -201,10 +201,13 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		private static bool IsSameSpawnContainer(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
+		private static bool IsSameSpawn(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
 		{
-			return (bool)typeof(AbilityObject)
-				.GetMethod("IsSameSpawnContainer", PrivateStaticFlags)
+			// Container-allocation helpers were extracted from AbilityObject into
+			// AbilityContainerAllocator (and IsSameSpawnContainer was renamed to
+			// IsSameSpawn). Reflection targets the current home of the method.
+			return (bool)typeof(AbilityContainerAllocator)
+				.GetMethod("IsSameSpawn", PrivateStaticFlags)
 				.Invoke(null, new object[] { container, seed, spawnTick });
 		}
 

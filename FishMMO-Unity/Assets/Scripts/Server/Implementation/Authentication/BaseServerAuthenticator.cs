@@ -112,6 +112,19 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Display name used in log messages. Defaults to the concrete class name.</summary>
 		protected virtual string LogPrefix => GetType().Name;
 
+		/// <summary>
+		/// Whether this authenticator's connections require an IPFetch-issued connection
+		/// token for real-IP recovery. Only true for authenticators deployed behind an L4
+		/// UDP proxy (the LoginServer, reached via IPFetch/nginx). World/Scene servers are
+		/// connected to directly by IP:port from server-select data — the client never
+		/// requests or sends a connection token for them (see
+		/// <see cref="FishMMO.Client.ClientLoginAuthenticator.ConnectionToken"/>, which is
+		/// explicitly null for World/Scene connections) — so enforcing the token/cookie-echo
+		/// gate for them would reject every legitimate first handshake. Overridden to
+		/// <c>false</c> in <see cref="TokenServerAuthenticator"/>.
+		/// </summary>
+		protected virtual bool RequiresConnectionToken => true;
+
 		#region Lifecycle
 
 		/// <inheritdoc/>
@@ -493,17 +506,19 @@ namespace FishMMO.Server.Implementation
 		#region Rate Limit Key Resolution
 
 		/// <summary>
-		/// Resolves the real client IP for rate limiting. Requires the IP to have been
-		/// recovered from a verified connection token or auth token. Returns null if
-		/// the real IP is not yet available — callers MUST disconnect the client.
-		/// Never falls back to proxy IP or ClientId.
+		/// Resolves the real client IP for rate limiting. For authenticators behind an
+		/// L4 proxy (<see cref="RequiresConnectionToken"/> true), this requires the IP to
+		/// have been recovered from a verified connection token — <c>conn.GetAddress()</c>
+		/// returns the proxy's loopback for every client there, so it is never used as a
+		/// fallback and a null result means callers MUST disconnect. For authenticators
+		/// not behind a proxy (World/Scene, connected to directly), <c>conn.GetAddress()</c>
+		/// IS the real client IP, so it is used as a safe fallback (falling back further to
+		/// a per-connection key if it happens to report loopback, e.g. local dev testing).
 		/// </summary>
 		protected string? ResolveRateLimitKey(NetworkConnection conn)
 		{
 			if (conn == null) return null;
 			// Look up the real IP recovered from the connection/auth token.
-			// Never fall back to conn.GetAddress() (which returns 127.0.0.1
-			// behind an L4 proxy) or conn.ClientId (which resets on reconnect).
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 				rt.ConnectionIpCache != null &&
@@ -511,7 +526,56 @@ namespace FishMMO.Server.Implementation
 			{
 				return HandshakeService.NormalizeIp(realIp);
 			}
-			return null;
+
+			if (RequiresConnectionToken)
+			{
+				// Behind an L4 proxy: conn.GetAddress() is the proxy's loopback for
+				// every client, so it is not a safe fallback here.
+				return null;
+			}
+
+			// Not behind a proxy — conn.GetAddress() is the client's real address.
+			string addr = conn.GetAddress();
+			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
+				return addr;
+			return $"conn:{conn.ClientId}";
+		}
+
+		/// <summary>
+		/// Resolves the exact key used by the handshake rate limiter for a connection.
+		/// Mirrors the fallback chain used by the gate in
+		/// <see cref="OnServerClientHandshakeReceivedAsync"/> so the gate and any
+		/// targeted clearing (<see cref="ClearHandshakeRateLimit"/>) agree on the key.
+		/// </summary>
+		private string ResolveHandshakeRateLimitKey(NetworkConnection conn)
+		{
+			string? rateLimitKey = ResolveRateLimitKey(conn);
+			if (!string.IsNullOrEmpty(rateLimitKey))
+				return rateLimitKey;
+
+			string addr = conn.GetAddress();
+			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
+				return addr;
+			return $"conn:{conn.ClientId}";
+		}
+
+		/// <summary>
+		/// Clears the handshake rate-limit window for a connection. Called when the
+		/// server itself invites a re-handshake on the same connection (login-queue
+		/// admission) so the invited retry cannot trip the limiter, and when the
+		/// connection stops so a recycled ClientId does not inherit a stale window.
+		/// FishNet reuses ClientIds after disconnect — on sub-10ms links a fast
+		/// reconnect can otherwise trip the limiter with a perfectly clean connection.
+		/// </summary>
+		internal void ClearHandshakeRateLimit(NetworkConnection conn)
+		{
+			if (conn == null) return;
+			handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
+			// The resolved key may differ from the key used at gate time: the real IP
+			// is only known after connection-token processing, so the initial handshake
+			// on a proxied connection (conn.GetAddress() == loopback) used the ClientId
+			// fallback. Remove that explicitly.
+			handshakeRateLimiter.Remove($"conn:{conn.ClientId}");
 		}
 
 		#endregion
@@ -525,6 +589,12 @@ namespace FishMMO.Server.Implementation
 		/// while this async method is suspended at an await point.</summary>
 		internal async Task OnServerClientHandshakeReceivedAsync(int clientId, ClientHandshake msg, Channel channel)
 		{
+			await Log.Info(LogPrefix, $"DEBUG ClientHandshake received: clientId={clientId} channel={channel} " +
+				$"PublicKey.Length={msg.PublicKey?.Length.ToString() ?? "null"} " +
+				$"Cookie.Length={msg.Cookie?.Length.ToString() ?? "null"} " +
+				$"ConnectionToken='{msg.ConnectionToken ?? "null"}' " +
+				$"MinVersion={msg.MinVersion} MaxVersion={msg.MaxVersion} GameVersion='{msg.GameVersion ?? "null"}'");
+
 			// Resolve the connection at entry.  If it's already gone, bail.
 			if (!TryResolveConnection(clientId, out var conn))
 				return;
@@ -579,18 +649,24 @@ namespace FishMMO.Server.Implementation
 			// pre-authentication client share one rate-limit bucket — a single
 			// attacker could saturate it and deny service to all legitimate clients.
 			// Fall back to ClientId (unique per QUIC connection) instead.
+			//
+			// Only gate the cookieless (Phase 1) handshake here. The cookie-echo
+			// retry (msg.Cookie != null) is the natural, bounded continuation of an
+			// already-rate-limited Phase 1 attempt on the SAME connection/key — not
+			// an independent new attempt an attacker could use to flood forged-token
+			// verification — so it must not share this budget. On a fast loopback
+			// connection the full challenge/echo round trip can complete in well
+			// under HandshakeRateLimitInterval (100ms), which would otherwise cause
+			// this gate to silently disconnect the echo before it ever reaches the
+			// core handshake handler.
+			if (msg.Cookie == null || msg.Cookie.Length == 0)
 			{
-				string? rateLimitKey = ResolveRateLimitKey(conn);
-				if (string.IsNullOrEmpty(rateLimitKey))
-				{
-					string addr = conn.GetAddress();
-					if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
-						rateLimitKey = addr;
-					else
-						rateLimitKey = $"conn:{clientId}";
-				}
+				string rateLimitKey = ResolveHandshakeRateLimitKey(conn);
 				if (!handshakeRateLimiter.TryBegin(rateLimitKey, DateTime.UtcNow, HandshakeRateLimitInterval))
 				{
+					// Log the trip — previous builds disconnected here with zero
+					// output, which hid every low-latency handshake failure.
+					await Log.Warning(LogPrefix, $"Connection {clientId} handshake rate-limited (key '{rateLimitKey}') — disconnecting.");
 					conn.Disconnect(true);
 					return;
 				}
@@ -620,15 +696,41 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 			}
-			else
+			else if (RequiresConnectionToken)
 			{
-				// No connection token provided — client is not coming through the
-				// IPFetch proxy path. Disconnect immediately.
-				await Log.Warning(LogPrefix, $"Connection {clientId} rejected: no connection token.");
-				if (TryResolveConnection(clientId, out conn))
-					conn.Disconnect(true);
-				return;
+				// No connection token on this handshake. That is legitimate for
+				// exactly one case: the cookie-echo retry. The client core
+				// (ClientAuthenticatorCore.OnServerHandshakeReceived, phase 1)
+				// deliberately sends connectionToken: null when echoing a cookie
+				// challenge, because the one-time token was already sent — and
+				// verified by ProcessConnectionTokenAsync — on the initial
+				// handshake of this same connection. Accept it only when BOTH:
+				//   1. the handshake carries a cookie (it is an echo, not initial), AND
+				//   2. this connection's real IP is already in the IP cache,
+				//      which only happens after a successful token verification.
+				bool isVerifiedCookieEcho = false;
+				if (msg.Cookie != null && msg.Cookie.Length > 0 &&
+					Server?.DataContainerRegistry != null &&
+					Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var ipRt) &&
+					ipRt.ConnectionIpCache != null &&
+					ipRt.ConnectionIpCache.TryGetAndTouch(clientId, DateTime.UtcNow, out _))
+				{
+					isVerifiedCookieEcho = true;
+				}
+
+				if (!isVerifiedCookieEcho)
+				{
+					// No token and not a verified cookie echo — client is not
+					// coming through the IPFetch proxy path. Disconnect immediately.
+					await Log.Warning(LogPrefix, $"Connection {clientId} rejected: no connection token.");
+					if (TryResolveConnection(clientId, out conn))
+						conn.Disconnect(true);
+					return;
+				}
 			}
+			// else: RequiresConnectionToken is false (e.g. World/Scene servers, which are
+			// connected to directly rather than through the IPFetch/L4 proxy path) — no
+			// token was ever expected, so proceed straight to the core handshake below.
 
 			// ── Re-resolve connection after await ──────────────────
 			// ProcessConnectionTokenAsync yielded at an await.  The
@@ -984,6 +1086,10 @@ namespace FishMMO.Server.Implementation
 				// gone regardless of whether it authenticated successfully.
 				connectionStartTimes.TryRemove(conn.ClientId, out _);
 				connectionNonces.TryRemove(conn.ClientId, out _);
+				// Clear the handshake rate-limit window so a recycled ClientId
+				// (FishNet reuses IDs after disconnect) does not inherit a stale
+				// 100ms block on its first handshake.
+				ClearHandshakeRateLimit(conn);
 
 				Core?.HandleConnectionStopped(conn);
 				// Immediately notify the login queue so dead connections
