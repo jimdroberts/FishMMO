@@ -113,9 +113,15 @@ namespace FishMMO.Auth.Implementation
 		private readonly ConcurrentDictionary<string, HandshakeIpWindow> handshakeIpWindows = new ConcurrentDictionary<string, HandshakeIpWindow>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
-		/// Sliding-window burst state for one rate-limit key in <see cref="handshakeIpWindows"/>.
-		/// A rejected attempt never touches the window (no sliding extension), mirroring the
-		/// anti-hammer property of the previous single-deadline debounce.
+		/// Fixed-window burst state for one rate-limit key in <see cref="handshakeIpWindows"/>.
+		/// The window runs from <see cref="WindowStartUtc"/> to
+		/// <c>WindowStartUtc + HandshakeIpWindowSeconds</c> and does not move on acceptance,
+		/// so a boundary straddle can admit up to 2 × <see cref="HandshakeIpBurstLimit"/>
+		/// completions in ~2.01 s (the last of one window plus the first of the next). That
+		/// doubling is bounded upstream: every completion still requires a fresh one-time
+		/// connection token, a rate-limited Phase-1 handshake, and a valid cookie. A rejected
+		/// attempt never touches the window (no extension), mirroring the anti-hammer
+		/// property of the previous single-deadline debounce.
 		/// </summary>
 		private struct HandshakeIpWindow
 		{

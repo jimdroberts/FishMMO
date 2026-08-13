@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests
 	public class CharacterAttributeResourceStateSerializerTests
 	{
 		/// <summary>
-		/// <see cref="CharacterAttributeResourceStateSerializer.RegisterDeltaSerializers"/> is
+		/// <see cref="CharacterAttributeResourceStateSerializer.RegisterSerializers"/> is
 		/// decorated with <c>[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]</c>, which only
 		/// fires in PlayMode. EditMode tests never load a scene, so the delta delegates would
 		/// be null and the Write/Read calls below would NullReferenceException.
@@ -32,10 +32,10 @@ namespace FishMMO.UnitTests
 		{
 			System.Type t = typeof(CharacterAttributeResourceStateSerializer);
 			System.Reflection.MethodInfo register = t.GetMethod(
-				"RegisterDeltaSerializers",
+				"RegisterSerializers",
 				System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
 			LogAssert.IsNotNull(register,
-				"CharacterAttributeResourceStateSerializer.RegisterDeltaSerializers must exist for EditMode test bootstrap.");
+				"CharacterAttributeResourceStateSerializer.RegisterSerializers must exist for EditMode test bootstrap.");
 			register.Invoke(null, null);
 		}
 
