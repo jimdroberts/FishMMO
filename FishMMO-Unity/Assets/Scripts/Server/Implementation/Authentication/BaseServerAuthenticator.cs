@@ -514,6 +514,43 @@ namespace FishMMO.Server.Implementation
 			return null;
 		}
 
+		/// <summary>
+		/// Resolves the exact key used by the handshake rate limiter for a connection.
+		/// Mirrors the fallback chain used by the gate in
+		/// <see cref="OnServerClientHandshakeReceivedAsync"/> so the gate and any
+		/// targeted clearing (<see cref="ClearHandshakeRateLimit"/>) agree on the key.
+		/// </summary>
+		private string ResolveHandshakeRateLimitKey(NetworkConnection conn)
+		{
+			string? rateLimitKey = ResolveRateLimitKey(conn);
+			if (!string.IsNullOrEmpty(rateLimitKey))
+				return rateLimitKey;
+
+			string addr = conn.GetAddress();
+			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
+				return addr;
+			return $"conn:{conn.ClientId}";
+		}
+
+		/// <summary>
+		/// Clears the handshake rate-limit window for a connection. Called when the
+		/// server itself invites a re-handshake on the same connection (login-queue
+		/// admission) so the invited retry cannot trip the limiter, and when the
+		/// connection stops so a recycled ClientId does not inherit a stale window.
+		/// FishNet reuses ClientIds after disconnect — on sub-10ms links a fast
+		/// reconnect can otherwise trip the limiter with a perfectly clean connection.
+		/// </summary>
+		internal void ClearHandshakeRateLimit(NetworkConnection conn)
+		{
+			if (conn == null) return;
+			handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
+			// The resolved key may differ from the key used at gate time: the real IP
+			// is only known after connection-token processing, so the initial handshake
+			// on a proxied connection (conn.GetAddress() == loopback) used the ClientId
+			// fallback. Remove that explicitly.
+			handshakeRateLimiter.Remove($"conn:{conn.ClientId}");
+		}
+
 		#endregion
 
 		#region FishNet Broadcast / Event Routing
@@ -552,24 +589,35 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-				// ── FIX #3: Validate protocol version range semantics ──
-				// MinVersion/MaxVersion are ushort — wire-type safe but never
-				// semantically validated before expensive crypto operations
-				// (HMAC-SHA256 token verification, ECDH key agreement).
-				// Reject invalid ranges here to avoid wasting CPU on
-				// connections that will inevitably fail version negotiation.
-				// Version 0 is reserved (indicates uninitialized client).
-				if (msg.MinVersion == 0 || msg.MaxVersion == 0 || msg.MinVersion > msg.MaxVersion)
-				{
-					conn.Disconnect(true);
-					return;
-				}
+			// ── FIX #3: Validate protocol version range semantics ──
+			// MinVersion/MaxVersion are ushort — wire-type safe but never
+			// semantically validated before expensive crypto operations
+			// (HMAC-SHA256 token verification, ECDH key agreement).
+			// Reject invalid ranges here to avoid wasting CPU on
+			// connections that will inevitably fail version negotiation.
+			// Version 0 is reserved (indicates uninitialized client).
+			if (msg.MinVersion == 0 || msg.MaxVersion == 0 || msg.MinVersion > msg.MaxVersion)
+			{
+				conn.Disconnect(true);
+				return;
+			}
 
 			// Rate-limit handshake processing BEFORE the connection token HMAC
 			// verification (which is CPU-bound). Without this gate, an attacker
 			// can open a single QUIC connection and flood ClientHandshake messages
 			// with forged tokens, consuming HMAC-SHA256 cycles without ever reaching
 			// the capacity-limited SRP channels deeper in the core.
+			//
+			// Only the INITIAL cookieless handshake is gated. The cookie echo that
+			// answers our own challenge is a natural round trip: on loopback or
+			// sub-10ms links it arrives well inside HandshakeRateLimitInterval, and
+			// gating both phases under the same per-connection key silently
+			// disconnected every low-latency client at exactly this point. The echo
+			// carries a cookie that only this server could have issued for this
+			// connection; the core rejects a forged echo on the first attempt
+			// (disconnecting the connection) and its per-IP Phase-2 burst limiter
+			// gates the expensive ECDH work — so the echo needs no transport gate.
+			//
 			// Uses the resolved real IP when available; falls back to transport
 			// address or ClientId for initial connections where IP isn't yet known.
 			//
@@ -579,18 +627,14 @@ namespace FishMMO.Server.Implementation
 			// pre-authentication client share one rate-limit bucket — a single
 			// attacker could saturate it and deny service to all legitimate clients.
 			// Fall back to ClientId (unique per QUIC connection) instead.
+			if (msg.Cookie == null || msg.Cookie.Length == 0)
 			{
-				string? rateLimitKey = ResolveRateLimitKey(conn);
-				if (string.IsNullOrEmpty(rateLimitKey))
-				{
-					string addr = conn.GetAddress();
-					if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
-						rateLimitKey = addr;
-					else
-						rateLimitKey = $"conn:{clientId}";
-				}
+				string rateLimitKey = ResolveHandshakeRateLimitKey(conn);
 				if (!handshakeRateLimiter.TryBegin(rateLimitKey, DateTime.UtcNow, HandshakeRateLimitInterval))
 				{
+					// Log the trip — previous builds disconnected here with zero
+					// output, which hid every low-latency handshake failure.
+					await Log.Warning(LogPrefix, $"Connection {clientId} handshake rate-limited (key '{rateLimitKey}') — disconnecting.");
 					conn.Disconnect(true);
 					return;
 				}
@@ -727,7 +771,7 @@ namespace FishMMO.Server.Implementation
 		{
 			if (capturedNonce == null) return true; // Pre-nonce server — no validation possible
 			return connectionNonces.TryGetValue(clientId, out string? currentNonce) &&
-			       currentNonce == capturedNonce;
+				   currentNonce == capturedNonce;
 		}
 
 		/// <summary>
@@ -984,6 +1028,10 @@ namespace FishMMO.Server.Implementation
 				// gone regardless of whether it authenticated successfully.
 				connectionStartTimes.TryRemove(conn.ClientId, out _);
 				connectionNonces.TryRemove(conn.ClientId, out _);
+				// Clear the handshake rate-limit window so a recycled ClientId
+				// (FishNet reuses IDs after disconnect) does not inherit a stale
+				// 100ms block on its first handshake.
+				ClearHandshakeRateLimit(conn);
 
 				Core?.HandleConnectionStopped(conn);
 				// Immediately notify the login queue so dead connections

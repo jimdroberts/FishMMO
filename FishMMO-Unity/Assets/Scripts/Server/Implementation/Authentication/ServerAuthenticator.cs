@@ -605,7 +605,14 @@ namespace FishMMO.Server.Implementation
 					outer.Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem))
 				{
 					if (queueSystem.TryEnqueue(conn))
+					{
+						// The client will re-send a cookieless handshake on this
+						// connection once admitted. Clear the handshake rate-limit
+						// window so the server-invited retry — including the
+						// immediate fast-pass re-admission path — can never trip it.
+						outer.ClearHandshakeRateLimit(conn);
 						return true;
+					}
 					// Queue is full — tell the client so they don't hang waiting
 					// for a handshake response that will never arrive.
 					BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);

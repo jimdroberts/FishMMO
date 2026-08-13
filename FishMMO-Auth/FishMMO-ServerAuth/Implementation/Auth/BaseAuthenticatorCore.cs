@@ -35,8 +35,25 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Maximum number of concurrent pending authentication connections.</summary>
 		protected const int MaxPendingAuthConnections = 10000;
 
-		/// <summary>Minimum seconds between handshake attempts from the same remote IP (or connection ID).</summary>
-		protected const float HandshakeIpDebounceSeconds = 0.25f;
+		/// <summary>
+		/// Duration of the per-IP Phase-2 handshake measurement window.
+		/// Combined with <see cref="HandshakeIpBurstLimit"/> this sustains 4 completed
+		/// handshakes/second/IP (unchanged from the previous single-deadline debounce)
+		/// while allowing a burst of near-simultaneous completions from one IP.
+		/// </summary>
+		protected const float HandshakeIpWindowSeconds = 2f;
+
+		/// <summary>
+		/// Maximum Phase-2 handshake completions accepted from one IP inside
+		/// <see cref="HandshakeIpWindowSeconds"/>. The old fixed 0.25 s debounce keyed
+		/// the whole handshake round trip on one interval: any second completion inside
+		/// the window — a player behind the same NAT as another, or a re-login whose
+		/// connect+token+challenge cycle finishes faster than the window on a sub-10 ms
+		/// link — was silently disconnected. A burst of 8 covers the legitimate worst
+		/// case (a household logging in together, a fast reconnect loop) without
+		/// meaningfully weakening the sustained per-IP throttle the limiter exists for.
+		/// </summary>
+		protected const int HandshakeIpBurstLimit = 8;
 
 		/// <summary>Maximum X25519 handshakes accepted in a single 1-second window.</summary>
 		protected const int MaxGlobalHandshakesPerSecond = 500;
@@ -85,8 +102,26 @@ namespace FishMMO.Auth.Implementation
 		/// Guarded by <see cref="ttlGate"/>.</summary>
 		private readonly Dictionary<int, TConnection> authConnectionByClientId = new Dictionary<int, TConnection>();
 
-		/// <summary>Per-IP handshake rate limiter. Prevents X25519 CPU abuse from rapid handshake replay.</summary>
-		private readonly ConcurrentDictionary<string, DateTime> handshakeIpNextAllowedUtc = new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+		/// <summary>
+		/// Per-IP Phase-2 handshake limiter with a burst allowance. Tracks completed
+		/// X25519 handshakes per remote IP inside a fixed measurement window instead of
+		/// a single debounce deadline, so a burst of legitimate near-simultaneous
+		/// handshakes from one IP (players behind one NAT, a fast re-login on a
+		/// sub-10 ms link) is accepted while a sustained flood is still throttled.
+		/// See <see cref="HandshakeIpWindowSeconds"/> and <see cref="HandshakeIpBurstLimit"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<string, HandshakeIpWindow> handshakeIpWindows = new ConcurrentDictionary<string, HandshakeIpWindow>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Sliding-window burst state for one rate-limit key in <see cref="handshakeIpWindows"/>.
+		/// A rejected attempt never touches the window (no sliding extension), mirroring the
+		/// anti-hammer property of the previous single-deadline debounce.
+		/// </summary>
+		private struct HandshakeIpWindow
+		{
+			public int Count;
+			public DateTime WindowStartUtc;
+		}
 
 		/// <summary>
 		/// HMAC-SHA256 key for stateless handshake cookies.
@@ -175,7 +210,7 @@ namespace FishMMO.Auth.Implementation
 				authOriginalStartByClientId.Clear();
 				authConnectionByClientId.Clear();
 			}
-			handshakeIpNextAllowedUtc.Clear();
+			handshakeIpWindows.Clear();
 		}
 
 		/// <summary>
@@ -350,26 +385,27 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Removes expired per-IP handshake rate-limit entries to prevent unbounded dictionary growth.
+		/// Removes expired per-IP handshake rate-limit windows to prevent unbounded dictionary growth.
 		/// </summary>
 		private void SweepExpiredHandshakeRateLimits()
 		{
-			if (handshakeIpNextAllowedUtc.Count == 0) return;
+			if (handshakeIpWindows.Count == 0) return;
 
 			DateTime now = DateTime.UtcNow;
+			TimeSpan window = TimeSpan.FromSeconds(HandshakeIpWindowSeconds);
 			int scanned = 0;
 			int removed = 0;
 
-			foreach (var kvp in handshakeIpNextAllowedUtc)
+			foreach (var kvp in handshakeIpWindows)
 			{
 				if (scanned >= HandshakeRateLimitSweepMaxScan || removed >= HandshakeRateLimitSweepMaxRemovals)
 					break;
 
 				scanned++;
 
-				if (now >= kvp.Value)
+				if (now >= kvp.Value.WindowStartUtc + window)
 				{
-					handshakeIpNextAllowedUtc.TryRemove(kvp.Key, out _);
+					handshakeIpWindows.TryRemove(kvp.Key, out _);
 					removed++;
 				}
 			}
@@ -471,10 +507,10 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			// ── Per-IP rate limit ─────────────────────────────────────────
+			// ── Per-IP rate limit (burst window) ────────────────────────
 			// Fail closed: if we cannot resolve a usable rate-limit key (no remote IP, parse
 			// failure, etc.), drop the connection rather than allowing it to bypass the
-			// per-IP debounce. Otherwise an attacker that strips remote-IP info from their
+			// per-IP throttle. Otherwise an attacker that strips remote-IP info from their
 			// transport could flood handshakes without ever hitting the rate limiter.
 			string rateLimitKey = ResolveRateLimitKey(conn);
 			if (string.IsNullOrEmpty(rateLimitKey))
@@ -483,28 +519,46 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 			DateTime nowUtc = DateTime.UtcNow;
-			DateTime deadline = nowUtc.AddSeconds(HandshakeIpDebounceSeconds);
+			TimeSpan window = TimeSpan.FromSeconds(HandshakeIpWindowSeconds);
 
-			// Atomic per-IP rate-limit check-and-set via AddOrUpdate.
+			// Atomic per-IP check-and-set via AddOrUpdate over a burst window.
+			// The previous single-deadline debounce rejected every completion within
+			// HandshakeIpDebounceSeconds of another from the same IP — including the
+			// cookie echo of a client whose Phase-1 challenge was issued inside the
+			// window (every sub-10 ms / loopback client) and a second player behind the
+			// same NAT logging in alongside the first. The windowed counter accepts a
+			// burst of HandshakeIpBurstLimit completions per IP per window and only
+			// throttles the sustained flood the limiter exists to stop. Rejected
+			// attempts never touch the window (no sliding extension).
+			//
 			// The delegates capture 'rateLimited' to distinguish whether AddOrUpdate
-			// honoured the check (rate-limited) or actually set the new deadline.
+			// honoured the check (rate-limited) or actually recorded the attempt.
 			// Under extreme contention the add factory's side effect may survive into
 			// a retry, but the consequence is a single extra handshake — not a
 			// systematic bypass — and is negligible compared to the original TOCTOU race.
 			bool rateLimited = true;
-			handshakeIpNextAllowedUtc.AddOrUpdate(
+			handshakeIpWindows.AddOrUpdate(
 				rateLimitKey,
 				_ =>
 				{
 					rateLimited = false;
-					return deadline;
+					return new HandshakeIpWindow { Count = 1, WindowStartUtc = nowUtc };
 				},
 				(_, existing) =>
 				{
-					if (nowUtc < existing)
-						return existing;
-					rateLimited = false;
-					return deadline;
+					if (nowUtc >= existing.WindowStartUtc + window)
+					{
+						// Window expired — start a fresh one.
+						rateLimited = false;
+						return new HandshakeIpWindow { Count = 1, WindowStartUtc = nowUtc };
+					}
+					if (existing.Count < HandshakeIpBurstLimit)
+					{
+						rateLimited = false;
+						return new HandshakeIpWindow { Count = existing.Count + 1, WindowStartUtc = existing.WindowStartUtc };
+					}
+					// Burst exhausted — reject without touching the window.
+					return existing;
 				});
 			if (rateLimited)
 			{
@@ -686,10 +740,6 @@ namespace FishMMO.Auth.Implementation
 		{
 			return HandshakeService.NormalizeIp(GetConnectionAddress(conn));
 		}
-
-		#endregion
-
-		#region Static Helpers
 
 		#endregion
 

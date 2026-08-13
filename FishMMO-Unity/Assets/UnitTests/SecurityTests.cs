@@ -476,7 +476,7 @@ namespace FishMMO.UnitTests
 					 $"Assembly {t.Assembly.GetName().Name} has no location — likely in-memory compile, not the shipping DLL.");
 					string normalised = loc.Replace('\\', '/');
 					LogAssert.IsTrue(normalised.Contains("/Assets/Dependencies/") || normalised.Contains("/Library/ScriptAssemblies/PrecompiledAssemblies/"),
-					 $"Type {t.FullName} resolved to {loc}; expected a DLL under Assets/Dependencies/." );
+					 $"Type {t.FullName} resolved to {loc}; expected a DLL under Assets/Dependencies/.");
 					StringAssert.Contains("FishMMO-", System.IO.Path.GetFileName(loc),
 					 $"Type {t.FullName} resolved to a non-FishMMO assembly file ({loc}).");
 				}
