@@ -104,9 +104,64 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${MSQUIC_TARGET}
-    OpenSSL::SSL
-    OpenSSL::Crypto
 )
+
+# TLS comes from msquic, never from this target: no source file here calls
+# OpenSSL directly.
+#
+# With WT_STATIC_MSQUIC=ON, msquic builds and statically links its own quictls
+# (QUIC_TLS_LIB above), so that copy is already inside ${MSQUIC_TARGET}. Adding
+# the system OpenSSL here as well produced a library holding TWO OpenSSL
+# implementations at once — ~400 quictls symbols defined locally and ~240 more
+# imported from the system libssl/libcrypto. Calls then split across the two:
+# SSL_CTX_new resolved to quictls while SSL_CTX_use_PrivateKey_file resolved to
+# system OpenSSL, which reinterpreted the quictls SSL_CTX layout and segfaulted
+# inside CxPlatTlsSecConfigCreate the moment the server loaded its certificate.
+# The server could never start. Verify a build stays single-implementation with:
+#   nm -D --undefined-only libfishmmo_webtransport.so | grep -c 'SSL_\|EVP_'
+#
+# Only a dynamically linked (system) msquic needs the system OpenSSL alongside it.
+if(NOT WT_STATIC_MSQUIC)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        OpenSSL::SSL
+        OpenSSL::Crypto
+    )
+endif()
+
+if(WIN32)
+    # Statically linked msquic/quictls pulls in Winsock (socket I/O), the
+    # Windows CryptoAPI/CNG certificate-store entry points (cert_capi.c),
+    # and adapter enumeration. Nothing else in this target references them,
+    # so with WT_STATIC_MSQUIC=ON the link fails without these.
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        ws2_32
+        crypt32
+        ncrypt
+        ntdll
+        iphlpapi
+    )
+endif()
+
+if(UNIX AND NOT APPLE)
+    # msquic compiles its platform layer with CXPLAT_NUMA_AWARE whenever numa.h
+    # is present, so the static archive absorbed here calls numa_available(),
+    # numa_node_of_cpu() and friends. That dependency is declared on msquic's
+    # own shared target, not on the static one, so without this the produced
+    # .so carries four undefined numa_* symbols and no DT_NEEDED entry for
+    # libnuma — Unity's dlopen of the plugin then fails to resolve them.
+    # Verify after building with:
+    #   nm -D --undefined-only libfishmmo_webtransport.so | grep numa
+    find_library(WT_NUMA_LIB NAMES numa libnuma.so.1)
+    if(WT_NUMA_LIB)
+        message(STATUS "Linking libnuma for NUMA-aware msquic: ${WT_NUMA_LIB}")
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${WT_NUMA_LIB})
+    else()
+        message(WARNING
+            "libnuma not found. If msquic was built NUMA-aware, the resulting "
+            "plugin will have unresolved numa_* symbols and fail to load. "
+            "Install libnuma (Arch: numactl, Debian/Ubuntu: libnuma-dev).")
+    endif()
+endif()
 
 # ── Platform-specific settings ────────────────────────────────
 # Output directly to the Unity project's plugin directory so no

@@ -79,11 +79,26 @@ typedef struct wt_stream_manager_s {
     HQUIC               quic_conn;
     atomic_uint         active_streams;
     atomic_bool         shutting_down;
-    /* Set when the QUIC connection is already closed/shutting down.
-     * wt_stream_manager_shutdown must NOT call MsQuic StreamShutdown /
-     * StreamClose on handles once this is true — that path was
-     * quic_bugcheck → LoginServer SIGABRT (rc=134). */
+    /* Set when the QUIC connection is shutting down (peer/transport initiated,
+     * or local disconnect). Blocks new sends and stops wt_stream_manager_shutdown
+     * from issuing graceful StreamShutdowns.
+     *
+     * NOTE: this does NOT mean the handles are dead — it is set while the
+     * connection is still valid, well before ConnectionClose. Use
+     * handles_invalid for "may I still call MsQuic on these handles". */
     atomic_bool         conn_closed;
+
+    /* Set immediately before MsQuic->ConnectionClose, which is the point where
+     * every child stream handle becomes invalid; calling StreamShutdown/
+     * StreamClose after it is quic_bugcheck → SIGABRT (rc=134).
+     *
+     * Separate from conn_closed because conflating the two leaked handles: with
+     * one flag, a stream shutting down during a peer-initiated close skipped its
+     * own StreamClose even though the handle was still perfectly valid, and
+     * nothing else ever closed it. msquic then held the connection (and a
+     * rundown reference on the registration) forever, hanging server shutdown
+     * inside MsQuicRegistrationClose. */
+    atomic_bool         handles_invalid;
 
     /* Browser WebTransport (HTTP/3): client/server-initiated data streams
      * begin with a WEBTRANSPORT_STREAM capsule (type 0x41) carrying the
@@ -155,6 +170,34 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr);
  * manager teardown never issues MsQuic stream ops on dead handles.
  */
 void wt_stream_manager_mark_conn_closed(wt_stream_manager_t* mgr);
+
+/**
+ * Close every stream handle the manager still owns.
+ *
+ * Call from connection SHUTDOWN_COMPLETE *after*
+ * wt_stream_manager_mark_conn_closed and *before* ConnectionClose — the only
+ * window where closing is both necessary and safe.
+ *
+ * Necessary: the per-stream SHUTDOWN_COMPLETE handler deliberately skips
+ * StreamClose once conn_closed is set (closing a handle whose connection is
+ * already gone aborts the process), so any stream still open at that point is
+ * never closed by anyone. msquic keeps the connection — and with it a rundown
+ * reference on the registration — alive until every stream handle is released,
+ * so a single leaked handle makes MsQuicRegistrationClose block forever and
+ * hangs server shutdown.
+ *
+ * Safe: ConnectionClose has not run yet, so the handles are still valid.
+ * Ordering after mark_conn_closed also means the synchronous SHUTDOWN_COMPLETE
+ * that StreamClose may deliver takes the "skip StreamClose" branch, so each
+ * handle is closed exactly once while its context is still freed normally.
+ */
+void wt_stream_manager_close_streams(wt_stream_manager_t* mgr);
+
+/**
+ * Mark every stream handle dead. Call immediately before ConnectionClose, after
+ * wt_stream_manager_close_streams has released the handles that were still open.
+ */
+void wt_stream_manager_mark_handles_invalid(wt_stream_manager_t* mgr);
 
 int32_t wt_stream_manager_send(
     wt_stream_manager_t* mgr, const uint8_t* data, int32_t length);

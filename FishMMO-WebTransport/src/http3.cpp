@@ -963,21 +963,44 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
  * Stream Writer Helpers
  * ═══════════════════════════════════════════════════════════════ */
 
+/* ── Heap send buffer: QUIC_BUFFER descriptor + payload in one block ──
+ * msquic retains the QUIC_BUFFER array pointer passed to StreamSend until the
+ * send is flushed and SEND_COMPLETE fires — it does not copy the descriptor at
+ * call time. Passing a stack-allocated QUIC_BUFFER therefore leaves msquic
+ * reading a dead stack frame when QuicStreamSendFlush later runs on a QUIC
+ * worker thread, which segfaults inside QuicStreamSendBufferRequest (a garbage
+ * Buffer/Length pair handed to memcpy). stream_manager.cpp already learned this
+ * and uses the same single-allocation layout (sm_send_req_t); every H3 send has
+ * to obey it too, and the SETTINGS bootstrap sent on every connection did not.
+ *
+ * The whole block is the SEND_COMPLETE ClientContext, so the existing
+ * free(ClientContext) handlers release descriptor and payload together. */
+typedef struct h3_send_buf_s {
+    QUIC_BUFFER buf;        /* buf.Buffer points at data[] */
+    uint8_t     data[1];    /* flexible: actual size = buf.Length */
+} h3_send_buf_t;
+
+static h3_send_buf_t* h3_send_buf_alloc(const uint8_t* data, uint32_t len)
+{
+    h3_send_buf_t* sb =
+        (h3_send_buf_t*)malloc(offsetof(h3_send_buf_t, data) + (size_t)len);
+    if (!sb) return NULL;
+    sb->buf.Buffer = sb->data;
+    sb->buf.Length = len;
+    if (len > 0 && data) memcpy(sb->data, data, (size_t)len);
+    return sb;
+}
+
 static QUIC_STATUS h3_stream_send(HQUIC stream, const uint8_t* data,
                                   uint32_t len)
 {
-    uint8_t* copy = (uint8_t*)malloc(len);
-    if (!copy) return QUIC_STATUS_OUT_OF_MEMORY;
-    memcpy(copy, data, len);
+    h3_send_buf_t* sb = h3_send_buf_alloc(data, len);
+    if (!sb) return QUIC_STATUS_OUT_OF_MEMORY;
 
-    QUIC_BUFFER buf;
-    buf.Buffer = copy;
-    buf.Length = len;
-
-    QUIC_STATUS st = MsQuic->StreamSend(stream, &buf, 1,
-                                         QUIC_SEND_FLAG_FIN, copy);
+    QUIC_STATUS st = MsQuic->StreamSend(stream, &sb->buf, 1,
+                                         QUIC_SEND_FLAG_FIN, sb);
     if (QUIC_FAILED(st)) {
-        free(copy);
+        free(sb);
         return st;
     }
     return QUIC_STATUS_SUCCESS;
@@ -999,14 +1022,16 @@ static QUIC_STATUS h3_stream_send_without_fin(HQUIC stream,
     if (!copy) return QUIC_STATUS_OUT_OF_MEMORY;
     memcpy(copy, data, len);
 
-    QUIC_BUFFER buf;
-    buf.Buffer = copy;
-    buf.Length = len;
+    /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+     * past this call, so it must not be a local. See h3_send_buf_alloc. */
+    h3_send_buf_t* sb = h3_send_buf_alloc(copy, (uint32_t)(len));
+    free(copy);
 
-    QUIC_STATUS st = MsQuic->StreamSend(stream, &buf, 1,
-                                         QUIC_SEND_FLAG_NONE, copy);
+    QUIC_STATUS st = sb ? MsQuic->StreamSend(stream, &sb->buf, 1,
+                                         QUIC_SEND_FLAG_NONE, sb)
+                              : QUIC_STATUS_OUT_OF_MEMORY;
     if (QUIC_FAILED(st)) {
-        free(copy);
+        free(sb);
         return st;
     }
     return QUIC_STATUS_SUCCESS;
@@ -1230,7 +1255,11 @@ typedef struct h3_send_only_ctx_s {
     HQUIC           stream;
     h3_session_t*   h3;
     int             role;       /* 1 = server_control, 2 = client_control, 0 = other */
-    volatile int    closed;     /* 0 = open, 1 = StreamClose done */
+    /* Claim flag for "who performs StreamClose + free(ctx)". Exactly one of the
+     * SHUTDOWN_COMPLETE callback and h3_session_free wins the exchange; the
+     * loser must not touch the ctx afterwards. Atomic because those two run on
+     * a QUIC worker and the application thread respectively. */
+    atomic_int      closed;     /* 0 = open, 1 = close+free claimed */
     volatile int    send_freed; /* 1 after ClientContext free (once) — atomic */
     /* Filled before StreamStart; sent from START_COMPLETE so we never
      * StreamSend before the stream is fully started (QuicStreamSendBufferRequest crash). */
@@ -1259,26 +1288,64 @@ static void h3_send_only_abort(HQUIC stream)
         0);
 }
 
+/**
+ * Abort AND close a send-only stream synchronously, releasing its context.
+ *
+ * Used on the connection-teardown path. Aborting alone is not enough there:
+ * StreamShutdown is asynchronous, and the caller (the connection's
+ * SHUTDOWN_COMPLETE handler) goes on to call ConnectionClose immediately, so
+ * the stream's own SHUTDOWN_COMPLETE — the only place that would StreamClose
+ * the handle — is never delivered. The stream object then keeps a rundown
+ * reference on the registration and MsQuicRegistrationClose blocks forever
+ * inside CxPlatRundownReleaseAndWait, hanging wt_server_destroy.
+ *
+ * StreamClose is safe to call here despite the "let SHUTDOWN_COMPLETE close it"
+ * rule above, because the atomic claim makes exactly one path do it, and
+ * StreamClose itself waits for any in-flight callback on that stream to return
+ * before it completes.
+ */
+static void h3_send_only_close_now(HQUIC stream, h3_send_only_ctx_t* c)
+{
+    if (!stream) return;
+    if (!c) {
+        MsQuic->StreamClose(stream);
+        return;
+    }
+    if (atomic_exchange(&c->closed, 1) == 0) {
+        MsQuic->StreamClose(stream);
+        if (c->pending_send) {
+            free(c->pending_send);
+            c->pending_send = NULL;
+        }
+        free(c);
+    }
+}
+
 static int h3_send_only_do_send(h3_send_only_ctx_t* c)
 {
     if (!c || !c->stream || !c->pending_send || c->pending_send_len == 0)
         return -1;
 
-    QUIC_BUFFER buf;
-    buf.Buffer = c->pending_send;
-    buf.Length = c->pending_send_len;
-    /* Ownership of pending_send transfers to SEND_COMPLETE ClientContext. */
-    uint8_t* payload = c->pending_send;
+    /* Move the payload into a heap block that also carries the QUIC_BUFFER
+     * descriptor — msquic keeps that descriptor alive past this call, so it
+     * must not be a local. See h3_send_buf_alloc. */
     uint32_t len = c->pending_send_len;
+    h3_send_buf_t* sb = h3_send_buf_alloc(c->pending_send, len);
+    if (!sb) {
+        WT_LOG_ERROR("H3: send-only alloc failed role=%d len=%u", c->role, len);
+        return -1;
+    }
+    free(c->pending_send);
     c->pending_send = NULL;
     c->pending_send_len = 0;
 
+    /* Ownership of sb transfers to the SEND_COMPLETE ClientContext. */
     QUIC_STATUS st = MsQuic->StreamSend(
-        c->stream, &buf, 1, QUIC_SEND_FLAG_NONE, payload);
+        c->stream, &sb->buf, 1, QUIC_SEND_FLAG_NONE, sb);
     if (QUIC_FAILED(st)) {
         WT_LOG_ERROR("H3: send-only StreamSend failed role=%d st=0x%x stream=%p len=%u",
                      c->role, st, (void*)c->stream, len);
-        free(payload);
+        free(sb);
         return -1;
     }
     return 0;
@@ -1329,15 +1396,17 @@ h3_send_only_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
         h3_send_only_clear_session_ref(c, stream);
         if (c) {
-            if (c->pending_send) {
-                free(c->pending_send);
-                c->pending_send = NULL;
-            }
-            if (!c->closed) {
-                c->closed = 1;
+            /* Close and free only if we win the claim. When h3_session_free
+             * already took it, that path owns both — touching c after losing
+             * the exchange (including free) would race its free. */
+            if (atomic_exchange(&c->closed, 1) == 0) {
+                if (c->pending_send) {
+                    free(c->pending_send);
+                    c->pending_send = NULL;
+                }
                 MsQuic->StreamClose(stream);
+                free(c);
             }
-            free(c);
         } else {
             MsQuic->StreamClose(stream);
         }
@@ -2055,20 +2124,28 @@ void h3_session_free(h3_session_t* h3)
     if (srv_ctx) ((h3_send_only_ctx_t*)srv_ctx)->h3 = NULL;
     if (cli_ctx) ((h3_send_only_ctx_t*)cli_ctx)->h3 = NULL;
 
+    /* Abort then close synchronously. The caller (the connection's
+     * SHUTDOWN_COMPLETE handler) calls ConnectionClose right after this
+     * returns, so a stream left waiting on its own asynchronous
+     * SHUTDOWN_COMPLETE never gets closed at all — see h3_send_only_close_now. */
     if (srv_ctrl) {
-        WT_LOG_INFO("H3: session_free aborting server control stream %p", (void*)srv_ctrl);
+        WT_LOG_INFO("H3: session_free closing server control stream %p", (void*)srv_ctrl);
         h3_send_only_abort(srv_ctrl);
+        h3_send_only_close_now(srv_ctrl, (h3_send_only_ctx_t*)srv_ctx);
     }
     if (cli_ctrl) {
         h3_send_only_abort(cli_ctrl);
+        h3_send_only_close_now(cli_ctrl, (h3_send_only_ctx_t*)cli_ctx);
     }
     if (qpack_enc) {
-        WT_LOG_INFO("H3: session_free aborting server QPACK encoder %p", (void*)qpack_enc);
+        WT_LOG_INFO("H3: session_free closing server QPACK encoder %p", (void*)qpack_enc);
         h3_send_only_abort(qpack_enc);
+        h3_send_only_close_now(qpack_enc, NULL);
     }
     if (qpack_dec) {
-        WT_LOG_INFO("H3: session_free aborting server QPACK decoder %p", (void*)qpack_dec);
+        WT_LOG_INFO("H3: session_free closing server QPACK decoder %p", (void*)qpack_dec);
         h3_send_only_abort(qpack_dec);
+        h3_send_only_close_now(qpack_dec, NULL);
     }
 
     /* Free all tracked h3_stream_ctx_t objects still on the list.
@@ -2096,6 +2173,19 @@ void h3_session_free(h3_session_t* h3)
             &sctx->freed, &expected, 1);
         H3_UNLOCK(h3);
         if (we_own) {
+            /* Winning the CAS means this stream's own SHUTDOWN_COMPLETE will
+             * never run its StreamClose, so the handle must be released here
+             * or it keeps a rundown reference on the registration and hangs
+             * MsQuicRegistrationClose at shutdown.
+             *
+             * Close BEFORE freeing sctx: the stream callback dereferences sctx
+             * (the CAS above) on entry, and StreamClose is what guarantees no
+             * further callbacks for this stream. Freeing first would leave that
+             * window open on a use-after-free. */
+            HQUIC dead_stream = sctx->quic_stream;
+            if (dead_stream) {
+                MsQuic->StreamClose(dead_stream);
+            }
             free(sctx->recv_buf);
             free(sctx);
         }
@@ -2190,17 +2280,19 @@ int32_t h3_client_connect(h3_session_t* h3,
     memcpy(ctrl_copy, ctrl_data, (size_t)ctrl_total);
 
     {
-        QUIC_BUFFER buf;
-        buf.Buffer = ctrl_copy;
-        buf.Length = (uint32_t)ctrl_total;
+        /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+         * past this call, so it must not be a local. See h3_send_buf_alloc. */
+        h3_send_buf_t* sb = h3_send_buf_alloc(ctrl_copy, (uint32_t)(ctrl_total));
+        free(ctrl_copy);
         H3_LOCK(h3);
         h3->client_control_stream = ctrl_stream;
         h3->client_control_ctx = ctrl_ctx;
         H3_UNLOCK(h3);
-        st = MsQuic->StreamSend(ctrl_stream, &buf, 1,
-                                 QUIC_SEND_FLAG_NONE, ctrl_copy);
+        st = sb ? MsQuic->StreamSend(ctrl_stream, &sb->buf, 1,
+                                 QUIC_SEND_FLAG_NONE, sb)
+                                  : QUIC_STATUS_OUT_OF_MEMORY;
         if (QUIC_FAILED(st)) {
-            free(ctrl_copy);
+            free(sb);
             H3_LOCK(h3);
             if (h3->client_control_stream == ctrl_stream) {
                 h3->client_control_stream = NULL;
@@ -2282,13 +2374,15 @@ int32_t h3_client_connect(h3_session_t* h3,
         memcpy(req_copy, req_data, (size_t)req_len);
 
         {
-            QUIC_BUFFER buf;
-            buf.Buffer = req_copy;
-            buf.Length = (uint32_t)req_len;
-            st = MsQuic->StreamSend(req_stream, &buf, 1,
-                                     QUIC_SEND_FLAG_FIN, req_copy);
+            /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+             * past this call, so it must not be a local. See h3_send_buf_alloc. */
+            h3_send_buf_t* sb = h3_send_buf_alloc(req_copy, (uint32_t)(req_len));
+            free(req_copy);
+            st = sb ? MsQuic->StreamSend(req_stream, &sb->buf, 1,
+                                     QUIC_SEND_FLAG_FIN, sb)
+                                      : QUIC_STATUS_OUT_OF_MEMORY;
             if (QUIC_FAILED(st)) {
-                free(req_copy);
+                free(sb);
                 MsQuic->StreamShutdown(req_stream,
                                         QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
                 return -1;
@@ -2372,6 +2466,71 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
         return 0;
     }
 
+    return 1;
+}
+
+/* See http3.h for the contract and the two call sites. */
+int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx)
+{
+    if (!h3 || !sctx) return -1;
+
+    /* Raw/native protocol.
+     * When allowed_origins is configured (non-empty, not "*"),
+     * native clients cannot perform CORS validation and are
+     * rejected by default.  Operators must explicitly enable
+     * allow_native_clients if they need both browser CORS and
+     * native client access on the same server. */
+    {
+        const char* allowed = h3->allowed_origins;
+        const bool origins_configured =
+            (allowed != NULL && allowed[0] != '\0' &&
+             strcmp(allowed, "*") != 0);
+        if (origins_configured && !h3->allow_native_clients) {
+            WT_LOG_WARN("Rejected native client: allowed_origins is "
+                        "configured and allow_native_clients is disabled. "
+                        "Set allow_native_clients=true to permit native "
+                        "clients alongside browser CORS enforcement.");
+            if (h3->on_error) {
+                h3->on_error(h3->callback_ctx, -1,
+                             "Native clients not allowed");
+            }
+            return -1;
+        }
+    }
+
+    /* ── CRITICAL: Save stream context for data replay ──
+     * The buffered data in sctx->recv_buf was received before
+     * the wt_session was created. Store the sctx so
+     * on_h3_session_ready (in server.cpp) can accept this
+     * stream into the stream_manager and replay the data.
+     * Without this, the first stream's data is silently lost. */
+    h3->native_stream_ctx = sctx;
+
+    /* Mark sctx as raw BEFORE calling on_ready.  on_h3_session_ready
+     * (server.cpp) calls h3_stream_ctx_unlink + free(nsctx) for the
+     * native_stream_ctx — after on_ready returns, sctx may be freed.
+     * All sctx writes MUST happen before the on_ready call. */
+    sctx->stream_type = -2; /* mark as raw */
+
+    /* Set handshake_complete and ESTABLISHED AFTER on_ready so
+     * that the wt_session is fully created (atomic_ptr_store'd
+     * into sconn->session) before any concurrent PEER_STREAM_STARTED
+     * sees handshake_complete==true and routes directly to
+     * the stream_manager.  Otherwise a QUIC worker thread could
+     * observe handshake_complete==true but sconn->session==NULL
+     * and abort the stream. */
+    if (h3->on_ready) {
+        h3->on_ready(h3->callback_ctx, h3->quic_conn, "/", "");
+        /* IMPORTANT: on_ready may have freed sctx via
+         * on_h3_session_ready -> h3_stream_ctx_unlink -> free.
+         * Do NOT access sctx after this point. */
+    }
+    h3->handshake_complete = true;
+    h3->server_state = H3_SRV_ESTABLISHED;
+    /* native_stream_ctx consumed (or NULLed) by on_h3_session_ready.
+     * If it was consumed, the stream and data are now managed by
+     * the stream_manager. If on_ready failed, the data is lost
+     * (acceptable — connection is shutting down anyway). */
     return 1;
 }
 
@@ -2473,64 +2632,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
          * WAIT_CONNECT — preserve native detection when no peer H3 uni was
          * seen and the first byte is not HEADERS. */
         if (!h3->peer_h3_seen && first_byte != H3_FRAME_HEADERS) {
-            /* Raw/native protocol.
-             * When allowed_origins is configured (non-empty, not "*"),
-             * native clients cannot perform CORS validation and are
-             * rejected by default.  Operators must explicitly enable
-             * allow_native_clients if they need both browser CORS and
-             * native client access on the same server. */
-            {
-                const char* allowed = h3->allowed_origins;
-                const bool origins_configured =
-                    (allowed != NULL && allowed[0] != '\0' &&
-                     strcmp(allowed, "*") != 0);
-                if (origins_configured && !h3->allow_native_clients) {
-                    WT_LOG_WARN("Rejected native client: allowed_origins is "
-                                "configured and allow_native_clients is disabled. "
-                                "Set allow_native_clients=true to permit native "
-                                "clients alongside browser CORS enforcement.");
-                    if (h3->on_error) {
-                        h3->on_error(h3->callback_ctx, -1,
-                                     "Native clients not allowed");
-                    }
-                    return -1;
-                }
-            }
-
-            /* ── CRITICAL: Save stream context for data replay ──
-             * The buffered data in sctx->recv_buf was received before
-             * the wt_session was created. Store the sctx so
-             * on_h3_session_ready (in server.cpp) can accept this
-             * stream into the stream_manager and replay the data.
-             * Without this, the first stream's data is silently lost. */
-            h3->native_stream_ctx = sctx;
-
-            /* Mark sctx as raw BEFORE calling on_ready.  on_h3_session_ready
-             * (server.cpp) calls h3_stream_ctx_unlink + free(nsctx) for the
-             * native_stream_ctx — after on_ready returns, sctx may be freed.
-             * All sctx writes MUST happen before the on_ready call. */
-            sctx->stream_type = -2; /* mark as raw */
-
-            /* Set handshake_complete and ESTABLISHED AFTER on_ready so
-             * that the wt_session is fully created (atomic_ptr_store'd
-             * into sconn->session) before any concurrent PEER_STREAM_STARTED
-             * sees handshake_complete==true and routes directly to
-             * the stream_manager.  Otherwise a QUIC worker thread could
-             * observe handshake_complete==true but sconn->session==NULL
-             * and abort the stream. */
-            if (h3->on_ready) {
-                h3->on_ready(h3->callback_ctx, h3->quic_conn, "/", "");
-                /* IMPORTANT: on_ready may have freed sctx via
-                 * on_h3_session_ready -> h3_stream_ctx_unlink -> free.
-                 * Do NOT access sctx after this point. */
-            }
-            h3->handshake_complete = true;
-            h3->server_state = H3_SRV_ESTABLISHED;
-            /* native_stream_ctx consumed (or NULLed) by on_h3_session_ready.
-             * If it was consumed, the stream and data are now managed by
-             * the stream_manager. If on_ready failed, the data is lost
-             * (acceptable — connection is shutting down anyway). */
-            return 1;
+            return h3_fallback_to_native_protocol(h3, sctx);
         }
 
         /* Browser CONNECT request after SETTINGS exchange.
@@ -2637,14 +2739,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
                                                         memcpy(rej_copy, rej, (size_t)rej_len);
-                                                        QUIC_BUFFER buf;
-                                                        buf.Buffer = rej_copy;
-                                                        buf.Length = (uint32_t)rej_len;
-                                                        QUIC_STATUS qst = MsQuic->StreamSend(
-                                                            sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+                                                         * past this call, so it must not be a local. See h3_send_buf_alloc. */
+                                                        h3_send_buf_t* sb = h3_send_buf_alloc(rej_copy, (uint32_t)(rej_len));
+                                                        free(rej_copy);
+                                                        QUIC_STATUS qst = sb ? MsQuic->StreamSend(
+                                                            sctx->quic_stream, &sb->buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, sb)
+                                                                                  : QUIC_STATUS_OUT_OF_MEMORY;
                                                         if (QUIC_FAILED(qst)) {
-                                                            free(rej_copy);
+                                                            free(sb);
                                                         }
                                                     }
                                                 }
@@ -2688,14 +2792,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
                                                         memcpy(rej_copy, rej, (size_t)rej_len);
-                                                        QUIC_BUFFER buf;
-                                                        buf.Buffer = rej_copy;
-                                                        buf.Length = (uint32_t)rej_len;
-                                                        QUIC_STATUS qst = MsQuic->StreamSend(
-                                                            sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+                                                         * past this call, so it must not be a local. See h3_send_buf_alloc. */
+                                                        h3_send_buf_t* sb = h3_send_buf_alloc(rej_copy, (uint32_t)(rej_len));
+                                                        free(rej_copy);
+                                                        QUIC_STATUS qst = sb ? MsQuic->StreamSend(
+                                                            sctx->quic_stream, &sb->buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, sb)
+                                                                                  : QUIC_STATUS_OUT_OF_MEMORY;
                                                         if (QUIC_FAILED(qst)) {
-                                                            free(rej_copy);
+                                                            free(sb);
                                                         }
                                                     }
                                                 }
@@ -2725,14 +2831,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
                                                         memcpy(rej_copy, rej, (size_t)rej_len);
-                                                        QUIC_BUFFER buf;
-                                                        buf.Buffer = rej_copy;
-                                                        buf.Length = (uint32_t)rej_len;
-                                                        QUIC_STATUS qst = MsQuic->StreamSend(
-                                                            sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+                                                         * past this call, so it must not be a local. See h3_send_buf_alloc. */
+                                                        h3_send_buf_t* sb = h3_send_buf_alloc(rej_copy, (uint32_t)(rej_len));
+                                                        free(rej_copy);
+                                                        QUIC_STATUS qst = sb ? MsQuic->StreamSend(
+                                                            sctx->quic_stream, &sb->buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, sb)
+                                                                                  : QUIC_STATUS_OUT_OF_MEMORY;
                                                         if (QUIC_FAILED(qst)) {
-                                                            free(rej_copy);
+                                                            free(sb);
                                                         }
                                                     }
                                                 }
@@ -2764,14 +2872,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
                                                         memcpy(rej_copy, rej, (size_t)rej_len);
-                                                        QUIC_BUFFER buf;
-                                                        buf.Buffer = rej_copy;
-                                                        buf.Length = (uint32_t)rej_len;
-                                                        QUIC_STATUS qst = MsQuic->StreamSend(
-                                                            sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+                                                         * past this call, so it must not be a local. See h3_send_buf_alloc. */
+                                                        h3_send_buf_t* sb = h3_send_buf_alloc(rej_copy, (uint32_t)(rej_len));
+                                                        free(rej_copy);
+                                                        QUIC_STATUS qst = sb ? MsQuic->StreamSend(
+                                                            sctx->quic_stream, &sb->buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, sb)
+                                                                                  : QUIC_STATUS_OUT_OF_MEMORY;
                                                         if (QUIC_FAILED(qst)) {
-                                                            free(rej_copy);
+                                                            free(sb);
                                                         }
                                                     }
                                                 }
@@ -2802,14 +2912,16 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
                                                         memcpy(rej_copy, rej, (size_t)rej_len);
-                                                        QUIC_BUFFER buf;
-                                                        buf.Buffer = rej_copy;
-                                                        buf.Length = (uint32_t)rej_len;
-                                                        QUIC_STATUS qst = MsQuic->StreamSend(
-                                                            sctx->quic_stream, &buf, 1,
-                                                            QUIC_SEND_FLAG_NONE, rej_copy);
+                                                        /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+                                                         * past this call, so it must not be a local. See h3_send_buf_alloc. */
+                                                        h3_send_buf_t* sb = h3_send_buf_alloc(rej_copy, (uint32_t)(rej_len));
+                                                        free(rej_copy);
+                                                        QUIC_STATUS qst = sb ? MsQuic->StreamSend(
+                                                            sctx->quic_stream, &sb->buf, 1,
+                                                            QUIC_SEND_FLAG_NONE, sb)
+                                                                                  : QUIC_STATUS_OUT_OF_MEMORY;
                                                         if (QUIC_FAILED(qst)) {
-                                                            free(rej_copy);
+                                                            free(sb);
                                                         }
                                                     }
                                                 }
@@ -2883,19 +2995,21 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                             if (resp_copy) {
                                                 memcpy(resp_copy, resp,
                                                        (size_t)resp_len);
-                                                QUIC_BUFFER buf;
-                                                buf.Buffer = resp_copy;
-                                                buf.Length = (uint32_t)resp_len;
-                                                QUIC_STATUS qst = MsQuic->StreamSend(
+                                                /* Heap descriptor + payload: msquic keeps the QUIC_BUFFER pointer
+                                                 * past this call, so it must not be a local. See h3_send_buf_alloc. */
+                                                h3_send_buf_t* sb = h3_send_buf_alloc(resp_copy, (uint32_t)(resp_len));
+                                                free(resp_copy);
+                                                QUIC_STATUS qst = sb ? MsQuic->StreamSend(
                                                     sctx->quic_stream,
-                                                    &buf, 1,
+                                                    &sb->buf, 1,
                                                     QUIC_SEND_FLAG_NONE,
-                                                    resp_copy);
+                                                    sb)
+                                                                          : QUIC_STATUS_OUT_OF_MEMORY;
                                                 if (QUIC_FAILED(qst)) {
                                                     /* StreamSend failed — resp_copy
                                                      * will never be freed by
                                                      * SEND_COMPLETE. Free it now. */
-                                                    free(resp_copy);
+                                                    free(sb);
                                                 }
                                             }
                                         }

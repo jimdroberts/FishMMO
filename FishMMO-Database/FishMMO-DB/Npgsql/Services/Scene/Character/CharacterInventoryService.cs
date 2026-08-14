@@ -47,12 +47,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character inventory (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterInventoryEntity>>> getInventoryItemsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterInventoryEntity>> getInventoryItemsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterInventoryItems
 					.AsNoTracking()
-					.Where(i => i.CharacterID == characterId && !i.Deleted)
-					.ToList());
+					.Where(i => i.CharacterID == characterId && !i.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterInventoryService"/> class.
@@ -333,7 +332,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getInventoryItemsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getInventoryItemsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var items = entities.Select(i => new CharacterInventoryData(
 					id: i.ID,
 					version: i.Version,

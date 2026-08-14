@@ -152,9 +152,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> UpdatePositionAsync(long characterId, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Updates the scene information for a character atomically.
+		/// Updates the routing information for a character atomically.
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>
+		/// <param name="worldServerId">The world server the character is being routed through.</param>
 		/// <param name="sceneName">The scene name.</param>
 		/// <param name="sceneHandle">The scene handle.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -162,11 +163,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses atomic UPDATE to set scene_name and scene_handle in one operation.
+		/// Uses atomic UPDATE to set world_server_id, scene_name and scene_handle in one operation.
+		/// All three are written together because the Scene Server matches an incoming character
+		/// against its loaded scene instances on the full (world_server_id, scene_name, scene_handle)
+		/// tuple — persisting the scene half while leaving world_server_id stale makes that lookup
+		/// reject the character as mismatched.
 		/// Updates last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves the selected character for each of the specified accounts in batches.

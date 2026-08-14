@@ -34,12 +34,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character known abilities.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterKnownAbilityEntity>>> getKnownAbilitiesQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterKnownAbilityEntity>> getKnownAbilitiesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterKnownAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.ToList());
+					.Where(a => a.CharacterID == characterId && !a.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterKnownAbilityService"/> class.
@@ -319,7 +318,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getKnownAbilitiesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getKnownAbilitiesQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterKnownAbilityData(
 					id: a.ID,
 					version: a.Version,

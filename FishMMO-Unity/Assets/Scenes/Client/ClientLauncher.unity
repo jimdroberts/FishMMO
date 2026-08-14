@@ -528,10 +528,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e0ebe9f1a5ebec045a7e5672bec3ed62, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  WebRequestService: {fileID: 468852881}
-  MaxRetries: 3
-  RetryDelay: 1
-  WebRequestTimeout: 10
+  webRequestService: {fileID: 468852881}
+  maxRetries: 3
+  retryDelay: 1
+  webRequestTimeout: 10
 --- !u!114 &468852880
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -544,11 +544,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3f15a46464814e3479c3dbc2eaf6f05b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  WebRequestService: {fileID: 468852881}
-  MaxRetries: 3
-  RetryDelay: 1
-  WebRequestTimeout: 10
-  HtmlPxToTmpSizeFactor: 1.5
+  webRequestService: {fileID: 468852881}
+  maxRetries: 3
+  retryDelay: 1
+  webRequestTimeout: 10
+  htmlPxToTmpSizeFactor: 1.5
 --- !u!114 &468852881
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -573,24 +573,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6d296ce8cc95d248961b5580c336645, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Background: {fileID: 212578446}
-  Title: {fileID: 629647594}
+  background: {fileID: 212578446}
+  title: {fileID: 629647594}
   HTMLView: {fileID: 1434440577}
-  ProgressBarGroup: {fileID: 1194338228}
-  ProgressSlider: {fileID: 716385163}
-  ProgressText: {fileID: 180067185}
-  QuitButton: {fileID: 772784617}
-  PlayButton: {fileID: 1434612282}
-  PlayButtonText: {fileID: 1342158545}
-  HtmlText: {fileID: 2101316213}
-  HtmlTextLinkHandler: {fileID: 2101316215}
-  HtmlViewURL: https://www.fishmmo.com/docs/introduction.html
-  DivClass: content
-  DefaultScreenWidth: 1024
-  DefaultScreenHeight: 768
-  UnityWebRequestService: {fileID: 468852881}
-  HtmlContentFetcher: {fileID: 468852880}
-  PatchServerService: {fileID: 468852879}
+  progressBarGroup: {fileID: 1194338228}
+  progressSlider: {fileID: 716385163}
+  progressText: {fileID: 180067185}
+  quitButton: {fileID: 772784617}
+  playButton: {fileID: 1434612282}
+  playButtonText: {fileID: 1342158545}
+  htmlText: {fileID: 2101316213}
+  htmlTextLinkHandler: {fileID: 2101316215}
+  htmlViewURL: https://www.fishmmo.com/docs/introduction.html
+  divClass: content
+  defaultScreenWidth: 1024
+  defaultScreenHeight: 768
+  unityWebRequestService: {fileID: 468852881}
+  htmlContentFetcher: {fileID: 468852880}
+  patchServerService: {fileID: 468852879}
 --- !u!1 &535781244
 GameObject:
   m_ObjectHideFlags: 0

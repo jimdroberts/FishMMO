@@ -34,12 +34,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character pet buffs (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterPetBuffEntity>>> getBuffsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterPetBuffEntity>> getBuffsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterPetBuffs
 					.AsNoTracking()
-					.Where(b => b.CharacterID == characterId && !b.Deleted)
-					.ToList());
+					.Where(b => b.CharacterID == characterId && !b.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character pet buffs.
@@ -306,7 +305,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getBuffsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getBuffsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var buffs = entities.Select(b => new CharacterPetBuffData(
 					id: b.ID,
 					version: b.Version,

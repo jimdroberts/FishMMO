@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a763eb6312d518bcfbc538eb8c6cec0b, type: 3}
   m_Name: LoginServerSystem
   m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.LoginServer.LoginServerSystem
-  PulseRate: 5
+  pulseRate: 5

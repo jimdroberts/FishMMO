@@ -223,7 +223,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxMainThreadActionsPerUpdate: 100
-  useConnectionIdForRateLimit: 0
+  authHandshakeTimeoutSeconds: 15
   renewalTokenExpirationMinutes: 10
 --- !u!114 &3165019703713927972
 MonoBehaviour:
@@ -372,22 +372,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  AddressOverride: 
-  PortOverride: 0
-  serverBehaviours:
-  - {fileID: 11400000, guid: 96d1ab01343fd325a9a69edf8e103274, type: 2}
-  - {fileID: 11400000, guid: 3a68083bfef2f80fc8ca1af9c8369512, type: 2}
-  - {fileID: 11400000, guid: 4ea1ea725a87cae669676026b040c884, type: 2}
+  <AddressOverride>k__BackingField: 
+  <PortOverride>k__BackingField: 0
+  serverBehaviors:
+  - {fileID: 11400000, guid: 4d40e4ae150539895a659c9da4e7b15c, type: 2}
   - {fileID: 11400000, guid: dfdce6e33e2616ef0b55cad7b8cd1a28, type: 2}
+  - {fileID: 11400000, guid: 3a68083bfef2f80fc8ca1af9c8369512, type: 2}
   - {fileID: 11400000, guid: ab11fc8547112b3f8b0737445814913c, type: 2}
-  - {fileID: 11400000, guid: c2da67465d50a8ed8b0a146bc785ce23, type: 2}
+  - {fileID: 11400000, guid: 8b035132fe06520f09c29d98026d2a36, type: 2}
   - {fileID: 11400000, guid: f854f419ab83b93908afd02eb77367aa, type: 2}
+  - {fileID: 11400000, guid: b71d352744ff0b27e8736d3f49fcc44f, type: 2}
+  - {fileID: 11400000, guid: c2da67465d50a8ed8b0a146bc785ce23, type: 2}
+  - {fileID: 11400000, guid: 69f773f7b940a847d9e2ad75e2f1cd34, type: 2}
   - {fileID: 11400000, guid: 188aa9244eeba18cca6f90abf9bee2b2, type: 2}
   - {fileID: 11400000, guid: 8989a761202af17c98c3437f210f1826, type: 2}
-  - {fileID: 11400000, guid: 69f773f7b940a847d9e2ad75e2f1cd34, type: 2}
-  - {fileID: 11400000, guid: b71d352744ff0b27e8736d3f49fcc44f, type: 2}
-  - {fileID: 11400000, guid: 8b035132fe06520f09c29d98026d2a36, type: 2}
-  - {fileID: 11400000, guid: 4d40e4ae150539895a659c9da4e7b15c, type: 2}
+  - {fileID: 11400000, guid: 4ea1ea725a87cae669676026b040c884, type: 2}
+  - {fileID: 11400000, guid: 96d1ab01343fd325a9a69edf8e103274, type: 2}
   - {fileID: 11400000, guid: cfab38130929316f08ac6e1f44fa64bd, type: 2}
   - {fileID: 11400000, guid: dc4f8795668c259a198bd41e7f1285e7, type: 2}
 --- !u!114 &8097462252018206293
@@ -459,6 +459,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
+  serverTimeout: 120
+  clientTimeout: 20
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

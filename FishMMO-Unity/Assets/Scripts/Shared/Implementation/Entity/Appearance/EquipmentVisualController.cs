@@ -342,7 +342,11 @@ namespace FishMMO.Shared
 			if (renderer.SkinnedRenderer != null)
 			{
 				renderer.SkinnedRenderer.sharedMesh = null;
-				renderer.SkinnedRenderer.materials = null;
+				// Renderer.materials requires an array — assigning null throws
+				// ArgumentNullException out of Renderer.SetMaterialArray, which aborts the
+				// rest of this cleanup (and whatever despawn/disconnect path invoked it)
+				// partway through. An empty array is the supported way to clear materials.
+				renderer.SkinnedRenderer.materials = System.Array.Empty<Material>();
 				renderer.SkinnedRenderer.enabled = false;
 			}
 			if (renderer.WeaponInstance != null)

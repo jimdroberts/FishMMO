@@ -336,8 +336,10 @@ namespace FishMMO.Client
 			{
 				SetConnectToServerLocked(true);
 
-				// Connect to the world server.
-				Client.ConnectToServer(selectedServer.Details.Port, true);
+				// Connect to the world server, asking the Login Server for a connection
+				// token first — the World Server is behind the same proxy and needs the real
+				// IP, which only the Login Server still knows. Mirrors UIServerSelect.
+				Client.RequestHopTokenThenConnect(selectedServer.Details.Port, true);
 			}
 		}
 

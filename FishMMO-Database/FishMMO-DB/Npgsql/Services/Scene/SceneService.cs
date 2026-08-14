@@ -40,26 +40,24 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving available scenes (hot path for scene matchmaking).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, string, int, int, CancellationToken, Task<List<SceneEntity>>> fetchAvailableQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, string sceneName, int maxClients, int readyStatus, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, string, int, int, IAsyncEnumerable<SceneEntity>> fetchAvailableQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, string sceneName, int maxClients, int readyStatus) =>
 				context.Scenes
 						.AsNoTracking()
 						.Where(s =>
 							s.WorldServerID == worldServerId &&
 							s.SceneName == sceneName &&
 							s.CharacterCount < maxClients &&
-							s.SceneStatus == readyStatus)
-						.ToList());
+							s.SceneStatus == readyStatus));
 
 		/// <summary>
 		/// Compiled query for retrieving ready scenes (hot path for scene server queries).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<List<SceneEntity>>> fetchReadyQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, int readyStatus, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, int, IAsyncEnumerable<SceneEntity>> fetchReadyQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, int readyStatus) =>
 				context.Scenes
 					.AsNoTracking()
-					.Where(s => s.WorldServerID == worldServerId && s.SceneStatus == readyStatus)
-					.ToList());
+					.Where(s => s.WorldServerID == worldServerId && s.SceneStatus == readyStatus));
 
 		/// <summary>
 		/// Initializes a new instance of SceneService.
@@ -412,7 +410,7 @@ var claimSql = $@"WITH claimable_scene AS (
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await fetchAvailableQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, cancellationToken).ConfigureAwait(false);
+				var scenes = await fetchAvailableQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -430,7 +428,7 @@ var claimSql = $@"WITH claimable_scene AS (
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await fetchReadyQuery(dbContext, worldServerId, readyStatus, cancellationToken).ConfigureAwait(false);
+				var scenes = await fetchReadyQuery(dbContext, worldServerId, readyStatus).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);

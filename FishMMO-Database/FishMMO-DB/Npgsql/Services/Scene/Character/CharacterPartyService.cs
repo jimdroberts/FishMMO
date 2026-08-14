@@ -52,12 +52,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving all party members.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterPartyEntity>>> getPartyMembersQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterPartyEntity>> getPartyMembersQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId) =>
 				context.CharacterParties
 					.AsNoTracking()
-					.Where(p => p.PartyID == partyId)
-					.ToList());
+					.Where(p => p.PartyID == partyId));
 
 		/// <summary>
 		/// Compiled query for counting party members.
@@ -330,7 +329,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getPartyMembersQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
+				var entities = await getPartyMembersQuery(dbContext, partyId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var members = entities.Select(p => new CharacterPartyData(
 					id: p.ID,
 					version: p.Version,

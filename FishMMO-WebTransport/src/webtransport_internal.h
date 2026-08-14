@@ -167,8 +167,32 @@ extern "C" {
  * (SETTINGS + CONNECT exchange) after the QUIC connection is
  * established.  Clients that complete the TLS handshake but
  * never send an H3 control stream or CONNECT request are
- * disconnected after this deadline to prevent slot exhaustion. */
+ * disconnected after this deadline to prevent slot exhaustion.
+ *
+ * Kept generous: this is the anti-DoS deadline, and a browser on a
+ * high-latency or lossy link legitimately needs several round trips
+ * to get SETTINGS + CONNECT across. Native clients do NOT wait this
+ * long to be rescued — see WT_H3_NATIVE_FALLBACK_MS. */
 #define WT_H3_HANDSHAKE_TIMEOUT_MS  15000  /* 15 seconds */
+
+/* ── Native-protocol fallback deadline ────────────────────────
+ * A native (non-browser) client's first raw bytes can begin with a
+ * value H3 reserves — 0x00 (control stream type) or 0x01 (HEADERS
+ * frame type) — which routes the stream into an H3 path that then
+ * waits for further H3 elements a native client never sends. Both
+ * collisions latch state (the 0x00 case sets peer_h3_seen), so the
+ * connection cannot recover on its own.
+ *
+ * After this shorter deadline the sweep replays whatever the peer
+ * buffered as native protocol data instead of continuing to wait.
+ * It is deliberately separate from WT_H3_HANDSHAKE_TIMEOUT_MS: this
+ * one governs how long a native client is stuck (it must stay well
+ * under the client's own connect timeout so the server's recovery
+ * wins that race), while the other still governs when an unresponsive
+ * peer loses its connection slot. A genuine browser is unaffected —
+ * its CONNECT completes in milliseconds, and if the fallback does fire
+ * for one, that connection was already failing. */
+#define WT_H3_NATIVE_FALLBACK_MS    1500   /* 1.5 seconds */
 
 /* ── Connection state enum ──────────────────────────────────── */
 

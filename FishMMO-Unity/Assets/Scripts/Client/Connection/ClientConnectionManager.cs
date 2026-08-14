@@ -21,6 +21,20 @@ namespace FishMMO.Client
 		/// <summary>The type of server currently connecting to (None, Login, World, Scene).</summary>
 		public ServerConnectionType CurrentConnectionType { get; set; } = ServerConnectionType.None;
 
+		/// <summary>
+		/// Optional coroutine run immediately before every <c>StartConnection</c>, used to
+		/// obtain the one-time connection token the game server needs to recover this
+		/// client's real IP.
+		/// <para>
+		/// Every game server — Login, World and Scene — sits behind the same L4 UDP proxy
+		/// and binds to loopback, so all of them see 127.0.0.1 as the source address and
+		/// all of them reject a handshake that arrives without a token. Hooking the fetch
+		/// here rather than at the individual call sites means world/scene routing and
+		/// automatic reconnects get a token too, not just the login screen.
+		/// </para>
+		/// </summary>
+		public Func<IEnumerator> EnsureConnectionToken;
+
 		/// <summary>Number of reconnect attempts made since the last successful connection.</summary>
 		public int ReconnectsAttempted { get; private set; }
 		private float nextReconnect;
@@ -299,6 +313,28 @@ namespace FishMMO.Client
 				yield break;
 			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
+
+			// Obtain a connection token before the handshake. Runs for every connection
+			// type and for reconnects — see EnsureConnectionToken. A failure here is not
+			// fatal on its own: the connect proceeds and the server reports the rejection,
+			// which keeps the failure visible in one place instead of two.
+			if (EnsureConnectionToken != null)
+			{
+				IEnumerator tokenRoutine = null;
+				try
+				{
+					tokenRoutine = EnsureConnectionToken();
+				}
+				catch (System.Exception ex)
+				{
+					Log.Error("ClientConnection", $"EnsureConnectionToken threw: {ex}");
+				}
+				if (tokenRoutine != null)
+				{
+					yield return tokenRoutine;
+				}
+			}
+
 			try
 			{
 				Log.Info("ClientConnection", $"StartConnection host={address} port={port} isWorld={isWorldServer} timeout={ConnectionEstablishTimeoutSeconds}s");

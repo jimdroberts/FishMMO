@@ -45,12 +45,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character equipment (hot path for character rendering).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterEquipmentEntity>>> getEquipmentQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterEquipmentEntity>> getEquipmentQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterEquippedItems
 					.AsNoTracking()
-					.Where(e => e.CharacterID == characterId && !e.Deleted)
-					.ToList());
+					.Where(e => e.CharacterID == characterId && !e.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterEquipmentService"/> class.
@@ -329,7 +328,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getEquipmentQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getEquipmentQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var equipment = entities.Select(e => new CharacterEquipmentData(
 					id: e.ID,
 					version: e.Version,

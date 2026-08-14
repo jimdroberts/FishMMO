@@ -468,8 +468,17 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         {
             wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&cli->session);
             if (old_session) {
-                if (old_session && old_session->stream_mgr)
+                if (old_session && old_session->stream_mgr) {
                     wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
+                    /* Same handle-leak fix as the server path: once
+                     * conn_closed is set the per-stream handler stops closing
+                     * handles, so release them here while the connection is
+                     * still valid. A leaked stream handle keeps the client's
+                     * registration from ever draining on disconnect. */
+                    wt_stream_manager_close_streams(old_session->stream_mgr);
+                    /* Handles are dead from ConnectionClose (just below) on. */
+                    wt_stream_manager_mark_handles_invalid(old_session->stream_mgr);
+                }
                 atomic_ptr_store(&cli->session, NULL);
 
                 /* Defer shutdown to poll (application thread) to guarantee
@@ -533,6 +542,30 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     }
 
     case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED: {
+        /* ── Raw/native mode: ignore peer unidirectional streams ──
+         * The server sends its HTTP/3 SETTINGS bootstrap on a
+         * unidirectional control stream (first byte 0x00) to every peer,
+         * including connections that end up on the native path. Game data
+         * travels only on bidirectional streams (wt_stream_manager opens
+         * with QUIC_STREAM_OPEN_FLAG_NONE) and datagrams, so without this
+         * filter those SETTINGS bytes are accepted as a data stream and
+         * handed to the managed layer as game data — FishNet reports an
+         * unhandled PacketId of 0 and purges the rest of that batch,
+         * taking real packets with it.
+         *
+         * cli->h3_session is non-NULL only for the browser-style CONNECT
+         * path, where H3 owns these streams and must keep receiving them. */
+        if (!cli->h3_session &&
+            (event->PEER_STREAM_STARTED.Flags &
+             QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL)) {
+            WT_LOG_INFO("Ignoring peer uni stream in native mode "
+                        "(H3 control/QPACK chatter, not game data)");
+            MsQuic->StreamShutdown(event->PEER_STREAM_STARTED.Stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT_RECEIVE, 0);
+            MsQuic->StreamClose(event->PEER_STREAM_STARTED.Stream);
+            break;
+        }
+
         /* Acquire session refcount to prevent UAF — wt_session_shutdown
          * on the poll thread may concurrently set stream_mgr=NULL and
          * free it.  Holding a ref keeps the session (and its stream_mgr

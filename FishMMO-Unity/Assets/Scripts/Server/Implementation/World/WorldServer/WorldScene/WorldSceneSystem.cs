@@ -335,7 +335,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				SweepSceneCaches(runtimeData);
 			}
 
-			if (runtimeData.NextWaitQueueUpdate <= 0)
+			runtimeData.NextWaitQueueUpdate -= deltaTime;
+			if (runtimeData.NextWaitQueueUpdate <= 0f)
 			{
 				runtimeData.NextWaitQueueUpdate = runtimeData.WaitQueueRateSeconds;
 
@@ -606,8 +607,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					// This mirrors the Pass 2 rebind logic below.
 					if (charData.SceneHandle != preferredHandle || charData.WorldServerID != worldServerID)
 					{
-						_ = charService.UpdateSceneAsync(charData.ID, sceneName, preferredHandle);
-						Log.Info("WorldSceneSystem", $"Pass1 rebind: Character {charData.ID} world={charData.WorldServerID}->{worldServerID} scene={charData.SceneHandle}->{preferredHandle}");
+						// Awaited, not fire-and-forget: BroadcastSceneConnect below sends the
+						// client straight to the Scene Server, which matches it on the
+						// (world_server_id, scene_name, scene_handle) tuple read back from this
+						// row. Racing the write against that lookup rebinds the character too
+						// late and the Scene Server rejects it as a mismatched scene handle.
+						DatabaseResult rebindResult = await charService.UpdateSceneAsync(charData.ID, worldServerID, sceneName, preferredHandle);
+						if (!rebindResult.IsSuccess)
+						{
+							await Log.Warning("WorldSceneSystem", $"Pass1 rebind DB error (CharID={charData.ID}): {rebindResult.ErrorCode} - {rebindResult.ErrorMessage}");
+						}
+						await Log.Info("WorldSceneSystem", $"Pass1 rebind: Character {charData.ID} world={charData.WorldServerID}->{worldServerID} scene={charData.SceneHandle}->{preferredHandle}");
 					}
 
 					BroadcastSceneConnect(conn, prefServer);
@@ -651,9 +661,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					}
 
 					// Fallback handles always differ from the character's saved handle
-					if (charData.SceneHandle != assignedHandle)
+					if (charData.SceneHandle != assignedHandle || charData.WorldServerID != worldServerID)
 					{
-						DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, sceneName, assignedHandle);
+						DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, worldServerID, sceneName, assignedHandle);
 						if (!updateResult.IsSuccess)
 						{
 							await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
@@ -809,6 +819,23 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 			var charData = charResult.Data.Value;
 			int characterFlags = charData.Flags;
+
+			// Bind the character to this world server before any routing decision.
+			// The instance path below broadcasts WorldSceneConnectBroadcast without touching
+			// the character row, so unlike the open-world path (which rebinds through
+			// UpdateSceneAsync) nothing else would refresh world_server_id here — and the
+			// Scene Server matches the arriving character on (world_server_id, scene,
+			// handle), rejecting it as mismatched when world_server_id is stale from a
+			// previous world instance or still 0 from character creation.
+			long currentWorldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
+			if (currentWorldServerID > 0 && charData.WorldServerID != currentWorldServerID)
+			{
+				DatabaseResult bindResult = await charService.UpdateSceneAsync(charData.ID, currentWorldServerID, charData.SceneName, charData.SceneHandle);
+				if (!bindResult.IsSuccess)
+				{
+					await Log.Warning("WorldSceneSystem", $"Failed to bind character {charData.ID} to world server {currentWorldServerID}: {bindResult.ErrorCode} - {bindResult.ErrorMessage}");
+				}
+			}
 
 			if (!characterFlags.IsFlagged(CharacterFlags.IsInInstance))
 			{

@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d4b340779d80da6b79edd621452a354d, type: 3}
   m_Name: ServerSelectSystem
   m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.LoginServer.ServerSelectSystem
-  IdleTimeout: 60
+  idleTimeout: 60

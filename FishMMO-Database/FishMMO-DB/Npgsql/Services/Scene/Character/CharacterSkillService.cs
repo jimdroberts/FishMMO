@@ -22,12 +22,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character skills (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterSkillEntity>>> getSkillsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterSkillEntity>> getSkillsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterSkills
 					.AsNoTracking()
-					.Where(s => s.CharacterID == characterId && !s.Deleted)
-					.ToList());
+					.Where(s => s.CharacterID == characterId && !s.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character skills.
@@ -294,7 +293,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getSkillsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getSkillsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var skills = entities.Select(s => new CharacterSkillData(
 					id: s.ID,
 					version: s.Version,

@@ -22,12 +22,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character abilities (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAbilityEntity>>> getAbilitiesQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterAbilityEntity>> getAbilitiesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.ToList());
+					.Where(a => a.CharacterID == characterId && !a.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character abilities.
@@ -246,11 +245,15 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeExistingItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeExistingItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeExistingItems.Select(a => a.Version).ToArray();
-					var abilityEventsArray = activeExistingItems
+					var abilityEventsJson = ToJaggedIntArrayJson(activeExistingItems
 						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
-						.ToArray();
+						.ToArray());
 					var cooldownArray = activeExistingItems.Select(a => a.Cooldown).ToArray();
 
+					// ability_events is a ragged (non-rectangular) set of per-row integer[] values, which
+					// Npgsql/EF Core 5 cannot reliably bind as a native integer[][] parameter. It is sent as
+					// jsonb instead and decoded server-side, joined back to the other UNNESTed columns by
+					// ordinal position. See BaseService.ToJaggedIntArrayJson for details.
 					var sql = $@"
 						UPDATE {TableName} AS t
 						SET
@@ -261,14 +264,28 @@ namespace FishMMO.Database.Npgsql.Services
 							deleted = FALSE,
 							time_deleted = NULL,
 							version = u.version
-						FROM UNNEST(
-							{{0}}::bigint[],
-							{{1}}::bigint[],
-							{{2}}::integer[],
-							{{3}}::bigint[],
-							{{4}}::integer[][],
-							{{5}}::real[]
-						) AS u(id, character_id, template_id, version, ability_events, cooldown)
+						FROM (
+							SELECT
+								ids.id,
+								ids.character_id,
+								ids.template_id,
+								ids.version,
+								events.ability_events,
+								ids.cooldown
+							FROM UNNEST(
+								{{0}}::bigint[],
+								{{1}}::bigint[],
+								{{2}}::integer[],
+								{{3}}::bigint[],
+								{{5}}::real[]
+							) WITH ORDINALITY AS ids(id, character_id, template_id, version, cooldown, ord)
+							JOIN (
+								SELECT
+									arr.ord,
+									ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS ability_events
+								FROM jsonb_array_elements({{4}}::jsonb) WITH ORDINALITY AS arr(value, ord)
+							) AS events ON events.ord = ids.ord
+						) AS u
 						WHERE t.id = u.id
 							AND u.version > t.version;";
 
@@ -276,7 +293,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeExistingItems.Count,
-						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilityEventsArray, cooldownArray },
+						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilityEventsJson, cooldownArray },
 						"One or more abilities were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
@@ -286,11 +303,13 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeNewItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeNewItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeNewItems.Select(a => a.Version).ToArray();
-					var abilityEventsArray = activeNewItems
+					var abilityEventsJson = ToJaggedIntArrayJson(activeNewItems
 						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
-						.ToArray();
+						.ToArray());
 					var cooldownArray = activeNewItems.Select(a => a.Cooldown).ToArray();
 
+					// See the UPDATE branch above: ability_events is sent as jsonb and decoded server-side
+					// instead of as a native integer[][] parameter.
 					var sql = $@"
 						INSERT INTO {TableName}
 							(character_id, template_id, version, ability_events, cooldown, time_created, deleted, time_deleted)
@@ -298,7 +317,7 @@ namespace FishMMO.Database.Npgsql.Services
 							u.character_id,
 							u.template_id,
 							u.version,
-							u.ability_events,
+							events.ability_events,
 							u.cooldown,
 							{{5}},
 							FALSE,
@@ -307,9 +326,14 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::integer[][],
 							{{4}}::real[]
-						) AS u(character_id, template_id, version, ability_events, cooldown)
+						) WITH ORDINALITY AS u(character_id, template_id, version, cooldown, ord)
+						JOIN (
+							SELECT
+								arr.ord,
+								ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS ability_events
+							FROM jsonb_array_elements({{3}}::jsonb) WITH ORDINALITY AS arr(value, ord)
+						) AS events ON events.ord = u.ord
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 							ability_events = EXCLUDED.ability_events,
@@ -324,7 +348,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeNewItems.Count,
-						new object[] { characterIdArray, templateIdArray, versionArray, abilityEventsArray, cooldownArray, now },
+						new object[] { characterIdArray, templateIdArray, versionArray, abilityEventsJson, cooldownArray, now },
 						"One or more abilities were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
@@ -427,7 +451,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getAbilitiesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getAbilitiesQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterAbilityData(
 					id: a.ID,
 					version: a.Version,

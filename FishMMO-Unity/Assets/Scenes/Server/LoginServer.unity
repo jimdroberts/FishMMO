@@ -337,7 +337,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxMainThreadActionsPerUpdate: 100
-  useConnectionIdForRateLimit: 0
+  authHandshakeTimeoutSeconds: 15
   tokenExpirationMinutes: 10
 --- !u!114 &6776049994790379668
 MonoBehaviour:
@@ -383,14 +383,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
-  _useCustomCertificate: 1
-  _mtu: 1200
-  _serverBindAddress: localhost
-  _port: 7770
-  _maximumClients: 2000
-  _clientAddress: localhost
-  _certificatePath: 
-  _privateKeyPath: 
+  serverTimeout: 120
+  clientTimeout: 20
 --- !u!114 &7600273199851258616
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -403,15 +397,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  AddressOverride: 
-  PortOverride: 0
-  serverBehaviours:
-  - {fileID: 11400000, guid: 7c1ca08ef1e69c690af41b67d7b5167e, type: 2}
+  <AddressOverride>k__BackingField: 
+  <PortOverride>k__BackingField: 0
+  serverBehaviors:
   - {fileID: 11400000, guid: 6879c81059fb59d4aaae79190fc5c262, type: 2}
-  - {fileID: 11400000, guid: 57662a393a0b3c42fb835c4b66b3710f, type: 2}
   - {fileID: 11400000, guid: 877efcded03164f809a7843e58a6db91, type: 2}
+  - {fileID: 11400000, guid: 57662a393a0b3c42fb835c4b66b3710f, type: 2}
+  - {fileID: 11400000, guid: 7c1ca08ef1e69c690af41b67d7b5167e, type: 2}
   - {fileID: 11400000, guid: 95d362574f2bba4e38b44204babd6b65, type: 2}
   - {fileID: 11400000, guid: dc4f8795668c259a198bd41e7f1285e7, type: 2}
+  - {fileID: 11400000, guid: cfab38130929316f08ac6e1f44fa64bd, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

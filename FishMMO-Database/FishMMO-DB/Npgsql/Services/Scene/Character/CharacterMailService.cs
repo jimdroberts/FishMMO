@@ -33,13 +33,16 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character mail by recipient character ID.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterMailEntity>>> getMailQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterMailEntity>> getMailQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterMail
 					.AsNoTracking()
 					.Where(m => m.CharacterID == characterId && !m.Deleted)
+					// AsQueryable() keeps overload resolution on the IQueryable<T> (sequence)
+					// form of CompileAsyncQuery: OrderByDescending returns IOrderedQueryable<T>,
+					// which otherwise binds to the scalar Task<TResult> overload instead.
 					.OrderByDescending(m => m.TimeCreated)
-					.ToList());
+					.AsQueryable());
 
 		/// <summary>
 		/// Compiled query for counting character mail.
@@ -224,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getMailQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getMailQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 
 				// Batch-fetch sender names as fallback for any entries missing SenderName
 				var senderIds = entities.Where(m => string.IsNullOrEmpty(m.SenderName)).Select(m => m.SenderID).Distinct().ToList();

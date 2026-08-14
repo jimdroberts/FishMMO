@@ -68,6 +68,12 @@ typedef struct {
      * reads it from the application thread.  Plain uint64_t
      * access tears on 32-bit ARM. */
     uint64_t                h3_handshake_deadline_ms;
+
+    /* Set once the H3 sweep has attempted the native-protocol rescue for
+     * this connection (see WT_H3_NATIVE_FALLBACK_MS), so the attempt is
+     * made at most once per connection rather than on every poll frame
+     * between the fallback deadline and the disconnect deadline. */
+    atomic_bool             h3_native_fallback_tried;
 } wt_server_conn_t;
 
 /* ── Server structure ───────────────────────────────────────── */

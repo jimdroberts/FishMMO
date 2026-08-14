@@ -39,4 +39,32 @@ namespace FishMMO.Shared
 		/// <summary>Port number for the world scene server.</summary>
 		public ushort Port;
 	}
+
+	/// <summary>
+	/// Client → server: request a connection token for the server this client is about to
+	/// connect to next (Login → World, World → Scene).
+	/// </summary>
+	/// <remarks>
+	/// Every game server is reached through the same L4 UDP proxy and therefore sees
+	/// 127.0.0.1, so each connection needs a token carrying the client's real IP. Only a
+	/// party that already knows that IP can issue one, which is why the client asks the
+	/// server it is currently authenticated to rather than going back to IPFetch.
+	/// Answered with <see cref="ConnectionTokenBroadcast"/>. Authenticated clients only.
+	/// </remarks>
+	public struct RequestConnectionTokenBroadcast : IBroadcast
+	{
+	}
+
+	/// <summary>
+	/// Server → client: a freshly minted connection token, or an empty token when the
+	/// server could not mint one. Answers <see cref="RequestConnectionTokenBroadcast"/>.
+	/// </summary>
+	public struct ConnectionTokenBroadcast : IBroadcast
+	{
+		/// <summary>
+		/// One-time connection token to send in the next ClientHandshake. Empty when
+		/// minting failed, in which case the next hop rejects the handshake.
+		/// </summary>
+		public string ConnectionToken;
+	}
 }

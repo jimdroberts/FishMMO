@@ -150,16 +150,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c2edaa6d4e0fd4393eb1def39f4f2f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LoginServerAddresses: 
-  LoginServerCacheTtlSeconds: 300
-  LoginServerRequestTimeoutSeconds: 10
-  WorldPreloadScenes:
+  loginServerCacheTtlSeconds: 55
+  loginServerRequestTimeoutSeconds: 10
+  probeStaggerInterval: 0.25
+  worldPreloadScenes:
   - SceneName: ClientWorldGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
-  LoginAuthenticator: {fileID: 2516426190219138202}
-  AudioListener: {fileID: 0}
-  ClientPostbootSystem: {fileID: 1045518714}
+  loginAuthenticator: {fileID: 2516426190219138202}
+  audioListener: {fileID: 0}
+  clientPostbootSystem: {fileID: 1045518714}
 --- !u!4 &1045518713
 Transform:
   m_ObjectHideFlags: 0

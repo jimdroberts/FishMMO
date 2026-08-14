@@ -344,6 +344,28 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
 int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 
 /**
+ * Server-side: complete the handshake as a raw/native (non-HTTP/3) connection,
+ * handing @p sctx over as the native stream whose buffered bytes are replayed
+ * into the stream manager by on_h3_session_ready.
+ *
+ * Called from two places:
+ *  - h3_server_process_data, on the normal first-byte detection path;
+ *  - the H3 handshake sweep in server.cpp, as a last resort for a native client
+ *    whose first byte collided with one of H3's reserved values (0x00 control
+ *    stream type, 0x01 HEADERS frame type) and was therefore misrouted into an
+ *    H3 path that waits for elements a native client never sends.
+ *
+ * Not thread-safe with respect to @p sctx: callers reaching it from outside the
+ * stream's own RECEIVE callback must claim @p sctx under H3_LOCK first (see the
+ * sweep in server.cpp). Invokes the on_ready callback, which may free @p sctx —
+ * do not touch @p sctx after this returns.
+ *
+ * @return 1  = handshake complete (native)
+ *        -1  = rejected (native clients not permitted by origin policy)
+ */
+int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
+/**
  * Client-side: process received data on the CONNECT request stream.
  * Called from the stream RECEIVE callback during the HTTP/3 handshake.
  *

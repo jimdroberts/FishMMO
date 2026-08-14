@@ -300,11 +300,15 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeUpdates.Select(p => p.CharacterID).ToArray();
 					var templateIdArray = activeUpdates.Select(p => p.TemplateID).ToArray();
 					var versionArray = activeUpdates.Select(p => p.Version).ToArray();
-					var abilitiesArray = activeUpdates
+					var abilitiesJson = ToJaggedIntArrayJson(activeUpdates
 						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
-						.ToArray();
+						.ToArray());
 					var spawnedArray = activeUpdates.Select(p => p.Spawned).ToArray();
 
+					// abilities is a ragged (non-rectangular) set of per-row integer[] values, which
+					// Npgsql/EF Core 5 cannot reliably bind as a native integer[][] parameter. It is sent as
+					// jsonb instead and decoded server-side, joined back to the other UNNESTed columns by
+					// ordinal position. See BaseService.ToJaggedIntArrayJson for details.
 					var sql = $@"
 						UPDATE {TableName} AS t
 						SET
@@ -315,14 +319,28 @@ namespace FishMMO.Database.Npgsql.Services
 							deleted = FALSE,
 							time_deleted = NULL,
 							version = u.version
-						FROM UNNEST(
-							{{0}}::bigint[],
-							{{1}}::bigint[],
-							{{2}}::integer[],
-							{{3}}::bigint[],
-							{{4}}::integer[][],
-							{{5}}::boolean[]
-						) AS u(id, character_id, template_id, version, abilities, spawned)
+						FROM (
+							SELECT
+								ids.id,
+								ids.character_id,
+								ids.template_id,
+								ids.version,
+								events.abilities,
+								ids.spawned
+							FROM UNNEST(
+								{{0}}::bigint[],
+								{{1}}::bigint[],
+								{{2}}::integer[],
+								{{3}}::bigint[],
+								{{5}}::boolean[]
+							) WITH ORDINALITY AS ids(id, character_id, template_id, version, spawned, ord)
+							JOIN (
+								SELECT
+									arr.ord,
+									ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS abilities
+								FROM jsonb_array_elements({{4}}::jsonb) WITH ORDINALITY AS arr(value, ord)
+							) AS events ON events.ord = ids.ord
+						) AS u
 						WHERE t.id = u.id
 							AND u.version > t.version;";
 
@@ -330,7 +348,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeUpdates.Count,
-						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilitiesArray, spawnedArray },
+						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray },
 						"One or more pets were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}
@@ -340,11 +358,13 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeInserts.Select(p => p.CharacterID).ToArray();
 					var templateIdArray = activeInserts.Select(p => p.TemplateID).ToArray();
 					var versionArray = activeInserts.Select(p => p.Version).ToArray();
-					var abilitiesArray = activeInserts
+					var abilitiesJson = ToJaggedIntArrayJson(activeInserts
 						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
-						.ToArray();
+						.ToArray());
 					var spawnedArray = activeInserts.Select(p => p.Spawned).ToArray();
 
+					// See the UPDATE branch above: abilities is sent as jsonb and decoded server-side
+					// instead of as a native integer[][] parameter.
 					var sql = $@"
 						INSERT INTO {TableName}
 							(character_id, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
@@ -352,7 +372,7 @@ namespace FishMMO.Database.Npgsql.Services
 							u.character_id,
 							u.template_id,
 							u.version,
-							u.abilities,
+							events.abilities,
 							u.spawned,
 							{{5}},
 							FALSE,
@@ -361,9 +381,14 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::integer[][],
 							{{4}}::boolean[]
-						) AS u(character_id, template_id, version, abilities, spawned)
+						) WITH ORDINALITY AS u(character_id, template_id, version, spawned, ord)
+						JOIN (
+							SELECT
+								arr.ord,
+								ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS abilities
+							FROM jsonb_array_elements({{3}}::jsonb) WITH ORDINALITY AS arr(value, ord)
+						) AS events ON events.ord = u.ord
 						ON CONFLICT (character_id)
 						DO UPDATE SET
 							template_id = EXCLUDED.template_id,
@@ -379,7 +404,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeInserts.Count,
-						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesArray, spawnedArray, now },
+						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray, now },
 						"One or more pets were rejected due to a stale Version.",
 						cancellationToken).ConfigureAwait(false);
 				}

@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed33efd5327bb702187694e3926827a9, type: 3}
   m_Name: CharacterSelectSystem
   m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.LoginServer.CharacterSelectSystem
-  KeepDeleteData: 1
+  keepDeleteData: 1

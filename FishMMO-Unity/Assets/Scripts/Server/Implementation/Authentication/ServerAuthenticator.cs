@@ -159,6 +159,19 @@ namespace FishMMO.Server.Implementation
 			}
 		}
 
+		/// <inheritdoc/>
+		/// <remarks>
+		/// Consults the login queue. A queued client holds an open, unauthenticated
+		/// connection for the whole wait — which the handshake-timeout sweep would
+		/// otherwise treat as a client that never handshook and disconnect.
+		/// </remarks>
+		protected override bool IsConnectionAwaitingQueueAdmission(NetworkConnection conn)
+		{
+			return Server?.BehaviourRegistry != null &&
+				Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem) &&
+				queueSystem.IsAwaitingAdmission(conn);
+		}
+
 		#region Lifecycle
 
 		/// <inheritdoc/>

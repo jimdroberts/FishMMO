@@ -88,7 +88,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 		// OnClientDisconnected() is called from FishNet network callbacks (potentially
 		// on a transport thread), while TryEnqueue() and TryAdmitFromQueue() run on
 		// the Unity main thread. ConcurrentDictionary provides lock-free reads/writes.
-		private readonly ConcurrentDictionary<int, byte> recentlyAdmitted = new ConcurrentDictionary<int, byte>();
+		private readonly ConcurrentDictionary<int, DateTime> recentlyAdmitted = new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// UTC time each connection first entered the queue, preserved across re-queues.
+		/// </summary>
+		/// <remarks>
+		/// A client that is admitted and then deferred again (auth cap still full once its
+		/// fast-pass window has lapsed) re-enters at the tail with a fresh arrival stamp.
+		/// Without remembering the original, <see cref="queueTimeoutSeconds"/> restarts on
+		/// every cycle and a client can be recycled indefinitely while later arrivals get
+		/// in ahead of it. Keyed by ClientId so the entry survives the connection object
+		/// leaving and re-entering the queue.
+		/// </remarks>
+		private readonly ConcurrentDictionary<int, DateTime> firstQueuedUtc = new ConcurrentDictionary<int, DateTime>();
 		private const float RecentAdmitTtlSeconds = 15f;
 		private float nextRecentAdmitSweep;
 
@@ -96,6 +109,30 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Returns the current number of clients in the queue.
 		/// </summary>
 		public int QueuedCount => queue?.Count ?? 0;
+
+		/// <summary>
+		/// Returns whether <paramref name="conn"/> is currently waiting in the queue.
+		/// </summary>
+		/// <remarks>
+		/// Used by the authenticator's handshake-timeout sweep: a queued connection is
+		/// intentionally left unauthenticated for as long as the wait lasts, which would
+		/// otherwise look identical to a client that connected and never handshook.
+        /// </remarks>
+		public bool IsQueued(NetworkConnection conn) => conn != null && queue != null && queue.Contains(conn);
+
+		/// <summary>
+		/// Returns whether <paramref name="conn"/> is waiting in the queue <em>or</em> has
+		/// just been admitted and is expected to re-handshake.
+		/// </summary>
+		/// <remarks>
+		/// The admitted-but-not-yet-re-handshaked window matters as much as the queue
+		/// itself: an admitted client is popped off the queue, so it is no longer "queued",
+		/// yet it is still unauthenticated and still waiting on us. Treating only the queue
+		/// as exempt from the handshake timeout would let that window be disconnected out
+		/// from under a client the server itself just invited back.
+		/// </remarks>
+		public bool IsAwaitingAdmission(NetworkConnection conn) =>
+			conn != null && (IsQueued(conn) || recentlyAdmitted.ContainsKey(conn.ClientId));
 
 		#region ServerBehaviour Lifecycle
 
@@ -144,6 +181,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				queue = null;
 			}
 			recentlyAdmitted.Clear();
+			firstQueuedUtc.Clear();
 		}
 
 		#endregion
@@ -229,7 +267,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (queue.Contains(conn))
 				return true;
 
-			queue.TrackIfMissing(conn, DateTime.UtcNow);
+			// Preserve the original arrival time across re-queues so queueTimeoutSeconds
+			// bounds the client's total wait rather than restarting each cycle.
+			DateTime arrivedUtc = firstQueuedUtc.GetOrAdd(conn.ClientId, DateTime.UtcNow);
+			queue.TrackIfMissing(conn, arrivedUtc);
 
 			// Send an immediate position update so the client knows they're queued.
 			int position = queue.GetPosition(conn);
@@ -257,25 +298,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 			nextAdmissionTime -= deltaTime;
 			if (nextAdmissionTime > 0f) return;
 
-			if (queue.PopOldest(out NetworkConnection conn, out _))
+			// Discard dead entries without spending the admission tick on them.
+			// Popping a disconnected client used to consume the tick anyway, so a run of
+			// stale entries throttled real admissions to the queue's drain rate (5/s by
+			// default) — the queue appeared to stall for clients who were still waiting.
+			// Bounded so a fully-dead queue cannot spin the whole frame.
+			const int maxSkipPerTick = 64;
+			int skipped = 0;
+			while (skipped < maxSkipPerTick && queue.PopOldest(out NetworkConnection conn, out _))
 			{
-				if (conn != null && conn.IsActive)
+				if (conn == null || !conn.IsActive)
 				{
-					// Track as recently admitted so that if their re-handshake
-					// fails (auth cap still full), they get a fast-pass through
-					// TryEnqueue instead of being re-queued at the tail.
-					recentlyAdmitted.TryAdd(conn.ClientId, 0);
-
-					// Position 0 = "you are being processed now — retry your handshake"
-					SendPositionUpdate(conn, 0, 0, 0);
-					Log.Debug("LoginQueueSystem",
-						$"Connection {conn.ClientId} admitted from queue. " +
-						$"{queue.Count} remaining.");
+					skipped++;
+					continue;
 				}
+
+				// Track as recently admitted so that if their re-handshake
+				// fails (auth cap still full), they get a fast-pass through
+				// TryEnqueue instead of being re-queued at the tail.
+				recentlyAdmitted[conn.ClientId] = DateTime.UtcNow;
+
+				// Position 0 = "you are being processed now — retry your handshake"
+				SendPositionUpdate(conn, 0, 0, 0);
+				Log.Debug("LoginQueueSystem",
+					$"Connection {conn.ClientId} admitted from queue. " +
+					$"{queue.Count} remaining.");
+
+				// One live client per interval.
+				nextAdmissionTime = 1.0f / admissionRatePerSecond;
+				return;
 			}
 
-			// Reset the admission timer — one client per interval.
-			nextAdmissionTime = 1.0f / admissionRatePerSecond;
+			if (skipped > 0)
+			{
+				Log.Debug("LoginQueueSystem", $"Skipped {skipped} dead queue entries while admitting.");
+			}
+			// Nothing live was admitted; retry on the next tick rather than idling a full interval.
 		}
 
 		/// <summary>
@@ -308,10 +366,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (nextRecentAdmitSweep > 0f || recentlyAdmitted.Count == 0) return;
 
 			nextRecentAdmitSweep = PurgeSweepIntervalSeconds;
-			// NOTE: All entries are cleared at once, not just expired ones.
-			// The effective fast-pass window ranges from 0 to ~25 seconds (not exactly 15s).
-			// This is an acceptable simplification for the admission rate.
-			recentlyAdmitted.Clear();
+
+			// Remove only entries past their TTL. Clearing the whole set (the previous
+			// behaviour) made the fast-pass window anywhere from 0 to ~25 seconds
+			// depending on where a client landed relative to the sweep, so a client
+			// admitted just before one lost its fast pass almost immediately.
+			DateTime cutoff = DateTime.UtcNow.AddSeconds(-RecentAdmitTtlSeconds);
+			foreach (var pair in recentlyAdmitted)
+			{
+				if (pair.Value <= cutoff)
+				{
+					recentlyAdmitted.TryRemove(pair.Key, out _);
+				}
+			}
 		}
 
 		/// <summary>
@@ -323,10 +390,33 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public void OnClientDisconnected(int clientId)
 		{
 			recentlyAdmitted.TryRemove(clientId, out _);
+			firstQueuedUtc.TryRemove(clientId, out _);
 			// We can't look up the NetworkConnection from just the clientId
 			// without access to the ServerManager, but the next purge sweep
 			// will catch it. The recentlyAdmitted cleanup is the critical path
 			// to prevent fast-pass abuse after disconnect.
+		}
+
+		/// <summary>
+		/// Removes a disconnected client from the queue and the recently-admitted set.
+		/// </summary>
+		/// <remarks>
+		/// Preferred over the ClientId-only overload when the caller still holds the
+		/// connection: the entry goes immediately rather than lingering until the next
+		/// purge sweep, which keeps reported positions and the queue count honest and
+		/// stops the admission loop from having to step over it.
+		/// <para>
+		/// Must be called on the main thread — the queue itself is not thread-safe, which
+		/// is why the ClientId-only overload deliberately touches nothing but the
+		/// concurrent recently-admitted set.
+		/// </para>
+		/// </remarks>
+		public void OnClientDisconnected(NetworkConnection conn)
+		{
+			if (conn == null) return;
+			recentlyAdmitted.TryRemove(conn.ClientId, out _);
+			firstQueuedUtc.TryRemove(conn.ClientId, out _);
+			queue?.Remove(conn);
 		}
 
 		/// <summary>
