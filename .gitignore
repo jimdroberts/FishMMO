@@ -68,3 +68,12 @@ core.[0-9]*
 
 # Native WebTransport CMake build directories and cache.
 FishMMO-WebTransport/openssl_cache.cmake
+
+# --- API Documentation (docfx) ---
+# docfx.json, toc.yml, docs/, publish.sh, etc. are tracked; only the
+# generated metadata/site output is not.
+/Documentation/
+
+# Local clone of the gh-pages doc-hosting repo (jimdroberts/FishMMO-Website).
+# Not part of this repo; publish.sh syncs built docs into it.
+/FishMMO-Website/
