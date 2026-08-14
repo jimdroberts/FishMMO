@@ -1,7 +1,27 @@
+# Repository-root ignores.
+#
+# The Unity project has its own rules in FishMMO-Unity/.gitignore; this file
+# covers the solution root, the .NET projects, and the native library.
+#
+# ── Pattern note: why these have no leading "*" ──────────────────────────────
+# A pattern with no "/" in it (a trailing "/" doesn't count) is matched against
+# every path component at every depth. "bin/" therefore already ignores bin/,
+# a/bin/, and a/b/c/bin/ — recursion into subdirectories is automatic and needs
+# no wildcard.
+#
+# Adding a leading "*" does not extend the depth. It changes the name match from
+# "equals" to "ends with", so "*bin/" also swallows Assets/Art/Cabin/ and
+# Assets/Scripts/Robin/, and "*[Oo]ut/" swallows Assets/UI/Layout/ because
+# "Layout" ends in "out". Reserve leading wildcards for real suffix matches
+# such as "*.log".
+#
+# Use a leading "/" only to anchor a rule to this directory (e.g. "/Migrations/"
+# would mean the root one and nothing else).
+
 # --- OS Metadata ---
 .DS_Store
 Thumbs.db
-*.*~
+*~
 *.swp
 
 # --- IDEs & Editors ---
@@ -18,25 +38,29 @@ Thumbs.db
 *.pem
 *.pfx
 *.cert
+*.key
 *.secret
+.env
+.env.*
+
 # Local environment overrides (may contain secrets)
 appsettings.Development.json
 appsettings.Production.json
 
 # --- Build & Output (General) ---
+# Each of these matches a directory of that exact name at any depth.
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
 x64/
 x86/
-build/
+[Bb]uild/
+[Bb]uilds/
 bld/
 [Bb]in/
 [Oo]bj/
 [Oo]ut/
-bin/
-obj/
 publish/
 msbuild.log
 msbuild.err
@@ -48,4 +72,14 @@ project.lock.json
 *.pyc
 nupkg/
 packages/
-[Mm]igrations*
+
+# --- Crash dumps ---
+mono_crash.*
+core.[0-9]*
+
+# --- Entity Framework ---
+# Generated per project and applied locally, not shared through source control.
+[Mm]igrations/
+
+# Native WebTransport CMake build directories and cache.
+FishMMO-WebTransport/openssl_cache.cmake
