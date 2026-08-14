@@ -38,7 +38,6 @@ namespace FishNet.Transporting.WebTransport.Server
 		#region Private Configuration
 		private ushort port;
 		private int maximumClients;
-		private int mtu;
 		private string certificatePath;
 		private string privateKeyPath;
 		#endregion
@@ -253,13 +252,12 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// Must be called before <see cref="StartConnection"/>.
 		/// </summary>
 		/// <param name="t">The parent transport instance.</param>
-		/// <param name="mtuValue">The maximum transmission unit for datagrams.</param>
+		/// <param name="mtuValue">Unused; the send limit lives on the transport (GetMTU) and the receive limit is MaxDatagramReceiveSize.</param>
 		/// <param name="certPath">Path to the TLS certificate PEM file.</param>
 		/// <param name="keyPath">Path to the TLS private key PEM file.</param>
 		internal void Initialize(Transport t, int mtuValue, string certPath, string keyPath)
 		{
 			base.transport = t;
-			this.mtu = mtuValue;
 			this.certificatePath = certPath ?? "";
 			this.privateKeyPath = keyPath ?? "";
 		}
@@ -919,7 +917,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		{
 			/* Security: reject invalid or oversized datagrams. Datagrams larger than the MTU
              * should never arrive from a compliant peer, but we validate defensively. */
-			if (length <= 0 || length > this.mtu)
+			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid datagram length {length} from connection {nativeConnectionId}. Dropping.");
 				return;

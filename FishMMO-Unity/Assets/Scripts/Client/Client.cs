@@ -909,7 +909,13 @@ namespace FishMMO.Client
 			{
 				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
 				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
-				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; DismissLoadingScreen(true); OnEnterGameWorld?.Invoke(); break;
+				/* Do NOT dismiss the loading screen here. SceneLoginSuccess only means the
+				 * network handshake with the scene server finished — Unity has not begun
+				 * loading the actual scene yet, and the character does not exist. Dismissing
+				 * at this point hid the overlay for the entire real load, which is the
+				 * "world server hangs with no loading screen" report. The screen is dismissed
+				 * in OnCharacterStartLocal, when the player actually exists. */
+				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; OnEnterGameWorld?.Invoke(); break;
 				default:
 					Log.Warning("Client", $"Unhandled auth result: {r}");
 					break;
@@ -1003,19 +1009,64 @@ namespace FishMMO.Client
 		/// Called when the local character starts. Sets up input controller and UI.
 		/// </summary>
 		/// <param name="c">The local player character.</param>
-		/// <summary>True after world entry — suppresses loading overlay re-shows.</summary>
+		/// <summary>
+		/// True after world entry. Suppresses only the <i>incidental</i> loading overlay —
+		/// the one driven by background Addressable asset loads.
+		/// </summary>
+		/// <remarks>
+		/// This deliberately does not suppress genuine scene transitions. The overlay has
+		/// two independent drivers: <c>AddressableLoadProcessor.OnProgressUpdate</c>, which
+		/// fires for any background asset work and would otherwise flash the overlay over
+		/// live gameplay, and FishNet's <c>SceneManager</c> load events, which are real zone
+		/// changes the player must see a loading screen for.
+		/// <para>Gating both on this flag meant that once it latched — which happened at the
+		/// network handshake, before the first scene had even loaded — no loading screen
+		/// could ever appear again for the rest of the session, including zone-to-zone
+		/// teleports. The flag is now checked only on the Addressable path.</para>
+		/// </remarks>
 		public static bool LoadingSuppressed { get; private set; }
 
 		/// <summary>
-		/// Hides the loading overlay and optionally suppresses future Show calls.
-		/// Called on successful scene login and local character start so the player
-		/// is never stuck behind a loading screen after world entry.
+		/// Hides the loading overlay and optionally suppresses future incidental re-shows.
+		/// Called on local character start, when the player actually exists in the world.
 		/// </summary>
+		/// <param name="suppress">
+		/// True to stop background asset loads from re-showing the overlay. Genuine scene
+		/// transitions are unaffected — see <see cref="LoadingSuppressed"/>.
+		/// </param>
 		public static void DismissLoadingScreen(bool suppress)
 		{
 			if (suppress) LoadingSuppressed = true;
 			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out _)) UIManager.Hide("UITKLoadingScreen");
 			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out _)) UIManager.Hide("UILoadingScreen");
+		}
+
+		/// <summary>
+		/// Caps how fast the client renders, and keeps FishNet from overriding the cap.
+		/// </summary>
+		/// <param name="framesPerSecond">
+		/// Target frames per second, normally the user's saved "Refresh Rate" preference.
+		/// Values outside 1..500 are ignored.
+		/// </param>
+		/// <remarks>
+		/// Setting <see cref="Application.targetFrameRate"/> alone is not enough to make a
+		/// preference stick. FishNet's <c>NetworkManager.UpdateFramerate</c> writes
+		/// <c>targetFrameRate</c> from <c>ClientManager.FrameRate</c> — 500 by default —
+		/// every time the connection state changes, so a value set here would be discarded
+		/// at the next connect or server hop. Pushing the same number into
+		/// <c>ClientManager.SetFrameRate</c> makes FishNet's own value agree, so the cap
+		/// survives every later <c>UpdateFramerate</c> call.
+		/// <para>Applying the screen refresh rate via <c>Screen.SetResolution</c> changes the
+		/// display mode only; with vSync off it does not limit the render loop.</para>
+		/// </remarks>
+		public static void ApplyTargetFrameRate(int framesPerSecond)
+		{
+			if (framesPerSecond <= 0 || framesPerSecond > 500) return;
+
+			Application.targetFrameRate = framesPerSecond;
+
+			// Keep FishNet's value in step so UpdateFramerate does not overwrite ours.
+			NetworkManager?.ClientManager?.SetFrameRate((ushort)framesPerSecond);
 		}
 
 		private void OnCharacterStartLocal(IPlayerCharacter c)

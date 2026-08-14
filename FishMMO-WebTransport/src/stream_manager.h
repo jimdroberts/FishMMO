@@ -205,6 +205,26 @@ int32_t wt_stream_manager_send(
 void wt_stream_manager_accept_stream(
     wt_stream_manager_t* mgr, HQUIC quic_stream);
 
+/**
+ * Accept a peer stream whose first bytes were already received and buffered
+ * elsewhere — the HTTP/3 layer reads the opening bytes of the first peer
+ * stream to tell a browser CONNECT from a native raw-QUIC client, so by the
+ * time the session exists those bytes are sitting in an h3 stream context.
+ *
+ * The prefilled bytes are pushed through the same header-strip and
+ * message-framing path as live data, so a replayed buffer containing two
+ * whole messages delivers two messages, and one containing a partial message
+ * retains the remainder for the next RECEIVE. Delivering the raw buffer
+ * directly (as the caller used to) bypasses framing and hands the
+ * application a truncated or merged bundle.
+ *
+ * @param data  Bytes already received on this stream; copied, caller retains
+ *              ownership. May be NULL when @p length is 0.
+ */
+void wt_stream_manager_accept_stream_prefill(
+    wt_stream_manager_t* mgr, HQUIC quic_stream,
+    const uint8_t* data, uint32_t length);
+
 #ifdef __cplusplus
 }
 #endif

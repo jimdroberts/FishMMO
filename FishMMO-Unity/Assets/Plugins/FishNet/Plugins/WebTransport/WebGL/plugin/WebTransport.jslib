@@ -44,6 +44,107 @@ var LibraryFishWebTransport = {
                 return dc(sig, fn, args);
               },
 
+        /* ── Reliable-channel message framing ──────────────────────────
+         * A WebTransport stream is an ordered BYTE stream: consecutive
+         * writer.write() calls may be coalesced into one reader.read()
+         * chunk, and one write may be split across several. FishNet needs
+         * whole packet bundles, so every message is length-delimited with
+         * a QUIC varint (RFC 9000 §16) — the same format the native
+         * library uses. Both ends must agree; see WT_MAX_FRAMED_MESSAGE
+         * in webtransport_internal.h.
+         *
+         * The browser strips the WEBTRANSPORT_STREAM header itself, so
+         * here the stream payload starts directly with the first length. */
+        _MAX_MESSAGE: 65536,
+
+        /** Encode val as a QUIC varint. Returns a Uint8Array of 1/2/4/8 bytes. */
+        _varintEncode: function(val) {
+            if (val < 64) {
+                return new Uint8Array([val]);
+            }
+            if (val < 16384) {
+                return new Uint8Array([0x40 | (val >>> 8), val & 0xFF]);
+            }
+            if (val < 1073741824) {
+                return new Uint8Array([
+                    0x80 | ((val >>> 24) & 0x3F),
+                    (val >>> 16) & 0xFF,
+                    (val >>> 8) & 0xFF,
+                    val & 0xFF
+                ]);
+            }
+            /* Lengths this large are rejected by _MAX_MESSAGE before we get
+             * here; encode defensively rather than emit a malformed varint. */
+            var hi = Math.floor(val / 4294967296);
+            var lo = val >>> 0;
+            return new Uint8Array([
+                0xC0 | ((hi >>> 24) & 0x3F), (hi >>> 16) & 0xFF,
+                (hi >>> 8) & 0xFF, hi & 0xFF,
+                (lo >>> 24) & 0xFF, (lo >>> 16) & 0xFF,
+                (lo >>> 8) & 0xFF, lo & 0xFF
+            ]);
+        },
+
+        /** Decode a QUIC varint. Returns {value, size} or null if truncated. */
+        _varintDecode: function(buf, offset) {
+            if (offset >= buf.length) return null;
+            var need = 1 << (buf[offset] >> 6);
+            if (offset + need > buf.length) return null;
+            var v = buf[offset] & 0x3F;
+            for (var i = 1; i < need; i++) {
+                /* Multiply rather than shift: >>> is 32-bit and an 8-byte
+                 * varint would silently wrap. */
+                v = v * 256 + buf[offset + i];
+            }
+            return { value: v, size: need };
+        },
+
+        /** Deliver every whole message in stream.buf; retain any partial tail. */
+        _drainFramed: function(session, st) {
+            var consumed = 0;
+            var buf = st.buf;
+            for (;;) {
+                var hdr = FishWebTransport._varintDecode(buf, consumed);
+                if (!hdr) break;                       /* length not fully here */
+                var len = hdr.value;
+                if (len === 0 || len > FishWebTransport._MAX_MESSAGE) {
+                    console.error('[FishWT] invalid framed message length ' +
+                                  len + ' — aborting stream');
+                    st.broken = true;
+                    return;
+                }
+                if (buf.length - consumed - hdr.size < len) break;  /* partial */
+                consumed += hdr.size;
+
+                var msg = buf.subarray(consumed, consumed + len);
+                var ptr = _malloc(len);
+                if (ptr) {
+                    HEAPU8.set(msg, ptr);
+                    FishWebTransport._dynCall('viii', session.onStream,
+                                              [session._index, ptr, len]);
+                    _free(ptr);
+                } else {
+                    console.warn('[FishWT] malloc failed for ' + len +
+                                 ' byte message — dropped');
+                }
+                consumed += len;
+            }
+            st.buf = consumed > 0 ? buf.subarray(consumed) : buf;
+        },
+
+        /** Append bytes to a per-stream accumulator. */
+        _appendChunk: function(st, chunk) {
+            if (st.buf.length === 0) {
+                /* Copy: the caller's view may alias a reused transfer buffer. */
+                st.buf = new Uint8Array(chunk);
+                return;
+            }
+            var merged = new Uint8Array(st.buf.length + chunk.length);
+            merged.set(st.buf, 0);
+            merged.set(chunk, st.buf.length);
+            st.buf = merged;
+        },
+
         _get: function(index) {
             return FishWebTransport._transports[index] || null;
         },
@@ -80,7 +181,63 @@ var LibraryFishWebTransport = {
             });
         },
 
-        /** Read incoming bidirectional streams, deliver data via onStream callback.
+        /** Drain one bidirectional stream's readable half, delivering each
+         *  complete framed message through the onStream callback.
+         *
+         *  Used for BOTH directions. A bidirectional stream we opened has a
+         *  readable half that carries the peer's replies — leaving it undrained
+         *  means every reply the server sends on that stream is discarded by the
+         *  browser, which is exactly what happened before this was factored out:
+         *  the only pump ran over incomingBidirectionalStreams (server-opened
+         *  streams), while the server replies on the stream the client opened. */
+        _pumpStreamReadable: function(session, readable, label) {
+            var streamReader;
+            try {
+                streamReader = readable.getReader();
+            } catch (e) {
+                console.warn('[FishWT] ' + label + ' reader create failed: ' + e.message);
+                return;
+            }
+            /* Per-stream reassembly state. Each stream carries its own message
+             * sequence, so the accumulator cannot be shared across streams. */
+            var st = { buf: new Uint8Array(0), broken: false };
+            function readStream() {
+                streamReader.read().then(function(sr) {
+                    if (session._closed) { try { streamReader.releaseLock(); } catch (_) {} return; }
+                    if (sr.done) {
+                        if (st.buf.length > 0) {
+                            console.warn('[FishWT] ' + label + ' ended with ' +
+                                st.buf.length + ' trailing bytes of an ' +
+                                'incomplete message — discarding');
+                        }
+                        try { streamReader.releaseLock(); } catch (_) {}
+                        return;
+                    }
+                    if (st.broken) { try { streamReader.releaseLock(); } catch (_) {} return; }
+
+                    FishWebTransport._appendChunk(st, new Uint8Array(sr.value));
+                    if (st.buf.length > FishWebTransport._MAX_MESSAGE * 2) {
+                        /* Nothing complete in twice the maximum message size
+                         * means the peer is not framing correctly; a byte
+                         * stream cannot be resynchronised. */
+                        console.error('[FishWT] ' + label + ' buffer overflow without a ' +
+                                      'complete message — dropping stream');
+                        st.broken = true;
+                        try { streamReader.releaseLock(); } catch (_) {}
+                        return;
+                    }
+                    FishWebTransport._drainFramed(session, st);
+                    if (st.broken) { try { streamReader.releaseLock(); } catch (_) {} return; }
+                    readStream();
+                }).catch(function(e) {
+                    console.warn('[FishWT] ' + label + ' read error: ' + e.message);
+                    try { streamReader.releaseLock(); } catch (_) {}
+                });
+            }
+            readStream();
+        },
+
+        /** Read incoming (peer-opened) bidirectional streams.
          *  Wraps the pump in a retry loop: if the reader becomes errored or the
          *  pump fails, it waits 1s and re-creates the reader. This prevents a
          *  single stream error from permanently killing all incoming stream data. */
@@ -123,34 +280,8 @@ var LibraryFishWebTransport = {
                             return;
                         }
                         session._doneRetries = 0;  /* reset on successful read */
-                        var stream = result.value;
-                        var streamReader = stream.readable.getReader();
-                        function readStream() {
-                            streamReader.read().then(function(sr) {
-                                if (session._closed) { try { streamReader.releaseLock(); } catch (_) {} return; }
-                                if (sr.done) { streamReader.releaseLock(); return; }
-                                var data = new Uint8Array(sr.value);
-                                // Retry _malloc up to 3 times with 10ms delay between attempts.
-                                // Under extreme WASM heap pressure, _malloc can transiently return
-                                // 0 (NULL). A brief delay allows GC to run and free memory.
-                                // If all retries fail, the chunk is dropped with a console.error
-                                // warning so the C# caller can respond to sustained data loss.
-                                return FishWebTransport._mallocRetry(data.length, 3, 10).then(function(ptr) {
-                                    if (ptr) {
-                                        HEAPU8.set(data, ptr);
-                                        FishWebTransport._dynCall('viii', session.onStream, [session._index, ptr, data.length]);
-                                        _free(ptr);
-                                    } else {
-                                        console.warn('[FishWT] malloc failed for stream data (' + data.length + ' bytes) after 3 retries');
-                                    }
-                                    readStream();
-                                });
-                            }).catch(function(e) {
-                                console.warn('[FishWT] stream read error: ' + e.message);
-                                try { streamReader.releaseLock(); } catch (_) {}
-                            });
-                        }
-                        readStream();
+                        FishWebTransport._pumpStreamReadable(
+                            session, result.value.readable, 'peer-stream');
                         pump();
                     }).catch(function(e) {
                         console.error('[FishWT] bidi stream pump error: ' + e.message);
@@ -231,8 +362,9 @@ var LibraryFishWebTransport = {
     // ------------------------------------------------------------------
 
     WTConnect__deps: ['$FishWebTransport'],
-    WTConnect: function(urlPtr, onOpen, onClose, onStream, onDatagram, onError) {
+    WTConnect: function(urlPtr, certHashesPtr, onOpen, onClose, onStream, onDatagram, onError) {
         var url = UTF8ToString(urlPtr);
+        var certHashes = certHashesPtr ? UTF8ToString(certHashesPtr) : '';
 
         // Create the session object first so it's available for the
         // "WebTransport not supported" check below (though no error is
@@ -258,8 +390,39 @@ var LibraryFishWebTransport = {
         var index = FishWebTransport._add(session);
         session._index = index;
 
+        /* Optional pinned certificate fingerprints. Without these a browser
+         * only accepts a publicly trusted chain, so a self-signed development
+         * certificate cannot be used from a WebGL build at all. With them the
+         * browser accepts the named certificate — provided it is ECDSA P-256
+         * and valid for no more than 14 days, which the browser enforces. */
+        var options;
+        if (certHashes) {
+            var hashes = [];
+            var parts = certHashes.split(',');
+            for (var i = 0; i < parts.length; i++) {
+                var hex = parts[i].trim().replace(/:/g, '');
+                if (!hex) continue;
+                if (hex.length !== 64 || /[^0-9a-fA-F]/.test(hex)) {
+                    console.warn('[FishWT] ignoring malformed certificate hash "' +
+                                 parts[i] + '" (want 64 hex chars of SHA-256)');
+                    continue;
+                }
+                var bytes = new Uint8Array(32);
+                for (var b = 0; b < 32; b++) {
+                    bytes[b] = parseInt(hex.substr(b * 2, 2), 16);
+                }
+                hashes.push({ algorithm: 'sha-256', value: bytes });
+            }
+            if (hashes.length > 0) {
+                options = { serverCertificateHashes: hashes };
+                console.log('[FishWT] pinning ' + hashes.length +
+                            ' server certificate hash(es)');
+            }
+        }
+
         try {
-            session.wt = new WebTransport(url);
+            session.wt = options ? new WebTransport(url, options)
+                                 : new WebTransport(url);
         } catch (e) {
             console.error('[FishWT] Create failed: ' + e.message);
             FishWebTransport._lastErrors[index] = 'Create failed: ' + e.message;
@@ -312,7 +475,18 @@ var LibraryFishWebTransport = {
         if (!session || !session.wt) return false;
         if (session.wt.readyState !== 'connected') return false;
 
-        var data = HEAPU8.slice(dataPtr, dataPtr + length);
+        if (length <= 0 || length > FishWebTransport._MAX_MESSAGE) {
+            console.error('[FishWT] SendStream rejected: length ' + length +
+                          ' outside 1..' + FishWebTransport._MAX_MESSAGE);
+            return false;
+        }
+
+        /* Length-delimit the message so the peer can find its boundaries in
+         * the byte stream. See _drainFramed for the receiving half. */
+        var lenHdr = FishWebTransport._varintEncode(length);
+        var data = new Uint8Array(lenHdr.length + length);
+        data.set(lenHdr, 0);
+        data.set(HEAPU8.subarray(dataPtr, dataPtr + length), lenHdr.length);
 
         /* Check cached writer — desiredSize is null when the
          * underlying stream is closed or errored. */
@@ -361,6 +535,12 @@ var LibraryFishWebTransport = {
                 var writer = stream.writable.getWriter();
                 session._streamWriter = writer;
                 session._streamWriterPending = false;
+
+                /* Drain this stream's readable half. The server replies on the
+                 * stream the client opened, so without this pump every reply
+                 * (login result, spawns, RPCs) is silently discarded. */
+                FishWebTransport._pumpStreamReadable(
+                    session, stream.readable, 'local-stream');
 
                 /* Flush any data that was queued while the stream was
                  * being created. */

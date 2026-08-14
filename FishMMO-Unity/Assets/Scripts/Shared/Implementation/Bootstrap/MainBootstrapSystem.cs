@@ -34,6 +34,24 @@ namespace FishMMO.Shared
 		private VersionConfig versionConfig;
 
 		/// <summary>
+		/// Frame rate the client is capped to during bootstrap, launcher, and the
+		/// login/character-select screens.
+		/// </summary>
+		/// <remarks>
+		/// Nothing sets <see cref="Application.targetFrameRate"/> before a network
+		/// connection exists, and its default is -1 (unlimited). The default quality
+		/// level also has vSync off, so the launcher and login menus render as fast as
+		/// the GPU allows and peg a CPU core to draw a static screen.
+		/// <para>This is only the pre-configuration default. The options UI persists a
+		/// "Refresh Rate" preference, and <c>RefreshRateSettingOption</c> /
+		/// <c>UITKOptions</c> call <c>Client.ApplyTargetFrameRate</c> when it loads, which
+		/// replaces this value with the user's choice. Failing that, FishNet's
+		/// <c>NetworkManager.UpdateFramerate</c> raises it from
+		/// <c>ClientManager.FrameRate</c> when the client connects.</para>
+		/// </remarks>
+		private const int BootstrapTargetFrameRate = 60;
+
+		/// <summary>
 		/// Indicates if shutdown is currently being initiated.
 		/// </summary>
 		private static bool isInitiatingShutdown = false;
@@ -220,6 +238,15 @@ namespace FishMMO.Shared
 			}
 
 			string workingDir = Constants.GetWorkingDirectory();
+
+#if !UNITY_SERVER
+			/* Cap the client before anything renders. See BootstrapTargetFrameRate:
+			 * without this the launcher and login screens run uncapped.
+			 * Headless servers are excluded — they do not render, and FishNet
+			 * derives the server frame rate from the tick rate instead. */
+			Application.targetFrameRate = BootstrapTargetFrameRate;
+			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus (FishNet raises it on connect).");
+#endif
 
 			GameVersion = versionConfig?.FullVersion ?? "UNKNOWN";
 

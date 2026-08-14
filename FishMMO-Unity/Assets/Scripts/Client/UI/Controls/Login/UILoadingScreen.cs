@@ -88,6 +88,12 @@ namespace FishMMO.Client
 		/// <param name="progress">The current loading progress (0-1).</param>
 		public void OnProgressUpdate(float progress)
 		{
+			/* Incidental background asset loading. Once the player is in the world this
+			 * must not touch the overlay at all — not to show it, and not to hide it:
+			 * an unrelated Addressable load finishing would otherwise pull the loading
+			 * screen out from under a genuine scene transition that is still running. */
+			if (Client.LoadingSuppressed) return;
+
 			if (progress < 1.0f && !Visible)
 			{
 				Show();
@@ -108,7 +114,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void Show()
 		{
-			if (Client.LoadingSuppressed) return;
+			/* No LoadingSuppressed check here. Scene transitions and reconnects call this
+			 * directly and must always be able to show the overlay; only the incidental
+			 * Addressable path in OnProgressUpdate is suppressed. */
 			base.Show();
 
 			if (LoadingProgress == null)

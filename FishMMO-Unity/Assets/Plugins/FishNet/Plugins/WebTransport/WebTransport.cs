@@ -36,8 +36,48 @@ namespace FishNet.Transporting.WebTransport
 	public class WebTransport : Transport
 	{
 		#region Configuration
-		/// <summary>QUIC minimum MTU (RFC 9000 §14).</summary>
-		private const int MTU = 1200;
+		/// <summary>
+		/// Maximum application payload for one unreliable datagram.
+		/// </summary>
+		/// <remarks>
+		/// QUIC guarantees a 1200-byte path (RFC 9000 §14), but that is the
+		/// size of the whole UDP datagram, not of the payload we may put in
+		/// it. Deduct the 1-RTT packet header, the DATAGRAM frame header, and
+		/// the AEAD tag, then the HTTP/3 Datagram Quarter Stream ID that a
+		/// browser session adds (RFC 9297 §2.1). Reporting the full 1200 here
+		/// produced datagrams the transport could not actually send.
+		/// </remarks>
+		private const int DatagramMTU = 1150;
+
+		/// <summary>
+		/// Maximum application payload for one reliable message.
+		/// </summary>
+		/// <remarks>
+		/// <para>The reliable channel runs over a QUIC stream, which has no MTU:
+		/// QUIC segments and reassembles transparently and this transport
+		/// length-delimits each message, so any value up to 64 KB is carried
+		/// correctly. The limit here is not a protocol constraint.</para>
+		/// <para>It is a memory one. FishNet allocates a <c>PacketBundle</c> per
+		/// channel <i>per connection</i>, and each bundle holds buffers sized to
+		/// this value — so raising it multiplies server memory by the client
+		/// count. At 4000 clients every extra kilobyte here costs about 8 MB.
+		/// The default stays near the datagram size for that reason; messages
+		/// above it are split by FishNet and reassembled correctly, which costs
+		/// a few header bytes and nothing else.</para>
+		/// <para>Raise it with <see cref="SetReliableMTU"/> on deployments with
+		/// few connections and large reliable payloads.</para>
+		/// </remarks>
+		private const int DefaultStreamMTU = 1200;
+
+		/// <summary>
+		/// Hard ceiling for <see cref="SetReliableMTU"/>. Matches the receive-side
+		/// cap on both backends (WT_MAX_FRAMED_MESSAGE in the native library,
+		/// _MAX_MESSAGE in the WebGL bridge) with room for the length prefix.
+		/// </summary>
+		private const int MaxStreamMTU = 65000;
+
+		/// <summary>Current reliable-channel MTU. See <see cref="DefaultStreamMTU"/>.</summary>
+		private int streamMTU = DefaultStreamMTU;
 
 		/// <summary>Server bind address. Set at startup from .cfg file.</summary>
 		private string serverBindAddress = "127.0.0.1";
@@ -61,6 +101,29 @@ namespace FishNet.Transporting.WebTransport
 
 		/// <summary>TLS private key PEM path. Set at startup from .cfg file.</summary>
 		private string privateKeyPath = "";
+
+		/// <summary>
+		/// Comma-separated SHA-256 fingerprints of the <i>remote</i> server's
+		/// certificate that a WebGL client will accept in place of a publicly
+		/// trusted chain.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>This is a client setting, not a server one.</b> The name follows
+		/// the W3C option it feeds (<c>serverCertificateHashes</c>), which means
+		/// "hashes of the server's certificate" — supplied by whoever is
+		/// connecting. A server never reads this field; it presents its own
+		/// certificate via <see cref="SetCertificatePath"/> and
+		/// <see cref="SetPrivateKeyPath"/> exactly as before.</para>
+		/// <para>It also only matters on WebGL. Native clients validate against the
+		/// platform trust store and ignore it.</para>
+		/// <para>Leave empty in production: browsers then require a normally trusted
+		/// certificate, which is what you want. Set it only for development,
+		/// where the browser would otherwise refuse a self-signed certificate
+		/// and a WebGL build could not reach a local server at all. The pinned
+		/// certificate must be ECDSA P-256 and valid for at most 14 days —
+		/// a browser rule, not one this transport imposes.</para>
+		/// </remarks>
+		private string serverCertificateHashes = "";
 
 		/// <summary>
 		/// Server-side idle timeout in seconds. If no data is received within this window,
@@ -204,20 +267,10 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToServer(byte channelId, ArraySegment<byte> segment)
 		{
 			SanitizeChannel(ref channelId);
-#if UNITY_WEBGL && !UNITY_EDITOR
-			// Browser only: never use QUIC DATAGRAM for FishNet channel 1. Datagrams have
-			// caused H3_FRAME_ERROR / session drop after LoginSuccess. Prefer the
-			// persistent reliable bidi stream (channel 0).
-			// Pair with TransportManager.CheckSetReliableChannel (WebGL forces Reliable
-			// *before* CreateRpc) so Replicate length headers match this stream path.
-			// Editor/native must NOT remap — that path uses real DATAGRAMs successfully.
-			if (channelId == 1)
-				channelId = 0;
-#endif
-			if (channelId == 1 && segment.Count > MTU)
+			if (channelId == 1 && segment.Count > DatagramMTU)
 			{
 				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds the {DatagramMTU} byte limit. Dropping.");
 				return;
 			}
 			this.clientSocket.SendToServer(channelId, segment);
@@ -247,10 +300,10 @@ namespace FishNet.Transporting.WebTransport
 		public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
 		{
 			SanitizeChannel(ref channelId);
-			if (channelId == 1 && segment.Count > MTU)
+			if (channelId == 1 && segment.Count > DatagramMTU)
 			{
 				base.NetworkManager.LogWarning(
-					$"[WebTransport] Datagram of {segment.Count} bytes exceeds MTU of {MTU}. Dropping.");
+					$"[WebTransport] Datagram of {segment.Count} bytes exceeds the {DatagramMTU} byte limit. Dropping.");
 				return;
 			}
 			this.serverSocket.SendToClient(channelId, segment, connectionId);
@@ -258,6 +311,80 @@ namespace FishNet.Transporting.WebTransport
 		#endregion
 
 		#region Configuration
+		/// <summary>
+		/// Sets the reliable-channel MTU. Must be called before the server or client
+		/// starts, because FishNet reads it once when a connection is initialized.
+		/// </summary>
+		/// <param name="value">
+		/// Bytes, clamped to 1200..65000. Larger values reduce message splitting but
+		/// cost roughly <c>2 × value</c> of buffer per connection — see
+		/// <see cref="DefaultStreamMTU"/> before raising it on a server with many
+		/// clients.
+		/// </param>
+		public void SetReliableMTU(int value)
+		{
+			if (value < DefaultStreamMTU)
+				value = DefaultStreamMTU;
+			else if (value > MaxStreamMTU)
+				value = MaxStreamMTU;
+
+			this.streamMTU = value;
+		}
+
+		/// <summary>
+		/// Pins the server certificates a WebGL client will accept, for development
+		/// against a server whose certificate is not publicly trusted.
+		/// </summary>
+		/// <param name="hashes">
+		/// Comma-separated SHA-256 fingerprints in hex (colons optional), or null to
+		/// clear the pinning and require a publicly trusted certificate.
+		/// </param>
+		/// <returns><c>true</c> if every supplied fingerprint was well formed.</returns>
+		/// <remarks>
+		/// Has no effect outside WebGL builds: native clients validate against the
+		/// platform trust store. Get a fingerprint with
+		/// <c>openssl x509 -in cert.pem -noout -fingerprint -sha256</c>.
+		/// </remarks>
+		public bool SetServerCertificateHashes(string hashes)
+		{
+			if (string.IsNullOrWhiteSpace(hashes))
+			{
+				serverCertificateHashes = "";
+				return true;
+			}
+
+			bool allValid = true;
+			string[] parts = hashes.Split(',');
+			for (int i = 0; i < parts.Length; i++)
+			{
+				string hex = parts[i].Trim().Replace(":", "");
+				if (hex.Length == 0)
+					continue;
+				if (hex.Length != 64)
+				{
+					base.NetworkManager?.LogError(
+						$"[WebTransport] Certificate hash \"{parts[i].Trim()}\" is {hex.Length} hex characters; a SHA-256 fingerprint is 64.");
+					allValid = false;
+					continue;
+				}
+				for (int c = 0; c < hex.Length; c++)
+				{
+					char ch = hex[c];
+					bool isHex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+					if (!isHex)
+					{
+						base.NetworkManager?.LogError(
+							$"[WebTransport] Certificate hash \"{parts[i].Trim()}\" contains a non-hex character '{ch}'.");
+						allValid = false;
+						break;
+					}
+				}
+			}
+
+			serverCertificateHashes = hashes;
+			return allValid;
+		}
+
 		/// <summary>
 		/// Sets the TLS certificate path. Validates the file exists on disk.
 		/// </summary>
@@ -480,7 +607,7 @@ namespace FishNet.Transporting.WebTransport
 				return false;
 			}
 #endif
-			this.serverSocket.Initialize(this, MTU, certificatePath, privateKeyPath);
+			this.serverSocket.Initialize(this, DatagramMTU, certificatePath, privateKeyPath);
 			// ALPN (Application-Layer Protocol Negotiation) is hardcoded to "h3" for HTTP/3 (WebTransport) in
 			// ServerSocket.DefaultAlpn. Override via ServerSocket.Alpn before calling StartConnection if needed.
 			return this.serverSocket.StartConnection(serverBindAddress, port, maximumClients, useCustomCertificate: true);
@@ -500,7 +627,8 @@ namespace FishNet.Transporting.WebTransport
 				return false;
 			}
 #endif
-			this.clientSocket.Initialize(this, MTU);
+			this.clientSocket.Initialize(this, DatagramMTU);
+			this.clientSocket.SetServerCertificateHashes(this.serverCertificateHashes);
 			return this.clientSocket.StartConnection(address, port, useTls: true);
 		}
 
@@ -542,11 +670,12 @@ namespace FishNet.Transporting.WebTransport
 		}
 
 		/// <summary>
-		/// Gets the MTU for a channel.
+		/// Gets the maximum payload FishNet may hand to a channel.
 		/// </summary>
+		/// <param name="channel">0 = reliable (stream), 1 = unreliable (datagram).</param>
 		public override int GetMTU(byte channel)
 		{
-			return MTU;
+			return channel == 1 ? DatagramMTU : this.streamMTU;
 		}
 		#endregion
 	}

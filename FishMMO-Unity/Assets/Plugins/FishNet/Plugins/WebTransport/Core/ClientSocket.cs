@@ -13,7 +13,6 @@ namespace FishNet.Transporting.WebTransport.Client
 		#region Private Configuration
 		private string address = string.Empty;
 		private ushort port;
-		private int mtu;
 		private string serverName = string.Empty;
 		#endregion
 
@@ -209,13 +208,33 @@ namespace FishNet.Transporting.WebTransport.Client
 		}
 
 		/// <summary>
-		/// Initializes the client socket with the specified transport and MTU.
-		/// Must be called before <see cref="StartConnection"/>.
+		/// Comma-separated SHA-256 certificate fingerprints (hex) the browser should
+		/// accept in place of a publicly trusted chain. Empty means "require a
+		/// publicly trusted certificate", which is the correct production setting.
+		/// Only consulted on WebGL — native builds validate against the platform
+		/// trust store.
 		/// </summary>
+		private string serverCertificateHashes = "";
+
+		/// <summary>
+		/// Initializes the client socket. Must be called before <see cref="StartConnection"/>.
+		/// </summary>
+		/// <param name="mtu">
+		/// Unused; the datagram send limit is enforced by the transport (GetMTU) and the
+		/// receive limit by <see cref="CommonSocket.MaxDatagramReceiveSize"/>.
+		/// </param>
 		internal void Initialize(Transport t, int mtu)
 		{
 			base.transport = t;
-			this.mtu = mtu;
+		}
+
+		/// <summary>
+		/// Sets the pinned server certificate hashes used by WebGL builds.
+		/// Must be called before <see cref="StartConnection"/>.
+		/// </summary>
+		internal void SetServerCertificateHashes(string hashes)
+		{
+			this.serverCertificateHashes = hashes ?? "";
 		}
 
 		/// <summary>
@@ -292,6 +311,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				webglIndex = WebTransportJSLib.WTConnect(
 					url,
+					this.serverCertificateHashes,
 					webglStaticOnOpen,
 					webglStaticOnClose,
 					webglStaticOnStream,
@@ -761,7 +781,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			if (!TryGetWebGlSocket(index, out ClientSocket socket))
 				return;
-			if (length <= 0 || length > socket.mtu)
+			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				socket.LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
@@ -971,7 +991,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
 		{
-			if (length <= 0 || length > this.mtu)
+			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;

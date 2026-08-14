@@ -25,6 +25,20 @@ namespace FishNet.Transporting.WebTransport
 		/// </summary>
 		protected const int MaxPacketSize = 65536;
 
+		/// <summary>
+		/// Maximum accepted size of an incoming datagram.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately larger than the send limit (<c>GetMTU(1)</c>). The send
+		/// limit is conservative so our own datagrams always fit the QUIC path;
+		/// the receive limit only has to reject the absurd. Reusing the send
+		/// limit here would silently drop datagrams from a peer that stayed
+		/// within QUIC's rules but not within our safety margin. Matches
+		/// WT_DGRAM_MAX_SIZE in the native library, which bounds anything that
+		/// can reach this layer.
+		/// </remarks>
+		protected const int MaxDatagramReceiveSize = 1500;
+
 		#region Public
 		/// <summary>
 		/// Current ConnectionState.

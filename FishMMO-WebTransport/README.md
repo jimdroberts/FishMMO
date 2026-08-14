@@ -22,6 +22,19 @@ src/
 
 **Channel mapping:** Channel 0 → QUIC bidirectional streams (reliable), Channel 1 → QUIC DATAGRAM frames (unreliable).
 
+**Wire format:** every application message on a stream is length-delimited with
+a QUIC varint (RFC 9000 §16), because a stream delivers bytes rather than
+messages and the peer's writes may be coalesced or split. Browser sessions
+additionally carry the WEBTRANSPORT_STREAM header (type `0x41`, on the wire as
+`40 41`, plus the Session ID) once at the start of each data stream, and encode
+datagrams as HTTP/3 Datagrams (RFC 9297): a Quarter Stream ID varint —
+the CONNECT stream ID divided by four — ahead of the payload. Native raw-QUIC
+peers exchange length-delimited messages on streams and bare payloads in
+datagrams.
+
+> Framing is a wire-format change: peers built before it cannot interoperate
+> with peers built after it. Deploy both ends together.
+
 **Protocol detection:** The server auto-detects browser clients (HTTP/3 — first byte `0x00`) vs native clients (raw QUIC — any other first byte) on the initial peer stream. Both paths are handled transparently.
 
 ## Building

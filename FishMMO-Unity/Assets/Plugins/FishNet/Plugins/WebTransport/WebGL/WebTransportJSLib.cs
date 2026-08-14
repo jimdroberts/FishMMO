@@ -24,10 +24,18 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		/// [AOT.MonoPInvokeCallback] for IL2CPP compatibility.
 		/// </summary>
 		/// <param name="url">Full URL, e.g. "https://game.fishmmo.com/wt/7770"</param>
+		/// <param name="certificateHashes">
+		/// Comma-separated SHA-256 certificate fingerprints in hex, or null/empty to
+		/// require a publicly trusted certificate chain. Supplying hashes lets a browser
+		/// accept a self-signed certificate, which is the only way to reach a development
+		/// server from a WebGL build. The certificate must be ECDSA P-256 with a validity
+		/// window of at most 14 days — a browser requirement, not one this code imposes.
+		/// </param>
 		/// <returns>Transport index (handle) or -1 on failure.</returns>
 		[DllImport("__Internal")]
 		internal static extern int WTConnect(
 			string url,
+			string certificateHashes,
 			WTIndexCallback onOpen,
 			WTIndexCallback onClose,
 			WTDataCallback onStream,
@@ -99,6 +107,7 @@ namespace FishNet.Transporting.WebTransport.WebGL
 	{
 		internal static int WTConnect(
 			string url,
+			string certificateHashes,
 			WTIndexCallback onOpen,
 			WTIndexCallback onClose,
 			WTDataCallback onStream,

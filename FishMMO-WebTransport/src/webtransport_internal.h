@@ -162,6 +162,33 @@ extern "C" {
 #define WT_MAX_STREAMS             4096
 #define WT_MAX_STREAM_RECV_BUF      (1024 * 1024)  /* 1 MB per stream */
 
+/* ── Reliable-channel message framing ─────────────────────────
+ * A QUIC stream is an ordered BYTE stream, not a message stream: the
+ * peer's writes may be coalesced into one RECEIVE event or split across
+ * several. The application layer above this library (FishNet) requires
+ * whole packet bundles, so every application message written to a
+ * WebTransport/QUIC bidirectional stream is length-delimited:
+ *
+ *   Message {
+ *     Length (i),        ← QUIC variable-length integer (RFC 9000 §16)
+ *     Payload (..),      ← exactly Length bytes
+ *   }
+ *
+ * On a browser (HTTP/3) session the stream still opens with the
+ * WEBTRANSPORT_STREAM header (type 0x41 + Session ID); the framed
+ * messages begin immediately after it. Native raw-QUIC streams carry
+ * framed messages from byte 0.
+ *
+ * Both peers must agree — the native library, the WebGL jslib bridge,
+ * and any future implementation. This is a wire-format change: a peer
+ * built before framing was introduced cannot interoperate with one
+ * built after it.
+ *
+ * The cap bounds a single message so a hostile or desynchronised peer
+ * cannot make us buffer without limit while waiting for a "message"
+ * that never completes. It matches MaxPacketSize on the C# side. */
+#define WT_MAX_FRAMED_MESSAGE       (64 * 1024)   /* 64 KB per message */
+
 /* ── FIX #3: H3 handshake timeout ─────────────────────────────
  * Maximum time allowed for the HTTP/3 WebTransport handshake
  * (SETTINGS + CONNECT exchange) after the QUIC connection is

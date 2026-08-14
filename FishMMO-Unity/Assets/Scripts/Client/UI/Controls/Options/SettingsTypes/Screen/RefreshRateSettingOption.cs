@@ -188,7 +188,14 @@ namespace FishMMO.Client
 			// Apply the selected refresh rate to the screen
 			Resolution currentResolution = Screen.currentResolution;
 			Screen.SetResolution(currentResolution.width, currentResolution.height, Screen.fullScreenMode, refreshRate);
+
+			/* Also cap the render loop. Screen.SetResolution changes the display mode; with
+			 * vSync off it does not limit how fast Unity renders, so without this the client
+			 * still draws as fast as it can and burns a core regardless of this setting. */
+			Client.ApplyTargetFrameRate(Mathf.RoundToInt((float)refreshRate.numerator / refreshRate.denominator));
 #endif
+			/* WebGL is excluded deliberately: the browser drives presentation through
+			 * requestAnimationFrame, and forcing targetFrameRate there causes stutter. */
 		}
 	}
 }
