@@ -493,12 +493,12 @@ namespace FishMMO.Server.Implementation
 				// Store the real IP recovered from the auth token for rate limiting.
 				// This is essential for World/Scene servers behind an L4 proxy where
 				// conn.GetAddress() returns 127.0.0.1.
-				if (outer.Server?.DataContainerRegistry != null &&
-					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
-					rt.ConnectionIpCache != null)
-				{
-					rt.ConnectionIpCache.Upsert(conn.ClientId, realIp, DateTime.UtcNow);
-				}
+				//
+				// Goes through the authenticator's own store rather than writing straight to
+				// IAccountCreationSystemRuntimeData: that container is registered only by
+				// AccountCreationSystem (a Login Server system), so on World and Scene — the
+				// very servers this override exists for — the write silently went nowhere.
+				outer.StoreRealIpForConnection(conn.ClientId, realIp);
 			}
 
 			/// <inheritdoc/>

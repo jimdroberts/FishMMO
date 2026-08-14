@@ -205,6 +205,13 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only react while this panel is shown. ClientLoginAuthenticator raises this
+			// event to every subscriber, so without the guard a result meant for another
+			// panel (e.g. a wrong password on the login screen) reaches the Client.QuitToLogin()
+			// below, which force-disconnects and resets state before the owning panel's
+			// handler runs — its error dialog never appears. Mirrors UICharacterSelect.
+			if (!Visible) return;
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:

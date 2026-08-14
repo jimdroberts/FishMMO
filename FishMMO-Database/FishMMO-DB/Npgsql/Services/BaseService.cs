@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1150,6 +1152,49 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				throw new StaleStateException(staleStateMessage);
 			}
+		}
+
+		/// <summary>
+		/// Serializes a batch of per-row integer arrays into a compact JSON array-of-arrays string
+		/// (e.g. <c>[[1,2],[3],[]]</c>) for use with a PostgreSQL <c>jsonb</c> parameter.
+		/// </summary>
+		/// <remarks>
+		/// Npgsql 5.x / EF Core 5 cannot reliably bind a ragged (non-rectangular) <c>int[][]</c> value as a
+		/// native PostgreSQL <c>integer[][]</c> parameter — real PostgreSQL arrays are strictly rectangular,
+		/// so rows with differing lengths (the normal case for per-character ability/pet event lists) cause
+		/// Npgsql to mis-infer the parameter's element type. The observed failure mode is a PostgresException
+		/// (42883, "function ... does not exist") coming from the server misinterpreting the malformed array
+		/// wire value rather than a clear client-side error.
+		/// <para>
+		/// The fix is to send the batch as JSON text/jsonb instead and decode it server-side (see the UNNEST
+		/// + <c>jsonb_array_elements(...) WITH ORDINALITY</c> pattern in <see cref="CharacterAbilityService"/>
+		/// and <see cref="CharacterPetService"/>), which sidesteps array parameter type inference entirely.
+		/// </para>
+		/// </remarks>
+		protected static string ToJaggedIntArrayJson(IReadOnlyList<int[]> rows)
+		{
+			var sb = new StringBuilder();
+			sb.Append('[');
+			for (int i = 0; i < rows.Count; i++)
+			{
+				if (i > 0)
+				{
+					sb.Append(',');
+				}
+				sb.Append('[');
+				var row = rows[i];
+				for (int j = 0; j < row.Length; j++)
+				{
+					if (j > 0)
+					{
+						sb.Append(',');
+					}
+					sb.Append(row[j]);
+				}
+				sb.Append(']');
+			}
+			sb.Append(']');
+			return sb.ToString();
 		}
 
 		private static readonly Regex ParameterPlaceholderRegex =

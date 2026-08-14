@@ -758,10 +758,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Process the scene by adding it to the world dictionary mappings.
 				ProcessScene(scene, sceneType, sceneData.WorldServerID);
 
-				// Capture Scene.name/handle on the main thread now. TryEnqueueAsyncWork
-				// runs its lambda on a background worker thread, and Unity's Scene.name
-				// getter (GetNameInternal) throws if called off the main thread — so the
-				// lambda below must close over these local copies, never `scene` itself.
+				// Capture Scene.name on the main thread. TryEnqueueAsyncWork runs its lambda
+				// on an AsyncWorkerData thread-pool worker, and Unity's Scene.name getter is
+				// a main-thread-only native call — closing over `scene` and reading .name
+				// inside the lambda throws there and aborts the scene-ready handling.
+				// Scene.handle is a plain struct field and is safe either way; it is
+				// captured alongside for symmetry.
 				string sceneName = scene.name;
 				int sceneHandle = scene.handle;
 

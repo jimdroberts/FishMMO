@@ -22,12 +22,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character archetypes.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterArchetypeEntity>>> getArchetypesQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterArchetypeEntity>> getArchetypesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterArchetypes
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.ToList());
+					.Where(a => a.CharacterID == characterId && !a.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterArchetypeService"/> class.
@@ -193,7 +192,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getArchetypesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getArchetypesQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var archetypes = entities.Select(a => new CharacterArchetypeData(
 					id: a.ID,
 					version: a.Version,

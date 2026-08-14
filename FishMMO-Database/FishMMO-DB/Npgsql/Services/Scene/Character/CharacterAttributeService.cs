@@ -22,12 +22,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character attributes (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAttributeEntity>>> getAttributesQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterAttributeEntity>> getAttributesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterAttributes
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.ToList());
+					.Where(a => a.CharacterID == characterId && !a.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterAttributeService"/> class.
@@ -195,7 +194,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getAttributesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getAttributesQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var attributes = entities.Select(a => new CharacterAttributeData(
 					id: a.ID,
 					version: a.Version,

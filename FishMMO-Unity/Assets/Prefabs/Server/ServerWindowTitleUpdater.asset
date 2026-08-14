@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: ServerWindowTitleUpdater
   m_EditorClassIdentifier: Assembly-CSharp::FishMMO.Server.Implementation.ServerWindowTitleUpdater
   Title: 
-  UpdateRate: 15
+  updateRate: 15
   NextUpdate: 0

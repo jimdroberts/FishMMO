@@ -47,12 +47,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character hotkeys.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterHotkeyEntity>>> getHotkeysQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterHotkeyEntity>> getHotkeysQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterHotkeys
 					.AsNoTracking()
-					.Where(h => h.CharacterID == characterId && !h.Deleted)
-					.ToList());
+					.Where(h => h.CharacterID == characterId && !h.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character hotkeys.
@@ -294,7 +293,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getHotkeysQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getHotkeysQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var hotkeys = entities.Select(h => new CharacterHotkeyData(
 					id: h.ID,
 					version: h.Version,

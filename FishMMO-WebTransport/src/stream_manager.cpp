@@ -490,6 +490,11 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             ? QUIC_SEND_FLAG_FIN
             : QUIC_SEND_FLAG_NONE;
 
+        /* Capture anything we want to log BEFORE the call: msquic may complete
+         * the send synchronously, and our SEND_COMPLETE handler frees req.
+         * Reading req->length afterwards is a use-after-free. */
+        const uint32_t req_length = req->length;
+
         QUIC_STATUS st = MsQuic->StreamSend(
             stream,
             &req->buf,
@@ -502,7 +507,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                 "stream_id=%llu len=%u fin=%d — free now (no SEND_COMPLETE)",
                 st,
                 (unsigned long long)sctx->stream_id,
-                req->length,
+                req_length,
                 sctx->pending_send_fin ? 1 : 0);
             sm_send_req_free(req, "send_failed");
             sm_mark_send_closed(sctx->mgr, sctx->stream_id, stream);
@@ -520,7 +525,7 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             "StreamSend queued after START_COMPLETE stream_id=%llu len=%u "
             "fin=%d stamp=SEND_AFTER_START_V2 (free only on SEND_COMPLETE)",
             (unsigned long long)sctx->stream_id,
-            req->length,
+            req_length,
             sctx->pending_send_fin ? 1 : 0);
         return QUIC_STATUS_SUCCESS;
     }
@@ -595,8 +600,11 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
         free(sctx->recv_buf);
         sctx->recv_buf = NULL;
 
-        /* Never StreamClose after parent connection is closed (handles invalid). */
-        if (!sctx->close_done && !atomic_load(&mgr->conn_closed)) {
+        /* Never StreamClose once ConnectionClose has run (handles invalid).
+         * Gated on handles_invalid, not conn_closed: during a peer-initiated
+         * shutdown conn_closed is already set while the handle is still valid,
+         * and skipping the close there leaks it. */
+        if (!sctx->close_done && !atomic_load(&mgr->handles_invalid)) {
             sctx->close_done = true;
             MsQuic->StreamClose(stream);
         } else {
@@ -637,6 +645,7 @@ void wt_stream_manager_init(
     atomic_init(&mgr->freed, false);
     atomic_store(&mgr->shutting_down, false);
     atomic_store(&mgr->conn_closed, false);
+    atomic_store(&mgr->handles_invalid, false);
     atomic_init(&mgr->total_recv_bytes, 0);
 
 #if defined(WT_PLATFORM_WINDOWS)
@@ -670,6 +679,45 @@ void wt_stream_manager_mark_conn_closed(wt_stream_manager_t* mgr)
     atomic_store(&mgr->conn_closed, true);
 }
 
+void wt_stream_manager_mark_handles_invalid(wt_stream_manager_t* mgr)
+{
+    if (!mgr) return;
+    atomic_store(&mgr->handles_invalid, true);
+}
+
+void wt_stream_manager_close_streams(wt_stream_manager_t* mgr)
+{
+    if (!mgr) return;
+
+    /* Claim every live handle under the lock, then close outside it —
+     * StreamClose can deliver a final SHUTDOWN_COMPLETE synchronously, and
+     * that callback takes this same (non-recursive on some platforms) lock. */
+    HQUIC claimed[WT_MAX_STREAMS];
+    int count = 0;
+
+    sm_lock(mgr);
+    for (int i = 0; i < WT_MAX_STREAMS && count < WT_MAX_STREAMS; i++) {
+        if (!mgr->streams[i].in_use) continue;
+        HQUIC h = mgr->streams[i].quic_stream;
+        if (h) claimed[count++] = h;
+        mgr->streams[i].in_use = false;
+        mgr->streams[i].quic_stream = NULL;
+        mgr->streams[i].id = 0;
+        mgr->streams[i].peer_initiated = false;
+        mgr->streams[i].send_closed = false;
+        mgr->streams[i].recv_closed = false;
+    }
+    sm_unlock(mgr);
+
+    if (count > 0) {
+        WT_LOG_INFO("wt_stream_manager_close_streams conn=%llu closing %d handle(s)",
+                    (unsigned long long)mgr->conn_id, count);
+    }
+    for (int i = 0; i < count; i++) {
+        MsQuic->StreamClose(claimed[i]);
+    }
+}
+
 void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
 {
     if (!mgr) return;
@@ -686,12 +734,12 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
      * Calling StreamShutdown/StreamClose on them aborts the process.
      *
      * Rules:
-     *  - If conn_closed: only clear local slots; never touch MsQuic.
+     *  - If handles_invalid: only clear local slots; never touch MsQuic.
      *  - If connection still live: graceful StreamShutdown only (no
      *    ABORT|IMMEDIATE combo — that was the assert path).
      *  - StreamClose remains owned by SHUTDOWN_COMPLETE in stream_cb.
      */
-    const int conn_dead = atomic_load(&mgr->conn_closed) ? 1 : 0;
+    const int conn_dead = atomic_load(&mgr->handles_invalid) ? 1 : 0;
 
     HQUIC* pending = NULL;
     int pending_count = 0;

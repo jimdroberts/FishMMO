@@ -34,12 +34,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character factions.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFactionEntity>>> getFactionsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterFactionEntity>> getFactionsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterFactions
 					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId && !f.Deleted)
-					.ToList());
+					.Where(f => f.CharacterID == characterId && !f.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterFactionService"/> class.
@@ -203,7 +202,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getFactionsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getFactionsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var factions = entities.Select(f => new CharacterFactionData(
 					id: f.ID,
 					version: f.Version,

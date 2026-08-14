@@ -688,7 +688,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &96654342
 GameObject:
   m_ObjectHideFlags: 0
@@ -10455,7 +10455,7 @@ GameObject:
   - component: {fileID: 777628363}
   - component: {fileID: 777628362}
   - component: {fileID: 777628361}
-  - component: {fileID: 777628365}
+  - component: {fileID: 990000002}
   m_Layer: 5
   m_Name: Scroll View
   m_TagString: Untagged
@@ -10572,7 +10572,7 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 777628359}
   m_CullTransparentMesh: 1
---- !u!114 &777628365
+--- !u!114 &990000002
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -11346,7 +11346,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &845713413
 GameObject:
   m_ObjectHideFlags: 0
@@ -13182,7 +13182,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &1106640997
 GameObject:
   m_ObjectHideFlags: 0
@@ -14546,7 +14546,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &1243886590
 GameObject:
   m_ObjectHideFlags: 0
@@ -15686,7 +15686,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &1358867654
 GameObject:
   m_ObjectHideFlags: 0
@@ -17874,7 +17874,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &1508147777
 GameObject:
   m_ObjectHideFlags: 0
@@ -19011,7 +19011,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1589800548}
   - component: {fileID: 1589800549}
-  - component: {fileID: 1589800550}
+  - component: {fileID: 990000003}
   m_Layer: 5
   m_Name: GameObject
   m_TagString: Untagged
@@ -19066,7 +19066,7 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
---- !u!114 &1589800550
+--- !u!114 &990000003
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -19690,7 +19690,7 @@ GameObject:
   - component: {fileID: 1639405038}
   - component: {fileID: 1639405040}
   - component: {fileID: 1639405039}
-  - component: {fileID: 1639405041}
+  - component: {fileID: 990000001}
   m_Layer: 5
   m_Name: OptionsLabel
   m_TagString: Untagged
@@ -19819,7 +19819,7 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1639405037}
   m_CullTransparentMesh: 1
---- !u!114 &1639405041
+--- !u!114 &990000001
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -21099,7 +21099,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 
+  m_Text: 0
 --- !u!1 &1799506067
 GameObject:
   m_ObjectHideFlags: 0
@@ -22514,7 +22514,6 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 1
-  m_UseReflectionProbes: 0
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0

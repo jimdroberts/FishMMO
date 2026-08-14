@@ -65,6 +65,17 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Cached connection token from the last successful IPFetch response.
 		/// </summary>
+		/// <remarks>
+		/// Handed out at most once, then cleared, so the next connect attempt re-probes for
+		/// a fresh one. The token itself is stateless and stays valid for its 60-second
+		/// expiry rather than being consumed server-side, but it cannot simply be cached
+		/// and reused: <see cref="ClientLoginAuthenticator.ConnectionToken"/> is nulled the
+		/// moment it is sent, so a retry would otherwise be served a token that has already
+		/// outlived part of its short window — and, with a cache TTL at or above 60s, one
+		/// that is expired outright. The server rejects an expired token before checking
+		/// credentials, which presents as a silent login failure that only a client restart
+		/// clears.
+		/// </remarks>
 		private string cachedConnectionToken;
 		/// <summary>
 		/// Time-to-live in seconds for the cached login server address list.
@@ -244,6 +255,7 @@ namespace FishMMO.Client
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
 			Connection = new ClientConnectionManager(NetworkManager);
+			Connection.EnsureConnectionToken = EnsureConnectionTokenRoutine;
 
 			// Initialize the OnReconnectFailed -> OnQuitToLogin forwarding delegate.
 			this.onReconnectFailedQuitToLogin = () => OnQuitToLogin?.Invoke();
@@ -378,6 +390,7 @@ namespace FishMMO.Client
 			if (NetworkManager == null) NetworkManager = FindFirstObjectByType<NetworkManager>();
 			if (NetworkManager == null) { Log.Error("Client", "NetworkManager not found."); return false; }
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnWorldSceneConnect);
+			NetworkManager.ClientManager.RegisterBroadcast<ConnectionTokenBroadcast>(OnConnectionTokenReceived);
 			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnValidatedScene);
 			NetworkManager.ClientManager.RegisterBroadcast<ServerBusyBroadcast>(OnServerBusy);
 			NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
@@ -539,6 +552,122 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Returns the cached connection token and clears it, so it is only ever handed out
+		/// once. See <see cref="cachedConnectionToken"/>.
+		/// </summary>
+		private string TakeConnectionToken()
+		{
+			string token = this.cachedConnectionToken;
+			this.cachedConnectionToken = null;
+			return token;
+		}
+
+		/// <summary>Set when a <see cref="ConnectionTokenBroadcast"/> reply arrives.</summary>
+		private bool hopTokenReplyReceived;
+
+		/// <summary>
+		/// Receives a hop token from the server this client is currently connected to and
+		/// stages it for the next handshake. See <see cref="RequestHopTokenThenConnect"/>.
+		/// </summary>
+		private void OnConnectionTokenReceived(ConnectionTokenBroadcast msg, Channel channel)
+		{
+			hopTokenReplyReceived = true;
+			if (LoginAuthenticator != null && !string.IsNullOrEmpty(msg.ConnectionToken))
+			{
+				LoginAuthenticator.ConnectionToken = msg.ConnectionToken;
+			}
+			else
+			{
+				Log.Warning("Client", "Server returned no connection token for the next hop; " +
+					"that server will reject the handshake.");
+			}
+		}
+
+		/// <summary>
+		/// Asks the currently connected server for a connection token, then connects to
+		/// <paramref name="port"/> once it arrives (or the wait times out).
+		/// </summary>
+		/// <remarks>
+		/// Used for both server hops — Login → World and World → Scene. The token must be
+		/// obtained before the current connection is torn down, because it is the only party
+		/// that knows this client's real IP; that is why it cannot be fetched from inside the
+		/// connect coroutine, which runs after StopConnection.
+		/// </remarks>
+		public void RequestHopTokenThenConnect(ushort port, bool isWorldServer)
+		{
+			StartCoroutine(RequestHopTokenThenConnectRoutine(port, isWorldServer));
+		}
+
+		private IEnumerator RequestHopTokenThenConnectRoutine(ushort port, bool isWorldServer)
+		{
+			hopTokenReplyReceived = false;
+			if (LoginAuthenticator != null)
+			{
+				// Drop any stale token so a failed request cannot silently reuse one that
+				// was already spent on the current connection.
+				LoginAuthenticator.ConnectionToken = null;
+			}
+
+			if (IsConnectionReady())
+			{
+				Broadcast(new RequestConnectionTokenBroadcast(), Channel.Reliable);
+
+				float deadline = Time.realtimeSinceStartup + HopTokenTimeoutSeconds;
+				while (!hopTokenReplyReceived && Time.realtimeSinceStartup < deadline)
+				{
+					yield return null;
+				}
+				if (!hopTokenReplyReceived)
+				{
+					Log.Warning("Client", "Timed out waiting for a connection token from the current server; " +
+						"connecting anyway so the failure surfaces from the handshake.");
+				}
+			}
+
+			ConnectToServer(port, isWorldServer);
+		}
+
+		/// <summary>Seconds to wait for a hop token before connecting regardless.</summary>
+		private const float HopTokenTimeoutSeconds = 5f;
+
+		/// <summary>
+		/// Ensures <see cref="ClientLoginAuthenticator.ConnectionToken"/> holds a token for
+		/// the connection that is about to start. Invoked by
+		/// <see cref="ClientConnectionManager.EnsureConnectionToken"/> before every
+		/// StartConnection.
+		/// </summary>
+		/// <remarks>
+		/// The token is what lets a game server learn the client's real IP: NGINX forwards
+		/// game traffic as raw UDP to loopback-bound servers, so every server — Login,
+		/// World and Scene — sees 127.0.0.1 and rejects a handshake without one. Only
+		/// IPFetch mints tokens (it is the sole component that sees the real IP, via
+		/// X-Forwarded-For), and it does so per request, so each connection needs its own
+		/// fetch. Skips the fetch when a token is already staged, which is the case on the
+		/// login screen where the UI fetched it alongside the server list.
+		/// </remarks>
+		private IEnumerator EnsureConnectionTokenRoutine()
+		{
+			if (LoginAuthenticator == null)
+			{
+				yield break;
+			}
+			if (!string.IsNullOrEmpty(LoginAuthenticator.ConnectionToken))
+			{
+				yield break;
+			}
+			yield return GetLoginServerList(
+				(error) => Log.Warning("Client", $"Could not obtain a connection token: {error}. " +
+					"The server will reject the handshake without one."),
+				(servers, token) =>
+				{
+					if (!string.IsNullOrEmpty(token))
+					{
+						LoginAuthenticator.ConnectionToken = token;
+					}
+				});
+		}
+
+		/// <summary>
 		/// Probes API host candidates for a login server address list. Returns cached results if within TTL.
 		/// </summary>
 		/// <param name="onFail">Callback invoked with an error message if all probes fail.</param>
@@ -546,21 +675,14 @@ namespace FishMMO.Client
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			// The connection token is single-use: ClientLoginAuthenticator clears it
-			// immediately after sending it in a handshake (Started -> OnConnected ->
-			// ConnectionToken = null). A cached token that has already been consumed
-			// must never be served again — doing so sends a null token on the next
-			// attempt, which the server rejects outright before checking credentials.
-			// Only the port list is safely reusable across attempts within the TTL.
+			// The port list is reusable within its TTL, but the connection token is not:
+			// it is single-use, so a cached entry whose token has already been handed out
+			// must re-probe to obtain a fresh one rather than serve a spent (or missing)
+			// token that the server will reject before checking credentials.
 			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0 && !string.IsNullOrEmpty(this.cachedConnectionToken))
 			{
 				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds)
-				{
-					Log.Debug("Client", $"GetLoginServerList: cache hit, age={age:F1}s tokenIsNullOrEmpty={string.IsNullOrEmpty(this.cachedConnectionToken)}");
-					onDone?.Invoke(this.loginServerPorts, this.cachedConnectionToken);
-					yield break;
-				}
+				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, TakeConnectionToken()); yield break; }
 			}
 			var candidates = ApiHostResolver.GetCandidates() ?? new List<string>();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
@@ -601,7 +723,6 @@ namespace FishMMO.Client
 								Log.Debug("Client", $"GetLoginServerList: JSON parse failed. Raw response (truncated): {(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
 								continue; 
 							}
-							// NOTE: Token not explicitly cleared in the cache path. TTL (55s) < server token TTL (60s), providing a 5s safety margin. Reset on QuitToLogin().
 							Log.Debug("Client", $"GetLoginServerList: fresh fetch, tokenIsNullOrEmpty={string.IsNullOrEmpty(parsed.ConnectionToken)}");
 							this.cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
@@ -613,7 +734,7 @@ namespace FishMMO.Client
 					if (!any && next >= candidates.Count) break;
 					yield return null;
 				}
-				if (winner != null) { this.loginServerPorts = winner; this.loginServerPortsFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, this.cachedConnectionToken); }
+				if (winner != null) { this.loginServerPorts = winner; this.loginServerPortsFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, TakeConnectionToken()); }
 				else onFail?.Invoke(lastErr ?? "Failed to reach any APIHost.");
 			}
 			finally
@@ -669,7 +790,12 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The world scene connect message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) ConnectToServer(msg.Port); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
+		/// <summary>
+		/// World Server → "connect to this Scene Server". Requests a connection token from
+		/// the World Server first: the Scene Server is behind the same proxy and needs the
+		/// real IP, and the World Server is the only party still holding it.
+		/// </summary>
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) RequestHopTokenThenConnect(msg.Port, false); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>

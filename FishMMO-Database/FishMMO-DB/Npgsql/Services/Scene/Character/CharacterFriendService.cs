@@ -33,12 +33,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character friends.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFriendEntity>>> getFriendsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterFriendEntity>> getFriendsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterFriends
 					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId && !f.Deleted)
-					.ToList());
+					.Where(f => f.CharacterID == characterId && !f.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character friends.
@@ -229,7 +228,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getFriendsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getFriendsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var friends = entities.Select(f => new CharacterFriendData(
 					id: f.ID,
 					version: f.Version,

@@ -67,13 +67,11 @@ namespace FishMMO.Shared
 		void Awake()
 		{
 			// Set the region's layer to ignore raycasts.
-			// Constants.Layers.IgnoreRaycast is a LayerMask (bitmask), not a layer
-			// index — gameObject.layer requires the plain index (0-31), so look it
-			// up directly rather than assigning the mask value.
-			int ignoreRaycastLayer = UnityEngine.LayerMask.NameToLayer("Ignore Raycast");
-			if (ignoreRaycastLayer >= 0)
+			// GameObject.layer takes a layer index, not the LayerMask bit mask that
+			// Constants.Layers.IgnoreRaycast holds — assigning the mask sets an invalid layer.
+			if (Constants.Layers.Index.IgnoreRaycast >= 0)
 			{
-				gameObject.layer = ignoreRaycastLayer;
+				gameObject.layer = Constants.Layers.Index.IgnoreRaycast;
 			}
 
 			// Register this region as a child of its parent, if applicable.

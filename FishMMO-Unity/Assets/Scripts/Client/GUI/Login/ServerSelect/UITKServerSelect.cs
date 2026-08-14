@@ -180,6 +180,13 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only react while this panel is shown. ClientLoginAuthenticator raises this
+			// event to every subscriber, so without the guard a result belonging to another
+			// panel's flow (e.g. a wrong password on the login screen) is handled here too,
+			// and OnLoginAuthenticationDialog below steps on the owning panel's own error
+			// handling. Mirrors the guard in UIServerSelect.
+			if (!Visible) return;
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
@@ -336,8 +343,10 @@ namespace FishMMO.Client
 			{
 				SetConnectToServerLocked(true);
 
-				// Connect to the world server.
-				Client.ConnectToServer(selectedServer.Details.Port, true);
+				// Connect to the world server, asking the Login Server for a connection
+				// token first — the World Server is behind the same proxy and needs the real
+				// IP, which only the Login Server still knows. Mirrors UIServerSelect.
+				Client.RequestHopTokenThenConnect(selectedServer.Details.Port, true);
 			}
 		}
 

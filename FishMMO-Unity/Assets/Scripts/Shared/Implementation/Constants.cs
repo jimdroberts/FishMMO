@@ -231,6 +231,34 @@ namespace FishMMO.Shared
 		public static class Layers
 		{
 			/// <summary>
+			/// Layer <em>indices</em> (0-31), for APIs that take a single layer such as
+			/// <see cref="GameObject.layer"/>. The members of the enclosing class are
+			/// <see cref="LayerMask"/> bit masks instead, for APIs that take a mask such as
+			/// <c>Physics.Raycast</c>: assigning a mask where an index is expected sets a
+			/// wildly out-of-range layer (mask 256 for layer 8), and shifting a mask again
+			/// (<c>1 &lt;&lt; mask</c>) silently selects the wrong layer because C# masks the
+			/// shift count to 5 bits.
+			/// </summary>
+			/// <remarks>
+			/// A value is -1 when the layer is missing from the project's Tag Manager;
+			/// callers must check before assigning. See <see cref="Validate"/>.
+			/// </remarks>
+			public static class Index
+			{
+				/// <summary>Index of the Default layer, or -1 if missing.</summary>
+				public static readonly int DefaultLayer = LayerMask.NameToLayer("Default");
+
+				/// <summary>Index of the Ignore Raycast layer, or -1 if missing.</summary>
+				public static readonly int IgnoreRaycast = LayerMask.NameToLayer("Ignore Raycast");
+
+				/// <summary>Index of the Ground layer, or -1 if missing.</summary>
+				public static readonly int Ground = LayerMask.NameToLayer("Ground");
+
+				/// <summary>Index of the Player layer, or -1 if missing.</summary>
+				public static readonly int Player = LayerMask.NameToLayer("Player");
+			}
+
+			/// <summary>
 			/// DefaultLayer (Layer 0), used for most GameObjects.
 			/// </summary>
 			/// <remarks>

@@ -180,7 +180,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
-  _spawnablePrefabs: {fileID: 11400000, guid: 21995114dd719fe42aae1e81385852d3, type: 2}
+  _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
@@ -198,7 +198,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68828c85278210948b9d50a8db3aab74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _authenticator: {fileID: 6586142925020834410}
+  _authenticator: {fileID: 0}
   _remoteClientTimeout: 0
   _remoteClientTimeoutDuration: 60
   _allowPredictedSpawning: 0
@@ -400,13 +400,13 @@ MonoBehaviour:
   <AddressOverride>k__BackingField: 
   <PortOverride>k__BackingField: 0
   serverBehaviors:
-  - {fileID: 11400000, guid: 7c1ca08ef1e69c690af41b67d7b5167e, type: 2}
   - {fileID: 11400000, guid: 6879c81059fb59d4aaae79190fc5c262, type: 2}
   - {fileID: 11400000, guid: 877efcded03164f809a7843e58a6db91, type: 2}
   - {fileID: 11400000, guid: 57662a393a0b3c42fb835c4b66b3710f, type: 2}
+  - {fileID: 11400000, guid: 7c1ca08ef1e69c690af41b67d7b5167e, type: 2}
   - {fileID: 11400000, guid: 95d362574f2bba4e38b44204babd6b65, type: 2}
-  - {fileID: 11400000, guid: cfab38130929316f08ac6e1f44fa64bd, type: 2}
   - {fileID: 11400000, guid: dc4f8795668c259a198bd41e7f1285e7, type: 2}
+  - {fileID: 11400000, guid: cfab38130929316f08ac6e1f44fa64bd, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

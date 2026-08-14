@@ -635,9 +635,9 @@ MonoBehaviour:
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  meshRoot: {fileID: 2976285799004961102}
   characterNameLabel: {fileID: 2817084262407755495}
   characterGuildLabel: {fileID: 3362407936794280637}
-  meshRoot: {fileID: 2976285799004961102}
   equipmentViewCamera: {fileID: 0}
 --- !u!136 &4989737185595066850
 CapsuleCollider:
@@ -1216,12 +1216,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2de080fd835ec6747b1b1ff8ed6870f6, type: 3}
---- !u!224 &2817084262407755493 stripped
-RectTransform:
-  m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
-    type: 3}
-  m_PrefabInstance: {fileID: 2117107678736878980}
-  m_PrefabAsset: {fileID: 0}
 --- !u!114 &2817084262407755495 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
@@ -1234,3 +1228,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9541d86e2fd84c1d9990edf0852d74ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!224 &2817084262407755493 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+    type: 3}
+  m_PrefabInstance: {fileID: 2117107678736878980}
+  m_PrefabAsset: {fileID: 0}

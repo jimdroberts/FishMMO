@@ -48,12 +48,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving all guild members.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterGuildEntity>>> getGuildMembersQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterGuildEntity>> getGuildMembersQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId) =>
 				context.CharacterGuilds
 					.AsNoTracking()
-					.Where(g => g.GuildID == guildId)
-					.ToList());
+					.Where(g => g.GuildID == guildId));
 
 		/// <summary>
 		/// Compiled query for counting guild members.
@@ -310,7 +309,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getGuildMembersQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
+				var entities = await getGuildMembersQuery(dbContext, guildId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var members = entities.Select(g => new CharacterGuildData(
 					id: g.ID,
 					version: g.Version,

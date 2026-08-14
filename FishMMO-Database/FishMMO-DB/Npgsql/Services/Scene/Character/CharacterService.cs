@@ -885,7 +885,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <para>If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
 		/// and pass the incoming version as a parameter.</para>
 		/// </remarks>
-		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -899,10 +899,12 @@ namespace FishMMO.Database.Npgsql.Services
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"UPDATE {tableName}
 					SET
-						scene_name = {{0}},
-						scene_handle = {{1}},
-						last_saved = {{2}}
-					WHERE id = {{3}} AND deleted = FALSE",
+						world_server_id = {{0}},
+						scene_name = {{1}},
+						scene_handle = {{2}},
+						last_saved = {{3}}
+					WHERE id = {{4}} AND deleted = FALSE",
+					worldServerId,
 					sceneName ?? string.Empty,
 					sceneHandle,
 					now,

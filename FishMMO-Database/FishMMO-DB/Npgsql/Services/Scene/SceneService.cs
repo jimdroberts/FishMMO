@@ -37,14 +37,27 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefault(s => s.ID == sceneId));
 #pragma warning restore CS8619
 
-		// NOTE: FetchAvailableAsync/FetchManyAsync intentionally do NOT use
-		// EF.CompileAsyncQuery here. Compiled queries returning a sequence must
-		// return IAsyncEnumerable<T> — wrapping the expression tree in a
-		// synchronous .ToList() to produce Task<List<T>> is not a translatable
-		// pattern and made both queries fail at runtime with
-		// "The LINQ expression ... could not be translated", silently returning
-		// zero scenes on every call. Plain async queries below are correct and
-		// simple; these are not hot enough to need query compilation.
+		/// <summary>
+		/// Compiled query for retrieving available scenes (hot path for scene matchmaking).
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, string, int, int, IAsyncEnumerable<SceneEntity>> fetchAvailableQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, string sceneName, int maxClients, int readyStatus) =>
+				context.Scenes
+						.AsNoTracking()
+						.Where(s =>
+							s.WorldServerID == worldServerId &&
+							s.SceneName == sceneName &&
+							s.CharacterCount < maxClients &&
+							s.SceneStatus == readyStatus));
+
+		/// <summary>
+		/// Compiled query for retrieving ready scenes (hot path for scene server queries).
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, int, IAsyncEnumerable<SceneEntity>> fetchReadyQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long worldServerId, int readyStatus) =>
+				context.Scenes
+					.AsNoTracking()
+					.Where(s => s.WorldServerID == worldServerId && s.SceneStatus == readyStatus));
 
 		/// <summary>
 		/// Initializes a new instance of SceneService.
@@ -397,14 +410,7 @@ var claimSql = $@"WITH claimable_scene AS (
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await dbContext.Scenes
-					.AsNoTracking()
-					.Where(s =>
-						s.WorldServerID == worldServerId &&
-						s.SceneName == sceneName &&
-						s.CharacterCount < maxClients &&
-						s.SceneStatus == readyStatus)
-					.ToListAsync(cancellationToken).ConfigureAwait(false);
+				var scenes = await fetchAvailableQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -422,10 +428,7 @@ var claimSql = $@"WITH claimable_scene AS (
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await dbContext.Scenes
-					.AsNoTracking()
-					.Where(s => s.WorldServerID == worldServerId && s.SceneStatus == readyStatus)
-					.ToListAsync(cancellationToken).ConfigureAwait(false);
+				var scenes = await fetchReadyQuery(dbContext, worldServerId, readyStatus).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);

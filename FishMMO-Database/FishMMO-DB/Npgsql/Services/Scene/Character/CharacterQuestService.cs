@@ -22,12 +22,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character quests.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterQuestEntity>>> getQuestsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterQuestEntity>> getQuestsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterQuests
 					.AsNoTracking()
-					.Where(q => q.CharacterID == characterId && !q.Deleted)
-					.ToList());
+					.Where(q => q.CharacterID == characterId && !q.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterQuestService"/> class.
@@ -195,7 +194,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getQuestsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getQuestsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var quests = entities.Select(q => new CharacterQuestData(
 					id: q.ID,
 					version: q.Version,

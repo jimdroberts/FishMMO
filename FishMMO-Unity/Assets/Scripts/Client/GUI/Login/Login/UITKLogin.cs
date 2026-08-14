@@ -206,6 +206,13 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			// Only react while this panel is shown. ClientLoginAuthenticator raises this
+			// event to every subscriber, so a hidden login panel would otherwise act on
+			// results belonging to server select or character select. UILogin gates the same
+			// event on its isAuthFlowActive flag; this stack has no such flag, and panel
+			// visibility is the equivalent signal here.
+			if (!Visible) return;
+
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:

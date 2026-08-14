@@ -180,8 +180,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxMainThreadActionsPerUpdate: 100
-  useConnectionIdForRateLimit: 0
+  authHandshakeTimeoutSeconds: 15
   renewalTokenExpirationMinutes: 10
+  loginAttemptDebounceSeconds: 1
+  sweepMaxScan: 128
+  sweepMaxRemove: 64
+  recentAdmissionWindowSeconds: 30
   maxPlayers: 5000
 --- !u!114 &567623045811336610
 MonoBehaviour:
@@ -318,11 +322,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  AddressOverride: 
-  PortOverride: 0
+  <AddressOverride>k__BackingField: 
+  <PortOverride>k__BackingField: 0
   serverBehaviors:
-  - {fileID: 11400000, guid: 3cfe401ccb6fbd445a4d7da9c623957d, type: 2}
   - {fileID: 11400000, guid: 72b6fb8767c0656c98ba7177dd4a470a, type: 2}
+  - {fileID: 11400000, guid: 3cfe401ccb6fbd445a4d7da9c623957d, type: 2}
   - {fileID: 11400000, guid: cfab38130929316f08ac6e1f44fa64bd, type: 2}
   - {fileID: 11400000, guid: dc4f8795668c259a198bd41e7f1285e7, type: 2}
 --- !u!114 &5291881772170593457
@@ -403,6 +407,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
+  serverTimeout: 120
+  clientTimeout: 20
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

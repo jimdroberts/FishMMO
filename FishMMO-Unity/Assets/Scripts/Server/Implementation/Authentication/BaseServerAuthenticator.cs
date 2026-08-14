@@ -75,6 +75,52 @@ namespace FishMMO.Server.Implementation
 		private protected readonly ConcurrentDictionary<int, string> connectionNonces = new ConcurrentDictionary<int, string>();
 
 
+		/// <summary>
+		/// Real client IP per ClientId, recovered from a verified connection token.
+		/// </summary>
+		/// <remarks>
+		/// Owned by the authenticator so it exists on every server type. The equivalent
+		/// cache on <see cref="IAccountCreationSystemRuntimeData"/> is registered only by
+		/// AccountCreationSystem, which is a Login Server system — relying on it alone meant
+		/// World and Scene servers, the ones that most need it (they sit behind the same L4
+		/// proxy and see 127.0.0.1 for everyone), silently had nowhere to store a recovered
+		/// IP and no way to read one back.
+		/// <para>
+		/// Entries are refreshed on every read, so a connection stays resolvable for as long
+		/// as it is active — including a client parked in the login queue.
+		/// </para>
+		/// </remarks>
+		private readonly LastSeenCacheTracker<int, string> connectionRealIps = new LastSeenCacheTracker<int, string>();
+
+		/// <summary>How long an unused real-IP entry survives before the auth sweep evicts it.</summary>
+		private static readonly TimeSpan ConnectionRealIpTtl = TimeSpan.FromMinutes(30);
+
+		/// <summary>
+		/// Signature of each connection token already redeemed here, mapped to the ClientId
+		/// that redeemed it. Makes a token single-use per connection.
+		/// </summary>
+		/// <remarks>
+		/// Connection tokens are stateless bearer tokens: valid to anyone holding them until
+		/// they expire. Without this, a token observed once could be presented again from a
+		/// different connection for the rest of its lifetime, letting the presenter be
+		/// attributed the original client's IP — enough to drain that IP's rate-limit budget
+		/// or to launder traffic under someone else's address.
+		/// <para>
+		/// Keyed on the signature half, which is unique per token. The stored ClientId makes
+		/// the check idempotent for the connection that legitimately owns the token, so a
+		/// retry on the same connection is never mistaken for an attack; only a *different*
+		/// connection presenting the same token is refused.
+		/// </para>
+		/// </remarks>
+		private readonly LastSeenCacheTracker<string, int> redeemedConnectionTokens = new LastSeenCacheTracker<string, int>(StringComparer.Ordinal);
+
+		/// <summary>
+		/// How long a redeemed token is remembered. Comfortably exceeds the 60-second token
+		/// lifetime so an entry always outlives the window in which the token would still
+		/// verify — expiry alone rejects it after that.
+		/// </summary>
+		private static readonly TimeSpan RedeemedTokenTtl = TimeSpan.FromMinutes(5);
+
 		/// <summary>Thread-safe queue for marshalling network operations to the main Unity thread.</summary>
 		private readonly ConcurrentQueue<Action> mainThreadQueue = new ConcurrentQueue<Action>();
 
@@ -166,6 +212,10 @@ namespace FishMMO.Server.Implementation
 				}
 			};
 			networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(this.clientHandshakeHandler, false);
+			// Hop-token requests: authenticated clients only (requireAuthentication: true),
+			// so the real IP embedded in the token is one this server verified for a client
+			// that has already proven who it is.
+			networkManager.ServerManager.RegisterBroadcast<RequestConnectionTokenBroadcast>(OnServerRequestConnectionTokenReceived, true);
 			RegisterProtocolHandlers(networkManager);
 		}
 
@@ -288,7 +338,54 @@ namespace FishMMO.Server.Implementation
 			// Sweep expired entries from the handshake rate limiter to prevent
 			// unbounded memory growth under sustained handshake traffic.
 			handshakeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+			// Backstop for real-IP entries whose disconnect event never arrived. Entries are
+			// touched on every read, so this only reaches genuinely abandoned ones — an
+			// active connection, including one sitting in the login queue, is never evicted.
+			connectionRealIps.SweepExpired(DateTime.UtcNow, ConnectionRealIpTtl, maxScan: 64, maxRemove: 16);
+			redeemedConnectionTokens.SweepExpired(DateTime.UtcNow, RedeemedTokenTtl, maxScan: 64, maxRemove: 16);
+			TouchActiveConnectionRealIps();
 		}
+
+		/// <summary>
+		/// Refreshes the real-IP entry of every still-connected client.
+		/// </summary>
+		/// <remarks>
+		/// The TTL sweep above is only meant to reclaim entries whose disconnect event was
+		/// missed, but nothing reads a queued client's entry: a player parked in the login
+		/// queue sends no handshake for as long as the wait lasts, so on a busy launch the
+		/// entry could expire underneath them and the re-handshake the queue invites — which
+		/// deliberately carries no token — would then be rejected for having no known IP.
+		/// Touching live connections here decouples entry lifetime from queue duration
+		/// entirely, so an arbitrarily long wait is safe.
+		/// </remarks>
+		private void TouchActiveConnectionRealIps()
+		{
+			realIpTouchAccumulator += Time.unscaledDeltaTime;
+			if (realIpTouchAccumulator < RealIpTouchIntervalSeconds) return;
+			realIpTouchAccumulator = 0f;
+
+			var clients = NetworkManager?.ServerManager?.Clients;
+			if (clients == null || clients.Count == 0) return;
+
+			DateTime nowUtc = DateTime.UtcNow;
+			foreach (var clientId in clients.Keys)
+			{
+				connectionRealIps.TryGetAndTouch(clientId, nowUtc, out _);
+			}
+		}
+
+		/// <summary>
+		/// Whether this connection is waiting for login-queue admission, and so should be
+		/// exempt from the handshake timeout. Only the Login Server has a queue; the default
+		/// is false everywhere else.
+		/// </summary>
+		protected virtual bool IsConnectionAwaitingQueueAdmission(NetworkConnection conn) => false;
+
+		/// <summary>Seconds between real-IP refresh passes over the active connections.</summary>
+		private const float RealIpTouchIntervalSeconds = 30f;
+
+		/// <summary>Accumulated time since the last real-IP refresh pass.</summary>
+		private float realIpTouchAccumulator;
 
 		/// <summary>
 		/// Disconnects clients that connected but never sent a valid
@@ -338,6 +435,19 @@ namespace FishMMO.Server.Implementation
 				if (conn == null)
 				{
 					connectionStartTimes.TryRemove(clientId, out _);
+					continue;
+				}
+
+				// A connection parked in the login queue is deliberately left
+				// unauthenticated until the queue admits it, which is indistinguishable
+				// here from a client that connected and never handshook. Refresh its
+				// deadline instead of disconnecting: without this, every client queued for
+				// longer than authHandshakeTimeoutSeconds (15s by default) was dropped, so
+				// the queue could not hold anyone past that. The timeout still applies from
+				// the moment they leave the queue.
+				if (IsConnectionAwaitingQueueAdmission(conn))
+				{
+					connectionStartTimes[clientId] = now;
 					continue;
 				}
 
@@ -515,10 +625,30 @@ namespace FishMMO.Server.Implementation
 		/// IS the real client IP, so it is used as a safe fallback (falling back further to
 		/// a per-connection key if it happens to report loopback, e.g. local dev testing).
 		/// </summary>
+		/// <remarks>
+		/// Every game server (Login, World and Scene alike) sits behind the same L4 UDP
+		/// proxy and binds to loopback, so conn.GetAddress() is 127.0.0.1 for every
+		/// client on every server type. Falling back to it would put all pre-authentication
+		/// clients in one rate-limit bucket; falling back to ClientId would hand each
+		/// reconnect a fresh bucket and disable per-IP limiting altogether. The real IP
+		/// comes only from the IPFetch-issued connection token.
+		/// </remarks>
 		protected string? ResolveRateLimitKey(NetworkConnection conn)
 		{
 			if (conn == null) return null;
 			// Look up the real IP recovered from the connection/auth token.
+			// Never fall back to conn.GetAddress() (which returns 127.0.0.1
+			// behind an L4 proxy) or conn.ClientId (which resets on reconnect).
+			//
+			// The authenticator-owned cache is checked first because it is the only one
+			// that exists on World and Scene servers; the account-creation container is
+			// consulted after it so a Login Server entry written by that system is still
+			// honoured. Both reads touch the entry, keeping a live connection resolvable
+			// however long it stays connected.
+			if (connectionRealIps.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ownIp))
+			{
+				return HandshakeService.NormalizeIp(ownIp);
+			}
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 				rt.ConnectionIpCache != null &&
@@ -557,6 +687,170 @@ namespace FishMMO.Server.Implementation
 			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
 				return addr;
 			return $"conn:{conn.ClientId}";
+		}
+
+		/// <summary>
+		/// Clears the handshake rate-limit window for a connection. Called when the
+		/// server itself invites a re-handshake on the same connection (login-queue
+		/// admission) so the invited retry cannot trip the limiter, and when the
+		/// connection stops so a recycled ClientId does not inherit a stale window.
+		/// FishNet reuses ClientIds after disconnect — on sub-10ms links a fast
+		/// reconnect can otherwise trip the limiter with a perfectly clean connection.
+		/// </summary>
+		internal void ClearHandshakeRateLimit(NetworkConnection conn)
+		{
+			if (conn == null) return;
+			handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
+			// The resolved key may differ from the key used at gate time: the real IP
+			// is only known after connection-token processing, so the initial handshake
+			// on a proxied connection (conn.GetAddress() == loopback) used the ClientId
+			// fallback. Remove that explicitly.
+			handshakeRateLimiter.Remove($"conn:{conn.ClientId}");
+		}
+
+		/// <summary>
+		/// Lifetime of a connection token minted by this server for a client's next hop.
+		/// Matches the 60s IPFetch issues; the client redeems it immediately.
+		/// </summary>
+		private const int MintedConnectionTokenTtlSeconds = 60;
+
+		/// <summary>
+		/// Mints a connection token for <paramref name="conn"/>'s next hop, binding the real
+		/// IP this server already verified for it.
+		/// </summary>
+		/// <remarks>
+		/// Lets the server a client is currently authenticated to hand it a token for the
+		/// server it is about to connect to (Login → World, World → Scene). Every game
+		/// server sits behind the same L4 UDP proxy, so the next hop needs a token to learn
+		/// the client's real IP, and only a party that already knows that IP can issue one.
+		/// <para>
+		/// The IPFetch-issued token cannot be reused for this: it is spent on the first
+		/// handshake and expires after 60 seconds, long before a player finishes character
+		/// select. Minting per hop also avoids a second HTTP round-trip to IPFetch and works
+		/// no matter how long the client sat in the login queue.
+		/// </para>
+		/// <para>
+		/// Format is byte-identical to IPFetch's (see LoginServerController): payload
+		/// <c>realIp|expiryUnix</c>, HMAC-SHA256 over the payload with the shared key, both
+		/// halves base64url-encoded. Uses the "shared" key so the no-keyId verification path
+		/// resolves it.
+		/// </para>
+		/// </remarks>
+		/// <returns>True when a token was minted; false when the real IP or key is unavailable.</returns>
+		protected bool TryMintConnectionToken(NetworkConnection conn, out string token)
+		{
+			token = null;
+			if (conn == null) return false;
+
+			// Only an IP this server itself verified may be embedded — never a
+			// client-supplied value.
+			string? realIp = ResolveRateLimitKey(conn);
+			if (string.IsNullOrEmpty(realIp))
+			{
+				_ = Log.Warning(LogPrefix, $"Cannot mint connection token for {conn.ClientId}: real IP unknown.");
+				return false;
+			}
+
+			// Prefer the "shared" key, which is what IPFetch registers when no keyId is
+			// configured and what the no-keyId verification path resolves. When a keyed
+			// deployment is in use there is no "shared" entry, so fall back to the single
+			// registered key and name it in the payload the way IPFetch would.
+			var keyMap = s_dbConnectionTokenKeyMap;
+			byte[]? key = null;
+			string keyIdPrefix = string.Empty;
+			// 32 bytes is the floor IPFetch enforces before it will sign (HMAC-SHA256);
+			// apply the same bar here so a weak key cannot slip in through a game server.
+			const int MinSigningKeyBytes = 32;
+			if (keyMap != null)
+			{
+				if (!keyMap.TryGetValue("shared", out key) || key == null || key.Length < MinSigningKeyBytes)
+				{
+					key = null;
+					foreach (var pair in keyMap)
+					{
+						if (pair.Value == null || pair.Value.Length < MinSigningKeyBytes) continue;
+						if (key != null) { key = null; break; }   // ambiguous — refuse to guess
+						key = pair.Value;
+						keyIdPrefix = pair.Key + ":";
+					}
+				}
+			}
+			if (key == null)
+			{
+				_ = Log.Warning(LogPrefix, $"Cannot mint connection token for {conn.ClientId}: no usable signing key loaded from the database.");
+				return false;
+			}
+
+			long expiryUnix = DateTimeOffset.UtcNow.AddSeconds(MintedConnectionTokenTtlSeconds).ToUnixTimeSeconds();
+			byte[] payload = Encoding.UTF8.GetBytes($"{keyIdPrefix}{realIp}|{expiryUnix}");
+			byte[] signature;
+			using (var hmac = new HMACSHA256(key))
+			{
+				signature = hmac.ComputeHash(payload);
+			}
+
+			token = $"{ToBase64Url(payload)}.{ToBase64Url(signature)}";
+			return true;
+		}
+
+		/// <summary>
+		/// Serves <see cref="RequestConnectionTokenBroadcast"/>: mints a token for the
+		/// requesting client's next hop and returns it.
+		/// </summary>
+		/// <remarks>
+		/// Registered with requireAuthentication, so an unauthenticated peer cannot use this
+		/// as an IP oracle or a token faucet. The token binds only the real IP this server
+		/// verified for the connection, so a client cannot influence what it contains, and a
+		/// stolen token grants nothing beyond what the holder of that IP already has.
+		/// </remarks>
+		private void OnServerRequestConnectionTokenReceived(NetworkConnection conn, RequestConnectionTokenBroadcast msg, Channel channel)
+		{
+			if (conn == null || !conn.IsActive) return;
+
+			if (!TryMintConnectionToken(conn, out string token))
+			{
+				// Reply with an empty token rather than staying silent: the client is
+				// waiting on this before it hops, and a reply lets it fail fast instead of
+				// blocking until its own timeout.
+				token = string.Empty;
+			}
+
+			Server?.NetworkWrapper?.Broadcast(conn, new ConnectionTokenBroadcast()
+			{
+				ConnectionToken = token,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>Base64url without padding, matching the IPFetch token encoding.</summary>
+		private static string ToBase64Url(byte[] value) =>
+			Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+		/// <summary>
+		/// Rate-limit key derived from the transport address, used where that address is the
+		/// client's own. Falls back to a per-connection key when the address is loopback
+		/// (local development), which is unique per QUIC connection.
+		/// </summary>
+		private string ResolveTransportRateLimitKey(NetworkConnection conn)
+		{
+			string addr = conn.GetAddress();
+			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
+				return HandshakeService.NormalizeIp(addr);
+			return $"conn:{conn.ClientId}";
+		}
+
+		/// <summary>
+		/// Resolves the exact key used by the handshake rate limiter for a connection.
+		/// Mirrors the fallback chain used by the gate in
+		/// <see cref="OnServerClientHandshakeReceivedAsync"/> so the gate and any
+		/// targeted clearing (<see cref="ClearHandshakeRateLimit"/>) agree on the key.
+		/// </summary>
+		private string ResolveHandshakeRateLimitKey(NetworkConnection conn)
+		{
+			string? rateLimitKey = ResolveRateLimitKey(conn);
+			if (!string.IsNullOrEmpty(rateLimitKey))
+				return rateLimitKey;
+
+			return ResolveTransportRateLimitKey(conn);
 		}
 
 		/// <summary>
@@ -622,24 +916,35 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-				// ── FIX #3: Validate protocol version range semantics ──
-				// MinVersion/MaxVersion are ushort — wire-type safe but never
-				// semantically validated before expensive crypto operations
-				// (HMAC-SHA256 token verification, ECDH key agreement).
-				// Reject invalid ranges here to avoid wasting CPU on
-				// connections that will inevitably fail version negotiation.
-				// Version 0 is reserved (indicates uninitialized client).
-				if (msg.MinVersion == 0 || msg.MaxVersion == 0 || msg.MinVersion > msg.MaxVersion)
-				{
-					conn.Disconnect(true);
-					return;
-				}
+			// ── FIX #3: Validate protocol version range semantics ──
+			// MinVersion/MaxVersion are ushort — wire-type safe but never
+			// semantically validated before expensive crypto operations
+			// (HMAC-SHA256 token verification, ECDH key agreement).
+			// Reject invalid ranges here to avoid wasting CPU on
+			// connections that will inevitably fail version negotiation.
+			// Version 0 is reserved (indicates uninitialized client).
+			if (msg.MinVersion == 0 || msg.MaxVersion == 0 || msg.MinVersion > msg.MaxVersion)
+			{
+				conn.Disconnect(true);
+				return;
+			}
 
 			// Rate-limit handshake processing BEFORE the connection token HMAC
 			// verification (which is CPU-bound). Without this gate, an attacker
 			// can open a single QUIC connection and flood ClientHandshake messages
 			// with forged tokens, consuming HMAC-SHA256 cycles without ever reaching
 			// the capacity-limited SRP channels deeper in the core.
+			//
+			// Only the INITIAL cookieless handshake is gated. The cookie echo that
+			// answers our own challenge is a natural round trip: on loopback or
+			// sub-10ms links it arrives well inside HandshakeRateLimitInterval, and
+			// gating both phases under the same per-connection key silently
+			// disconnected every low-latency client at exactly this point. The echo
+			// carries a cookie that only this server could have issued for this
+			// connection; the core rejects a forged echo on the first attempt
+			// (disconnecting the connection) and its per-IP Phase-2 burst limiter
+			// gates the expensive ECDH work — so the echo needs no transport gate.
+			//
 			// Uses the resolved real IP when available; falls back to transport
 			// address or ClientId for initial connections where IP isn't yet known.
 			//
@@ -696,37 +1001,25 @@ namespace FishMMO.Server.Implementation
 					return;
 				}
 			}
-			else if (RequiresConnectionToken)
+			else if (ResolveRateLimitKey(conn) == null)
 			{
-				// No connection token on this handshake. That is legitimate for
-				// exactly one case: the cookie-echo retry. The client core
-				// (ClientAuthenticatorCore.OnServerHandshakeReceived, phase 1)
-				// deliberately sends connectionToken: null when echoing a cookie
-				// challenge, because the one-time token was already sent — and
-				// verified by ProcessConnectionTokenAsync — on the initial
-				// handshake of this same connection. Accept it only when BOTH:
-				//   1. the handshake carries a cookie (it is an echo, not initial), AND
-				//   2. this connection's real IP is already in the IP cache,
-				//      which only happens after a successful token verification.
-				bool isVerifiedCookieEcho = false;
-				if (msg.Cookie != null && msg.Cookie.Length > 0 &&
-					Server?.DataContainerRegistry != null &&
-					Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var ipRt) &&
-					ipRt.ConnectionIpCache != null &&
-					ipRt.ConnectionIpCache.TryGetAndTouch(clientId, DateTime.UtcNow, out _))
-				{
-					isVerifiedCookieEcho = true;
-				}
-
-				if (!isVerifiedCookieEcho)
-				{
-					// No token and not a verified cookie echo — client is not
-					// coming through the IPFetch proxy path. Disconnect immediately.
-					await Log.Warning(LogPrefix, $"Connection {clientId} rejected: no connection token.");
-					if (TryResolveConnection(clientId, out conn))
-						conn.Disconnect(true);
-					return;
-				}
+				// No token, and no real IP recovered for this connection yet — the client
+				// is not coming through the proxy token path and its IP can never be
+				// established. Disconnect immediately.
+				//
+				// A token is required only for the FIRST handshake on a connection. Two
+				// legitimate handshakes deliberately carry no token and must not be
+				// rejected here, both identified by the real IP already being cached
+				// against this ClientId:
+				//   - the cookie echo (handshake phase 2), which answers our own
+				//     challenge on the same connection;
+				//   - the re-handshake a client performs when the login queue admits it
+				//     (see ClientLoginAuthenticator.RetryHandshakeAsync).
+				// Rejecting those broke every connection at phase 2, on every server type.
+				await Log.Warning(LogPrefix, $"Connection {clientId} rejected: no connection token and no known real IP.");
+				if (TryResolveConnection(clientId, out conn))
+					conn.Disconnect(true);
+				return;
 			}
 			// else: RequiresConnectionToken is false (e.g. World/Scene servers, which are
 			// connected to directly rather than through the IPFetch/L4 proxy path) — no
@@ -793,6 +1086,21 @@ namespace FishMMO.Server.Implementation
 			string? realIp = TryVerifyStatelessConnectionToken(rawToken);
 			if (realIp != null)
 			{
+				// Single-use per connection: the signature is authentic, but a bearer token
+				// already redeemed by a different connection is being replayed.
+				int dotIdx = rawToken.LastIndexOf('.');
+				string signature = dotIdx >= 0 ? rawToken.Substring(dotIdx + 1) : rawToken;
+				DateTime nowUtc = DateTime.UtcNow;
+				if (redeemedConnectionTokens.TryGetAndTouch(signature, nowUtc, out int redeemedBy) &&
+					redeemedBy != clientId)
+				{
+					await Log.Warning(LogPrefix,
+						$"Connection {clientId} presented a connection token already redeemed by " +
+						$"connection {redeemedBy} — rejecting replay.");
+					return false;
+				}
+				redeemedConnectionTokens.Upsert(signature, clientId, nowUtc);
+
 				StoreRealIpForConnection(clientId, realIp);
 				await Log.Debug(LogPrefix, $"Real IP {realIp} recovered via HMAC token for connection {clientId}.");
 				return true;
@@ -829,7 +1137,7 @@ namespace FishMMO.Server.Implementation
 		{
 			if (capturedNonce == null) return true; // Pre-nonce server — no validation possible
 			return connectionNonces.TryGetValue(clientId, out string? currentNonce) &&
-			       currentNonce == capturedNonce;
+				   currentNonce == capturedNonce;
 		}
 
 		/// <summary>
@@ -1002,7 +1310,17 @@ namespace FishMMO.Server.Implementation
 					var keyMap = s_dbConnectionTokenKeyMap;
 					hasKeyId = keyMap != null && keyMap.TryGetValue(potentialKeyId, out hmacKey);
 				}
-				else
+				if (colonIdx > 0 && colonIdx < pipeIdx && !hasKeyId)
+				{
+					// A colon that is not a registered keyId. This is the normal shape of an
+					// IPv6 address in the realIp position ("2001:db8::1|..."), so fall through
+					// to the shared key rather than failing: leaving hmacKey null here
+					// rejected every IPv6 client's token outright.
+					var keyMap = s_dbConnectionTokenKeyMap;
+					hmacKey = keyMap != null && keyMap.TryGetValue("shared", out var ipv6Key)
+						? ipv6Key : null;
+				}
+				else if (colonIdx <= 0 || colonIdx >= pipeIdx)
 				{
 					// No keyId prefix in the payload — use the default shared key.
 					// This is the path taken when IpFetchServer.GetConnectionTokenKeyId()
@@ -1041,8 +1359,18 @@ namespace FishMMO.Server.Implementation
 				if (!long.TryParse(payloadStr.Substring(pipeIdx + 1), out long expiryUnix))
 					return null;
 
-				if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiryUnix)
-					return null; // expired
+				long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+				if (nowUnix > expiryUnix)
+				{
+					// Logged explicitly: an authentic-but-expired token is the one failure
+					// mode that points at clock skew between the issuer and this server
+					// rather than at the client. Silent rejection here made a skewed host
+					// look like clients simply were not sending tokens.
+					_ = Log.Warning("ConnectionToken",
+						$"Token signature valid but expired {nowUnix - expiryUnix}s ago. " +
+						"If this is widespread, check clock sync between IpFetchServer and the game servers.");
+					return null;
+				}
 
 				return realIp;
 			}
@@ -1056,8 +1384,15 @@ namespace FishMMO.Server.Implementation
 		/// Stores the real client IP for a connection so that rate-limiting and
 		/// logging use the actual address instead of the proxy's loopback IP.
 		/// </summary>
-		private void StoreRealIpForConnection(int clientId, string realIp)
+		internal void StoreRealIpForConnection(int clientId, string realIp)
 		{
+			if (string.IsNullOrEmpty(realIp)) return;
+
+			// Authenticator-owned cache: authoritative, and present on every server type.
+			connectionRealIps.Upsert(clientId, realIp, DateTime.UtcNow);
+
+			// Mirror into the account-creation container where it exists (Login Server), so
+			// its ingress validation keeps seeing the same data as before.
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
@@ -1086,6 +1421,9 @@ namespace FishMMO.Server.Implementation
 				// gone regardless of whether it authenticated successfully.
 				connectionStartTimes.TryRemove(conn.ClientId, out _);
 				connectionNonces.TryRemove(conn.ClientId, out _);
+				// Drop the recovered IP so a recycled ClientId cannot inherit the previous
+				// occupant's identity (FishNet reuses ClientIds after disconnect).
+				connectionRealIps.Remove(conn.ClientId);
 				// Clear the handshake rate-limit window so a recycled ClientId
 				// (FishNet reuses IDs after disconnect) does not inherit a stale
 				// 100ms block on its first handshake.
@@ -1097,7 +1435,9 @@ namespace FishMMO.Server.Implementation
 				if (Server?.BehaviourRegistry != null &&
 					Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem))
 				{
-					queueSystem.OnClientDisconnected(conn.ClientId);
+					// Connection-typed overload: removes the queue entry itself, not just the
+					// recently-admitted marker, so positions stay accurate immediately.
+					queueSystem.OnClientDisconnected(conn);
 				}
 			}
 		}

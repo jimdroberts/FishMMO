@@ -756,7 +756,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Add the spawner position
 			origin += spawnPosition;
 
-			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, 1 << Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
+			// Constants.Layers.Ground is already a LayerMask bit mask, so it is passed as-is.
+			// Shifting it again (1 << mask) selects the wrong layer: C# masks the shift count
+			// to 5 bits, so e.g. a Ground mask of 64 becomes 1 << 0 — the Default layer.
+			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
 			{
 				spawnPosition = hit.point;
 			}

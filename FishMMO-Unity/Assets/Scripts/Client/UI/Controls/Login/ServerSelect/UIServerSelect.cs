@@ -96,11 +96,12 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
-			// Only react while this panel is actually shown. Without this guard, this
-			// handler fires for every auth result client-wide — including ones meant for
-			// UILogin (e.g. wrong password on the initial login screen) — and calling
-			// OnClick_QuitToLogin() from here would reset UILogin's own in-flight lock
-			// before its handler runs, silently swallowing the result there.
+			// Only react while this panel is shown. ClientLoginAuthenticator raises this
+			// event to every subscriber, so without the guard a result belonging to another
+			// panel's flow (e.g. a wrong password on the login screen) is handled here too,
+			// and OnLoginAuthenticationDialog/OnClick_QuitToLogin below tears down the
+			// connection and resets state before the owning panel's handler ever runs.
+			// UILogin guards the same event with its own isAuthFlowActive flag.
 			if (!Visible) return;
 
 			switch (result)
@@ -235,8 +236,12 @@ namespace FishMMO.Client
 			{
 				SetConnectToServerLocked(true);
 
-				// Connect to the world server
-				Client.ConnectToServer(selectedServer.Details.Port, true);
+				// Connect to the world server. The token is requested from the Login Server
+				// first — the World Server sits behind the same proxy and needs the real IP,
+				// and the Login Server is the only party that still knows it. Requesting it
+				// now (rather than at login) also means a long stay on this screen or in the
+				// login queue cannot outlive the token's short expiry.
+				Client.RequestHopTokenThenConnect(selectedServer.Details.Port, true);
 			}
 		}
 

@@ -20,31 +20,13 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterAbilityService : BaseService<CharacterAbilityEntity>, ICharacterAbilityService
 	{
 		/// <summary>
-		/// Encodes each row's variable-length ability_events list as a JSON array string
-		/// (e.g. "[1,2,3]" or "[]"). Bulk UNNEST cannot carry a genuinely variable-length
-		/// per-row array as one of several zipped columns: passing a C# jagged int[][] is
-		/// rejected outright by Npgsql (no built-in conversion), and passing a padded
-		/// rectangular int[,] doesn't work either — PostgreSQL's multi-argument UNNEST
-		/// fully flattens a 2D array into scalar rows rather than preserving one
-		/// sub-array per row, so ability_events resolves to scalar integer, not
-		/// integer[]. Encoding as JSON text keeps this column a plain 1D text[] (fully
-		/// compatible with normal UNNEST zipping), and the SQL below reconstructs the
-		/// actual integer[] per row via jsonb_array_elements_text + array_agg.
-		/// </summary>
-		private static string[] ToJsonArrayStrings(IEnumerable<int[]> jagged)
-		{
-			return jagged.Select(row => "[" + string.Join(",", row) + "]").ToArray();
-		}
-
-		/// <summary>
 		/// Compiled query for retrieving character abilities (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAbilityEntity>>> getAbilitiesQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterAbilityEntity>> getAbilitiesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.ToList());
+					.Where(a => a.CharacterID == characterId && !a.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character abilities.
@@ -263,31 +245,47 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeExistingItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeExistingItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeExistingItems.Select(a => a.Version).ToArray();
-					var abilityEventsJson = ToJsonArrayStrings(activeExistingItems
-						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray()));
+					var abilityEventsJson = ToJaggedIntArrayJson(activeExistingItems
+						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
+						.ToArray());
 					var cooldownArray = activeExistingItems.Select(a => a.Cooldown).ToArray();
 
+					// ability_events is a ragged (non-rectangular) set of per-row integer[] values, which
+					// Npgsql/EF Core 5 cannot reliably bind as a native integer[][] parameter. It is sent as
+					// jsonb instead and decoded server-side, joined back to the other UNNESTed columns by
+					// ordinal position. See BaseService.ToJaggedIntArrayJson for details.
 					var sql = $@"
 						UPDATE {TableName} AS t
 						SET
 							character_id = u.character_id,
 							template_id = u.template_id,
-							ability_events = COALESCE((
-								SELECT array_agg(elem::integer)
-								FROM jsonb_array_elements_text(u.ability_events::jsonb) AS elem
-							), ARRAY[]::integer[]),
+							ability_events = u.ability_events,
 							cooldown = u.cooldown,
 							deleted = FALSE,
 							time_deleted = NULL,
 							version = u.version
-						FROM UNNEST(
-							{{0}}::bigint[],
-							{{1}}::bigint[],
-							{{2}}::integer[],
-							{{3}}::bigint[],
-							{{4}}::text[],
-							{{5}}::real[]
-						) AS u(id, character_id, template_id, version, ability_events, cooldown)
+						FROM (
+							SELECT
+								ids.id,
+								ids.character_id,
+								ids.template_id,
+								ids.version,
+								events.ability_events,
+								ids.cooldown
+							FROM UNNEST(
+								{{0}}::bigint[],
+								{{1}}::bigint[],
+								{{2}}::integer[],
+								{{3}}::bigint[],
+								{{5}}::real[]
+							) WITH ORDINALITY AS ids(id, character_id, template_id, version, cooldown, ord)
+							JOIN (
+								SELECT
+									arr.ord,
+									ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS ability_events
+								FROM jsonb_array_elements({{4}}::jsonb) WITH ORDINALITY AS arr(value, ord)
+							) AS events ON events.ord = ids.ord
+						) AS u
 						WHERE t.id = u.id
 							AND u.version > t.version;";
 
@@ -305,10 +303,13 @@ namespace FishMMO.Database.Npgsql.Services
 					var characterIdArray = activeNewItems.Select(a => a.CharacterID).ToArray();
 					var templateIdArray = activeNewItems.Select(a => a.TemplateID).ToArray();
 					var versionArray = activeNewItems.Select(a => a.Version).ToArray();
-					var abilityEventsJson = ToJsonArrayStrings(activeNewItems
-						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray()));
+					var abilityEventsJson = ToJaggedIntArrayJson(activeNewItems
+						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
+						.ToArray());
 					var cooldownArray = activeNewItems.Select(a => a.Cooldown).ToArray();
 
+					// See the UPDATE branch above: ability_events is sent as jsonb and decoded server-side
+					// instead of as a native integer[][] parameter.
 					var sql = $@"
 						INSERT INTO {TableName}
 							(character_id, template_id, version, ability_events, cooldown, time_created, deleted, time_deleted)
@@ -316,10 +317,7 @@ namespace FishMMO.Database.Npgsql.Services
 							u.character_id,
 							u.template_id,
 							u.version,
-							COALESCE((
-								SELECT array_agg(elem::integer)
-								FROM jsonb_array_elements_text(u.ability_events::jsonb) AS elem
-							), ARRAY[]::integer[]),
+							events.ability_events,
 							u.cooldown,
 							{{5}},
 							FALSE,
@@ -328,9 +326,14 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{3}}::text[],
 							{{4}}::real[]
-						) AS u(character_id, template_id, version, ability_events, cooldown)
+						) WITH ORDINALITY AS u(character_id, template_id, version, cooldown, ord)
+						JOIN (
+							SELECT
+								arr.ord,
+								ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS ability_events
+							FROM jsonb_array_elements({{3}}::jsonb) WITH ORDINALITY AS arr(value, ord)
+						) AS events ON events.ord = u.ord
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 							ability_events = EXCLUDED.ability_events,
@@ -448,7 +451,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getAbilitiesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getAbilitiesQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterAbilityData(
 					id: a.ID,
 					version: a.Version,

@@ -190,7 +190,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16f2d94bc9b8e7a4288d439c1ac5bcbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  RuntimeBaseUrl: https://127.0.0.1:8080/
+  runtimeBaseUrl: https://127.0.0.1:8080/
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

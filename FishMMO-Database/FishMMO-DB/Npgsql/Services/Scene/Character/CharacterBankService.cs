@@ -45,12 +45,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character bank items (hot path for bank access).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterBankEntity>>> getBankItemsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterBankEntity>> getBankItemsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterBankItems
 					.AsNoTracking()
-					.Where(i => i.CharacterID == characterId && !i.Deleted)
-					.ToList());
+					.Where(i => i.CharacterID == characterId && !i.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterBankService"/> class.
@@ -329,7 +328,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getBankItemsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getBankItemsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var items = entities.Select(i => new CharacterBankData(
 					id: i.ID,
 					version: i.Version,

@@ -36,6 +36,7 @@ static void on_server_dgram_drain(void* ctx, wt_connection_id_t conn_id,
 static void fire_connect(wt_server_conn_t* sconn);
 static void fire_disconnect(wt_server_conn_t* sconn, int err);
 static uint64_t rate_limiter_now_ms(void);
+static void wt_server_drain_pending_shutdowns(wt_server_s* server);
 
 /* ── HTTP/3 Handshake Callbacks ─────────────────────────────── */
 
@@ -90,20 +91,14 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
             (unsigned long long)session->stream_mgr->wt_session_id);
     }
 
-    /* ── CRITICAL: fire_connect BEFORE any stream-data replay ──
-     * The C# layer's OnConnect handler creates the FishNet
-     * NetworkConnection object for this client. Any stream data
-     * delivered via on_stream_data before OnConnect fires arrives for
-     * a connection the C# layer doesn't know exists yet, and gets
-     * silently dropped/misinterpreted (observed as FishNet logging
-     * "received an unhandled PacketId of 0" on the receiving side,
-     * and the sender's ServerAuthenticator/ClientHandshake handshake
-     * subsequently timing out even though the bytes were delivered
-     * correctly at the native layer). fire_connect was previously
-     * called at the end of this function, after both the immediate
-     * native-client replay and the deferred-stream replay below —
-     * moved here, immediately after the session is fully wired, so
-     * C# always learns about the connection before any of its data. */
+    /* ── CRITICAL: announce the connection BEFORE replaying data ──
+     * The managed layer creates its connection object in the on_connect
+     * handler. Both replay blocks below deliver buffered bytes through
+     * stream_mgr->on_stream_data, which lands in that same managed layer —
+     * so firing on_connect after them delivers a client's first packets
+     * (the FishNet handshake) for a connection it does not yet know
+     * exists. Those bytes are dropped and the handshake then times out
+     * even though the transport delivered them correctly. */
     WT_LOG_INFO("Client %llu WebTransport session established (path=%s)",
                 (unsigned long long)sconn->id, path ? path : "/");
     fire_connect(sconn);
@@ -415,14 +410,77 @@ void wt_server_free_impl(wt_server_s* server)
      * previously) caused those callbacks to skip the decrement,
      * guaranteeing a spurious timeout on every shutdown with
      * active connections. */
+    /* Tear down still-live sessions before waiting.
+     *
+     * wt_server_stop_impl above asked msquic to shut these connections down,
+     * but their SHUTDOWN_COMPLETE (which is what normally hands the session to
+     * the deferred-shutdown queue) has not run yet. Each live session's stream
+     * manager still holds open QUIC stream handles, and msquic will not finish
+     * tearing the connection down — nor let MsQuicRegistrationClose return —
+     * while stream handles are outstanding. So the wait below would time out
+     * and the RegistrationClose after it would block forever. Closing the
+     * sessions here, on the application thread (the only thread allowed to run
+     * wt_session_shutdown), releases those handles.
+     *
+     * The exchange claims each session exactly once; SHUTDOWN_COMPLETE uses the
+     * same exchange, so whichever runs first owns the shutdown. */
+    if (server->connections) {
+        for (uint32_t i = 1; i <= server->max_clients; i++) {
+            wt_session_t* live = (wt_session_t*)atomic_ptr_exchange(
+                &server->connections[i].session, NULL);
+            if (live) {
+                /* Deliberately NOT wt_stream_manager_mark_conn_closed here:
+                 * the QUIC connection is still open (ConnectionClose only runs
+                 * in SHUTDOWN_COMPLETE, which has not fired yet). Marking it
+                 * dead would send wt_stream_manager_shutdown down its
+                 * "connection gone, never touch MsQuic" path, which clears the
+                 * slots without shutting the streams down — leaving exactly the
+                 * open handles this teardown exists to release. Leaving it live
+                 * takes the graceful-StreamShutdown path, and each stream's own
+                 * SHUTDOWN_COMPLETE then closes its handle while the QUIC
+                 * workers are still running. */
+                wt_session_shutdown(live);
+            }
+        }
+    }
+
     int retries = 600;
     while (atomic_load(&server->pending_shutdowns) > 0 && retries-- > 0) {
+        /* Keep draining while we wait. SHUTDOWN_COMPLETE hands sessions off to
+         * this queue instead of tearing them down on the QUIC thread, and poll
+         * has already stopped running by now (state != WT_SERVER_STARTED), so
+         * nothing else will pick them up. Each undrained session still owns
+         * open QUIC stream handles. */
+        wt_server_drain_pending_shutdowns(server);
 #if defined(WT_PLATFORM_WINDOWS)
         Sleep(10);
 #else
         struct timespec ts = {0, 10000000}; /* 10ms */
         nanosleep(&ts, NULL);
 #endif
+    }
+
+    /* Final sweep before the QUIC handles go away.
+     *
+     * Two gaps remain after the loop above: sessions queued on the very last
+     * iteration, and — because SHUTDOWN_COMPLETE publishes the session pointer
+     * and the queue entry in two separate steps — a connection whose session
+     * was stored but whose queue slot was not yet visible. Both leave stream
+     * handles open, and MsQuicRegistrationClose below waits on every child
+     * object of the registration, so either one hangs shutdown indefinitely.
+     * Draining the queue once more and then sweeping the slots directly covers
+     * both; the atomic exchange makes the overlap between them harmless. */
+    wt_server_drain_pending_shutdowns(server);
+    if (server->connections) {
+        for (uint32_t i = 1; i <= server->max_clients; i++) {
+            wt_session_t* s = (wt_session_t*)atomic_ptr_exchange(
+                &server->connections[i].pending_shutdown_session, NULL);
+            if (s) {
+                WT_LOG_WARN("Shutting down session for connection %u left "
+                            "pending at server teardown", (unsigned)i);
+                wt_session_shutdown(s);
+            }
+        }
     }
     if (retries < 0) {
         WT_LOG_ERROR("Timed out waiting for %u pending shutdowns -- forcing cleanup (late callbacks may crash)",
@@ -648,21 +706,23 @@ void wt_server_stop_impl(wt_server_s* server)
     WT_LOG_INFO("Server stopped.");
 }
 
-void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
+/**
+ * Drain the deferred session-shutdown queue.
+ *
+ * Split out of wt_server_poll_impl so teardown can run it too. Poll refuses to
+ * run once the server leaves WT_SERVER_STARTED, but SHUTDOWN_COMPLETE keeps
+ * queueing sessions right up to (and past) wt_server_stop_impl — a client that
+ * disconnects between the last poll and stop lands here. Those sessions own
+ * open QUIC stream handles, and MsQuicRegistrationClose blocks until every
+ * child object of the registration is closed, so skipping this drain wedges
+ * wt_server_destroy forever on shutdown.
+ *
+ * Must run on the application thread (same thread as send), which is true of
+ * both callers: poll and wt_server_free_impl.
+ */
+static void wt_server_drain_pending_shutdowns(wt_server_s* server)
 {
-    (void)timeout_us;
-    /* NOTE: timeout_us is ignored by design — poll is non-blocking for Unity
-     * main-thread integration. Use a short sleep in the caller if backpressure
-     * is needed.
-     *
-     * timeout_us is intentionally ignored — this poll is always non-blocking.
-     * The Unity main thread calls poll every frame (typically 16ms at 60 FPS).
-     * Blocking in poll would stall the entire Unity tick, causing frame drops
-     * and delaying Netcode sends.  Datagrams and shutdown events are drained
-     * in a single pass and the call returns immediately. */
-    if (!server || atomic_load(&server->state) != WT_SERVER_STARTED)
-        return;
-
+    if (!server) return;
     /* Process deferred session shutdowns via O(1) queue drain.
      * SHUTDOWN_COMPLETE callbacks enqueue connection IDs into
      * pending_shutdown_queue. This poll path drains them on the
@@ -736,6 +796,24 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
         std::atomic_thread_fence(std::memory_order_release);
         atomic_fetch_add_u64(&server->pending_shutdown_head, 1);
     }
+}
+
+void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
+{
+    (void)timeout_us;
+    /* NOTE: timeout_us is ignored by design — poll is non-blocking for Unity
+     * main-thread integration. Use a short sleep in the caller if backpressure
+     * is needed.
+     *
+     * timeout_us is intentionally ignored — this poll is always non-blocking.
+     * The Unity main thread calls poll every frame (typically 16ms at 60 FPS).
+     * Blocking in poll would stall the entire Unity tick, causing frame drops
+     * and delaying Netcode sends.  Datagrams and shutdown events are drained
+     * in a single pass and the call returns immediately. */
+    if (!server || atomic_load(&server->state) != WT_SERVER_STARTED)
+        return;
+
+    wt_server_drain_pending_shutdowns(server);
 
     /* ── FIX #3: Sweep stale H3 handshakes ──────────────────────
      * Disconnect connections that completed the QUIC+TLS handshake
@@ -776,6 +854,64 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
             uint64_t deadline = atomic_load_u64(&c->h3_handshake_deadline_ms);
             if (deadline == 0) continue;
 
+            /* ── Native-protocol rescue ───────────────────────────────
+             * Runs at WT_H3_NATIVE_FALLBACK_MS, well before the
+             * disconnect deadline. A native client whose first byte
+             * collided with 0x00 (control stream type) or 0x01 (HEADERS
+             * frame type) has been misclassified as an H3 peer and is
+             * now waiting for elements it will never send; both collision
+             * paths latch peer_h3_seen, so gating on that flag would skip
+             * exactly the connections that need rescuing. Instead accept
+             * any stream that still holds buffered bytes and replay them
+             * as native data.
+             *
+             * A genuine browser mid-handshake is not harmed: its CONNECT
+             * completes within milliseconds of connecting, so it is
+             * already ESTABLISHED (session != NULL, skipped above) long
+             * before this fires. If it somehow is not, the replay only
+             * costs it a connection that was failing anyway.
+             *
+             * The candidate is claimed under H3_LOCK (marking it raw and
+             * publishing it as native_stream_ctx) and the callback is then
+             * invoked with the lock released: on_h3_session_ready unlinks
+             * the sctx from the same list and would otherwise re-enter this
+             * non-recursive mutex. */
+            if (now >= deadline - (WT_H3_HANDSHAKE_TIMEOUT_MS -
+                                   WT_H3_NATIVE_FALLBACK_MS) &&
+                !atomic_load(&c->h3_native_fallback_tried))
+            {
+                h3_session_t* h3 = c->h3_session;
+                h3_stream_ctx_t* claimed = NULL;
+
+                H3_LOCK(h3);
+                if (!h3->handshake_complete && !h3->native_stream_ctx) {
+                    for (h3_stream_ctx_t* ds = h3->stream_ctx_list;
+                         ds; ds = ds->next) {
+                        if (ds->quic_stream && ds->recv_offset > 0) {
+                            claimed = ds;
+                            break;
+                        }
+                    }
+                    if (claimed) {
+                        h3->native_stream_ctx = claimed;
+                        claimed->stream_type = -2;  /* mark as raw */
+                    }
+                }
+                H3_UNLOCK(h3);
+
+                atomic_store(&c->h3_native_fallback_tried, true);
+
+                if (claimed) {
+                    WT_LOG_WARN("Client %llu H3 handshake stalled — replaying "
+                                "buffered bytes as native protocol",
+                                (unsigned long long)c->id);
+                    /* Already claimed above, so this only runs the origin
+                     * gate and the on_ready/state transition. */
+                    (void)h3_fallback_to_native_protocol(h3, claimed);
+                    continue;
+                }
+            }
+
             if (now < deadline) continue;
 
             /* Re-check session pointer AFTER the deadline check.
@@ -785,55 +921,6 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
              * completes the handshake in that narrow window would be
              * spuriously disconnected. */
             if (atomic_ptr_load(&c->session) != NULL) continue;
-
-            /* ── Last-resort native fallback before giving up ──
-             * A native FishMMO client's first raw bytes can collide with
-             * one of H3's reserved sniff values (0x00 = control stream
-             * type, 0x01 = HEADERS frame type) and get routed into an H3
-             * protocol path that then waits forever for further H3
-             * elements that will never arrive. Critically, BOTH collision
-             * variants set peer_h3_seen = true as soon as the colliding
-             * byte is observed (before any further validation) — the
-             * 0x00 case explicitly, at the same point it classifies the
-             * stream as H3_STREAM_CONTROL — so gating this fallback on
-             * "!peer_h3_seen" misses exactly the cases it needs to catch.
-             * By the time this sweep runs, the H3 handshake has already
-             * timed out and the connection is about to be disconnected
-             * regardless — the only question is whether to try replaying
-             * whatever was buffered as native data first. There's no
-             * meaningful downside to trying: if it's genuinely leftover
-             * bytes from a hung/hostile H3 peer, native replay just fails
-             * harmlessly further up the stack (FishNet logs an unhandled
-             * PacketId and discards it, same as any other malformed
-             * packet). So gate only on handshake_complete (no verified WT
-             * session was ever established for this connection) and
-             * accept any stream — regardless of its current sniffed
-             * stream_type — that still has real buffered data. */
-            {
-                h3_session_t* h3 = c->h3_session;
-                h3_stream_ctx_t* fallback_sctx = NULL;
-                if (h3 && !h3->handshake_complete) {
-                    H3_LOCK(h3);
-                    h3_stream_ctx_t* ds = h3->stream_ctx_list;
-                    while (ds) {
-                        if (ds->quic_stream && ds->recv_offset > 0) {
-                            fallback_sctx = ds;
-                            break;
-                        }
-                        ds = ds->next;
-                    }
-                    H3_UNLOCK(h3);
-                }
-
-                if (fallback_sctx) {
-                    WT_LOG_INFO("Client %llu H3 handshake timed out with no "
-                                "confirmed H3 evidence — falling back to "
-                                "native protocol instead of disconnecting",
-                                (unsigned long long)c->id);
-                    h3_fallback_to_native_protocol(h3, fallback_sctx);
-                    continue;
-                }
-            }
 
             WT_LOG_WARN("Client %llu H3 handshake timed out — disconnecting",
                         (unsigned long long)c->id);
@@ -1363,6 +1450,9 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
      * Zeroing here guarantees the sweep's `deadline == 0` guard
      * skips the slot until CONNECTED sets a proper deadline. */
     atomic_store_u64(&conn->h3_handshake_deadline_ms, 0);
+    /* Same slot-recycling reason: a stale "already tried" flag would
+     * deny the new occupant its one native-protocol rescue attempt. */
+    atomic_store(&conn->h3_native_fallback_tried, false);
     /* If the previous occupant of this slot queued a pending shutdown
      * that hasn't been drained by poll() yet, leave it in place.
      * The queue entry written by SHUTDOWN_COMPLETE is still in the ring
@@ -1758,16 +1848,28 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
         /* Atomic load — no non-atomic guard (avoids torn read on ARM). */
         {
-            wt_session_t* old_session = (wt_session_t*)atomic_ptr_load(&sconn->session);
+            /* Exchange, not load+store: wt_server_free_impl claims live sessions
+             * the same way during teardown, and a load-then-store here would let
+             * both sides take the same pointer and shut the session down twice. */
+            wt_session_t* old_session =
+                (wt_session_t*)atomic_ptr_exchange(&sconn->session, NULL);
             if (old_session) {
                 /* ── FIX 27: Mark connection closed before ConnectionClose ─
                  * Must happen BEFORE ConnectionClose — after ConnectionClose
                  * the QUIC handle is invalid and any subsequent StreamShutdown
                  * from wt_session_shutdown would trigger quic_bugcheck. */
-                if (old_session->stream_mgr)
+                if (old_session->stream_mgr) {
                     wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
-
-                atomic_ptr_store(&sconn->session, NULL);
+                    /* Release any stream handles still open, in the one window
+                     * where it is both safe and possible — see
+                     * wt_stream_manager_close_streams. Marking conn_closed
+                     * above makes the per-stream handler skip its own
+                     * StreamClose, so without this nothing closes them and
+                     * MsQuicRegistrationClose hangs at server shutdown. */
+                    wt_stream_manager_close_streams(old_session->stream_mgr);
+                    /* Handles are dead from ConnectionClose (just below) on. */
+                    wt_stream_manager_mark_handles_invalid(old_session->stream_mgr);
+                }
 
                 /* Defer shutdown to poll (application thread) to guarantee
                  * session free never races with in-flight sends.

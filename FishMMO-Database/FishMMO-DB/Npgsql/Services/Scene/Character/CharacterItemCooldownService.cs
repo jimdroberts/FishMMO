@@ -22,12 +22,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character item cooldowns (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterItemCooldownEntity>>> getCooldownsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterItemCooldownEntity>> getCooldownsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterItemCooldowns
 					.AsNoTracking()
-					.Where(c => c.CharacterID == characterId && !c.Deleted)
-					.ToList());
+					.Where(c => c.CharacterID == characterId && !c.Deleted));
 
 		/// <summary>
 		/// Compiled query for counting character item cooldowns.
@@ -279,7 +278,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entities = await getCooldownsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				var entities = await getCooldownsQuery(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
 				var cooldowns = entities.Select(c => new CharacterItemCooldownData(
 					id: c.ID,
 					version: c.Version,
