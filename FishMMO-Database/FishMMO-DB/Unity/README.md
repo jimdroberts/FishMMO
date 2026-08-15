@@ -363,6 +363,6 @@ flowchart TD
 
 ## See Also
 
-- [POOL_HEALTH_MONITORING.md](../POOL_HEALTH_MONITORING.md) - Connection pool details
+- [Monitoring/README.md](../Npgsql/Monitoring/README.md) - Connection pool health, metrics, and query diagnostics
 - [Database.cs](../Database.cs) - Main database orchestrator
 - [DatabaseHealthMonitor.cs](../Npgsql/Monitoring/Health/DatabaseHealthMonitor.cs) - Core health check logic

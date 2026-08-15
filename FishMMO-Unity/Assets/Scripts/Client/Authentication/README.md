@@ -26,7 +26,7 @@ The Unity wrapper's job is purely routing:
 - Implements the abstract `Send*` callbacks on `ClientAuthenticatorCore` by emitting FishNet broadcasts via `Client.Broadcast(...)`.
 - Implements `Disconnect()` by calling `Client.ForceDisconnect()`.
 - Forwards FishNet `OnClientConnectionState` (`Started` / `Stopping` / `Stopped`) into `core.OnConnected()` / `core.OnDisconnected()`.
-- Forwards incoming `ServerHandshake`, `SrpVerifyBroadcast`, `SrpSuccessBroadcast`, `ClientAuthResultBroadcast`, and `TwoFactorSetupBroadcast` broadcasts into the matching core handlers.
+- Forwards incoming `ServerHandshake`, `SrpVerifyResponseBroadcast`, `SrpSuccessBroadcast`, `ClientAuthResultBroadcast`, and `TwoFactorSetupBroadcast` broadcasts into the matching core handlers.
 - Surfaces `OnClientAuthenticationResult` and `OnTwoFactorSetupReceived` as Unity-facing events.
 - Disposes the core in `OnDestroy()`.
 
@@ -96,7 +96,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 - `FishMMO.Shared.Authentication` — centralized validation rules (`IsAllowedUsername`: 3–32 chars, alphanumeric + underscores; `IsAllowedPassword`: 8–32 chars, expanded charset).
 - `Client` class — FishNet client wrapper providing `Broadcast()` and `ForceDisconnect()`.
 - `FishMMO.Logging` — structured logging via `Log.Warning()`, `Log.Error()`, `Log.Debug()`.
-- Shared broadcast message types: `ClientHandshake`, `ServerHandshake`, `SrpVerifyBroadcast`, `SrpProofBroadcast`, `SrpSuccessBroadcast`, `CreateAccountBroadcast`, `TokenAuthBroadcast`, `ClientAuthResultBroadcast`, `TwoFactorVerifyBroadcast`, `TwoFactorSetupBroadcast`.
+- Shared broadcast message types: `ClientHandshake`, `ServerHandshake`, `SrpVerifyRequestBroadcast`, `SrpVerifyResponseBroadcast`, `SrpProofBroadcast`, `SrpSuccessBroadcast`, `CreateAccountBroadcast`, `TokenAuthBroadcast`, `ClientAuthResultBroadcast`, `TwoFactorVerifyBroadcast`, `TwoFactorSetupBroadcast`.
 
 ## Installation / Build
 
@@ -237,7 +237,7 @@ networkManager.ClientManager.StopConnection();
 | Malformed UTF-8 disconnects | Server sends non-UTF-8 bytes in encrypted SRP field | `DecoderFallbackException` caught, warning logged, `ForceDisconnect()` called |
 | Payload size enforced | Encrypted field exceeds `MaxSrpPayloadBytes` | Client clears key material and calls `ForceDisconnect()` before decryption |
 | Key material zeroed on disconnect | Disconnect or stop connection | `ClearKeyMaterial()` zeroes keys, disposes nonce contexts, nulls credentials and SRP data |
-| Duplicate verify ignored | Server sends second `SrpVerifyBroadcast` | `srpVerifyProcessed` guard returns early |
+| Duplicate verify ignored | Server sends second `SrpVerifyResponseBroadcast` | `srpVerifyProcessed` guard returns early |
 | Duplicate success ignored | Server sends second `SrpSuccessBroadcast` | `srpSuccessProcessed` guard returns early |
 | Pre-validation rejects bad username | Set username shorter than 3 or longer than 32 characters | Client logs warning and calls `ForceDisconnect()` before sending any SRP broadcast |
 
@@ -292,9 +292,9 @@ Client                                         Server
   │                                               │
   │  AES-GCM encrypt(username, AAD=SrpVerify)      │
   │  AES-GCM encrypt(clientEphemeral, AAD=SrpVer)  │
-  │── SrpVerifyBroadcast { S, PublicEphemeral } ─►│
+  │── SrpVerifyRequestBroadcast { S, PublicEphemeral } ─►│
   │                                               │
-  │◄── SrpVerifyBroadcast { S, PublicEphemeral } ─│  Encrypted salt + server ephemeral
+  │◄── SrpVerifyResponseBroadcast { S, PublicEphemeral } ─│  Encrypted salt + server ephemeral
   │                                               │
   │  AES-GCM decrypt salt (AAD=SrpVerifyResponse)  │
   │  AES-GCM decrypt serverEphemeral               │
@@ -450,18 +450,29 @@ FishMMO-Auth/
 
 ```
 Shared/Implementation/Network/Authentication/
-├── ClientHandshake.cs            # Broadcast: client public key + cookie + version range
-├── ServerHandshake.cs            # Broadcast: server public key + cookie + agreed version
-├── SrpVerifyBroadcast.cs         # Broadcast: encrypted username/ephemeral (request) or salt/ephemeral (response)
-├── SrpProofBroadcast.cs          # Broadcast: encrypted client proof
-├── SrpSuccessBroadcast.cs        # Broadcast: encrypted server proof + auth token + result
-├── CreateAccountBroadcast.cs     # Broadcast: encrypted username, salt, verifier
-├── TokenAuthBroadcast.cs         # Broadcast: encrypted stored auth token
-└── ClientAuthResultBroadcast.cs  # Broadcast: authentication result enum
+└── AuthenticationBroadcasts.cs   # Every auth broadcast struct lives in this one file:
+    ├── ClientHandshake               # client public key + cookie + version range
+    ├── ServerHandshake               # server public key + cookie + agreed version
+    ├── SrpVerifyRequestBroadcast     # encrypted username + client public ephemeral
+    ├── SrpVerifyResponseBroadcast    # encrypted salt + server public ephemeral
+    ├── SrpProofBroadcast             # encrypted client proof
+    ├── SrpSuccessBroadcast           # encrypted server proof + auth token + result
+    ├── CreateAccountBroadcast        # encrypted username, salt, verifier
+    ├── AccountVerifyBroadcast        # email verification code
+    ├── TokenAuthBroadcast            # encrypted stored auth token
+    ├── RenewTokenResponseBroadcast   # reissued auth token
+    ├── RevokeTokenBroadcast          # token invalidation
+    ├── TwoFactorSetupBroadcast       # TOTP secret + recovery codes
+    ├── TwoFactorVerifyBroadcast      # TOTP code submission
+    └── ClientAuthResultBroadcast     # authentication result enum
 
 FishMMO-SharedUtility/
 └── Authentication.cs             # Centralized validation: IsAllowedUsername, IsAllowedPassword
 ```
+
+> The SRP verify step uses **two distinct broadcast types**, not one bidirectional
+> type: `SrpVerifyRequestBroadcast` client→server and
+> `SrpVerifyResponseBroadcast` server→client.
 
 ### Inheritance Hierarchy
 
@@ -486,7 +497,7 @@ The inner `LoginAuthenticatorCore` implements all 11 abstract callbacks of `Clie
 |---|---|
 | `SendClientHandshake` | `Client.Broadcast(new ClientHandshake { ... }, Channel.Reliable)` |
 | `SendTokenAuth` | `Client.Broadcast(new TokenAuthBroadcast { ... }, Channel.Reliable)` |
-| `SendSrpVerify` | `Client.Broadcast(new SrpVerifyBroadcast { ... }, Channel.Reliable)` |
+| `SendSrpVerify` | `Client.Broadcast(new SrpVerifyRequestBroadcast { ... }, Channel.Reliable)` |
 | `SendSrpProof` | `Client.Broadcast(new SrpProofBroadcast { ... }, Channel.Reliable)` |
 | `SendCreateAccount` | `Client.Broadcast(new CreateAccountBroadcast { ... }, Channel.Reliable)` |
 | `SendAccountVerify` | `Client.Broadcast(new AccountVerifyBroadcast { ... }, Channel.Reliable)` |

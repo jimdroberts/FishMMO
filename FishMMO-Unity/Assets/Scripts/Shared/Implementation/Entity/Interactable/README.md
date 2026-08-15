@@ -134,17 +134,19 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `HealthHealPercent`| `float`               | Percentage of max HP to restore    |
 | `HealMana`         | `bool`                | Whether to heal mana               |
 | `ManaHealPercent`  | `float`               | Percentage of max MP to restore    |
-| `Buff`             | `BuffTemplate`        | Optional buff to apply             |
+| `Buff`             | `BaseBuffTemplate`    | Optional buff to apply             |
 | `BuffStackCount`   | `int`                 | Number of buff stacks to apply     |
 
-### SwitchTemplate
+### Switch
 
-| Field       | Type             | Description                          |
-|-------------|------------------|--------------------------------------|
-| `Target`    | `ISwitchTarget`  | Object to activate/deactivate        |
-| `IsToggle`  | `bool`           | If true, toggles; otherwise one-shot |
+`Switch` has no template — its configuration lives directly on the component:
 
-**ISwitchTarget** interface: `IsActivated` (bool), `Activate()`, `Deactivate()`.
+| Field          | Type             | Description                          |
+|----------------|------------------|--------------------------------------|
+| `SwitchTarget` | `ISwitchTarget`  | Object to activate/deactivate        |
+| `IsToggle`     | `bool`           | If true, toggles; otherwise one-shot |
+
+**ISwitchTarget** interface: `IsActivated` (bool), `Activate(IPlayerCharacter)`, `Deactivate(IPlayerCharacter)`.
 
 ### DialogueTemplate
 
@@ -178,16 +180,12 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 ### Static Events (ICapturePoint)
 
-- `OnCaptured(ICapturePoint, IPlayerCharacter)` — fired when capture completes.
-- `OnStateChanged(ICapturePoint, ObjectiveState)` — fired on state transitions.
+- `OnCaptured(CapturePoint, long)` — fired when capture completes.
+- `OnStateChanged(CapturePoint, ObjectiveState)` — fired on state transitions.
 
-### Instance Events (IDialogueInteractable)
+### Static Events (IDialogueInteractable)
 
-- `OnDialogueStarted` — fired when a dialogue tree is started with a player.
-
-### Instance Events (IBindstone)
-
-- `OnBind` — fired when a player binds to this Bindstone.
+- `OnServerDialogueRequested(ICharacter, DialogueTemplate)` — raised on the server when a dialogue session is requested via an ECA action. `InteractableSystem` subscribes to it to start dialogue sessions.
 
 ### Interactable Types Summary
 
@@ -195,7 +193,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 |-----------------------|--------------------------------------------------------------------------|-------------------------|
 | AbilityCrafter        | Opens the ability crafting UI. `[RequireComponent(typeof(SceneObjectNamer))]` | —                       |
 | Banker                | Opens the bank storage UI. `[RequireComponent(typeof(SceneObjectNamer))]`    | —                       |
-| Bindstone             | Sets the player's respawn point. Fires `IBindstone.OnBind`               | —                       |
+| Bindstone             | Sets the player's `BindPosition` / `BindScene` via `BindstoneAction`      | —                       |
 | CapturePoint          | PvP/PvE objective: ownership + capture progress tracking                 | `CapturePointTemplate`  |
 | Container             | Chest/crate with items. `IItemContainer` for full slot management        | `ContainerTemplate`     |
 | DialogueInteractable  | NPC dialogue tree with branching, conditions, and actions                | `DialogueTemplate`      |
@@ -204,6 +202,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 | LoreObject            | Discoverable lore granting abilities, events, or items                   | `LoreObjectTemplate`    |
 | Mailbox               | Opens the mail UI. No template required                                  | —                       |
 | Merchant              | Buy/sell with tabbed inventory. `[RequireComponent(typeof(SceneObjectNamer))]` | `MerchantTemplate`      |
+| QuestInteractable     | Quest giver / turn-in NPC                                                | —                       |
 | Shrine                | Healing/buff station                                                     | `ShrineTemplate`        |
 | Switch                | Toggle/trigger activating an `ISwitchTarget`                             | —                       |
 | Teleporter            | Moves player to target Transform                                         | —                       |
@@ -309,6 +308,8 @@ Interactable/
 │   ├── MerchantTabType.cs              # Enum: None, Ability, AbilityEvent, Item
 │   └── Template/
 │       └── MerchantTemplate.cs         # ScriptableObject: Abilities, AbilityEvents, Items
+├── Quest/
+│   └── QuestInteractable.cs            # Quest giver / turn-in interactable
 ├── Shrine/
 │   ├── Shrine.cs                       # Healing/buff shrine interactable
 │   └── ShrineTemplate.cs              # ScriptableObject: heal amounts, buff reference
@@ -335,6 +336,7 @@ NetworkBehaviour
     ├── LoreObject         : ILoreObject
     ├── Mailbox            : IMailbox
     ├── Merchant           : IMerchant
+    ├── QuestInteractable  : IQuestInteractable
     ├── Shrine             : IShrine
     ├── Switch             : ISwitch
     ├── Teleporter         : ITeleporter
@@ -373,7 +375,7 @@ MerchantTabType : byte
 ### Related Files
 
 ```
-Shared/Core/Entity/Interactable/                # 15 core interfaces (IAbilityCrafter, IBanker, etc.)
+Shared/Core/Entity/Interactable/                # 16 core interfaces (IAbilityCrafter, IBanker, etc.)
 Shared/Implementation/Entity/Naming/             # SceneObjectNamer used by interactables
 Shared/Implementation/Entity/Spawner/            # ObjectSpawner that spawns/despawns interactables
 Server/Implementation/World/SceneServer/          # Server-side interaction handling systems

@@ -25,7 +25,7 @@ Containers are automatically discovered via `[RequiresDataContainer]` attributes
 
 The Core layer (`Server/Core/RuntimeData/`) defines engine-agnostic interfaces: `IRuntimeDataContainer` (marker extending `IServerComponent`), the generic `IRuntimeDataContainer<TNetworkManager, TServerManager, TConnection, TDataContainer>` (with `Initialize`, `Clear`), `IRuntimeDataContainerFactory`, `IRuntimeDataContainerRegistry<...>`, `IAsyncWorkerData`, and `IMainThreadQueueData`. The Implementation layer (`Server/Implementation/RuntimeData/`) provides the abstract `RuntimeDataContainer` base class, the concrete `RuntimeDataContainerFactory` and `RuntimeDataContainerRegistry`, and shared cross-system containers: `AsyncWorkerData` (bounded async work queue with backpressure and entity-keyed ordering), `MainThreadQueueData` (thread-safe main-thread action marshalling with copy-then-invoke drain), and `SystemMainThreadQueueData` (thin abstract subclass for per-system queue isolation).
 
-Concrete per-system containers (e.g., `PartyRuntimeData`, `GuildRuntimeData`, `CharacterMappingData`) live alongside their respective system implementations under `Server/Implementation/World/` and `Server/Implementation/LoginServer/`, while shared cross-system containers are centralized here.
+Concrete per-system containers (e.g., `PartySystemRuntimeData`, `GuildSystemRuntimeData`, `CharacterMappingData`) live alongside their respective system implementations under `Server/Implementation/World/` and `Server/Implementation/LoginServer/`, while shared cross-system containers are centralized here.
 
 ## Supported Platforms
 
@@ -244,60 +244,78 @@ if (Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker))
 **Core interface:**
 
 ```csharp
-public interface IPartyRuntimeData : IRuntimeDataContainer
+public interface IPartySystemRuntimeData : IRuntimeDataContainer
 {
-    Dictionary<long, HashSet<long>> PartyMemberTracker { get; }
-    Dictionary<long, HashSet<long>> PartyCharacterTracker { get; }
-    Dictionary<long, long> PendingInvitations { get; }
+    bool TryGetPendingInvitation(long targetCharacterID, out long partyID);
+    bool TryAddPendingInvitation(long targetCharacterID, long partyID, DateTime nowUtc);
+    bool RemovePendingInvitation(long targetCharacterID);
+    int SweepExpiredInvitations(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
     DateTime LastFetchTime { get; set; }
+    bool TryBeginUpdatePump();
+    void EndUpdatePump();
+    DateTime NextInvitationSweepUtc { get; set; }
+    IngressGuard IngressGuard { get; }
 }
 ```
 
 **Implementation:**
 
 ```csharp
-public class PartyRuntimeData : RuntimeDataContainer, IPartyRuntimeData
+public class PartySystemRuntimeData : RuntimeDataContainer, IPartySystemRuntimeData
 {
-    private readonly Dictionary<long, HashSet<long>> partyMemberTracker = new();
-    private readonly Dictionary<long, HashSet<long>> partyCharacterTracker = new();
-    private readonly Dictionary<long, long> pendingInvitations = new();
+    private LastSeenCacheTracker<long, long> pendingInvitations;
+    private int updatePumpInFlight;
 
-    public Dictionary<long, HashSet<long>> PartyMemberTracker => partyMemberTracker;
-    public Dictionary<long, HashSet<long>> PartyCharacterTracker => partyCharacterTracker;
-    public Dictionary<long, long> PendingInvitations => pendingInvitations;
     public DateTime LastFetchTime { get; set; }
+    public DateTime NextInvitationSweepUtc { get; set; }
+    public IngressGuard IngressGuard { get; private set; }
 
     public override ServerComponentInitializationStatus InitializeOnce()
     {
+        pendingInvitations = new LastSeenCacheTracker<long, long>();
         LastFetchTime = DateTime.UtcNow;
+        Interlocked.Exchange(ref updatePumpInFlight, 0);
+        NextInvitationSweepUtc = DateTime.UtcNow;
+        IngressGuard = new IngressGuard();
         return ServerComponentInitializationStatus.Initialized;
     }
 
     public override void Clear()
     {
-        partyMemberTracker.Clear();
-        partyCharacterTracker.Clear();
-        pendingInvitations.Clear();
+        pendingInvitations?.Clear();
         LastFetchTime = DateTime.UtcNow;
+        Interlocked.Exchange(ref updatePumpInFlight, 0);
+        NextInvitationSweepUtc = DateTime.UtcNow;
+        IngressGuard?.Clear();
     }
 
-    protected override void OnDeinitialize() => Clear();
+    protected override void OnDeinitialize()
+    {
+        Clear();
+        pendingInvitations = null;
+    }
 }
 ```
 
 **Behaviour:**
 
 ```csharp
-[CreateAssetMenu(fileName = "PartySystem", menuName = "FishMMO/Server/SceneServer/Party System")]
-[RequiresDataContainer(typeof(PartyRuntimeData))]
+[CreateAssetMenu(fileName = "PartySystem", menuName = "FishMMO/Server/SceneServer/Party System", order = 1)]
+[RequiresDataContainer(typeof(PartySystemRuntimeData))]
+[RequiresDataContainer(typeof(PartyCharacterMappingData))]
+[RequiresDataContainer(typeof(PartySystemMainThreadQueueData))]
+[RequiresDataContainer(typeof(AsyncWorkerData))]
 public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 {
-    public int MaxPartySize = 6;
-    public float UpdatePumpRate = 1.0f;
+    [SerializeField] private int maxPartySize = 6;
+    [SerializeField] private float updatePumpRate = 1.0f;
+
+    public int MaxPartySize => maxPartySize;
+    public float UpdatePumpRate => updatePumpRate;
 
     public override ServerComponentInitializationStatus InitializeOnce()
     {
-        if (!Server.DataContainerRegistry.TryGet<IPartyRuntimeData>(out var runtimeData))
+        if (!Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var runtimeData))
             return ServerComponentInitializationStatus.FailedToGetDataContainer;
 
         Server.NetworkWrapper.RegisterBroadcast<PartyCreateBroadcast>(
@@ -475,7 +493,7 @@ RuntimeDataContainer (abstract)
     │   └── SystemMainThreadQueueData (abstract)
     │           Per-system concrete subclasses inherit this
     │
-    ├── PartyRuntimeData, GuildRuntimeData, ChatRuntimeData, ...
+    ├── PartySystemRuntimeData, GuildSystemRuntimeData, ChatSystemRuntimeData, ...
     └── (per-system containers alongside their ServerBehaviour implementations)
 
 IServerComponentRegistry<...>

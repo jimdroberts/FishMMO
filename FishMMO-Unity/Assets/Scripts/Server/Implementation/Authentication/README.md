@@ -182,7 +182,7 @@ The following constants are defined in `BaseAuthenticatorCore<TConnection>` and 
 |----------|-------|-------------|
 | `AuthStaleTtlSeconds` | 15 s | TTL for stale-auth sweep |
 | `AuthHardDeadlineSeconds` | 60 s | Absolute auth deadline (cannot be extended) |
-| `AuthSweepIntervalSeconds` | 1 s | Sweep interval for stale auth cleanup |
+| *(no interval constant)* | every frame | `Core.Tick()` runs the stale-auth sweep each Unity frame; the caps below bound its cost |
 | `AuthSweepMaxScan` | 256 | Max entries scanned per stale-auth sweep |
 | `AuthSweepMaxRemovals` | 64 | Max entries purged per stale-auth sweep |
 | `MaxPendingAuthConnections` | 10,000 | Cap on concurrent half-open auth connections |
@@ -269,7 +269,7 @@ authenticator.OnClientAuthenticationResult += (conn, authenticated) =>
 |-------|---------------|
 | Workers started | Log output: `"Workers initialized (Verify=2, Proof=2)"` or `"Workers initialized (Token=2)"` |
 | Handshake completing | Client receives `ServerHandshake` with X25519 public key and agreed version |
-| SRP verify processing | Client receives `SrpVerifyBroadcast` response with encrypted salt and server ephemeral |
+| SRP verify processing | Client receives `SrpVerifyResponseBroadcast` with encrypted salt and server ephemeral |
 | SRP proof accepted | Client receives `SrpSuccessBroadcast` with encrypted server proof and auth token |
 | Token auth accepted | Client receives `ClientAuthResultBroadcast` with `LoginSuccess` / `WorldLoginSuccess` / `SceneLoginSuccess` |
 | Stale auth sweep active | Log warnings for purged connections exceeding 15 s TTL |
@@ -324,7 +324,7 @@ Client                              Server (Network Thread)
 ```
 Client                              Server
   │                                      │
-  │── SrpVerifyBroadcast ──────────────► │  UDP Gate → verifyChannel
+  │── SrpVerifyRequestBroadcast ───────► │  UDP Gate → verifyChannel
   │   { Username (enc), Ephemeral (enc)} │    • Per-IP debounce (1 s)
   │                                      │    • AuthState: Handshake → VerifyPending
   │                                      │    • DropWrite rollback on channel full
@@ -341,7 +341,7 @@ Client                              Server
   │                                      │    • Non-existent account → fake SRP tuple + per-username HMAC salt
   │                                      │    • AddConnectionAccount (VerifyPending → WaitingForProof)
   │                                      │    • AES-GCM encrypt salt + server ephemeral
-  │◄── SrpVerifyBroadcast ──────────── │    • Enqueue → Main Thread Broadcast
+  │◄── SrpVerifyResponseBroadcast ──── │    • Enqueue → Main Thread Broadcast
   │   { Salt (enc), Ephemeral (enc) }   │
 ```
 
@@ -559,7 +559,8 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 |-----------|-----------|----------|
 | `ClientHandshake` | Client → Server | X25519 public key, cookie (phase 2), min/max protocol version |
 | `ServerHandshake` | Server → Client | X25519 public key (phase 2) or cookie (phase 1), agreed version |
-| `SrpVerifyBroadcast` | Bidirectional | Encrypted username/salt + public ephemeral |
+| `SrpVerifyRequestBroadcast` | Client → Server | Encrypted username + client public ephemeral |
+| `SrpVerifyResponseBroadcast` | Server → Client | Encrypted salt + server public ephemeral |
 | `SrpProofBroadcast` | Client → Server | Encrypted client proof |
 | `SrpSuccessBroadcast` | Server → Client | Encrypted server proof + auth result + encrypted token |
 | `TokenAuthBroadcast` | Client → Server | Encrypted auth token |

@@ -59,12 +59,11 @@ Monitoring/
 │   └── MetricsSummary.cs           # Metrics summary data structure
 │
 └── Diagnostics/                 # Query-level performance diagnostics
-    ├── QueryPerformanceTracker.cs  # Tracks per-operation query performance
+    ├── QueryPerformanceTracker.cs  # Tracks per-operation query performance;
+    │                               #   also declares SlowQueryEventArgs
     ├── QueryMetrics.cs             # Per-operation metrics (avg, min, max, percentiles)
     ├── QueryPerformanceConfiguration.cs  # Configuration for tracking levels and sampling
-    ├── TrackingLevel.cs            # Enum for tracking overhead levels
-    ├── SlowQueryEventArgs.cs       # Event args for slow query detection
-    └── INTEGRATION_EXAMPLE.cs      # Comprehensive integration examples
+    └── TrackingLevel.cs            # Enum for tracking overhead levels
 ```
 
 ## Namespaces
@@ -215,7 +214,7 @@ foreach (var (opName, metrics) in slowestOps)
 - **Staging**: `Enabled: true, Level: Standard, SampleRate: 0.1`
 - **Development**: `Enabled: true, Level: Full, SampleRate: 1.0`
 
-**See [INTEGRATION_EXAMPLE.cs](Diagnostics/INTEGRATION_EXAMPLE.cs) for comprehensive usage patterns.**
+**See [QueryPerformanceTracker.cs](Diagnostics/QueryPerformanceTracker.cs) for the tracking API and the `SlowQueryDetected` event.**
 ```csharp
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 

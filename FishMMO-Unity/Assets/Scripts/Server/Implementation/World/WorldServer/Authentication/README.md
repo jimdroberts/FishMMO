@@ -85,14 +85,10 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `maxPlayers` | `uint` | `5000` | Upper bound for concurrent world-server admissions. When `ConnectionCount >= MaxPlayers`, new logins receive `ServerFull`. |
-
-### Internal Constants
-
-| Constant | Type | Value | Description |
-|---|---|---|---|
-| `LoginAttemptDebounceWindow` | `TimeSpan` | `1.0 s` | Per-account rate-limit window for `TryLoginAsync`. Rapid duplicate attempts within this window are rejected with `ServerBusy`. |
-| `SweepMaxScan` | `int` | `128` | Maximum entries to scan per auth sweep cycle in `OnAuthSweep()`. |
-| `SweepMaxRemove` | `int` | `64` | Maximum entries to remove per auth sweep cycle in `OnAuthSweep()`. |
+| `loginAttemptDebounceSeconds` | `float` | `1.0` | Per-account rate-limit window (seconds) for `TryLoginAsync`. Rapid duplicate attempts within this window are rejected with `ServerBusy`. |
+| `sweepMaxScan` | `int` | `128` | Maximum entries to scan per auth sweep cycle in `OnAuthSweep()`. |
+| `sweepMaxRemove` | `int` | `64` | Maximum entries to remove per auth sweep cycle in `OnAuthSweep()`. |
+| `recentAdmissionWindowSeconds` | `float` | `30.0` | Seconds a recently admitted username still counts against `MaxPlayers`, bounding the read-then-admit burst race. |
 
 ### Admission Rules
 
@@ -273,7 +269,7 @@ Authentication/
 | `Server/Implementation/Authentication/TokenServerAuthenticator.cs` | Token-based auth pipeline: HMAC verification, bounded async channel, account mapping |
 | `Server/Core/World/WorldServer/WorldServer/IWorldServerSystemRuntimeData.cs` | Interface providing `IsLocked` flag for server lock checks |
 | `Server/Core/World/WorldServer/WorldScene/IWorldSceneMappingData.cs` | Interface providing `ConnectionCount` for population tracking |
-| `Shared/Implementation/Network/Authentication/ClientAuthenticationResult.cs` | Enum defining all authentication result codes |
+| `FishMMO-Auth/FishMMO-AuthShared/Core/Enums/ClientAuthenticationResult.cs` | Enum defining all authentication result codes (shipped via the `FishMMO-Auth` DLLs) |
 | `Server/Core/Collections/ExpiringKeyTracker.cs` | Bounded expiring key collection used for per-account rate limiting |
 
 ### Inheritance Hierarchy

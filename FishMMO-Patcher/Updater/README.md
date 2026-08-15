@@ -32,8 +32,12 @@ critical failure triggers a rollback to the pre-patch state.
 
 ## Description
 
-The updater applies one or more sequential patches (e.g. `1.0.0 → 1.0.1
-→ 1.1.0`) by reading a ZIP archive per version step. Each archive contains:
+The updater applies **one** patch archive per run: the single file that upgrades
+directly from `-version` to `-latestversion` (`Patches/<from>-<to>.zip`). It does
+not chain intermediate steps — the patch server indexes and serves a direct
+archive for each supported source version, and if no such archive exists the
+update cannot proceed (the launcher surfaces this as `PatchUnavailable` and asks
+the player to reinstall). The archive contains:
 
 - A `manifest.json` describing the per-file operations (**new**, **modified**,
   **deleted**) including the source hash, the target hash, and (for modified
@@ -72,12 +76,45 @@ FishMMO-Patcher/Updater/
 Patching is performed in a single pass with these phases:
 
 1. **Argument parsing** — current version, target version, launcher PID, exe to restart.
-2. **Launcher shutdown** — graceful close, fall back to kill.
-3. **Patch application** — per-version archive, parallel new/modified file handling, sequential deletes.
+2. **Launcher shutdown** — graceful request, fall back to a forced kill (see below).
+3. **Patch application** — one archive, parallel new/modified file handling, sequential deletes.
 4. **Move-into-place** — temporary `.new` files are atomically moved over the originals.
 5. **Rollback** — on any unrecoverable error, restore every backup taken in this run.
-6. **Cleanup** — remove temporary files and backups.
-7. **Restart** — optionally start the configured executable, then exit.
+6. **Cleanup** — remove temporary files and backups; on success, delete the consumed archive.
+7. **Restart** — kill the PID again as a safety net, optionally start the configured executable, then exit.
+
+### Shutting the client down
+
+Patching a live install corrupts it, so the client must be gone before any file
+is touched. The request is platform-specific:
+
+| Platform | Graceful request | Fallback |
+|---|---|---|
+| Windows | `Process.CloseMainWindow()` | `Process.Kill()` |
+| Linux / macOS | `kill(pid, SIGTERM)` via P/Invoke to `libc` | `Process.Kill()` (SIGKILL) |
+
+`CloseMainWindow` is Windows-only and throws `PlatformNotSupportedException`
+elsewhere, so it cannot be the single path. Every route where the graceful
+request is refused, undeliverable, or ignored past the timeout falls through to
+the forced kill — an ungraceful client shutdown is far cheaper than patching
+files underneath a running process.
+
+### Failure semantics
+
+`ApplyPatchFile` reports success or failure, and the two outcomes differ in what
+is left on disk:
+
+| Outcome | Install state | `Patches/<from>-<to>.zip` |
+|---|---|---|
+| Applied | Upgraded to `-latestversion` | Deleted, so `Patches/` does not accumulate every update ever installed |
+| Rolled back | Still on the **old** version | Kept, so a retry does not have to re-download it |
+
+The updater always terminates with exit code `0` and always attempts to restart
+`-exe`, on both outcomes. Success is reported on the console, not through the
+exit code, and the launcher does not read it — the updater kills the launcher
+before patching, so there is no launcher left to observe the result. After a
+failed apply the restarted client is still on the old version and its next
+version check re-enters the update flow.
 
 ---
 
@@ -85,8 +122,9 @@ Patching is performed in a single pass with these phases:
 
 | Component | Responsibility |
 |---|---|
-| `Program.Main` | Argument parsing, top-level try/catch, exit code policy. |
-| Launcher control | Locates the launcher process by PID and shuts it down (graceful → forceful). |
+| `Program.Main` | Argument parsing, orchestration, restart handoff. |
+| `KillLauncherProcess` | Locates the launcher process by PID and shuts it down (graceful → forceful). |
+| `TryRequestGracefulExit` | Platform-appropriate graceful shutdown request: `CloseMainWindow` on Windows, `kill(SIGTERM)` on POSIX. |
 | `Patch/` manifest reader | Loads `manifest.json` out of the patch ZIP. |
 | New-file writer | Streams new files from the ZIP into the target tree (parallelized). |
 | Binary diff applier | Applies binary diffs to existing files, with hash verification on both sides. |
@@ -104,6 +142,20 @@ updater executable. Naming convention:
 ```
 Patches/<oldVersion>-<newVersion>.zip
 ```
+
+> **Three-way contract.** This directory name and file-name scheme are shared by
+> three independently built components and must be changed in all three at once:
+>
+> | Component | Resolves it as |
+> |---|---|
+> | Unity client (launcher, downloads here) | `Constants.GetPatchesDirectory()` / `Constants.GetPatchFileName(from, to)` |
+> | Updater (reads here) | `AppDomain.CurrentDomain.BaseDirectory` + `Patches`, hard-coded — it cannot reference the Unity assembly |
+> | Patcher web server (indexes and serves) | `Patches:DirectoryName` in `appsettings.json` + the index regex |
+>
+> Both client processes run from the install root, so the first two agree. If
+> they ever diverge, every update silently no-ops: the launcher downloads to one
+> place, the updater finds nothing at the other, and the client relaunches at the
+> same version forever.
 
 Archive contents:
 
@@ -125,7 +177,10 @@ overridden by editing the source.
 |---|---|---|
 | `MaxFileOperationRetries` | `5` | Retry count for transient file I/O errors. |
 | `FileOperationRetryDelayMs` | `200` | Delay between retries. |
-| `PatchesDirectory` | `Patches` | Directory (relative to working dir) holding patch ZIPs. |
+| `PatchesDirectory` | `Patches` | Directory (relative to the updater's base directory) holding patch ZIPs. |
+| `GracefulExitTimeoutMs` | `10000` | How long to wait for the client to exit after the graceful request before forcing a kill. |
+| `ForceKillTimeoutMs` | `5000` | How long to wait for the process to disappear after `Kill()`. |
+| `PostKillSettleMs` | `500` | Settle delay after shutdown, so the OS releases file handles before patching. |
 
 ---
 
@@ -136,11 +191,13 @@ overridden by editing the source.
 | `-version=<currentVersion>` | Yes | The version currently installed. |
 | `-latestversion=<latestVersion>` | Yes | The target version to upgrade to. |
 | `-pid=<launcherPID>` | Yes | Process ID of the launcher; updater will close/kill it before patching. |
-| `-exe=<executablePath>` | Optional | Relative path to the client executable to start after a successful patch. |
+| `-exe=<executablePath>` | Optional | Path to the client executable to start when the updater is done, relative to the updater's base directory. |
 
-If the chain `currentVersion → latestVersion` requires multiple patch archives,
-the updater locates and applies each step in order, only proceeding to the next
-when the previous step has been verified and moved into place.
+Arguments are matched by prefix, so `-version` also matches `-versionfoo`; pass
+them exactly as listed. If `-version` and `-latestversion` are equal the updater
+does nothing but restart `-exe`. If the single archive `<version>-<latestversion>.zip`
+is missing from `Patches/`, it reports the missing file and restarts the client
+unchanged.
 
 ---
 
@@ -156,21 +213,25 @@ Updater.exe -version=1.0.0 -latestversion=1.1.0 -pid=1234 -exe=FishMMOClient.exe
 
 This call:
 
-1. Waits for / kills launcher PID `1234`.
-2. Looks for `Patches/1.0.0-1.0.x.zip`, …, ending at `…-1.1.0.zip`.
-3. Applies them transactionally.
-4. On success, starts `FishMMOClient(.exe)` and exits with code `0`.
-5. On failure, rolls back and exits with a non-zero code; the launcher should
-   detect this and surface the error to the user.
+1. Shuts down launcher PID `1234` — graceful request first, forced kill if it
+   does not exit in time.
+2. Looks for exactly `Patches/1.0.0-1.1.0.zip`.
+3. Applies it transactionally.
+4. On success, deletes the archive; on failure, rolls back and keeps it.
+5. Starts `FishMMOClient(.exe)` either way and exits with code `0`.
 
 ---
 
 ## Logging
 
-All actions, warnings, and errors are written to the console. The launcher is
-expected to capture stdout/stderr and surface a user-facing summary. Log lines
-include: file path, operation (new/modified/deleted), pre- and post-hash,
-retry counts, and rollback decisions.
+All actions, warnings, and errors are written to the console. Log lines include:
+file path, operation (new/modified/deleted), pre- and post-hash, retry counts,
+and rollback decisions.
+
+The launcher does **not** capture this output. It hands off and shuts down (the
+updater kills it by PID regardless), so the console is the operator's and the
+player's only view of what happened. Run the updater from a terminal when
+diagnosing a failed update.
 
 ---
 
@@ -192,10 +253,18 @@ populated by the patch generator.
 
 ```mermaid
 flowchart TD
-    Launcher[FishMMO Launcher] -->|spawns with args| U[Updater.Main]
+    Launcher[FishMMO Launcher] -->|spawns with args, then exits| U[Updater.Main]
     U --> Args[Parse args:<br/>-version / -latestversion / -pid / -exe]
-    Args --> Kill[Close or kill launcher PID]
-    Kill --> Load[Load Patches/oldVer-newVer.zip<br/>+ manifest.json]
+    Args --> Shutdown[Shut down launcher PID]
+    Shutdown --> Graceful{"Graceful request delivered?<br/>(CloseMainWindow / SIGTERM)"}
+    Graceful -- "exited in 10s" --> Settle[Settle 500ms]
+    Graceful -- "no, or timed out" --> ForceKill["Kill() + wait 5s"]
+    ForceKill --> Settle
+    Settle --> Same{"-version == -latestversion?"}
+    Same -- yes --> Restart
+    Same -- no --> Find{"Patches/from-to.zip exists?"}
+    Find -- no --> Restart
+    Find -- yes --> Load[Open archive + manifest.json]
     Load --> Backup[Take .bak for each affected file]
     Backup --> Apply{Apply changes}
     Apply -->|New files| WriteNew[Stream from ZIP - parallel]
@@ -205,9 +274,12 @@ flowchart TD
     Diff --> Move
     Delete --> Move
     Move --> OK{All steps OK?}
-    OK -- yes --> Cleanup[Remove .bak / temp files]
-    Cleanup --> Restart["Start -exe (optional)"]
+    OK -- yes --> Cleanup[Remove .bak / temp files<br/>delete consumed archive]
+    OK -- no --> Rollback[Restore from .bak<br/>keep archive for retry]
+    Cleanup --> Restart["Re-kill PID, start -exe (optional)"]
+    Rollback --> Restart
     Restart --> Exit0[Exit 0]
-    OK -- no --> Rollback[Restore from .bak]
-    Rollback --> ExitN[Exit non-zero]
 ```
+
+> Both outcomes converge on the same exit. The updater never signals failure
+> through its exit code — see [Failure semantics](#failure-semantics).

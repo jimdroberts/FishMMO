@@ -1,7 +1,9 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-07-19.  
-> Built on Unity 6.3 LTS, FishNet, PostgreSQL, .NET 8.0, WebTransport (QUIC/HTTP3).
+> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-08-15 against commit `630f975c`.  
+> Built on Unity 6000.3.2f1, FishNet, PostgreSQL, .NET 8.0, WebTransport (QUIC/HTTP3).
+>
+> Items marked *scaffolded*, *planned*, *projected*, or *not yet wired* are **not** shipped functionality — read those qualifiers literally.
 
 ---
 
@@ -34,18 +36,18 @@
 1. **Process Liveness Monitoring** — Verifies child processes are alive each check interval.  
 2. **TCP Port Health Check** — TCP connect probe to confirm the monitored port is accepting connections.  
 3. **UDP Port Health Check** — UDP send/receive probe to verify datagram delivery.  
-4. **WebSocket Health Check** — Full WebSocket upgrade handshake probe (for Bayou/WebGL transports).  
+4. **WebSocket Health Check** — Full WebSocket upgrade handshake probe. A generic capability of the supervisor (`WebSocketHealthChecker`, `PortType.WebSocket`); FishMMO's own game servers are QUIC/UDP and are probed with the UDP checker.  
 5. **CPU Threshold Monitoring** — Samples per-process CPU% and triggers restart on sustained breach.  
 6. **Memory Threshold Monitoring** — Samples per-process memory usage and triggers restart on sustained breach.  
 7. **Exponential Backoff Restarts** — Failed processes restart with increasing delay (configurable initial → max, capped retries).  
 8. **Circuit Breaker** — After N consecutive failures across launches, parks the application until manual intervention.  
 9. **Graceful Shutdown** — Sends close signal to child process; force-kills if it doesn't exit within timeout.  
-10. **Interactive Console Commands** — `start`, `stop`, `status`, `force-restart`, `force-kill`, `shutdown`, `help`.  
-11. **Headless Mode** — Disables interactive console; starts monitoring immediately on launch (for systemd/Docker).  
+10. **Interactive Console Commands** — `start`, `stop`, `status`, `force-restart`, `force-kill`, `shutdown` (alias `exit`), `help`, registered through `CommandHandler`/`ConsoleCommand`.  
+11. **Headless Mode** — `Headless: true` in config disables stdin reads and starts monitoring immediately on launch (for systemd/Docker). Exits with a failure code when the headless monitoring cycle ends with all monitors exhausted.  
 12. **Per-App Config Validation** — Validates all settings at startup, rejects with precise error messages.  
 13. **Launch Delay Sequencing** — Configurable per-app delay before launching the next application in sequence.  
 14. **Post-Launch Settle Delay** — Pause after launch/restart before resuming probes (lets the process fully boot).  
-15. **systemd Integration** — Ships with a reference systemd unit file for Linux service deployment.
+15. **systemd Integration** — Handles both SIGTERM and SIGINT through the same graceful shutdown path. No `.service` file is checked into the project; the README documents a reference unit inline, and FishMMO-Installer can generate and register one.
 
 ---
 
@@ -57,7 +59,7 @@
 
 ## FishMMO-Auth
 
-**Transport-agnostic .NET authentication library** providing SRP-6a login, token auth, TOTP 2FA, and engine-independent authenticator cores.
+**Transport-agnostic .NET authentication library** providing SRP-6a login, token auth, TOTP 2FA, and engine-independent authenticator cores. Split into three projects: **FishMMO-AuthShared** (DTOs, enums, crypto services, trackers), **FishMMO-ClientAuth** (`ClientAuthenticatorCore`), and **FishMMO-ServerAuth** (`BaseAuthenticatorCore`, `SrpAuthenticatorCore`, `TokenAuthenticatorCore`). All auth broadcast structs used by the Unity layer live in `FishMMO-Unity/Assets/Scripts/Shared/Implementation/Network/Authentication/AuthenticationBroadcasts.cs`.
 
 ### Core / Protocol Contracts
 1. **Bounded Concurrent Collections** — `ArrivalOrderTracker<T>` (O(1) insertion-order TTL), `ExpiringKeyTracker<T>` (debounce / rate-limit), `LastSeenCacheTracker<TKey,TValue>` (LRU-style last-seen cache).  
@@ -93,12 +95,13 @@
 
 ## FishMMO-CMS
 
-**ASP.NET Core Content Management System** for game news, announcements, and launcher content.
+**ASP.NET Core (net8.0) account-management web API** — *not* a news/content CMS. Registers Swashbuckle and references FishMMO-ServerAuth and FishMMO-DB, and copies `appsettings.CMS.json` from FishMMO-Setup at build time.
 
-1. **AccountController** — Handles CMS user authentication and account management.  
-2. **AdminController** — Admin-level content management endpoints (news posts, announcements, launcher HTML content).  
-3. **JSON/HTML Content Delivery** — Serves structured content consumed by the client launcher's news feed and HTML display.  
-4. **appsettings.json Configuration** — Database and service configuration for the CMS backend.
+> **Status: scaffolded, not implemented.** Every controller action in this project is a stub — each one returns a placeholder and carries `// TODO` comments for the work it does not do. There is no database wiring, no authentication registration for the account endpoints, and no admin authorization on the admin endpoints. Nothing in this section is shipped functionality.
+
+1. **AccountController (`api/Account`)** — Route stubs for `POST register`, `POST verify`, `POST change-password`, `POST 2fa/setup`. TODOs cover SRP salt/verifier generation, `IAccountService` persistence, TOTP secret generation/encryption, recovery codes, and verification email delivery.  
+2. **AdminController (`api/Admin`)** — Route stubs for `GET accounts/search`, `POST accounts/{username}/ban`, `unban`, `access-level`, `revoke-tokens`, `reset-2fa`, `force-password-reset`. Every action's first TODO is "Require admin authentication" — the endpoints are currently unauthenticated stubs.  
+3. **appsettings.json Configuration** — `CopyFishMMOConfig` MSBuild target copies `FishMMO-Setup/Development/appsettings.CMS.json` (and the Production variant when present) into the build output.
 
 ---
 
@@ -114,55 +117,56 @@
 5. **NpgsqlDbConfiguration** — Builds connection string from `IConfiguration` (`Npgsql:*` or `ConnectionStrings:NpgsqlConnection`).  
 6. **NpgsqlServiceRegistry** — Wires all per-domain service implementations.  
 7. **AppSettings** — Strongly-typed `appsettings.json` binder (Npgsql, QueryPerformanceTracking, Logging). **DatabaseConfigurationHelper** — Convenience helpers for IConfiguration builders.  
-9. **DatabaseResult\<T\>** — Uniform result envelope (`IsSuccess`, `ErrorCode`, `ErrorMessage`, `Data`).  
-10. **DatabaseErrorCodes** — Stable error code enum returned via DatabaseResult.  
-11. **Layered Configuration** — `appsettings.json` → `appsettings.{Environment}.json` → environment variables (with `__` nesting).  
-12. **FISHMMO_ENVIRONMENT** — Precedence-based environment selection (FISHMMO_ENVIRONMENT > DOTNET_ENVIRONMENT > ASPNETCORE_ENVIRONMENT).
+8. **DatabaseResult\<T\>** — Uniform result envelope (`IsSuccess`, `ErrorCode`, `ErrorMessage`, `Data`).  
+9. **DatabaseErrorCodes** — Stable error code enum returned via DatabaseResult.  
+10. **Layered Configuration** — `appsettings.json` → `appsettings.{Environment}.json` → environment variables (with `__` nesting).  
+11. **FISHMMO_ENVIRONMENT** — Precedence-based environment selection (FISHMMO_ENVIRONMENT > DOTNET_ENVIRONMENT > ASPNETCORE_ENVIRONMENT).
 
 ### Database Services (Npgsql/Services/)
-13. **IAccountService** — Account CRUD: create, fetch for login (SRP data), online status check, kick request persist, token hash persist, TOTP verify.  
-14. **ICharacterService** — Character CRUD: save, load, delete, fetch by account, session claim/release, inventory/equipment/bank/hotkey persist.  
-15. **IChatService** — Chat message persistence and retrieval with channel, character, and server metadata.  
-16. **ILoginServerService** — Login server registration, heartbeat pulses, signing key storage (AEAD-wrapped via deployment KEK).  
-17. **IWorldServerService** — World server registration, heartbeat pulses, server listing.  
-18. **ISceneServerService** — Scene server registration, heartbeat pulses, pending scene queue, channel listing.  
-19. **ICharacterInventoryService** — Inventory/equipment/bank slot persistence.  
-20. **IGuildService** — Guild creation, membership, ranks, invitation persistence.  
-21. **IPartyService** — Party creation, membership persistence.  
-22. **IFriendService** — Friend list add/remove/query persistence.  
-23. **IKickRequestService** — Kick request queue polling and processing.  
+12. **IAccountService** — Account CRUD: create, fetch for login (SRP data), online status check, kick request persist, token hash persist, TOTP verify.  
+13. **ICharacterService** — Character CRUD: save, load, delete, fetch by account, session claim/release, inventory/equipment/bank/hotkey persist.  
+14. **IChatService** — Chat message persistence and retrieval with channel, character, and server metadata.  
+15. **ILoginServerService** — Login server registration, heartbeat pulses, signing key storage (AEAD-wrapped via deployment KEK).  
+16. **IWorldServerService** — World server registration, heartbeat pulses, server listing.  
+17. **ISceneServerService** — Scene server registration, heartbeat pulses, pending scene queue, channel listing.  
+18. **ICharacterInventoryService** — Inventory/equipment/bank slot persistence.  
+19. **IGuildService** — Guild creation, membership, ranks, invitation persistence.  
+20. **IPartyService** — Party creation, membership persistence.  
+21. **ICharacterFriendService** — Friend list add/remove/query persistence. (Part of a wider per-character service family: `ICharacterAbilityService`, `ICharacterAchievementService`, `ICharacterArchetypeService`, `ICharacterAttributeService`, `ICharacterBankService`, `ICharacterBuffService`, `ICharacterEquipmentService`, `ICharacterFactionService`, `ICharacterGuildService`, `ICharacterHotkeyService`, `ICharacterItemCooldownService`, `ICharacterKnownAbilityService`, `ICharacterMailService`, `ICharacterPartyService`, `ICharacterPetService`/`ICharacterPetAttributeService`/`ICharacterPetBuffService`, `ICharacterQuestService`, `ICharacterSkillService`.)  
+22. **IKickRequestService** — Kick request queue polling and processing.  
+23. **Auth & Deployment Services** — `IAuthTokenService` (token hash persist/revoke), `ILoginServerSigningKeyService` (AEAD-wrapped signing keys), `ITwoFactorRecoveryCodeService`, `IConnectionTokenKeyService` (one-time connection token keys for IPFetch), `IDeploymentSecretService` (database-stored deployment secrets, e.g. the signing-key KEK), `IEmailQueueService` (verification email queue), `ISceneService` (pending scene load/unload queue), `IGuildUpdateService` / `IPartyUpdateService` (social update pumps).  
 24. **UnitOfWorkService** — Ambient DbContext + transaction scope for multi-step atomic operations. Supports savepoints for nested atomicity inside a unit of work.  
 25. **BaseService Execution Wrappers** — `ExecuteReadAsync`, `ExecuteWriteAsync`, `ExecuteTransactionAsync` with retry logic, transient error classification (PostgreSQL error code mapping), and automatic SaveChanges.  
 26. **Convention Guards** — `ApplyTimeCreatedConventions` skips entities with explicit defaults (prevents silent override of `QuestEntity`'s `DateTime.UnixEpoch`). `ApplyLogicalVersionConventions` checks for existing defaults before applying.  
 27. **Npgsql Type Mapping** — `List<int>` properties natively map to PostgreSQL `integer[]` columns; `HasDefaultValueSql("'{}'")` for empty array defaults.
 
 ### Data Entities
-26. **AccountData** — Account credentials (SRP verifier, salt), email, 2FA state, verification status.  
-27. **CharacterData** — Full character sheet: position, race, archetype, attributes, equipped items, hotkeys, achievements, faction standings.  
-28. **ChatData** — Chat message with channel, content, character, server metadata.  
-29. **LoginServerData / WorldServerData / SceneServerData** — Server registration and heartbeat entities.  
-30. **AuthTokenData** — Token hash with expiration for revocation lookup.  
-31. **LoginServerSigningKeyData** — AEAD-wrapped HMAC signing key per login server.  
-32. **KickRequestData** — Admin-initiated kick request queue.  
-33. **SceneData** — Pending scene load/unload requests.  
-34. **QuestData** — Quest state persistence.  
-35. **TwoFactorRecoveryCodeData** — Hashed 2FA recovery codes.  
-36. **IVersioned / VersionExtensions** — Optimistic concurrency versioning on all entities.
+28. **AccountData** — Account credentials (SRP verifier, salt), email, 2FA state, verification status.  
+29. **CharacterData** — Full character sheet: position, race, archetype, attributes, equipped items, hotkeys, achievements, faction standings.  
+30. **ChatData** — Chat message with channel, content, character, server metadata.  
+31. **LoginServerData / WorldServerData / SceneServerData** — Server registration and heartbeat entities.  
+32. **AuthTokenData** — Token hash with expiration for revocation lookup.  
+33. **LoginServerSigningKeyData** — AEAD-wrapped HMAC signing key per login server.  
+34. **KickRequestData** — Admin-initiated kick request queue.  
+35. **SceneData** — Pending scene load/unload requests.  
+36. **QuestData** — Quest state persistence.  
+37. **TwoFactorRecoveryCodeData** — Hashed 2FA recovery codes.  
+38. **IVersioned / VersionExtensions** — Optimistic concurrency versioning on all entities.
 
 ### Monitoring Infrastructure (Npgsql/Monitoring/)
-37. **DatabaseHealthMonitor** — `SELECT 1` connectivity probe with Healthy/Degraded/Unhealthy classification.  
-38. **ConnectionPoolMetrics** — Runtime open connections, pool utilization %, driven by EF Core connection interceptors.  
-39. **DatabaseMetricsTracker** — Success/failure/latency aggregates with summary reporting.  
-40. **QueryPerformanceTracker** — Per-operation query performance with P95/P99 percentiles, slow query detection events, configurable tracking levels (None/Basic/Standard/Detailed/Full).
+39. **DatabaseHealthMonitor** — `SELECT 1` connectivity probe with Healthy/Degraded/Unhealthy classification.  
+40. **ConnectionPoolMetrics** — Runtime open connections, pool utilization %, driven by EF Core connection interceptors.  
+41. **DatabaseMetricsTracker** — Success/failure/latency aggregates with summary reporting.  
+42. **QueryPerformanceTracker** — Per-operation query performance with P95/P99 percentiles, slow query detection events, configurable tracking levels (None/Basic/Standard/Detailed/Full).
 
 ### Unity Integration
-41. **DatabaseHealthService** — Unity MonoBehaviour wrapping the monitoring stack. Inspector-configurable health/pool/metrics check intervals. Exposes events for external alerting (Slack/PagerDuty). Context menu commands for manual health checks.
+43. **DatabaseHealthService** — Unity MonoBehaviour wrapping the monitoring stack. Inspector-configurable health/pool/metrics check intervals. Exposes events for external alerting (Slack/PagerDuty). Context menu commands for manual health checks.
 
 ### Exceptions
-42. **DatabaseException** — Typed database exception hierarchy: `DatabaseEntityNotFoundException`, `StaleStateException`, `DuplicateReplayException`.
+44. **DatabaseException** — Typed database exception hierarchy: `DatabaseEntityNotFoundException`, `StaleStateException`, `DuplicateReplayException`.
 
 ### Database Migrator
-43. **FishMMO-DB-Migrator** — Standalone console tool for creating and applying EF Core migrations.
+45. **FishMMO-DB-Migrator** — Standalone console tool for creating and applying EF Core migrations.
 
 ---
 
@@ -170,10 +174,13 @@
 
 **Centralised NuGet dependency library** — single source of truth for third-party package versions across the entire solution.
 
-1. **EF Core Stack** — EF Core, Abstractions, Relational, Design, Tools, EFCore.NamingConventions (snake_case).  
-2. **Microsoft.Extensions Stack** — Configuration (Json, Abstractions), DependencyInjection, Logging, Caching, Options, Primitives, Bcl.AsyncInterfaces.  
-3. **Utility Libraries** — SRP (SRP-6a), HtmlAgilityPack, Humanizer, OpenAI, System.Collections.Immutable, ComponentModel.Annotations, DiagnosticSource, IO.Hashing (xxHash/Crc32/Crc64), Text.Json, Threading.Channels.  
-4. **Post-Build DLL Copy** — Output DLLs automatically copied to `../FishMMO-Unity/Assets/Dependencies/` via `CopyDependenciesToUnity` MSBuild target (cross-platform forward-slash paths). System DLLs excluded from copy to avoid Unity conflicts.
+1. **EF Core Stack (pinned 5.0.x)** — EF Core, Abstractions, Relational, Design, Tools (all 5.0.17), EFCore.NamingConventions (snake_case), Npgsql 5.0.18 + Npgsql.EntityFrameworkCore.PostgreSQL 5.0.10. EF Core is **intentionally pinned to 5.0.x** for netstandard2.1 / Unity compatibility; the csproj carries an explicit warning that EF Core 5.0.x was compiled against older `Microsoft.Extensions.*` assemblies, so mixing in 9.0.x surface APIs risks `TypeLoadException` / `MissingMethodException` under Unity's resolver — hard crashes on IL2CPP rather than warnings.  
+2. **Microsoft.Extensions Stack (9.0.4)** — Configuration (+ Json, Abstractions, Binder, EnvironmentVariables), DependencyInjection (+ Abstractions), Logging (+ Abstractions), Caching (Abstractions, Memory), Options, Primitives, Http (pinned to override the transitive 2.1.0 pulled by OpenAI), Bcl.AsyncInterfaces.  
+3. **Utility Libraries** — srp 1.0.7 (SRP-6a), BouncyCastle.Cryptography 2.6.2, Otp.NET 1.4.1 (TOTP), HtmlAgilityPack, Humanizer, OpenAI, ZString, System.Collections.Immutable, ComponentModel.Annotations, DiagnosticSource, IO.Hashing (xxHash/Crc32/Crc64), Text.Json, Text.Encodings.Web, Threading.Channels, Runtime.CompilerServices.Unsafe.  
+4. **Redis Pins** — StackExchange.Redis 2.8.0, Pipelines.Sockets.Unofficial 2.2.8, StackExchange.Redis.Extensions.Core 10.0.0 — transitively pulled by FishMMO-AuthShared, pinned here for solution-wide version consistency.  
+5. **FishMMO Sub-Library Project References** — Builds and forwards FishMMO-AuthShared, FishMMO-ClientAuth, FishMMO-ServerAuth, FishMMO-DB, FishMMO-SharedUtility, and FishMMO-Logger so their DLLs land in Unity alongside the NuGet output.  
+6. **Post-Build DLL Copy** — Output DLLs automatically copied to `../FishMMO-Unity/Assets/Dependencies/` via the `CopyDependenciesToUnity` MSBuild target (cross-platform forward-slash paths). System DLLs excluded from copy to avoid Unity conflicts.  
+7. **Stale DLL Sweep** — `RemoveStaleDependencies` runs before the copy and clears the Unity `Assets/Dependencies` folder, so DLLs from removed NuGet packages do not linger.
 
 ---
 
@@ -181,20 +188,20 @@
 
 **Standalone .NET 8 Discord bot** that bridges in-game chat with a Discord guild.
 
-1. **Game → Discord Chat Relay** — Polls FishMMO chat REST API and forwards game messages to configured Discord channels.  
+1. **Game → Discord Chat Relay** — `ChatPollingService` (an `IHostedService` timer with a `SemaphoreSlim` reentrancy guard) polls the game **database directly** via `NpgsqlDbContextFactory`, tracking `lastProcessedChatId`, and forwards new messages to the mapped Discord channels. There is no chat REST API in this path.  
 2. **Discord → Game Chat Relay** — Discord messages intercepted and pushed back to the game via `GameChatBridgeService`.  
-3. **Account Linking** — `/link` workflow: issues short-lived one-time codes redeemable in-game to link Discord ↔ FishMMO account.  
+3. **Account Linking** — `link` / `unlink` commands (`LinkModule`, `AccountLinkingService`, `PendingLinkVerification`): issues short-lived one-time codes redeemable in-game to link Discord ↔ FishMMO account.  
 4. **Dynamic Channel Management** — Creates/archives Discord channels in response to in-game events (party formed, guild created).  
 5. **Moderation Commands** — Mute, unmute, ban, unban for the chat bridge (uses `BridgeBanService`).  
 6. **Admin Commands** — Reload config, shutdown, diagnostics (owner/admin-only).  
 7. **Character Lookup** — Query character info by name or Discord-linked account.  
-8. **Slash Command Support** — Modern Discord slash commands alongside legacy text-command support.  
+8. **Text Command Handling** — All commands are Discord.Net **text** commands (`CommandService`, `ModuleBase<SocketCommandContext>`, `[Command("…")]`). `CommandHandlingService` accepts either a leading `/` character prefix or an @-mention. Note this is a message prefix, not a registered Discord application command — no `InteractionService` or slash-command registration exists in the project. ~34 commands across General, Admin, Moderation, Character, Link, Database, and CommandList modules (`ping`, `help`, `commands`, `online`, `whois`, `inspect`, `getcharacter`, `getaccount`, `search`, `guild`, `channels`, `scenes`, `sceneservers`, `worldservers`, `status`, `kick`, `ban`/`unban`, `ban-bridge`/`unban-bridge`, `bridge-bans`, `mute-zone`/`unmute-zone`, `my-mutes`, `enable-cmd`/`disable-cmd`, `list-cmds`, `cmd-config`, `require-role`/`unrequire-role`, `cleanup`, `echo`, `link`/`unlink`).  
 9. **Rate Limiting** — Per-user/per-channel sliding-window rate limiter to prevent spam from either side (`RateLimiterService`).  
 10. **Bridge Ban System** — Tracks Discord users banned from the bridge; consulted before forwarding (`BridgeBanService`).  
 11. **Config File Watching** — `BotConfigurationService` watches `appsettings.json` for changes and propagates config at runtime.  
 12. **Generic Host + DI** — Built on `Microsoft.Extensions.Hosting`; all services are `IHostedService` with full DI composition.  
 13. **Database Read-Only Queries** — Admin-gated database queries via `DatabaseModule`.  
-14. **Self-Documenting Help** — `!help` / `/help` command lists all available commands.
+14. **Self-Documenting Help** — `help` and `commands` list available commands, driven by `CommandService` reflection over the registered modules (`CommandListModule`). Per-command enable/disable and role gating come from `CommandPermissionConfig`.
 
 ---
 
@@ -251,17 +258,18 @@
 32. **PostgreSQL Hardening** — Rewrites `pg_hba.conf` to require `scram-sha-256` on all TCP connections, sets `password_encryption` and `listen_addresses` in `postgresql.conf`, reloads via `pg_reload_conf()`. Idempotent via managed markers.  
 33. **PgBouncer Configuration Generation** — Generates `pgbouncer.ini` (transaction pooling, scram-sha-256) and `userlist.txt` (with SCRAM hash from `pg_shadow`) with secure file permissions.  
 34. **Database Credentials File** — Generates `/etc/fishmmo/db-secrets.env` (systemd `EnvironmentFile`) and `~/.config/fish/conf.d/fishmmo-secrets.fish` (fish shell snippet) so database passwords never live in plain-text JSON. Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database, not in env files.  
-35. **AppSettings Secure Wizard** — Interactive configuration wizard for all FishMMO components (Database, IPFetch, Patcher, WebGL, Discord Bot, CMS). Preserves unmanaged JSON keys across writes. Applies `chmod 600` on all output files.
+35. **AppSettings Secure Wizard** — Interactive configuration wizard for all FishMMO components (Database, IPFetch, Patcher, WebGL, Discord Bot, CMS). Preserves unmanaged JSON keys across writes. Applies `chmod 600` on all output files.  
+36. **SecurityKeyInstaller** — Generates CSPRNG keys (`RandomNumberGenerator.Fill`, base64, round-trip validated) and writes them **directly to the database** over a superuser `NpgsqlConnection`, so no env file has to be copied between machines: the ClientGate secret and signing-key KEK into `deployment_secrets` (`client_gate_secret`, `signing_key_kek`) and the connection token HMAC key into `connection_token_keys` (`key_id='shared'`). Superuser credentials come from the interactive prompt or `FISHMMO_PG_SUPERUSER_PASSWORD`. The matching client-side build constants (`ClientApiSecret.generated.cs`, `CertificatePins.generated.cs`, `HostConfig.generated.cs`) are generated separately from **FishMMO Dashboard > Game Settings** in the Unity Editor.
 
 ### Build Automation
-36. **Build All C# Projects** — Discovers and builds all `.csproj` files under the repo root with dependency-prioritized ordering (synchronous for low-priority projects, parallel for independent builds). Copies DLLs to Unity Dependencies.  
-37. **Unity Build Automation** — Headless Unity builds via `-batchmode -nographics -executeMethod` for Client/Server/Addressables. Resolves Unity executable path from environment variable, Unity Hub CLI, or filesystem probing.  
-38. **Unity Hub + Editor Installation** — Installs Unity Hub (Linux: apt/AUR, Windows: official installer) and Unity Editor versions with selectable build support modules via Unity Hub CLI.
+37. **Build All C# Projects** — Discovers and builds all `.csproj` files under the repo root with dependency-prioritized ordering (synchronous for low-priority projects, parallel for independent builds). Copies DLLs to Unity Dependencies.  
+38. **Unity Build Automation** — Headless Unity builds via `-batchmode -nographics -executeMethod` for Client/Server/Addressables. Resolves Unity executable path from environment variable, Unity Hub CLI, or filesystem probing.  
+39. **Unity Hub + Editor Installation** — Installs Unity Hub (Linux: apt/AUR, Windows: official installer) and Unity Editor versions with selectable build support modules via Unity Hub CLI.
 
 ### Platform Support
-39. **Cross-Platform** — Windows 10/11 and Linux (Arch/CachyOS, Ubuntu/Debian, Fedora/RHEL).  
-40. **Package Manager Auto-Detection** — pacman, apt-get, dnf, and yum auto-detected with appropriate update/install command templates.  
-41. **Platform Abstraction** — `IPlatform` interface with `WindowsPlatform` / `LinuxPlatform` implementations for shell command dispatch, privilege elevation, and command availability checks.
+40. **Cross-Platform** — Windows 10/11 and Linux (Arch/CachyOS, Ubuntu/Debian, Fedora/RHEL).  
+41. **Package Manager Auto-Detection** — pacman, apt-get, dnf, and yum auto-detected with appropriate update/install command templates.  
+42. **Platform Abstraction** — `IPlatform` interface with `WindowsPlatform` / `LinuxPlatform` implementations for shell command dispatch, privilege elevation, and command availability checks.
 
 ---
 
@@ -278,25 +286,25 @@
 7. **Pluggable Sink Model** — `ILogger` + `ILoggerConfig` interfaces; register custom sinks via factory before initialization.  
 8. **Polymorphic Config Converter** — `ILoggerConfigConverter` for System.Text.Json round-tripping of sink configs.  
 9. **Console Formatter** — ANSI / plain-text console formatting helpers.  
-10. **Unity Integration** — Unity console bridge (`UnityLoggerBridge`) and Unity-specific console formatter.  
-11. **Async Shutdown** — `Log.Shutdown()` drains and disposes all sinks gracefully.
+10. **Unity Integration** — `UnityLoggerBridge` (captures Unity log callbacks into the facade, with an `IsLoggingInternally` re-entrancy guard), `UnityConsoleLogger` sink, and `UnityConsoleFormatter`. These live in the Unity project under `Assets/Scripts/Shared/Implementation/Bootstrap/Logging/`, not in the FishMMO-Logger library itself, so the library stays engine-independent.  
+11. **Async Shutdown** — `Log.Shutdown()` (async `Task`) drains and disposes all sinks gracefully. Bootstrap detaches `UnityLoggerBridge` before the async shutdown runs.
 
 ---
 
 ## FishMMO-Patcher
 
-**Standalone .NET 8 updater** that applies versioned binary patches to FishMMO clients.
+**Standalone .NET 8 updater** (`Updater/Program.cs`, ~850 lines) that applies a versioned binary patch to a FishMMO client. Invoked by the launcher with `-version=`, `-latestversion=`, `-pid=`, `-exe=`.
 
-1. **Versioned Patch Application** — Applies sequential patches (`1.0.0 → 1.0.1 → 1.1.0`) from ZIP archives.  
-2. **Patch Manifest Parsing** — Reads `manifest.json` describing new/modified/deleted files with hashes.  
-3. **Binary Diff Application** — Applies binary diffs to existing files with pre- and post-hash verification.  
-4. **Parallel File Operations** — New and modified files processed concurrently for speed.  
-5. **Transactional Patching** — Every file backed up before modification; full rollback on any failure.  
-6. **Atomic File Replacement** — Temporary `.new` files atomically moved over originals.  
-7. **Launcher Process Management** — Locates launcher by PID, graceful close with force-kill fallback.  
-8. **Automatic Client Restart** — Starts the updated client executable after successful patch.  
-9. **Multi-Step Version Chain** — Locates and applies all intermediate patch archives in version order.  
-10. **Retry with Backoff** — Configurable retry count and delay for transient file I/O errors.
+1. **Single-Archive Patch Application** — Applies exactly **one** archive per run: `Patches/{from}-{to}.zip`, built from the `-version` and `-latestversion` arguments. There is no patch chaining — if that specific archive is absent the updater logs the miss, restarts the client, and exits.  
+2. **Patch Manifest Parsing** — Reads `manifest.json` from the ZIP into `PatchManifest` (`OldVersion`, `NewVersion`, `NewFiles`, `ModifiedFiles`, `DeletedFiles`).  
+3. **Binary Diff Application** — `Patcher.Apply` reconstructs each modified file from its `PatchDataEntryName` diff stream into a temp file. New files are verified against `NewHash` (XxHash128) after extraction and deleted on mismatch.  
+4. **Parallel File Operations** — New and modified files processed concurrently via `Parallel.ForEach` with an exception bag that stops the loop on first failure.  
+5. **Transactional Patching** — Every replaced file copied to `.bak` before the move; failure anywhere triggers a full rollback to the previous state.  
+6. **Atomic File Replacement** — Patched content written to unique temp files, then moved over originals in a finalization phase.  
+7. **Launcher Process Management** — Terminates the launcher by PID before patching: `kill(SIGTERM)` via a `libc` P/Invoke on Linux/macOS, `Process.CloseMainWindow()` on Windows, falling through to a forced `Kill()` on any path where the graceful request fails or is ignored.  
+8. **Automatic Client Restart** — `TryStartExecutableAndExit` starts the client executable on every exit path (success, failure, missing archive, already-current) and always `Environment.Exit(0)` — the launcher treats a non-zero code as an updater failure.  
+9. **Archive Lifecycle** — The consumed archive is deleted on success so `Patches/` does not accumulate; it is **kept** on failure so a retry does not require re-downloading.  
+10. **Retry with Backoff** — `TryDeleteFile` / `TryMoveFile` retry with a fixed delay for transient file I/O errors before giving up.
 
 ---
 
@@ -309,23 +317,31 @@
 2. **HTTP/HTTPS Gateway (L7)** — TLS 1.2/1.3 termination with Let's Encrypt certificates, HSTS (6 months + includeSubDomains), modern cipher suite (ECDHE+AESGCM:ECDHE+CHACHA20), OCSP stapling.  
 3. **Virtual Hosts** — `play.fishmmo.com` (WebGL client), `api.fishmmo.com` (IPFetch + Patcher), `game.fishmmo.com` (444-close — game traffic is UDP-only). Catch-all returns 444.  
 4. **Rate Limiting** — `limit_req_zone` per-endpoint: 10r/s API, 2r/s patch downloads, 30r/s WebGL. `limit_conn_zone` per-IP: 20 conn WebGL, 10 conn API, 3 conn patch. HTTP 429 with `Retry-After`.  
-5. **Security Headers** — CSP (WebGL: `wasm-unsafe-eval`, `connect-src wss://game.fishmmo.com:*`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `Access-Control-Allow-Origin` for API.  
+5. **Security Headers** — CSP (WebGL: `wasm-unsafe-eval`, `connect-src 'self' wss://game.fishmmo.com:* https://game.fishmmo.com:*`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `Access-Control-Allow-Origin` for API. Browser WebTransport is permitted by the `https://` entry; the `wss://` entry is a leftover from the retired WebSocket transport and grants nothing that is still used.  
 6. **Performance** — `sendfile on`, `tcp_nopush on`, `tcp_nodelay on`, `gzip on` with `gzip_proxied any` (not `off`), `gzip_types` tuned for text/wasm, `keepalive_timeout 65s`.  
-7. **Hardening** — `server_tokens off`, `client_max_body_size 1k` (API), `client_body_timeout 10s`, `client_header_timeout 10s`.  
+7. **Hardening** — `server_tokens off`, `client_max_body_size 64k` globally (raised from nginx's 1m default being too restrictive for POST; the patch download location overrides to `0` / unlimited), `client_body_timeout 10s`, `client_header_timeout 10s`.  
 
 ### Server Configuration (.cfg files)
-8. **LoginServer.cfg** — ServerName, MaximumClients (4000), Address (127.0.0.1 via nginx), Port (7770), TLS certificate paths, SMTP config (with `UseSsl` per-environment).  
-9. **WorldServer.cfg** — Port 7780, same TLS cert paths.  
-10. **SceneServer.cfg** — Port 7790+, StaleSceneTimeout (5 minutes), same TLS cert paths.  
-11. **AutoVerifyAccounts** — `true` in Development (local SMTP), `false` in Release (email verification required).  
+8. **LoginServer.cfg** — ServerName, MaximumClients (4000), Address (127.0.0.1, all traffic via nginx), Port (7770), TLS `CertificatePath`/`PrivateKeyPath` for the server's own QUIC/TLS termination, `AllowedOrigins` (browser WebTransport CORS allow-list; empty = allow all, development only), `ConnectionTokenHmacKeyBase64` (left blank — keys load from the `connection_token_keys` table), and SMTP config (`Smtp:Host/Port/Username/Password/FromAddress/FromName/UseSsl`, each overridable by `FISHMMO_SMTP_*` environment variables).  
+9. **Login Queue Keys** — `LoginQueueUpdateRateSeconds` (2.0), `LoginQueueMaxSize` (500), `LoginQueueAdmissionRatePerSecond` (5.0), `LoginQueueTimeoutSeconds` (300) configure `LoginQueueSystem`. All server-authoritative — clients cannot request faster updates.  
+10. **WorldServer.cfg** — Port 7780, same Address/TLS/connection-token keys.  
+11. **SceneServer.cfg** — Port 7790+, same Address/TLS/connection-token keys. Note `StaleSceneTimeout=5` is present in **all three** .cfg templates, not only SceneServer.  
+12. **IPv6 Reserved** — `EnableIPv6` / `IPv6Address` are commented out in every template. IPv6 dual-stack is not supported at the native QUIC layer; IPv6 clients must arrive through an IPv6-enabled NGINX L4 proxy.  
+13. **AutoVerifyAccounts** — `true` in Development (bypasses email verification, flagged with an explicit do-not-copy-to-production warning), `false` in Production so email verification is required.
 
-### Deploy Hooks
-12. **certbot-fishmmo.sh** — Post-renewal deploy hook: copies Let's Encrypt certs to `/etc/fishmmo/certs/`, `chmod 640`, `chown fishmmo:fishmmo`, reloads nginx, restarts game servers via systemd (with SIGHUP fallback).  
-13. **gen-fishmmo-stream-config.sh** — Regenerates `stream.d/*.conf` for all game UDP ports (230 ports across Login/World/Scene ranges). Validates with `nginx -t` before atomic replacement.  
+### Deploy Hooks (contracts, operator-supplied — **not shipped in this repo**)
+*Neither script exists under `FishMMO-Setup/`. `nginx.conf` and the deployment docs define the contract each must satisfy, and the root README states plainly that they are operator-supplied.*  
+14. **certbot-fishmmo.sh** — Documented post-renewal deploy hook contract: copy Let's Encrypt certs to `/etc/fishmmo/certs/`, `chmod 640`, `chown fishmmo:fishmmo`, reload nginx, restart game servers via systemd (with SIGHUP fallback). Operator installs it to `/usr/local/bin/`.  
+15. **gen-fishmmo-stream-config.sh** — Documented generator contract for `stream.d/*.conf` across the game UDP port ranges, validated with `nginx -t` before atomic replacement. `nginx.conf` includes `/etc/nginx/stream.d/*.conf` and expects this generator at `/usr/local/bin/`.  
+
+### Config Templates
+16. **Per-Environment appsettings** — `Development/` and `Production/` each hold `appsettings.json` plus per-component variants: `appsettings.Database.json`, `appsettings.IpFetchServer.json`, `appsettings.Patcher.json`, `appsettings.WebGLServer.json`, `appsettings.DiscordBot.json`, `appsettings.AppHealthMonitor.json`, `appsettings.CMS.json`. Component projects copy-and-rename these into their build output at build time.  
+17. **Installer Manifests** — `install-config.full.json`, `install-config.quickstart.json`, and `install-config.web.json` (Development only) drive FishMMO-Installer’s non-interactive pipeline.  
+18. **logging.json** — Single shared FishMMO-Logger sink configuration.
 
 ### Build System
-14. **WebTransport Build** — `build_all.sh` master script: Linux (native CMake), Windows (Zig cross-compile), macOS (native CMake).  
-15. **Cross-Platform Paths** — Forward-slash paths in `.csproj` files. `$(Configuration)` used directly (no redundant `BuildConfiguration` property).
+19. **WebTransport Build** — Per-platform scripts in `FishMMO-WebTransport/`; there is **no** `build_all.sh` master script. `build_linux.sh` (native CMake), `build_windows.ps1` / `build_windows_schannel.ps1` (native CMake on Windows), `build_windows_cross.sh` (Zig 0.13+ cross-compile from Linux — downloads the msquic NuGet package for the import library and runtime DLL, compiles with `zig c++ -target x86_64-windows-gnu`, links via `lld-link --out-implib`), `build_macos.sh` (must build on a Mac — msquic’s quictls dependency contains platform-specific assembly that cannot be cross-compiled), plus `rebuild_only.*` incremental helpers.  
+20. **Cross-Platform Paths** — Forward-slash paths in `.csproj` files. `$(Configuration)` used directly (no redundant `BuildConfiguration` property).
 
 ---
 
@@ -341,7 +357,8 @@
 5. **MathHelper** — Mathematical constants: `HalfPI`, `Tau`.  
 6. **RefWrapper\<T\>** — Boxed reference wrapper for value types with implicit conversion.  
 7. **SetOnce\<T\>** — Thread-safe write-once latch with lock-free reads and double-checked locking.  
-8. **IReference** — Marker interface for reference-equality compared objects.
+8. **IReference** — Marker interface for reference-equality compared objects.  
+9. **CryptographicOperationsCompat** — netstandard2.1 shim supplying `ZeroMemory` / fixed-time comparison primitives where `System.Security.Cryptography.CryptographicOperations` is unavailable.
 
 ### Compression
 10. **StringCompression** — GZip compress/decompress for UTF-8 strings.  
@@ -362,7 +379,7 @@
 
 ## FishMMO-Unity — Client
 
-**The player-facing Unity client** (FishMMO.Client assembly, 172 .cs files).
+**The player-facing Unity client** (FishMMO.Client assembly, 175 .cs files).
 
 ### Networking & Connectivity
 1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking via `ClientConnectionManager`.  
@@ -374,121 +391,115 @@
 7. **Death Dialog** — `UITKDeathDialog` with Respawn/Resurrect buttons. Handles `ResurrectOfferBroadcast` for dynamic button visibility.
 
 ### Authentication
-6. **SRP-6a Client Login Flow** — Full SRP-6a protocol: cookie challenge echo, key agreement, verify/proof, token-based reauth.  
-7. **Token-Based Reauthentication** — Stored auth tokens for seamless World/Scene server transitions.  
-8. **Account Creation** — Encrypted credential registration with validation.  
-9. **Account Email Verification** — Verification code submission.  
-10. **TOTP / 2FA Support** — Two-factor code submission and 2FA setup (QR code + recovery codes).  
-11. **Token Renewal & Revocation** — Token refresh on login server and revocation on logout/shutdown.
+8. **SRP-6a Client Login Flow** — Full SRP-6a protocol: cookie challenge echo, key agreement, verify/proof, token-based reauth.  
+9. **Token-Based Reauthentication** — Stored auth tokens for seamless World/Scene server transitions.  
+10. **Account Creation** — Encrypted credential registration with validation.  
+11. **Account Email Verification** — Verification code submission.  
+12. **TOTP / 2FA Support** — Two-factor code submission and 2FA setup (QR code + recovery codes).  
+13. **Token Renewal & Revocation** — Token refresh on login server and revocation on logout/shutdown.
 
 ### Input System
-12. **Unity Input System Integration** — `PlayerInputHandler` manages the `PlayerControls` asset.  
-13. **Mouse Mode Management** — Cursor visibility/lock state toggling.  
-14. **Input Binding Persistence** — Loading/saving input binding overrides to configuration.  
-15. **Character Movement Input** — Move, Look, Jump, Crouch, Sprint mapped to KCC replication data.  
-16. **Full Gameplay Bindings** — Interact, Cancel, Chat, Inventory, Equipment, Abilities, Guild, Party, Friends, Achievements, Factions, Minimap, Menu, Toggle First-Person, ScrollWheel.  
-17. **Right-Click Context Menus** — Inspect, Add Friend, Invite to Party, Trade on player targets.
+14. **Unity Input System Integration** — `PlayerInputHandler` manages the `PlayerControls` asset.  
+15. **Mouse Mode Management** — Cursor visibility/lock state toggling.  
+16. **Input Binding Persistence** — Loading/saving input binding overrides to configuration.  
+17. **Character Movement Input** — Move, Look, Jump, Crouch, Sprint mapped to KCC replication data.  
+18. **Full Gameplay Bindings** — Interact, Cancel, Chat, Inventory, Equipment, Abilities, Guild, Party, Friends, Achievements, Factions, Minimap, Menu, Toggle First-Person, ScrollWheel.  
+19. **Right-Click Context Menus** — Inspect, Add Friend, Invite to Party, Trade on player targets.
 
 ### Launcher
-18. **HTML News Feed** — Fetches and displays launcher news via HtmlAgilityPack → TextMeshPro rich text.  
-19. **API Host Resolution** — Randomised mirror selection from comma-separated host list with HTTPS enforcement.  
-20. **Version Checking** — Compares local version against `/latest_version` API endpoint.  
-21. **Patch Download** — Downloads patch ZIPs with SHA-256 integrity verification and progress display.  
-22. **External Updater Launch** — Spawns the standalone Updater process, monitors exit, reports results.  
-23. **API Request Signing** — HMAC-SHA256 request signing with replay protection (timestamp ±300s, nonce).  
-24. **UnityWebRequest Service** — Shared MonoBehaviour for HTTP requests with retry, timeout, progress callbacks, custom certificate handling.
+20. **HTML News Feed** — Fetches and displays launcher news via HtmlAgilityPack → TextMeshPro rich text (`IHtmlContentFetcher` / `UnityHtmlContentFetcher`).  
+21. **API Host Resolution** — Randomised mirror selection from comma-separated host list with HTTPS enforcement (`ApiHostResolver`).  
+22. **Version Checking** — `HttpPatchServerService` calls `GET /latest_version?from={clientVersion}` and parses `latest_version`, `up_to_date`, `patch_available`, `sha256`, and `size` into `PatchInfo`. Unparseable version strings are rejected rather than thrown on.  
+23. **Patch Download with SHA-256 Verification** — `DownloadPatch(patchUrl, destination, expectedSha256, …)` streams the archive with progress reporting and recomputes SHA-256 over the written file, failing the download on mismatch. Verification is skipped only when the server supplied no hash.  
+24. **Launcher State Machine** — `LauncherState`: LoadingNews, Connecting, CheckingVersion, DownloadingPatch, ApplyingPatch, ReadyToPlay, ClientAhead, ConnectionFailed, VersionCheckFailed, PatchDownloadFailed, UpdaterFailed, LaunchFailed, **PatchUnavailable** (out of date but no patch exists from this specific version — full reinstall required, retry cannot help), VersionError, **ServerRejectedVersion** (game server refused the client's game version).  
+25. **Transient-State Watchdog** — `TransientStateWatchdog` coroutine tracks a heartbeat across transient states (connecting/checking/downloading/applying) and recovers the UI if one stalls, so the player is never left with a dead button and no way to act. A separate `LaunchWatchdog` re-enables the Play button if the addressable scene load exceeds `launchWatchdogTimeoutSeconds` (default 30s).  
+26. **External Updater Launch** — `IUpdaterLauncher` / `SystemUpdaterLauncher` spawns the standalone Updater process, monitors exit, reports results. A non-zero updater exit code surfaces as `UpdaterFailed`.  
+27. **UnityWebRequest Service** — Shared MonoBehaviour for HTTP requests with retry, timeout, progress callbacks, custom certificate handling. Launcher API calls are HMAC-signed via `ClientApiSigner` / `ClientApiSecret` (see Security below).
 
 ### Security
-25. **TLS Certificate Pinning** — SHA-256(SPKI) base64 pinning via BouncyCastle for UnityWebRequest. Constant-time pin comparison. Release builds fail-closed when pins are not configured.  
-26. **IL-Embedded Pin Configuration** — Pins are compiled into the assembly from `CertificatePins.generated.cs`, not loaded from StreamingAssets. Generated via Unity Editor tool at **FishMMO > Security > Fetch Certificate Pins**.  
-27. **TOFU Mode** — Development/editor builds allow empty pins (trust-on-first-use with loud warnings).  
-28. **Build-Time Validation** — `IPreprocessBuildWithReport` warns on release builds without TLS pins (at least 2 required).  
-29. **Dynamic Pin Update Scaffold** — `IPinUpdateSidecar` interface for out-of-band signed manifest updates with UTC validity windows.  
-30. **API Request Signing** — HMAC-SHA256 with `X-FishMMO-Client` header (v1.{ts}.{nonce}.{sig} format), 30s skew window, per-process nonce LRU cache.
+28. **TLS Certificate Pinning** — SHA-256(SPKI) base64 pinning via BouncyCastle for UnityWebRequest. Constant-time pin comparison. Release builds fail-closed when pins are not configured.  
+29. **IL-Embedded Pin Configuration** — Pins are compiled into the assembly from `CertificatePins.generated.cs`, not loaded from StreamingAssets. Generated from the **FishMMO Dashboard** (`FishMMO > FishMMO Dashboard`, or Ctrl+Shift+D) > **Game Settings** panel, which also emits `ClientApiSecret.generated.cs` and `HostConfig.generated.cs`. There is no `FishMMO > Security` menu — these are Dashboard panels, not menu items.  
+30. **TOFU Mode** — Development/editor builds allow empty pins (trust-on-first-use with loud warnings).  
+31. **Build-Time Validation** — `IPreprocessBuildWithReport` warns on release builds without TLS pins (at least 2 required).  
+32. **Dynamic Pin Update Scaffold** — `IPinUpdateSidecar` interface for out-of-band signed manifest updates with UTC validity windows.  
+33. **API Request Signing** — HMAC-SHA256 with `X-FishMMO-Client` header (v1.{ts}.{nonce}.{sig} format), 30s skew window, per-process nonce LRU cache.
 
 ### UI Toolkit (UITK) Panels — Login Flow
-30. **Loading Screen** — Addressable-loaded transition images with progress bar.  
-31. **Reconnect Display** — Reconnect attempt status during network interruptions.  
-32. **Login Panel** — Username/password, TOTP/2FA code, account verification code input.  
-33. **Register Panel** — Username, password, email, age fields.  
-34. **Server Select** — Available game server list.  
-35. **Character Select** — Existing character display with create-new option.  
-36. **Character Create** — Name input and appearance customization.
+34. **Loading Screen** — Addressable-loaded transition images with progress bar.  
+35. **Reconnect Display** — Reconnect attempt status during network interruptions.  
+36. **Login Panel** — Username/password, TOTP/2FA code, account verification code input.  
+37. **Register Panel** — Username, password, email, age fields.  
+38. **Server Select** — Available game server list.  
+39. **Character Select** — Existing character display with create-new option.  
+40. **Character Create** — Name input and appearance customization.
 
 ### UI Toolkit (UITK) Panels — World / In-Game HUD
-37. **Ability Book** — Learned abilities with details.  
-38. **Cast Bar** — Channeling/casting progress display.  
-39. **Ability Crafting** — Ability-based item crafting UI.  
-40. **Achievement Window** — Achievement tracking and completion display.  
-41. **Bank / Storage** — Deposit/withdraw item interface.  
-42. **Buff Container** — Active buff/debuff icon management.  
-43. **Chat Window** — Message history, tabs, channel picker, input.  
-44. **Crosshair** — Reticle display for targeting.  
-45. **Dungeon Finder** — Instance group finder and queue interface.  
-46. **Equipment Window** — Equipped items and character stats.  
-47. **Faction Standings** — Reputation display.  
-48. **Friend List** — Online/offline status.  
-49. **Guild Management** — Members, ranks, info.  
-50. **Hotkey Bar** — Action bar with ability slots.  
-51. **Inventory / Bag Window** — Item grid display.  
-52. **Main Menu** — Settings, logout, quit.  
-53. **Merchant Buy/Sell** — NPC vendor interface.  
-54. **Minimap** — Surrounding area display.  
-55. **NPC Dialogue** — Conversation window.  
-56. **Options / Settings** — Audio, video, keybindings.  
-57. **Party List** — Group member management.  
-58. **Pet Control** — Summon, dismiss, pet abilities.  
-59. **Resource Bars** — Health bar, mana bar, stamina bar.  
-60. **Target Frame** — Target name, health, buffs/debuffs.
+41. **Ability Book** — Learned abilities with details.  
+42. **Cast Bar** — Channeling/casting progress display.  
+43. **Ability Crafting** — Ability-based item crafting UI.  
+44. **Achievement Window** — Achievement tracking and completion display.  
+45. **Bank / Storage** — Deposit/withdraw item interface.  
+46. **Buff Container** — Active buff/debuff icon management.  
+47. **Chat Window** — Message history, tabs, channel picker, input.  
+48. **Crosshair** — Reticle display for targeting.  
+49. **Dungeon Finder** — Instance group finder and queue interface.  
+50. **Equipment Window** — Equipped items and character stats.  
+51. **Faction Standings** — Reputation display.  
+52. **Friend List** — Online/offline status.  
+53. **Guild Management** — Members, ranks, info.  
+54. **Hotkey Bar** — Action bar with ability slots.  
+55. **Inventory / Bag Window** — Item grid display.  
+56. **Main Menu** — Settings, logout, quit.  
+57. **Merchant Buy/Sell** — NPC vendor interface.  
+58. **Minimap** — Surrounding area display.  
+59. **NPC Dialogue** — Conversation window.  
+60. **Options / Settings** — Audio, video, keybindings.  
+61. **Party List** — Group member management.  
+62. **Pet Control** — Summon, dismiss, pet abilities.  
+63. **Resource Bars** — Health bar, mana bar, stamina bar.  
+64. **Target Frame** — Target name, health, buffs/debuffs.
 
 ### UGUI (Legacy Canvas) Panels
-61. Full UGUI equivalents of all login flow and world HUD panels above (loading screen, login, register, server select, character select/create, options with screen settings, chat, inventory, equipment, bank, merchant, abilities, hotkeys, achievements, buffs/debuffs, guild, party, friends, factions, dungeon finder, NPC dialogue, pet, minimap, inspect, chat channels, context menus, crosshair, tooltips).
+65. Full UGUI equivalents of all login flow and world HUD panels above (loading screen, login, register, server select, character select/create, options with screen settings, chat, inventory, equipment, bank, merchant, abilities, hotkeys, achievements, buffs/debuffs, guild, party, friends, factions, dungeon finder, NPC dialogue, pet, minimap, inspect, chat channels, context menus, crosshair, tooltips).
 
 ### Shared UI Components
-62. **Dialog Box** — Modal informational dialog.  
-63. **Input Dialog Box** — Modal dialog with text input field.  
-64. **Color Picker** — Color selection control.  
-65. **Custom Dropdown** — Dropdown control.  
-66. **Selector / Grid** — Item picking grid.  
-67. **Drag Object** — Draggable UI elements.  
-68. **Tooltip** — Item/ability information popup on hover.  
-69. **UI Theming Engine** — `CanvasCrawler` crawls Canvas and applies unified theme (colors, layout, scroll, font, transitions) to all supported Unity UI component types.  
-70. **UI Manager** — Static registry for all UI controls with Show/Hide/Toggle/GetByName, close-on-escape stack, character injection.
+66. **Dialog Box** — Modal informational dialog.  
+67. **Input Dialog Box** — Modal dialog with text input field.  
+68. **Color Picker** — Color selection control.  
+69. **Custom Dropdown** — Dropdown control.  
+70. **Selector / Grid** — Item picking grid.  
+71. **Drag Object** — Draggable UI elements.  
+72. **Tooltip** — Item/ability information popup on hover.  
+73. **UI Theming Engine** — `CanvasCrawler` crawls Canvas and applies unified theme (colors, layout, scroll, font, transitions) to all supported Unity UI component types.  
+74. **UI Manager** — Static registry for all UI controls with Show/Hide/Toggle/GetByName, close-on-escape stack, character injection.
 
 ### 3D World-Space Effects
-71. **3D Label System** — Object-pooled TextMeshPro labels for damage numbers, heal numbers, achievement popups.
-72. **Visual Effects** — 10 configurable effects: FadeIn, FadeOut, FloatUp, FloatRandom, Bounce, Pulse, ScaleUp, ScaleDown, Wave, Shake.  
-73. **Billboard Component** — Makes GameObjects always face the camera (nameplates, health bars).  
-74. **Cinematic Camera** — Camera movement along Unity Spline paths with LookAt target and user skip.  
-75. **Floating Labels** — Damage, heal, achievement, and region name labels in world space.
+75. **3D Label System** — Object-pooled TextMeshPro labels for damage numbers, heal numbers, achievement popups.
+76. **Visual Effects** — 10 configurable effects: FadeIn, FadeOut, FloatUp, FloatRandom, Bounce, Pulse, ScaleUp, ScaleDown, Wave, Shake.  
+77. **Billboard Component** — Makes GameObjects always face the camera (nameplates, health bars).  
+78. **Cinematic Camera** — Camera movement along Unity Spline paths with LookAt target and user skip.  
+79. **Floating Labels** — Damage, heal, achievement, and region name labels in world space.
 
 ### Scene Management
-76. **Addressable-Based Scene Loading** — Scene preloading/postloading with progress tracking.  
-77. **Template Cache Population** — Static permanent addressable loading.  
-78. **Fog Transitions** — Scene fog changes during world transitions. `ClientFogManager` extracted for SRP compliance.  
-79. **World Scene Tracking / Unloading** — Client-side world scene lifecycle management.  
-80. **Postload Scene Lifecycle** — Reloads on quit-to-login, unloads on entering game world.  
-81. **Death Broadcast Handler** — `DeathBroadcast` registered on client for reconnect-while-dead death dialog re-display.
+80. **Addressable-Based Scene Loading** — Scene preloading/postloading with progress tracking.  
+81. **Template Cache Population** — Static permanent addressable loading.  
+82. **Fog Transitions** — Scene fog changes during world transitions. `ClientFogManager` extracted for SRP compliance.  
+83. **World Scene Tracking / Unloading** — Client-side world scene lifecycle management.  
+84. **Postload Scene Lifecycle** — Reloads on quit-to-login, unloads on entering game world.  
+85. **Death Broadcast Handler** — `DeathBroadcast` registered on client for reconnect-while-dead death dialog re-display.
 
 ### Naming & Resolution
-76. **ClientNamingSystem** — ID-to-name and name-to-ID resolution for characters, guilds, pets with server queries and disk persistence (GZip binary).
-
-### Scene Management
-77. **Addressable-Based Scene Loading** — Scene preloading/postloading with progress tracking.  
-78. **Template Cache Population** — Static permanent addressable loading.  
-79. **Fog Transitions** — Scene fog changes during world transitions.  
-80. **World Scene Tracking / Unloading** — Client-side world scene lifecycle management.  
-81. **Postload Scene Lifecycle** — Reloads on quit-to-login, unloads on entering game world.
+86. **ClientNamingSystem** — ID-to-name and name-to-ID resolution for characters, guilds, pets with server queries and disk persistence (GZip binary).
 
 ### WebGL Support
-82. **Browser Key Interception** — Prevents default browser actions (F12, Ctrl+W) during gameplay via JavaScript interop.  
-83. **WebGL Quit** — Calls JavaScript quit function.
+87. **Browser Key Interception** — Prevents default browser actions (F12, Ctrl+W) during gameplay via JavaScript interop (`Assets/Scripts/Client/WebGL/WebGL.jslib`).  
+88. **WebGL Quit** — Calls a JavaScript quit function via `Client.jslib`.
 
 ---
 
 ## FishMMO-Unity — Server
 
-**The headless server** (FishMMO.Server assembly, 210 .cs files). Three server types — Login, World, Scene — launched from one GameServer executable.
+**The headless server** (FishMMO.Server assembly, 211 .cs files). Three server types — Login, World, Scene — launched from one GameServer executable.
 
 ### Core Server Infrastructure
 1. **Server Composition Root** — `Server` MonoBehaviour orchestrates CoreServer, Database, NetworkWrapper, AddressProvider, AccountManager, BehaviourRegistry, DataContainerRegistry.  
@@ -497,7 +508,7 @@
 4. **Periodic Callback System** — `IPeriodicUpdateSystem` for registering/unregistering configurable-interval per-frame callbacks.  
 5. **Server Behaviour System** — ScriptableObject-derived modular server behaviours with unified InitializeOnce/Deinitialize lifecycle.  
 6. **Server Component Registry** — Multi-interface lookup registry for all server components.  
-7. **Runtime Data Containers** — Typed runtime data containers with factory and registry; behaviours can declare required containers via `[RequiresDataContainer]`.  
+7. **Runtime Data Containers** — Typed runtime data containers (`RuntimeDataContainer`) with `RuntimeDataContainerFactory` and `RuntimeDataContainerRegistry`; behaviours declare required containers via `[RequiresDataContainer]`. Per-system containers follow the `<System>SystemRuntimeData` / `I<System>SystemRuntimeData` naming convention — e.g. `PartySystemRuntimeData`/`IPartySystemRuntimeData`, `GuildSystemRuntimeData`, `CharacterSystemRuntimeData`, `ChatSystemRuntimeData`, `WorldSceneSystemRuntimeData`, `NamingSystemRuntimeData`. Shared infrastructure containers (`MainThreadQueueData`, `AsyncWorkerData`) are similarly split per system via marker interfaces such as `IGuildSystemMainThreadQueueData` so systems do not collide on one registry slot.  
 8. **Main Thread Queue** — Thread-safe main-thread action queue for marshalling async worker results to the Unity thread.  
 9. **Async Worker Queue** — Centralized bounded async work queue with backpressure and entity-keyed ordering (FIFO per key via consistent hashing).  
 10. **IngressGuard** — Per-connection, per-operation debounce and in-flight guard to prevent duplicate/replay/DoS attacks (ConcurrentDictionary-backed, bounded, periodic sweep).  
@@ -520,52 +531,53 @@
 23. **Account Creation System** — Per-IP rate limiting with `ExpiringKeyTracker`, per-IP block after N failures, global hourly account creation cap (DoS shield), per-username verification failure lockout (60 min after 5 failures). AES-256-GCM encrypted credential decryption, mandatory TOTP 2FA setup with encrypted secret storage, recovery code generation/hashing, encrypted otpauth URI delivery.  
 24. **Character Create System** — Template-validated character creation with starting equipment/abilities/hotkeys initialization, `MaxCharacters` per account enforcement.  
 25. **Character Select System** — Character listing, selection, and deletion for player accounts.  
-26. **Server Select System** — World server list provisioning from database.
+26. **Server Select System** — World server list provisioning from database.  
+27. **Login Queue System** — `LoginQueueSystem` (`ServerBehaviour`) holds a FIFO queue, backed by `ArrivalOrderTracker<TKey>` for O(1) add/remove by connection, for clients arriving while the server is at authentication capacity. Queued clients stay connected at the QUIC layer and receive `LoginQueuePositionBroadcast` position updates every `LoginQueueUpdateRateSeconds`; on reaching position 0 the client re-initiates the handshake and proceeds through normal auth. Admission is rate-smoothed via `LoginQueueAdmissionRatePerSecond` so newly admitted clients cannot immediately re-saturate auth capacity. Clients beyond `LoginQueueMaxSize` are rejected with `ClientAuthenticationResult.ServerBusy` (`ServerBusyBroadcast`) rather than queued; clients exceeding `LoginQueueTimeoutSeconds` receive position -1 and are disconnected. All parameters are server-authoritative.
 
 ### WorldServer Features
-27. **World Server Registration** — DB registration, periodic heartbeat with character count.  
-28. **World Server Authenticator** — Token auth with per-account login debounce, server-lock check, combined admission gate (DB connection count + recently admitted usernames burst prevention), selected-character validation.  
-29. **World Scene System** — Open world and instanced scene routing, connection authentication, instance lookup with debounce and TTL caching, waiting queue management with TTL purge, DB updates.  
-30. **Kick Request System** — Periodic DB polling for admin-initiated kicks, player disconnection via main-thread marshalling.
+28. **World Server Registration** — DB registration, periodic heartbeat with character count.  
+29. **World Server Authenticator** — Token auth with per-account login debounce, server-lock check, combined admission gate (DB connection count + recently admitted usernames burst prevention), selected-character validation.  
+30. **World Scene System** — Open world and instanced scene routing, connection authentication, instance lookup with debounce and TTL caching, waiting queue management with TTL purge, DB updates.  
+31. **Kick Request System** — Periodic DB polling for admin-initiated kicks, player disconnection via main-thread marshalling.
 
 ### SceneServer Features
-31. **Scene Server Registration** — DB registration, periodic heartbeat pulses with scene character counts.  
-32. **Scene Loading/Unloading** — FishNet SceneManager orchestration, pending scene queue processing from DB, stale scene cleanup.  
-33. **Character System** — Full lifecycle: loading from DB, spawning, periodic saves (configurable interval), despawning, disconnect cleanup. Session ownership with claim/release and lease refresh. Teleportation, out-of-bounds checks, death/respawn.  
-34. **Character Inventory System** — Item moves, swaps, splits across inventory, equipment, and bank containers. Persists changes to DB.  
-35. **Equipment System** — Equip/unequip with slot validation.  
-36. **Bank System** — Bank/storage slot management.  
-37. **Chat System** — Local (proximity), World, Party, Guild, and Private (whisper/tell) chat channels. Lock-free incoming queue with O(1) size counter. Batch DB persistence. Token-bucket rate limiting.  
-38. **Guild System** — Creation, membership, ranks, invitations (TTL-expiring), periodic update pump, character connect/disconnect tracking.  
-39. **Party System** — Creation, membership, invitations (TTL-expiring), character connect/disconnect tracking.  
-40. **Friend System** — Add/remove friends with validation, online status tracking, `MaxFriends` enforcement.  
-41. **Achievement System** — Progress tracking, completion events, reward delivery.  
-42. **Quest System** — Event handling, auto-progression, reward delivery, DB persistence.  
-43. **Pet System** — Summoning, following, staying, releasing, AI initialization, death handling.  
-44. **Hotkey System** — Player hotkey configuration for abilities/items with ingress debounce protection.  
-45. **Naming System** — Character/guild ID ↔ name resolution with bounded TTL caches and negative caching.  
-46. **Interactable System** — NPC interaction, merchant purchases (items/abilities), ability crafting, world containers, server-authoritative dialogues (ECA-driven), dungeon finder entrance, mailbox (send/receive/delete mail).  
-47. **Faction System** — Faction relationship management.  
-48. **Scene Channel System** — Open-world channel listing and same-server channel switching with per-connection cooldown enforcement.
+32. **Scene Server Registration** — DB registration, periodic heartbeat pulses with scene character counts.  
+33. **Scene Loading/Unloading** — FishNet SceneManager orchestration, pending scene queue processing from DB, stale scene cleanup.  
+34. **Character System** — Full lifecycle: loading from DB, spawning, periodic saves (configurable interval), despawning, disconnect cleanup. Session ownership with claim/release and lease refresh. Teleportation, out-of-bounds checks, death/respawn.  
+35. **Character Inventory System** — Item moves, swaps, splits across inventory, equipment, and bank containers. Persists changes to DB.  
+36. **Equipment System** — Equip/unequip with slot validation.  
+37. **Bank System** — Bank/storage slot management.  
+38. **Chat System** — Local (proximity), World, Party, Guild, and Private (whisper/tell) chat channels. Lock-free incoming queue with O(1) size counter. Batch DB persistence. Token-bucket rate limiting.  
+39. **Guild System** — Creation, membership, ranks, invitations (TTL-expiring), periodic update pump, character connect/disconnect tracking.  
+40. **Party System** — Creation, membership, invitations (TTL-expiring), character connect/disconnect tracking.  
+41. **Friend System** — Add/remove friends with validation, online status tracking, `MaxFriends` enforcement.  
+42. **Achievement System** — Progress tracking, completion events, reward delivery.  
+43. **Quest System** — Event handling, auto-progression, reward delivery, DB persistence.  
+44. **Pet System** — Summoning, following, staying, releasing, AI initialization, death handling.  
+45. **Hotkey System** — Player hotkey configuration for abilities/items with ingress debounce protection.  
+46. **Naming System** — Character/guild ID ↔ name resolution with bounded TTL caches and negative caching.  
+47. **Interactable System** — NPC interaction, merchant purchases (items/abilities), ability crafting, world containers, server-authoritative dialogues (ECA-driven), dungeon finder entrance, mailbox (send/receive/delete mail).  
+48. **Faction System** — Faction relationship management.  
+49. **Scene Channel System** — Open-world channel listing and same-server channel switching with per-connection cooldown enforcement.
 
 ### Server Authority & Security
-49. **CharacterStateValidation** — Centralized static validation gate for all broadcast handlers. `CanAct()` rejects dead, teleporting, frozen, and unloaded characters. `CanActOrMove()` additionally rejects in-combat characters. `TryGetPlayerAndValidate(conn, out player)` canonical pattern resolves player from connection and validates in one call. Called at entry of every state-mutating broadcast handler.
-50. **Comprehensive CanAct Coverage** — All server-side broadcast handlers validated: CharacterInventory (6 ops), Bank (2 ops), Equipment (2 ops), Quest (3 ops), Guild (7 ops), Party (7 ops), Friend (2 ops), Pet (4 ops), Hotkey (2 ops), Chat, Interactable. Movement pipeline also gated server-side in KCCPlayer.OnReplicate.
-51. **Per-Account Rate Limiting** — Auth callback rate limit keyed by account name (not ClientId), preventing multi-connection bypass. Separate per-connection rate limit for scene unload broadcasts.
-52. **Respawn/Resurrect IngressGuard** — Per-operation IngressGuard (2s debounce) on respawn-at-bind-point and resurrect-accept handlers. Prevents spam and concurrent-operation races.
-53. **TCP/TLS Transport Encryption** — All network traffic encrypted at transport layer.
+50. **CharacterStateValidation** — Centralized static validation gate for all broadcast handlers. `CanAct()` rejects dead, teleporting, frozen, and unloaded characters. `CanActOrMove()` additionally rejects in-combat characters. `TryGetPlayerAndValidate(conn, out player)` canonical pattern resolves player from connection and validates in one call. Called at entry of every state-mutating broadcast handler.
+51. **Comprehensive CanAct Coverage** — All server-side broadcast handlers validated: CharacterInventory (6 ops), Bank (2 ops), Equipment (2 ops), Quest (3 ops), Guild (7 ops), Party (7 ops), Friend (2 ops), Pet (4 ops), Hotkey (2 ops), Chat, Interactable. Movement pipeline also gated server-side in KCCPlayer.OnReplicate.
+52. **Per-Account Rate Limiting** — Auth callback rate limit keyed by account name (not ClientId), preventing multi-connection bypass. Separate per-connection rate limit for scene unload broadcasts.
+53. **Respawn/Resurrect IngressGuard** — Per-operation IngressGuard (2s debounce) on respawn-at-bind-point and resurrect-accept handlers. Prevents spam and concurrent-operation races.
+54. **TCP/TLS Transport Encryption** — All network traffic encrypted at transport layer.
 
 ### Observer LOD System
-54. **HashGrid Spatial Partitioning** — FishNet `HashGrid` component on NetworkManager (Accuracy=70, GridAxes=XZ). O(1) hash-based proximity: objects in same or adjacent grid cells are "nearby." Covers ~105m effective radius.
-55. **Global Observer Conditions** — `ObserverManager` configured with `SceneCondition` (never observe cross-scene) + `GridCondition` (spatial hash pre-filter). Applied to all `NetworkObject`s with `OverrideType = AddMissing`.
-56. **Tiered Distance Conditions** — Four `DistanceCondition` ScriptableObjects (FishMMO → Create Observer Distance Conditions): Player(100m/10% hysteresis), Monster(50m/15%), Interactable(30m/10%), WorldItem(15m/20%). Added per-prefab on `NetworkObserver`.
-57. **Bandwidth Reduction** — Per-client observer bandwidth drops from ~256 KB/s to ~43 KB/s (83% reduction) with full observer condition setup. Server aggregate outbound drops from ~25.6 MB/s to ~4.3 MB/s for 100 players + 100 NPCs.
+55. **HashGrid Spatial Partitioning** — FishNet `HashGrid` component on the SceneServer scene's NetworkManager (`_accuracy: 70`). O(1) hash-based proximity: objects in the same or adjacent grid cells are "nearby." **Note:** `_gridAxes` is currently serialized as `0` = `XY`, not `XZ` — for a horizontal-plane world this is very likely a misconfiguration and should be reviewed.
+56. **Global Observer Conditions** — The scene's `ObserverManager` `_defaultConditions` list holds exactly two assets: FishNet's stock `SceneCondition` (never observe cross-scene) and `GridCondition` (spatial hash pre-filter), applied to all `NetworkObject`s.
+57. **Tiered Distance Conditions (authored, not yet wired)** — Four `DistanceCondition` ScriptableObjects live in `Assets/Settings/ObserverConditions/`: `PlayerDistanceCondition` (100m, `_hideDistancePercent` 0.1), `MonsterDistanceCondition` (50m, 0.15), `InteractableDistanceCondition` (30m, 0.1), `WorldItemDistanceCondition` (15m, 0.2). They are plain assets — there is no "FishMMO → Create Observer Distance Conditions" editor menu — and as of this revision **no prefab or scene references any of their GUIDs**, so no `NetworkObserver` currently applies them. Wiring them onto the relevant prefabs is outstanding work.
+58. **Bandwidth Reduction (projected)** — With the full observer condition setup applied, per-client observer bandwidth is projected to drop from ~256 KB/s to ~43 KB/s (83% reduction), and server aggregate outbound from ~25.6 MB/s to ~4.3 MB/s for 100 players + 100 NPCs. These are design targets for the completed setup, not measurements of the current wiring (see 56).
 
 ---
 
 ## FishMMO-Unity — Shared
 
-**The shared entity and logic layer** (FishMMO.Shared assembly, 579 .cs files). Used by both client and server, containing all entity definitions, the ECA trigger system, templates, network broadcasts, and prediction pipeline.
+**The shared entity and logic layer** (FishMMO.Shared assembly, 585 .cs files). Used by both client and server, containing all entity definitions, the ECA trigger system, templates, network broadcasts, and prediction pipeline.
 
 ### Character System
 1. **ICharacter / IPlayerCharacter Interfaces** — Root character contracts: ID, name, transform, collider, network object, prediction manager, observers, flags, behaviours, triggers.  
@@ -579,167 +591,174 @@
 ### ECA Trigger System (Entity-Component-Action)
 *The data-driven trigger/action pipeline powering abilities, quests, dialogue, interactables, and game events.*
 
-6. **Trigger System Core** — `Trigger` ScriptableObjects with `TargetSelector` + `Conditions` + `OnConditionsMetActions` + `OnConditionsNotMetActions`. Fault isolation (throwing actions caught/logged).  
-7. **EventData** — Typed event context container: Initiator, Target, TargetCharacter, RNG, ConditionFilter. Supports typed sub-payloads, forking, merging.  
-8. **Polymorphic Serialization** — All actions/conditions/selectors use `[SerializeReference]` + `[SubclassSelector]` for designer-authored Inspector workflows.
+8. **Trigger System Core** — `Trigger` ScriptableObjects with `TargetSelector` + `Conditions` + `OnConditionsMetActions` + `OnConditionsNotMetActions`. Fault isolation (throwing actions caught/logged).  
+9. **EventData** — Typed event context container: Initiator, Target, TargetCharacter, RNG, ConditionFilter. Supports typed sub-payloads, forking, merging.  
+10. **Polymorphic Serialization** — All actions/conditions/selectors use `[SerializeReference]` + `[SubclassSelector]` for designer-authored Inspector workflows.
 
-#### ECA Actions (~80 implementations)
-9. **Combat Actions** — ApplyDamage, ApplyHeal, ApplyBuff, ApplyDispel, ConsumeResource, Interrupt, KnockbackHit.  
-10. **Ability Actions** — AbilityApplyArea, AbilityApplyTarget, AbilityForkHit, AbilityHitCount, AbilityMoveTransform, AbilityPierceHit, AbilitySpawnMultiply.  
-11. **Item Actions** — EquipItem, UnequipItem, GiveItem, RemoveItem. (Equip/Unequip `#if UNITY_SERVER` guarded — persistent state mutations never run during prediction replay.)  
-12. **Quest Actions** — AcceptQuest, AbandonQuest, AdvanceQuestObjective, CompleteQuest, FailQuest, TurnInQuest.  
-13. **Interactable Actions** — Bindstone, GatheringNode, LoreObject, NPCLookAtInteractor, PickupWorldItem, SendAbilityCrafterBroadcast, SendBankerBroadcast, SendContainerOpenBroadcast, SendDungeonFinderBroadcast, SendMailboxBroadcast, SendMerchantBroadcast, SendQuestOffer, Shrine, Switch, Teleport.  
-14. **Region Actions** — ApplyRegionAttribute, ApplyRegionBuff, ChangeFog, ChangeSkybox, DisplayRegionName, PlayRegionAudio.  
-15. **Utility Actions** — AchievementIncrement, AddFaction, ClearTarget, DestroyObject, DisplayDialogue, PlayFX. (DestroyObject `#if UNITY_SERVER` guarded; PlayFX/ClearTarget suppress during prediction replay via `IsReplicateTick`.)
+#### ECA Actions (52 implementations)
+11. **Combat Actions** — ApplyDamage, ApplyHeal, ApplyRevive, ApplyBuff, ApplyDispel, ConsumeResource, Interrupt, KnockbackHit.  
+12. **Ability Actions** — AbilityApplyArea, AbilityApplyTarget, AbilityForkHit, AbilityHitCount, AbilityMoveTransform, AbilityPierceHit, AbilitySpawnMultiply.  
+13. **Item Actions** — EquipItem, UnequipItem, GiveItem, RemoveItem. (Equip/Unequip `#if UNITY_SERVER` guarded — persistent state mutations never run during prediction replay.)  
+14. **Quest Actions** — AcceptQuest, AbandonQuest, AdvanceQuestObjective, CompleteQuest, FailQuest, TurnInQuest.  
+15. **Interactable Actions** — Bindstone, GatheringNode, LoreObject, NPCLookAtInteractor, PickupWorldItem, SendAbilityCrafterBroadcast, SendBankerBroadcast, SendContainerOpenBroadcast, SendDungeonFinderBroadcast, SendMailboxBroadcast, SendMerchantBroadcast, SendQuestOffer, Shrine, Switch, Teleport.  
+16. **Region Actions** — ApplyRegionAttribute, ApplyRegionBuff, ChangeFog, ChangeSkybox, DisplayRegionName, PlayRegionAudio.  
+17. **Utility Actions** — AchievementIncrement, AddFaction, ClearTarget, DestroyObject, DisplayDialogue, PlayFX. (DestroyObject `#if UNITY_SERVER` guarded; PlayFX/ClearTarget suppress during prediction replay via `IsReplicateTick`.)
 
-#### ECA Conditions (~30 implementations)
-16. **Combat/Attribute Conditions** — HasResource, HasRequiredAttribute, HasBuff, HasCooldown, IsCharacterAlive, IsImmortal.  
-17. **Equipment/Inventory Conditions** — CanEquipItem, HasEquippedItem, CanUseItem, HasInventoryItem, HasInventorySpace, HasBankItem, HasBankSpace.  
-18. **Social/Progression Conditions** — HasGuild, HasParty, HasFaction, TargetAlliance, IsArchetype, IsRace, HasPet.  
-19. **Quest Conditions** — CanAcceptQuest, HasQuest, QuestObjectiveComplete, QuestStatus.  
-20. **Achievement Conditions** — AchievementCompleted.  
-21. **Composite Conditions** — AND/OR gate with `ConditionTargetCombine` (All/Any) and `Invert` flag.
+#### ECA Conditions (30 implementations)
+*There is no separate composite/AND-OR condition type. Every `BaseCondition` carries a `ConditionTargetCombine Combine` field (All/Any, default All) governing how per-target results aggregate, plus a universal `Invert` flag the framework applies in `Check()` — derived classes must not apply it themselves.*
+18. **Combat/Attribute Conditions** — HasResource, HasRequiredAttribute, HasBuff, HasCooldown, HitCount, IsCharacterAlive, IsImmortal.  
+19. **Equipment/Inventory Conditions** — CanEquipItem, HasEquippedItem, CanUseItem, HasInventoryItem, HasInventorySpace, HasBankItem, HasBankSpace.  
+20. **Social/Progression Conditions** — HasGuild, HasParty, HasFaction, TargetAlliance, IsArchetype, IsRace, HasPet.  
+21. **Quest Conditions** — CanAcceptQuest, HasQuest, QuestObjectiveComplete, QuestStatus.  
+22. **Achievement Conditions** — AchievementCompleted.  
+23. **Presence/Controller Conditions** — HasTarget, IsCharacterNPC, HasAttributeController, HasBankController.
 
-#### ECA Target Selectors (14 types)
-22. **Basic** — EventTarget, Initiator, NearestTarget, FurthestTarget, RandomTarget, AllCharacters.  
-23. **Spatial** — AreaTarget, ConeTarget, LineTarget, ChainTarget.  
-24. **Hierarchy** — ChildrenTarget.  
-25. **Named/Tagged** — NamedSceneObjectTarget, TaggedSceneObjectTarget.
+#### ECA Target Selectors (13 types)
+*All derive from the abstract `TargetSelector` base (`Conditions` list + `SelectTargets(EventData)`). Selectors are attachable on the `Trigger` itself and, optionally, per-condition and per-action for additional fan-out.*
+24. **Basic** — `EventTargetSelector`, `InitiatorTargetSelector`, `NearestTargetSelector`, `FurthestTargetSelector`, `RandomTargetSelector`, `AllCharactersTargetSelector`.  
+25. **Spatial** — `AreaTargetSelector`, `ConeTargetSelector`, `LineTargetSelector`, `ChainTargetSelector`.  
+26. **Hierarchy** — `ChildrenTargetSelector`.  
+27. **Named/Tagged** — `NamedSceneObjectTargetSelector`, `TaggedSceneObjectTargetSelector`.
 
 #### ECA Value Providers (10 types)
-26. ConstantFloat, ConstantInt, RandomRangeFloat, RandomRangeInt, StatScaledFloat, StatScaledInt, DamageAmount, HealAmount, FactionAmount, QuestObjectiveAmount.
+28. `ConstantValue`, `ConstantFloatValue`, `RandomRangeValue`, `RandomRangeFloatValue`, `StatScaledValue`, `StatScaledFloatValue`, `DamageAmountValue`, `HealAmountValue`, `FactionAmountValue`, `QuestObjectiveAmountValue`.
 
 ### Item System
-27. **Item Template Hierarchy** — `BaseItemTemplate` → `ConsumableTemplate` / `EquippableItemTemplate` → concrete: Potion, Scroll, Armor, Weapon.  
-28. **Runtime Item** — `Item` with optional `ItemEquippable`, `ItemStackable`, `ItemGenerator` components.  
-29. **Item Generation** — `ItemGenerator` using `DeterministicRNG` for seed-based stat rolls (AttackPower, AttackSpeed, ArmorBonus + random attributes from databases).  
-30. **Item Attributes** — Template-driven attribute system with min/max values linked to CharacterAttributeTemplates.  
-31. **Item Containers** — `IItemContainer` with slot locking, stacking, swapping. `InventoryController`, `EquipmentController`, `BankController` implementations.  
-32. **Item Slots** — Head, Chest, Shoulders, Hands, Legs, Feet, Back, Primary, Secondary, Accessory (10 slots).
+29. **Item Template Hierarchy** — `BaseItemTemplate` → `ConsumableTemplate` / `EquippableItemTemplate` → concrete: Potion, Scroll, Armor, Weapon.  
+30. **Runtime Item** — `Item` with optional `ItemEquippable`, `ItemStackable`, `ItemGenerator` components.  
+31. **Item Generation** — `ItemGenerator` using `DeterministicRNG` for seed-based stat rolls (AttackPower, AttackSpeed, ArmorBonus + random attributes from databases).  
+32. **Item Attributes** — Template-driven attribute system with min/max values linked to CharacterAttributeTemplates.  
+33. **Item Containers** — `IItemContainer` with slot locking, stacking, swapping. `InventoryController`, `EquipmentController`, `BankController` implementations.  
+34. **Item Slots** — Head, Chest, Shoulders, Hands, Legs, Feet, Back, Primary, Secondary, Accessory (10 slots).
 
 ### Ability System
-33. **Ability Templates** — `BaseAbilityTemplate` → `AbilityTemplate` / `PetAbilityTemplate` with ActivationTime, LifeTime, Speed, Cooldown, Price, RequiresTarget, HitCount.  
-34. **ECA Ability Events** — OnTick, OnHit, OnPreSpawn, OnSpawn, OnDestroy — each with configurable ECA triggers.  
-35. **Ability Activation State Machine** — Resource cost validation via `IResourceCost` conditions, activation queuing, consumable support, network sync.  
-36. **AbilityObject** — Networked GameObject for projectiles/AoE with lifetime, collision, tick handling, and snapshot reconciliation.  
-37. **Ability Knowledge System** — Learned abilities, base abilities, ability events, event subset tracking.  
-38. **Cooldown System** — Tick-based immutable `CooldownInstance` with reconcile snapshots, static events for add/update/remove.
+35. **Ability Templates** — `BaseAbilityTemplate` → `AbilityTemplate` / `PetAbilityTemplate` with ActivationTime, LifeTime, Speed, Cooldown, Price, RequiresTarget, HitCount.  
+36. **ECA Ability Events** — OnTick, OnHit, OnPreSpawn, OnSpawn, OnDestroy — each with configurable ECA triggers.  
+37. **Ability Activation State Machine** — Resource cost validation via `IResourceCost` conditions, activation queuing, consumable support, network sync.  
+38. **AbilityObject** — Networked GameObject for projectiles/AoE with lifetime, collision, tick handling, and snapshot reconciliation.  
+39. **Ability Knowledge System** — Learned abilities, base abilities, ability events, event subset tracking.  
+40. **Cooldown System** — Tick-based immutable `CooldownInstance` with reconcile snapshots, static events for add/update/remove.
 
 ### Buff/Debuff System
-39. **Runtime Buff** — Tick-based timing (ExpiryTick, NextTickTick), stack count, cumulative tick multiplier.  
-40. **Buff Template Types** — AttributeBuff (flat stat modifier), AttributeTickBuff (per-tick modifier), ResourceTickBuff (DoT/HoT), StateBuff (stun/freeze/mesmerize), CompositeBuff.  
-41. **Buff Reconciliation** — `BuffReconcileEntry` for deterministic rollback in the prediction pipeline.
+41. **Runtime Buff** — Tick-based timing (ExpiryTick, NextTickTick), stack count, cumulative tick multiplier.  
+42. **Buff Template Types** — AttributeBuff (flat stat modifier), AttributeTickBuff (per-tick modifier), ResourceTickBuff (DoT/HoT), StateBuff (stun/freeze/mesmerize), CompositeBuff.  
+43. **Buff Reconciliation** — `BuffReconcileEntry` for deterministic rollback in the prediction pipeline.
 
 ### Character Attribute System
-42. **Three-Tier Value System** — baseValue + formulaModifier + externalModifier = finalValue. Parent/child dependency graph with formula propagation.  
-43. **Resource Attributes** — `CharacterResourceAttribute` extends with currentValue (health/mana/stamina), clamping, regeneration.  
-44. **Attribute Formulas** — Flat bonus and percentage bonus formulas with dependency tracking.  
-45. **Propagation Batching** — Deferred notifications with suppression for replay performance.  
-46. **Tick-Driven Regeneration** — Monotonic guard against double-advance.  
-47. **Damage System** — `CharacterDamageController`: damage, healing, kill, resurrection, combat state management with full ECA trigger invocation. Client+server deterministic prediction (Damage/Heal/Revive run on both sides; Kill server-only for non-deterministic side effects). Healer enters combat when healing an in-combat ally.
-48. **Damage Types & Resistances** — `DamageAttributeTemplate` (physical, fire, frost, etc.) and `ResistanceAttributeTemplate` pairing.  
-49. **Death System** — Player death shows dialog with Respawn/Resurrect options. NPC corpse decay timer (configurable per spawner). `ResurrectOfferBroadcast`/`ResurrectAcceptBroadcast`/`RespawnAtBindPointBroadcast`/`DeathBroadcast`. Reconnect-while-dead re-shows death dialog.  
-50. **Revive** — `Revive(ICharacter, int)` works on dead characters (unlike Heal). Fires `OnResurrected` static event, resets death animation, fires ECA resurrect triggers.
+44. **Three-Tier Value System** — baseValue + formulaModifier + externalModifier = finalValue. Parent/child dependency graph with formula propagation.  
+45. **Resource Attributes** — `CharacterResourceAttribute` extends with currentValue (health/mana/stamina), clamping, regeneration.  
+46. **Attribute Formulas** — Flat bonus and percentage bonus formulas with dependency tracking.  
+47. **Propagation Batching** — Deferred notifications with suppression for replay performance.  
+48. **Tick-Driven Regeneration** — Monotonic guard against double-advance.  
+49. **Damage System** — `CharacterDamageController`: damage, healing, kill, resurrection, combat state management with full ECA trigger invocation. Client+server deterministic prediction (Damage/Heal/Revive run on both sides; Kill server-only for non-deterministic side effects). Healer enters combat when healing an in-combat ally.
+50. **Damage Types & Resistances** — `DamageAttributeTemplate` (physical, fire, frost, etc.) and `ResistanceAttributeTemplate` pairing.  
+51. **Death System** — Player death shows dialog with Respawn/Resurrect options. NPC corpse decay timer (configurable per spawner). `ResurrectOfferBroadcast`/`ResurrectAcceptBroadcast`/`RespawnAtBindPointBroadcast`/`DeathBroadcast`. Reconnect-while-dead re-shows death dialog.  
+52. **Revive** — `Revive(ICharacter, int)` works on dead characters (unlike Heal). Fires `OnResurrected` static event, resets death animation, fires ECA resurrect triggers.
 
 ### Client-Side Prediction Pipeline
-49. **Unified Prediction Controller** — `CharacterPredictionController` discovers all `IPredictableController` components, stable-sorts by Order with deterministic type-name tiebreaker, drives a single FishNet Prediction V2 pipeline.  
-50. **Participating Subsystems** — KCC movement (Order 80), BuffController (85), CooldownController (90), EquipmentController (93), CharacterAttributeController (95), AbilityController (100).  
-51. **Type-Safe Ticks** — `PredictionTick` struct prevents accidental raw tick usage.  
-52. **Delta Compression** — `CharacterReconcileDataDeltaSerializer`, `CharacterAttributeResourceStateSerializer`, KCC motor state delta serializer for bandwidth-efficient sync (~43 bytes/tick typical, ~86 bytes/tick combat).  
-53. **Deterministic RNG** — xoshiro128** algorithm with full 128-bit state capture in reconcile data. All prediction-path code uses `DeterministicRNG` — zero `UnityEngine.Random` or `System.Random`.  
-54. **Shared Speed Enforcement** — `MaxAllowedSpeed = SprintSpeed × 3.0f` runs identically on client and server in shared code. No server-only branches.  
-55. **Motor PhysicsScene Init** — `KCCPlayer.Awake` initializes motor's `PhysicsScene` from GameObject scene, ensuring client collision queries (ground detection, wall collision) work identically to server.  
-56. **Deterministic Ability Math** — `Math.Ceiling(double)` replaces `Mathf.CeilToInt(float)` for platform-independent activation time rounding (prevents x86/ARM one-tick mismatches).  
-57. **Physics Query Guards** — All ECA target selectors (`AreaTarget`, `ConeTarget`, `LineTarget`, `ChainTarget`, `NearestTarget`, `FurthestTarget`, `RandomTarget`) and `AbilityApplyAreaAction` suppress physics queries during prediction replay via `IsReplicateTick` guard.  
-58. **Reconcile Delta Efficiency** — Delta serializer sends only changed fields. Idle tick: ~20 bytes. Walking: ~43 bytes. Combat: ~86 bytes. Full struct: ~223-1300 bytes raw → 95-97% reduction.
+53. **Unified Prediction Controller** — `CharacterPredictionController` discovers all `IPredictableController` components, stable-sorts by Order with deterministic type-name tiebreaker, drives a single FishNet Prediction V2 pipeline.  
+54. **Participating Subsystems** — KCC movement (Order 80), BuffController (85), CooldownController (90), EquipmentController (93), CharacterAttributeController (95), AbilityController (100).  
+55. **Type-Safe Ticks** — `PredictionTick` struct prevents accidental raw tick usage.  
+56. **Delta Compression** — `CharacterReconcileDataDeltaSerializer`, `CharacterAttributeResourceStateSerializer`, KCC motor state delta serializer for bandwidth-efficient sync (~43 bytes/tick typical, ~86 bytes/tick combat).  
+57. **Deterministic RNG** — xoshiro128** algorithm with full 128-bit state capture in reconcile data. All prediction-path code uses `DeterministicRNG` — zero `UnityEngine.Random` or `System.Random`.  
+58. **Shared Speed Enforcement** — `MaxAllowedSpeed = SprintSpeed × 3.0f` runs identically on client and server in shared code. No server-only branches.  
+59. **Motor PhysicsScene Init** — `KCCPlayer.Awake` initializes motor's `PhysicsScene` from GameObject scene, ensuring client collision queries (ground detection, wall collision) work identically to server.  
+60. **Deterministic Ability Math** — `Math.Ceiling(double)` replaces `Mathf.CeilToInt(float)` for platform-independent activation time rounding (prevents x86/ARM one-tick mismatches).  
+61. **Physics Query Guards** — All ECA target selectors (`AreaTargetSelector`, `ConeTargetSelector`, `LineTargetSelector`, `ChainTargetSelector`, `NearestTargetSelector`, `FurthestTargetSelector`, `RandomTargetSelector`) and `AbilityApplyAreaAction` suppress physics queries during prediction replay via `IsReplicateTick` guard.  
+62. **Reconcile Delta Efficiency** — Delta serializer sends only changed fields. Idle tick: ~20 bytes. Walking: ~43 bytes. Combat: ~86 bytes. Full struct: ~223-1300 bytes raw → 95-97% reduction.
 
 ### AI System (NPC)
-53. **State Machine** — Idle, Wander, Patrol, ReturnHome, Retreat, MeleeAttacking, RangedAttacking, CasterAttacking, HealerAttacking, GetBehind, Orbit, PetIdle states.  
-54. **Behavior Tree** — Selector, Sequence, Inverter, Repeater, Composite, Condition nodes.  
-55. **Group Combat** — `NPCGroup` with roles, pack tactics, aggression management.  
-56. **Boss Mechanics** — `BossPhase`, `BossScript`, `BossTimedMechanic`.  
-57. **Navigation** — NavMeshAgent-based with waypoints, avoidance priorities, LOD settings.  
-58. **Deterministic RNG** — Seeded per-NPC for reproducible behavior.  
-59. **Ability Rotation** — `AIAbilityRotation` for combat ability selection.  
-60. **Combat Personality** — `AICombatPersonality` configuration for varied NPC combat styles.
+63. **State Machine** — `BaseAIState` subclasses: Idle, Wander, Patrol, ReturnHome, Retreat, MeleeAttacking, RangedAttacking, CasterAttacking, HealerAttacking (via `BaseAttackingState`), GetBehind, Orbit, PetIdle, BossScript, plus `AggressionState`.  
+64. **Behavior Tree** — `AIBehaviorTree` of `AIBehaviorNode`s: `AISelector`, `AISequence`, `AIInverter`, `AIRepeater`, `AICompositeNode`, `AIConditionNode`, plus game-specific leaves `AIHasTargetNode`, `AIIsDeadNode`, `AIGroupInCombatNode`, `AIAdoptGroupTargetNode`, `AIStateTransitionNode`.  
+65. **Group Combat** — `NPCGroup` with roles, pack tactics, aggression management.  
+66. **Boss Mechanics** — `BossPhase`, `BossScript`, `BossTimedMechanic`.  
+67. **Navigation** — NavMeshAgent-based with waypoints, avoidance priorities, LOD settings.  
+68. **Deterministic RNG** — Seeded per-NPC for reproducible behavior.  
+69. **Ability Rotation** — `AIAbilityRotation` for combat ability selection.  
+70. **Combat Personality** — `AICombatPersonality` configuration for varied NPC combat styles.
 
 ### Interactable System
-61. **16 Interactable Types** — AbilityCrafter, Banker, Bindstone, CapturePoint, Container, Dialogue, DungeonEntrance, GatheringNode, LoreObject, Mailbox, Merchant, Quest, Shrine, Switch, Teleporter, WorldItem.  
-62. **Base Interaction** — Range (3.5u default), 60ms rate limit, ECA trigger execution.  
-63. **Server-Side Validation** — `CanInteract()` + `InRange()` checks before trigger execution.  
-64. **Capture Points** — PvP capture points with state machine (Neutral, Capturing, Captured).  
-65. **Dialogue Trees** — `DialogueTemplate` with nodes and choices, server-authoritative session management with choice bitmasks.  
-66. **Gathering Nodes** — Harvesting with drop tables, cooldowns, remaining uses.  
-67. **Merchant Tabs** — Categorized merchant inventory tabs.
+71. **16 Interactable Types** — All derive from `Interactable : NetworkBehaviour, IInteractable, ISpawnable`: `AbilityCrafter`, `Banker`, `Bindstone`, `CapturePoint`, `Container`, `DialogueInteractable`, `DungeonEntrance`, `GatheringNode`, `LoreObject`, `Mailbox`, `Merchant`, `QuestInteractable`, `Shrine`, `Switch`, `Teleporter`, `WorldItem`.  
+72. **Base Interaction — ECA-Authored, No Handler Plugins** — `InteractionRange` 3.5u default, `INTERACT_RATE_LIMIT` of 60ms (overridable per type via `InteractRateLimit`). Behaviour is authored entirely as a `List<Trigger> OnInteractTriggers` on the interactable prefab and fired via `IInteractable.ExecuteOnInteract(EventData)`. There is **no** server-side handler-plugin architecture — no handler interface, no registration attribute, and no handler initializer exists anywhere in the codebase.  
+73. **Server-Side Validation** — The server's `InteractableSystem` validates the scene, runs `ValidateSceneObject` against the character's scene handle, resolves the `IInteractable` component, checks `CanInteract()` (which covers `InRange()` and the rate limit), then invokes `ExecuteOnInteract` with a `PlayerInteractionEventData` — all inside an `IngressGuard`.  
+74. **Capture Points** — PvP capture points with state machine (`CapturePointTemplate`, `ObjectiveState`).  
+75. **Dialogue Trees** — `DialogueTemplate` with `DialogueNode`/`DialogueChoice`, server-authoritative session management with choice bitmasks.  
+76. **Gathering Nodes** — Harvesting with `GatheringDrop` drop tables, cooldowns, remaining uses (`GatheringNodeTemplate`).  
+77. **Merchant Tabs** — Categorized merchant inventory tabs (`MerchantTabType`, `MerchantTemplate`).
 
 ### Faction System
-68. **Faction Standing** — Per-faction integer standing with Allied/Neutral/Hostile classification.  
-69. **Faction Matrices** — Template-driven faction relationship matrices with editor tooling.
+78. **Faction Standing** — Per-faction integer standing with Allied/Neutral/Hostile classification.  
+79. **Faction Matrices** — Template-driven faction relationship matrices with editor tooling.
 
 ### Quest System
-70. **Quest Lifecycle** — Inactive → Active → Complete → TurnedIn / Failed.  
-71. **Objective Tracking** — Per-objective progress with required amounts.  
-72. **Attribute Requirements** — Pre-requisite attribute checks before acceptance.
+80. **Quest Lifecycle** — Inactive → Active → Complete → TurnedIn / Failed.  
+81. **Objective Tracking** — Per-objective progress with required amounts.  
+82. **Attribute Requirements** — Pre-requisite attribute checks before acceptance.
 
 ### Social Systems
-73. **Friends** — Friend list management with online status.  
-74. **Guilds** — Membership, invites, ranks, join/leave ECA triggers.  
-75. **Parties** — Creation, invites, member tracking, leader ranks.
+83. **Friends** — Friend list management with online status.  
+84. **Guilds** — Membership, invites, ranks, join/leave ECA triggers.  
+85. **Parties** — Creation, invites, member tracking, leader ranks.
 
 ### World System
-76. **World Scene Details** — Per-scene configuration: max clients, spawn/respawn positions, teleporters, boundaries.  
-77. **Day/Night Cycle** — Configurable cycle durations, skybox transitions, object activation/deactivation, material alpha fading, ECA triggers for day/night transitions.  
-78. **Spawner System** — Linear/Random/Weighted spawning with respawn conditions (OR/AND), initial/max counts, pooling (`ObjectSpawner`). NPC corpse decay with per-spawner override. Re-rolled attributes on each spawn.  
-79. **Teleporter System** — Cross-scene and same-scene teleportation with cached destinations.  
-80. **Region System** — Zone definitions for area effects (fog, skybox, audio, buffs, attributes, region name display).  
-81. **Scene Boundaries** — Terrain and custom boundary definitions.
+86. **World Scene Details** — Per-scene configuration: max clients, spawn/respawn positions, teleporters, boundaries.  
+87. **Day/Night Cycle** — Configurable cycle durations, skybox transitions, object activation/deactivation, material alpha fading, ECA triggers for day/night transitions.  
+88. **Spawner System** — Linear/Random/Weighted spawning with respawn conditions (OR/AND), initial/max counts, pooling (`ObjectSpawner`). NPC corpse decay with per-spawner override. Re-rolled attributes on each spawn.  
+89. **Teleporter System** — Cross-scene and same-scene teleportation with cached destinations.  
+90. **Region System** — Zone definitions for area effects (fog, skybox, audio, buffs, attributes, region name display).  
+91. **Scene Boundaries** — Terrain and custom boundary definitions.
 
 ### Character Appearance & Visual Equipment
-82. **Modular Character System** — One shared humanoid skeleton, one Animator, one animation library for all races and equipment.  
-83. **Body Region System** — Body mesh split into 6 hideable regions (Head, Torso, Arms, Hands, Legs, Feet). `BodyVisibilityManager` with per-slot reference counting for overlapping equipment hides.  
-84. **Character Customization** — Bone scaling for Height, ArmLength, LegLength, TorsoLength, ShoulderWidth, HeadScale. Race presets (Human/Dwarf/Elf). Blend shapes for Weight, MuscleMass, ChestSize, WaistSize.  
-85. **Equipment Visuals** — `EquipmentVisualController` with persistent renderer pool (no Instantiate/Destroy spam). Loads prefabs via Addressables, extracts mesh + materials, binds to skeleton via `SkeletonBinder.BindMeshKeepParent`.  
-86. **Weapon Attachment** — Weapons as `MeshRenderer` children of bone transforms (RightHand, LeftHand). Follow animations automatically. Scale-independent from body proportions.  
-87. **Equipment Mesh Variations** — `EquippableItemTemplate.EquipmentMeshes` list with seed-based selection via `ModelPools`/`ModelSeed`.  
-88. **SkeletonBinder** — Bone name matching with caching. Generation-based cache invalidation for instance ID recycling safety.  
-89. **Animation System** — `CharacterAnimationController` with Speed, IsGrounded, IsCrouching, Jump, Attack, Block, Roll, Cast, Death, RootMotion. FishNet `NetworkAnimator` integration.  
-90. **Ability Animation** — `TriggerAbilityAnimation` maps `AbilityType` to animation: Physical→Attack, Magic→Cast, Block→SetBlocking, Roll→TriggerRoll. Death animation suppresses all other state.
+92. **Modular Character System** — One shared humanoid skeleton, one Animator, one animation library for all races and equipment.  
+93. **Body Region System** — Body mesh split into 6 hideable regions (Head, Torso, Arms, Hands, Legs, Feet). `BodyVisibilityManager` with per-slot reference counting for overlapping equipment hides.  
+94. **Character Customization** — Bone scaling for Height, ArmLength, LegLength, TorsoLength, ShoulderWidth, HeadScale. Race presets (Human/Dwarf/Elf). Blend shapes for Weight, MuscleMass, ChestSize, WaistSize.  
+95. **Equipment Visuals** — `EquipmentVisualController` with persistent renderer pool (no Instantiate/Destroy spam). Loads prefabs via Addressables, extracts mesh + materials, binds to skeleton via `SkeletonBinder.BindMeshKeepParent`.  
+96. **Weapon Attachment** — Weapons as `MeshRenderer` children of bone transforms (RightHand, LeftHand). Follow animations automatically. Scale-independent from body proportions.  
+97. **Equipment Mesh Variations** — `EquippableItemTemplate.EquipmentMeshes` list with seed-based selection via `ModelPools`/`ModelSeed`.  
+98. **SkeletonBinder** — Bone name matching with caching. Generation-based cache invalidation for instance ID recycling safety.  
+99. **Animation System** — `CharacterAnimationController` with Speed, IsGrounded, IsCrouching, Jump, Attack, Block, Roll, Cast, Death, RootMotion. FishNet `NetworkAnimator` integration.  
+100. **Ability Animation** — `TriggerAbilityAnimation` maps `AbilityType` to animation: Physical→Attack, Magic→Cast, Block→SetBlocking, Roll→TriggerRoll. Death animation suppresses all other state.
 
 ### AI Threat System
-91. **Threat Table** — `AggressionController` with damage, healing, resource expenditure threat. Configurable weights per category.  
-92. **Vulnerability Scoring** — Low-health targets (<30%) get 1.5x threat multiplier. Low-mana targets (<20%) get 1.3x multiplier. AI intelligently pressures weakened enemies.  
-93. **Replay-Safe Events** — `AggressionState.IsSpawnedAndAuthoritative()` guard prevents threat double-counting during client-side prediction replay.  
-94. **Object-Pooled Aggression Entries** — Stack-based pool for `AggressionEntry` to avoid per-event allocations.
+101. **Threat Table** — `AggressionController` with damage, healing, resource expenditure threat. Configurable weights per category.  
+102. **Vulnerability Scoring** — Low-health targets (<30%) get 1.5x threat multiplier. Low-mana targets (<20%) get 1.3x multiplier. AI intelligently pressures weakened enemies.  
+103. **Replay-Safe Events** — `AggressionState.IsSpawnedAndAuthoritative()` guard prevents threat double-counting during client-side prediction replay.  
+104. **Object-Pooled Aggression Entries** — Stack-based pool for `AggressionEntry` to avoid per-event allocations.
 
 ### Network Broadcasts (30+ types)
-82. **Auth** — Authentication request/response, token sync.  
-83. **Character** — Character data, abilities, achievements, archetype, factions, friends, guild, party, pet, quest, hotkeys.  
-84. **Inventory** — Inventory, equipment, bank slot sync.  
-85. **Character Create/Select** — Creation request/result, character details, delete.  
-86. **Chat** — Chat messages with 10 channels (Say, World, Region, Party, Guild, Tell, Trade, System, Command, Discord).  
-87. **Interactable** — Interactable state sync.  
-88. **Naming** — Name reservation/release, ID ↔ name resolution.  
-89. **Scene** — Scene loading, transitions, channel addresses.  
-90. **Server Select** — Server list and connection info.
+105. **Auth** — Authentication request/response, token sync.  
+106. **Character** — Character data, abilities, achievements, archetype, factions, friends, guild, party, pet, quest, hotkeys.  
+107. **Inventory** — Inventory, equipment, bank slot sync.  
+108. **Character Create/Select** — Creation request/result, character details, delete.  
+109. **Chat** — Chat messages with 10 channels (Say, World, Region, Party, Guild, Tell, Trade, System, Command, Discord).  
+110. **Interactable** — Interactable state sync.  
+111. **Naming** — Name reservation/release, ID ↔ name resolution.  
+112. **Scene** — Scene loading, transitions, channel addresses.  
+113. **Server Select** — Server list and connection info.
 
 ### Bootstrap & Tools
-91. **Bootstrap System** — Multi-environment asset/scene preloading (Editor, Standalone, WebGL), version management, graceful shutdown.  
-92. **Addressable Integration** — `AddressableLoadProcessor` for async prefab/sprite/mesh loading with caching.  
-93. **Template Caching** — `CachedScriptableObject` with database-wide lookup and Addressable icon/mesh loading.  
-94. **DeterministicRNG** — Reproducible random number generator for networked determinism.  
-95. **SerializableDictionary / SerializableHashSet** — Unity-serializable generic collections with custom property drawers.  
-96. **Version Management** — `VersionBuilder` with `VersionConfig` ScriptableObject; increments major/minor/patch, writes `version.txt` at build time.
+114. **Bootstrap System** — Multi-environment asset/scene preloading (Editor, Standalone, WebGL), version management, graceful shutdown. Each phase enqueues its work and completes on its own `batch.Completed` signal rather than a shared global event.  
+115. **Addressable Integration** — `AddressableLoadProcessor` for async prefab/sprite/mesh/scene loading with caching.  
+116. **Per-Caller Load Batches** — `BeginProcessQueue()` returns an `AddressableLoadBatch` claiming exactly the items that caller enqueued, with its own `Completed` event, `Progressed` event, `TotalItems`/`CompletedItems`/`Progress`, and `FailedItems`/`HasFailures`. This replaces completion signalling through the processor's global `OnProgressUpdate` multicast delegate, which reported "done" to every bootstrap system and loading screen whenever *any* drain finished and could double-invoke subscribers that resubscribed during dispatch. `OnProgressUpdate` remains as a display-only progress feed. A batch counts an item finished whether it succeeded, failed, or was dropped — failures surface via `FailedItems` instead of withholding completion and stalling boot. Handlers subscribing after completion are invoked immediately, so a fully-cached batch that completes inside `BeginProcessQueue` cannot be missed.  
+117. **Template Caching** — `CachedScriptableObject` with database-wide lookup and Addressable icon/mesh loading.  
+118. **DeterministicRNG** — Reproducible random number generator for networked determinism.  
+119. **SerializableDictionary / SerializableHashSet** — Unity-serializable generic collections with custom property drawers.  
+120. **Version Management** — `VersionBuilder` with `VersionConfig` ScriptableObject; increments major/minor/patch, writes `version.txt` at build time.
 
 ### Editor Tools
-97. **FishMMO Dashboard** — Custom build tool suite: AddressableManager, BuildConfigurator, BuildExecutor, LinkerGenerator.  
-98. **Patch Generator** — Unity Editor window for creating delta patches between builds with manifest generation.  
-99. **Addressables Dashboard** — Analysis, build, categorization, and tree view for addressable assets.  
-100. **Behaviour Tree Editor** — Visual editor for NPC behaviour trees.  
-101. **Dialogue Tree Editor** — Visual editor for NPC dialogue trees.  
-102. **World Scene Details Cache Builder** — Builds cached world scene details at edit time.  
-103. **Custom Property Drawers** — `[ShowReadonly]`, `[SubclassSelector]`, `[TemplateReference]`, serializable dictionary drawers.  
-104. **Build Environment Options** — Development/Release build environment selector.  
-105. **Security Assembly Filter** — Editor-only assembly filtering for security-sensitive code.
+121. **FishMMO Dashboard** — The single editor hub (`FishMMO > FishMMO Dashboard`, Ctrl+Shift+D), a UI Toolkit window whose panels are Build & Version, Categories, Game Settings, Inspector, and Patcher. Most FishMMO editor workflows are panels inside this window, not separate menu items. Backed by the custom build tool suite: AddressableManager, BuildConfigurator, BuildExecutor, LinkerGenerator. `BuildExecutor` additionally performs two post-build copies: `CopyRemoteAddressablesToBuild` stages `ServerData/[BuildTarget]/` bundles into the built player's `StreamingAssets/ServerData/[BuildTarget]/` for server builds (so `DynamicAddressableLoadPathSystem` can load them over `file://`), and `CopyUpdaterToBuild` copies the standalone Updater executable and its runtime dependencies into standalone client builds — without it the launcher's `Constants.Configuration.UpdaterExecutable` lookup fails and players are stranded on an unpatchable version. Both are skipped for build types that do not need them (server/WebGL for the updater).  
+122. **Patch Generator** — `PatchGeneratorWindow` (`EditorWindow`) for creating delta patches between builds with manifest generation, surfaced through the Dashboard's **Patcher** panel (`FishMMODashboard.Patcher.cs`). It has no menu item of its own.  
+123. **Addressables Dashboard** — Analysis, build, categorization, and tree view for addressable assets. Menu: `FishMMO > Addressables Dashboard`.  
+124. **Behavior Tree Editor** — Visual editor for NPC behaviour trees. Menu: `FishMMO > Behavior Tree Editor` (spelled "Behavior").  
+125. **Dialogue Tree Editor** — Visual editor for NPC dialogue trees. Menu: `FishMMO > Dialogue Tree Editor`.  
+126. **World Scene Details Cache Builder** — Builds cached world scene details at edit time. Menu: `FishMMO > Rebuild World Scene Details`.  
+127. **Custom Property Drawers** — `[ShowReadonly]`, `[SubclassSelector]`, `[TemplateReference]`, serializable dictionary drawers.  
+128. **Build Option Toggles** — `FishMMO > Build > Build Type` (Client/Server), `> OS Target` (Windows x64 / Linux x64 / WebGL), and `> Environment` (Development/Production/Enable Local Directory), from `BuildEnvironmentOptions.cs` and `WorkingEnvironmentOptions.cs`. These set build options only — **they do not run builds**; builds execute from the Dashboard's Build & Version panel.  
+129. **Security Assembly Filter** — Editor-only assembly filtering for security-sensitive code.  
+130. **Version Menu** — `FishMMO > Version > Increment Major/Minor/Patch` drives `VersionBuilder`.  
+131. **QuickStart Scene Menu** — `FishMMO > QuickStart > …` opens Main Bootstrap, Client Preboot/Postboot/Launcher, and Login/World/Scene Server scenes directly, ordered by priority.  
+132. **Script Compilation Menu** — `FishMMO > Script Compilation > …` toggles Auto Refresh and selects recompile behaviour while in Play Mode (Recompile After Finished Playing / Recompile And Continue Playing / Stop Playing And Recompile).  
+133. **AddressablesPlayModeSceneHandleFix** — Editor-only workaround for the "Attempting to use an invalid operation handle" exception Addressables throws from its own Play Mode teardown. `AddressablesImpl.Dispose()` releases each scene handle twice (once from `m_resultToHandle`, once from `m_SceneInstances`) with no `IsValid()` guard. Subscribes from `[InitializeOnLoadMethod]` so it runs ahead of the Addressables package's own handler, which our runtime shutdown path cannot do.
 
 ---
 
@@ -748,24 +767,28 @@
 **ASP.NET Core web services** providing client-facing HTTP APIs.
 
 ### IPFetchASP.NET (Login Server Discovery)
-1. **Login Server Discovery API** — `/loginserver` endpoint returns available login server ports from the database with a one-time connection token (SHA-256 hashed, 60s TTL) for real-IP recovery through the L4 UDP proxy.  
-2. **ClientGate** — Validates the `X-FishMMO-Client` HMAC-SHA256 header with multi-key rotation, 30s skew window, 20K-nonce LRU cache, and URL-decoded path traversal protection.  
-3. **Port Safety** — `WebServer:HttpPort` uses nullable `GetValue<int?>()` to prevent port-0 binding when config key is missing.  
-4. **CORS Headers** — `Access-Control-Allow-Origin: https://play.fishmmo.com` on API responses for cross-origin WebGL client access.
+1. **Login Server Discovery API** — `GET /loginserver` (`LoginServerController`) returns available login server ports from the database, cached in `IMemoryCache` with a 60s TTL plus jitter so a server pulled from rotation ages out quickly. Empty results are deliberately not cached, so a re-registering server is not masked by a 404 for the full window.  
+2. **Stateless Connection Token** — Each response carries a token for real-IP recovery across the L4 UDP proxy (which loses the client IP). Format `base64url(payload).base64url(hmac)` where `payload = [keyId ':'] realIp '|' expiryUnixSeconds` and `hmac = HMAC-SHA256(sharedKey, payload)`; the client echoes it in its first `ClientHandshake` and the Login Server verifies the HMAC — no database round-trip. Expiry is 60 seconds. It is HMAC-**signed**, not a hashed one-time value. The optional `keyId` prefix lets multi-region game servers pick the right verification key; the signing key is registered in the `connection_token_keys` table as the sole discovery source. Keys shorter than 32 bytes are rejected at request time with a 500.  
+3. **ClientGate** — Validates the `X-FishMMO-Client` HMAC-SHA256 header with multi-key rotation, a 30-second skew window (`MaxSkewSeconds`, re-checked post-HMAC), a 100,000-entry nonce cache (`NonceCacheCapacity`) with oldest-quarter eviction on overflow, and canonicalization that collapses repeated slashes and rejects traversal segments before signing.  
+4. **Port Safety** — `WebServer:HttpPort` is read as a string (accepting both `"8080"` and `8080` in JSON) and validated with `int.TryParse` plus a 1–65535 range check; a malformed value throws at startup rather than silently falling back. Matches Patcher and WebGLServer behaviour. Kestrel binds via `ListenLocalhost` with no TLS — termination is NGINX's job.  
+5. **CORS Defaults to Deny** — The `Public` policy reads `Cors:AllowedOrigins`; when unset it emits **no** `Access-Control-Allow-Origin` and logs a warning, denying cross-origin browser requests. Native `UnityWebRequest` clients ignore CORS entirely and the WebGL build is loaded same-origin, so operators must opt in explicitly for genuine cross-origin browser access.  
+6. **Forwarded Headers, Single Hop** — `X-Forwarded-For` / `X-Forwarded-Proto` honoured with `ForwardLimit = 1`, since NGINX is the only trusted proxy; extra values would be attacker-controlled and would break per-IP rate limiting.  
+7. **PascalCase JSON** — `PropertyNamingPolicy`/`DictionaryKeyPolicy` set to null so Unity's `JsonUtility` (exact-name matching) can deserialize responses without client-side rewriting.
 
 ### PatcherASP.NET (Patch Delivery)
-5. **Latest Version Endpoint** — `/latest_version` returns current game version, up-to-date status, and patch availability info (SHA-256, size).  
-6. **Patch Download Endpoint** — `/{version}` serves patch ZIP files with range request support, `ReparsePoint` symlink rejection at serve time, and SHA-256 integrity verification.  
-7. **ClientGate** — Same HMAC request signing validation as IPFetch.  
-8. **Sliding-Window Rate Limiting** — Patch downloads limited to 6 requests/minute via sliding window (prevents fixed-window boundary burst).  
-9. **Symlink Protection** — `PatchVersionService` reindex skips `FileAttributes.ReparsePoint` files to prevent hash disclosure via symlinks.  
-10. **Semantic Versioning** — `VersionConfig` with full SemVer 2.0.0 parsing, comparison operators, and `IComparable<VersionConfig>`.
+8. **Latest Version Endpoint** — `GET`/`HEAD /latest_version?from={clientVersion}`. Without `from` it returns `{ latest_version }`; with `from` it returns `up_to_date: true`, or `patch_available: false` when no archive bridges that specific version pair, or `patch_available: true` with the patch's `sha256` and `size`.  
+9. **Version Response Caching & Integrity** — Sets a weak `ETag` (derived from the patch hash / response shape) and `Cache-Control: public, max-age=30`; honours `If-None-Match` (comma-separated list, any match) with `304 Not Modified`. Adds `X-FishMMO-Version-Signature`, an HMAC over the canonical `latest_version=…` content so a compromised endpoint cannot silently substitute a patch hash.  
+10. **Patch Download Endpoint** — `GET /{version}` serves patch ZIP files with range request support, `ReparsePoint` symlink rejection at serve time, and strong `ETag`/`Cache-Control: public, max-age=3600, immutable` on the artifact. Returns **`204 No Content`** when the requesting client is already on the latest version.  
+11. **ClientGate** — Same HMAC request signing validation as IPFetch (`UseFishMMOClientGate`, with `/healthz` exempted).  
+12. **Sliding-Window Rate Limiting** — Patch downloads limited to 6 permits/minute via a sliding-window partition (`[EnableRateLimiting("PatchDownload")]`), behind a global token-bucket limiter partitioned by client IP.  
+13. **Symlink Protection** — `PatchVersionService` reindex skips `FileAttributes.ReparsePoint` files to prevent hash disclosure via symlinks.  
+14. **Semantic Versioning** — `VersionConfig` with full SemVer 2.0.0 parsing, comparison operators, and `IComparable<VersionConfig>`.
 
 ### WebGLServerASP.NET (WebGL Static Server)
-11. **WebGL Build Serving** — Serves Unity WebGL builds as static files (HTML, JS, WASM, `.unityweb`, `.data`) with correct MIME types and `X-Content-Type-Options: nosniff`.  
-12. **Response Compression** — `AddResponseCompression` middleware with `application/wasm` and `application/octet-stream` MIME types for bandwidth reduction on large WASM builds (20–50 MB).  
-13. **Cross-Origin Isolation** — CSP headers configured for `wasm-unsafe-eval` and WebTransport `connect-src` to `game.fishmmo.com:*`.  
-14. **ClientGate** — Intentionally absent. Browsers cannot add custom headers to static resource requests, so HMAC request signing is not possible for WebGL. Rate limiting and CORS provide the security boundary.
+15. **WebGL Build Serving** — Serves Unity WebGL builds as static files (HTML, JS, WASM, `.unityweb`, `.data`) with correct MIME types and `X-Content-Type-Options: nosniff`.  
+16. **Response Compression** — `AddResponseCompression` middleware with `application/wasm` and `application/octet-stream` MIME types for bandwidth reduction on large WASM builds (20–50 MB).  
+17. **Cross-Origin Isolation** — CSP headers configured for `wasm-unsafe-eval` and WebTransport `connect-src` to `game.fishmmo.com:*`.  
+18. **ClientGate** — Intentionally absent. Browsers cannot add custom headers to static resource requests, so HMAC request signing is not possible for WebGL. Rate limiting and CORS provide the security boundary.
 
 ---
 
