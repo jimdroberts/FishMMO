@@ -224,7 +224,7 @@ sequenceDiagram
     else Client == Server
         Launcher->>Launcher: ReadyToPlay — show "Play"
     else Client > Server
-        Launcher->>Launcher: ClientAhead, (Play is NOT offered; button re-checks version)
+        Launcher->>Launcher: ClientAhead, (Play is NOT offered — button re-checks version)
     end
 ```
 
