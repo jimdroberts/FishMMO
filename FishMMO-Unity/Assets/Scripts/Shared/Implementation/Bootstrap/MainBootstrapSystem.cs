@@ -64,8 +64,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unity Awake message. Starts the bootstrap initialization chain.
 		/// </summary>
-		void Awake()
+		/// <remarks>
+		/// Overrides rather than hides the base. Declaring a second <c>void Awake()</c>
+		/// shadowed the base implementation, so the base never ran for this system.
+		/// </remarks>
+		protected override void Awake()
 		{
+			base.Awake();
+
 			StartBootstrap();
 		}
 
@@ -231,10 +237,18 @@ namespace FishMMO.Shared
 		{
 			Debug.Log("[MainBootstrapSystem] Initializing...");
 
+			/* A missing VersionConfig used to return here. That aborted the rest of
+			 * OnPreload — including the EnqueueLoad of the first scene at the bottom of
+			 * this method — which left the load queue empty. BeginProcessQueue then
+			 * immediately reported 100%, postload found nothing, and OnCompleteProcessing
+			 * had no bootstrap systems to start: the client sat on a black screen forever
+			 * with nothing but a console error nobody could see.
+			 *
+			 * Carry on with a sentinel version instead. Boot completes, the launcher comes
+			 * up, and its version check reports the bad version to the player in the UI. */
 			if (versionConfig == null)
 			{
-				Debug.LogError("[MainBootstrapSystem] FATAL ERROR: Failed to initialize Version Config.");
-				return;
+				Debug.LogError("[MainBootstrapSystem] Failed to initialize Version Config. Continuing boot with an unknown version; the launcher will report this to the player.");
 			}
 
 			string workingDir = Constants.GetWorkingDirectory();
@@ -317,7 +331,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unity OnDestroy message. Handles shutdown and cleanup when the object is destroyed.
 		/// </summary>
-		void OnDestroy()
+		protected override void OnDestroy()
 		{
 #if UNITY_EDITOR
 			EditorApplication.playModeStateChanged -= OnEditorPlayModeStateChanged;
@@ -333,6 +347,10 @@ namespace FishMMO.Shared
 			{
 				Debug.Log("[MainBootstrapSystem] OnDestroy called. (isInitiatingShutdown: " + isInitiatingShutdown + ", canQuitApplication: " + canQuitApplication + ")");
 			}
+
+			// Base last: it releases the internal-log hook, and the shutdown above still
+			// wants that routing available while it runs.
+			base.OnDestroy();
 		}
 	}
 }

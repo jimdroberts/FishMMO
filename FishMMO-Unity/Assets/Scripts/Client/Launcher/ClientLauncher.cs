@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -138,14 +139,27 @@ namespace FishMMO.Client
 		#region CONFIGURATION
 		[Header("Configuration")]
 		/// <summary>
-		/// The URL to fetch HTML news content from.
+		/// Optional per-scene override for the news URL. Leave empty in normal use.
 		/// </summary>
+		/// <remarks>
+		/// This deliberately defaults to empty rather than to
+		/// <see cref="Constants.Configuration.LauncherHtmlUrl"/>. A non-empty default gets
+		/// baked into the scene the first time it is saved, and the serialized copy then
+		/// silently wins over the build-time configured value for every subsequent build —
+		/// which is exactly how a stale hard-coded URL ended up shipping here. Resolution
+		/// happens at read time in <see cref="HtmlViewURL"/> instead.
+		/// </remarks>
+		[Tooltip("Leave empty to use the build-time configured launcher news URL. Set only to override it for local testing.")]
 		[SerializeField]
-		private string htmlViewURL = Constants.Configuration.LauncherHtmlUrl;
+		private string htmlViewURL = "";
 		/// <summary>
-		/// The URL to fetch HTML news content from.
+		/// The URL to fetch HTML news content from. Falls back to the build-time
+		/// configured <see cref="Constants.Configuration.LauncherHtmlUrl"/> when no
+		/// per-scene override is set.
 		/// </summary>
-		public string HtmlViewURL => htmlViewURL;
+		public string HtmlViewURL => string.IsNullOrWhiteSpace(htmlViewURL)
+			? Constants.Configuration.LauncherHtmlUrl
+			: htmlViewURL;
 		/// <summary>
 		/// The class name of the div to extract from the HTML content.
 		/// </summary>
@@ -182,6 +196,20 @@ namespace FishMMO.Client
 		[Tooltip("Timeout in seconds for the addressable scene load watchdog. Override via Constants or config for deployment-specific needs.")]
 		[SerializeField]
 		private float launchWatchdogTimeoutSeconds = 30f;
+		/// <summary>
+		/// Seconds the launcher may sit in a state with no interactive button before it is
+		/// forced back to a recoverable one.
+		/// </summary>
+		/// <remarks>
+		/// A catch-all, not a substitute for per-operation error handling. Every transient
+		/// state is driven by a coroutine and reports its own failures; this exists because
+		/// a coroutine that dies (Unity logs the exception and silently stops it) leaves the
+		/// player facing a dead button with no message and no way to retry. Download
+		/// progress resets the timer, so a slow patch is never interrupted.
+		/// </remarks>
+		[Tooltip("Seconds the launcher may sit in a non-interactive state before recovering. Download progress resets the timer.")]
+		[SerializeField]
+		private float transientStateTimeoutSeconds = 120f;
 		#endregion
 
 		#region DEPENDENCIES (Injected via Inspector)
@@ -221,6 +249,15 @@ namespace FishMMO.Client
 
 		#region INTERNAL STATE
 		/// <summary>
+		/// Addressable scene name of the post-boot scene the launcher hands off to.
+		/// </summary>
+		private const string PostbootSceneName = "ClientPostboot";
+		/// <summary>
+		/// Addressable scene name of this launcher scene, unloaded once post-boot is up.
+		/// </summary>
+		private const string LauncherSceneName = "ClientLauncher";
+
+		/// <summary>
 		/// Guards against re-entering PlayButtonConnect while a connection is in progress.
 		/// </summary>
 		private bool isConnecting = false;
@@ -228,6 +265,13 @@ namespace FishMMO.Client
 		/// Guards against re-entering PlayButtonLaunch while a launch is in progress.
 		/// </summary>
 		private bool isLaunching = false;
+		/// <summary>
+		/// Guards against re-entering PlayButtonUpdate while a download/patch is in
+		/// progress. The DownloadingPatch/ApplyingPatch states disable the button, but the
+		/// update flow is also entered directly from the version check, so the button
+		/// state alone is not a sufficient interlock.
+		/// </summary>
+		private bool isUpdating = false;
 		/// <summary>
 		/// Stores the latest client version string fetched from the patch server.
 		/// </summary>
@@ -254,6 +298,11 @@ namespace FishMMO.Client
 		/// The current state of the launcher UI and process.
 		/// </summary>
 		private LauncherState currentLauncherState;
+		/// <summary>
+		/// <see cref="Time.realtimeSinceStartup"/> of the last state change or activity
+		/// heartbeat, used by the transient-state watchdog.
+		/// </summary>
+		private float lastStateActivityTime;
 		#endregion
 
 		#region UI TEXT CONSTANTS
@@ -277,7 +326,20 @@ namespace FishMMO.Client
 			public const string StatusLaunchFailed = "Launch Failed";
 			public const string StatusVersionError = "Version Error";
 			public const string StatusClientAhead = "Client Version Ahead";
-				public const string StatusServerRejectedVersion = "Version Rejected by Server";
+			public const string StatusPatchUnavailable = "Update Unavailable";
+			public const string StatusServerRejectedVersion = "Version Rejected by Server";
+
+			// Default player-facing detail for states that would otherwise show only a
+			// two-word button label with no explanation of what to do next.
+			public const string DetailConnectionFailed = "Could not reach the update server. Check your internet connection and firewall, then try again.";
+			public const string DetailVersionCheckFailed = "Could not determine the current game version. Press the button to try again.";
+			public const string DetailPatchDownloadFailed = "The update could not be downloaded. Press the button to retry.";
+			public const string DetailUpdaterFailed = "The updater could not run. Verify your installation is intact, then try again.";
+			public const string DetailLaunchFailed = "The game could not be started. Press the button to re-check for updates.";
+			public const string DetailVersionError = "The installed version could not be read. Press the button to try again, or reinstall the client.";
+			public const string DetailClientAhead = "This client is newer than the server. Press the button to re-check once the server has been updated.";
+			public const string DetailPatchUnavailable = "No update path exists from this client version. Please download and install the latest full client.";
+			public const string DetailApplyingPatch = "Applying the update to your game files. The client will restart automatically — do not close this window.";
 
 			public const string ErrorLoadingNews = "Error loading news: ";
 			public const string ErrorNoNewsContent = "Could not display news content.";
@@ -306,8 +368,12 @@ namespace FishMMO.Client
 			// SystemUpdaterLauncher is a plain C# class, directly instantiate it
 			this.updaterLauncher = new SystemUpdaterLauncher();
 
-			// Basic null checks for dependencies
-			if (this.unityWebRequestService == null || this.htmlContentFetcher == null || this.patchServerService == null)
+			// Basic null checks for dependencies, including the shared web request service
+			// that the two sub-services depend on. Those services null-check it themselves
+			// and disable, but validating here lets us report one clear fatal message
+			// instead of leaving the UI on "Loading News..." with a dead coroutine.
+			if (this.unityWebRequestService == null || this.htmlContentFetcher == null || this.patchServerService == null ||
+				this.htmlContentFetcher.WebRequestService == null || this.patchServerService.WebRequestService == null)
 			{
 				Log.Error("ClientLauncher", "One or more required service dependencies are not assigned in the Inspector or are missing!");
 				if (this.PlayButtonText != null)
@@ -318,19 +384,36 @@ namespace FishMMO.Client
 				{
 					this.PlayButton.interactable = false;
 				}
+				// Surface the reason rather than only logging it — a player hitting this
+				// has no access to the log file.
+				if (this.ProgressSlider != null)
+				{
+					this.ProgressSlider.gameObject.SetActive(false);
+				}
+				ShowStatusPanel("The launcher is missing required components and cannot start. Please reinstall the client.");
 				enabled = false; // Disable this script if dependencies aren't met
 				return;
 			}
-			// Ensure UnityWebRequestServiceMB is correctly assigned within its own script's Awake/Start
-			// or confirm it's not null here. For example, within UnityHtmlContentFetcher and HttpPatchServerService,
-			// they will check if their WebRequestService field is assigned.
 
 			if (this.HtmlTextLinkHandler != null)
 			{
 				this.HtmlTextLinkHandler.OnLinkClicked += HandleHtmlLinkClicked;
 			}
 
+			// Wire Quit in code. The scene's persistent UnityEvent listener had a null
+			// target, so the button silently did nothing; a code-side listener cannot be
+			// broken by a scene re-save.
+			if (this.QuitButton != null)
+			{
+				this.QuitButton.onClick.RemoveAllListeners();
+				this.QuitButton.onClick.AddListener(Quit);
+			}
+
 			SetLauncherState(LauncherState.LoadingNews);
+
+			// Catch-all so no async failure can leave the player on a dead button.
+			StartCoroutine(TransientStateWatchdog());
+
 			// Delegate HTML fetching to the dedicated service
 			StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
 				this.HtmlViewURL,
@@ -338,15 +421,21 @@ namespace FishMMO.Client
 				onHtmlReady: (htmlContent) =>
 				{
 					this.HtmlText.text = htmlContent;
-#if !UNITY_EDITOR
-					PlayButtonConnect();
-#else
-					SetLauncherState(LauncherState.ReadyToPlay);
-#endif
+					ContinueAfterNews();
 				},
 				onError: (error) =>
 				{
-					SetLauncherState(LauncherState.ConnectionFailed, error);
+					// News is cosmetic. Failing to fetch it must not block the version
+					// check — and reporting it as "Connection Failed" misleads the player
+					// into thinking the game servers are down. Show it in the news pane and
+					// carry on; if the network really is down, the version check reports
+					// that accurately a moment later.
+					Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
+					if (this.HtmlText != null)
+					{
+						this.HtmlText.text = UIText.ErrorNoNewsContent;
+					}
+					ContinueAfterNews();
 				}));
 
 			// Construct the full path to the updater executable
@@ -365,6 +454,19 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Advances out of the news-loading state once the news fetch has settled, whether
+		/// it succeeded or not.
+		/// </summary>
+		private void ContinueAfterNews()
+		{
+#if !UNITY_EDITOR
+			PlayButtonConnect();
+#else
+			SetLauncherState(LauncherState.ReadyToPlay);
+#endif
+		}
+
+		/// <summary>
 		/// Unity OnDestroy method. Cleans up event subscriptions.
 		/// </summary>
 		private void OnDestroy()
@@ -373,16 +475,34 @@ namespace FishMMO.Client
 			{
 				this.HtmlTextLinkHandler.OnLinkClicked -= HandleHtmlLinkClicked;
 			}
+			if (this.QuitButton != null)
+			{
+				this.QuitButton.onClick.RemoveListener(Quit);
+			}
 		}
 		#endregion
 
 		#region UI STATE MANAGEMENT
+		/// <summary>
+		/// True when status messages have to borrow <see cref="ProgressText"/> because no
+		/// dedicated <see cref="StatusText"/> element is assigned. In that case the
+		/// containing progress group must be made visible for the message to be seen.
+		/// </summary>
+		private bool UsesProgressTextForStatus => this.StatusText == null && this.ProgressText != null;
+
 		/// <summary>
 		/// Writes a human-readable status or error message to the player-facing UI.
 		/// Prefers <see cref="StatusText"/> when assigned; falls back to
 		/// <see cref="ProgressText"/> so messages are visible even without a
 		/// dedicated status element. Also logs the message.
 		/// </summary>
+		/// <remarks>
+		/// When falling back to <see cref="ProgressText"/>, this also forces
+		/// <see cref="ProgressBarGroup"/> active. That element is the progress text's
+		/// parent, and the state machine hides the group for every non-download state — so
+		/// without this every error detail was written to an inactive object and the player
+		/// saw nothing but a two-word button label.
+		/// </remarks>
 		private void SetStatus(string message, LogLevel level = LogLevel.Info)
 		{
 			// Always log so operators can correlate.
@@ -400,13 +520,36 @@ namespace FishMMO.Client
 					break;
 			}
 
-			// Player-facing display.
+			ShowStatusPanel(message);
+		}
+
+		/// <summary>
+		/// Displays <paramref name="message"/> on the player-facing status element and
+		/// ensures whatever container it lives in is visible. Does not log — callers that
+		/// want logging use <see cref="SetStatus"/>.
+		/// </summary>
+		private void ShowStatusPanel(string message)
+		{
 			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
-			if (target != null)
+			if (target == null)
 			{
-				target.text = message;
-				// Only show the progress bar group for actual progress updates.
-				// Status messages use ProgressText as a convenience label.
+				return;
+			}
+
+			target.text = message;
+
+			if (this.StatusText != null)
+			{
+				this.StatusText.gameObject.SetActive(true);
+				return;
+			}
+
+			// Borrowing the progress text: reveal its group, but keep the slider hidden so
+			// a message is not mistaken for a stalled progress bar. The slider is
+			// re-enabled by SetLauncherState for genuine progress states.
+			if (this.ProgressBarGroup != null)
+			{
+				this.ProgressBarGroup.SetActive(true);
 			}
 		}
 
@@ -423,6 +566,29 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Returns the default player-facing explanation for <paramref name="state"/>, or
+		/// null when the state needs no detail line. Used when a caller does not supply a
+		/// more specific message, so no state can present a bare button label with no
+		/// indication of what happened or what to do next.
+		/// </summary>
+		private static string GetDefaultDetail(LauncherState state)
+		{
+			switch (state)
+			{
+				case LauncherState.ConnectionFailed: return UIText.DetailConnectionFailed;
+				case LauncherState.VersionCheckFailed: return UIText.DetailVersionCheckFailed;
+				case LauncherState.PatchDownloadFailed: return UIText.DetailPatchDownloadFailed;
+				case LauncherState.UpdaterFailed: return UIText.DetailUpdaterFailed;
+				case LauncherState.LaunchFailed: return UIText.DetailLaunchFailed;
+				case LauncherState.VersionError: return UIText.DetailVersionError;
+				case LauncherState.ClientAhead: return UIText.DetailClientAhead;
+				case LauncherState.PatchUnavailable: return UIText.DetailPatchUnavailable;
+				case LauncherState.ApplyingPatch: return UIText.DetailApplyingPatch;
+				default: return null;
+			}
+		}
+
+		/// <summary>
 		/// Sets the current launcher state and updates the UI accordingly.
 		/// Centralizes all UI updates related to the launcher's operational state.
 		/// </summary>
@@ -431,6 +597,7 @@ namespace FishMMO.Client
 		private void SetLauncherState(LauncherState newState, string errorDetail = null)
 		{
 			this.currentLauncherState = newState;
+			this.lastStateActivityTime = Time.realtimeSinceStartup;
 			this.PlayButton.onClick.RemoveAllListeners(); // Always clear to ensure only one listener.
 
 			bool isButtonInteractable = false;
@@ -466,6 +633,15 @@ namespace FishMMO.Client
 					buttonText = UIText.StatusClientAhead;
 					isButtonInteractable = true;
 					buttonAction = PlayButtonConnect; // Re-check version — don't allow Play when client is ahead.
+					break;
+				case LauncherState.PatchUnavailable:
+					// The server has no patch from this specific version to the latest.
+					// Retrying the download can only 404 again, so the button re-runs the
+					// version check (which may succeed after the server publishes a patch)
+					// rather than looping on a request that cannot succeed.
+					buttonText = UIText.StatusPatchUnavailable;
+					isButtonInteractable = true;
+					buttonAction = PlayButtonConnect;
 					break;
 				case LauncherState.ServerRejectedVersion:
 					// NOTE: ServerRejectedVersion state is defined here and wired into
@@ -526,14 +702,33 @@ namespace FishMMO.Client
 
 			this.PlayButtonText.text = buttonText;
 			this.PlayButton.interactable = isButtonInteractable;
-			this.ProgressBarGroup.SetActive(progressBarVisible);
+
+			// Fall back to a standard explanation so no state can present a bare label.
+			string detail = !string.IsNullOrEmpty(errorDetail) ? errorDetail : GetDefaultDetail(newState);
+
+			// The progress group has to stay visible whenever it is carrying a status
+			// message, not only during a download — otherwise the message is written to an
+			// inactive object. The slider inside it is shown only for real progress.
+			bool groupVisible = progressBarVisible || (UsesProgressTextForStatus && !string.IsNullOrEmpty(detail));
+			if (this.ProgressBarGroup != null)
+			{
+				this.ProgressBarGroup.SetActive(groupVisible);
+			}
+			if (this.ProgressSlider != null)
+			{
+				this.ProgressSlider.gameObject.SetActive(progressBarVisible);
+				if (!progressBarVisible)
+				{
+					this.ProgressSlider.value = 0f;
+				}
+			}
 
 			// Display error/status detail to the player when available.
-			if (!string.IsNullOrEmpty(errorDetail))
+			if (!string.IsNullOrEmpty(detail))
 			{
-				SetStatus(errorDetail, level: IsErrorState(newState) ? LogLevel.Error : LogLevel.Info);
+				SetStatus(detail, level: IsErrorState(newState) ? LogLevel.Error : LogLevel.Info);
 			}
-			else if (!IsErrorState(newState))
+			else
 			{
 				ClearStatus();
 			}
@@ -541,6 +736,53 @@ namespace FishMMO.Client
 			if (buttonAction != null)
 			{
 				this.PlayButton.onClick.AddListener(() => buttonAction.Invoke());
+			}
+		}
+
+		/// <summary>
+		/// True for states that are waiting on an asynchronous operation and offer the
+		/// player no way to act. These are the states the watchdog guards.
+		/// </summary>
+		private static bool IsTransientState(LauncherState state)
+		{
+			return state == LauncherState.LoadingNews ||
+			       state == LauncherState.Connecting ||
+			       state == LauncherState.CheckingVersion ||
+			       state == LauncherState.DownloadingPatch ||
+			       state == LauncherState.ApplyingPatch;
+		}
+
+		/// <summary>
+		/// Forces the launcher out of a transient state that has stopped making progress,
+		/// so a dead coroutine cannot leave the player with a disabled button forever.
+		/// </summary>
+		private IEnumerator TransientStateWatchdog()
+		{
+			WaitForSeconds tick = new WaitForSeconds(1f);
+
+			while (true)
+			{
+				yield return tick;
+
+				if (!IsTransientState(this.currentLauncherState))
+				{
+					continue;
+				}
+				if (Time.realtimeSinceStartup - this.lastStateActivityTime <= this.transientStateTimeoutSeconds)
+				{
+					continue;
+				}
+
+				LauncherState stalled = this.currentLauncherState;
+				Log.Error("ClientLauncher", $"Launcher stalled in {stalled} for over {this.transientStateTimeoutSeconds}s with no activity. Recovering.");
+
+				// Clear the in-flight guards; whatever owned them is not coming back.
+				this.isConnecting = false;
+				this.isUpdating = false;
+
+				SetLauncherState(
+					stalled == LauncherState.DownloadingPatch ? LauncherState.PatchDownloadFailed : LauncherState.ConnectionFailed,
+					$"The launcher stopped responding while it was busy ({stalled}). Press the button to try again.");
 			}
 		}
 
@@ -554,6 +796,7 @@ namespace FishMMO.Client
 			       state == LauncherState.PatchDownloadFailed ||
 			       state == LauncherState.UpdaterFailed ||
 			       state == LauncherState.LaunchFailed ||
+			       state == LauncherState.PatchUnavailable ||
 			       state == LauncherState.VersionError;
 		}
 		#endregion
@@ -614,10 +857,26 @@ namespace FishMMO.Client
 					this.PlayButton.interactable = false;
 				}
 
-				AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData("ClientPostboot", OnPostbootSceneLoaded));
+				// A retry after a failed launch would otherwise dead-end: EnqueueLoad
+				// silently no-ops when the scene is already tracked as loaded, so
+				// OnPostbootSceneLoaded would never fire and the watchdog would report
+				// another launch failure with the launcher still sitting on top.
+				if (AddressableLoadProcessor.IsSceneLoaded(PostbootSceneName))
+				{
+					Log.Debug("ClientLauncher", $"{PostbootSceneName} is already loaded; completing the launch directly.");
+					OnPostbootSceneLoaded(SceneManager.GetSceneByName(PostbootSceneName));
+					return;
+				}
+
+				AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData(PostbootSceneName, OnPostbootSceneLoaded));
 				try
 				{
-					AddressableLoadProcessor.BeginProcessQueue();
+					// Watch the batch as well as the scene callback. An Addressable load that
+					// fails asynchronously never invokes OnPostbootSceneLoaded, and without
+					// this the only signal was the 30s watchdog timing out with a generic
+					// message. The batch reports the failure the moment it happens.
+					AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+					batch.Completed += OnLaunchBatchCompleted;
 				}
 				catch (UnityException ex)
 				{
@@ -641,6 +900,26 @@ namespace FishMMO.Client
 			// OnPostbootSceneLoaded never fires and the button stays permanently disabled.
 			// The watchdog re-enables the button after a generous timeout so the player can retry.
 			StartCoroutine(LaunchWatchdog());
+		}
+
+		/// <summary>
+		/// Reports a failed launch as soon as the load batch settles.
+		/// </summary>
+		/// <remarks>
+		/// Only handles the failure case. On success <see cref="OnPostbootSceneLoaded"/> has
+		/// already run from the scene's own callback and unloaded this scene.
+		/// </remarks>
+		/// <param name="batch">The completed launch batch.</param>
+		private void OnLaunchBatchCompleted(AddressableLoadBatch batch)
+		{
+			if (batch == null || !batch.HasFailures)
+			{
+				return;
+			}
+
+			this.isLaunching = false;
+			SetLauncherState(LauncherState.LaunchFailed,
+				$"Could not load the game scene ({string.Join(", ", batch.FailedItems)}). Check that Addressable bundles are built and up to date.");
 		}
 
 		/// <summary>
@@ -672,10 +951,21 @@ namespace FishMMO.Client
 		/// Callback when the ClientPostboot scene is loaded.
 		/// </summary>
 		/// <param name="scene">The loaded scene.</param>
-		private void OnPostbootSceneLoaded(UnityEngine.SceneManagement.Scene scene)
+		private void OnPostbootSceneLoaded(Scene scene)
 		{
-			Log.Debug("ClientLauncher", "ClientPostboot scene loaded.");
-			AddressableLoadProcessor.UnloadSceneByLabelAsync("ClientLauncher");
+			Log.Debug("ClientLauncher", $"{PostbootSceneName} scene loaded.");
+
+			if (!scene.IsValid() || !scene.isLoaded)
+			{
+				// Bail out rather than unloading ourselves and leaving the player with no
+				// UI at all. The watchdog will surface this as a launch failure.
+				this.isLaunching = false;
+				SetLauncherState(LauncherState.LaunchFailed,
+					$"The game scene '{PostbootSceneName}' reported as loaded but is not usable. Check that Addressable bundles are built and up to date.");
+				return;
+			}
+
+			AddressableLoadProcessor.UnloadSceneByLabelAsync(LauncherSceneName);
 
 			// Find the ClientPostbootSystem in the loaded scene and start its bootstrap process.
 			foreach (var rootGO in scene.GetRootGameObjects())
@@ -689,9 +979,33 @@ namespace FishMMO.Client
 		/// </summary>
 		public void PlayButtonUpdate()
 		{
+			if (this.isUpdating)
+			{
+				return;
+			}
+
+			// The patch file name is derived from the target version, so an update cannot
+			// proceed without one. Reachable if the retry button is pressed after state was
+			// lost; re-run the version check rather than downloading to a malformed path.
+			if (string.IsNullOrEmpty(this.latestVersionString))
+			{
+				Log.Warning("ClientLauncher", "Update requested before a successful version check. Re-checking version.");
+				PlayButtonConnect();
+				return;
+			}
+
+			this.isUpdating = true;
+
 			SetLauncherState(LauncherState.DownloadingPatch);
 
-			string tempFilePath = Constants.GetTemporaryPath();
+			/* The patch must land where the Updater will look for it. The Updater resolves
+			 * <install root>/Patches/<from>-<to>.zip from its own base directory and will
+			 * not search anywhere else — if the archive is not at exactly this path it
+			 * reports "patch file not found", relaunches the client unchanged, and the
+			 * launcher detects the same version mismatch again on the next run. */
+			string patchFilePath = Path.Combine(
+				Constants.GetPatchesDirectory(),
+				Constants.GetPatchFileName(MainBootstrapSystem.GameVersion, this.latestVersionString));
 
 			// Use the APIHost that succeeded during the version check so the patch we
 			// download corresponds to the version we were told about. Fall back to the
@@ -704,46 +1018,90 @@ namespace FishMMO.Client
 			// Delegate patch download to patch server service
 			StartCoroutine(this.patchServerService.DownloadPatch(
 				$"{patchApiHost}{MainBootstrapSystem.GameVersion}",
-				tempFilePath,
+				patchFilePath,
 				this.expectedPatchSha256,
-				onComplete: () =>
+				onComplete: (patchWritten) =>
 				{
-					SetLauncherState(LauncherState.ApplyingPatch, "Applying patch to game files. This may take a few minutes.");
-					// Delegate updater launch to updater launcher service
+					if (!patchWritten)
+					{
+						// Server answered "already up to date" mid-flight (the version we
+						// checked against was superseded, or we raced a deployment).
+						// Nothing to apply — go straight to Play instead of invoking the
+						// updater on a patch that does not exist.
+						this.isUpdating = false;
+						SetLauncherState(LauncherState.ReadyToPlay);
+						return;
+					}
+
+					SetLauncherState(LauncherState.ApplyingPatch);
+
+					// Delegate updater launch to updater launcher service. NOTE: the patch
+					// archive is deliberately NOT deleted here — the Updater is about to
+					// read it, and it removes the archive itself once applied.
 					StartCoroutine(this.updaterLauncher.LaunchUpdater(
 						this.updaterPath,
 						MainBootstrapSystem.GameVersion,
 						this.latestVersionString,
-						onComplete: () => {
-						// Clean up temp patch file after successful update.
-						if (File.Exists(tempFilePath))
+						onComplete: () =>
 						{
-							try { File.Delete(tempFilePath); }
-							catch (Exception ex) { Log.Error("ClientLauncher", $"Failed to delete temp patch file {tempFilePath}: {ex.Message}"); }
-						}
-						Quit(); // Updater completed, quit launcher
-					},
+							// The updater is running and owns the install; it will terminate
+							// this process and relaunch the client. Quit promptly so the
+							// client binaries are released.
+							Log.Info("ClientLauncher", "Updater has taken over. Shutting down the launcher.");
+							Quit();
+						},
 						onError: (error) =>
 						{
+							this.isUpdating = false;
 							SetLauncherState(LauncherState.UpdaterFailed, error);
 						}));
 				},
 				onError: (error) =>
 				{
+					this.isUpdating = false;
 					SetLauncherState(LauncherState.PatchDownloadFailed, error);
 
 					// Attempt to clean up any partially downloaded file if an error occurs.
-					if (File.Exists(tempFilePath))
-					{
-						try { File.Delete(tempFilePath); }
-						catch (Exception ex) { Log.Error("ClientLauncher", $"Failed to delete temp patch file {tempFilePath}: {ex.Message}"); }
-					}
+					TryDeletePatchFile(patchFilePath);
 				},
 				onProgress: (progress, progressString) =>
 				{
-					this.ProgressSlider.value = progress;
-					this.ProgressText.text = progressString;
+					// Heartbeat: a large patch on a slow link must not trip the transient
+					// state watchdog while it is genuinely still downloading.
+					this.lastStateActivityTime = Time.realtimeSinceStartup;
+
+					if (this.ProgressSlider != null)
+					{
+						this.ProgressSlider.value = progress;
+					}
+					if (this.ProgressText != null)
+					{
+						this.ProgressText.text = progressString;
+					}
 				}));
+		}
+
+		/// <summary>
+		/// Best-effort removal of a partial or rejected patch archive. Failures are logged
+		/// but never propagated — a leftover file is recoverable, an exception here is not.
+		/// </summary>
+		private static void TryDeletePatchFile(string path)
+		{
+			if (string.IsNullOrEmpty(path))
+			{
+				return;
+			}
+			try
+			{
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("ClientLauncher", $"Failed to delete patch file {path}: {ex.Message}");
+			}
 		}
 
 		/// <summary>
@@ -807,20 +1165,30 @@ namespace FishMMO.Client
 					yield break;
 				}
 
+				// Defensive: the service already rejects an unparseable server version, but
+				// a null here would NRE below and strand the UI on "Checking Version..."
+				// with the button disabled and nothing logged to the player.
+				if (serverVersion == null)
+				{
+					SetLauncherState(LauncherState.VersionCheckFailed,
+						"The update server returned an unreadable version. Please try again later.");
+					yield break;
+				}
+
 				this.selectedApiHost = successfulHost;
-				this.latestVersionString = serverVersion.ToString(); // Store for updater launch
+				this.latestVersionString = serverVersion.FullVersion; // Store for updater launch
 				this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
 				Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
 
-				VersionConfig clientVersion;
-				try
-				{
-					clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
-				}
-				catch (ArgumentException)
+				// VersionConfig.Parse returns null for malformed input rather than throwing,
+				// so this must be a null check. A null client version silently compares as
+				// "older than everything" and would kick off a patch download for a version
+				// the server has never heard of.
+				VersionConfig clientVersion = VersionConfig.Parse(MainBootstrapSystem.GameVersion);
+				if (clientVersion == null)
 				{
 					SetLauncherState(LauncherState.VersionError,
-						$"Client version '{MainBootstrapSystem.GameVersion}' is not valid. Reinstall or delete version.txt.");
+						$"The installed client version '{MainBootstrapSystem.GameVersion}' is not valid. Please reinstall the client.");
 					yield break;
 				}
 
@@ -835,6 +1203,19 @@ namespace FishMMO.Client
 						"Your browser client is outdated. Please refresh the page (Ctrl+F5) to get the latest version.");
 					yield break;
 #else
+					// The server tells us up front whether it holds a patch for this exact
+					// version. Without this check an outdated client with no upgrade path
+					// downloads, 404s, lands in PatchDownloadFailed, and its retry button
+					// repeats the same impossible request forever.
+					if (!patchInfo.PatchAvailable)
+					{
+						Log.Warning("ClientLauncher",
+							$"Server has no patch from {MainBootstrapSystem.GameVersion} to {this.latestVersionString}.");
+						SetLauncherState(LauncherState.PatchUnavailable,
+							$"This client (v{MainBootstrapSystem.GameVersion}) cannot be updated to v{this.latestVersionString} automatically. Please download and install the latest full client.");
+						yield break;
+					}
+
 					PlayButtonUpdate();
 #endif
 				}

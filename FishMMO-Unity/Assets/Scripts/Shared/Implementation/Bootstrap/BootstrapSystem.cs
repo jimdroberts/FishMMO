@@ -66,14 +66,34 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool hasStartedBootstrap = false;
 		/// <summary>
-		/// List of bootstrap systems that were preloaded by this system.
+		/// Guards <see cref="OnCompletePreload"/> against running more than once.
 		/// </summary>
-		private List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();
+		private bool hasCompletedPreload = false;
+		/// <summary>
+		/// Guards <see cref="OnCompleteProcessing"/> against running more than once.
+		/// </summary>
+		private bool hasCompletedPostload = false;
+		/// <summary>
+		/// Bootstrap systems discovered in the scenes this system loaded.
+		/// </summary>
+		/// <remarks>
+		/// Accumulated across every scene this system loads. It used to be reassigned per
+		/// scene, so a system that loaded more than one scene containing bootstraps started
+		/// only the last one's, and a postload scene's bootstraps silently displaced the
+		/// preload scene's before either had been started.
+		/// </remarks>
+		private readonly List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();
 
 		/// <summary>
 		/// Unity Awake message. Initializes logging callback.
 		/// </summary>
-		void Awake()
+		/// <remarks>
+		/// Virtual so derived systems extend rather than hide it. A derived
+		/// <c>void Awake()</c> that merely shadows this one silently suppresses it —
+		/// Unity dispatches only the most-derived member — which is how
+		/// <see cref="OnDestroying"/> came to never run for <c>MainBootstrapSystem</c>.
+		/// </remarks>
+		protected virtual void Awake()
 		{
 			Log.OnInternalLogMessage = OnInternalLogCallback;
 		}
@@ -118,9 +138,15 @@ namespace FishMMO.Shared
 			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} OnCompleteProcessing");
 
 			// Start any Bootstrap systems in the scenes that were loaded by this BootstrapSystem.
-			foreach (BootstrapSystem bootstrapSystem in preloadedBootstrapSystems)
+			// Iterate a copy: StartBootstrap can load further scenes whose post-process
+			// appends to this list while we are walking it.
+			BootstrapSystem[] discovered = preloadedBootstrapSystems.ToArray();
+			foreach (BootstrapSystem bootstrapSystem in discovered)
 			{
-				bootstrapSystem.StartBootstrap();
+				if (bootstrapSystem != null)
+				{
+					bootstrapSystem.StartBootstrap();
+				}
 			}
 		}
 
@@ -167,8 +193,15 @@ namespace FishMMO.Shared
 			{
 				Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Preload Start");
 
-				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPreloadProgressUpdate;
-				AddressableLoadProcessor.BeginProcessQueue(); // This will start processing the global queue
+				/* Completion comes from this system's own batch, not from the processor's
+				 * global progress event. That event is shared by every bootstrap system,
+				 * both loading screens and the world-scene handshake, so it reported "done"
+				 * to all of them whenever any queue drained — and a handler that
+				 * resubscribed during dispatch could make another subscriber run twice,
+				 * double-invoking OnCompletePreload. A batch tracks only what this call
+				 * enqueued and fires exactly once. */
+				AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+				batch.Completed += OnPreloadBatchCompleted;
 			}
 			catch (UnityException ex)
 			{
@@ -177,17 +210,23 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called after Preload is completed. Handles progress update and triggers postload.
+		/// Called when this system's preload batch finishes. Triggers postload.
 		/// </summary>
-		/// <param name="progress">The progress value (0.0 to 1.0).</param>
-		public void AddressableLoadProcessor_OnPreloadProgressUpdate(float progress)
+		/// <param name="batch">The completed preload batch.</param>
+		private void OnPreloadBatchCompleted(AddressableLoadBatch batch)
 		{
-			if (progress < 1.0f)
+			if (hasCompletedPreload)
 			{
 				return;
 			}
-			// Preload has completed.
-			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPreloadProgressUpdate;
+			hasCompletedPreload = true;
+
+			if (batch != null && batch.HasFailures)
+			{
+				// Continue regardless: refusing to advance would strand the client on a
+				// black screen with no UI. The failures are already logged by name.
+				Log.Error("BootstrapSystem", $"{gameObject.scene.name} preload finished with {batch.FailedItems.Count} failed item(s). Continuing bootstrap.");
+			}
 
 			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Preload Complete");
 			OnCompletePreload();
@@ -222,8 +261,8 @@ namespace FishMMO.Shared
 			{
 				Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Postload Start");
 
-				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPostloadProgressUpdate;
-				AddressableLoadProcessor.BeginProcessQueue();
+				AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+				batch.Completed += OnPostloadBatchCompleted;
 			}
 			catch (UnityException ex)
 			{
@@ -237,17 +276,21 @@ namespace FishMMO.Shared
 		public virtual void OnPostLoad() { }
 
 		/// <summary>
-		/// Called after Postload is completed. Handles progress update and triggers completion processing.
+		/// Called when this system's postload batch finishes. Triggers completion processing.
 		/// </summary>
-		/// <param name="progress">The progress value (0.0 to 1.0).</param>
-		public void AddressableLoadProcessor_OnPostloadProgressUpdate(float progress)
+		/// <param name="batch">The completed postload batch.</param>
+		private void OnPostloadBatchCompleted(AddressableLoadBatch batch)
 		{
-			if (progress < 1.0f)
+			if (hasCompletedPostload)
 			{
 				return;
 			}
-			// Postload has completed.
-			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPostloadProgressUpdate;
+			hasCompletedPostload = true;
+
+			if (batch != null && batch.HasFailures)
+			{
+				Log.Error("BootstrapSystem", $"{gameObject.scene.name} postload finished with {batch.FailedItems.Count} failed item(s). Continuing bootstrap.");
+			}
 
 			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Postload Complete");
 			OnCompleteProcessing();
@@ -256,11 +299,22 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unity OnDestroy message. Handles cleanup when the object is destroyed.
 		/// </summary>
-		void OnDestroy()
+		/// <remarks>
+		/// Only clears <see cref="Log.OnInternalLogMessage"/> if this instance is the
+		/// current owner. That hook is a single-cast static assigned by every bootstrap
+		/// system's <see cref="Awake"/>, so several are alive at once and the last to wake
+		/// owns it. Clearing unconditionally meant the first system destroyed during
+		/// teardown silenced internal logging for every system still shutting down —
+		/// exactly when those diagnostics matter most.
+		/// </remarks>
+		protected virtual void OnDestroy()
 		{
 			OnDestroying();
 
-			Log.OnInternalLogMessage = null;
+			if (Log.OnInternalLogMessage == OnInternalLogCallback)
+			{
+				Log.OnInternalLogMessage = null;
+			}
 		}
 
 		/// <summary>
@@ -269,31 +323,41 @@ namespace FishMMO.Shared
 		public virtual void OnDestroying() { }
 
 		/// <summary>
-		/// Called after a scene is loaded to process bootstrap systems in the new scene.
+		/// Called after a scene is loaded to collect bootstrap systems in the new scene.
 		/// </summary>
 		/// <param name="scene">The loaded scene.</param>
 		public void OnBootstrapPostProcess(Scene scene)
 		{
-			preloadedBootstrapSystems = OnScenePostProcess(scene);
+			CollectBootstrapSystems(scene);
 		}
 
 		/// <summary>
-		/// Finds all BootstrapSystem components in the root objects of the given scene.
+		/// Appends every BootstrapSystem found in the given scene to
+		/// <see cref="preloadedBootstrapSystems"/>, skipping duplicates and self.
 		/// </summary>
 		/// <param name="scene">The scene to search.</param>
-		/// <returns>List of found BootstrapSystem components.</returns>
-		private List<BootstrapSystem> OnScenePostProcess(Scene scene)
+		private void CollectBootstrapSystems(Scene scene)
 		{
-			List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();
+			if (!scene.IsValid() || !scene.isLoaded)
+			{
+				Log.Warning("BootstrapSystem", $"Post-process skipped for an invalid or unloaded scene ('{scene.name}').");
+				return;
+			}
+
 			foreach (GameObject rootObject in scene.GetRootGameObjects())
 			{
-				BootstrapSystem[] bootstraps = rootObject.GetComponentsInChildren<BootstrapSystem>();
+				// Includes inactive children: a bootstrap system parented under a disabled
+				// container would otherwise never be started.
+				BootstrapSystem[] bootstraps = rootObject.GetComponentsInChildren<BootstrapSystem>(true);
 				foreach (BootstrapSystem bootstrap in bootstraps)
 				{
+					if (bootstrap == null || bootstrap == this || preloadedBootstrapSystems.Contains(bootstrap))
+					{
+						continue;
+					}
 					preloadedBootstrapSystems.Add(bootstrap);
 				}
 			}
-			return preloadedBootstrapSystems;
 		}
 	}
 }

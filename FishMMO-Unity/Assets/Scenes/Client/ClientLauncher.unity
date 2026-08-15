@@ -575,7 +575,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   background: {fileID: 212578446}
   title: {fileID: 629647594}
-  HTMLView: {fileID: 1434440577}
+  htmlView: {fileID: 1434440577}
   progressBarGroup: {fileID: 1194338228}
   progressSlider: {fileID: 716385163}
   progressText: {fileID: 180067185}
@@ -584,10 +584,12 @@ MonoBehaviour:
   playButtonText: {fileID: 1342158545}
   htmlText: {fileID: 2101316213}
   htmlTextLinkHandler: {fileID: 2101316215}
-  htmlViewURL: https://www.fishmmo.com/docs/introduction.html
+  statusText: {fileID: 0}
+  htmlViewURL: 
   divClass: content
   defaultScreenWidth: 1024
   defaultScreenHeight: 768
+  launchWatchdogTimeoutSeconds: 30
   unityWebRequestService: {fileID: 468852881}
   htmlContentFetcher: {fileID: 468852880}
   patchServerService: {fileID: 468852879}
@@ -1165,19 +1167,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 772784618}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: FishMMO.Client.ClientLauncher, Assembly-CSharp
-        m_MethodName: Quit
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &772784618
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2277,19 +2267,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1434612283}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 468852875}
-        m_TargetAssemblyTypeName: 
-        m_MethodName: 
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: 
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &1434612283
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -77,8 +77,13 @@ namespace FishMMO.Client
 		{
 			if (this.webRequestService == null)
 			{
+				// Disable only this component. Deactivating the GameObject would take the
+				// sibling ClientLauncher down with it (they share one GameObject) and abort
+				// its in-flight news coroutine, leaving the UI stuck on "Loading News..."
+				// with a disabled button and no message. FetchAndProcessHtml null-checks
+				// and reports through onError instead.
 				Log.Error("UnityHtmlContentFetcher", "WebRequestService dependency is not assigned! This script will not function.");
-				this.gameObject.SetActive(false);
+				this.enabled = false;
 			}
 		}
 
@@ -130,9 +135,12 @@ namespace FishMMO.Client
 						onError?.Invoke($"Error processing HTML content: {ex.Message}");
 					}
 				},
+				// request is null when the service rejected the config outright (bad URL),
+				// so it must not be dereferenced unguarded.
 				OnFailure = (request) =>
 				{
-					string errorMsg = $"Failed to fetch HTML content from {url}. Error: {request.error}";
+					string reason = request != null ? request.error : "the request could not be sent";
+					string errorMsg = $"Failed to fetch HTML content from {url}. Error: {reason}";
 					Log.Error("UnityHtmlContentFetcher", errorMsg);
 					onError?.Invoke(errorMsg);
 				}

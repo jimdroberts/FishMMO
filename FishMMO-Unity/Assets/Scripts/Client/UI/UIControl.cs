@@ -213,8 +213,37 @@ namespace FishMMO.Client
 			{
 				Hide();
 			}
-			AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
-			AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+
+			/* Movable windows are normalised to a centre pivot and centre anchor so drag and
+			 * screen-clamp math has one frame of reference.
+			 *
+			 * Stretched panels are excluded, and must be. Their size comes from the parent's
+			 * rect, with sizeDelta acting as an inset; collapsing the anchors to a point
+			 * reinterprets that inset as an absolute size, so a full-screen overlay
+			 * (anchors 0,0-1,1 with sizeDelta 0,0) becomes literally 0x0 at screen centre and
+			 * disappears, along with every child stretched inside it. UILoadingScreen is
+			 * exactly that shape — backdrop, image and progress bar all vanished here, which
+			 * looked like the loading screen never being shown at all. */
+			if (!IsStretched(MainPanel))
+			{
+				AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
+				AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+			}
+		}
+
+		/// <summary>
+		/// True when the rect is anchored across a range on either axis, meaning its size is
+		/// derived from its parent rather than from its own <c>sizeDelta</c>.
+		/// </summary>
+		/// <param name="rectTransform">The rect to test.</param>
+		private static bool IsStretched(RectTransform rectTransform)
+		{
+			if (rectTransform == null)
+			{
+				return false;
+			}
+			return !Mathf.Approximately(rectTransform.anchorMin.x, rectTransform.anchorMax.x) ||
+				   !Mathf.Approximately(rectTransform.anchorMin.y, rectTransform.anchorMax.y);
 		}
 
 		/// <summary>

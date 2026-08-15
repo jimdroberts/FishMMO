@@ -105,6 +105,22 @@ namespace FishMMO.Client
 		public void Shutdown()
 		{
 			NetworkManager.ClientManager.OnClientConnectionState -= OnClientConnectionState;
+
+			/* Drop every subscriber this manager is holding.
+			 *
+			 * Client.Awake attaches handlers here — including an anonymous lambda on
+			 * OnConnectionAttemptFailed that captures the Client, which by construction can
+			 * never be removed by its owner. Clearing the events here is the only place
+			 * that reference can be released, and it stops a stale handler from firing
+			 * against a half-destroyed Client if anything reaches this manager after
+			 * teardown has begun.
+			 *
+			 * EnsureConnectionToken is a Func the Client also assigns, capturing it too. */
+			OnConnectionSuccessful = null;
+			OnReconnectAttempt = null;
+			OnReconnectFailed = null;
+			OnConnectionAttemptFailed = null;
+			EnsureConnectionToken = null;
 		}
 
 		/// <summary>Drives reconnect timer. Called every frame from the owning client.</summary>

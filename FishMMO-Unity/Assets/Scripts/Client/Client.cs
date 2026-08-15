@@ -159,6 +159,12 @@ namespace FishMMO.Client
 		/// Accumulates subscribers even before <see cref="Connection"/> is created.
 		/// </summary>
 		private Action onConnectionSuccessful;
+		/// <summary>
+		/// True while a world-scene preload batch is in flight, so a repeated
+		/// <c>ClientValidatedSceneBroadcast</c> from the server does not start a second
+		/// preload and send a duplicate acknowledgement.
+		/// </summary>
+		private bool isPreloadingWorldScenes;
 
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
 		public event Action<int, int> OnReconnectAttempt
@@ -227,9 +233,10 @@ namespace FishMMO.Client
 		// ── Lifecycle ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// Unity Awake. Initializes NetworkManager, authenticator, transport, audio, UI, and event handlers.
+		/// Initializes NetworkManager, authenticator, transport, audio, UI, and event handlers.
+		/// This starts the primary client behaviour.
 		/// </summary>
-		private void Awake()
+		public void Initialize()
 		{
 			if (!TryInitializeNetworkManager() || !TryInitializeAuthenticator() || !TryInitializeTransport())
 			{ Quit(); return; }
@@ -466,6 +473,10 @@ namespace FishMMO.Client
 		/// <param name="forceDisconnect">If true, forces an immediate disconnection.</param>
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
+			// Leaving the world: re-arm the incidental loading overlay that world entry
+			// latched off, so the next login/world-entry cycle shows loading progress again.
+			RestoreLoadingScreen();
+
 			this.fogManager?.Stop();
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
@@ -802,26 +813,51 @@ namespace FishMMO.Client
 		/// <param name="ch">The network channel.</param>
 		private void OnValidatedScene(ClientValidatedSceneBroadcast msg, Channel ch)
 		{
-			// Guard against duplicate broadcasts: unsubscribe first to prevent
-			// multiple subscriptions that would send duplicate responses.
-			AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress;
-			AddressableLoadProcessor.EnqueueLoad(this.worldPreloadScenes);
-			try { AddressableLoadProcessor.OnProgressUpdate += OnValidatedSceneProgress; AddressableLoadProcessor.BeginProcessQueue(); }
-			catch (UnityException ex) { Log.Error("Client", "Preload failed", ex); }
+			/* Readiness is keyed off this call's own load batch.
+			 *
+			 * It used to subscribe to AddressableLoadProcessor.OnProgressUpdate, a global
+			 * event that fires 1 whenever ANY queue drains. A bootstrap system or a loading
+			 * screen finishing unrelated work would satisfy the >= 1 test and make the
+			 * client tell the server it was in the scene before its world scenes existed.
+			 * A batch only reports on the scenes enqueued right here. */
+			if (this.isPreloadingWorldScenes)
+			{
+				// Duplicate broadcast from the server; the in-flight batch already covers it.
+				return;
+			}
+
+			try
+			{
+				AddressableLoadProcessor.EnqueueLoad(this.worldPreloadScenes);
+
+				this.isPreloadingWorldScenes = true;
+				AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+				batch.Completed += OnWorldPreloadComplete;
+			}
+			catch (UnityException ex)
+			{
+				this.isPreloadingWorldScenes = false;
+				Log.Error("Client", "Preload failed", ex);
+			}
 		}
 		/// <summary>
-		/// Called during world scene preload progress. Sends a validated scene broadcast when loading completes.
+		/// Sends the validated-scene acknowledgement once this client's world preload
+		/// scenes have finished loading.
 		/// </summary>
-		/// <param name="p">Progress value from 0 to 1.</param>
-		private void OnValidatedSceneProgress(float p) 
-		{ 
-			// Unsubscribe on completion (p >= 1) or error/failure (p < 0).
-			if (p >= 1f || p < 0f) 
-			{ 
-				AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress; 
-				if (p >= 1f) 
-					Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable); 
-			} 
+		/// <param name="batch">The completed world preload batch.</param>
+		private void OnWorldPreloadComplete(AddressableLoadBatch batch)
+		{
+			this.isPreloadingWorldScenes = false;
+
+			if (batch != null && batch.HasFailures)
+			{
+				// Do not claim readiness for a scene set that did not load — the server
+				// would spawn the character into a world this client cannot render.
+				Log.Error("Client", $"World scene preload failed for: {string.Join(", ", batch.FailedItems)}. Not acknowledging scene validation.");
+				return;
+			}
+
+			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
 		}
 		/// <summary>
 		/// Handles a server busy broadcast by showing a dialog to the player.
@@ -1039,6 +1075,21 @@ namespace FishMMO.Client
 			if (suppress) LoadingSuppressed = true;
 			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out _)) UIManager.Hide("UITKLoadingScreen");
 			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out _)) UIManager.Hide("UILoadingScreen");
+		}
+
+		/// <summary>
+		/// Re-arms the incidental loading overlay after leaving the world.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="LoadingSuppressed"/> latches on world entry and had no counterpart, so
+		/// it stayed set for the rest of the process: quit to login and come back and the
+		/// Addressable-driven overlay never appeared again, because both loading screens
+		/// return early from their progress handler while it is set. Clearing it on the way
+		/// out of the world restores the overlay for the next login/world-entry cycle.
+		/// </remarks>
+		public static void RestoreLoadingScreen()
+		{
+			LoadingSuppressed = false;
 		}
 
 		/// <summary>

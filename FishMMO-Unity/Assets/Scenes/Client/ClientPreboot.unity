@@ -13864,25 +13864,25 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   EditorPreloadAssets: []
   EditorPostloadAssets: []
-  EditorPreloadScenes:
+  EditorPreloadScenes: []
+  EditorPostloadScenes:
   - SceneName: ClientPostboot
     ActivateOnLoad: 1
     LoadSceneMode: 1
-  EditorPostloadScenes: []
   PreloadAssets: []
   PostloadAssets: []
-  PreloadScenes:
+  PreloadScenes: []
+  PostloadScenes:
   - SceneName: ClientLauncher
     ActivateOnLoad: 1
     LoadSceneMode: 1
-  PostloadScenes: []
   WebGLPreloadAssets: []
   WebGLPostloadAssets: []
-  WebGLPreloadScenes:
+  WebGLPreloadScenes: []
+  WebGLPostloadScenes:
   - SceneName: ClientPostboot
     ActivateOnLoad: 1
     LoadSceneMode: 1
-  WebGLPostloadScenes: []
 --- !u!1 &1200828874
 GameObject:
   m_ObjectHideFlags: 0
@@ -18260,7 +18260,7 @@ MonoBehaviour:
   CanvasScaler: {fileID: 0}
   MainPanel: {fileID: 1522124212}
   InputField: {fileID: 0}
-  StartOpen: 0
+  StartOpen: 1
   IsAlwaysOpen: 0
   HasFocus: 0
   FocusOnSelect: 0

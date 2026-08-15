@@ -66,8 +66,12 @@ namespace FishMMO.Client
 		{
 			if (this.webRequestService == null)
 			{
+				// Disable only this component. Deactivating the GameObject would take the
+				// sibling ClientLauncher down with it (they share one GameObject), killing
+				// its in-flight coroutines and freezing the UI with no explanation. Both
+				// public entry points below null-check and report through onError instead.
 				Log.Error("HttpPatchServerService", "WebRequestService dependency is not assigned! This script will not function.");
-				this.gameObject.SetActive(false);
+				this.enabled = false;
 			}
 		}
 
@@ -132,7 +136,19 @@ namespace FishMMO.Client
 					try
 					{
 						VersionFetch versionFetch = JsonUtility.FromJson<VersionFetch>(request.downloadHandler.text);
+
+						// VersionConfig.Parse returns null on malformed input — it does not
+						// throw. Without this guard a blank or malformed latest_version
+						// propagates a null through onComplete and NREs in the caller's
+						// coroutine, which Unity swallows, leaving the launcher wedged on
+						// "Checking Version..." with no way forward.
 						VersionConfig serverVersion = VersionConfig.Parse(versionFetch.latest_version);
+						if (serverVersion == null)
+						{
+							onError?.Invoke($"Server returned an unusable version string: '{versionFetch.latest_version}'. Expected Major.Minor.Patch[.PreRelease].");
+							return;
+						}
+
 						PatchInfo info = new PatchInfo
 						{
 							UpToDate = versionFetch.up_to_date,
@@ -142,16 +158,13 @@ namespace FishMMO.Client
 						};
 						onComplete?.Invoke(serverVersion, info);
 					}
-					catch (ArgumentException ex)
-					{
-						onError?.Invoke($"Invalid server version format: {ex.Message}");
-					}
 					catch (Exception ex)
 					{
 						onError?.Invoke($"Error parsing latest version JSON: {ex.Message}");
 					}
 				},
-				OnFailure = (request) => onError?.Invoke($"Error fetching latest version: {request.error}")
+				// request is null when the service rejected the config outright (bad URL).
+				OnFailure = (request) => onError?.Invoke($"Error fetching latest version: {(request != null ? request.error : "the request could not be sent")}")
 			};
 
 			yield return this.webRequestService.StartCoroutine(this.webRequestService.SendWebRequestWithRetries(config));
@@ -164,17 +177,39 @@ namespace FishMMO.Client
 		/// does not match (the partial file is deleted).
 		/// </summary>
 		/// <param name="patchUrl">The URL to download the patch from.</param>
-		/// <param name="tempFilePath">The temporary file path to save the patch.</param>
+		/// <param name="destinationFilePath">Full path (including file name) to save the patch archive to.</param>
 		/// <param name="expectedSha256">Lowercase hex SHA-256 the downloaded file must match, or null/empty to skip verification.</param>
-		/// <param name="onComplete">Callback for successful download.</param>
+		/// <param name="onComplete">Callback for successful download. The argument is false when the server reported the client is already up to date.</param>
 		/// <param name="onError">Callback for error handling.</param>
 		/// <param name="onProgress">Callback for progress updates.</param>
 		/// <returns>Coroutine enumerator.</returns>
-		public IEnumerator DownloadPatch(string patchUrl, string tempFilePath, string expectedSha256, Action onComplete, Action<string> onError, Action<float, string> onProgress)
+		public IEnumerator DownloadPatch(string patchUrl, string destinationFilePath, string expectedSha256, Action<bool> onComplete, Action<string> onError, Action<float, string> onProgress)
 		{
 			if (this.webRequestService == null)
 			{
 				onError?.Invoke("PatchServerService not initialized due to missing WebRequestService.");
+				yield break;
+			}
+
+			if (string.IsNullOrWhiteSpace(destinationFilePath))
+			{
+				onError?.Invoke("No destination path was supplied for the patch download.");
+				yield break;
+			}
+
+			// DownloadHandlerFile does not create missing parent directories; it fails the
+			// request instead. The Patches directory does not exist in a fresh install.
+			try
+			{
+				string destinationDirectory = Path.GetDirectoryName(destinationFilePath);
+				if (!string.IsNullOrEmpty(destinationDirectory))
+				{
+					Directory.CreateDirectory(destinationDirectory);
+				}
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke($"Could not create the patch directory for '{destinationFilePath}': {ex.Message}");
 				yield break;
 			}
 
@@ -203,7 +238,7 @@ namespace FishMMO.Client
 				// WebGL runs under Emscripten's MEMFS (in-memory virtual FS); the
 				// file is lost when the tab closes and may silently fail on large
 				// writes. Fall back to DownloadHandlerBuffer + manual write below.
-				DownloadHandlerFactory = () => new DownloadHandlerFile(tempFilePath),
+				DownloadHandlerFactory = () => new DownloadHandlerFile(destinationFilePath),
 #else
 				DownloadHandlerFactory = () => new DownloadHandlerBuffer(),
 #endif
@@ -221,34 +256,51 @@ namespace FishMMO.Client
 					// DownloadHandlerFile does not support .text; check response code only.
 #else
 					// DownloadHandlerBuffer was used; persist the downloaded bytes
-					// to the filesystem at tempFilePath.
+					// to the filesystem at destinationFilePath.
 					try
 					{
-						File.WriteAllBytes(tempFilePath, request.downloadHandler.data);
+						File.WriteAllBytes(destinationFilePath, request.downloadHandler.data);
 					}
 					catch (Exception ex)
 					{
 						onError?.Invoke($"Error writing downloaded patch to disk: {ex.Message}");
-						TryDeleteTempFile(tempFilePath);
+						TryDeleteTempFile(destinationFilePath);
 						return;
 					}
 #endif
 					if (request.responseCode == (long)HttpStatusCode.NoContent)
 					{
-						// Server indicates client is already up to date.
+						// Server indicates client is already up to date. Nothing was
+						// written worth applying, so discard whatever landed on disk and
+						// tell the caller there is no patch to hand to the Updater.
+						TryDeleteTempFile(destinationFilePath);
 						onProgress?.Invoke(1f, "100% (Already Updated)");
-						onComplete?.Invoke();
+						onComplete?.Invoke(false);
 						return;
 					}
 
 					if (request.responseCode != (long)HttpStatusCode.OK)
 					{
 						onError?.Invoke($"Unexpected response code downloading patch: {request.responseCode}");
-						TryDeleteTempFile(tempFilePath);
+						TryDeleteTempFile(destinationFilePath);
 						return;
 					}
 
 					onProgress?.Invoke(1f, "100%");
+
+					// Shape check before anything downstream trusts this file. A 200 with a
+					// JSON/HTML body (an error page, or a gateway that answers the patch
+					// route with a status document) is written to disk verbatim by
+					// DownloadHandlerFile and would otherwise be handed to the Updater as a
+					// "patch". Cheap, and it fires before the hash comparison so the
+					// resulting message names the real problem.
+					if (!IsZipArchive(destinationFilePath))
+					{
+						Log.Error("HttpPatchServerService", $"Downloaded patch at '{destinationFilePath}' is not a ZIP archive.");
+						onError?.Invoke("The server did not return a patch archive. The download has been discarded.");
+						TryDeleteTempFile(destinationFilePath);
+						return;
+					}
 
 					// SHA-256 verification (when an expected digest was supplied).
 					if (!string.IsNullOrEmpty(expectedSha256))
@@ -256,12 +308,12 @@ namespace FishMMO.Client
 						string actual;
 						try
 						{
-							actual = ComputeFileSha256Hex(tempFilePath);
+							actual = ComputeFileSha256Hex(destinationFilePath);
 						}
 						catch (Exception ex)
 						{
 							onError?.Invoke($"Error hashing downloaded patch: {ex.Message}");
-							TryDeleteTempFile(tempFilePath);
+							TryDeleteTempFile(destinationFilePath);
 							return;
 						}
 
@@ -269,21 +321,50 @@ namespace FishMMO.Client
 						{
 							Log.Error("HttpPatchServerService", $"Patch SHA-256 mismatch. expected={expectedSha256} actual={actual}");
 							onError?.Invoke("Patch integrity check failed (SHA-256 mismatch). The downloaded file has been discarded.");
-							TryDeleteTempFile(tempFilePath);
+							TryDeleteTempFile(destinationFilePath);
 							return;
 						}
 					}
 
-					onComplete?.Invoke();
+					onComplete?.Invoke(true);
 				},
+				// request is null when the service rejected the config outright (bad URL).
 				OnFailure = (request) =>
 				{
-					TryDeleteTempFile(tempFilePath);
-					onError?.Invoke($"Error downloading patch: {request.error}");
+					TryDeleteTempFile(destinationFilePath);
+					onError?.Invoke($"Error downloading patch: {(request != null ? request.error : "the request could not be sent")}");
 				}
 			};
 
 			yield return this.webRequestService.StartCoroutine(this.webRequestService.SendWebRequestWithRetries(config));
+		}
+
+		/// <summary>
+		/// Returns true when the file at <paramref name="filePath"/> begins with the ZIP
+		/// local-file-header magic (<c>PK\x03\x04</c>).
+		/// </summary>
+		/// <remarks>
+		/// Only the first four bytes are read. This is a shape check, not an integrity
+		/// check — SHA-256 verification remains the authority on content.
+		/// </remarks>
+		private static bool IsZipArchive(string filePath)
+		{
+			try
+			{
+				using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+				{
+					byte[] header = new byte[4];
+					int read = stream.Read(header, 0, header.Length);
+					return read == 4 &&
+						   header[0] == 0x50 && header[1] == 0x4B &&
+						   header[2] == 0x03 && header[3] == 0x04;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("HttpPatchServerService", $"Could not inspect downloaded patch '{filePath}': {ex.Message}");
+				return false;
+			}
 		}
 
 		/// <summary>

@@ -75,7 +75,11 @@ namespace FishMMO.Client
 		{
 			if (config == null || string.IsNullOrWhiteSpace(config.URL))
 			{
+				// Report through OnFailure rather than just bailing. Callers drive UI state
+				// off these callbacks; a silent yield break left the launcher sitting on
+				// "Loading News..." with a disabled button and no way forward.
 				Log.Error("UnityWebRequestService", "Request URL is null or empty.");
+				config?.OnFailure?.Invoke(null);
 				yield break;
 			}
 			

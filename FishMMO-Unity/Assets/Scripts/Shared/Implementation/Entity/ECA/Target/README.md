@@ -301,13 +301,13 @@ These are not selector features, but they directly affect how Triggers behave ar
 
 ### 10.1 `BaseCondition.Invert` (centralized)
 
-Every concrete condition inherits an `Invert` toggle from [BaseCondition](../../../Core/Entity/ECA/Core/Condition/BaseCondition.cs). The framework evaluates conditions through the non-virtual `Check(initiator, eventData)` wrapper, which calls the derived `Evaluate(...)` and flips the result when `Invert` is set. Implementers write **plain positive logic** in `Evaluate` and never re-derive `Invert ? !x : x` themselves.
+Every concrete condition inherits an `Invert` toggle from [BaseCondition](../../../../Core/Entity/ECA/Core/Condition/BaseCondition.cs). The framework evaluates conditions through the non-virtual `Check(initiator, eventData)` wrapper, which calls the derived `Evaluate(...)` and flips the result when `Invert` is set. Implementers write **plain positive logic** in `Evaluate` and never re-derive `Invert ? !x : x` themselves.
 
-Callers that previously called `condition.Evaluate(...)` directly have been migrated to `condition.Check(...)` (see [Trigger.cs](../../../Core/Entity/ECA/Core/Trigger.cs), [CompositeCondition.cs](../../../Core/Entity/ECA/Core/Condition/CompositeCondition.cs), and [Ability.cs](../../Prediction/Ability/Ability.cs)).
+Callers that previously called `condition.Evaluate(...)` directly have been migrated to `condition.Check(...)` (see [Trigger.cs](../../../../Core/Entity/ECA/Core/Trigger.cs), [CompositeCondition.cs](../../../../Core/Entity/ECA/Core/Condition/CompositeCondition.cs), and [Ability.cs](../../Prediction/Ability/Ability.cs)).
 
 ### 10.2 `BaseAction.StopChainOnFailure` + `IAbortableAction` (opt-in)
 
-[BaseAction](../../../Core/Entity/ECA/Core/Action/BaseAction.cs) exposes a `StopChainOnFailure` bool. By itself it is inert \u2014 the action must also implement `IAbortableAction` to be cancellable:
+[BaseAction](../../../../Core/Entity/ECA/Core/Action/BaseAction.cs) exposes a `StopChainOnFailure` bool. By itself it is inert \u2014 the action must also implement `IAbortableAction` to be cancellable:
 
 ```csharp
 public interface IAbortableAction { bool TryExecute(ICharacter initiator, EventData eventData); }

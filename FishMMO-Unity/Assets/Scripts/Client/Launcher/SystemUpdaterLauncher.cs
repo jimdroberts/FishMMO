@@ -9,40 +9,52 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Starts the standalone updater executable and polls for its exit on the main thread,
-	/// reporting completion/failure through callbacks safely usable with Unity APIs.
-	/// Includes a hard timeout to prevent the launcher from hanging indefinitely
-	/// if the updater process deadlocks or hangs on a corrupted patch file.
+	/// Starts the standalone updater executable and hands control over to it.
 	/// </summary>
+	/// <remarks>
+	/// <para>The updater takes ownership of the install as soon as it starts: its first
+	/// action is to terminate this process (it is given our PID) so that the client
+	/// binaries are not in use while they are patched, and its last action is to relaunch
+	/// the client. This launcher therefore must NOT wait for the updater to exit — doing
+	/// so is a mutual wait that the updater resolves by killing us, which makes every
+	/// completion callback unreachable dead code.</para>
+	/// <para>Instead we watch the updater only long enough to catch a fast failure
+	/// (missing runtime, bad arguments, unreadable patch), then report success and let the
+	/// caller shut the launcher down cleanly. If the updater is still running at the end
+	/// of that window it has gotten far enough to own the handoff.</para>
+	/// </remarks>
 	public class SystemUpdaterLauncher : IUpdaterLauncher
 	{
 		/// <summary>
 		/// Interval in seconds between process-exit polls.
 		/// </summary>
-		private const float pollIntervalSeconds = 0.5f;
+		private const float pollIntervalSeconds = 0.25f;
 
 		/// <summary>
-		/// Maximum total time the launcher will wait for the updater process to exit.
-		/// Patches are typically small delta files; even a large patch plus rollback
-		/// should complete well within this window. If the updater hasn't exited by
-		/// this deadline, the launcher force-kills it and reports failure.
+		/// How long to watch the updater for an immediate failure before handing off.
+		/// Long enough for a process that cannot start (missing .NET runtime, bad
+		/// arguments, unreadable patch archive) to fail and set an exit code; short
+		/// enough that the player is not left staring at a static screen.
 		/// </summary>
-		private const float updaterTimeoutSeconds = 300f;
+		private const float handoffGraceSeconds = 10f;
 
 		/// <summary>
-		/// Launches the updater executable and polls for process exit via a coroutine,
-		/// ensuring callbacks execute on the Unity main thread.
+		/// Launches the updater executable and hands off to it via a coroutine, ensuring
+		/// callbacks execute on the Unity main thread.
 		/// <para><b>IMPORTANT:</b> This method returns an IEnumerator and the caller
 		/// MUST invoke it via <c>MonoBehaviour.StartCoroutine</c>. The implementation
 		/// uses <c>yield return new WaitForSeconds(...)</c> which requires a Unity
 		/// coroutine host with a main-thread UnitySynchronizationContext. Calling this
 		/// method outside of a Unity coroutine context will result in undefined behavior.</para>
+		/// <para><paramref name="onComplete"/> means "the updater is running and owns the
+		/// install from here" — NOT "the patch has been applied". The caller should shut
+		/// the launcher down promptly so the updater can replace the client binaries.</para>
 		/// </summary>
 		/// <param name="updaterPath">Path to the updater executable.</param>
 		/// <param name="currentClientVersion">Current client version string.</param>
 		/// <param name="latestServerVersion">Latest server version string.</param>
-		/// <param name="onComplete">Callback invoked when updater completes successfully.</param>
-		/// <param name="onError">Callback invoked when updater fails or errors occur.</param>
+		/// <param name="onComplete">Callback invoked once the updater has started successfully and taken over.</param>
+		/// <param name="onError">Callback invoked when updater fails to start or exits with an error before handoff.</param>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
 		public IEnumerator LaunchUpdater(string updaterPath, string currentClientVersion, string latestServerVersion, Action onComplete, Action<string> onError)
 		{
@@ -148,7 +160,7 @@ namespace FishMMO.Client
 				process.BeginOutputReadLine();
 				process.BeginErrorReadLine();
 
-				Log.Debug("Updater", $"Updater launched: {updaterPath} with arguments: {startInfo.Arguments}");
+				Log.Debug("Updater", $"Updater launched: {updaterPath} (client {currentClientVersion} -> {latestServerVersion})");
 			}
 			catch (Exception ex)
 			{
@@ -159,52 +171,42 @@ namespace FishMMO.Client
 				process?.Dispose();
 				yield break;
 			}
-			finally
-			{
-				// Detach event handlers before the process is disposed,
-				// but NOT here — the polling loop below still needs them
-				// to capture output/error from the running updater.
-				// Handlers are detached in the exit paths below.
-			}
 
-			// Poll for process exit on the main thread with a hard timeout.
-			// Without this timeout, a hung updater process (e.g. deadlocked on a
-			// corrupted patch or a filesystem stall) would lock the launcher UI
-			// forever with no path forward for the player.
-			// Uses Time.realtimeSinceStartup for accurate elapsed-time measurement
-			// rather than accumulating WaitForSeconds durations, which drift due
-			// to frame-rate variance.
+			/* Watch briefly for a fast failure, then hand off.
+			 *
+			 * We deliberately do NOT wait for the updater to exit. The updater kills this
+			 * process by PID before it touches any files, so a wait-for-exit loop can only
+			 * ever end one of two ways: we get killed mid-wait (and every callback below
+			 * becomes unreachable), or the kill fails and we wait out a timeout for no
+			 * reason. Watching only for an early non-zero exit gives us real error
+			 * reporting for the cases the player can act on, without the deadlock.
+			 *
+			 * Uses Time.realtimeSinceStartup rather than accumulating WaitForSeconds
+			 * durations, which drift with frame-rate variance. */
 			float startTime = Time.realtimeSinceStartup;
-			while (!process.HasExited)
+			while (Time.realtimeSinceStartup - startTime < handoffGraceSeconds)
 			{
-				if (Time.realtimeSinceStartup - startTime > updaterTimeoutSeconds)
+				if (process.HasExited)
 				{
-					Log.Critical("Updater", $"Updater process timed out after {updaterTimeoutSeconds}s. Force-killing.");
-					try
-					{
-						process.Kill();
-						// Give the process a brief window to terminate.
-						process.WaitForExit(5000);
-					}
-					catch (Exception ex)
-					{
-						Log.Error("Updater", $"Error force-killing timed-out updater: {ex.Message}");
-					}
-					finally
-					{
-						process.OutputDataReceived -= outputHandler;
-						process.ErrorDataReceived -= errorHandler;
-						process.Dispose();
-					}
-					onError?.Invoke($"Updater process timed out after {updaterTimeoutSeconds} seconds. The patch may be corrupted or the system is under heavy load.");
-					yield break;
+					break;
 				}
 				yield return new WaitForSeconds(pollIntervalSeconds);
 			}
 
-			// WaitForExit ensures the process handle is fully updated before reading ExitCode.
-			// Without this, reading ExitCode can throw InvalidOperationException in the
-			// normal exit path (not just the timeout path).
+			if (!process.HasExited)
+			{
+				// Still running: it is past the point where it would have failed to start,
+				// and it now owns the install. Leave the process alone (disposing here
+				// would not kill it, but detaching the readers loses its diagnostics) and
+				// let the caller quit so the binaries are released.
+				Log.Debug("Updater", "Updater is running and has taken over the install. Handing off and shutting down the launcher.");
+				onComplete?.Invoke();
+				yield break;
+			}
+
+			// Exited within the grace window. WaitForExit ensures the process handle is
+			// fully updated before reading ExitCode; without it, reading ExitCode can
+			// throw InvalidOperationException even on the normal exit path.
 			process.WaitForExit();
 			int exitCode = process.ExitCode;
 			process.OutputDataReceived -= outputHandler;
@@ -214,6 +216,8 @@ namespace FishMMO.Client
 			Log.Debug("Updater", $"Updater process exited with code: {exitCode}");
 			if (exitCode == 0)
 			{
+				// A clean, immediate exit means the updater decided there was nothing to
+				// do (already up to date). Treat it as a successful handoff.
 				onComplete?.Invoke();
 			}
 			else

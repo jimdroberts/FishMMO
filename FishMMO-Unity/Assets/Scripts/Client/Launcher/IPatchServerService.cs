@@ -29,12 +29,17 @@ namespace FishMMO.Client
 		/// the digest does not match.
 		/// </summary>
 		/// <param name="patchUrl">The full URL of the patch file to download.</param>
-		/// <param name="tempFilePath">The temporary file path where the patch should be saved.</param>
+		/// <param name="destinationFilePath">Full path (including file name) the patch archive is written to. Parent directories are created if missing.</param>
 		/// <param name="expectedSha256">Lowercase hex SHA-256 the downloaded file must match, or null/empty to skip verification.</param>
-		/// <param name="onComplete">Callback invoked upon successful download (and verification, if requested).</param>
+		/// <param name="onComplete">
+		/// Callback invoked upon successful download (and verification, if requested).
+		/// The argument is <c>true</c> when a patch archive was written to
+		/// <paramref name="destinationFilePath"/>, and <c>false</c> when the server
+		/// reported the client is already up to date and there is nothing to apply.
+		/// </param>
 		/// <param name="onError">Callback invoked with an error message upon failure.</param>
 		/// <param name="onProgress">Callback invoked periodically with download progress (0.0 to 1.0) and a formatted string.</param>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		IEnumerator DownloadPatch(string patchUrl, string tempFilePath, string expectedSha256, Action onComplete, Action<string> onError, Action<float, string> onProgress);
+		IEnumerator DownloadPatch(string patchUrl, string destinationFilePath, string expectedSha256, Action<bool> onComplete, Action<string> onError, Action<float, string> onProgress);
 	}
 }
