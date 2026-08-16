@@ -747,6 +747,14 @@ namespace FishMMO.Server.Implementation
 				// waiting on this before it hops, and a reply lets it fail fast instead of
 				// blocking until its own timeout.
 				token = string.Empty;
+				_ = Log.Warning(LogPrefix,
+					$"Hop token mint FAILED for conn={conn.ClientId} — sending empty token.");
+			}
+			else
+			{
+				_ = Log.Warning(LogPrefix,
+					$"Hop token minted for conn={conn.ClientId} len={token.Length} " +
+					$"ip={ResolveRateLimitKey(conn) ?? "?"} keys={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
 			}
 
 			Server?.NetworkWrapper?.Broadcast(conn, new ConnectionTokenBroadcast()
@@ -900,12 +908,19 @@ namespace FishMMO.Server.Implementation
 			// The token bridges the real IP from the HTTP layer into the QUIC layer.
 			// We await resolution because rate limiting requires a verified real IP —
 			// falling back to proxy IP or ClientId is not acceptable for DoS protection.
+			_ = Log.Warning(LogPrefix,
+				$"ClientHandshake conn={clientId} cookie={(msg.Cookie != null && msg.Cookie.Length > 0)} " +
+				$"connectionToken={(string.IsNullOrEmpty(msg.ConnectionToken) ? "missing" : $"present len={msg.ConnectionToken.Length}")} " +
+				$"keysLoaded={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
+
 			if (!string.IsNullOrEmpty(msg.ConnectionToken))
 			{
 				try
 				{
 					if (!await ProcessConnectionTokenAsync(clientId, msg.ConnectionToken))
 					{
+						_ = Log.Warning(LogPrefix,
+							$"Connection {clientId} connection-token verify FAILED (len={msg.ConnectionToken.Length}) — disconnecting before world/login auth.");
 						if (TryResolveConnection(clientId, out conn))
 							conn.Disconnect(true);
 						return;
@@ -991,14 +1006,16 @@ namespace FishMMO.Server.Implementation
 			CancellationToken ct = shutdownToken;
 			if (ct.IsCancellationRequested) return false;
 
-			var server = Server;
-			if (server?.DataContainerRegistry == null ||
-				!server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out _))
+			// Do not require IAccountCreationSystemRuntimeData. That container is
+			// registered only by AccountCreationSystem on the Login Server. World/Scene
+			// sit behind the same L4 proxy and need this path most — gating on it
+			// silently rejected every hop token (handshake saw len=74, HMAC never ran).
+			if (Server == null)
 				return false;
 
 			// Try stateless HMAC verification (format: payloadB64.sigB64).
 			// Uses the database-backed key map — no environment variable or .cfg file fallbacks.
-			string? realIp = TryVerifyStatelessConnectionToken(rawToken);
+			string? realIp = TryVerifyStatelessConnectionToken(rawToken, out string verifyFail);
 			if (realIp != null)
 			{
 				// Single-use per connection: the signature is authentic, but a bearer token
@@ -1023,7 +1040,8 @@ namespace FishMMO.Server.Implementation
 
 			// Legacy DB-backed token path removed (IConnectionTokenService deleted
 			// when connection tokens migrated to stateless HMAC).
-			await Log.Warning(LogPrefix, $"Legacy connection token not supported for {clientId}.");
+			await Log.Warning(LogPrefix,
+				$"Connection {clientId} connection-token rejected: {verifyFail} (len={rawToken.Length}).");
 			return false;
 		}
 
@@ -1120,7 +1138,7 @@ namespace FishMMO.Server.Implementation
 					{
 						s_dbConnectionTokenKeyMap = map;
 					}
-					await Log.Debug(LogPrefix, $"Loaded {map.Count} active connection token key(s) from database.");
+					await Log.Warning(LogPrefix, $"Loaded {map.Count} active connection token key(s) from database.");
 				}
 				else if (result.IsSuccess)
 				{
@@ -1186,11 +1204,20 @@ namespace FishMMO.Server.Implementation
 		/// Returns the real IP on success, null if the token is invalid/expired
 		/// or the HMAC key is not available.
 		/// </summary>
-		private static string? TryVerifyStatelessConnectionToken(string rawToken)
+		private static string? TryVerifyStatelessConnectionToken(string rawToken, out string failReason)
 		{
-			if (string.IsNullOrEmpty(rawToken)) return null;
+			failReason = "unknown";
+			if (string.IsNullOrEmpty(rawToken))
+			{
+				failReason = "empty token";
+				return null;
+			}
 			int dotIdx = rawToken.LastIndexOf('.');
-			if (dotIdx <= 0 || dotIdx >= rawToken.Length - 1) return null;
+			if (dotIdx <= 0 || dotIdx >= rawToken.Length - 1)
+			{
+				failReason = "not payload.sig format";
+				return null;
+			}
 
 			try
 			{
@@ -1205,7 +1232,11 @@ namespace FishMMO.Server.Implementation
 
 				var payloadStr = Encoding.UTF8.GetString(payload);
 				int pipeIdx = payloadStr.LastIndexOf('|');
-				if (pipeIdx <= 0) return null;
+				if (pipeIdx <= 0)
+				{
+					failReason = "payload missing |expiry";
+					return null;
+				}
 
 				// Determine token format by checking for a keyId prefix.
 				// Format: "keyId:realIp|expiryUnix" - first colon separates
@@ -1253,12 +1284,22 @@ namespace FishMMO.Server.Implementation
 						? defaultKey : null;
 				}
 
-				if (hmacKey == null) return null;
+				if (hmacKey == null)
+				{
+					int keyCount = s_dbConnectionTokenKeyMap?.Count ?? 0;
+					failReason = keyCount == 0
+						? "no connection-token keys loaded from DB"
+						: $"no HMAC key for payload '{payloadStr}' (keys={keyCount})";
+					return null;
+				}
 
 				using var hmac = new HMACSHA256(hmacKey);
 				var computedSig = hmac.ComputeHash(payload);
 				if (!CryptographicOperations.FixedTimeEquals(computedSig, expectedSig))
+				{
+					failReason = $"HMAC mismatch payload='{payloadStr}' keys={s_dbConnectionTokenKeyMap?.Count ?? 0}";
 					return null;
+				}
 
 				// Extract the real IP from the payload.
 				string realIp;
@@ -1272,7 +1313,10 @@ namespace FishMMO.Server.Implementation
 				}
 
 				if (!long.TryParse(payloadStr.Substring(pipeIdx + 1), out long expiryUnix))
+				{
+					failReason = "expiry not an integer";
 					return null;
+				}
 
 				long nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 				if (nowUnix > expiryUnix)
@@ -1289,8 +1333,9 @@ namespace FishMMO.Server.Implementation
 
 				return realIp;
 			}
-			catch
+			catch (Exception ex)
 			{
+				failReason = $"parse exception: {ex.GetType().Name}: {ex.Message}";
 				return null;
 			}
 		}
