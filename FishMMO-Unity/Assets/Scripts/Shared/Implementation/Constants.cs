@@ -184,37 +184,37 @@ namespace FishMMO.Shared
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string GameHost = GeneratedHostConfig.GameHost;
 
-				/// <summary>
-				/// Launcher HTML/news page URL.
-				///
-				/// <para>
-				/// Set at build time via <see cref="GeneratedHostConfig.LauncherHtmlUrl"/>,
-				/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
-				/// </para>
-				/// </summary>
-				/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-				public static readonly string LauncherHtmlUrl = GeneratedHostConfig.LauncherHtmlUrl;
+			/// <summary>
+			/// Launcher HTML/news page URL.
+			///
+			/// <para>
+			/// Set at build time via <see cref="GeneratedHostConfig.LauncherHtmlUrl"/>,
+			/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
+			/// </para>
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public static readonly string LauncherHtmlUrl = GeneratedHostConfig.LauncherHtmlUrl;
 
-				/// <summary>
-				/// SMTP from address for verification/notification emails.
-				///
-				/// <para>
-				/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromAddress"/>,
-				/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
-				/// </para>
-				/// </summary>
-				/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-				public static readonly string SmtpFromAddress = GeneratedHostConfig.SmtpFromAddress;
+			/// <summary>
+			/// SMTP from address for verification/notification emails.
+			///
+			/// <para>
+			/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromAddress"/>,
+			/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
+			/// </para>
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public static readonly string SmtpFromAddress = GeneratedHostConfig.SmtpFromAddress;
 
-				/// <summary>
-				/// SMTP from display name for outgoing emails.
-				///
-				/// <para>
-				/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromName"/>.
-				/// </para>
-				/// </summary>
-				/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-				public static readonly string SmtpFromName = GeneratedHostConfig.SmtpFromName;
+			/// <summary>
+			/// SMTP from display name for outgoing emails.
+			///
+			/// <para>
+			/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromName"/>.
+			/// </para>
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public static readonly string SmtpFromName = GeneratedHostConfig.SmtpFromName;
 
 			/// <summary>
 			/// Root path for Unity scene assets.
@@ -363,7 +363,7 @@ namespace FishMMO.Shared
 				if (layer < 0) return 0;
 				return 1 << layer;
 			}
-			
+
 			static Layers()
 			{
 				var missing = Validate();

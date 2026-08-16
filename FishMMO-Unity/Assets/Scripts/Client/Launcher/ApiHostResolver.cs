@@ -252,7 +252,7 @@ namespace FishMMO.Client
 				if (ip.IsIPv6SiteLocal) return true;
 				byte[] b = ip.GetAddressBytes();
 				if ((b[0] & 0xFE) == 0xFC) return true; // fc00::/7
-				// fe80::/10 link-local
+														// fe80::/10 link-local
 				if (b[0] == 0xFE && (b[1] & 0xC0) == 0x80) return true;
 			}
 

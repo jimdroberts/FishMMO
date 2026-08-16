@@ -646,28 +646,28 @@ namespace FishNet.Transporting.WebTransport.Client
 						$"index={webglIndex} url={webglConnectUrl}");
 				}
 #else
-				int result;
-				if (pkt.Channel == 1)
-					result = WebTransportNative.wt_client_send_datagram(this.clientHandle, pkt.Data, pkt.Length);
-				else
-					result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
-				if (result == 0)
-				{
-					long n = System.Threading.Interlocked.Increment(ref wireSentOkCount);
-					System.Threading.Interlocked.Add(ref wireSentBytes, pkt.Length);
-					if (n <= 12 || (n % 50) == 0)
+					int result;
+					if (pkt.Channel == 1)
+						result = WebTransportNative.wt_client_send_datagram(this.clientHandle, pkt.Data, pkt.Length);
+					else
+						result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
+					if (result == 0)
 					{
-						UnityEngine.Debug.Log(
-							$"[FishWT] WIRE SEND OK #{n} ch={pkt.Channel} len={pkt.Length} native");
+						long n = System.Threading.Interlocked.Increment(ref wireSentOkCount);
+						System.Threading.Interlocked.Add(ref wireSentBytes, pkt.Length);
+						if (n <= 12 || (n % 50) == 0)
+						{
+							UnityEngine.Debug.Log(
+								$"[FishWT] WIRE SEND OK #{n} ch={pkt.Channel} len={pkt.Length} native");
+						}
 					}
-				}
-				else
-				{
-					System.Threading.Interlocked.Increment(ref wireSentFailCount);
-					transport.NetworkManager?.LogWarning(
-						$"[FishWT] WIRE SEND FAIL ch={pkt.Channel} len={pkt.Length}: " +
-						$"{WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
-				}
+					else
+					{
+						System.Threading.Interlocked.Increment(ref wireSentFailCount);
+						transport.NetworkManager?.LogWarning(
+							$"[FishWT] WIRE SEND FAIL ch={pkt.Channel} len={pkt.Length}: " +
+							$"{WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
+					}
 #endif
 				}
 				finally

@@ -126,20 +126,20 @@ namespace FishNet.Transporting.WebTransport.Server
 		// for callers that explicitly set to null.
 		public string Alpn { get => alpn; set => alpn = value ?? "h3"; }
 
-			/// <summary>
-			/// Comma-separated list of allowed Origin header values for browser
-			/// WebTransport CORS validation (e.g. "https://play.fishmmo.com").
-			/// Empty string or null means allow all origins (development/testing only).
-			/// In production, this MUST be set to a specific origin to prevent
-			/// cross-site WebTransport connection attempts.
-			/// </summary>
-			private string allowedOrigins = "";
-			/// <summary>
-			/// Gets or sets the allowed origins for browser WebTransport CORS
-			/// validation. Must be called before <see cref="StartConnection"/>.
-			/// Pass an empty string or null to allow all origins (dev/testing only).
-			/// </summary>
-			public string AllowedOrigins { get => allowedOrigins; set => allowedOrigins = value ?? ""; }
+		/// <summary>
+		/// Comma-separated list of allowed Origin header values for browser
+		/// WebTransport CORS validation (e.g. "https://play.fishmmo.com").
+		/// Empty string or null means allow all origins (development/testing only).
+		/// In production, this MUST be set to a specific origin to prevent
+		/// cross-site WebTransport connection attempts.
+		/// </summary>
+		private string allowedOrigins = "";
+		/// <summary>
+		/// Gets or sets the allowed origins for browser WebTransport CORS
+		/// validation. Must be called before <see cref="StartConnection"/>.
+		/// Pass an empty string or null to allow all origins (dev/testing only).
+		/// </summary>
+		public string AllowedOrigins { get => allowedOrigins; set => allowedOrigins = value ?? ""; }
 
 		/// <summary>
 		/// Atomic guard to ensure StopConnection runs exactly once,
@@ -714,9 +714,9 @@ namespace FishNet.Transporting.WebTransport.Server
 				{
 					byte* p = (byte*)remoteAddressPtr;
 					// Cap at MaxAddrLen-1 to guarantee null-terminator space in the
-			// fixed-size native buffer (256 bytes). Without this, a 256-byte
-			// address with no null would cause MemoryCopy to read past the buffer.
-			while (addrLen < MaxAddrLen - 1 && p[addrLen] != 0) addrLen++;
+					// fixed-size native buffer (256 bytes). Without this, a 256-byte
+					// address with no null would cause MemoryCopy to read past the buffer.
+					while (addrLen < MaxAddrLen - 1 && p[addrLen] != 0) addrLen++;
 				}
 				if (addrLen > 0)
 				{
@@ -749,7 +749,7 @@ namespace FishNet.Transporting.WebTransport.Server
 
 					// Atomic allocation with overflow protection and collision retry.
 					int fishNetId;
-					for (;;)
+					for (; ; )
 					{
 						fishNetId = System.Threading.Interlocked.Increment(ref this.nextConnectionId);
 						// Overflow protection: wrap to 1 if the counter overflows past
