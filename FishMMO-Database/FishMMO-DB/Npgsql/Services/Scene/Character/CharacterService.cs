@@ -293,6 +293,15 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// Persists character state only — it deliberately does not touch the session lease.
+		/// It used to extend the lease for any row whose session was Online, without checking
+		/// which server was writing, so a stale save from a server that had already released
+		/// the character extended the *new* owner's lease. Lease liveness belongs to the
+		/// ownership operations (<see cref="TryClaimAsync"/>, <see cref="ReleaseAsync"/>,
+		/// <see cref="RefreshSessionLeaseAsync"/>, <see cref="RefreshSessionLeasesAsync"/>),
+		/// all of which verify ownership before writing.
+		/// </remarks>
 		public async Task<DatabaseResult> PersistAsync(CharacterData characterData, CancellationToken cancellationToken = default)
 		{
 			if (characterData.ID <= 0)
@@ -312,7 +321,6 @@ namespace FishMMO.Database.Npgsql.Services
 			var saveResult = await ExecuteTransactionAsync<SaveCharacterWriteOutcome>(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
 				var sceneName = characterData.SceneName ?? string.Empty;
 				var bindScene = characterData.BindScene ?? string.Empty;
 
@@ -347,12 +355,8 @@ namespace FishMMO.Database.Npgsql.Services
 						access_level = {{27}},
 						flags = {{28}},
 						version = {{29}},
-						last_saved = {{30}},
-						session_lease_expires_utc = CASE
-							WHEN session_state <> 0 THEN {{31}}
-							ELSE session_lease_expires_utc
-						END
-					WHERE id = {{32}} AND deleted = FALSE AND version < {{29}}";
+						last_saved = {{30}}
+					WHERE id = {{31}} AND deleted = FALSE AND version < {{29}}";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
@@ -389,7 +393,6 @@ namespace FishMMO.Database.Npgsql.Services
 						characterData.Flags,
 						characterData.Version,
 						now,
-						newLeaseExpiresUtc,
 						characterData.ID,
 					},
 					cancellationToken).ConfigureAwait(false);
@@ -797,6 +800,103 @@ namespace FishMMO.Database.Npgsql.Services
 					errorCode: DatabaseErrorCodes.InvalidOperation);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <summary>
+		/// Maximum leases sent in one statement. Each lease contributes three parameters, so
+		/// this stays far below PostgreSQL's 65535 parameter ceiling while keeping the number
+		/// of round trips proportional to population/500 rather than to population.
+		/// </summary>
+		private const int MaxLeaseRefreshBatchSize = 500;
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> RefreshSessionLeasesAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default)
+		{
+			if (leases == null || leases.Count == 0)
+			{
+				return DatabaseResult<int>.Success(0);
+			}
+
+			// Drop malformed entries up front so a single bad row cannot fail the whole batch.
+			var valid = new List<CharacterSessionLeaseData>(leases.Count);
+			foreach (var lease in leases)
+			{
+				if (lease.IsValid)
+				{
+					valid.Add(lease);
+				}
+			}
+
+			if (valid.Count == 0)
+			{
+				return DatabaseResult<int>.Success(0);
+			}
+
+			int totalRefreshed = 0;
+
+			for (int offset = 0; offset < valid.Count; offset += MaxLeaseRefreshBatchSize)
+			{
+				int batchSize = Math.Min(MaxLeaseRefreshBatchSize, valid.Count - offset);
+				int batchStart = offset;
+
+				var batchResult = await ExecuteTransactionAsync<int>(async dbContext =>
+				{
+					var now = DateTime.UtcNow;
+					var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+					var tableName = dbContext.GetTableName<CharacterEntity>();
+
+					// Parameters: {0} new lease, {1} now, {2} Online, then (id, serverId, token) per lease.
+					var parameters = new object[3 + (batchSize * 3)];
+					parameters[0] = newLeaseExpiresUtc;
+					parameters[1] = now;
+					parameters[2] = (short)CharacterSessionState.Online;
+
+					var values = new System.Text.StringBuilder();
+					for (int i = 0; i < batchSize; i++)
+					{
+						var lease = valid[batchStart + i];
+						int p = 3 + (i * 3);
+						parameters[p] = lease.CharacterID;
+						parameters[p + 1] = lease.OwnerServerID;
+						parameters[p + 2] = lease.OwnerToken;
+
+						if (i > 0)
+						{
+							values.Append(", ");
+						}
+						// Explicit casts: a bare parameter inside VALUES gives PostgreSQL nothing
+						// to infer the column type from, which fails to resolve the comparison
+						// operators in the join predicate below.
+						values.Append("(CAST(").Append('{').Append(p).Append("} AS bigint), ")
+							  .Append("CAST(").Append('{').Append(p + 1).Append("} AS bigint), ")
+							  .Append("CAST(").Append('{').Append(p + 2).Append("} AS uuid))");
+					}
+
+					// Ownership is verified per row: a server that released the session, or had it
+					// claimed away after its lease expired, matches nothing here and so cannot
+					// extend the current owner's lease.
+					var sql = $@"UPDATE {tableName} AS c
+						SET session_lease_expires_utc = {{0}},
+							last_saved = {{1}}
+						FROM (VALUES {values}) AS v(character_id, owner_server_id, owner_token)
+						WHERE c.id = v.character_id
+							AND c.deleted = false
+							AND c.session_state = {{2}}
+							AND c.session_owner_server_id = v.owner_server_id
+							AND c.session_owner_token = v.owner_token";
+
+					return await dbContext.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken).ConfigureAwait(false);
+				}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+				if (!batchResult.IsSuccess)
+				{
+					return batchResult;
+				}
+
+				totalRefreshed += batchResult.Data;
+			}
+
+			return DatabaseResult<int>.Success(totalRefreshed);
 		}
 
 		/// <inheritdoc/>

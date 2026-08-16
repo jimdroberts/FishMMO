@@ -1,12 +1,15 @@
 using FishNet.Connection;
 using FishNet.Object;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
@@ -67,10 +70,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AppendAbilityData(character, abilityDataList);
 			}
 
-			// Capture session tokens so we can refresh leases even if individual saves fail
-			var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
-
-			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList, sessionTokens)))
+			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList)))
 			{
 				runtimeData.EndSave();
 				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
@@ -117,10 +117,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendAttributeData(character, attributeDataList);
 			AppendAbilityData(character, abilityDataList);
 
-			// Save then fully release session (Online → Offline)
+			// Save then fully release session (Online → Offline).
+			//
+			// The async worker pool is bounded and drops writes when full, so this enqueue can
+			// fail. The session token has already been taken out of SessionTokens by the
+			// caller, which means a dropped work item used to leave nothing anywhere that
+			// could ever release the claim: the character stayed Online until its lease
+			// expired, and every attempt to load it on the destination scene server was
+			// kicked for the whole two minutes. Hand it to the retry queue instead.
 			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, sessionInfo)))
 			{
-				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID}.");
+				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID} — queued for retry.");
+				QueuePendingFlush(charData.ID, charData, sessionInfo);
 			}
 
 			if (buffDataList.Count > 0)
@@ -197,25 +205,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Saves a single character asynchronously via the database service.
 		/// </summary>
-		private async Task SaveCharacterAsync(CharacterData charData)
+		/// <returns>
+		/// <c>true</c> when the row is persisted, or when the write was rejected for a reason
+		/// that retrying cannot change; <c>false</c> for transient failures worth retrying.
+		/// </returns>
+		private async Task<bool> SaveCharacterAsync(CharacterData charData)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
-					return;
+					return false;
 				}
 
 				DatabaseResult result = await characterService.PersistAsync(charData);
-				if (!result.IsSuccess)
+				if (result.IsSuccess)
 				{
-					await Log.Warning("CharacterSystem", $"SaveCharacterAsync DB error for character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+					return true;
 				}
+
+				await Log.Warning("CharacterSystem", $"SaveCharacterAsync DB error for character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+
+				// A stale or duplicate write means newer state is already persisted; replaying
+				// this snapshot would keep losing to the same version guard.
+				return result.ErrorCode == DatabaseErrorCodes.StaleState ||
+					   result.ErrorCode == DatabaseErrorCodes.NotFound ||
+					   result.ErrorCode == DatabaseErrorCodes.ValidationError;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveCharacterAsync failed for character {charData.ID}: {ex}");
+				return false;
 			}
 		}
 
@@ -227,20 +248,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private async Task SaveAndReleaseCharacterAsync(CharacterData charData, CharacterSessionInfo? sessionInfo)
 		{
 			// Save first — we must persist while still holding the session lock
-			await SaveCharacterAsync(charData);
+			bool saved = await SaveCharacterAsync(charData);
 
-			// Then release the session
+			// Release regardless of whether the save landed. Holding the claim back because a
+			// write failed would strand the character far more visibly than losing one save:
+			// the destination scene server could not claim it and would kick the player.
+			bool released = true;
 			if (sessionInfo.HasValue)
 			{
-				await ReleaseCharacterSessionAsync(charData.ID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
+				released = await ReleaseCharacterSessionAsync(charData.ID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
+			}
+
+			if (!saved || !released)
+			{
+				// Retrying the save after the release is safe: the snapshot is the state we
+				// held while we owned the character, and the version guard drops it if the
+				// next owner has already written something newer.
+				QueuePendingFlush(charData.ID, saved ? (CharacterData?)null : charData, released ? null : sessionInfo);
 			}
 		}
 
 		/// <summary>
 		/// Saves all characters asynchronously with a processing guard to prevent overlapping saves.
-		/// Refreshes session leases for each character to prevent lease expiry even if a save fails.
 		/// </summary>
-		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList, Dictionary<long, CharacterSessionInfo> sessionTokens)
+		/// <remarks>
+		/// Session leases are deliberately not touched here. They are refreshed on their own
+		/// timer by <see cref="OnPeriodicSessionLeaseRefresh"/> so that liveness of a claim
+		/// never depends on how long this sequential save walk takes.
+		/// </remarks>
+		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList)
 		{
 			try
 			{
@@ -264,25 +300,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {charData.ID}: {ex}");
 					}
-
-					// Refresh session lease regardless of whether the save succeeded.
-					// PersistAsync extends the lease on success, but if it fails we still
-					// need to prevent the lease from expiring on a live character.
-					if (sessionTokens.TryGetValue(charData.ID, out CharacterSessionInfo si))
-					{
-						try
-						{
-							DatabaseResult leaseResult = await characterService.RefreshSessionLeaseAsync(charData.ID, si.ServerID, si.Token);
-							if (!leaseResult.IsSuccess)
-							{
-								await Log.Warning("CharacterSystem", $"SaveAllCharactersAsync: RefreshSessionLeaseAsync DB error for character {charData.ID}: {leaseResult.ErrorCode} - {leaseResult.ErrorMessage}");
-							}
-						}
-						catch (Exception ex)
-						{
-							await Log.Error("CharacterSystem", $"SaveAllCharactersAsync: RefreshSessionLeaseAsync failed for character {charData.ID}: {ex}");
-						}
-					}
 				}
 			}
 			finally
@@ -303,19 +320,321 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (mappingData.SessionTokens.TryGetValue(characterID, out CharacterSessionInfo sessionInfo))
 			{
 				mappingData.SessionTokens.Remove(characterID);
-				if (!EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(characterID, sessionInfo.ServerID, sessionInfo.Token)))
-				{
-					Log.Warning("CharacterSystem", $"Failed to enqueue session release for character {characterID}.");
-				}
+				ReleaseSessionSafely(characterID, sessionInfo.ServerID, sessionInfo.Token);
 				return sessionInfo;
 			}
 			return null;
 		}
 
 		/// <summary>
+		/// Releases a claimed session, guaranteeing the release is not lost if the async worker
+		/// pool is saturated or the database call fails.
+		/// </summary>
+		/// <remarks>
+		/// Every abandoned-load path has to go through here. A claim that is dropped instead of
+		/// released leaves the character Online in the database with nothing left in this
+		/// process holding its token, so the only thing that can free it is lease expiry —
+		/// during which the player cannot be loaded anywhere.
+		/// </remarks>
+		private void ReleaseSessionSafely(long characterID, long serverID, Guid sessionToken)
+		{
+			var sessionInfo = new CharacterSessionInfo(sessionToken, serverID);
+			if (!EnqueueAsyncWork(() => ReleaseSessionWithRetryAsync(characterID, sessionInfo)))
+			{
+				Log.Warning("CharacterSystem", $"Failed to enqueue session release for character {characterID} — queued for retry.");
+				QueuePendingFlush(characterID, null, sessionInfo);
+			}
+		}
+
+		/// <summary>
+		/// Releases a session and queues a retry if the release did not stick.
+		/// </summary>
+		private async Task ReleaseSessionWithRetryAsync(long characterID, CharacterSessionInfo sessionInfo)
+		{
+			if (!await ReleaseCharacterSessionAsync(characterID, sessionInfo.ServerID, sessionInfo.Token))
+			{
+				QueuePendingFlush(characterID, null, sessionInfo);
+			}
+		}
+
+		#region Pending Flush Retry
+
+		/// <summary>
+		/// A save and/or session release that could not be completed on its first attempt.
+		/// </summary>
+		private sealed class PendingCharacterFlush
+		{
+			/// <summary>Character snapshot still to persist, or null when only a release is outstanding.</summary>
+			public CharacterData? CharacterData;
+			/// <summary>Session ownership still to release, or null when only a save is outstanding.</summary>
+			public CharacterSessionInfo? Session;
+			/// <summary>Earliest UTC time the next attempt may run.</summary>
+			public DateTime NextAttemptUtc;
+			/// <summary>Attempts made so far, used for backoff and for giving up.</summary>
+			public int Attempts;
+			/// <summary>1 while an attempt is running; 0 when idle.</summary>
+			public int InFlight;
+		}
+
+		/// <summary>
+		/// Outstanding saves/releases awaiting retry, keyed by character ID.
+		/// </summary>
+		/// <remarks>
+		/// Exists so that a full async-worker channel or a transient database error can never
+		/// silently strand a claimed character session. A stranded claim is not a local
+		/// problem: the character stays Online in the database, so the scene server the player
+		/// is transferring to cannot claim it and kicks them, repeatedly, until the lease
+		/// expires.
+		/// </remarks>
+		private readonly ConcurrentDictionary<long, PendingCharacterFlush> pendingFlushes =
+			new ConcurrentDictionary<long, PendingCharacterFlush>();
+
+		/// <summary>Interval in seconds between pending-flush retry passes.</summary>
+		private const float PendingFlushRetryIntervalSeconds = 3f;
+
+		/// <summary>
+		/// Empties the pending-flush queue and returns its contents, for a final synchronous
+		/// flush during shutdown.
+		/// </summary>
+		private List<KeyValuePair<long, PendingCharacterFlush>> DrainPendingFlushes()
+		{
+			var drained = new List<KeyValuePair<long, PendingCharacterFlush>>(pendingFlushes.Count);
+			foreach (var kvp in pendingFlushes)
+			{
+				if (pendingFlushes.TryRemove(kvp.Key, out PendingCharacterFlush pending))
+				{
+					drained.Add(new KeyValuePair<long, PendingCharacterFlush>(kvp.Key, pending));
+				}
+			}
+			return drained;
+		}
+
+		/// <summary>
+		/// Maximum retry attempts before giving up. With the backoff below this spans well over
+		/// the session lease duration, after which the claim expires on its own and any further
+		/// release would match nothing anyway.
+		/// </summary>
+		private const int MaxPendingFlushAttempts = 12;
+
+		/// <summary>
+		/// Records a save and/or release for retry, merging with any entry already pending for
+		/// the same character.
+		/// </summary>
+		/// <param name="characterID">Character the work belongs to.</param>
+		/// <param name="charData">Character snapshot to persist, or null if only releasing.</param>
+		/// <param name="sessionInfo">Session ownership to release, or null if only saving.</param>
+		private void QueuePendingFlush(long characterID, CharacterData? charData, CharacterSessionInfo? sessionInfo)
+		{
+			if (characterID <= 0 || (charData == null && sessionInfo == null))
+			{
+				return;
+			}
+
+			pendingFlushes.AddOrUpdate(
+				characterID,
+				_ => new PendingCharacterFlush
+				{
+					CharacterData = charData,
+					Session = sessionInfo,
+					NextAttemptUtc = DateTime.UtcNow,
+					Attempts = 0,
+					InFlight = 0,
+				},
+				(_, existing) =>
+				{
+					// Keep the newest snapshot; keep whichever session token we have, since a
+					// character only ever holds one claim at a time.
+					if (charData.HasValue)
+					{
+						existing.CharacterData = charData;
+					}
+					if (sessionInfo.HasValue)
+					{
+						existing.Session = sessionInfo;
+					}
+					return existing;
+				});
+		}
+
+		/// <summary>
+		/// Periodic retry pass over <see cref="pendingFlushes"/>.
+		/// </summary>
+		private void OnPeriodicPendingFlushRetry(float deltaTime)
+		{
+			if (Server == null || Server.ServerState != ConnectionState.Started || pendingFlushes.IsEmpty)
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+
+			foreach (var kvp in pendingFlushes)
+			{
+				long characterID = kvp.Key;
+				PendingCharacterFlush pending = kvp.Value;
+
+				if (nowUtc < pending.NextAttemptUtc)
+				{
+					continue;
+				}
+
+				if (Interlocked.CompareExchange(ref pending.InFlight, 1, 0) != 0)
+				{
+					continue;
+				}
+
+				if (!EnqueueAsyncWork(() => RunPendingFlushAsync(characterID, pending)))
+				{
+					// Still saturated; leave it queued and try again next pass.
+					Interlocked.Exchange(ref pending.InFlight, 0);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Executes one retry of a pending save/release, rescheduling or dropping the entry
+		/// according to the outcome.
+		/// </summary>
+		private async Task RunPendingFlushAsync(long characterID, PendingCharacterFlush pending)
+		{
+			bool completed = false;
+			try
+			{
+				pending.Attempts++;
+
+				if (pending.CharacterData.HasValue)
+				{
+					// A stale snapshot is rejected by the version guard rather than
+					// overwriting newer state, so replaying it is safe.
+					if (await SaveCharacterAsync(pending.CharacterData.Value))
+					{
+						pending.CharacterData = null;
+					}
+				}
+
+				if (pending.Session.HasValue)
+				{
+					if (await ReleaseCharacterSessionAsync(characterID, pending.Session.Value.ServerID, pending.Session.Value.Token))
+					{
+						pending.Session = null;
+					}
+				}
+
+				completed = pending.CharacterData == null && pending.Session == null;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"RunPendingFlushAsync failed for character {characterID}: {ex}");
+			}
+			finally
+			{
+				if (completed)
+				{
+					pendingFlushes.TryRemove(characterID, out _);
+				}
+				else if (pending.Attempts >= MaxPendingFlushAttempts)
+				{
+					pendingFlushes.TryRemove(characterID, out _);
+					_ = Log.Error("CharacterSystem",
+						$"Giving up on pending flush for character {characterID} after {pending.Attempts} attempts. " +
+						"Any unreleased session will free itself when its lease expires.");
+				}
+				else
+				{
+					// Linear backoff: fast enough that a normal scene transition is not held
+					// up, slow enough that a database outage is not hammered.
+					pending.NextAttemptUtc = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Min(3 * pending.Attempts, 30));
+				}
+				Interlocked.Exchange(ref pending.InFlight, 0);
+			}
+		}
+
+		#endregion
+
+		#region Session Lease Refresh
+
+		/// <summary>
+		/// Extends the lease on every session this server currently holds, in one round trip.
+		/// </summary>
+		/// <remarks>
+		/// Runs on its own timer rather than inside the save loop. The save loop walks
+		/// characters sequentially with a database round trip each, so on a busy shard with a
+		/// slow database the characters near the end of the list could go longer than the lease
+		/// duration between refreshes and become claimable by another server while still
+		/// online. Refresh cost here is independent of how many characters are resident.
+		/// </remarks>
+		private void OnPeriodicSessionLeaseRefresh(float deltaTime)
+		{
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data) ||
+				data.SessionTokens.Count == 0)
+			{
+				return;
+			}
+
+			var leases = new List<CharacterSessionLeaseData>(data.SessionTokens.Count);
+			foreach (var kvp in data.SessionTokens)
+			{
+				leases.Add(new CharacterSessionLeaseData(kvp.Key, kvp.Value.ServerID, kvp.Value.Token));
+			}
+
+			if (!EnqueueAsyncWork(() => RefreshSessionLeasesAsync(leases)))
+			{
+				Log.Warning("CharacterSystem", "OnPeriodicSessionLeaseRefresh: Failed to enqueue lease refresh work item.");
+			}
+		}
+
+		/// <summary>
+		/// Sends a batched session-lease refresh to the database.
+		/// </summary>
+		private async Task RefreshSessionLeasesAsync(List<CharacterSessionLeaseData> leases)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					return;
+				}
+
+				DatabaseResult<int> result = await characterService.RefreshSessionLeasesAsync(leases);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("CharacterSystem", $"RefreshSessionLeasesAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
+					return;
+				}
+
+				if (result.Data < leases.Count)
+				{
+					// Every entry we send is a session this server believes it owns, so a short
+					// count means at least one claim is gone — released underneath us, or taken
+					// over after a lease lapse. Worth surfacing: it is the signature of the
+					// split-brain window the lease exists to bound.
+					await Log.Warning("CharacterSystem",
+						$"Session lease refresh updated {result.Data} of {leases.Count} held sessions; " +
+						"the remainder are no longer owned by this server.");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"RefreshSessionLeasesAsync failed: {ex}");
+			}
+		}
+
+		#endregion
+
+		/// <summary>
 		/// Releases a character session from Online → Offline in a single step.
 		/// </summary>
-		private async Task ReleaseCharacterSessionAsync(long characterID, long serverID, Guid sessionToken)
+		/// <returns>
+		/// <c>true</c> when the session is known to be released, or when retrying could not
+		/// possibly help; <c>false</c> only for transient failures worth another attempt.
+		/// </returns>
+		private async Task<bool> ReleaseCharacterSessionAsync(long characterID, long serverID, Guid sessionToken)
 		{
 			try
 			{
@@ -323,24 +642,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: ICharacterService not available for character {characterID}.");
-					return;
+					return false;
 				}
 
 				if (sessionToken == Guid.Empty || serverID <= 0)
 				{
 					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: Invalid session token or server ID for character {characterID}.");
-					return;
+					// Nothing to retry with — a malformed token can never match a row.
+					return true;
 				}
 
 				DatabaseResult releaseResult = await characterService.ReleaseAsync(characterID, serverID, sessionToken);
-				if (!releaseResult.IsSuccess)
+				if (releaseResult.IsSuccess)
 				{
-					await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: ReleaseAsync failed for character {characterID}: {releaseResult.ErrorCode} - {releaseResult.ErrorMessage}");
+					return true;
 				}
+
+				// The session is no longer ours: either it was already released, or the lease
+				// expired and another server claimed it. Retrying would keep matching nothing,
+				// and must not be mistaken for a stuck claim.
+				if (releaseResult.ErrorCode == DatabaseErrorCodes.InvalidOperation ||
+					releaseResult.ErrorCode == DatabaseErrorCodes.NotFound)
+				{
+					await Log.Warning("CharacterSystem", $"ReleaseCharacterSessionAsync: session for character {characterID} is no longer owned by this server ({releaseResult.ErrorCode}); nothing to release.");
+					return true;
+				}
+
+				await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync: ReleaseAsync failed for character {characterID}: {releaseResult.ErrorCode} - {releaseResult.ErrorMessage}");
+				return false;
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"ReleaseCharacterSessionAsync failed for character {characterID}: {ex}");
+				return false;
 			}
 		}
 

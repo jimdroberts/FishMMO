@@ -336,7 +336,13 @@ namespace FishMMO.Shared
 		/// to distinguish success from failure before using the new token.</summary>
 		public ClientAuthenticationResult Result;
 
-		/// <summary>Explicit message sequence number (server->client).</summary>
+		/// <summary>
+		/// Informational only. The AES-GCM sequence for this message is not carried on the
+		/// wire: the client derives it from its own server-&gt;client receive counter, which
+		/// advances in lock step with the server's send counter. Do not decrypt against this
+		/// value — a desynchronised counter must surface as a decryption failure, not as a
+		/// successful decrypt at an attacker-chosen sequence.
+		/// </summary>
 		public uint Seq;
 	}
 

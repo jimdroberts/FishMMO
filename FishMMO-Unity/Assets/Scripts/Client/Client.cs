@@ -943,10 +943,40 @@ namespace FishMMO.Client
 				 * "world server hangs with no loading screen" report. The screen is dismissed
 				 * in OnCharacterStartLocal, when the player actually exists. */
 				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; OnEnterGameWorld?.Invoke(); break;
+
+				/* A rejected token cannot be fixed by retrying with the same token, and the
+				 * reconnect loop does exactly that: ten attempts with exponential backoff
+				 * (5,10,20,40,60,60...) spent re-presenting a token every one of which the
+				 * server has already refused, leaving the player watching a "reconnecting"
+				 * spinner for minutes before landing on the login screen anyway. Drop the dead
+				 * token and go there immediately. */
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenRevoked:
+					Log.Warning("Client", $"Authentication token rejected ({r}) — returning to login.");
+					HandleUnrecoverableAuthFailure();
+					break;
+
 				default:
 					Log.Warning("Client", $"Unhandled auth result: {r}");
 					break;
 			}
+		}
+
+		/// <summary>
+		/// Abandons the current session after the server rejected our credentials in a way that
+		/// retrying cannot fix, and returns the player to the login screen.
+		/// </summary>
+		/// <remarks>
+		/// Clears the stored auth token first: leaving it in place lets any later automatic
+		/// reconnect present the same rejected token again, reproducing the very loop this
+		/// exists to stop.
+		/// </remarks>
+		private void HandleUnrecoverableAuthFailure()
+		{
+			try { this.loginAuthenticator?.ClearAuthToken(); }
+			catch (Exception ex) { Log.Warning("Client", $"ClearAuthToken failed: {ex.Message}"); }
+			QuitToLogin();
 		}
 
 		// ── Log guard ───────────────────────────────────────────────────

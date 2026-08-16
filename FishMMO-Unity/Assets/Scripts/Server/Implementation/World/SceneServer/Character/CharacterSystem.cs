@@ -55,6 +55,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField][Min(0.1f)] private float outOfBoundsCheckRate = 2.5f;
 
 		/// <summary>
+		/// Interval in seconds between batched session-lease refreshes.
+		/// </summary>
+		/// <remarks>
+		/// Must stay comfortably under the database's session lease duration (2 minutes) so a
+		/// few missed passes cannot let a live character's claim lapse and be stolen by another
+		/// scene server. The refresh is a single statement for the whole population, so a short
+		/// interval is cheap regardless of how many characters are resident.
+		/// </remarks>
+		[Tooltip("Interval in seconds between batched session lease refreshes. Must stay well under the 2 minute lease duration.")]
+		[SerializeField][Min(1f)] private float sessionLeaseRefreshRate = 20.0f;
+
+		/// <summary>
 		/// Triggered before a character is loaded from the database. <conn, CharacterID>
 		/// </summary>
 		public event Action<NetworkConnection, long> OnBeforeLoadCharacter;
@@ -153,11 +165,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Periodic callbacks
 			saveRate = Mathf.Max(1f, saveRate);
 			outOfBoundsCheckRate = Mathf.Max(0.1f, outOfBoundsCheckRate);
+			sessionLeaseRefreshRate = Mathf.Max(1f, sessionLeaseRefreshRate);
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(saveRate, OnPeriodicSave);
 				periodicSystem.RegisterPeriodicCallback(outOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
 				periodicSystem.RegisterPeriodicCallback(30f, OnPeriodicRespawnResurrectSweep);
+				periodicSystem.RegisterPeriodicCallback(sessionLeaseRefreshRate, OnPeriodicSessionLeaseRefresh);
+				periodicSystem.RegisterPeriodicCallback(PendingFlushRetryIntervalSeconds, OnPeriodicPendingFlushRetry);
+				periodicSystem.RegisterPeriodicCallback(TransferDisconnectSweepIntervalSeconds, OnPeriodicTransferDisconnectSweep);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
@@ -213,6 +229,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSave);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicRespawnResurrectSweep);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSessionLeaseRefresh);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPendingFlushRetry);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicTransferDisconnectSweep);
 			}
 
 			// Save all characters and release all sessions before shutdown
@@ -258,6 +277,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							catch (Exception ex)
 							{
 								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {charData.ID}: {ex}");
+							}
+						}
+
+						// Flush anything still queued for retry before releasing live sessions,
+						// so a save or release that the async worker pool dropped earlier is
+						// not lost to shutdown as well.
+						foreach (var kvp in DrainPendingFlushes())
+						{
+							cancellationToken.ThrowIfCancellationRequested();
+							try
+							{
+								if (kvp.Value.CharacterData.HasValue)
+								{
+									await characterService.PersistAsync(kvp.Value.CharacterData.Value, cancellationToken);
+								}
+								if (kvp.Value.Session.HasValue)
+								{
+									await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.Session.Value.ServerID, kvp.Value.Session.Value.Token);
+								}
+							}
+							catch (Exception ex)
+							{
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to flush pending work for character {kvp.Key}: {ex}");
 							}
 						}
 

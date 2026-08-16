@@ -537,6 +537,13 @@ namespace FishMMO.Server.Implementation
 		protected virtual void OnUpdate() { }
 
 		/// <summary>
+		/// Override to release subclass-owned per-connection state when a remote connection stops.
+		/// Called before the core purges its own auth state for the connection.
+		/// </summary>
+		/// <param name="conn">The connection that stopped.</param>
+		protected virtual void OnConnectionStopped(NetworkConnection conn) { }
+
+		/// <summary>
 		/// Override for subclass-specific periodic auth state cleanup.
 		/// Called every frame; implementations should use bounded scan/remove to stay cheap.
 		/// </summary>
@@ -1388,6 +1395,17 @@ namespace FishMMO.Server.Implementation
 				// (FishNet reuses IDs after disconnect) does not inherit a stale
 				// 100ms block on its first handshake.
 				ClearHandshakeRateLimit(conn);
+
+				// Let subclasses drop their own per-connection state before the core
+				// tears down the account/encryption entries they may depend on.
+				try
+				{
+					OnConnectionStopped(conn);
+				}
+				catch (Exception ex)
+				{
+					_ = Log.Error(LogPrefix, $"OnConnectionStopped threw for connection {conn.ClientId}: {ex.Message}");
+				}
 
 				Core?.HandleConnectionStopped(conn);
 				// Immediately notify the login queue so dead connections
