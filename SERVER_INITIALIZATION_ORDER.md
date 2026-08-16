@@ -337,18 +337,36 @@ Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var data)
             → Registers by concrete type
             → Registers by all implemented interfaces
     
-→ BehaviourRegistry.InitializeAll(this)
-    • foreach behaviour:
-        • behaviour.InternalInitializeOnce(server, serverManager)
-            → Set Server reference
-            → Set ServerManager reference
-            → Call behaviour.InitializeOnce()
-                → Behaviours can now access initialized containers!
-                → Subscribe to network broadcasts
-                → Register event handlers
-                → Set up periodic callbacks
-            → Mark Initialized = true
-            → Log initialization status
+→ StartCoroutine(InitializeBehavioursThenStartServer())
+    • Behaviour initialization performs database I/O, so it runs asynchronously and the
+      transport starts from its completion callback — the same start/callback chain used
+      above for the external IP fetch. The main thread is never blocked on I/O: it is the
+      thread that drains async continuations, so blocking it stalls the work being awaited.
+
+    • for attempt in 1..startupInitializationAttempts (default 5):
+        → BehaviourRegistry.InitializeAllAsync(this, cancellationToken)
+            • foreach behaviour (deduplicated — components are registered under their
+              concrete type AND every interface, so Values repeats instances):
+                • await behaviour.InternalInitializeOnceAsync(server, serverManager, ct)
+                    → Set Server reference
+                    → Set ServerManager reference
+                    → await behaviour.InitializeOnceAsync(ct)
+                        → Default implementation runs the synchronous InitializeOnce()
+                        → Behaviours can now access initialized containers!
+                        → Subscribe to network broadcasts
+                        → Register event handlers
+                        → Set up periodic callbacks
+                    → Mark Initialized = true
+            • Behaviours are awaited ONE AT A TIME in registration order, so a behaviour may
+              depend on state published by an earlier one (LoginServerSystem's registered
+              server ID, for example).
+
+        → if no failures: start the transport and stop
+        → else: log, wait (backoff doubles from 2s, capped at 30s), retry
+
+    • After the final attempt: log and exit the process with code 1. A live server that
+      never binds its port is worse than a dead one — a supervisor can restart a dead
+      process, but a silent zombie just looks up.
 ```
 
 **Behaviour Initialization Example:**
@@ -373,7 +391,7 @@ public override ServerComponentInitializationStatus InitializeOnce()
 }
 ```
 
-**4.6 Physics and Network Start**
+**4.6 Physics and Network Start** *(inside the initialization coroutine's completion path)*
 ```
 → KinematicCharacterSystem.EnsureCreation()
 → KinematicCharacterSystem.Settings.AutoSimulation = false
@@ -532,22 +550,28 @@ Unity Engine Start
     │                   │           │                   │   │       ├─ Register by concrete type
     │                   │           │                   │   │       ╰─ Register by all interfaces
     │                   │           │                   │   │
-    │                   │           │                   │   ╰─▶ BehaviourRegistry.InitializeAll(this)
-    │                   │           │                   │       ╰─ foreach behaviour:
-    │                   │           │                   │           ├─ Set Server reference
-    │                   │           │                   │           ├─ Set ServerManager reference
-    │                   │           │                   │           ├─ Call behaviour.InitializeOnce()
-    │                   │           │                   │           │   ├─ Access DataContainerRegistry
-    │                   │           │                   │           │   ├─ Register network broadcasts
-    │                   │           │                   │           │   ├─ Subscribe to events
-    │                   │           │                   │           │   ╰─ Register periodic callbacks
-    │                   │           │                   │           ├─ Initialized = true
-    │                   │           │                   │           ╰─ Log initialization status
+    │                   │           │                   │   ╰─▶ StartCoroutine(InitializeBehavioursThenStartServer())
+    │                   │           │                   │       │   (main thread stays free; the player loop keeps
+    │                   │           │                   │       │    running so async continuations can be drained)
+    │                   │           │                   │       ╰─ attempt 1..5, backoff 2s→30s:
+    │                   │           │                   │           ╰─ await BehaviourRegistry.InitializeAllAsync(this, ct)
+    │                   │           │                   │               ╰─ foreach behaviour (deduplicated, in order):
+    │                   │           │                   │                   ├─ Set Server reference
+    │                   │           │                   │                   ├─ Set ServerManager reference
+    │                   │           │                   │                   ├─ await behaviour.InitializeOnceAsync(ct)
+    │                   │           │                   │                   │   ├─ Access DataContainerRegistry
+    │                   │           │                   │                   │   ├─ Register/await database work
+    │                   │           │                   │                   │   ├─ Register network broadcasts
+    │                   │           │                   │                   │   ├─ Subscribe to events
+    │                   │           │                   │                   │   ╰─ Register periodic callbacks
+    │                   │           │                   │                   ╰─ Initialized = true
     │                   │           │                   │
-    │                   │           │                   ├─ KinematicCharacterSystem.EnsureCreation()
+    │                   │           │                   ├─ on success ─▶ KinematicCharacterSystem.EnsureCreation()
     │                   │           │                   ├─ KinematicCharacterSystem.Settings.AutoSimulation = false
     │                   │           │                   ├─ NetworkWrapper.StartServer()
     │                   │           │                   │   ╰─ FishNet ServerManager.StartConnection()
+    │                   │           │                   │
+    │                   │           │                   ├─ on exhausting all attempts ─▶ Application.Quit(1)
     │                   │           │                   │
     │                   │           │                   ╰─ Log: "Initialization Complete"
     │                   │           │

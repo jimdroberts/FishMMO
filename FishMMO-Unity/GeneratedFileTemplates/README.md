@@ -38,7 +38,9 @@ Restoring never overwrites an existing file, so it is always safe to re-run.
 Open **FishMMO Dashboard > Game Settings**:
 
 - **Host Configuration** → *Write Host Config*
-- **Certificate Pins** → *Fetch Pins*, then *Write Pins to File*
+- **Certificate Pins** → *Fetch Pins*, then *Write Pins to File*. Each host needs a TCP
+  connect plus a TLS handshake, so the fetch runs on a background thread and the Editor
+  stays responsive; the button disables until it completes
 - **Client Secret** → paste the gate secret from the FishMMO-Installer output or the
   `deployment_secrets` table, then *Write Secret to File*
 

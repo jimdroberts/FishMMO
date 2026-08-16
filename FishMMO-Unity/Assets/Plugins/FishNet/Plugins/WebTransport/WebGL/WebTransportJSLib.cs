@@ -93,11 +93,22 @@ namespace FishNet.Transporting.WebTransport.WebGL
 
 		/// <summary>
 		/// Frees a pointer previously allocated on the WASM heap.
-		/// Maps to Emscripten's built-in _free() via EntryPoint.
-		/// Required to release memory returned by <see cref="WTGetLastErrorMessage"/>.
+		/// Calls the jslib <c>WTFree</c> wrapper, which forwards to Emscripten's
+		/// JS-side <c>_free</c>. Do NOT DllImport <c>_free</c> directly: IL2CPP
+		/// resolves the entry point against the linked libc symbol, and modern
+		/// Emscripten (Unity 6) emits that as <c>free</c>, so
+		/// <c>EntryPoint = "_free"</c> fails the WebGL link with
+		/// <c>undefined symbol: _free</c>.
 		/// </summary>
-		[DllImport("__Internal", EntryPoint = "_free")]
-		internal static extern void WASMFree(IntPtr ptr);
+		[DllImport("__Internal")]
+		private static extern void WTFree(IntPtr ptr);
+
+		/// <summary>
+		/// Releases memory returned by <see cref="WTGetLastErrorMessage"/>.
+		/// Kept under the original name so callers are platform-agnostic — the
+		/// non-WebGL stub below exposes the same signature.
+		/// </summary>
+		internal static void WASMFree(IntPtr ptr) => WTFree(ptr);
 	}
 #else
 	/// <summary>

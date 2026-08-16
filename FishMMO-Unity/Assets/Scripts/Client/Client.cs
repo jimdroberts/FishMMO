@@ -283,11 +283,16 @@ namespace FishMMO.Client
 			// When a non-reconnectable connection fails (e.g. login server unreachable),
 			// invalidate the cached login server list so the next attempt re-fetches from
 			// IPFetch instead of retrying the same potentially dead server/port.
+			// This also runs on a Login→World hop: ConnectToServer stops the login socket
+			// while CurrentConnectionType is ConnectingToWorld, which is not reconnectable,
+			// so the same event fires on a perfectly healthy hop. Logged at Debug because
+			// of that — a Warning/Info here reads as a failure on the success path, and
+			// Unity WebGL paints warnings into the browser error console.
 			Connection.OnConnectionAttemptFailed += () =>
 			{
 				if (this.loginServerPorts != null)
 				{
-					Log.Info("Client", "Login server connection attempt failed — invalidating cached server list.");
+					Log.Debug("Client", "Login socket stopped without reconnect (failed attempt or hop) — invalidating cached server list.");
 					this.loginServerPorts = null;
 					this.cachedConnectionToken = null;
 				}

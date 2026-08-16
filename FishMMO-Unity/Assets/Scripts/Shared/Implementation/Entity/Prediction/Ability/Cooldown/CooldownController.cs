@@ -463,7 +463,8 @@ namespace FishMMO.Shared
 			{
 				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
 				{
-					Log.Warning("CooldownController",
+					// Expected until the first replicate arrives — reconcile corrects it.
+					Log.Debug("CooldownController",
 						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. StartTick will be corrected by reconcile.");
 					resolveAuthoritativeWarningLogged = true;
 				}

@@ -103,6 +103,21 @@ namespace FishNet.Transporting.WebTransport
 		}
 
 		/// <summary>
+		/// Logs a common (debug) message, routing through FishNet's NetworkManager when
+		/// the transport is initialized, falling back to UnityEngine.Debug.
+		/// Use for expected hop teardown (ForceStop, socket close). Unity WebGL maps
+		/// <c>LogWarning</c> onto the browser error console, so logging these at Warning
+		/// makes a healthy Login→World→Scene hop look like a transport failure.
+		/// </summary>
+		protected void LogTransportDebug(string message)
+		{
+			if (transport?.NetworkManager != null)
+				transport.NetworkManager.Log(message);
+			else
+				UnityEngine.Debug.Log(message);
+		}
+
+		/// <summary>
 		/// Logs an error message, routing through FishNet's NetworkManager when
 		/// the transport is initialized, falling back to UnityEngine.Debug.
 		/// </summary>

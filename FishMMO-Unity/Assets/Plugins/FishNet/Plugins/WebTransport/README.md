@@ -46,6 +46,66 @@ by the payload. Native raw-QUIC peers exchange bare payloads.
 > both be built from this revision or later; a pre-framing peer cannot
 > interoperate with a framing one.
 
+## WebGL bridge
+
+`WebGL/plugin/WebTransport.jslib` is the browser half of the transport, driven
+from `WebGL/WebTransportJSLib.cs`. Three rules in it are non-obvious and easy to
+undo by accident.
+
+### Session liveness is not `readyState`
+
+Nothing in the bridge gates traffic on `wt.readyState === 'connected'`. That
+property is absent on some Chromium builds and can still read `'connecting'`
+immediately after the `ready()` promise resolves, so gating on it dropped the
+very first `ClientHandshake` — the client logged `WIRE SEND FAIL` while the
+server logged `prefill=0`, and the connection stalled until it timed out.
+
+The single source of truth is the `_isLive(session)` helper: once `ready()`
+resolves it sets `session._ready` and the session counts as live until it is
+explicitly `'closed'`/`'failed'` or `WTDisconnect` sets `session._closed`. Send
+paths, the datagram pump, and the incoming-stream pump all call it. Reintroducing
+a bare `readyState` check anywhere brings the dropped handshake back.
+
+### One persistent outgoing stream, opened before Started
+
+Reliable sends share a single bidirectional stream whose writer is cached in
+`session._streamWriter`; a new stream is opened only when the cached writer dies
+(`desiredSize === null`). Opening a stream per packet exhausts the browser's
+~100–200 stream limit within seconds at gameplay rates.
+
+That stream is warmed up inside `wt.ready` — `_writeReliable(session, null)`
+creates it *before* the `onOpen` callback tells C# the socket is Started, so the
+first handshake packet cannot race `createBidirectionalStream()`. Sends issued
+while the stream is still resolving are queued in `session._sendQueue` and
+flushed in order once the writer exists, so ordering holds either way.
+
+The readable half of that client-opened stream is pumped too: the server replies
+on the stream the client opened, and leaving it undrained silently discards every
+login result, spawn, and RPC.
+
+### Freeing heap pointers: call `WTFree`, never `_free`
+
+`WTGetLastErrorMessage` returns a `_malloc`'d UTF-8 pointer that managed code
+must release. C# frees it through the `WTFree` jslib export, wrapped by
+`WebTransportJSLib.WASMFree`:
+
+```csharp
+IntPtr msgPtr = WebTransportJSLib.WTGetLastErrorMessage(index);
+if (msgPtr != IntPtr.Zero)
+{
+    string detail = Marshal.PtrToStringUTF8(msgPtr);
+    WebTransportJSLib.WASMFree(msgPtr);
+}
+```
+
+Do **not** replace that with `[DllImport("__Internal", EntryPoint = "_free")]`.
+IL2CPP resolves a `DllImport` entry point against the linked libc symbol name,
+which modern Emscripten (Unity 6) emits as `free`, so the `_free` spelling fails
+the WebGL link with `undefined symbol: _free`. Inside the `.jslib` the leading
+underscore *is* correct — `_free` there is the JS-side name of the same
+allocator as `_malloc`. The underscore rule is opposite on each side of the
+boundary, which is exactly why the wrapper exists.
+
 ## TLS
 
 The **server** presents a certificate the same way it always has, via

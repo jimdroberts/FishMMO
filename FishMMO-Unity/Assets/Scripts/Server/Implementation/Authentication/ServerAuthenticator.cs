@@ -448,6 +448,9 @@ namespace FishMMO.Server.Implementation
 				Verifier = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,
 				TotpEnabled = d.TotpEnabled,
+				// Required by the core's expired-verify-code resend. Leaving this unset left it
+				// null for every account, which silently disabled the resend entirely.
+				VerifyCodeExpiresUtc = d.VerifyCodeExpiresUtc,
 			};
 		}
 

@@ -61,7 +61,8 @@ The Implementation layer sits between the abstract `Server.Core` interfaces and 
 ## Features
 
 - **Composition-root architecture** — `Server` wires core services, networking, database, authentication, behaviours, and data containers in a single orchestrated startup.
-- **Modular server behaviours** — `ServerBehaviour` (ScriptableObject-based) provides a plug-in lifecycle: `InitializeOnce`, `OnUpdate`, `OnDeinitialize`.
+- **Modular server behaviours** — `ServerBehaviour` (ScriptableObject-based) provides a plug-in lifecycle: `InitializeOnce` / `InitializeOnceAsync`, `OnUpdate`, `OnDeinitialize`.
+- **Non-blocking startup** — behaviours are initialized one at a time through `InitializeAllAsync`, awaited from a coroutine in `Server`, and the transport starts from the completion callback. Failed initialization retries with exponential backoff and then exits the process rather than leaving a live server that never binds its port.
 - **Auto-discovered runtime data containers** — behaviours declare `[RequiresDataContainer(typeof(T))]`; the server discovers, deduplicates, priority-sorts, and creates containers automatically.
 - **Generic component registries** — `ServerComponentRegistry<TNet, TConn, TComponent>` registers components under concrete type and all `IServerComponent`-derived interfaces for dependency lookup.
 - **Network abstraction** — `INetworkManagerWrapper` / `FishNetNetworkWrapper` decouple the server from FishNet internals, exposing start/stop, transport config, broadcast registration, and authenticator attachment.
@@ -124,6 +125,12 @@ The second command-line argument selects the server type. If no argument is prov
 
 1. Create a class extending `ServerBehaviour`.
 2. Implement `InitializeOnce()`, `OnDeinitialize()`, and optionally `OnUpdate(float deltaTime)`.
+   - If initialization needs I/O (database registration, for example), override
+     `InitializeOnceAsync(CancellationToken)` instead and `await` the work. Never block the
+     Unity main thread: it is the thread that drains async continuations, so blocking it can
+     deadlock startup before the transport binds. Overrides run on the main thread and, because
+     they await without `ConfigureAwait(false)`, resume on it — Unity APIs stay safe to use
+     after an await.
 3. If the behaviour needs mutable runtime state, create a `RuntimeDataContainer` subclass and annotate the behaviour with `[RequiresDataContainer(typeof(YourData))]`.
 4. Create a ScriptableObject asset for the behaviour and add it to the `Server` component's `serverBehaviours` list.
 

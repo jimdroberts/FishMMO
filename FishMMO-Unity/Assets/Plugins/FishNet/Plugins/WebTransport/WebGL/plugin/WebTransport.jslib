@@ -44,6 +44,129 @@ var LibraryFishWebTransport = {
                 return dc(sig, fn, args);
               },
 
+        /** True when the session can send/receive.
+         *  Deliberately does NOT require wt.readyState === 'connected':
+         *  that property is absent on some Chromium builds and can still
+         *  read 'connecting' after ready() has resolved. Gating sends on it
+         *  made WebGL refuse the very first ClientHandshake
+         *  (browser: WIRE SEND FAIL, server: prefill=0) while the desktop
+         *  native path sent fine. Once ready() resolves we treat the session
+         *  as live until it is explicitly closed or failed. */
+        _isLive: function(session) {
+            if (!session || !session.wt || session._closed) return false;
+            var rs = session.wt.readyState;
+            if (rs === 'closed' || rs === 'failed') return false;
+            if (session._ready) return true;
+            return rs === 'connected';
+        },
+
+        /** Open (or reuse) the persistent outgoing bidirectional stream and,
+         *  when payload is non-null, write it.
+         *
+         *  A null payload is the "warm up the stream" call made from
+         *  wt.ready — it creates the stream without sending anything.
+         *
+         *  Returns false only when the session is not live or when
+         *  createBidirectionalStream throws synchronously; a true return
+         *  means QUEUED, not delivered (the write Promise may still reject). */
+        _writeReliable: function(session, payload) {
+            if (!FishWebTransport._isLive(session)) return false;
+
+            /* Check cached writer — desiredSize is null when the
+             * underlying stream is closed or errored. */
+            if (session._streamWriter) {
+                try {
+                    if (session._streamWriter.desiredSize === null) {
+                        try { session._streamWriter.releaseLock(); } catch (_) {}
+                        session._streamWriter = null;
+                        session._streamWriterPending = false;
+                    }
+                } catch (_) {
+                    session._streamWriter = null;
+                    session._streamWriterPending = false;
+                }
+            }
+
+            if (session._streamWriter) {
+                /* Reuse the existing writer — no new stream created. */
+                if (payload) {
+                    var writer = session._streamWriter;
+                    writer.write(payload).catch(function(e) {
+                        console.warn('[FishWT] stream write error: ' + e.message);
+                        if (session._streamWriter === writer) {
+                            try { writer.releaseLock(); } catch (_) {}
+                            session._streamWriter = null;
+                        }
+                    });
+                }
+                return true;
+            }
+
+            /* If a createBidirectionalStream promise is already in-flight
+             * (e.g. from a rapid previous send, or from the warm-up call in
+             * wt.ready), queue this data to be flushed once the stream becomes
+             * available. This prevents exhausting the browser's stream limit
+             * (~100-200) by creating a new bidi stream on every rapid send. */
+            if (session._streamWriterPending) {
+                if (payload) {
+                    if (!session._sendQueue) session._sendQueue = [];
+                    session._sendQueue.push(payload);
+                }
+                return true;
+            }
+
+            /* No valid cached writer and no pending creation:
+             * start creating a new persistent bidirectional stream. */
+            session._streamWriterPending = true;
+            try {
+                session.wt.createBidirectionalStream().then(function(stream) {
+                    var writer = stream.writable.getWriter();
+                    session._streamWriter = writer;
+                    session._streamWriterPending = false;
+
+                    /* Drain this stream's readable half. The server replies on the
+                     * stream the client opened, so without this pump every reply
+                     * (login result, spawns, RPCs) is silently discarded. */
+                    FishWebTransport._pumpStreamReadable(
+                        session, stream.readable, 'local-stream');
+
+                    /* Flush any data that was queued while the stream was
+                     * being created. */
+                    var queue = session._sendQueue || [];
+                    session._sendQueue = [];
+                    for (var i = 0; i < queue.length; i++) {
+                        writer.write(queue[i]).catch(function(e) {
+                            console.warn('[FishWT] queued stream write error: ' + e.message);
+                        });
+                    }
+
+                    /* Write the current data. */
+                    if (payload) {
+                        writer.write(payload).catch(function(e) {
+                            console.warn('[FishWT] stream write error: ' + e.message);
+                            if (session._streamWriter === writer) {
+                                try { writer.releaseLock(); } catch (_) {}
+                                session._streamWriter = null;
+                            }
+                        });
+                    }
+                }).catch(function(err) {
+                    console.warn('[FishWT] createBidirectionalStream failed: ' + err.message);
+                    session._streamWriterPending = false;
+                    session._sendQueue = [];
+                });
+                return true;
+            } catch (e) {
+                /* Synchronous throw (e.g. InvalidStateError on a session that
+                 * died between the _isLive check and this call). Clear the
+                 * pending flag — leaving it set would make every later send
+                 * queue forever instead of opening a fresh stream. */
+                console.error('[FishWT] SendStream create error: ' + e.message);
+                session._streamWriterPending = false;
+                return false;
+            }
+        },
+
         /* ── Reliable-channel message framing ──────────────────────────
          * A WebTransport stream is an ordered BYTE stream: consecutive
          * writer.write() calls may be coalesced into one reader.read()
@@ -244,7 +367,7 @@ var LibraryFishWebTransport = {
         _readBidiStreams: function(session) {
             function startPump() {
                 /* Guard: don't start a new pump if the session is already closed. */
-                if (!session.wt || session.wt.readyState !== 'connected') return;
+                if (!FishWebTransport._isLive(session)) return;
 
                 var reader;
                 try {
@@ -298,7 +421,7 @@ var LibraryFishWebTransport = {
 
         _readDatagrams: function(session) {
             function startPump() {
-                if (!session.wt || session.wt.readyState !== 'connected') return;
+                if (!FishWebTransport._isLive(session)) return;
 
                 var reader;
                 try {
@@ -432,6 +555,13 @@ var LibraryFishWebTransport = {
         }
 
         session.wt.ready.then(function() {
+            session._ready = true;
+            /* Open the outgoing bidi stream before telling C# we are Started.
+             * Otherwise the first ClientHandshake races createBidirectionalStream
+             * (or is refused by a stale readyState check) and the server sees
+             * prefill=0 / no handshake. Sends issued before the stream resolves
+             * are queued by _writeReliable and flushed in order. */
+            FishWebTransport._writeReliable(session, null);
             FishWebTransport._dynCall('vi', onOpen, [index]);
             FishWebTransport._readBidiStreams(session);
             FishWebTransport._readDatagrams(session);
@@ -472,8 +602,17 @@ var LibraryFishWebTransport = {
     WTSendStream__deps: ['$FishWebTransport'],
     WTSendStream: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
-        if (!session || !session.wt) return false;
-        if (session.wt.readyState !== 'connected') return false;
+        if (!session || !session.wt) {
+            console.error('[FishWT] SendStream refused: no session for index=' + index);
+            return false;
+        }
+        if (!FishWebTransport._isLive(session)) {
+            console.error('[FishWT] SendStream refused: session not live index=' + index +
+                          ' readyState=' + session.wt.readyState +
+                          ' ready=' + !!session._ready +
+                          ' closed=' + !!session._closed);
+            return false;
+        }
 
         if (length <= 0 || length > FishWebTransport._MAX_MESSAGE) {
             console.error('[FishWT] SendStream rejected: length ' + length +
@@ -488,96 +627,14 @@ var LibraryFishWebTransport = {
         data.set(lenHdr, 0);
         data.set(HEAPU8.subarray(dataPtr, dataPtr + length), lenHdr.length);
 
-        /* Check cached writer — desiredSize is null when the
-         * underlying stream is closed or errored. */
-        if (session._streamWriter) {
-            try {
-                if (session._streamWriter.desiredSize === null) {
-                    try { session._streamWriter.releaseLock(); } catch (_) {}
-                    session._streamWriter = null;
-                    session._streamWriterPending = false;
-                }
-            } catch (_) {
-                session._streamWriter = null;
-                session._streamWriterPending = false;
-            }
-        }
-
-        if (session._streamWriter) {
-            /* Reuse the existing writer — no new stream created. */
-            var writer = session._streamWriter;
-            writer.write(data).catch(function(e) {
-                console.warn('[FishWT] stream write error: ' + e.message);
-                if (session._streamWriter === writer) {
-                    try { writer.releaseLock(); } catch (_) {}
-                    session._streamWriter = null;
-                }
-            });
-            return true;
-        }
-
-        /* If a createBidirectionalStream promise is already in-flight
-         * (e.g. from a rapid previous send before the promise resolved),
-         * queue this data to be flushed once the stream becomes available.
-         * This prevents exhausting the browser's stream limit (~100-200)
-         * by creating a new bidi stream on every rapid send. */
-        if (session._streamWriterPending) {
-            if (!session._sendQueue) session._sendQueue = [];
-            session._sendQueue.push(data);
-            return true;
-        }
-
-        /* No valid cached writer and no pending creation:
-         * start creating a new persistent bidirectional stream. */
-        session._streamWriterPending = true;
-        try {
-            session.wt.createBidirectionalStream().then(function(stream) {
-                var writer = stream.writable.getWriter();
-                session._streamWriter = writer;
-                session._streamWriterPending = false;
-
-                /* Drain this stream's readable half. The server replies on the
-                 * stream the client opened, so without this pump every reply
-                 * (login result, spawns, RPCs) is silently discarded. */
-                FishWebTransport._pumpStreamReadable(
-                    session, stream.readable, 'local-stream');
-
-                /* Flush any data that was queued while the stream was
-                 * being created. */
-                var queue = session._sendQueue || [];
-                session._sendQueue = [];
-                for (var i = 0; i < queue.length; i++) {
-                    writer.write(queue[i]).catch(function(e) {
-                        console.warn('[FishWT] queued stream write error: ' + e.message);
-                    });
-                }
-
-                /* Write the current data. */
-                writer.write(data).catch(function(e) {
-                    console.warn('[FishWT] stream write error: ' + e.message);
-                    if (session._streamWriter === writer) {
-                        try { writer.releaseLock(); } catch (_) {}
-                        session._streamWriter = null;
-                    }
-                });
-            }).catch(function(err) {
-                console.warn('[FishWT] createBidirectionalStream failed: ' + err.message);
-                session._streamWriterPending = false;
-                session._sendQueue = [];
-            });
-            return true;
-        } catch (e) {
-            console.error('[FishWT] SendStream create error: ' + e.message);
-            session._streamWriterPending = false;
-            return false;
-        }
+        return FishWebTransport._writeReliable(session, data);
     },
 
     WTSendDatagram__deps: ['$FishWebTransport'],
     WTSendDatagram: function(index, dataPtr, length) {
         var session = FishWebTransport._get(index);
         if (!session || !session.wt) return false;
-        if (session.wt.readyState !== 'connected') return false;
+        if (!FishWebTransport._isLive(session)) return false;
 
         var data = new Uint8Array(HEAPU8.slice(dataPtr, dataPtr + length));
         try {
@@ -637,13 +694,14 @@ var LibraryFishWebTransport = {
     },
 
     /** @deprecated Reserved for future use — currently not called from C#.
-     *  Returns true if the WebTransport session is in the 'connected' state.
+     *  Returns true if the WebTransport session is usable (see _isLive —
+     *  ready() has resolved and the session is not closed or failed).
      *  C# callers should track connection state locally instead. */
     WTIsConnected__deps: ['$FishWebTransport'],
     WTIsConnected: function(index) {
         var session = FishWebTransport._get(index);
         if (!session || !session.wt) return false;
-        return session.wt.readyState === 'connected';
+        return FishWebTransport._isLive(session);
     },
 
     WTSetStreamThreshold__deps: ['$FishWebTransport'],
@@ -656,7 +714,7 @@ var LibraryFishWebTransport = {
      *  Reads from the _lastErrors map which persists after session _remove.
      *  Cleans up the stored error entry after reading (one-shot).
      *  Returns a pointer to a UTF-8 string allocated on the WASM heap.
-     *  The caller (C#) MUST free the returned pointer via _free() after
+     *  The caller (C#) MUST free the returned pointer via WTFree() after
      *  marshalling the string.
      *  Returns 0 (NULL) if no error is stored for this index. */
     WTGetLastErrorMessage__deps: ['$FishWebTransport'],
@@ -674,6 +732,19 @@ var LibraryFishWebTransport = {
         if (!ptr) return 0;
         stringToUTF8(msg, ptr, msg.length + 1);
         return ptr;
+    },
+
+    /** Free a WASM-heap pointer handed to C# (e.g. by WTGetLastErrorMessage).
+     *  C# must DllImport this wrapper rather than _free directly: IL2CPP
+     *  resolves a [DllImport("__Internal")] against the linked libc symbol
+     *  name, which modern Emscripten (Unity 6) emits as "free", so
+     *  EntryPoint = "_free" fails the wasm-ld step with
+     *  "undefined symbol: _free". Inside a JS library the leading underscore
+     *  IS correct — that is the JS-side name of the same allocator used by
+     *  _malloc above. */
+    WTFree__deps: ['$FishWebTransport'],
+    WTFree: function(ptr) {
+        if (ptr) _free(ptr);
     }
 };
 

@@ -827,6 +827,12 @@ namespace FishMMO.Auth.Implementation
 							verifier = lookupResult.Verifier;
 							accessLevel = lookupResult.AccessLevel;
 							isUnverified = true;
+							// Cache the verify-code expiry on this branch too. ProcessSrpProofAsync
+							// reads it to decide whether to issue a fresh code, and that decision is
+							// only ever reached for an unverified account — recording the expiry
+							// solely on the verified branch below left the lookup permanently empty,
+							// so an expired code could never be refreshed by attempting to log in.
+							verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
 							await Log.Debug(LogPrefix, "Carrying real SRP state for unverified username-based login; AccountUnverified deferred until after M1.");
 						}
 					}
@@ -1198,6 +1204,7 @@ namespace FishMMO.Auth.Implementation
 			// TOTP success — complete login
 			totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
 			totpEnabledByClientId.TryRemove(GetConnectionClientId(conn), out _);
+			verifyCodeExpiryByClientId.TryRemove(GetConnectionClientId(conn), out _);
 
 			byte[] encryptedServerProof = SrpService.EncryptServerProof(pendingState.ServerProof!, pendingState.EncryptionData);
 			byte[]? encryptedToken = (IsConnectionActive(conn))
