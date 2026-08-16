@@ -151,7 +151,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   loginServerPorts: 
-  loginServerCacheTtlSeconds: 55
   loginServerRequestTimeoutSeconds: 10
   probeStaggerInterval: 0.25
   worldPreloadScenes:

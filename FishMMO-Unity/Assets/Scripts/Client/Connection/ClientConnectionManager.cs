@@ -60,6 +60,26 @@ namespace FishMMO.Client
 		private System.Collections.IEnumerator inFlightConnectionCoroutine;
 		/// <summary>Thread-safe disconnect flag. Volatile for visibility across transport-worker callbacks.</summary>
 		private volatile bool forceDisconnect;
+		/// <summary>
+		/// Set while <see cref="ConnectToServer"/> is tearing down the previous connection on
+		/// purpose so it can start a new one. The resulting Stopped transition is a deliberate
+		/// hop, not a dropped connection, so it must arm neither the reconnect timer nor
+		/// <see cref="OnConnectionAttemptFailed"/>.
+		/// </summary>
+		/// <remarks>
+		/// Without this, a World→Scene hop looked exactly like a world-server drop: the hop
+		/// passes isWorldServer=false, so CurrentConnectionType stays World, CanReconnect is
+		/// true, and the teardown armed a reconnect back to the world server. connectingGuard
+		/// stopped the duplicate connect from landing, but only after TryReconnect had already
+		/// incremented ReconnectsAttempted and fired OnReconnectAttempt, surfacing a spurious
+		/// "reconnecting" state during a perfectly healthy scene transition.
+		///
+		/// Cleared immediately before StartConnection, which is what keeps a genuine connect
+		/// failure reportable: every Stopped that means "the connection attempt failed" arrives
+		/// after StartConnection, so it always sees this flag false. Volatile to match
+		/// forceDisconnect — the transport reports state from worker callbacks.
+		/// </remarks>
+		private volatile bool stoppingForConnect;
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort;
 
@@ -155,7 +175,16 @@ namespace FishMMO.Client
 				return;
 			}
 			connectingGuardAcquiredAt = (double)Time.realtimeSinceStartup;
-		if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
+			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
+			// Mark the teardown below as deliberate so OnClientConnectionState does not treat
+			// it as a drop. Covers every hop — Login→World, World→Scene and reconnects alike.
+			stoppingForConnect = true;
+			// A deliberate connect supersedes any reconnect still counting down from an earlier
+			// drop; leaving it armed lets Update fire TryReconnect at the old world address
+			// mid-hop, which only connectingGuard would stop — and not before it had already
+			// incremented ReconnectsAttempted and raised OnReconnectAttempt. A failed attempt
+			// re-arms it from OnClientConnectionState, so the retry loop is unaffected.
+			nextReconnect = -1;
 			NetworkManager.ClientManager.StopConnection();
 			var routine = OnAwaitingConnectionReady(address, port, isWorldServer);
 			inFlightConnectionCoroutine = routine;
@@ -199,6 +228,7 @@ namespace FishMMO.Client
 		public void ResetReconnectState()
 		{
 			forceDisconnect = false;
+			stoppingForConnect = false;
 			ReconnectsAttempted = 0; nextReconnect = -1;
 			CurrentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = ""; lastWorldPort = 0;
@@ -248,6 +278,16 @@ namespace FishMMO.Client
 			switch (ClientState)
 			{
 				case LocalConnectionState.Stopped:
+					// A teardown that ConnectToServer started on purpose is a hop, not a loss.
+					// Consume the flag and leave every other piece of state alone: no reconnect
+					// timer, no OnConnectionAttemptFailed, and CurrentConnectionType is kept so
+					// ConnectingToWorld survives the stop it was set for (the authenticator
+					// promotes it to World/Scene once the new connection authenticates).
+					if (stoppingForConnect)
+					{
+						stoppingForConnect = false;
+						break;
+					}
 					// Check CanReconnect BEFORE clearing CurrentConnectionType —
 					// CanReconnect reads CurrentConnectionType to decide whether
 					// World/Scene reconnection is applicable.
@@ -350,6 +390,11 @@ namespace FishMMO.Client
 					yield return tokenRoutine;
 				}
 			}
+
+			// The deliberate teardown is over. Every Stopped from here on means the connection
+			// attempt itself failed, which must still arm reconnect / fire
+			// OnConnectionAttemptFailed — so clear the flag before StartConnection, not after.
+			stoppingForConnect = false;
 
 			try
 			{

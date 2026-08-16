@@ -58,38 +58,20 @@ namespace FishMMO.Client
 		/// </summary>
 		public List<ushort> LoginServerPorts => loginServerPorts;
 		/// <summary>
-		/// UTC timestamp of the last successful login server address fetch.
-		/// Uses DateTime.UtcNow instead of Time.realtimeSinceStartup to survive scene reloads.
-		/// </summary>
-		private DateTime loginServerPortsFetchedAt = DateTime.MinValue;
-		/// <summary>
 		/// Cached connection token from the last successful IPFetch response.
 		/// </summary>
 		/// <remarks>
-		/// Handed out at most once, then cleared, so the next connect attempt re-probes for
-		/// a fresh one. The token itself is stateless and stays valid for its 60-second
-		/// expiry rather than being consumed server-side, but it cannot simply be cached
-		/// and reused: <see cref="ClientLoginAuthenticator.ConnectionToken"/> is nulled the
-		/// moment it is sent, so a retry would otherwise be served a token that has already
-		/// outlived part of its short window — and, with a cache TTL at or above 60s, one
-		/// that is expired outright. The server rejects an expired token before checking
-		/// credentials, which presents as a silent login failure that only a client restart
-		/// clears.
+		/// Handed out at most once by <see cref="TakeConnectionToken"/>, then cleared, so the
+		/// next connect attempt re-probes for a fresh one. The token itself is stateless and
+		/// stays valid for its 60-second expiry rather than being consumed server-side, but it
+		/// cannot simply be cached and reused: <see cref="ClientLoginAuthenticator.ConnectionToken"/>
+		/// is nulled the moment it is sent, so a retry would otherwise be served a token that
+		/// has already outlived part of its short window. The server rejects an expired token
+		/// before checking credentials, which presents as a silent login failure that only a
+		/// client restart clears. This single-use rule is why
+		/// <see cref="GetLoginServerList"/> cannot cache.
 		/// </remarks>
 		private string cachedConnectionToken;
-		/// <summary>
-		/// Time-to-live in seconds for the cached login server address list.
-		/// This value MUST be less than the server's connection token TTL (typically 60s)
-		/// to ensure we never serve a stale list with an expired token from a previous
-		/// <see cref="IPFetch"/> response. If the cache outlives the token the server
-		/// will reject the handshake.
-		/// </summary>
-		[SerializeField]
-		private float loginServerCacheTtlSeconds = 55f;
-		/// <summary>
-		/// Time-to-live in seconds for the cached login server address list.
-		/// </summary>
-		public float LoginServerCacheTtlSeconds => loginServerCacheTtlSeconds;
 		/// <summary>
 		/// Timeout in seconds for each login server probe request.
 		/// </summary>
@@ -283,16 +265,17 @@ namespace FishMMO.Client
 			// When a non-reconnectable connection fails (e.g. login server unreachable),
 			// invalidate the cached login server list so the next attempt re-fetches from
 			// IPFetch instead of retrying the same potentially dead server/port.
-			// This also runs on a Login→World hop: ConnectToServer stops the login socket
-			// while CurrentConnectionType is ConnectingToWorld, which is not reconnectable,
-			// so the same event fires on a perfectly healthy hop. Logged at Debug because
-			// of that — a Warning/Info here reads as a failure on the success path, and
-			// Unity WebGL paints warnings into the browser error console.
+			//
+			// This used to fire on a healthy Login→World hop too, because ConnectToServer's
+			// deliberate teardown was indistinguishable from a drop — which is what made the
+			// message read as a failure on the success path. ClientConnectionManager now marks
+			// that teardown with stoppingForConnect and skips this event for it, so reaching
+			// here again means a real failed attempt and Info is the honest level.
 			Connection.OnConnectionAttemptFailed += () =>
 			{
 				if (this.loginServerPorts != null)
 				{
-					Log.Debug("Client", "Login socket stopped without reconnect (failed attempt or hop) — invalidating cached server list.");
+					Log.Info("Client", "Login server connection attempt failed — invalidating cached server list.");
 					this.loginServerPorts = null;
 					this.cachedConnectionToken = null;
 				}
@@ -684,22 +667,25 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Probes API host candidates for a login server address list. Returns cached results if within TTL.
+		/// Probes API host candidates for a login server address list and the connection token
+		/// that must accompany the next handshake. Always performs a fresh probe.
 		/// </summary>
+		/// <remarks>
+		/// This deliberately does not cache. IPFetch returns the port list and the connection
+		/// token in one response, the token is single-use, and every connect needs one — so a
+		/// cache hit could never skip the round trip it would have to make anyway to mint a
+		/// fresh token. A TTL-based port cache used to sit here; it was unreachable, because
+		/// its guard required an unspent <see cref="cachedConnectionToken"/> and
+		/// <see cref="TakeConnectionToken"/> clears that on the same synchronous path that
+		/// sets it. Serving a stale list with a spent or expired token would present as a
+		/// silent login failure that only a client restart clears, so re-probing is also the
+		/// safe behaviour, not merely the simpler one.
+		/// </remarks>
 		/// <param name="onFail">Callback invoked with an error message if all probes fail.</param>
 		/// <param name="onDone">Callback invoked with the list of discovered server addresses.</param>
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			// The port list is reusable within its TTL, but the connection token is not:
-			// it is single-use, so a cached entry whose token has already been handed out
-			// must re-probe to obtain a fresh one rather than serve a spent (or missing)
-			// token that the server will reject before checking credentials.
-			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0 && !string.IsNullOrEmpty(this.cachedConnectionToken))
-			{
-				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, TakeConnectionToken()); yield break; }
-			}
 			var candidates = ApiHostResolver.GetCandidates() ?? new List<string>();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
 			float stagger = this.probeStaggerInterval;
@@ -749,7 +735,7 @@ namespace FishMMO.Client
 					if (!any && next >= candidates.Count) break;
 					yield return null;
 				}
-				if (winner != null) { this.loginServerPorts = winner; this.loginServerPortsFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, TakeConnectionToken()); }
+				if (winner != null) { this.loginServerPorts = winner; onDone?.Invoke(winner, TakeConnectionToken()); }
 				else onFail?.Invoke(lastErr ?? "Failed to reach any APIHost.");
 			}
 			finally
