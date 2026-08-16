@@ -77,6 +77,10 @@ Network Thread (UDP Gates)              Worker Threads (Async)              Main
 | **Worker Threads** | AES decryption, StrictUtf8 decode, database I/O, SRP math, ZeroMemory | **Yes** (async/await) |
 | **Main Thread** | `Broadcast()`, `Disconnect()`, `OnAuthenticationResult` | N/A (Unity main loop) |
 
+**Do not call `task.GetAwaiter().GetResult()` / `.Result` / `.Wait()` on the Unity main thread** for EF/Npgsql work. Unity's `SynchronizationContext` posts async completions back to that thread; blocking it deadlocks the continuation. `LoginServerSystem.InitializeOnce` used to hang this way inside `SigningKeyKekProvider.TryLoadFromDatabase` — the process stayed alive, `login_servers.last_pulse` froze after the persist, and WebTransport never bound `:7770`. Use `UnitySyncOverAsync.Run(...)` (or `Task.Run(...).Wait(timeout)` as Login/World/Scene registration already does) so the async method starts on a thread-pool thread with a null sync context.
+
+`DeploymentSecretService.FetchAsync` already uses `ConfigureAwait(false)` internally. That is not enough when the *first* `await` in the EF/Npgsql stack still captured the Unity context, which is what happened at login startup.
+
 Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `BaseServerAuthenticator`, drained each frame by `Update()` → `DrainMainThreadQueue()`. A per-frame cap (`maxMainThreadActionsPerUpdate = 100`, Inspector-configurable) time-slices draining to avoid frame spikes, with back-pressure logging when the queue is not fully drained.
 
 ## Supported Platforms
@@ -267,6 +271,8 @@ authenticator.OnClientAuthenticationResult += (conn, authenticated) =>
 
 | Check | How to Verify |
 |-------|---------------|
+| LoginServer bound `:7770` after boot | Log: `[wt:INFO] Server started on 127.0.0.1:7770`. If the process is alive but this line never appears and `login_servers.last_pulse` is stale, KEK load deadlocked on the Unity main thread |
+| Signing-key KEK loaded | No `"Signing-key KEK not provisioned — persisting raw HMAC key"` warning. That warning means World/Scene cannot unwrap tokens |
 | Workers started | Log output: `"Workers initialized (Verify=2, Proof=2)"` or `"Workers initialized (Token=2)"` |
 | Handshake completing | Client receives `ServerHandshake` with X25519 public key and agreed version |
 | SRP verify processing | Client receives `SrpVerifyResponseBroadcast` with encrypted salt and server ephemeral |
@@ -499,7 +505,8 @@ Server/
 │   ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
 │   ├── BaseServerAuthenticator.cs             # Composition host: owns Core, routes FishNet events to core
 │   ├── ServerAuthenticator.cs                 # SRP wrapper: inner ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
-│   └── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
+│   ├── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
+│   └── SigningKeyKekProvider.cs               # Loads signing_key_kek via UnitySyncOverAsync (never GetResult on main thread)
 │
 └── Implementation/World/
     ├── WorldServer/Authentication/

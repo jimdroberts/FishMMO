@@ -849,7 +849,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (batch.Count > 0)
 				{
-					DatabaseResult result = chatService.PersistBatchAsync(batch).GetAwaiter().GetResult();
+					// Shutdown flush runs on the Unity main thread. Do not GetResult() the
+					// EF task in-place — same SynchronizationContext deadlock as KEK load.
+					DatabaseResult result = UnitySyncOverAsync.Run(
+						() => chatService.PersistBatchAsync(batch));
 					if (!result.IsSuccess)
 					{
 						Log.Warning("ChatSystem", $"FlushPersistQueueSync DB error ({batch.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");

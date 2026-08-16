@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using FishMMO.Auth.Implementation;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
@@ -49,8 +50,14 @@ namespace FishMMO.Server.Implementation
 
 			try
 			{
-				var result = secretService.FetchAsync(DatabaseKey, System.Threading.CancellationToken.None)
-					.GetAwaiter().GetResult();
+				// MUST leave the Unity SynchronizationContext. LoginServerSystem.InitializeOnce
+				// calls this on the main thread, then StartServer() only runs after it returns.
+				// A raw FetchAsync(...).GetResult() deadlocks: EF/Npgsql completions post back
+				// to the blocked main thread, last_pulse freezes, and UDP :7770 never binds.
+				// UnitySyncOverAsync.Run is the same Task.Run + timeout pattern used for
+				// Login/World/Scene DB registration.
+				var result = UnitySyncOverAsync.Run(
+					() => secretService.FetchAsync(DatabaseKey, CancellationToken.None));
 
 				if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))
 				{
