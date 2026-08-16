@@ -367,6 +367,16 @@ namespace FishMMO.Server.Implementation
 				// expectation that access-level changes accompany token revocation.
 				// A full fix would require an IAccountManager lookup here, but World/Scene
 				// servers may not have access to the accounts table in all deployments.
+				// Scene TokenAuth requires RealIp (v4+). A renewal without it is
+				// TokenInvalid even after a successful world hop. Use the IP recovered
+				// from the hop connection token (authenticator store), not loopback.
+				string? realIp = ResolveRateLimitKey(conn);
+				if (string.IsNullOrEmpty(realIp))
+				{
+					await Log.Warning(LogPrefix,
+						$"Renewal token for '{accountName}' has no stored real IP — scene hop will TokenInvalid.");
+				}
+
 				byte[] encryptedToken = TokenService.GenerateAndEncryptToken(
 					encryptionData,
 					accountName,
@@ -375,7 +385,8 @@ namespace FishMMO.Server.Implementation
 					expirationMinutes,
 					signingKey,
 					accessLevel,
-					out rawTokenForHashing);
+					out rawTokenForHashing,
+					realIp);
 
 				if (encryptedToken == null || rawTokenForHashing == null)
 				{

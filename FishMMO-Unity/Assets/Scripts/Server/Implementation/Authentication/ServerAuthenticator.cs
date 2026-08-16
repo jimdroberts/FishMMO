@@ -604,13 +604,17 @@ namespace FishMMO.Server.Implementation
 			protected override string? ResolveClientRealIp(NetworkConnection conn)
 			{
 				if (conn == null) return null;
-				// Look up the real IP that was recovered from the connection token
-				// (or stateless HMAC token) during the ClientHandshake.
+				// Authenticator-owned cache is the source of truth (written during
+				// ClientHandshake token verify). The account-creation cache is a
+				// Login-only mirror and can miss after ClientId reuse.
+				string? ip = outer.ResolveRateLimitKey(conn);
+				if (!string.IsNullOrEmpty(ip))
+					return ip;
 				if (outer.Server?.DataContainerRegistry != null &&
 					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 					rt.ConnectionIpCache != null)
 				{
-					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ip))
+					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out ip))
 						return ip;
 				}
 				return null;
