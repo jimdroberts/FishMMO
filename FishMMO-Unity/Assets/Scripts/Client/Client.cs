@@ -287,7 +287,8 @@ namespace FishMMO.Client
 			{
 				if (this.loginServerPorts != null)
 				{
-					Log.Info("Client", "Login server connection attempt failed — invalidating cached server list.");
+					// Also fires on hop teardown (login/world socket stop), not only a failed login.
+					Log.Debug("Client", "Login/world socket stopped — invalidating cached server list if this was not a hop.");
 					this.loginServerPorts = null;
 					this.cachedConnectionToken = null;
 				}

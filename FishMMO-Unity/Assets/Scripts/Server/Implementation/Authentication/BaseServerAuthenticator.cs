@@ -752,7 +752,7 @@ namespace FishMMO.Server.Implementation
 			}
 			else
 			{
-				_ = Log.Warning(LogPrefix,
+				_ = Log.Debug(LogPrefix,
 					$"Hop token minted for conn={conn.ClientId} len={token.Length} " +
 					$"ip={ResolveRateLimitKey(conn) ?? "?"} keys={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
 			}
@@ -908,7 +908,7 @@ namespace FishMMO.Server.Implementation
 			// The token bridges the real IP from the HTTP layer into the QUIC layer.
 			// We await resolution because rate limiting requires a verified real IP —
 			// falling back to proxy IP or ClientId is not acceptable for DoS protection.
-			_ = Log.Warning(LogPrefix,
+			_ = Log.Debug(LogPrefix,
 				$"ClientHandshake conn={clientId} cookie={(msg.Cookie != null && msg.Cookie.Length > 0)} " +
 				$"connectionToken={(string.IsNullOrEmpty(msg.ConnectionToken) ? "missing" : $"present len={msg.ConnectionToken.Length}")} " +
 				$"keysLoaded={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
@@ -1138,7 +1138,7 @@ namespace FishMMO.Server.Implementation
 					{
 						s_dbConnectionTokenKeyMap = map;
 					}
-					await Log.Warning(LogPrefix, $"Loaded {map.Count} active connection token key(s) from database.");
+					await Log.Debug(LogPrefix, $"Loaded {map.Count} active connection token key(s) from database.");
 				}
 				else if (result.IsSuccess)
 				{

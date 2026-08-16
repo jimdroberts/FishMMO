@@ -478,7 +478,8 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		internal void ForceStopAndReset()
 		{
-			LogTransportWarning(
+			// Expected on every Login→World→Scene hop. Warning paints red in the WebGL console.
+			LogTransportDebug(
 				$"[FishWT] ForceStopAndReset priorState={base.GetConnectionState()} target={lastConnectTarget}");
 			// Clear guard so StopConnection can run even if a prior stop stalled.
 			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
@@ -738,7 +739,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			string url = socket.webglConnectUrl;
 			socket.incomingEvents.Enqueue(() =>
 			{
-				socket.LogTransportWarning($"[FishWT] close index={index} url={url}");
+				// Expected socket close on hop/teardown — not a transport failure.
+				socket.LogTransportDebug($"[FishWT] close index={index} url={url}");
 				socket.SetConnectionState(LocalConnectionState.Stopped, false);
 			});
 		}
