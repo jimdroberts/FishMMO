@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -26,6 +27,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Interval in seconds between database heartbeat pulses.
 		/// </summary>
 		[SerializeField] private float pulseRate = 5.0f;
+
+		/// <summary>
+		/// Maximum time a shutdown database call may block the main thread. Shorter than the
+		/// startup timeout: process exit must not wait on an unresponsive database.
+		/// </summary>
+		private const int dbShutdownTimeoutMs = 5_000;
 
 		/// <summary>
 		/// Interval in seconds between database heartbeat pulses.
@@ -58,13 +65,32 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private byte[] signingKeyKek;
 
 		/// <summary>
-		/// Initializes the login server system, registers event handlers, and adds the server to the database.
+		/// Synchronous entry point. This system registers itself in the database, so it must be
+		/// initialized through <see cref="InitializeOnceAsync"/>; reaching this method means the
+		/// asynchronous startup chain was bypassed.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			Log.Error("LoginServerSystem",
+				"InitializeOnce called directly. This system performs database I/O and must be " +
+				"initialized via InitializeOnceAsync (Server drives this through the async startup chain).");
+			return ServerComponentInitializationStatus.InitializationFailed;
+		}
+
+		/// <summary>
+		/// Initializes the login server system, registers event handlers, and adds the server to
+		/// the database — without blocking the Unity main thread.
+		/// </summary>
+		/// <remarks>
+		/// Awaits here deliberately capture Unity's SynchronizationContext (no
+		/// <c>ConfigureAwait(false)</c>), so execution resumes on the main thread and the Unity
+		/// and FishNet APIs used below stay legal.
+		/// </remarks>
+		public override async Task<ServerComponentInitializationStatus> InitializeOnceAsync(CancellationToken cancellationToken)
+		{
 			if (Server == null)
 			{
-				Log.Error("LoginServerSystem", "InitializeOnce: Server is null");
+				_ = Log.Error("LoginServerSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -80,24 +106,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 				"1", StringComparison.OrdinalIgnoreCase);
 			if (allowCoredumps)
 			{
-				Log.Warning("LoginServerSystem",
+				_ = Log.Warning("LoginServerSystem",
 					"FISHMMO_ALLOW_COREDUMPS=1 — core dumps are ENABLED. " +
 					"Key material may be exposed in core files. " +
 					"Unset this variable before returning to production.");
 			}
 			else if (ProcessHardening.TryDisableCoreDumpAndPtrace(out string hardeningStatus))
 			{
-				Log.Debug("LoginServerSystem", $"Process hardening: {hardeningStatus}");
+				_ = Log.Debug("LoginServerSystem", $"Process hardening: {hardeningStatus}");
 			}
 			else
 			{
-				Log.Warning("LoginServerSystem", $"Process hardening skipped: {hardeningStatus}");
+				_ = Log.Warning("LoginServerSystem", $"Process hardening skipped: {hardeningStatus}");
 			}
 
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
 			if (Server.Configuration.TryGetBool("AutoVerifyAccounts", out bool autoVerify) && autoVerify)
 			{
-				Log.Error("LoginServerSystem",
+				_ = Log.Error("LoginServerSystem",
 					"FATAL: AutoVerifyAccounts=true is not allowed in production builds. " +
 					"Set AutoVerifyAccounts=false in the server .cfg file.");
 				throw new InvalidOperationException(
@@ -107,19 +133,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (!Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
-				Log.Error("LoginServerSystem", "Failed to initialize: ILoginServerRuntimeData not found");
+				_ = Log.Error("LoginServerSystem", "Failed to initialize: ILoginServerRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
 			if (!Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server))
 			{
-				Log.Error("LoginServerSystem", "Failed to initialize: Could not get server IP address");
+				_ = Log.Error("LoginServerSystem", "Failed to initialize: Could not get server IP address");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (!Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				Log.Error("LoginServerSystem", "Failed to initialize: ServerName not configured");
+				_ = Log.Error("LoginServerSystem", "Failed to initialize: ServerName not configured");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -127,32 +153,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ILoginServerService>(out var loginServerService))
 			{
-				Log.Error("LoginServerSystem", "Failed to resolve ILoginServerService from database service registry");
+				_ = Log.Error("LoginServerSystem", "Failed to resolve ILoginServerService from database service registry");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			// Register login server in database.
-			// BLOCKING THE MAIN THREAD IS INTENTIONAL: Unity's SynchronizationContext captures
-			// the main thread. If we awaited directly, any continuation that needs the main thread
-			// (e.g., FishNet callbacks, coroutine resumptions) would deadlock because the main thread
-			// is blocked. We use Task.Run to escape the SynchronizationContext, then Wait() to block
-			// synchronously on a background-thread task. The 30s timeout prevents indefinite hang.
-			const int dbRegistrationTimeoutMs = 30_000;
-			Task<DatabaseResult<LoginServerData>> registerTask = Task.Run(() =>
-				loginServerService.PersistAsync(name, server.Address, server.Port));
-
-			// Block the main thread intentionally during startup (see comment above).
-			if (!registerTask.Wait(dbRegistrationTimeoutMs))
-			{
-				Log.Error("LoginServerSystem", $"Login server DB registration timed out after {dbRegistrationTimeoutMs}ms");
-				return ServerComponentInitializationStatus.FailedToGetDbContext;
-			}
-
-			DatabaseResult<LoginServerData> dbResult = registerTask.GetAwaiter().GetResult();
+			// Register login server in database. The main thread is not blocked: it keeps running
+			// the player loop, which is what drains the continuation this await depends on.
+			DatabaseResult<LoginServerData> dbResult =
+				await loginServerService.PersistAsync(name, server.Address, server.Port, cancellationToken);
 
 			if (!dbResult.IsSuccess)
 			{
-				Log.Error("LoginServerSystem", $"Failed to register login server in database: [{dbResult.ErrorCode}] {dbResult.ErrorMessage} (IsTransient={dbResult.IsTransient})");
+				_ = Log.Error("LoginServerSystem", $"Failed to register login server in database: [{dbResult.ErrorCode}] {dbResult.ErrorMessage} (IsTransient={dbResult.IsTransient})");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -162,7 +174,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var signingKeyService))
 			{
-				Log.Error("LoginServerSystem", "Failed to resolve ILoginServerSigningKeyService from database service registry");
+				_ = Log.Error("LoginServerSystem", "Failed to resolve ILoginServerSigningKeyService from database service registry");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -175,7 +187,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				&& existingAuth.TokenSigningKey.Length == CryptoHelper.HmacKeyLength)
 			{
 				hmacKey = existingAuth.TokenSigningKey;
-				Log.Debug("LoginServerSystem", "Reusing pre-bootstrapped TokenSigningKey for persistence.");
+				_ = Log.Debug("LoginServerSystem", "Reusing pre-bootstrapped TokenSigningKey for persistence.");
 			}
 			else
 			{
@@ -187,36 +199,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// A DB-only attacker (read or write) cannot recover or forge usable signing keys
 			// without also possessing the KEK, which is provisioned out-of-band.
 			string kekError = "KEK provisioning failed — deployment_secrets table may be missing the signing_key_kek row.";
-			if (Server.Database?.ServiceRegistry == null ||
-				!Server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var secretService) ||
-				!SigningKeyKekProvider.TryLoadFromDatabase(secretService, out signingKeyKek, out kekError))
+			signingKeyKek = null;
+			if (Server.Database?.ServiceRegistry != null &&
+				Server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var secretService))
+			{
+				// Awaited, not blocked: this is the call that hung LoginServer startup when it was
+				// resolved synchronously on the main thread.
+				var kekResult = await SigningKeyKekProvider.LoadFromDatabaseAsync(secretService, cancellationToken);
+				if (kekResult.Success)
+				{
+					signingKeyKek = kekResult.Kek;
+				}
+				else
+				{
+					kekError = kekResult.Error;
+				}
+			}
+
+			if (signingKeyKek == null)
 			{
 	#if UNITY_EDITOR || DEVELOPMENT_BUILD
-				Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
+				_ = Log.Warning("LoginServerSystem", $"Signing-key KEK not provisioned — persisting raw HMAC key. {kekError}");
 				signingKeyKek = null;
 #else
-				Log.Error("LoginServerSystem", $"Signing-key KEK is REQUIRED in production. KEK must be in the deployment_secrets database table with key='signing_key_kek'. {kekError}");
+				_ = Log.Error("LoginServerSystem", $"Signing-key KEK is REQUIRED in production. KEK must be in the deployment_secrets database table with key='signing_key_kek'. {kekError}");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 #endif
 			}
 
 			byte[] wrappedHmacKey = signingKeyKek != null ? KeyEnvelope.Wrap(signingKeyKek, hmacKey, SigningKeyKekProvider.BuildAad(runtimeData.ID)) : hmacKey;
 
-			Task<DatabaseResult<LoginServerSigningKeyData>> keyTask = Task.Run(() =>
-				signingKeyService.UpsertAsync(runtimeData.ID, wrappedHmacKey));
-
-			// Block the main thread intentionally during startup (see comment above).
-			if (!keyTask.Wait(dbRegistrationTimeoutMs))
-			{
-				Log.Error("LoginServerSystem", $"HMAC signing key persistence timed out after {dbRegistrationTimeoutMs}ms");
-				return ServerComponentInitializationStatus.FailedToGetDbContext;
-			}
-
-			DatabaseResult<LoginServerSigningKeyData> keyResult = keyTask.GetAwaiter().GetResult();
+			DatabaseResult<LoginServerSigningKeyData> keyResult =
+				await signingKeyService.UpsertAsync(runtimeData.ID, wrappedHmacKey, cancellationToken);
 
 			if (!keyResult.IsSuccess)
 			{
-				Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: [{keyResult.ErrorCode}] {keyResult.ErrorMessage}");
+				_ = Log.Error("LoginServerSystem", $"Failed to persist HMAC signing key: [{keyResult.ErrorCode}] {keyResult.ErrorMessage}");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -252,13 +270,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					else
 					{
-						Log.Warning("LoginServerSystem", "accountSystem is not AccountCreationSystem -- TOTP master key not forwarded.");
+						_ = Log.Warning("LoginServerSystem", "accountSystem is not AccountCreationSystem -- TOTP master key not forwarded.");
 					}
 				}
 			}
 			else
 			{
-				Log.Error("LoginServerSystem", "Failed to configure authenticator: ServerAuthenticator not found");
+				_ = Log.Error("LoginServerSystem", "Failed to configure authenticator: ServerAuthenticator not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -268,7 +286,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
 
-			Log.Debug("LoginServerSystem", $"Initialized (ServerID={runtimeData.ID}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
+			_ = Log.Debug("LoginServerSystem", $"Initialized (ServerID={runtimeData.ID}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -329,22 +347,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					try
 					{
-						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: We use Task.Run to escape
-						// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
-						// At this point the server is shutting down, so blocking the main thread momentarily
-						// is acceptable and ensures the DB cleanup completes before process exit.
-						var keyDeleteTask = Task.Run(() => signingKeyService.DeleteAsync(runtimeData.ID));
-						if (!keyDeleteTask.Wait(5000))
+						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: UnitySyncOverAsync keeps
+						// the work off Unity's SynchronizationContext and bounds the wait. At this point
+						// the server is shutting down, so blocking the main thread momentarily is
+						// acceptable and ensures the DB cleanup completes before process exit.
+						if (UnitySyncOverAsync.TryRun(
+							cancellationToken => signingKeyService.DeleteAsync(runtimeData.ID, cancellationToken),
+							out DatabaseResult keyDeleteResult,
+							dbShutdownTimeoutMs))
 						{
-							Log.Warning("LoginServerSystem", $"Signing key deletion timed out after 5000ms");
-						}
-						else
-						{
-							DatabaseResult keyDeleteResult = keyDeleteTask.GetAwaiter().GetResult();
 							if (!keyDeleteResult.IsSuccess)
 							{
 								Log.Warning("LoginServerSystem", $"Failed to delete signing key from DB: [{keyDeleteResult.ErrorCode}] {keyDeleteResult.ErrorMessage}");
 							}
+						}
+						else
+						{
+							Log.Warning("LoginServerSystem", $"Signing key deletion timed out after {dbShutdownTimeoutMs}ms");
 						}
 					}
 					catch (Exception ex)
@@ -358,18 +377,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 					try
 					{
 						// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL (see comment above).
-						var deregisterTask = Task.Run(() => loginServerService.DeleteAsync(runtimeData.ID));
-						if (!deregisterTask.Wait(5000))
+						if (UnitySyncOverAsync.TryRun(
+							cancellationToken => loginServerService.DeleteAsync(runtimeData.ID, cancellationToken),
+							out DatabaseResult deregisterResult,
+							dbShutdownTimeoutMs))
 						{
-							Log.Warning("LoginServerSystem", $"Login server deregistration timed out after 5000ms");
-						}
-						else
-						{
-							DatabaseResult deregisterResult = deregisterTask.GetAwaiter().GetResult();
 							if (!deregisterResult.IsSuccess)
 							{
 								Log.Warning("LoginServerSystem", $"Failed to deregister login server from DB: [{deregisterResult.ErrorCode}] {deregisterResult.ErrorMessage}");
 							}
+						}
+						else
+						{
+							Log.Warning("LoginServerSystem", $"Login server deregistration timed out after {dbShutdownTimeoutMs}ms");
 						}
 					}
 					catch (Exception ex)

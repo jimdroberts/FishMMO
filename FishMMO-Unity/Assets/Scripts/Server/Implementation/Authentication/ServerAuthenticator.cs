@@ -437,7 +437,13 @@ namespace FishMMO.Server.Implementation
 				IsSuccess = true,
 				// Grace period: unverified accounts can log in until the verification
 				// email is actually sent. Once sent, login is blocked until verified.
-				IsVerified = d.Verified || d.VerificationEmailSentAt == null,
+				// AutoVerifyAccounts (development builds only) bypasses the gate outright so
+				// that accounts already stamped with VerificationEmailSentAt — created before
+				// the flag was set, or against a production build — are not permanently
+				// locked out of a local server.
+				IsVerified = d.Verified ||
+					d.VerificationEmailSentAt == null ||
+					AccountVerificationPolicy.IsAutoVerifyEnabled(Server?.Configuration),
 				Salt = d.Salt,
 				Verifier = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,
@@ -751,7 +757,11 @@ namespace FishMMO.Server.Implementation
 					await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
 				}
 
-				await outer.PersistVerificationEmailSentCoreAsync(username);
+				// VerificationEmailSentAt is deliberately NOT stamped here. Queueing an email
+				// is not sending one: the queue processor stamps it after SMTP confirms
+				// delivery. Stamping on enqueue ended the grace period for a mail that may
+				// never go out — with an unreachable SMTP host, a single expired-code login
+				// attempt locked the account out permanently.
 				return true;
 			}
 		}
@@ -759,19 +769,6 @@ namespace FishMMO.Server.Implementation
 		#endregion
 
 
-		/// <summary>
-		/// Sets VerificationEmailSentAt after resending a verification email during login.
-		/// </summary>
-		private async Task PersistVerificationEmailSentCoreAsync(string username)
-		{
-			if (Server?.Database?.ServiceRegistry != null &&
-				Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
-			{
-				var r = await accountService.PersistVerificationEmailSentAsync(username);
-				if (!r.IsSuccess)
-					await Log.Warning(LogPrefix, $"PersistVerificationEmailSentAsync DB error for '{username}': {r.ErrorCode} - {r.ErrorMessage}");
-			}
-		}
 		/// <summary>
 		/// Builds the HTML body for a login-triggered verification email resend.
 		/// </summary>

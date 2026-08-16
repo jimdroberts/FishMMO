@@ -40,6 +40,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
 
 		/// <summary>
+		/// Maximum time a shutdown database call may block the main thread. Process exit must
+		/// not wait on an unresponsive database.
+		/// </summary>
+		private const int dbShutdownTimeoutMs = 5_000;
+
+		/// <summary>
 		/// Minimum seconds between instance DB routing lookups for the same account.
 		/// </summary>
 		[Header("Connection Routing Hardening")]
@@ -229,18 +235,19 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Blocking call during shutdown with timeout to prevent indefinite hang
 				try
 				{
-					var deleteTask = Task.Run(() => sceneService.DeleteByWorldServerAsync(worldData.ID));
-					if (!deleteTask.Wait(5000))
+					if (UnitySyncOverAsync.TryRun(
+						cancellationToken => sceneService.DeleteByWorldServerAsync(worldData.ID, cancellationToken),
+						out DatabaseResult<int> deleteResult,
+						dbShutdownTimeoutMs))
 					{
-						Log.Warning("WorldSceneSystem", $"World scene deletion timed out after 5000ms (WorldServerID={worldData.ID})");
-					}
-					else
-					{
-						DatabaseResult<int> deleteResult = deleteTask.GetAwaiter().GetResult();
 						if (!deleteResult.IsSuccess)
 						{
 							Log.Warning("WorldSceneSystem", $"Failed to delete world scenes during shutdown (WorldServerID={worldData.ID}): [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
 						}
+					}
+					else
+					{
+						Log.Warning("WorldSceneSystem", $"World scene deletion timed out after {dbShutdownTimeoutMs}ms (WorldServerID={worldData.ID})");
 					}
 				}
 				catch (Exception ex)

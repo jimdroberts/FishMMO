@@ -327,7 +327,7 @@
 10. **WorldServer.cfg** — Port 7780, same Address/TLS/connection-token keys.  
 11. **SceneServer.cfg** — Port 7790+, same Address/TLS/connection-token keys. Note `StaleSceneTimeout=5` is present in **all three** .cfg templates, not only SceneServer.  
 12. **IPv6 Reserved** — `EnableIPv6` / `IPv6Address` are commented out in every template. IPv6 dual-stack is not supported at the native QUIC layer; IPv6 clients must arrive through an IPv6-enabled NGINX L4 proxy.  
-13. **AutoVerifyAccounts** — `true` in Development (bypasses email verification, flagged with an explicit do-not-copy-to-production warning), `false` in Production so email verification is required.
+13. **AutoVerifyAccounts** — `true` in Development (bypasses email verification at both account creation and login, flagged with an explicit do-not-copy-to-production warning), `false` in Production so email verification is required.
 
 ### Deploy Hooks (contracts, operator-supplied — **not shipped in this repo**)
 *Neither script exists under `FishMMO-Setup/`. `nginx.conf` and the deployment docs define the contract each must satisfy, and the root README states plainly that they are operator-supplied.*  

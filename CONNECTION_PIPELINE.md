@@ -967,7 +967,7 @@ All FishMMO servers read configuration from `.cfg` files in the working director
 
 | Key | Type | Default | Servers | Description |
 |-----|------|---------|---------|-------------|
-| `AutoVerifyAccounts` | bool (string) | `true` (dev), `false` (prod) | Login | When `true`, new accounts are automatically verified without email confirmation. Must be `false` in production. Only effective in `UNITY_EDITOR` or `DEVELOPMENT_BUILD` builds. |
+| `AutoVerifyAccounts` | bool (string) | `true` (dev), `false` (prod) | Login | When `true`, new accounts are persisted with `verified = true` (no email confirmation, no TOTP enrollment) **and** the login verification gate is bypassed, so accounts created before the flag was enabled can still log in. Must be `false` in production. Only effective in `UNITY_EDITOR` or `DEVELOPMENT_BUILD` builds — a server built with the Production working environment ignores the key entirely. |
 | `Smtp:Host` | string | `"localhost"` | Login | SMTP server hostname for sending verification emails. Overridable via `FISHMMO_SMTP_HOST` env var. |
 | `Smtp:Port` | int | `587` | Login | SMTP server port. Production typically uses 465 (implicit TLS). Overridable via `FISHMMO_SMTP_PORT` env var. |
 | `Smtp:Username` | string | `""` | Login | SMTP authentication username. Overridable via `FISHMMO_SMTP_USERNAME` env var. |

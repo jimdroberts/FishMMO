@@ -633,6 +633,37 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistAutoVerifiedAsync(
+			string accountName,
+			CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// No verify_code predicate: the caller is the server itself, not a client
+				// redeeming a code. Any pending code is cleared so a stale one cannot be
+				// replayed later against an already-verified account.
+				var normalized = Authentication.NormalizeAccountLookup(accountName);
+				var sql = $@"UPDATE {TableName}
+					SET verified = true, verify_code = 0, verify_code_expires_utc = NULL
+					WHERE name_lowercase = {{0}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { normalized }, cancellationToken)
+					.ConfigureAwait(false);
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> PersistVerifyCodeAsync(
 			string accountName,
 			int verifyCode,

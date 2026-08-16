@@ -785,17 +785,17 @@ namespace FishMMO.Auth.Implementation
 				// useful information to the legitimate owner anyway).
 				bool isUnverified = false;
 
-					// Guard: fakeSaltKey must have been initialized by InitializeWorkersCore.
-					// If it is null, the server was started without calling InitializeWorkers,
-					// which is a fatal configuration error.
-					if (fakeSaltKey == null)
-					{
-						throw new InvalidOperationException(
-							"fakeSaltKey is null \u2014 InitializeWorkersCore was not called before processing SRP verify requests. " +
-							"This is a fatal configuration error. Ensure the authenticator's InitializeWorkers is called during server startup.");
-					}
+				// Guard: fakeSaltKey must have been initialized by InitializeWorkersCore.
+				// If it is null, the server was started without calling InitializeWorkers,
+				// which is a fatal configuration error.
+				if (fakeSaltKey == null)
+				{
+					throw new InvalidOperationException(
+						"fakeSaltKey is null \u2014 InitializeWorkersCore was not called before processing SRP verify requests. " +
+						"This is a fatal configuration error. Ensure the authenticator's InitializeWorkers is called during server startup.");
+				}
 
-					if (!lookupResult.IsSuccess)
+				if (!lookupResult.IsSuccess)
 				{
 					salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey);
 					verifier = SrpService.GetStaticFakeData().Verifier;
@@ -1014,14 +1014,14 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-				// Reject banned accounts after SRP proof succeeds so that wrong-password
-				// attempts on banned accounts still return InvalidUsernameOrPassword
-				// (same as non-existent accounts), preventing username enumeration.
-				if (accessLevel == AccessLevel.Banned)
-				{
-					RejectAndPurge(conn, ClientAuthenticationResult.Banned);
-					return;
-				}
+			// Reject banned accounts after SRP proof succeeds so that wrong-password
+			// attempts on banned accounts still return InvalidUsernameOrPassword
+			// (same as non-existent accounts), preventing username enumeration.
+			if (accessLevel == AccessLevel.Banned)
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.Banned);
+				return;
+			}
 
 			RefreshAuthTtl(conn);
 

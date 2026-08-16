@@ -262,6 +262,23 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Marks an account verified without requiring a verification code, clearing any
+		/// pending code in the process.
+		///
+		/// This is the server-initiated counterpart to <see cref="PersistVerifiedAsync"/> and
+		/// exists for the development-only <c>AutoVerifyAccounts</c> path, where no code is
+		/// ever generated or emailed. It performs no code check, so it must never be reachable
+		/// from a client-supplied value — client-driven verification goes through
+		/// <see cref="PersistVerifiedAsync"/>, which validates the code atomically.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>DatabaseResult indicating success or failure.</returns>
+		Task<DatabaseResult> PersistAutoVerifiedAsync(
+			string accountName,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Sets the verification code for an account, along with the UTC expiry timestamp
 		/// after which the code is no longer redeemable.
 		/// </summary>

@@ -36,6 +36,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxMainThreadActionsPerFrame = 200;
 
 		/// <summary>
+		/// Maximum time the shutdown character save / session release blocks the main thread.
+		/// Generous because losing character progress is expensive, but still bounded so an
+		/// unresponsive database cannot hold process exit open indefinitely.
+		/// </summary>
+		private const int shutdownFlushTimeoutMs = 30_000;
+
+		/// <summary>
 		/// Interval in seconds between periodic character saves.
 		/// </summary>
 		[Tooltip("Interval in seconds between periodic character saves")]
@@ -231,14 +238,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Capture all session tokens (spawned + waiting-to-load characters)
 					var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
 
-					Task.Run(async () =>
+					// Bounded: an unresponsive database must not hold process exit open forever.
+					// Characters already saved before the deadline keep their progress; the token
+					// cancels the in-flight write rather than leaving it running unobserved.
+					bool flushed = UnitySyncOverAsync.TryRun(async cancellationToken =>
 					{
 						// Save all spawned characters
 						foreach (var charData in characterDataList)
 						{
+							cancellationToken.ThrowIfCancellationRequested();
 							try
 							{
-								DatabaseResult result = await characterService.PersistAsync(charData);
+								DatabaseResult result = await characterService.PersistAsync(charData, cancellationToken);
 								if (!result.IsSuccess)
 								{
 									await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
@@ -253,6 +264,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// Release all claimed sessions (spawned + waiting-to-load characters)
 						foreach (var kvp in sessionTokens)
 						{
+							cancellationToken.ThrowIfCancellationRequested();
 							try
 							{
 								await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.ServerID, kvp.Value.Token);
@@ -262,7 +274,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to release session for character {kvp.Key}: {ex}");
 							}
 						}
-					}).GetAwaiter().GetResult();
+					}, shutdownFlushTimeoutMs);
+
+					if (!flushed)
+					{
+						Log.Warning("CharacterSystem", $"OnDeinitialize: character save/session release timed out after {shutdownFlushTimeoutMs}ms; some progress may not have been persisted.");
+					}
 				}
 			}
 		}

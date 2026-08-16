@@ -789,7 +789,7 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | `CertificatePath` | PEM certificate for QUIC/TLS (game servers terminate their own TLS) | platform-dependent |
 | `PrivateKeyPath` | PEM private key for QUIC/TLS | platform-dependent |
 | `ConnectionTokenHmacKeyBase64` | **Leave empty.** Loaded at runtime from the `connection_token_keys` database table | empty |
-| `AutoVerifyAccounts` | LoginServer only — skip email verification (Development only, never in Production) | `true` (Dev) / `false` (Prod) |
+| `AutoVerifyAccounts` | LoginServer only — skip email verification at account creation and at login (Development builds only, never in Production) | `true` (Dev) / `false` (Prod) |
 | `AllowedOrigins` | LoginServer only — comma-separated CORS origins permitted for WebGL clients | `https://play.fishmmo.com` |
 | `Smtp:Host` / `Smtp:Port` / `Smtp:Username` / `Smtp:Password` / `Smtp:FromAddress` / `Smtp:FromName` / `Smtp:UseSsl` | LoginServer only — verification-email relay. Port 465 = implicit TLS (`UseSsl=true`); port 587 = STARTTLS (`UseSsl=false`) | `localhost` / `465` / — / — / `noreply@fishmmo.com` / `FishMMO` / `true` |
 | `LoginQueueUpdateRateSeconds` | LoginServer only — how often queued clients receive position updates | `2.0` |

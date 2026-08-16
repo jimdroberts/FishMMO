@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -28,6 +29,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		[SerializeField] private float pulseRate = 5.0f;
 
 		/// <summary>
+		/// Maximum time a shutdown database call may block the main thread. Shorter than startup:
+		/// process exit must not wait on an unresponsive database.
+		/// </summary>
+		private const int dbShutdownTimeoutMs = 5_000;
+
+		/// <summary>
 		/// Interval (in seconds) between heartbeat pulses to the database.
 		/// </summary>
 		public float PulseRate => pulseRate;
@@ -37,29 +44,51 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// this world server in the database, and starts periodic pulse callbacks.
 		/// </summary>
 		/// <returns>The initialization status.</returns>
+		/// <summary>
+		/// Synchronous entry point. This system registers itself in the database, so it must be
+		/// initialized through <see cref="InitializeOnceAsync"/>; reaching this method means the
+		/// asynchronous startup chain was bypassed.
+		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
+		{
+			Log.Error("WorldServerSystem",
+				"InitializeOnce called directly. This system performs database I/O and must be " +
+				"initialized via InitializeOnceAsync (Server drives this through the async startup chain).");
+			return ServerComponentInitializationStatus.InitializationFailed;
+		}
+
+		/// <summary>
+		/// Initializes the system and registers it in the database without blocking the Unity
+		/// main thread.
+		/// </summary>
+		/// <remarks>
+		/// Awaits here deliberately capture Unity's SynchronizationContext (no
+		/// <c>ConfigureAwait(false)</c>), so execution resumes on the main thread and the Unity
+		/// and FishNet APIs used below stay legal.
+		/// </remarks>
+		public override async Task<ServerComponentInitializationStatus> InitializeOnceAsync(CancellationToken cancellationToken)
 		{
 			if (Server == null)
 			{
-				Log.Error("WorldServerSystem", "InitializeOnce: Server is null");
+				_ = Log.Error("WorldServerSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (Server.Database?.ServiceRegistry == null)
 			{
-				Log.Error("WorldServerSystem", "InitializeOnce: Database ServiceRegistry is null");
+				_ = Log.Error("WorldServerSystem", "InitializeOnce: Database ServiceRegistry is null");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			if (!Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out _))
 			{
-				Log.Error("WorldServerSystem", "InitializeOnce: IWorldServerService not found");
+				_ = Log.Error("WorldServerSystem", "InitializeOnce: IWorldServerService not found");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			if (!Server.Configuration.TryGetString("ServerName", out _))
 			{
-				Log.Error("WorldServerSystem", "InitializeOnce: ServerName not configured");
+				_ = Log.Error("WorldServerSystem", "InitializeOnce: ServerName not configured");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
@@ -69,7 +98,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;
 
-				Register(server.Address, server.Port, characterCount);
+				if (!await RegisterAsync(server.Address, server.Port, characterCount, cancellationToken))
+				{
+					return ServerComponentInitializationStatus.FailedToGetDbContext;
+				}
 			}
 
 			// Periodic callbacks
@@ -78,7 +110,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
 
-			Log.Debug("WorldServerSystem", $"Initialized (PulseRate={PulseRate}s)");
+			_ = Log.Debug("WorldServerSystem", $"Initialized (PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -107,22 +139,23 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				try
 				{
-					// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: We use Task.Run to escape
-					// Unity's SynchronizationContext and Wait(5000) to block synchronously with a timeout.
-					// At this point the server is shutting down, so blocking the main thread momentarily
-					// is acceptable and ensures the DB cleanup completes before process exit.
-					var deleteTask = Task.Run(() => worldServerService.DeleteAsync(runtimeData.ID));
-					if (!deleteTask.Wait(5000))
+					// BLOCKING THE MAIN THREAD DURING SHUTDOWN IS INTENTIONAL: UnitySyncOverAsync keeps
+					// the work off Unity's SynchronizationContext and bounds the wait. At this point
+					// the server is shutting down, so blocking momentarily is acceptable and ensures
+					// the DB cleanup completes before process exit.
+					if (UnitySyncOverAsync.TryRun(
+						cancellationToken => worldServerService.DeleteAsync(runtimeData.ID, cancellationToken),
+						out DatabaseResult deleteResult,
+						dbShutdownTimeoutMs))
 					{
-						Log.Warning("WorldServerSystem", $"World server deregistration timed out after 5000ms (ServerID={runtimeData.ID})");
-					}
-					else
-					{
-						DatabaseResult deleteResult = deleteTask.GetAwaiter().GetResult();
 						if (!deleteResult.IsSuccess)
 						{
 							Log.Warning("WorldServerSystem", $"Failed to deregister world server from DB (ServerID={runtimeData.ID}): [{deleteResult.ErrorCode}] {deleteResult.ErrorMessage}");
 						}
+					}
+					else
+					{
+						Log.Warning("WorldServerSystem", $"World server deregistration timed out after {dbShutdownTimeoutMs}ms (ServerID={runtimeData.ID})");
 					}
 				}
 				catch (Exception ex)
@@ -133,41 +166,44 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Registers the world server in the database. Public wrapper used by the core-facing interface.
-		/// This duplicates the initialization-time registration logic when called directly.
+		/// Registers the world server in the database without blocking the Unity main thread.
 		/// </summary>
 		/// <param name="serverAddress">Address string.</param>
 		/// <param name="port">Port number.</param>
 		/// <param name="characterCount">Character count to register.</param>
-		public void Register(string serverAddress, ushort port, int characterCount)
+		/// <param name="cancellationToken">Cancelled when the server shuts down mid-startup.</param>
+		/// <returns><c>true</c> when the server was registered.</returns>
+		public async Task<bool> RegisterAsync(string serverAddress, ushort port, int characterCount, CancellationToken cancellationToken = default)
 		{
 			if (!Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
 			{
-				throw new UnityException("Failed to get IWorldServerSystemRuntimeData.");
+				_ = Log.Error("WorldServerSystem", "Failed to get IWorldServerSystemRuntimeData.");
+				return false;
 			}
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IWorldServerService>(out var worldServerService))
 			{
-				throw new UnityException("Failed to resolve IWorldServerService from database service registry.");
+				_ = Log.Error("WorldServerSystem", "Failed to resolve IWorldServerService from database service registry.");
+				return false;
 			}
 
-			if (Server.Configuration.TryGetString("ServerName", out string name))
+			if (!Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				// Task.Run avoids deadlock from Unity's SynchronizationContext when blocking on async during init.
-				// BLOCKING THE MAIN THREAD IS INTENTIONAL: Unity's SynchronizationContext captures the main thread.
-				// If we awaited directly, any continuation that needs the main thread would deadlock. We use
-				// Task.Run to escape the SynchronizationContext, then GetAwaiter().GetResult() to block synchronously.
-				DatabaseResult<(long ServerId, WorldServerData ServerData)> result = Task.Run(() =>
-					worldServerService.PersistAsync(name, serverAddress, port, characterCount, data.IsLocked))
-					.GetAwaiter().GetResult();
-
-				if (!result.IsSuccess)
-				{
-					throw new UnityException($"Failed to register world server: [{result.ErrorCode}] {result.ErrorMessage}");
-				}
-
-				data.ID = result.Data.ServerId;
+				_ = Log.Error("WorldServerSystem", "ServerName not configured.");
+				return false;
 			}
+
+			DatabaseResult<(long ServerId, WorldServerData ServerData)> result =
+				await worldServerService.PersistAsync(name, serverAddress, port, characterCount, data.IsLocked, cancellationToken);
+
+			if (!result.IsSuccess)
+			{
+				_ = Log.Error("WorldServerSystem", $"Failed to register world server: [{result.ErrorCode}] {result.ErrorMessage}");
+				return false;
+			}
+
+			data.ID = result.Data.ServerId;
+			return true;
 		}
 
 		/// <summary>

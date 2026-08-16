@@ -43,43 +43,56 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Lock object for thread-safe lazy initialization of <see cref="signingKeyKek"/>.
 		/// </summary>
-		private readonly object signingKeyKekLock = new object();
+		/// <remarks>
+		/// A <see cref="SemaphoreSlim"/> rather than a monitor: the KEK is loaded from the
+		/// database, and this path runs on worker threads inside async token verification.
+		/// A monitor would force a blocking wait around that database round trip; an async
+		/// gate lets the worker yield instead.
+		/// </remarks>
+		private readonly SemaphoreSlim signingKeyKekLock = new SemaphoreSlim(1, 1);
 
 		/// <summary>
 		/// Loads (and caches) the deployment KEK. Returns <c>null</c> on failure and emits a
 		/// warning log; callers must fail closed.
 		/// Uses double-checked locking for thread safety: the outer null check avoids the
-		/// lock cost on the hot path; the inner null check under the lock ensures only one
-		/// thread calls <see cref="TryLoadKekFromDatabase"/>.
+		/// gate cost on the hot path; the inner null check under the gate ensures only one
+		/// caller reaches <see cref="TryLoadKekFromDatabaseAsync"/>. The gate is awaited, never
+		/// blocked on, so a worker yields rather than parking during the database round trip.
 		/// The database (deployment_secrets table) is the ONLY source for the KEK — no
 		/// environment variable or .cfg file fallbacks are supported.
 		/// </summary>
-		private byte[] TryGetSigningKeyKek()
+		private async Task<byte[]> TryGetSigningKeyKekAsync(CancellationToken cancellationToken = default)
 		{
 			if (this.signingKeyKek != null) return this.signingKeyKek;
-			lock (signingKeyKekLock)
+
+			await signingKeyKekLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+			try
 			{
 				if (this.signingKeyKek != null) return this.signingKeyKek;
-				byte[] kek = TryLoadKekFromDatabase();
+				byte[] kek = await TryLoadKekFromDatabaseAsync(cancellationToken).ConfigureAwait(false);
 				if (kek == null)
 				{
-					_ = Log.Warning(LogPrefix,
+					await Log.Warning(LogPrefix,
 						"Signing-key KEK unavailable. " +
 						"The KEK must be in the deployment_secrets database table with key='signing_key_kek'. " +
-						"No environment variable or .cfg file fallbacks are supported.");
+						"No environment variable or .cfg file fallbacks are supported.").ConfigureAwait(false);
 					return null;
 				}
 				this.signingKeyKek = kek;
 				return kek;
+			}
+			finally
+			{
+				signingKeyKekLock.Release();
 			}
 		}
 
 		/// <summary>
 		/// Attempts to load the KEK from the deployment_secrets database table.
 		/// Returns null if the database is unavailable or the key is not found.
-		/// Uses <see cref="SigningKeyKekProvider.TryLoadFromDatabase"/> for the actual lookup.
+		/// Uses <see cref="SigningKeyKekProvider.LoadFromDatabaseAsync"/> for the actual lookup.
 		/// </summary>
-		private byte[]? TryLoadKekFromDatabase()
+		private async Task<byte[]?> TryLoadKekFromDatabaseAsync(CancellationToken cancellationToken = default)
 		{
 			try
 			{
@@ -87,14 +100,17 @@ namespace FishMMO.Server.Implementation
 				if (server?.Database?.ServiceRegistry == null) return null;
 				if (!server.Database.ServiceRegistry.TryGet<IDeploymentSecretService>(out var svc))
 					return null;
-				if (SigningKeyKekProvider.TryLoadFromDatabase(svc, out byte[] kek, out string error))
-					return kek;
-				_ = Log.Warning(LogPrefix, $"Failed to load KEK from deployment_secrets: {error}");
+
+				var result = await SigningKeyKekProvider.LoadFromDatabaseAsync(svc, cancellationToken).ConfigureAwait(false);
+				if (result.Success)
+					return result.Kek;
+
+				await Log.Warning(LogPrefix, $"Failed to load KEK from deployment_secrets: {result.Error}").ConfigureAwait(false);
 				return null;
 			}
 			catch (Exception ex)
 			{
-				_ = Log.Warning(LogPrefix, $"Exception loading KEK from deployment_secrets: {ex.Message}");
+				await Log.Warning(LogPrefix, $"Exception loading KEK from deployment_secrets: {ex.Message}").ConfigureAwait(false);
 				return null;
 			}
 		}
@@ -112,9 +128,9 @@ namespace FishMMO.Server.Implementation
 		/// <param name="wrappedKey">The AES-256-GCM envelope (or plain key if not wrapped).</param>
 		/// <param name="loginServerId">Owning LoginServer ID, bound into AAD for AEAD authentication.</param>
 		/// <returns>The unwrapped (or pass-through plain) key bytes, or <c>null</c> on failure.</returns>
-		private byte[] UnwrapSigningKeyInternal(byte[] wrappedKey, long loginServerId)
+		private async Task<byte[]> UnwrapSigningKeyInternalAsync(byte[] wrappedKey, long loginServerId, CancellationToken cancellationToken = default)
 		{
-			byte[] kek = TryGetSigningKeyKek();
+			byte[] kek = await TryGetSigningKeyKekAsync(cancellationToken).ConfigureAwait(false);
 			if (kek == null)
 			{
 				if (KeyEnvelope.LooksWrapped(wrappedKey))
@@ -164,12 +180,24 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		public override void ShutdownWorkers()
 		{
-			lock (signingKeyKekLock)
+			// Runs on the main thread during teardown, so it must not wait on an in-flight KEK
+			// load. Take the gate only if it is free; zero the cached key either way. A load
+			// still running is stopped by the worker cancellation in base.ShutdownWorkers().
+			bool acquired = signingKeyKekLock.Wait(0);
+			try
 			{
-				if (signingKeyKek != null)
+				byte[] cached = signingKeyKek;
+				signingKeyKek = null;
+				if (cached != null)
 				{
-					CryptographicOperationsCompat.ZeroMemory(signingKeyKek);
-					signingKeyKek = null;
+					CryptographicOperationsCompat.ZeroMemory(cached);
+				}
+			}
+			finally
+			{
+				if (acquired)
+				{
+					signingKeyKekLock.Release();
 				}
 			}
 			base.ShutdownWorkers();
@@ -229,7 +257,7 @@ namespace FishMMO.Server.Implementation
 				return null;
 			}
 
-			byte[] unwrapped = UnwrapSigningKeyInternal(result.Data.HmacKey, loginServerId);
+			byte[] unwrapped = await UnwrapSigningKeyInternalAsync(result.Data.HmacKey, loginServerId).ConfigureAwait(false);
 			if (unwrapped == null)
 			{
 				await Log.Warning(LogPrefix, $"Failed to unwrap signing key {signingKeyId} for LoginServer {loginServerId}.");
@@ -258,7 +286,7 @@ namespace FishMMO.Server.Implementation
 				return (null, 0);
 			}
 
-			byte[] unwrapped = UnwrapSigningKeyInternal(result.Data.HmacKey, loginServerId);
+			byte[] unwrapped = await UnwrapSigningKeyInternalAsync(result.Data.HmacKey, loginServerId).ConfigureAwait(false);
 			if (unwrapped == null)
 			{
 				await Log.Warning(LogPrefix, $"Failed to unwrap current signing key for LoginServer {loginServerId}.");

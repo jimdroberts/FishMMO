@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading.Tasks;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 using UnityEditor;
@@ -53,6 +54,14 @@ namespace FishMMO.Shared
 		private VisualElement gs_pinListContainer;
 		private VisualElement gs_pinErrorContainer;
 		private Button gs_writePinsButton;
+		private Button gs_fetchPinsButton;
+
+		/// <summary>
+		/// True while a pin fetch is running on a background thread. Guards against a second
+		/// fetch being started on top of the first. Instance state, so a domain reload during a
+		/// fetch clears it along with the rebuilt panel.
+		/// </summary>
+		private bool gs_pinFetchInProgress;
 
 		// ══════════════════════════════════════════════════════════════════
 		//  CLIENT SECRET STATE
@@ -679,17 +688,18 @@ namespace FishMMO.Shared
 			buttonRow.style.flexDirection = FlexDirection.Row;
 			buttonRow.style.marginTop = 8;
 
-			Button fetchButton = new Button(() => FetchCertificatePins());
-			fetchButton.text = "Fetch Pins";
-			fetchButton.style.height = 28;
-			fetchButton.style.marginRight = 4;
-			fetchButton.style.backgroundColor = new Color(0.25f, 0.35f, 0.55f, 1f);
-			fetchButton.style.color = new Color(0.75f, 0.85f, 1f, 1f);
-			fetchButton.style.borderTopLeftRadius = 4;
-			fetchButton.style.borderTopRightRadius = 4;
-			fetchButton.style.borderBottomLeftRadius = 4;
-			fetchButton.style.borderBottomRightRadius = 4;
-			buttonRow.Add(fetchButton);
+			gs_fetchPinsButton = new Button(() => FetchCertificatePins());
+			gs_fetchPinsButton.text = "Fetch Pins";
+			gs_fetchPinsButton.style.height = 28;
+			gs_fetchPinsButton.style.marginRight = 4;
+			gs_fetchPinsButton.style.backgroundColor = new Color(0.25f, 0.35f, 0.55f, 1f);
+			gs_fetchPinsButton.style.color = new Color(0.75f, 0.85f, 1f, 1f);
+			gs_fetchPinsButton.style.borderTopLeftRadius = 4;
+			gs_fetchPinsButton.style.borderTopRightRadius = 4;
+			gs_fetchPinsButton.style.borderBottomLeftRadius = 4;
+			gs_fetchPinsButton.style.borderBottomRightRadius = 4;
+			gs_fetchPinsButton.SetEnabled(!gs_pinFetchInProgress);
+			buttonRow.Add(gs_fetchPinsButton);
 
 			gs_writePinsButton = new Button(() => WriteCertificatePins());
 			gs_writePinsButton.text = "Write Pins to File";
@@ -783,14 +793,25 @@ namespace FishMMO.Shared
 				: "Fetch at least one pin first (or load existing non-sentinel pins).";
 		}
 
+		/// <summary>
+		/// Starts a certificate pin fetch. Each host involves a TCP connect plus a TLS handshake
+		/// with a 10s timeout, so the work runs on a background thread and the result is applied
+		/// from <see cref="EditorApplication.update"/>. Doing it inline would freeze the whole
+		/// Editor UI for up to 10 seconds per host.
+		/// </summary>
 		private void FetchCertificatePins()
 		{
+			if (gs_pinFetchInProgress)
+			{
+				return;
+			}
+
 			gs_discoveredPins.Clear();
 			gs_pinErrors.Clear();
-			SetPinStatus("Fetching HTTPS SPKI pins…", new Color(0.7f, 0.7f, 0.3f, 1f));
 			RefreshPinErrorDisplay();
 			UpdateWritePinsButtonState();
 
+			// Resolve hosts on the main thread — these read Unity-side configuration.
 			string apiHost = string.IsNullOrEmpty(gs_apiHost)
 				? Constants.Configuration.APIHost : gs_apiHost;
 			string gameHost = string.IsNullOrEmpty(gs_gameHost)
@@ -813,28 +834,58 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			var seen = new HashSet<string>(StringComparer.Ordinal);
+			gs_pinFetchInProgress = true;
+			SetPinFetchControlsEnabled(false);
+			SetPinStatus($"Fetching HTTPS SPKI pins from {hostsToFetch.Count} host(s)…",
+				new Color(0.7f, 0.7f, 0.3f, 1f));
 
-			foreach (var host in hostsToFetch)
+			Task<PinFetchOutcome> fetchTask = Task.Run(() => FetchPinsOffThread(hostsToFetch));
+
+			EditorApplication.CallbackFunction poll = null;
+			poll = () =>
 			{
-				string hostClean = host.Trim();
-				if (string.IsNullOrEmpty(hostClean)) continue;
+				if (!fetchTask.IsCompleted)
+				{
+					return;
+				}
 
-				try
+				EditorApplication.update -= poll;
+
+				// The dashboard window may have been closed while the fetch was in flight;
+				// Unity's overloaded == reports a destroyed object as null.
+				if (this == null)
 				{
-					string pin = FetchSpkiPin(hostClean, 443);
-					if (!string.IsNullOrEmpty(pin) && seen.Add(pin))
-						gs_discoveredPins.Add(pin);
+					return;
 				}
-				catch (Exception ex)
-				{
-					gs_pinErrors.Add(hostClean + ": " + ex.Message);
-				}
+
+				gs_pinFetchInProgress = false;
+				ApplyPinFetchOutcome(fetchTask, hostsToFetch.Count);
+			};
+			EditorApplication.update += poll;
+		}
+
+		/// <summary>
+		/// Applies a completed fetch to the UI. Runs on the Editor main thread.
+		/// </summary>
+		private void ApplyPinFetchOutcome(Task<PinFetchOutcome> fetchTask, int hostCount)
+		{
+			gs_discoveredPins.Clear();
+			gs_pinErrors.Clear();
+
+			if (fetchTask.IsFaulted)
+			{
+				gs_pinErrors.Add("Pin fetch failed: " + fetchTask.Exception?.GetBaseException().Message);
+			}
+			else if (fetchTask.IsCompletedSuccessfully)
+			{
+				PinFetchOutcome outcome = fetchTask.Result;
+				gs_discoveredPins.AddRange(outcome.Pins);
+				gs_pinErrors.AddRange(outcome.Errors);
 			}
 
 			if (gs_discoveredPins.Count > 0)
 			{
-				string msg = $"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostsToFetch.Count} host(s). " +
+				string msg = $"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostCount} host(s). " +
 					"Click Write Pins to File to save CertificatePins.generated.cs.";
 				if (gs_pinErrors.Count > 0)
 					msg += $" ({gs_pinErrors.Count} host error(s) — see below.)";
@@ -850,9 +901,65 @@ namespace FishMMO.Shared
 					new Color(0.95f, 0.4f, 0.4f, 1f));
 			}
 
+			SetPinFetchControlsEnabled(true);
 			RefreshPinListDisplay();
 			RefreshPinErrorDisplay();
 			UpdateWritePinsButtonState();
+		}
+
+		/// <summary>
+		/// Performs the blocking TLS handshakes. Runs on a thread-pool thread — it must not touch
+		/// Unity APIs or any <c>gs_</c> UI state.
+		/// </summary>
+		private static PinFetchOutcome FetchPinsOffThread(List<string> hostsToFetch)
+		{
+			var pins = new List<string>();
+			var errors = new List<string>();
+			var seen = new HashSet<string>(StringComparer.Ordinal);
+
+			foreach (var host in hostsToFetch)
+			{
+				string hostClean = host.Trim();
+				if (string.IsNullOrEmpty(hostClean)) continue;
+
+				try
+				{
+					string pin = FetchSpkiPin(hostClean, 443);
+					if (!string.IsNullOrEmpty(pin) && seen.Add(pin))
+						pins.Add(pin);
+				}
+				catch (Exception ex)
+				{
+					errors.Add(hostClean + ": " + ex.Message);
+				}
+			}
+
+			return new PinFetchOutcome(pins, errors);
+		}
+
+		/// <summary>Result of an off-thread pin fetch.</summary>
+		private readonly struct PinFetchOutcome
+		{
+			/// <summary>Unique SPKI pins discovered.</summary>
+			public List<string> Pins { get; }
+
+			/// <summary>Per-host failures.</summary>
+			public List<string> Errors { get; }
+
+			public PinFetchOutcome(List<string> pins, List<string> errors)
+			{
+				Pins = pins;
+				Errors = errors;
+			}
+		}
+
+		/// <summary>
+		/// Disables the fetch controls while a fetch is running so a second one cannot be started
+		/// on top of the first.
+		/// </summary>
+		private void SetPinFetchControlsEnabled(bool enabled)
+		{
+			gs_fetchPinsButton?.SetEnabled(enabled);
 		}
 
 		private void SetPinStatus(string message, Color color)

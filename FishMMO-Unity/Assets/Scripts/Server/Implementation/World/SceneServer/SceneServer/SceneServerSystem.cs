@@ -6,6 +6,7 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
@@ -40,6 +41,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[Header("Main Thread Dispatch")]
 		[Tooltip("Max queued scene-server actions drained from main-thread queue per frame")]
 		[SerializeField] private int maxMainThreadActionsPerFrame = 100;
+
+		/// <summary>
+		/// Maximum time a startup database call may block the main thread before initialization
+		/// fails. Matches the LoginServer registration timeout.
+		/// </summary>
+		private const int dbStartupTimeoutMs = 30_000;
+
+		/// <summary>
+		/// Maximum time a shutdown database call may block the main thread. Shorter than startup:
+		/// process exit must not wait on an unresponsive database.
+		/// </summary>
+		private const int dbShutdownTimeoutMs = 5_000;
 
 		/// <summary>
 		/// Maximum pending scene load age in seconds before failing and removing the request.
@@ -92,71 +105,93 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Called once to initialize the scene server system. Registers the server in the database and subscribes to connection and scene events.
 		/// </summary>
+		/// <summary>
+		/// Synchronous entry point. This system registers itself in the database, so it must be
+		/// initialized through <see cref="InitializeOnceAsync"/>; reaching this method means the
+		/// asynchronous startup chain was bypassed.
+		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
+		{
+			Log.Error("SceneServerSystem",
+				"InitializeOnce called directly. This system performs database I/O and must be " +
+				"initialized via InitializeOnceAsync (Server drives this through the async startup chain).");
+			return ServerComponentInitializationStatus.InitializationFailed;
+		}
+
+		/// <summary>
+		/// Initializes the system and registers it in the database without blocking the Unity
+		/// main thread.
+		/// </summary>
+		/// <remarks>
+		/// Awaits here deliberately capture Unity's SynchronizationContext (no
+		/// <c>ConfigureAwait(false)</c>), so execution resumes on the main thread and the Unity
+		/// and FishNet APIs used below stay legal.
+		/// </remarks>
+		public override async Task<ServerComponentInitializationStatus> InitializeOnceAsync(CancellationToken cancellationToken)
 		{
 			if (Server == null)
 			{
-				Log.Error("SceneServerSystem", "InitializeOnce: Server is null");
+				_ = Log.Error("SceneServerSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneServerSystemMainThreadQueueData>(out _))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: ISceneServerSystemMainThreadQueueData not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ISceneServerSystemMainThreadQueueData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: ISceneInstanceMappingData not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ISceneInstanceMappingData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 			{
-				Log.Error("SceneServerSystem", "InitializeOnce: ISceneServerRuntimeData not found");
+				_ = Log.Error("SceneServerSystem", "InitializeOnce: ISceneServerRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (Server.NetworkWrapper.NetworkManager.SceneManager == null)
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: SceneManager not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: SceneManager not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (!Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: Could not get server IP address");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: Could not get server IP address");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: ICharacterSystem not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ICharacterSystem not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: ICharacterMappingData not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ICharacterMappingData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
 			if (Server.Database?.ServiceRegistry == null)
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: Database ServiceRegistry is null");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: Database ServiceRegistry is null");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			if (!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: ISceneServerService not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ISceneServerService not found");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
 			{
-				Log.Error("SceneServerSystem", "Failed to initialize: ISceneService not found");
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ISceneService not found");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -168,20 +203,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 			characterSystem.OnAfterLoadCharacter += CharacterSystem_OnAfterLoadCharacter;
 
-			// Register scene server in database (Task.Run avoids deadlock from
-			// Unity's SynchronizationContext when blocking on async during init).
+			// Register scene server in database. UnitySyncOverAsync keeps the async work off
+			// Unity's SynchronizationContext (blocking on it here would deadlock startup) and
+			// bounds the wait so an unreachable database fails initialization instead of hanging.
 			// Capture Unity API values on the main thread before dispatching.
 			string serverName = name;
 			string serverAddress = server.Address;
 			ushort serverPort = server.Port;
 			int characterCount = characterMappingData.ConnectionCharacters.Count;
-			DatabaseResult<(long ServerId, SceneServerData ServerData)> persistResult = Task.Run(() =>
-				sceneServerService.PersistAsync(serverName, serverAddress, serverPort, characterCount, runtimeData.IsLocked))
-				.GetAwaiter().GetResult();
+			DatabaseResult<(long ServerId, SceneServerData ServerData)> persistResult =
+				await sceneServerService.PersistAsync(serverName, serverAddress, serverPort, characterCount, runtimeData.IsLocked, cancellationToken);
 
 			if (!persistResult.IsSuccess)
 			{
-				Log.Error("SceneServerSystem", $"Failed to register scene server in database: [{persistResult.ErrorCode}] {persistResult.ErrorMessage} (IsTransient={persistResult.IsTransient})");
+				_ = Log.Error("SceneServerSystem", $"Failed to register scene server in database: [{persistResult.ErrorCode}] {persistResult.ErrorMessage} (IsTransient={persistResult.IsTransient})");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -189,10 +224,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			runtimeData.ID = id;
 
 			// Delete any stale scenes for this server
-			DatabaseResult<int> cleanupResult = Task.Run(() => sceneService.DeleteBySceneServerAsync(id)).GetAwaiter().GetResult();
+			DatabaseResult<int> cleanupResult = await sceneService.DeleteBySceneServerAsync(id, cancellationToken);
 			if (!cleanupResult.IsSuccess)
 			{
-				Log.Warning("SceneServerSystem", $"Failed to clean up stale scenes for server {id}: [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
+				_ = Log.Warning("SceneServerSystem", $"Failed to clean up stale scenes for server {id}: [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
 			}
 
 			// Periodic callbacks
@@ -209,7 +244,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			runtimeData.EndPulse();
 			runtimeData.NextPendingSceneSweepUtc = DateTime.UtcNow;
 
-			Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
+			_ = Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -235,11 +270,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (Server.Database?.ServiceRegistry != null &&
 					Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
 				{
-					// Blocking call during shutdown to ensure cleanup completes
-					DatabaseResult<int> cleanupResult = Task.Run(() => sceneService.DeleteBySceneServerAsync(runtimeData.ID)).GetAwaiter().GetResult();
-					if (!cleanupResult.IsSuccess)
+					// Blocking call during shutdown to ensure cleanup completes, bounded so an
+					// unresponsive database cannot hold process exit open.
+					if (UnitySyncOverAsync.TryRun(
+						cancellationToken => sceneService.DeleteBySceneServerAsync(runtimeData.ID, cancellationToken),
+						out DatabaseResult<int> cleanupResult,
+						dbShutdownTimeoutMs))
 					{
-						Log.Warning("SceneServerSystem", $"Failed to clean up scene server from DB during shutdown (ServerID={runtimeData.ID}): [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
+						if (!cleanupResult.IsSuccess)
+						{
+							Log.Warning("SceneServerSystem", $"Failed to clean up scene server from DB during shutdown (ServerID={runtimeData.ID}): [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
+						}
+					}
+					else
+					{
+						Log.Warning("SceneServerSystem", $"Scene server DB cleanup timed out after {dbShutdownTimeoutMs}ms during shutdown (ServerID={runtimeData.ID})");
 					}
 				}
 			}
