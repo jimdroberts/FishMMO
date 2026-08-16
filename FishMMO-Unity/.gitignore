@@ -32,7 +32,11 @@
 *.mdb
 *.opendb
 *.VC.db
+# Generated files hold real hosts, certificate pins, and the client gate secret.
+# Tracked sentinel templates live in GeneratedFileTemplates/ and are restored
+# automatically on Editor load (see that folder's README).
 *.generated.cs
+*.generated.cs.meta
 *.blob
 *.log
 
