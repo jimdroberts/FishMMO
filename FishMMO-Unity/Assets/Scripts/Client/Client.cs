@@ -944,12 +944,12 @@ namespace FishMMO.Client
 				 * in OnCharacterStartLocal, when the player actually exists. */
 				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; OnEnterGameWorld?.Invoke(); break;
 
-				/* A rejected token cannot be fixed by retrying with the same token, and the
-				 * reconnect loop does exactly that: ten attempts with exponential backoff
-				 * (5,10,20,40,60,60...) spent re-presenting a token every one of which the
-				 * server has already refused, leaving the player watching a "reconnecting"
-				 * spinner for minutes before landing on the login screen anyway. Drop the dead
-				 * token and go there immediately. */
+				/* A rejected token is terminal, but nothing used to stop the reconnect loop
+				 * from running its full course anyway: ten attempts with exponential backoff
+				 * (5,10,20,40,60,60...) that cannot succeed, because the core has discarded the
+				 * token and the credentials were nulled after login. That left the player
+				 * watching a "reconnecting" spinner for minutes before landing on the login
+				 * screen regardless. Go there immediately instead. */
 				case ClientAuthenticationResult.TokenExpired:
 				case ClientAuthenticationResult.TokenInvalid:
 				case ClientAuthenticationResult.TokenRevoked:
@@ -968,9 +968,16 @@ namespace FishMMO.Client
 		/// retrying cannot fix, and returns the player to the login screen.
 		/// </summary>
 		/// <remarks>
-		/// Clears the stored auth token first: leaving it in place lets any later automatic
-		/// reconnect present the same rejected token again, reproducing the very loop this
-		/// exists to stop.
+		/// <see cref="ClientAuthenticatorCore.OnAuthResultReceived"/> already discards the
+		/// rejected token before this runs, so the reconnect loop was not re-presenting it —
+		/// but nothing stopped the loop either, and a client with no token and no credentials
+		/// (they are nulled after login) cannot complete any of its ten attempts. Going
+		/// straight to the login screen replaces several minutes of futile backoff with the
+		/// outcome those attempts were always going to reach.
+		/// <para>
+		/// The redundant clear is kept as a safety net so this stays correct if the result is
+		/// ever raised on a path that did not go through the core.
+		/// </para>
 		/// </remarks>
 		private void HandleUnrecoverableAuthFailure()
 		{

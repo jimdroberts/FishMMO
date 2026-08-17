@@ -574,9 +574,9 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 ### Key Interfaces and Classes
 
 - **`IServerAuthenticator`** — Unity interface exposing `Server` property, `InitializeWorkers()`, and `ShutdownWorkers()`. Consumed by `FishNetNetworkWrapper.AttachLoginAuthenticator`.
-- **`BaseServerAuthenticator`** — Abstract Unity composition host. Holds `protected abstract BaseAuthenticatorCore<NetworkConnection> Core`. Owns the `ConcurrentQueue<Action>` drained by `Update()`, handles `InitializeOnce`, `OnRemoteConnectionState`, `ClientHandshake` broadcast routing, and the `OnAuthSweep()` / `TryLoginAsync()` virtual hooks. Includes an `OnDestroy()` failsafe that calls `ShutdownWorkers()`.
+- **`BaseServerAuthenticator`** — Abstract Unity composition host. Holds `protected abstract BaseAuthenticatorCore<NetworkConnection> Core`. Owns the `ConcurrentQueue<Action>` drained by `Update()`, handles `InitializeOnce`, `OnRemoteConnectionState`, `ClientHandshake` broadcast routing, and the `OnAuthSweep()` / `OnUpdate()` / `OnConnectionStopped()` / `TryLoginAsync()` virtual hooks. `OnConnectionStopped(conn)` fires before the core purges its own auth state, so subclasses can drop per-connection state that depends on the account or encryption entries. Includes an `OnDestroy()` failsafe that calls `ShutdownWorkers()`.
 - **`ServerAuthenticator`** — SRP wrapper (LoginServer). Inspector fields: `tokenExpirationMinutes`. Contains inner `ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>` which implements all abstract callbacks by routing to `_outer`. The outer class provides DB method implementations (`FetchAccountForLoginCoreAsync`, `CheckIsOnlineCoreAsync`, `PersistTokenHashCoreAsync`, `VerifyTotpCodeCoreAsync`, etc.).
-- **`TokenServerAuthenticator`** — Token wrapper (base for World/Scene servers). Contains inner `TokenCore : TokenAuthenticatorCore<NetworkConnection>`. Provides `FetchSigningKeyCoreAsync` and `CheckTokenRevocationCoreAsync`. Subclassed by `WorldServerAuthenticator` and `SceneServerAuthenticator` (both located outside this directory under `Server/Implementation/World/...`).
+- **`TokenServerAuthenticator`** — Token wrapper (base for World/Scene servers). Inspector fields: `renewalTokenExpirationMinutes`, `renewalRefreshFraction`. Contains inner `TokenCore : TokenAuthenticatorCore<NetworkConnection>`. Provides `FetchSigningKeyCoreAsync` and `CheckTokenRevocationCoreAsync`, and owns the periodic token-renewal sweep (see below). Subclassed by `WorldServerAuthenticator` and `SceneServerAuthenticator` (both located outside this directory under `Server/Implementation/World/...`).
 - **`BaseAuthenticatorCore<TConnection>`** (FishMMO-Auth) — Engine-independent base: cookie challenge, X25519 handshake, stale-auth TTL sweep, pending-auth cap, global/per-IP handshake rate limits, worker lifecycle (`InitializeWorkers`, `ShutdownWorkers`, `Tick`), and `HandleConnectionStopped`.
 - **`SrpAuthenticatorCore<TConnection>`** (FishMMO-Auth) — All SRP-6a logic: bounded verify/proof channels, workers, fake SRP verifier, TOTP, per-IP/account debounce, IP cache, kick-request debounce, token generation. `TickRateLimits()` must be called each frame from the Unity wrapper's `OnUpdate()`.
 - **`TokenAuthenticatorCore<TConnection>`** (FishMMO-Auth) — All token-auth logic: bounded token channel, worker, HMAC verification with timing equalization, expiration and revocation checks.
@@ -646,7 +646,43 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 | **Stale Auth Sweep** | Periodic 1 s sweep disconnects + purges half-open sessions (15 s TTL, 60 s hard deadline) |
 | **AccountManager Backstop** | `SweepUnauthenticatedConnections()` with oldest-first tracking purges stale SRP/encryption state |
 | **ExpiringKeyTracker Sweep** | `OnAuthSweep()` / `OnUpdate()` in subclasses evicts stale debounce/rate-limit entries |
+| **Token Renewal Sweep** | `TokenServerAuthenticator.SweepTokenRenewals()` (every 5 s) re-mints tokens due for refresh; entries are removed on `OnConnectionStopped` and cleared by `ShutdownWorkers()` |
 | **Cookie Key Rotation** | `InitializeWorkers()` regenerates HMAC key; `ShutdownWorkers()` zeroes it — in-flight cookies fail-closed |
+
+### Token Renewal
+
+World and Scene servers re-mint each connection's auth token on a timer, not only when it
+authenticates. A scene transfer is a re-authentication — the scene server releases the
+character and disconnects the client, which reconnects to the World server and presents its
+stored token — so a session that stayed in one scene longer than the token lifetime would
+otherwise arrive with an expired token and be dropped to the login screen.
+
+`HandleTokenAuthSuccessAsync` registers a `TokenRenewalState` per ClientId (account, access
+level, LoginServer ID, next-attempt time) and issues the first token.
+`SweepTokenRenewals()` runs from `OnUpdate()` and re-issues once `RenewalInterval`
+(`renewalRefreshFraction` × lifetime, default half) has elapsed, backing off exponentially on
+failure up to the renewal interval.
+
+Three invariants make repeated renewal over one connection safe. Breaking any of them
+silently disables renewal for the rest of the session:
+
+1. **Build and persist before encrypting.** `TokenService.EncryptTokenForSend` consumes a
+   sequence number from the connection's server→client nonce context, and the client derives
+   its decryption nonce from its own receive counter. A token encrypted but never delivered
+   desynchronises them permanently. Every fallible step — real-IP resolution, signing-key
+   fetch, `BuildToken`, the `IssueAsync` write — happens first. If the broadcast itself
+   throws, the connection is dropped so the client re-authenticates on a fresh channel.
+2. **One renewal in flight per connection.** Two overlapping renewals take sequence numbers
+   `N` and `N+1` and may reach the main thread in either order; the client rejects anything
+   that is not exactly the next sequence. A CAS guard on `TokenRenewalState.InFlight`
+   serialises them.
+3. **Never mint without a verified real IP.** Scene `TokenAuth` requires `RealIp` (v4+), so a
+   token minted without one is guaranteed to be rejected at the next hop. Aborting leaves the
+   client holding its current, still-valid token.
+
+Because FishNet recycles ClientIds, a renewal re-checks that its `TokenRenewalState` is still
+the registered one before touching the encryption channel, so a renewal scheduled for a
+closed connection cannot be delivered to its replacement.
 
 ### Extensibility
 

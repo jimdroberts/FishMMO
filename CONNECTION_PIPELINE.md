@@ -20,6 +20,7 @@
   - [Phase 8: World Server Connection](#phase-8-world-server-connection)
   - [Phase 9: Scene Server Connection](#phase-9-scene-server-connection)
   - [Phase 10: Token Renewal & Revocation](#phase-10-token-renewal--revocation)
+  - [Phase 11: Scene Transfer & Character Session Ownership](#phase-11-scene-transfer--character-session-ownership)
 - [Protocol Layers](#protocol-layers)
 - [Security Properties](#security-properties)
 - [Rate Limiting & DDoS Protection](#rate-limiting--ddos-protection)
@@ -560,6 +561,14 @@ sequenceDiagram
 
 ### Phase 10: Token Renewal & Revocation
 
+Renewal runs on a timer, not just once at authentication. A scene transfer is a
+re-authentication — the scene server releases the character and disconnects the client,
+which reconnects to the World server and presents its stored token — so a session that
+stayed in one scene longer than the token lifetime would otherwise arrive with an expired
+token and be dropped to the login screen. The sweep re-mints halfway through the lifetime
+(default every 5 minutes for a 10-minute token), so the token a client holds is never more
+than halfway through its life regardless of how long it has been standing still.
+
 ```mermaid
 sequenceDiagram
     participant Client as Client
@@ -567,14 +576,17 @@ sequenceDiagram
     participant Login as LoginServer
     participant DB as PostgreSQL
 
-    Note over Client,World: Token renewal happens automatically, after each successful World/Scene auth
+    Note over Client,World: Renewal runs on first auth and then every RenewalInterval, for as long as the connection lives
 
     rect rgb(240, 255, 240)
-        Note over Client,World: TOKEN RENEWAL (Phase 8/9)
-        World->>World: IssueRenewalTokenCoreAsync(), • Fetch current signing key from DB, • GenerateAndEncryptToken(),   - New expiration: now + 10min,   - Same username, accessLevel, loginServerId
+        Note over Client,World: TOKEN RENEWAL (Phase 8/9, then periodic)
+        World->>World: SweepTokenRenewals(), • Every 5s, per authenticated connection, • Due when now >= NextAttemptUtc, • Per-connection in-flight guard
+        World->>World: IssueRenewalTokenCoreAsync(), • Resolve verified real IP (abort if unknown), • Fetch current signing key from DB, • BuildToken(): now + 10min,   same username, accessLevel, loginServerId
         World->>DB: PersistTokenHash(new_token_hash)
-        World-->>Client: RenewTokenResponseBroadcast { Token }
-        Client->>Client: TryApplyRenewedToken(), • Decrypt + store new token
+        World->>World: EncryptTokenForSend(), ⚠ consumes an AES-GCM send sequence, so it runs ONLY after the DB write succeeds
+        World-->>Client: RenewTokenResponseBroadcast {, Token, Result: LoginSuccess, }
+        Client->>Client: TryApplyRenewedToken(), • Check Result before decrypting, • Decrypt + store new token
+        Note over World: On failure: exponential backoff, capped at the renewal interval., Client keeps its existing, still-valid token.
     end
 
     rect rgb(255, 240, 240)
@@ -593,6 +605,103 @@ sequenceDiagram
         Client->>Client: OnApplicationQuit(), → RevokeAndClearAuthToken()
     end
 ```
+
+#### Renewal invariants
+
+Repeated renewal over one connection is only safe because of three rules. Breaking any of
+them silently disables renewal for the rest of that session, which surfaces much later as a
+player dropped to the login screen on their next scene transfer.
+
+1. **Encrypt last.** `EncryptTokenForSend` takes a sequence number from the connection's
+   server→client nonce context, and the client derives its decryption nonce from its own
+   receive counter — the two advance in lock step and nothing on the wire re-synchronises
+   them. A token that is encrypted but never delivered desynchronises them permanently. So
+   every step that can fail (real-IP resolution, signing-key fetch, token build, DB write)
+   must complete *before* encryption. If the broadcast itself throws, the connection is
+   dropped so the client re-authenticates on a fresh channel.
+2. **One renewal at a time per connection.** Two overlapping renewals take sequence numbers
+   `N` and `N+1` and may reach the main thread in either order. The client rejects anything
+   that is not exactly the next sequence, so an inverted pair breaks both messages and every
+   one after them. An in-flight guard per connection serialises them.
+3. **Never mint a token without a verified real IP.** Scene `TokenAuth` requires `RealIp`
+   (v4+), so a token minted without one is guaranteed to be rejected at the next hop.
+   Aborting the renewal leaves the client holding its current, still-valid token — strictly
+   better than replacing it with one that cannot work.
+
+`RenewTokenResponseBroadcast.Seq` is informational only; the client must not decrypt against
+it. A desynchronised counter has to surface as a decryption failure rather than as a
+successful decrypt at a peer-chosen sequence.
+
+### Phase 11: Scene Transfer & Character Session Ownership
+
+Walking into a `SceneTeleporter`, or respawning at a bind point in a different scene, moves
+a player between scene servers. There is no server-to-server handover: the source server
+saves and releases the character, the client goes back through the World server, and the
+destination server claims the character fresh. The client therefore re-authenticates
+mid-transfer, which is why Phase 10's periodic renewal is a prerequisite for transfers to
+work at all.
+
+```mermaid
+sequenceDiagram
+    participant Client as Client
+    participant SceneA as SceneServer A
+    participant World as WorldServer
+    participant SceneB as SceneServer B
+    participant DB as PostgreSQL
+
+    Client->>SceneA: Enters SceneTeleporter trigger
+    SceneA->>SceneA: IPlayerCharacter_OnTeleport(), • Reject if IsInCombat, • Immortal = true
+    SceneA-->>Client: UnloadSceneForConnection(currentScene)
+    SceneA->>SceneA: OnDisconnect invoked BEFORE SceneName changes, (subscribers need the scene being left)
+    SceneA->>SceneA: Apply destination scene + position, clear IsInInstance / IsLoaded
+    SceneA->>DB: PersistAsync(character)
+    SceneA->>DB: ReleaseAsync(id, serverId, token), session_state → Offline
+    Note over SceneA: Release is never dropped: a saturated worker pool, or a failed write goes onto the pending-flush retry queue.
+
+    Client-->>SceneA: ClientScenesUnloadedBroadcast
+    SceneA->>SceneA: No character for this connection → Disconnect
+    Note over SceneA: Watchdog: if the client never reports, the connection, is force-disconnected after TransferDisconnectGrace (15s).
+
+    Client->>World: Reconnect + TokenAuthBroadcast, (uses the periodically renewed token)
+    World-->>Client: WorldSceneConnectBroadcast { Port of Scene B }
+
+    Client->>SceneB: Handshake + TokenAuthBroadcast
+    SceneB->>DB: TryClaimAsync(id, serverId), retried up to 5x (~1.5s) while contended
+    DB-->>SceneB: session token
+    SceneB->>DB: Re-read character row AFTER the claim
+    Note over SceneB: The pre-claim read can predate Scene A's final save., Reading again is what makes the player arrive at the, destination rather than back where they started.
+    SceneB->>DB: Fetch sub-entities in a Unit of Work
+    SceneB->>SceneB: Spawn character → gameplay resumes
+```
+
+#### Session ownership rules
+
+The `characters` row carries `session_state`, `session_owner_server_id`, `session_owner_token`
+and `session_lease_expires_utc`. Exactly one scene server owns a character at a time.
+
+| Operation | Guard |
+|-----------|-------|
+| `TryClaimAsync` | Succeeds only when `session_state = Offline` **or** the lease has expired. Retried briefly on contention. |
+| `ReleaseAsync` | Requires a matching owner server **and** token, so a stale release cannot free someone else's claim. |
+| `RefreshSessionLeasesAsync` | Batched, ownership-checked, on its own timer. |
+| `PersistAsync` | Persists character state only. It does **not** touch the lease. |
+
+Two constraints are easy to reintroduce and worth stating plainly:
+
+- **Saving must not manage the lease.** `PersistAsync` used to extend the lease for any row
+  whose session was Online without checking which server was writing, so a stale save from a
+  server that had already released the character extended the *new* owner's lease.
+- **Lease liveness must not depend on save throughput.** Refreshing one character per round
+  trip inside the sequential save loop meant that on a busy shard with a slow database the
+  characters at the tail of the walk could exceed the 2-minute lease between refreshes and
+  become claimable while still online. The batched refresh costs one statement regardless of
+  population.
+
+A claim that is dropped rather than released is not a local problem: the character stays
+Online in the database, so the destination server cannot claim it and kicks the player,
+repeatedly, until the lease expires. Every abandoned-load path therefore routes through
+`ReleaseSessionSafely`, and anything that fails lands on a retry queue that is also drained
+on shutdown.
 
 ---
 
@@ -748,6 +857,7 @@ stateDiagram-v2
     Reconnecting --> Connected: Reconnect success
     Reconnecting --> Reconnecting: Attempt failed, (exponential backoff + jitter)
     Reconnecting --> LoginScreen: Max attempts (10) exhausted
+    Connected --> LoginScreen: TokenExpired / TokenInvalid / TokenRevoked, (immediate — retrying cannot help)
     LoginScreen --> [*]: Full re-auth required
 
     note right of Reconnecting
@@ -757,6 +867,16 @@ stateDiagram-v2
         Max 10 attempts
     end note
 ```
+
+**Token rejection short-circuits the retry loop.** A server that answers `TokenExpired`,
+`TokenInvalid` or `TokenRevoked` has refused the exact credential the client would present
+again on every retry. Feeding those into the backoff loop cost ten attempts spread over
+roughly four minutes of "reconnecting" before landing on the login screen anyway, so
+`Client.OnAuthResult` now clears the stored token and goes there immediately.
+
+Periodic token renewal (Phase 10) is what keeps this path rare: before it existed, any
+session that stayed in one scene past the token lifetime hit `TokenExpired` on its next
+scene transfer or bind-point respawn.
 
 ---
 
@@ -895,6 +1015,13 @@ Application wants to quit
 | `HandshakeIpDebounceSeconds` | 0.25s | `BaseAuthenticatorCore.cs` |
 | `MaxGlobalHandshakesPerSecond` | 500 | `BaseAuthenticatorCore.cs` |
 | `TokenExpirationMinutes` | 10 (configurable) | `ServerAuthenticator.cs` |
+| `renewalTokenExpirationMinutes` | 10 (configurable) | `TokenServerAuthenticator.cs` |
+| `renewalRefreshFraction` | 0.5 of lifetime (configurable) | `TokenServerAuthenticator.cs` |
+| `RenewalSweepIntervalSeconds` | 5s | `TokenServerAuthenticator.cs` |
+| `DefaultSessionLeaseDuration` | 2 min | `CharacterService.cs` |
+| `sessionLeaseRefreshRate` | 20s (configurable) | `CharacterSystem.cs` |
+| `saveRate` | 30s (configurable) | `CharacterSystem.cs` |
+| `TransferDisconnectGrace` | 15s | `CharacterSystem.Connection.cs` |
 | `LoginServerCacheTtlSeconds` | 55s | `Client.cs` |
 | `MaxReconnectAttempts` | 10 | `ClientConnectionManager.cs` |
 | `MaxReconnectDelay` | 60s | `ClientConnectionManager.cs` |
