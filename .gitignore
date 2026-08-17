@@ -67,7 +67,34 @@ core.[0-9]*
 [Mm]igrations/
 
 # Native WebTransport CMake build directories and cache.
+FishMMO-WebTransport/build/
+FishMMO-WebTransport/build_win_schannel/
 FishMMO-WebTransport/openssl_cache.cmake
+
+# --- Unity build-generated (not source) ---
+# Dependency DLLs copied in by "Build all C# Projects" (see README).
+FishMMO-Unity/Assets/Dependencies/
+FishMMO-Unity/Assets/Dependencies.meta
+# Platform-specific native WebTransport binaries built locally. Per README, only the
+# Linux binary is committed — Windows/macOS binaries must be built on their own platform.
+FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64/
+FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64.meta
+FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/mac_x86_64/
+FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/mac_x86_64.meta
+
+# --- FishMMO build/deploy output ---
+# Client/server build output produced by the FishMMO Dashboard build panel.
+/Builds/
+# Per-deployment server config copied to the deploy root at build/install time —
+# the tracked source templates live under FishMMO-Setup/Development|Production/.
+/LoginServer.cfg
+/WorldServer.cfg
+/SceneServer.cfg
+# Runtime appsettings.json copied into each web server's output directory from the
+# FishMMO-Setup/ templates. These hold real DB credentials at runtime and must never
+# be committed — only the FishMMO-Setup/ templates are tracked.
+FishMMO-WebServers/**/appsettings.json
+FishMMO-CMS/**/appsettings.json
 
 # --- API Documentation (docfx) ---
 # docfx.json, toc.yml, docs/, publish.sh, etc. are tracked; only the
