@@ -7,6 +7,7 @@ using FishNet.Serializing;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -293,6 +294,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void TryInitializeLocalClient()
 		{
+			Log.Debug("PlayerCharacter", $"DEBUG TryInitializeLocalClient: ID={ID} initialized={localClientInitialized} IsOwner={base.IsOwner} IsSpawned={base.IsSpawned}");
 			if (localClientInitialized || !base.IsOwner) return;
 			localClientInitialized = true;
 

@@ -1144,11 +1144,34 @@ namespace FishMMO.Client
 
 		private void OnCharacterStartLocal(IPlayerCharacter c)
 		{
-			UIManager.SetCharacter(c);
-			var input = c.GameObject.GetComponent<PlayerInputController>() ?? c.GameObject.AddComponent<PlayerInputController>();
-			input.Initialize(c);
-			PlayerInputController.MouseMode = false;
-			DismissLoadingScreen(true);
+			/* World entry must always complete. Each step is isolated and the loading-screen
+			 * dismissal is in a finally: a failure while binding UI or input previously threw
+			 * straight out of this handler, so DismissLoadingScreen never ran and the player
+			 * was left staring at a black screen with no way forward. Losing a HUD panel is
+			 * recoverable; never reaching the world is not. */
+			try
+			{
+				UIManager.SetCharacter(c);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnCharacterStartLocal: UIManager.SetCharacter failed: {ex}");
+			}
+
+			try
+			{
+				var input = c.GameObject.GetComponent<PlayerInputController>() ?? c.GameObject.AddComponent<PlayerInputController>();
+				input.Initialize(c);
+				PlayerInputController.MouseMode = false;
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnCharacterStartLocal: input controller setup failed: {ex}");
+			}
+			finally
+			{
+				DismissLoadingScreen(true);
+			}
 		}
 		/// <summary>
 		/// Called when the local character stops. Cleans up input, UI, fog, and destroys the character object.

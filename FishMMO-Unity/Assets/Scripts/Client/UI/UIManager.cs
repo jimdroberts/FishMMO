@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishMMO.Logging;
 using System.Runtime.CompilerServices;
 using UnityEngine.InputSystem.EnhancedTouch;
 
@@ -69,14 +71,33 @@ namespace FishMMO.Client
 		/// <param name="character">Player character to inject.</param>
 		internal static void SetCharacter(IPlayerCharacter character)
 		{
+			/* Each control is isolated. This runs inside OnCharacterStartLocal, which also
+			 * dismisses the loading screen and wires up player input — so an exception from
+			 * any single panel used to abort world entry entirely, leaving the player on a
+			 * black screen with the loading overlay never dismissed and no input controller.
+			 * A broken panel must cost only that panel. */
 			foreach (UICharacterControl control in characterControls.Values)
 			{
-				control.SetCharacter(character);
+				try
+				{
+					control.SetCharacter(character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed for UGUI control '{control?.Name}': {ex}");
+				}
 			}
 
 			foreach (UITKCharacterControl control in tkCharacterControls.Values)
 			{
-				control.SetCharacter(character);
+				try
+				{
+					control.SetCharacter(character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed for UITK control '{control?.Name}': {ex}");
+				}
 			}
 		}
 

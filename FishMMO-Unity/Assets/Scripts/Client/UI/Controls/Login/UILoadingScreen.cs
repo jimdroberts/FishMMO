@@ -2,6 +2,7 @@ using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -128,6 +129,8 @@ namespace FishMMO.Client
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
 			bool shouldShow = addressableLoadActive || sceneTransitionActive;
+
+			Log.Debug("UILoadingScreen", $"DEBUG RefreshVisibility: addressable={addressableLoadActive} sceneTransition={sceneTransitionActive} shouldShow={shouldShow} Visible={Visible} force={forceRefresh} suppressed={Client.LoadingSuppressed}");
 
 			if (shouldShow && (forceRefresh || !Visible))
 			{
@@ -258,6 +261,8 @@ namespace FishMMO.Client
 
 			SceneLookupData[] lookupData = startEvent.QueueData.SceneLoadData.SceneLookupDatas;
 
+			Log.Debug("UILoadingScreen", $"DEBUG OnSceneStartLoad: scenes=[{(lookupData == null ? "null" : string.Join(", ", System.Array.ConvertAll(lookupData, d => d == null ? "null" : $"{d.Name}|{d.Handle}")))}]");
+
 			if (lookupData == null ||
 				lookupData.Length < 1)
 			{
@@ -296,6 +301,7 @@ namespace FishMMO.Client
 		/// <param name="endEvent">The event arguments for scene load end.</param>
 		private void OnSceneEndLoad(SceneLoadEndEventArgs endEvent)
 		{
+			Log.Debug("UILoadingScreen", $"DEBUG OnSceneEndLoad: loaded=[{(endEvent.LoadedScenes == null ? "null" : string.Join(", ", System.Array.ConvertAll(endEvent.LoadedScenes, s => s.name)))}] skipped=[{(endEvent.SkippedSceneNames == null ? "null" : string.Join(", ", endEvent.SkippedSceneNames))}]");
 			sceneTransitionActive = false;
 			RefreshVisibility();
 		}
