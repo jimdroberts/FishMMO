@@ -213,6 +213,17 @@ namespace FishMMO.Shared
 		{
 			Debug.Log("[MainBootstrapSystem] Initializing...");
 
+#if !UNITY_SERVER
+			// The active QualitySettings level can have vSyncCount 0 (uncapped), and
+			// nothing sets Application.targetFrameRate until FishNet's NetworkManager
+			// starts a client/server manager. Without a cap here, the launcher/login
+			// screens render as fast as the GPU allows for a static UI, pinning a CPU
+			// core. NetworkManager.UpdateFramerate() overrides this once gameplay
+			// actually starts, using the configured ClientManager/ServerManager rate.
+			QualitySettings.vSyncCount = 0;
+			Application.targetFrameRate = 60;
+#endif
+
 			if (versionConfig == null)
 			{
 				Debug.LogError("[MainBootstrapSystem] FATAL ERROR: Failed to initialize Version Config.");

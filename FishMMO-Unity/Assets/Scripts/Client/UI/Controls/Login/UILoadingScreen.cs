@@ -88,6 +88,14 @@ namespace FishMMO.Client
 		/// <param name="progress">The current loading progress (0-1).</param>
 		public void OnProgressUpdate(float progress)
 		{
+			// Suppressed after world entry: this fires for any addressable load (item
+			// icons, minor prefabs, etc.), not just scene transitions, so without this
+			// guard it would flash the full-screen overlay for incidental background
+			// loads during normal gameplay. Genuine scene transitions (teleporters,
+			// zone changes) go through OnSceneStartLoad/OnSceneStartUnload below, which
+			// call Show() directly and are never suppressed.
+			if (Client.LoadingSuppressed) return;
+
 			if (progress < 1.0f && !Visible)
 			{
 				Show();
@@ -108,7 +116,6 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void Show()
 		{
-			if (Client.LoadingSuppressed) return;
 			base.Show();
 
 			if (LoadingProgress == null)

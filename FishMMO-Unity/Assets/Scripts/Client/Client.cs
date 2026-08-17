@@ -912,7 +912,17 @@ namespace FishMMO.Client
 			{
 				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
 				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
-				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; DismissLoadingScreen(true); OnEnterGameWorld?.Invoke(); break;
+				case ClientAuthenticationResult.SceneLoginSuccess:
+					Connection.CurrentConnectionType = ServerConnectionType.Scene;
+					// Do NOT dismiss/suppress the loading screen here. This fires as soon as
+					// the Scene Server handshake completes -- before FishNet's SceneManager
+					// has even started loading the actual scene. Suppressing here silences
+					// OnSceneStartLoad/OnLoadPercentChange for the real scene load that
+					// follows, leaving the player staring at a blank screen with zero
+					// progress feedback. The loading screen is correctly dismissed once the
+					// character actually spawns, in OnCharacterStartLocal.
+					OnEnterGameWorld?.Invoke();
+					break;
 				default:
 					Log.Warning("Client", $"Unhandled auth result: {r}");
 					break;

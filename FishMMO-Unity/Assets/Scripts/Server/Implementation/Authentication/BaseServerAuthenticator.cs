@@ -672,43 +672,6 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Resolves the exact key used by the handshake rate limiter for a connection.
-		/// Mirrors the fallback chain used by the gate in
-		/// <see cref="OnServerClientHandshakeReceivedAsync"/> so the gate and any
-		/// targeted clearing (<see cref="ClearHandshakeRateLimit"/>) agree on the key.
-		/// </summary>
-		private string ResolveHandshakeRateLimitKey(NetworkConnection conn)
-		{
-			string? rateLimitKey = ResolveRateLimitKey(conn);
-			if (!string.IsNullOrEmpty(rateLimitKey))
-				return rateLimitKey;
-
-			string addr = conn.GetAddress();
-			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
-				return addr;
-			return $"conn:{conn.ClientId}";
-		}
-
-		/// <summary>
-		/// Clears the handshake rate-limit window for a connection. Called when the
-		/// server itself invites a re-handshake on the same connection (login-queue
-		/// admission) so the invited retry cannot trip the limiter, and when the
-		/// connection stops so a recycled ClientId does not inherit a stale window.
-		/// FishNet reuses ClientIds after disconnect — on sub-10ms links a fast
-		/// reconnect can otherwise trip the limiter with a perfectly clean connection.
-		/// </summary>
-		internal void ClearHandshakeRateLimit(NetworkConnection conn)
-		{
-			if (conn == null) return;
-			handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
-			// The resolved key may differ from the key used at gate time: the real IP
-			// is only known after connection-token processing, so the initial handshake
-			// on a proxied connection (conn.GetAddress() == loopback) used the ClientId
-			// fallback. Remove that explicitly.
-			handshakeRateLimiter.Remove($"conn:{conn.ClientId}");
-		}
-
-		/// <summary>
 		/// Lifetime of a connection token minted by this server for a client's next hop.
 		/// Matches the 60s IPFetch issues; the client redeems it immediately.
 		/// </summary>
