@@ -257,7 +257,11 @@ namespace FishMMO.Shared
 			/* Cap the client before anything renders. See BootstrapTargetFrameRate:
 			 * without this the launcher and login screens run uncapped.
 			 * Headless servers are excluded — they do not render, and FishNet
-			 * derives the server frame rate from the tick rate instead. */
+			 * derives the server frame rate from the tick rate instead.
+			 * vSyncCount is forced to 0 alongside it: Application.targetFrameRate is ignored
+			 * entirely whenever the active QualitySettings level has vSync enabled, so the
+			 * cap silently did nothing on quality levels that ship with it on. */
+			QualitySettings.vSyncCount = 0;
 			Application.targetFrameRate = BootstrapTargetFrameRate;
 			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus (FishNet raises it on connect).");
 #endif

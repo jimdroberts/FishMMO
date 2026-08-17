@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishMMO.Logging;
 using System.Runtime.CompilerServices;
 using UnityEngine.InputSystem.EnhancedTouch;
 
@@ -69,14 +71,33 @@ namespace FishMMO.Client
 		/// <param name="character">Player character to inject.</param>
 		internal static void SetCharacter(IPlayerCharacter character)
 		{
+			/* Each control is isolated. This runs inside Client.OnCharacterStartLocal, which
+			 * also dismisses the loading screen and wires up the player input controller — so
+			 * an exception from any single panel aborted world entry entirely, leaving the
+			 * player on a black screen with the loading overlay never dismissed and no input.
+			 * A misconfigured panel must cost only that panel. */
 			foreach (UICharacterControl control in characterControls.Values)
 			{
-				control.SetCharacter(character);
+				try
+				{
+					control.SetCharacter(character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed for control '{control?.Name}': {ex}");
+				}
 			}
 
 			foreach (UITKCharacterControl control in tkCharacterControls.Values)
 			{
-				control.SetCharacter(character);
+				try
+				{
+					control.SetCharacter(character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed for UIToolkit control '{control?.Name}': {ex}");
+				}
 			}
 		}
 
@@ -85,14 +106,30 @@ namespace FishMMO.Client
 		/// </summary>
 		internal static void UnsetCharacter()
 		{
+			// Isolated for the same reason as SetCharacter: teardown runs on logout and on
+			// character despawn, and one panel failing there must not strand the rest.
 			foreach (UICharacterControl control in characterControls.Values)
 			{
-				control.UnsetCharacter();
+				try
+				{
+					control.UnsetCharacter();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"UnsetCharacter failed for control '{control?.Name}': {ex}");
+				}
 			}
 
 			foreach (UITKCharacterControl control in tkCharacterControls.Values)
 			{
-				control.UnsetCharacter();
+				try
+				{
+					control.UnsetCharacter();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"UnsetCharacter failed for UIToolkit control '{control?.Name}': {ex}");
+				}
 			}
 		}
 

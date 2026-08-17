@@ -204,7 +204,13 @@ namespace FishMMO.Client
 				{
 					ReconnectsAttempted++;
 					OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
-					ConnectToServer(lastWorldAddress, lastWorldPort);
+					/* isWorldServer: true — lastWorldAddress/lastWorldPort are by definition the
+					 * world server, so the reconnect must be typed as one. Omitting it left
+					 * CurrentConnectionType at whatever the dropped connection was (Scene, after
+					 * a world->scene hop), so a reconnect to the world server was recorded as a
+					 * scene connection and the cached world address no longer matched the state
+					 * describing it. */
+					ConnectToServer(lastWorldAddress, lastWorldPort, isWorldServer: true);
 				}
 			}
 			else
