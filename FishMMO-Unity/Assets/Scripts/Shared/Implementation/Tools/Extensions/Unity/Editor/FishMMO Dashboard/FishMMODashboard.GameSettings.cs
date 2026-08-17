@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading.Tasks;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 using UnityEditor;
@@ -53,6 +54,14 @@ namespace FishMMO.Shared
 		private VisualElement gs_pinListContainer;
 		private VisualElement gs_pinErrorContainer;
 		private Button gs_writePinsButton;
+		private Button gs_fetchPinsButton;
+
+		/// <summary>
+		/// True while a pin fetch is running on a background thread. Guards against a second
+		/// fetch being started on top of the first. Instance state, so a domain reload during a
+		/// fetch clears it along with the rebuilt panel.
+		/// </summary>
+		private bool gs_pinFetchInProgress;
 
 		// ══════════════════════════════════════════════════════════════════
 		//  CLIENT SECRET STATE
@@ -62,6 +71,42 @@ namespace FishMMO.Shared
 		private Label gs_secretStatusLabel;
 
 		// ══════════════════════════════════════════════════════════════════
+		//  DRAFT STATE (survives panel rebuild + domain reload)
+		// ══════════════════════════════════════════════════════════════════
+
+		// Unsaved typed/fetched values used to be wiped because ShowGameSettingsInspector
+		// always reloaded from disk (sentinels → empty fields), and AssetDatabase.Refresh
+		// after a Write triggers a domain reload that resets every instance field.
+		//
+		// Drafts live in SessionState, NOT EditorPrefs:
+		//   • SessionState is in-memory and dies with the Editor process, so the client
+		//     gate secret never reaches a plaintext file on disk (EditorPrefs writes to
+		//     ~/.local/share/unity3d/prefs, %APPDATA% registry, or a macOS plist — all
+		//     world-readable, all shared by every Unity project on the machine).
+		//   • It still survives assembly reloads, which is the whole requirement here.
+		//
+		// Each section owns its own dirty flag so writing one section never discards
+		// another section's unsaved work.
+		private const string DraftHostsDirtyKey = "FishMMODashboard.GameSettings.HostsDirty";
+		private const string DraftApiHostKey = "FishMMODashboard.GameSettings.ApiHost";
+		private const string DraftGameHostKey = "FishMMODashboard.GameSettings.GameHost";
+		private const string DraftPlayHostKey = "FishMMODashboard.GameSettings.PlayHost";
+		private const string DraftRootDomainKey = "FishMMODashboard.GameSettings.RootDomain";
+
+		private const string DraftPinsDirtyKey = "FishMMODashboard.GameSettings.PinsDirty";
+		private const string DraftPinsKey = "FishMMODashboard.GameSettings.Pins";
+
+		// Pin fetch inputs are UI-only (they are never written to a generated file), so
+		// they are kept for the session independently of the fetched-pin draft.
+		private const string DraftPinInputsSetKey = "FishMMODashboard.GameSettings.PinInputsSet";
+		private const string DraftPinApiEnabledKey = "FishMMODashboard.GameSettings.PinApiEnabled";
+		private const string DraftPinGameEnabledKey = "FishMMODashboard.GameSettings.PinGameEnabled";
+		private const string DraftPinCustomHostKey = "FishMMODashboard.GameSettings.PinCustomHost";
+
+		private const string DraftSecretDirtyKey = "FishMMODashboard.GameSettings.SecretDirty";
+		private const string DraftSecretKey = "FishMMODashboard.GameSettings.Secret";
+
+		// ══════════════════════════════════════════════════════════════════
 		//  ENTRY POINT
 		// ══════════════════════════════════════════════════════════════════
 
@@ -69,7 +114,12 @@ namespace FishMMO.Shared
 		/// Shows the Game Settings panel with Host Configuration, Certificate Pins,
 		/// Client Secret, and Constants sections.
 		/// </summary>
-		private void ShowGameSettingsInspector()
+		/// <param name="reloadFromDisk">
+		/// True (the Reload from File buttons only) discards every unsaved draft and
+		/// loads the generated files. False keeps unsaved drafts so that reopening the
+		/// panel — or a script recompile — does not wipe typed or fetched values.
+		/// </param>
+		private void ShowGameSettingsInspector(bool reloadFromDisk = false)
 		{
 			ClearInspector();
 
@@ -78,59 +128,117 @@ namespace FishMMO.Shared
 				inspectorHeader.text = "Game Settings";
 			}
 
-			LoadGameSettingsState();
+			LoadGameSettingsState(reloadFromDisk);
 
 			BuildHostConfigSection();
 			BuildCertificatePinsSection();
 			BuildClientSecretSection();
 			BuildConstantsSection();
 
-			SetStatus("Game Settings");
+			SetStatus(reloadFromDisk ? "Game Settings (reloaded from disk)" : "Game Settings");
 		}
 
 		/// <summary>
-		/// Loads current state from the generated files into the UI fields.
+		/// Loads UI state from the generated files, preferring each section's unsaved
+		/// session draft when one exists.
 		/// </summary>
-		private void LoadGameSettingsState()
+		/// <param name="forceFromFile">
+		/// True discards all drafts and reads the generated files (explicit Reload).
+		/// </param>
+		private void LoadGameSettingsState(bool forceFromFile = false)
 		{
-			// ── Host Config ──────────────────────────────────────────
-			string hostPath = GetHostConfigFilePath();
-			if (File.Exists(hostPath))
-			{
-				try
-				{
-					string content = File.ReadAllText(hostPath);
-					string api = ParseConstantFromFile(content, "ApiHost");
-					string game = ParseConstantFromFile(content, "GameHost");
-					string play = ParseConstantFromFile(content, "PlayHost");
-					string root = ParseConstantFromFile(content, "RootDomain");
+			if (forceFromFile)
+				ClearAllDrafts();
 
-					gs_apiHost = IsSentinelOrEmpty(api) ? "" : api;
-					gs_gameHost = IsSentinelOrEmpty(game) ? "" : game;
-					gs_playHost = IsSentinelOrEmpty(play) ? "" : play;
-					gs_rootDomain = IsSentinelOrEmpty(root) ? "" : root;
-				}
-				catch { /* leave fields blank on error */ }
+			// Order matters: the pin host toggles derive from the host config values.
+			LoadHostConfigState(forceFromFile);
+			LoadCertificatePinState(forceFromFile);
+			LoadClientSecretState(forceFromFile);
+		}
+
+		private void LoadHostConfigState(bool forceFromFile)
+		{
+			if (!forceFromFile && SessionState.GetBool(DraftHostsDirtyKey, false))
+			{
+				gs_apiHost = SessionState.GetString(DraftApiHostKey, gs_apiHost ?? "");
+				gs_gameHost = SessionState.GetString(DraftGameHostKey, gs_gameHost ?? "");
+				gs_playHost = SessionState.GetString(DraftPlayHostKey, gs_playHost ?? "");
+				gs_rootDomain = SessionState.GetString(DraftRootDomainKey, gs_rootDomain ?? "");
+				return;
 			}
 
-			// ── Certificate Pins ─────────────────────────────────────
-			gs_discoveredPins.Clear();
+			string hostPath = GetHostConfigFilePath();
+			if (!File.Exists(hostPath))
+				return;
+
+			try
+			{
+				string content = File.ReadAllText(hostPath);
+				string api = ParseConstantFromFile(content, "ApiHost");
+				string game = ParseConstantFromFile(content, "GameHost");
+				string play = ParseConstantFromFile(content, "PlayHost");
+				string root = ParseConstantFromFile(content, "RootDomain");
+
+				gs_apiHost = IsSentinelOrEmpty(api) ? "" : api;
+				gs_gameHost = IsSentinelOrEmpty(game) ? "" : game;
+				gs_playHost = IsSentinelOrEmpty(play) ? "" : play;
+				gs_rootDomain = IsSentinelOrEmpty(root) ? "" : root;
+			}
+			catch { /* leave fields blank on error */ }
+		}
+
+		private void LoadCertificatePinState(bool forceFromFile)
+		{
+			// Fetch errors are transient — they always belong to the last fetch attempt.
 			gs_pinErrors.Clear();
 
-			string pinPath = GetCertificatePinsFilePath();
-			if (File.Exists(pinPath))
+			LoadPinFetchInputs(forceFromFile);
+
+			gs_discoveredPins.Clear();
+
+			if (!forceFromFile && SessionState.GetBool(DraftPinsDirtyKey, false))
 			{
-				try
+				string pinsBlob = SessionState.GetString(DraftPinsKey, "");
+				if (!string.IsNullOrEmpty(pinsBlob))
 				{
-					string content = File.ReadAllText(pinPath);
-					var parsed = ParsePinsFromFile(content);
-					if (parsed != null)
-						gs_discoveredPins.AddRange(parsed);
+					foreach (string line in pinsBlob.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+					{
+						string pin = line.Trim();
+						if (!string.IsNullOrEmpty(pin) && !pin.Contains(sentinelMarker))
+							gs_discoveredPins.Add(pin);
+					}
 				}
-				catch { /* leave empty on error */ }
+				return;
 			}
 
-			// Set API/Game host values from generated host config
+			string pinPath = GetCertificatePinsFilePath();
+			if (!File.Exists(pinPath))
+				return;
+
+			try
+			{
+				string content = File.ReadAllText(pinPath);
+				var parsed = ParsePinsFromFile(content);
+				if (parsed != null)
+					gs_discoveredPins.AddRange(parsed);
+			}
+			catch { /* leave empty on error */ }
+		}
+
+		/// <summary>
+		/// Restores the pin fetch inputs (host toggles + custom host) for this session,
+		/// or derives them from the host configuration the first time around.
+		/// </summary>
+		private void LoadPinFetchInputs(bool forceFromFile)
+		{
+			if (!forceFromFile && SessionState.GetBool(DraftPinInputsSetKey, false))
+			{
+				gs_pinApiHostEnabled = SessionState.GetBool(DraftPinApiEnabledKey, gs_pinApiHostEnabled);
+				gs_pinGameHostEnabled = SessionState.GetBool(DraftPinGameEnabledKey, gs_pinGameHostEnabled);
+				gs_pinCustomHost = SessionState.GetString(DraftPinCustomHostKey, gs_pinCustomHost ?? "");
+				return;
+			}
+
 			try
 			{
 				string apiUrl = string.IsNullOrEmpty(gs_apiHost)
@@ -145,22 +253,117 @@ namespace FishMMO.Shared
 					gs_pinGameHostEnabled = false;
 			}
 			catch { /* use defaults */ }
+		}
 
-			// ── Client Secret ────────────────────────────────────────
-			string secretPath = GetClientSecretFilePath();
-			if (File.Exists(secretPath))
+		private void LoadClientSecretState(bool forceFromFile)
+		{
+			if (!forceFromFile && SessionState.GetBool(DraftSecretDirtyKey, false))
 			{
-				try
-				{
-					string content = File.ReadAllText(secretPath);
-					string parsed = ParseConstantFromFile(content, "Secret");
-					if (!string.IsNullOrEmpty(parsed) && !parsed.Contains(sentinelMarker))
-						gs_secretInput = parsed;
-					else
-						gs_secretInput = "";
-				}
-				catch { gs_secretInput = ""; }
+				gs_secretInput = SessionState.GetString(DraftSecretKey, gs_secretInput ?? "");
+				return;
 			}
+
+			string secretPath = GetClientSecretFilePath();
+			if (!File.Exists(secretPath))
+				return;
+
+			try
+			{
+				string content = File.ReadAllText(secretPath);
+				string parsed = ParseConstantFromFile(content, "Secret");
+				if (!string.IsNullOrEmpty(parsed) && !parsed.Contains(sentinelMarker))
+					gs_secretInput = parsed;
+				else
+					gs_secretInput = "";
+			}
+			catch { gs_secretInput = ""; }
+		}
+
+		// ══════════════════════════════════════════════════════════════════
+		//  DRAFT PERSISTENCE
+		// ══════════════════════════════════════════════════════════════════
+
+		private void SaveHostDraft()
+		{
+			SessionState.SetBool(DraftHostsDirtyKey, true);
+			SessionState.SetString(DraftApiHostKey, gs_apiHost ?? "");
+			SessionState.SetString(DraftGameHostKey, gs_gameHost ?? "");
+			SessionState.SetString(DraftPlayHostKey, gs_playHost ?? "");
+			SessionState.SetString(DraftRootDomainKey, gs_rootDomain ?? "");
+		}
+
+		private static void ClearHostDraft()
+		{
+			SessionState.EraseBool(DraftHostsDirtyKey);
+			SessionState.EraseString(DraftApiHostKey);
+			SessionState.EraseString(DraftGameHostKey);
+			SessionState.EraseString(DraftPlayHostKey);
+			SessionState.EraseString(DraftRootDomainKey);
+		}
+
+		private void SavePinDraft()
+		{
+			SessionState.SetBool(DraftPinsDirtyKey, true);
+			SessionState.SetString(DraftPinsKey, string.Join("\n", gs_discoveredPins));
+		}
+
+		private static void ClearPinDraft()
+		{
+			SessionState.EraseBool(DraftPinsDirtyKey);
+			SessionState.EraseString(DraftPinsKey);
+		}
+
+		private void SavePinFetchInputs()
+		{
+			SessionState.SetBool(DraftPinInputsSetKey, true);
+			SessionState.SetBool(DraftPinApiEnabledKey, gs_pinApiHostEnabled);
+			SessionState.SetBool(DraftPinGameEnabledKey, gs_pinGameHostEnabled);
+			SessionState.SetString(DraftPinCustomHostKey, gs_pinCustomHost ?? "");
+		}
+
+		private static void ClearPinFetchInputs()
+		{
+			SessionState.EraseBool(DraftPinInputsSetKey);
+			SessionState.EraseBool(DraftPinApiEnabledKey);
+			SessionState.EraseBool(DraftPinGameEnabledKey);
+			SessionState.EraseString(DraftPinCustomHostKey);
+		}
+
+		/// <summary>
+		/// Holds the typed secret for this Editor session only. Never written to disk —
+		/// the secret's only durable home is ClientApiSecret.generated.cs.
+		/// </summary>
+		private void SaveSecretDraft()
+		{
+			SessionState.SetBool(DraftSecretDirtyKey, true);
+			SessionState.SetString(DraftSecretKey, gs_secretInput ?? "");
+		}
+
+		private static void ClearSecretDraft()
+		{
+			SessionState.EraseBool(DraftSecretDirtyKey);
+			SessionState.EraseString(DraftSecretKey);
+		}
+
+		private static void ClearAllDrafts()
+		{
+			ClearHostDraft();
+			ClearPinDraft();
+			ClearPinFetchInputs();
+			ClearSecretDraft();
+		}
+
+		/// <summary>
+		/// Adds the "unsaved draft" hint shown above a section's button row.
+		/// </summary>
+		private static void AddDraftHint(VisualElement section, string message)
+		{
+			Label hint = new Label(message);
+			hint.style.fontSize = 10;
+			hint.style.color = new Color(0.95f, 0.75f, 0.35f, 1f);
+			hint.style.whiteSpace = WhiteSpace.Normal;
+			hint.style.marginTop = 6;
+			section.Add(hint);
 		}
 
 		// ══════════════════════════════════════════════════════════════════
@@ -185,28 +388,44 @@ namespace FishMMO.Shared
 			// API Host
 			TextField apiField = new TextField("API Host (e.g. https://api.fishmmo.com/)");
 			apiField.value = gs_apiHost;
-			apiField.RegisterValueChangedCallback(evt => gs_apiHost = evt.newValue ?? "");
+			apiField.RegisterValueChangedCallback(evt =>
+			{
+				gs_apiHost = evt.newValue ?? "";
+				SaveHostDraft();
+			});
 			apiField.style.marginBottom = 4;
 			section.Add(apiField);
 
 			// Game Host
 			TextField gameField = new TextField("Game Host (e.g. game.fishmmo.com)");
 			gameField.value = gs_gameHost;
-			gameField.RegisterValueChangedCallback(evt => gs_gameHost = evt.newValue ?? "");
+			gameField.RegisterValueChangedCallback(evt =>
+			{
+				gs_gameHost = evt.newValue ?? "";
+				SaveHostDraft();
+			});
 			gameField.style.marginBottom = 4;
 			section.Add(gameField);
 
 			// Play Host
 			TextField playField = new TextField("Play Host — WebGL client (e.g. play.fishmmo.com)");
 			playField.value = gs_playHost;
-			playField.RegisterValueChangedCallback(evt => gs_playHost = evt.newValue ?? "");
+			playField.RegisterValueChangedCallback(evt =>
+			{
+				gs_playHost = evt.newValue ?? "";
+				SaveHostDraft();
+			});
 			playField.style.marginBottom = 4;
 			section.Add(playField);
 
 			// Root Domain
 			TextField rootField = new TextField("Root Domain (e.g. fishmmo.com)");
 			rootField.value = gs_rootDomain;
-			rootField.RegisterValueChangedCallback(evt => gs_rootDomain = evt.newValue ?? "");
+			rootField.RegisterValueChangedCallback(evt =>
+			{
+				gs_rootDomain = evt.newValue ?? "";
+				SaveHostDraft();
+			});
 			rootField.style.marginBottom = 8;
 			section.Add(rootField);
 
@@ -233,6 +452,13 @@ namespace FishMMO.Shared
 			gs_hostStatusLabel.style.whiteSpace = WhiteSpace.Normal;
 			section.Add(gs_hostStatusLabel);
 
+			if (SessionState.GetBool(DraftHostsDirtyKey, false))
+			{
+				AddDraftHint(section,
+					"Unsaved host draft — kept across panel rebuilds and script recompiles " +
+					"for this Editor session. Write Host Config to persist it.");
+			}
+
 			// Buttons
 			VisualElement buttonRow = new VisualElement();
 			buttonRow.style.flexDirection = FlexDirection.Row;
@@ -250,12 +476,10 @@ namespace FishMMO.Shared
 			writeButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(writeButton);
 
-			Button loadButton = new Button(() =>
-			{
-				LoadGameSettingsState();
-				ShowGameSettingsInspector();
-			});
+			Button loadButton = new Button(() => ShowGameSettingsInspector(reloadFromDisk: true));
 			loadButton.text = "Reload from File";
+			loadButton.tooltip = "Discards every unsaved draft (hosts, pins, secret) and reloads " +
+				"the generated files from disk.";
 			loadButton.style.height = 28;
 			loadButton.style.borderTopLeftRadius = 4;
 			loadButton.style.borderTopRightRadius = 4;
@@ -358,6 +582,9 @@ namespace FishMMO.Shared
 				sb.AppendLine("}");
 
 				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+				// The file is now the source of truth for these fields; drop only the host
+				// draft so any unwritten pin/secret work survives the Refresh domain reload.
+				ClearHostDraft();
 				AssetDatabase.Refresh();
 
 				gs_hostStatusLabel.text = "Wrote host configuration to HostConfig.generated.cs";
@@ -399,19 +626,31 @@ namespace FishMMO.Shared
 
 			Toggle apiToggle = new Toggle("API Host:  " + ExtractHost(apiHost));
 			apiToggle.value = gs_pinApiHostEnabled;
-			apiToggle.RegisterValueChangedCallback(evt => gs_pinApiHostEnabled = evt.newValue);
+			apiToggle.RegisterValueChangedCallback(evt =>
+			{
+				gs_pinApiHostEnabled = evt.newValue;
+				SavePinFetchInputs();
+			});
 			apiToggle.style.marginBottom = 2;
 			section.Add(apiToggle);
 
 			Toggle gameToggle = new Toggle("Game Host: " + gameHost);
 			gameToggle.value = gs_pinGameHostEnabled;
-			gameToggle.RegisterValueChangedCallback(evt => gs_pinGameHostEnabled = evt.newValue);
+			gameToggle.RegisterValueChangedCallback(evt =>
+			{
+				gs_pinGameHostEnabled = evt.newValue;
+				SavePinFetchInputs();
+			});
 			gameToggle.style.marginBottom = 4;
 			section.Add(gameToggle);
 
 			TextField customField = new TextField("Custom Host:");
 			customField.value = gs_pinCustomHost;
-			customField.RegisterValueChangedCallback(evt => gs_pinCustomHost = evt.newValue ?? "");
+			customField.RegisterValueChangedCallback(evt =>
+			{
+				gs_pinCustomHost = evt.newValue ?? "";
+				SavePinFetchInputs();
+			});
 			customField.style.marginBottom = 8;
 			section.Add(customField);
 
@@ -436,23 +675,31 @@ namespace FishMMO.Shared
 			section.Add(gs_pinErrorContainer);
 			RefreshPinErrorDisplay();
 
+			if (SessionState.GetBool(DraftPinsDirtyKey, false))
+			{
+				AddDraftHint(section,
+					"Fetched pins are not written yet — kept for this Editor session only. " +
+					"Click Write Pins to File to persist them.");
+			}
+
 			// Buttons — Write is always visible (was only created when pins already
 			// existed at panel build time, so after Fetch the button never appeared).
 			VisualElement buttonRow = new VisualElement();
 			buttonRow.style.flexDirection = FlexDirection.Row;
 			buttonRow.style.marginTop = 8;
 
-			Button fetchButton = new Button(() => FetchCertificatePins());
-			fetchButton.text = "Fetch Pins";
-			fetchButton.style.height = 28;
-			fetchButton.style.marginRight = 4;
-			fetchButton.style.backgroundColor = new Color(0.25f, 0.35f, 0.55f, 1f);
-			fetchButton.style.color = new Color(0.75f, 0.85f, 1f, 1f);
-			fetchButton.style.borderTopLeftRadius = 4;
-			fetchButton.style.borderTopRightRadius = 4;
-			fetchButton.style.borderBottomLeftRadius = 4;
-			fetchButton.style.borderBottomRightRadius = 4;
-			buttonRow.Add(fetchButton);
+			gs_fetchPinsButton = new Button(() => FetchCertificatePins());
+			gs_fetchPinsButton.text = "Fetch Pins";
+			gs_fetchPinsButton.style.height = 28;
+			gs_fetchPinsButton.style.marginRight = 4;
+			gs_fetchPinsButton.style.backgroundColor = new Color(0.25f, 0.35f, 0.55f, 1f);
+			gs_fetchPinsButton.style.color = new Color(0.75f, 0.85f, 1f, 1f);
+			gs_fetchPinsButton.style.borderTopLeftRadius = 4;
+			gs_fetchPinsButton.style.borderTopRightRadius = 4;
+			gs_fetchPinsButton.style.borderBottomLeftRadius = 4;
+			gs_fetchPinsButton.style.borderBottomRightRadius = 4;
+			gs_fetchPinsButton.SetEnabled(!gs_pinFetchInProgress);
+			buttonRow.Add(gs_fetchPinsButton);
 
 			gs_writePinsButton = new Button(() => WriteCertificatePins());
 			gs_writePinsButton.text = "Write Pins to File";
@@ -546,14 +793,25 @@ namespace FishMMO.Shared
 				: "Fetch at least one pin first (or load existing non-sentinel pins).";
 		}
 
+		/// <summary>
+		/// Starts a certificate pin fetch. Each host involves a TCP connect plus a TLS handshake
+		/// with a 10s timeout, so the work runs on a background thread and the result is applied
+		/// from <see cref="EditorApplication.update"/>. Doing it inline would freeze the whole
+		/// Editor UI for up to 10 seconds per host.
+		/// </summary>
 		private void FetchCertificatePins()
 		{
+			if (gs_pinFetchInProgress)
+			{
+				return;
+			}
+
 			gs_discoveredPins.Clear();
 			gs_pinErrors.Clear();
-			SetPinStatus("Fetching HTTPS SPKI pins…", new Color(0.7f, 0.7f, 0.3f, 1f));
 			RefreshPinErrorDisplay();
 			UpdateWritePinsButtonState();
 
+			// Resolve hosts on the main thread — these read Unity-side configuration.
 			string apiHost = string.IsNullOrEmpty(gs_apiHost)
 				? Constants.Configuration.APIHost : gs_apiHost;
 			string gameHost = string.IsNullOrEmpty(gs_gameHost)
@@ -576,6 +834,87 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			gs_pinFetchInProgress = true;
+			SetPinFetchControlsEnabled(false);
+			SetPinStatus($"Fetching HTTPS SPKI pins from {hostsToFetch.Count} host(s)…",
+				new Color(0.7f, 0.7f, 0.3f, 1f));
+
+			Task<PinFetchOutcome> fetchTask = Task.Run(() => FetchPinsOffThread(hostsToFetch));
+
+			EditorApplication.CallbackFunction poll = null;
+			poll = () =>
+			{
+				if (!fetchTask.IsCompleted)
+				{
+					return;
+				}
+
+				EditorApplication.update -= poll;
+
+				// The dashboard window may have been closed while the fetch was in flight;
+				// Unity's overloaded == reports a destroyed object as null.
+				if (this == null)
+				{
+					return;
+				}
+
+				gs_pinFetchInProgress = false;
+				ApplyPinFetchOutcome(fetchTask, hostsToFetch.Count);
+			};
+			EditorApplication.update += poll;
+		}
+
+		/// <summary>
+		/// Applies a completed fetch to the UI. Runs on the Editor main thread.
+		/// </summary>
+		private void ApplyPinFetchOutcome(Task<PinFetchOutcome> fetchTask, int hostCount)
+		{
+			gs_discoveredPins.Clear();
+			gs_pinErrors.Clear();
+
+			if (fetchTask.IsFaulted)
+			{
+				gs_pinErrors.Add("Pin fetch failed: " + fetchTask.Exception?.GetBaseException().Message);
+			}
+			else if (fetchTask.IsCompletedSuccessfully)
+			{
+				PinFetchOutcome outcome = fetchTask.Result;
+				gs_discoveredPins.AddRange(outcome.Pins);
+				gs_pinErrors.AddRange(outcome.Errors);
+			}
+
+			if (gs_discoveredPins.Count > 0)
+			{
+				string msg = $"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostCount} host(s). " +
+					"Click Write Pins to File to save CertificatePins.generated.cs.";
+				if (gs_pinErrors.Count > 0)
+					msg += $" ({gs_pinErrors.Count} host error(s) — see below.)";
+				SetPinStatus(msg, new Color(0.4f, 0.85f, 0.4f, 1f));
+				// Survive a panel rebuild / recompile before the user gets to Write.
+				SavePinDraft();
+			}
+			else
+			{
+				SetPinStatus(
+					"No pins fetched. Hosts need HTTPS on TCP :443 (game QUIC-only hosts will fail). " +
+					"Use API Host / Custom Host (e.g. api.fishmmo.com, ipfetch.fishmmo.com).",
+					new Color(0.95f, 0.4f, 0.4f, 1f));
+			}
+
+			SetPinFetchControlsEnabled(true);
+			RefreshPinListDisplay();
+			RefreshPinErrorDisplay();
+			UpdateWritePinsButtonState();
+		}
+
+		/// <summary>
+		/// Performs the blocking TLS handshakes. Runs on a thread-pool thread — it must not touch
+		/// Unity APIs or any <c>gs_</c> UI state.
+		/// </summary>
+		private static PinFetchOutcome FetchPinsOffThread(List<string> hostsToFetch)
+		{
+			var pins = new List<string>();
+			var errors = new List<string>();
 			var seen = new HashSet<string>(StringComparer.Ordinal);
 
 			foreach (var host in hostsToFetch)
@@ -587,33 +926,40 @@ namespace FishMMO.Shared
 				{
 					string pin = FetchSpkiPin(hostClean, 443);
 					if (!string.IsNullOrEmpty(pin) && seen.Add(pin))
-						gs_discoveredPins.Add(pin);
+						pins.Add(pin);
 				}
 				catch (Exception ex)
 				{
-					gs_pinErrors.Add(hostClean + ": " + ex.Message);
+					errors.Add(hostClean + ": " + ex.Message);
 				}
 			}
 
-			if (gs_discoveredPins.Count > 0)
-			{
-				string msg = $"Fetched {gs_discoveredPins.Count} unique pin(s) from {hostsToFetch.Count} host(s). " +
-					"Click Write Pins to File to save CertificatePins.generated.cs.";
-				if (gs_pinErrors.Count > 0)
-					msg += $" ({gs_pinErrors.Count} host error(s) — see below.)";
-				SetPinStatus(msg, new Color(0.4f, 0.85f, 0.4f, 1f));
-			}
-			else
-			{
-				SetPinStatus(
-					"No pins fetched. Hosts need HTTPS on TCP :443 (game QUIC-only hosts will fail). " +
-					"Use API Host / Custom Host (e.g. api.fishmmo.com, ipfetch.fishmmo.com).",
-					new Color(0.95f, 0.4f, 0.4f, 1f));
-			}
+			return new PinFetchOutcome(pins, errors);
+		}
 
-			RefreshPinListDisplay();
-			RefreshPinErrorDisplay();
-			UpdateWritePinsButtonState();
+		/// <summary>Result of an off-thread pin fetch.</summary>
+		private readonly struct PinFetchOutcome
+		{
+			/// <summary>Unique SPKI pins discovered.</summary>
+			public List<string> Pins { get; }
+
+			/// <summary>Per-host failures.</summary>
+			public List<string> Errors { get; }
+
+			public PinFetchOutcome(List<string> pins, List<string> errors)
+			{
+				Pins = pins;
+				Errors = errors;
+			}
+		}
+
+		/// <summary>
+		/// Disables the fetch controls while a fetch is running so a second one cannot be started
+		/// on top of the first.
+		/// </summary>
+		private void SetPinFetchControlsEnabled(bool enabled)
+		{
+			gs_fetchPinsButton?.SetEnabled(enabled);
 		}
 
 		private void SetPinStatus(string message, Color color)
@@ -738,6 +1084,9 @@ namespace FishMMO.Shared
 				sb.AppendLine("}");
 
 				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+				// Pins are on disk now; the fetch inputs stay so the panel comes back the
+				// way the operator left it. Other sections keep their own drafts.
+				ClearPinDraft();
 				AssetDatabase.Refresh();
 
 				SetPinStatus($"Wrote {gs_discoveredPins.Count} pin(s) to CertificatePins.generated.cs",
@@ -770,10 +1119,16 @@ namespace FishMMO.Shared
 			info.style.marginBottom = 8;
 			section.Add(info);
 
-			// Secret input
+			// Secret input — masked on screen; the plaintext value never leaves this
+			// session (SessionState) or ClientApiSecret.generated.cs.
 			TextField secretField = new TextField("Gate Secret (base64)");
+			secretField.isPasswordField = true;
 			secretField.value = gs_secretInput;
-			secretField.RegisterValueChangedCallback(evt => gs_secretInput = evt.newValue ?? "");
+			secretField.RegisterValueChangedCallback(evt =>
+			{
+				gs_secretInput = evt.newValue ?? "";
+				SaveSecretDraft();
+			});
 			secretField.style.marginBottom = 4;
 			section.Add(secretField);
 
@@ -795,6 +1150,13 @@ namespace FishMMO.Shared
 			gs_secretStatusLabel.style.whiteSpace = WhiteSpace.Normal;
 			section.Add(gs_secretStatusLabel);
 
+			if (SessionState.GetBool(DraftSecretDirtyKey, false))
+			{
+				AddDraftHint(section,
+					"Unsaved secret — held in memory for this Editor session only and lost " +
+					"when the Editor closes. Write Secret to File to persist it.");
+			}
+
 			// Buttons
 			VisualElement buttonRow = new VisualElement();
 			buttonRow.style.flexDirection = FlexDirection.Row;
@@ -812,12 +1174,10 @@ namespace FishMMO.Shared
 			writeButton.style.borderBottomRightRadius = 4;
 			buttonRow.Add(writeButton);
 
-			Button loadButton = new Button(() =>
-			{
-				LoadGameSettingsState();
-				ShowGameSettingsInspector();
-			});
+			Button loadButton = new Button(() => ShowGameSettingsInspector(reloadFromDisk: true));
 			loadButton.text = "Reload from File";
+			loadButton.tooltip = "Discards every unsaved draft (hosts, pins, secret) and reloads " +
+				"the generated files from disk.";
 			loadButton.style.height = 28;
 			loadButton.style.borderTopLeftRadius = 4;
 			loadButton.style.borderTopRightRadius = 4;
@@ -859,6 +1219,8 @@ namespace FishMMO.Shared
 				sb.AppendLine("}");
 
 				File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+				// Drop the in-memory copy as soon as the file owns the value.
+				ClearSecretDraft();
 				AssetDatabase.Refresh();
 
 				gs_secretStatusLabel.text = "Wrote secret to ClientApiSecret.generated.cs";

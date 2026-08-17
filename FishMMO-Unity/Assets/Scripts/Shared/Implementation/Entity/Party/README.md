@@ -186,7 +186,7 @@ flowchart LR
 
 1. Leader sends `PartyInviteBroadcast` (or uses `/pi` / `/invite` chat commands).
 2. Server validates: leader rank, party capacity (async DB check), target not already in party, no duplicate pending invite.
-3. Stores pending invitation in `PendingInvitations` dictionary.
+3. Stores the pending invitation via `IPartySystemRuntimeData.TryAddPendingInvitation(targetCharacterID, partyID, nowUtc)`.
 4. Sends `PartyInviteBroadcast` to target client.
 
 ### Accept
@@ -237,7 +237,6 @@ The `FetchAndProcessPartyUpdatesAsync()` method runs on `UpdatePumpRate`:
 
 ```
 Party/
-├── IPartyController.cs   # Interface for per-character party state and events
 ├── PartyController.cs     # Client-side controller (CharacterBehaviour + broadcast listeners)
 └── PartyRank.cs           # Enum defining party ranks (None, Member, Leader)
 ```
@@ -245,6 +244,9 @@ Party/
 ### Related Files (Outside This Directory)
 
 ```
+Shared/Core/Entity/Party/
+└── IPartyController.cs    # Interface for per-character party state and events
+
 Shared/Implementation/Network/Character/
 └── PartyBroadcasts.cs     # All party broadcast structs (Create, Invite, Add, Leave, Remove, ChangeRank)
 
@@ -252,7 +254,7 @@ Server/Implementation/World/SceneServer/Party/
 ├── PartySystem.cs                       # Server-side party logic (ServerBehaviour)
 ├── PartySystemRuntimeData.cs            # Runtime state container (pending invites, fetch time)
 ├── PartySystemMainThreadQueueData.cs    # Main-thread action queue for async marshalling
-└── (PartyCharacterMappingData)          # Tracks which party members are on this scene server
+└── PartyCharacterMappingData.cs         # Tracks which party members are on this scene server
 ```
 
 ### Inheritance Hierarchies

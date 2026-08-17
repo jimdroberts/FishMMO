@@ -150,6 +150,11 @@ namespace FishMMO.Server.Implementation
 		private void Start()
 		{
 			hasShutdownFlag = 0;
+
+			// Static state survives Editor play sessions when domain reload is disabled. A stale,
+			// already-expired budget would clamp every shutdown flush to zero on the next run.
+			UnitySyncOverAsync.ClearShutdownBudget();
+
 			Log.Debug("Server", "Server is starting...");
 
 			NetworkManager networkManager = FindFirstObjectByType<NetworkManager>();
@@ -354,17 +359,134 @@ namespace FishMMO.Server.Implementation
 			RegisterAllDataContainers();
 			DataContainerRegistry.InitializeAll(this);
 
-			// Initialize all registered server behaviours
+			// Initialize all registered server behaviours.
+			// Behaviour initialization performs database I/O, so it runs asynchronously and the
+			// transport is started from its completion callback — the same start/callback chain
+			// used above for the external IP fetch. The main thread is never blocked on I/O:
+			// blocking it would stall the very continuations the work depends on.
 			BehaviourRegistry = new ServerBehaviourRegistry();
 			RegisterAllBehaviours();
-			BehaviourRegistry.InitializeAll(this);
 
-			KinematicCharacterSystem.EnsureCreation();
-			KinematicCharacterSystem.Settings.AutoSimulation = false;
+			behaviourInitCoroutine = StartCoroutine(InitializeBehavioursThenStartServer());
+		}
 
-			NetworkWrapper.StartServer();
+		/// <summary>
+		/// Number of times behaviour initialization is attempted before the process gives up.
+		/// Retries cover a database that is still coming up when the game servers start.
+		/// </summary>
+		[Header("Startup")]
+		[Tooltip("Attempts at behaviour initialization (database registration) before exiting")]
+		[SerializeField][Min(1)] private int startupInitializationAttempts = 5;
 
-			Log.Debug("Server", "Initialization Complete");
+		/// <summary>
+		/// Delay before the second initialization attempt, in seconds. Each further attempt
+		/// doubles the delay, capped at <see cref="startupInitializationMaxRetryDelaySeconds"/>.
+		/// </summary>
+		[Tooltip("Delay before the first retry; doubles each attempt up to the cap")]
+		[SerializeField][Min(0.1f)] private float startupInitializationRetryDelaySeconds = 2f;
+
+		/// <summary>Upper bound on the exponential retry delay, in seconds.</summary>
+		[Tooltip("Maximum delay between initialization attempts")]
+		[SerializeField][Min(0.1f)] private float startupInitializationMaxRetryDelaySeconds = 30f;
+
+		/// <summary>Coroutine driving asynchronous behaviour initialization.</summary>
+		private Coroutine behaviourInitCoroutine;
+
+		/// <summary>
+		/// Cancels in-flight startup work when the server shuts down before initialization
+		/// finishes (early play-mode exit, SIGTERM during boot, failed configuration).
+		/// </summary>
+		private System.Threading.CancellationTokenSource startupCancellation;
+
+		/// <summary>
+		/// Drives behaviour initialization without blocking the main thread, retrying with
+		/// exponential backoff, then either starts the transport or exits the process.
+		/// </summary>
+		/// <remarks>
+		/// Polling the task with <c>yield return null</c> keeps the player loop running, which is
+		/// what lets Unity's SynchronizationContext drain the continuations the behaviours are
+		/// waiting on. This is the structural fix for the startup hang: the main thread stays
+		/// free instead of parking inside a database call.
+		/// </remarks>
+		private System.Collections.IEnumerator InitializeBehavioursThenStartServer()
+		{
+			startupCancellation = new System.Threading.CancellationTokenSource();
+			float retryDelay = startupInitializationRetryDelaySeconds;
+
+			for (int attempt = 1; attempt <= startupInitializationAttempts; attempt++)
+			{
+				if (hasShutdownFlag != 0)
+				{
+					yield break;
+				}
+
+				var initTask = BehaviourRegistry.InitializeAllAsync(this, startupCancellation.Token);
+
+				while (!initTask.IsCompleted)
+				{
+					if (hasShutdownFlag != 0)
+					{
+						yield break;
+					}
+					yield return null;
+				}
+
+				if (initTask.IsCanceled)
+				{
+					Log.Debug("Server", "Behaviour initialization cancelled during shutdown.");
+					yield break;
+				}
+
+				if (initTask.IsFaulted)
+				{
+					Exception failure = initTask.Exception?.GetBaseException();
+					Log.Error("Server", $"Behaviour initialization threw on attempt {attempt}/{startupInitializationAttempts}: {failure}");
+				}
+				else if (initTask.Result.Count == 0)
+				{
+					KinematicCharacterSystem.EnsureCreation();
+					KinematicCharacterSystem.Settings.AutoSimulation = false;
+
+					NetworkWrapper.StartServer();
+
+					Log.Debug("Server", "Initialization Complete");
+					behaviourInitCoroutine = null;
+					yield break;
+				}
+				else
+				{
+					string failed = string.Join(", ", initTask.Result.Select(f => $"{f.Name} ({f.Status})"));
+					Log.Error("Server", $"Behaviour initialization failed on attempt {attempt}/{startupInitializationAttempts}: {failed}");
+				}
+
+				if (attempt < startupInitializationAttempts)
+				{
+					Log.Warning("Server", $"Retrying behaviour initialization in {retryDelay:0.#}s...");
+					yield return new WaitForSeconds(retryDelay);
+					retryDelay = Mathf.Min(retryDelay * 2f, startupInitializationMaxRetryDelaySeconds);
+				}
+			}
+
+			// Every attempt failed. A live process that never binds its port is worse than a dead
+			// one: an orchestrator can restart a dead process, but a silent zombie just looks up.
+			Log.Error("Server",
+				$"Behaviour initialization failed after {startupInitializationAttempts} attempt(s). " +
+				"The server cannot start; exiting so the supervisor can restart it.");
+
+			behaviourInitCoroutine = null;
+			QuitWithFailure();
+		}
+
+		/// <summary>
+		/// Terminates the process with a non-zero exit code after unrecoverable startup failure.
+		/// </summary>
+		private void QuitWithFailure()
+		{
+#if UNITY_EDITOR
+			EditorApplication.isPlaying = false;
+#else
+			Application.Quit(1);
+#endif
 		}
 
 		/// <summary>
@@ -516,35 +638,62 @@ namespace FishMMO.Server.Implementation
 				externalIpTimeoutCoroutine = null;
 			}
 
+			// 0b. Cancel in-flight behaviour initialization. The server can be destroyed while
+			//     startup database work is still running (early play-mode exit, SIGTERM during
+			//     boot); cancelling stops the I/O instead of leaving it running against a
+			//     database that is about to be shut down below.
+			if (behaviourInitCoroutine != null)
+			{
+				StopCoroutine(behaviourInitCoroutine);
+				behaviourInitCoroutine = null;
+			}
+			if (startupCancellation != null)
+			{
+				try
+				{
+					startupCancellation.Cancel();
+				}
+				catch (ObjectDisposedException) { }
+				startupCancellation.Dispose();
+				startupCancellation = null;
+			}
+
 			// 1. Signal worker cancellation FIRST — in-flight auth operations can
 			//    finish broadcasting before the transport is stopped.
-			if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator authenticator)
+			IServerAuthenticator authenticator =
+				NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() as IServerAuthenticator;
+			if (authenticator != null)
 			{
 				authenticator.ShutdownWorkers();
 			}
 
 			// 2. Synchronous worker drain (no coroutine — OnDestroy can't yield).
-			float deadline = Time.realtimeSinceStartup + workerDrainTimeoutSeconds;
-			while (Time.realtimeSinceStartup < deadline)
-			{
-				if (NetworkWrapper?.NetworkManager?.ServerManager?.GetAuthenticator() is IServerAuthenticator auth)
-				{
-					if (auth.AreWorkersDrained()) break;
-				}
-				else break;
-				// Thread.Sleep is acceptable here: PerformShutdown runs during OnDestroy,
-				// which cannot yield (no coroutine support). The sleep duration is
-				// bounded by workerDrainTimeoutSeconds (1s) and this path only executes
-				// during process teardown, not during normal gameplay.
 #if UNITY_WEBGL && !UNITY_EDITOR
-				// WebGL: Thread.Sleep is not available. Use a brief spin-wait
-				// as a fallback (WebGL is single-threaded so the worker drain
-				// will complete quickly).
-				System.Threading.Thread.SpinWait(10000);
+			// WebGL has no worker threads, so there is nothing to drain and nothing that could
+			// make the exit condition true. Spinning here would only freeze the browser's single
+			// thread for the full timeout, so skip the drain entirely.
 #else
-				System.Threading.Thread.Sleep(10);
-#endif
+			if (authenticator != null)
+			{
+				// Thread.Sleep is the right primitive here despite blocking: PerformShutdown runs
+				// during OnDestroy, which cannot yield, and sleeping releases the CPU so the very
+				// worker threads being waited on can finish. A spin-wait would compete with them.
+				// Bounded by workerDrainTimeoutSeconds, and only on the teardown path.
+				//
+				// Time.realtimeSinceStartup is read from the OS clock rather than the frame timer,
+				// so it keeps advancing while this thread sleeps and the loop always terminates.
+				float deadline = Time.realtimeSinceStartup + workerDrainTimeoutSeconds;
+				while (!authenticator.AreWorkersDrained() && Time.realtimeSinceStartup < deadline)
+				{
+					System.Threading.Thread.Sleep(10);
+				}
 			}
+#endif
+
+			// Cap the total time the remaining teardown steps may block the main thread. The
+			// per-call timeouts below are individually sane but serialize into far more than a
+			// supervisor's grace period on a wedged database.
+			UnitySyncOverAsync.BeginShutdownBudget(shutdownBlockingBudgetMilliseconds);
 
 			// 3. Stop accepting new connections.
 			NetworkWrapper?.StopServer();
@@ -574,6 +723,19 @@ namespace FishMMO.Server.Implementation
 		/// Workers might not fully drain if pending items exceed this window;
 		/// remaining work items are abandoned on process exit.</summary>
 		private const float workerDrainTimeoutSeconds = 1f;
+
+		/// <summary>
+		/// Total time the teardown steps after the worker drain may block the main thread,
+		/// across every behaviour's <c>OnDeinitialize</c> combined.
+		/// </summary>
+		/// <remarks>
+		/// Sized to fit inside a supervisor's stop window (Kubernetes defaults to a 30s grace
+		/// period, Docker Compose to 10s) with the 1s worker drain and process teardown alongside
+		/// it. Without this cap the per-call timeouts serialize — a scene server can spend 5s on
+		/// database cleanup, 10s on the chat flush and 30s on character saves — and the supervisor
+		/// SIGKILLs mid-flush, losing the work the flush was protecting.
+		/// </remarks>
+		private const int shutdownBlockingBudgetMilliseconds = 8_000;
 
 		/// <summary>
 		/// Registers all server behaviours in order.

@@ -58,38 +58,20 @@ namespace FishMMO.Client
 		/// </summary>
 		public List<ushort> LoginServerPorts => loginServerPorts;
 		/// <summary>
-		/// UTC timestamp of the last successful login server address fetch.
-		/// Uses DateTime.UtcNow instead of Time.realtimeSinceStartup to survive scene reloads.
-		/// </summary>
-		private DateTime loginServerPortsFetchedAt = DateTime.MinValue;
-		/// <summary>
 		/// Cached connection token from the last successful IPFetch response.
 		/// </summary>
 		/// <remarks>
-		/// Handed out at most once, then cleared, so the next connect attempt re-probes for
-		/// a fresh one. The token itself is stateless and stays valid for its 60-second
-		/// expiry rather than being consumed server-side, but it cannot simply be cached
-		/// and reused: <see cref="ClientLoginAuthenticator.ConnectionToken"/> is nulled the
-		/// moment it is sent, so a retry would otherwise be served a token that has already
-		/// outlived part of its short window — and, with a cache TTL at or above 60s, one
-		/// that is expired outright. The server rejects an expired token before checking
-		/// credentials, which presents as a silent login failure that only a client restart
-		/// clears.
+		/// Handed out at most once by <see cref="TakeConnectionToken"/>, then cleared, so the
+		/// next connect attempt re-probes for a fresh one. The token itself is stateless and
+		/// stays valid for its 60-second expiry rather than being consumed server-side, but it
+		/// cannot simply be cached and reused: <see cref="ClientLoginAuthenticator.ConnectionToken"/>
+		/// is nulled the moment it is sent, so a retry would otherwise be served a token that
+		/// has already outlived part of its short window. The server rejects an expired token
+		/// before checking credentials, which presents as a silent login failure that only a
+		/// client restart clears. This single-use rule is why
+		/// <see cref="GetLoginServerList"/> cannot cache.
 		/// </remarks>
 		private string cachedConnectionToken;
-		/// <summary>
-		/// Time-to-live in seconds for the cached login server address list.
-		/// This value MUST be less than the server's connection token TTL (typically 60s)
-		/// to ensure we never serve a stale list with an expired token from a previous
-		/// <see cref="IPFetch"/> response. If the cache outlives the token the server
-		/// will reject the handshake.
-		/// </summary>
-		[SerializeField]
-		private float loginServerCacheTtlSeconds = 55f;
-		/// <summary>
-		/// Time-to-live in seconds for the cached login server address list.
-		/// </summary>
-		public float LoginServerCacheTtlSeconds => loginServerCacheTtlSeconds;
 		/// <summary>
 		/// Timeout in seconds for each login server probe request.
 		/// </summary>
@@ -159,6 +141,12 @@ namespace FishMMO.Client
 		/// Accumulates subscribers even before <see cref="Connection"/> is created.
 		/// </summary>
 		private Action onConnectionSuccessful;
+		/// <summary>
+		/// True while a world-scene preload batch is in flight, so a repeated
+		/// <c>ClientValidatedSceneBroadcast</c> from the server does not start a second
+		/// preload and send a duplicate acknowledgement.
+		/// </summary>
+		private bool isPreloadingWorldScenes;
 
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
 		public event Action<int, int> OnReconnectAttempt
@@ -227,9 +215,10 @@ namespace FishMMO.Client
 		// ── Lifecycle ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// Unity Awake. Initializes NetworkManager, authenticator, transport, audio, UI, and event handlers.
+		/// Initializes NetworkManager, authenticator, transport, audio, UI, and event handlers.
+		/// This starts the primary client behaviour.
 		/// </summary>
-		private void Awake()
+		public void Initialize()
 		{
 			if (!TryInitializeNetworkManager() || !TryInitializeAuthenticator() || !TryInitializeTransport())
 			{ Quit(); return; }
@@ -276,6 +265,12 @@ namespace FishMMO.Client
 			// When a non-reconnectable connection fails (e.g. login server unreachable),
 			// invalidate the cached login server list so the next attempt re-fetches from
 			// IPFetch instead of retrying the same potentially dead server/port.
+			//
+			// This used to fire on a healthy Login→World hop too, because ConnectToServer's
+			// deliberate teardown was indistinguishable from a drop — which is what made the
+			// message read as a failure on the success path. ClientConnectionManager now marks
+			// that teardown with stoppingForConnect and skips this event for it, so reaching
+			// here again means a real failed attempt and Info is the honest level.
 			Connection.OnConnectionAttemptFailed += () =>
 			{
 				if (this.loginServerPorts != null)
@@ -466,6 +461,10 @@ namespace FishMMO.Client
 		/// <param name="forceDisconnect">If true, forces an immediate disconnection.</param>
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
+			// Leaving the world: re-arm the incidental loading overlay that world entry
+			// latched off, so the next login/world-entry cycle shows loading progress again.
+			RestoreLoadingScreen();
+
 			this.fogManager?.Stop();
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
@@ -668,22 +667,25 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Probes API host candidates for a login server address list. Returns cached results if within TTL.
+		/// Probes API host candidates for a login server address list and the connection token
+		/// that must accompany the next handshake. Always performs a fresh probe.
 		/// </summary>
+		/// <remarks>
+		/// This deliberately does not cache. IPFetch returns the port list and the connection
+		/// token in one response, the token is single-use, and every connect needs one — so a
+		/// cache hit could never skip the round trip it would have to make anyway to mint a
+		/// fresh token. A TTL-based port cache used to sit here; it was unreachable, because
+		/// its guard required an unspent <see cref="cachedConnectionToken"/> and
+		/// <see cref="TakeConnectionToken"/> clears that on the same synchronous path that
+		/// sets it. Serving a stale list with a spent or expired token would present as a
+		/// silent login failure that only a client restart clears, so re-probing is also the
+		/// safe behaviour, not merely the simpler one.
+		/// </remarks>
 		/// <param name="onFail">Callback invoked with an error message if all probes fail.</param>
 		/// <param name="onDone">Callback invoked with the list of discovered server addresses.</param>
 		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFail, Action<List<ushort>, string> onDone)
 		{
-			// The port list is reusable within its TTL, but the connection token is not:
-			// it is single-use, so a cached entry whose token has already been handed out
-			// must re-probe to obtain a fresh one rather than serve a spent (or missing)
-			// token that the server will reject before checking credentials.
-			if (this.loginServerPorts != null && this.loginServerPorts.Count > 0 && !string.IsNullOrEmpty(this.cachedConnectionToken))
-			{
-				double age = Math.Max(0.0, (DateTime.UtcNow - this.loginServerPortsFetchedAt).TotalSeconds);
-				if (LoginServerCacheTtlSeconds <= 0 || age < LoginServerCacheTtlSeconds) { onDone?.Invoke(this.loginServerPorts, TakeConnectionToken()); yield break; }
-			}
 			var candidates = ApiHostResolver.GetCandidates() ?? new List<string>();
 			if (candidates.Count == 0) { onFail?.Invoke("Failed to configure APIHost."); yield break; }
 			float stagger = this.probeStaggerInterval;
@@ -734,7 +736,7 @@ namespace FishMMO.Client
 					if (!any && next >= candidates.Count) break;
 					yield return null;
 				}
-				if (winner != null) { this.loginServerPorts = winner; this.loginServerPortsFetchedAt = DateTime.UtcNow; onDone?.Invoke(winner, TakeConnectionToken()); }
+				if (winner != null) { this.loginServerPorts = winner; onDone?.Invoke(winner, TakeConnectionToken()); }
 				else onFail?.Invoke(lastErr ?? "Failed to reach any APIHost.");
 			}
 			finally
@@ -803,28 +805,51 @@ namespace FishMMO.Client
 		/// <param name="ch">The network channel.</param>
 		private void OnValidatedScene(ClientValidatedSceneBroadcast msg, Channel ch)
 		{
-			Log.Warning("Client", $"DEBUG OnValidatedScene received: worldPreloadScenes.Count={this.worldPreloadScenes?.Count ?? -1}");
-			// Guard against duplicate broadcasts: unsubscribe first to prevent
-			// multiple subscriptions that would send duplicate responses.
-			AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress;
-			AddressableLoadProcessor.EnqueueLoad(this.worldPreloadScenes);
-			try { AddressableLoadProcessor.OnProgressUpdate += OnValidatedSceneProgress; AddressableLoadProcessor.BeginProcessQueue(); }
-			catch (UnityException ex) { Log.Error("Client", "Preload failed", ex); }
+			/* Readiness is keyed off this call's own load batch.
+			 *
+			 * It used to subscribe to AddressableLoadProcessor.OnProgressUpdate, a global
+			 * event that fires 1 whenever ANY queue drains. A bootstrap system or a loading
+			 * screen finishing unrelated work would satisfy the >= 1 test and make the
+			 * client tell the server it was in the scene before its world scenes existed.
+			 * A batch only reports on the scenes enqueued right here. */
+			if (this.isPreloadingWorldScenes)
+			{
+				// Duplicate broadcast from the server; the in-flight batch already covers it.
+				return;
+			}
+
+			try
+			{
+				AddressableLoadProcessor.EnqueueLoad(this.worldPreloadScenes);
+
+				this.isPreloadingWorldScenes = true;
+				AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+				batch.Completed += OnWorldPreloadComplete;
+			}
+			catch (UnityException ex)
+			{
+				this.isPreloadingWorldScenes = false;
+				Log.Error("Client", "Preload failed", ex);
+			}
 		}
 		/// <summary>
-		/// Called during world scene preload progress. Sends a validated scene broadcast when loading completes.
+		/// Sends the validated-scene acknowledgement once this client's world preload
+		/// scenes have finished loading.
 		/// </summary>
-		/// <param name="p">Progress value from 0 to 1.</param>
-		private void OnValidatedSceneProgress(float p)
+		/// <param name="batch">The completed world preload batch.</param>
+		private void OnWorldPreloadComplete(AddressableLoadBatch batch)
 		{
-			// Unsubscribe on completion (p >= 1) or error/failure (p < 0).
-			if (p >= 1f || p < 0f)
+			this.isPreloadingWorldScenes = false;
+
+			if (batch != null && batch.HasFailures)
 			{
-				Log.Warning("Client", $"DEBUG OnValidatedSceneProgress complete: p={p}");
-				AddressableLoadProcessor.OnProgressUpdate -= OnValidatedSceneProgress;
-				if (p >= 1f)
-					Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
+				// Do not claim readiness for a scene set that did not load — the server
+				// would spawn the character into a world this client cannot render.
+				Log.Error("Client", $"World scene preload failed for: {string.Join(", ", batch.FailedItems)}. Not acknowledging scene validation.");
+				return;
 			}
+
+			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
 		}
 		/// <summary>
 		/// Handles a server busy broadcast by showing a dialog to the player.
@@ -912,21 +937,47 @@ namespace FishMMO.Client
 			{
 				case ClientAuthenticationResult.LoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Login; break;
 				case ClientAuthenticationResult.WorldLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.World; break;
-				case ClientAuthenticationResult.SceneLoginSuccess:
-					Connection.CurrentConnectionType = ServerConnectionType.Scene;
-					// Do NOT dismiss/suppress the loading screen here. This fires as soon as
-					// the Scene Server handshake completes -- before FishNet's SceneManager
-					// has even started loading the actual scene. Suppressing here silences
-					// OnSceneStartLoad/OnLoadPercentChange for the real scene load that
-					// follows, leaving the player staring at a blank screen with zero
-					// progress feedback. The loading screen is correctly dismissed once the
-					// character actually spawns, in OnCharacterStartLocal.
-					OnEnterGameWorld?.Invoke();
+				/* Do NOT dismiss the loading screen here. SceneLoginSuccess only means the
+				 * network handshake with the scene server finished — Unity has not begun
+				 * loading the actual scene yet, and the character does not exist. Dismissing
+				 * at this point hid the overlay for the entire real load, which is the
+				 * "world server hangs with no loading screen" report. The screen is dismissed
+				 * in OnCharacterStartLocal, when the player actually exists. */
+				case ClientAuthenticationResult.SceneLoginSuccess: Connection.CurrentConnectionType = ServerConnectionType.Scene; OnEnterGameWorld?.Invoke(); break;
+
+				/* A rejected token cannot be fixed by retrying with the same token, and the
+				 * reconnect loop does exactly that: ten attempts with exponential backoff
+				 * (5,10,20,40,60,60...) spent re-presenting a token every one of which the
+				 * server has already refused, leaving the player watching a "reconnecting"
+				 * spinner for minutes before landing on the login screen anyway. Drop the dead
+				 * token and go there immediately. */
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenRevoked:
+					Log.Warning("Client", $"Authentication token rejected ({r}) — returning to login.");
+					HandleUnrecoverableAuthFailure();
 					break;
+
 				default:
 					Log.Warning("Client", $"Unhandled auth result: {r}");
 					break;
 			}
+		}
+
+		/// <summary>
+		/// Abandons the current session after the server rejected our credentials in a way that
+		/// retrying cannot fix, and returns the player to the login screen.
+		/// </summary>
+		/// <remarks>
+		/// Clears the stored auth token first: leaving it in place lets any later automatic
+		/// reconnect present the same rejected token again, reproducing the very loop this
+		/// exists to stop.
+		/// </remarks>
+		private void HandleUnrecoverableAuthFailure()
+		{
+			try { this.loginAuthenticator?.ClearAuthToken(); }
+			catch (Exception ex) { Log.Warning("Client", $"ClearAuthToken failed: {ex.Message}"); }
+			QuitToLogin();
 		}
 
 		// ── Log guard ───────────────────────────────────────────────────
@@ -1016,19 +1067,79 @@ namespace FishMMO.Client
 		/// Called when the local character starts. Sets up input controller and UI.
 		/// </summary>
 		/// <param name="c">The local player character.</param>
-		/// <summary>True after world entry — suppresses loading overlay re-shows.</summary>
+		/// <summary>
+		/// True after world entry. Suppresses only the <i>incidental</i> loading overlay —
+		/// the one driven by background Addressable asset loads.
+		/// </summary>
+		/// <remarks>
+		/// This deliberately does not suppress genuine scene transitions. The overlay has
+		/// two independent drivers: <c>AddressableLoadProcessor.OnProgressUpdate</c>, which
+		/// fires for any background asset work and would otherwise flash the overlay over
+		/// live gameplay, and FishNet's <c>SceneManager</c> load events, which are real zone
+		/// changes the player must see a loading screen for.
+		/// <para>Gating both on this flag meant that once it latched — which happened at the
+		/// network handshake, before the first scene had even loaded — no loading screen
+		/// could ever appear again for the rest of the session, including zone-to-zone
+		/// teleports. The flag is now checked only on the Addressable path.</para>
+		/// </remarks>
 		public static bool LoadingSuppressed { get; private set; }
 
 		/// <summary>
-		/// Hides the loading overlay and optionally suppresses future Show calls.
-		/// Called on successful scene login and local character start so the player
-		/// is never stuck behind a loading screen after world entry.
+		/// Hides the loading overlay and optionally suppresses future incidental re-shows.
+		/// Called on local character start, when the player actually exists in the world.
 		/// </summary>
+		/// <param name="suppress">
+		/// True to stop background asset loads from re-showing the overlay. Genuine scene
+		/// transitions are unaffected — see <see cref="LoadingSuppressed"/>.
+		/// </param>
 		public static void DismissLoadingScreen(bool suppress)
 		{
 			if (suppress) LoadingSuppressed = true;
 			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out _)) UIManager.Hide("UITKLoadingScreen");
 			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out _)) UIManager.Hide("UILoadingScreen");
+		}
+
+		/// <summary>
+		/// Re-arms the incidental loading overlay after leaving the world.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="LoadingSuppressed"/> latches on world entry and had no counterpart, so
+		/// it stayed set for the rest of the process: quit to login and come back and the
+		/// Addressable-driven overlay never appeared again, because both loading screens
+		/// return early from their progress handler while it is set. Clearing it on the way
+		/// out of the world restores the overlay for the next login/world-entry cycle.
+		/// </remarks>
+		public static void RestoreLoadingScreen()
+		{
+			LoadingSuppressed = false;
+		}
+
+		/// <summary>
+		/// Caps how fast the client renders, and keeps FishNet from overriding the cap.
+		/// </summary>
+		/// <param name="framesPerSecond">
+		/// Target frames per second, normally the user's saved "Refresh Rate" preference.
+		/// Values outside 1..500 are ignored.
+		/// </param>
+		/// <remarks>
+		/// Setting <see cref="Application.targetFrameRate"/> alone is not enough to make a
+		/// preference stick. FishNet's <c>NetworkManager.UpdateFramerate</c> writes
+		/// <c>targetFrameRate</c> from <c>ClientManager.FrameRate</c> — 500 by default —
+		/// every time the connection state changes, so a value set here would be discarded
+		/// at the next connect or server hop. Pushing the same number into
+		/// <c>ClientManager.SetFrameRate</c> makes FishNet's own value agree, so the cap
+		/// survives every later <c>UpdateFramerate</c> call.
+		/// <para>Applying the screen refresh rate via <c>Screen.SetResolution</c> changes the
+		/// display mode only; with vSync off it does not limit the render loop.</para>
+		/// </remarks>
+		public static void ApplyTargetFrameRate(int framesPerSecond)
+		{
+			if (framesPerSecond <= 0 || framesPerSecond > 500) return;
+
+			Application.targetFrameRate = framesPerSecond;
+
+			// Keep FishNet's value in step so UpdateFramerate does not overwrite ours.
+			NetworkManager?.ClientManager?.SetFrameRate((ushort)framesPerSecond);
 		}
 
 		private void OnCharacterStartLocal(IPlayerCharacter c)

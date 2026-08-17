@@ -199,7 +199,7 @@ VALUES ('client_gate_secret', 'your-32+byte-secret', NOW(), NOW());
 **Shared secret:** The same secret must be shared across all servers that validate `X-FishMMO-Client`:
 - **IPFetchServer** (via `GateSecretHolder`)
 - **Patcher** (via `GateSecretHolder`; also used by `PatchVersionService` to HMAC-sign version manifest responses)
-- **Unity client** (embedded via Unity Editor: **FishMMO > Security > Fetch Client Secrets**, which writes `ClientApiSecret.generated.cs`)
+- **Unity client** (embedded via Unity Editor: **FishMMO Dashboard** (`FishMMO > FishMMO Dashboard`, or Ctrl+Shift+D) > **Game Settings**, which writes `ClientApiSecret.generated.cs`)
 
 The `client_gate_secret` is a single value (or a comma-separated set for rotation). If a comma-separated keyset is provided, all keys are tried during verification so old clients continue to work during rotation.
 

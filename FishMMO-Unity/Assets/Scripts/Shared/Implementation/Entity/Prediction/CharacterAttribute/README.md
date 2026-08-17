@@ -157,7 +157,7 @@ types were removed entirely along with the per-tick dirty-flush pipeline.
 
 | Reconcile field | Carries |
 |-----------------|---------|
-| `CharacterReconcileData.ResourceState` (`CharacterAttributeResourceState`) | Resource attributes (HP/MP/Stamina) — base value, `CurrentValue`, `RegenTickAccum` |
+| `CharacterReconcileData.ResourceState` (`CharacterAttributeResourceState`) | Resource attributes (HP/MP/Stamina) — base value, `CurrentValue`, `NextRegenTick` |
 | `CharacterReconcileData.Attributes` (`AttributeReconcileEntry[]`) | Non-resource attributes — `TemplateID`, `Value`, `ExternalModifier` |
 
 `AttributeReconcileEntry[]` uses index-delta compression with a packed 16-bit header
@@ -167,7 +167,7 @@ replicated — it is recomputed locally via the dependency graph in `ApplyChildr
 
 #### Reconciliation
 
-`CharacterAttributeResourceState` is a snapshot struct containing `RegenTickAccum`, `Health`, `Mana`, `Stamina`, and max/final caps (`MaxHealth`, `MaxMana`, `MaxStamina`). Used by FishNet's Replicate/Reconcile prediction system via `GetResourceState()` / `ApplyResourceState()`. `RegenTickAccum` is an integer tick counter (replacing the legacy float `RegenDelta`) which guarantees deterministic client/server agreement on the exact tick a regen pulse fires.
+`CharacterAttributeResourceState` is a snapshot struct containing `NextRegenTick`, `Health`, `Mana`, `Stamina`, and max/final caps (`MaxHealth`, `MaxMana`, `MaxStamina`). Used by FishNet's Replicate/Reconcile prediction system via `GetResourceState()` / `ApplyResourceState()`. `NextRegenTick` is the absolute simulation tick at which the next regen pulse fires (replacing the legacy float regen accumulator), which guarantees deterministic client/server agreement on the exact tick a regen pulse fires.
 
 ### Prediction Pipeline
 
@@ -176,7 +176,7 @@ replicated — it is recomputed locally via the dependency graph in `ApplyChildr
 | Method              | Behaviour                                                                                |
 |---------------------|------------------------------------------------------------------------------------------|
 | `PopulateInput`     | No-op (attributes have no input)                                                         |
-| `OnReplicate`       | Calls `Regenerate()` — advances integer `regenTickAccum` and fires a regen pulse when it reaches `regenTickInterval`. During reconcile replay the per-tick `OnAttributeUpdated` notifications are discarded so UI subscribers only react to the authoritative reconcile. |
+| `OnReplicate`       | Calls `Regenerate(tick)` — fires a regen pulse once the simulation tick reaches the scheduled `nextRegenTick`, then advances it by `regenTickInterval`. During reconcile replay the per-tick `OnAttributeUpdated` notifications are discarded so UI subscribers only react to the authoritative reconcile. |
 | `OnCreateReconcile` | Writes `GetResourceState()` to `ResourceState` **and** `CreateAttributeSnapshot()` to `Attributes[]` (sorted by `TemplateID`). The snapshot array is cached and re-emitted across ticks when no attribute mutated, so the delta serializer's `ReferenceEquals` check produces zero network bytes. |
 | `OnReconcile`       | Calls `ApplyResourceState(rd.ResourceState)` **and** `ApplyAttributeSnapshot(rd.Attributes)` to restore authoritative values. Dirty-tracking is suppressed during the restore so the cached snapshot retains identity. |
 
@@ -184,7 +184,7 @@ replicated — it is recomputed locally via the dependency graph in `ApplyChildr
 
 | Field             | Type    | Description                                                  |
 |-------------------|---------|--------------------------------------------------------------|
-| `RegenTickAccum`  | `uint`  | Integer tick counter toward the next regen pulse             |
+| `NextRegenTick`   | `uint`  | Absolute simulation tick at which the next regen pulse fires |
 | `Health`          | `float` | Current health resource value                                |
 | `MaxHealth`       | `int`   | Maximum health (FinalValue of health attribute)              |
 | `Mana`            | `float` | Current mana resource value                                  |
@@ -335,9 +335,9 @@ The `CharacterDamageController` handles:
 
 `CharacterAttributeController.Regenerate()` uses a configurable tick rate (`regenTickRate`, default 5.0 seconds):
 
-1. Accumulates `deltaTime` until >= `regenTickRate`.
-2. Calculates number of intervals elapsed.
-3. For each resource (Health, Mana, Stamina), looks up the regeneration attribute via dependency and calls `Gain(regenAmount * intervals)`.
+1. Converts `regenTickRate` into an integer `regenTickInterval` (ticks) from `TimeManager.TickDelta`.
+2. Fires when the simulation tick reaches the scheduled `nextRegenTick`, then advances `nextRegenTick` by `regenTickInterval`.
+3. For each resource (Health, Mana, Stamina), looks up the regeneration attribute via dependency and calls `RegenerateResource(...)`.
 
 Regeneration attributes (HealthRegeneration, ManaRegeneration, StaminaRegeneration) are **dependencies** of their corresponding resource attribute.
 

@@ -523,7 +523,26 @@ namespace FishMMO.Client
 		private void OnClientRenewTokenResponseBroadcastReceived(RenewTokenResponseBroadcast msg, Channel channel)
 		{
 			if (core == null) return;
-			core.TryApplyRenewedToken(msg.Token);
+
+			// The server only broadcasts on success, but it now says so explicitly. Applying a
+			// payload the server did not vouch for would consume a receive sequence number the
+			// server never spent, permanently desynchronising the AES-GCM channel and breaking
+			// every later renewal on this connection.
+			if (msg.Result != ClientAuthenticationResult.LoginSuccess)
+			{
+				_ = FishMMO.Logging.Log.Warning("ClientLoginAuthenticator",
+					$"Ignoring token renewal with result {msg.Result}; keeping the existing token.");
+				return;
+			}
+
+			if (!core.TryApplyRenewedToken(msg.Token))
+			{
+				// Not fatal on its own — the current token is still valid until it expires —
+				// but it means renewals have stopped working, so surface it rather than
+				// letting the session drift silently toward an expired token.
+				_ = FishMMO.Logging.Log.Warning("ClientLoginAuthenticator",
+					"Failed to apply a renewed auth token; the session will expire when the current token does.");
+			}
 		}
 	}
 }

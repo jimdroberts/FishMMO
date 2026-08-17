@@ -1,4 +1,6 @@
 using FishNet.Connection;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.Core;
@@ -20,6 +22,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
+			// The connection is gone, so the transfer watchdog has nothing left to enforce.
+			pendingTransferDisconnects.TryRemove(conn.ClientId, out _);
+
 			// Clean up per-connection scene-unload rate-limit tracking.
 			sceneUnloadLastTimeByClientId.TryRemove(conn.ClientId, out _);
 
@@ -158,8 +163,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					damageController.Immortal = true;
 				}
 
+				NetworkConnection owner = character.Owner;
+
 				// Invoke disconnect early when teleporting because we require the scene the character is in.
-				OnDisconnect?.Invoke(character.Owner, character);
+				OnDisconnect?.Invoke(owner, character);
 
 				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
@@ -169,11 +176,91 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				character.DisableFlags(CharacterFlags.IsLoaded);
 
 				// Save the character and fully release the session so the destination scene server can claim it
-				RemoveCharacterConnectionMapping(character.Owner, skipOnDisconnect: true);
+				RemoveCharacterConnectionMapping(owner, skipOnDisconnect: true);
+
+				// Nothing here disconnects the client: the transfer relies on the client
+				// reporting the scene unload above, and that report is the only thing that
+				// sends it back to the world server. Arm a deadline so a client that never
+				// reports — crashed, modified, or one whose broadcast was dropped — cannot sit
+				// forever on a scene server that no longer holds its character.
+				ArmTransferDisconnect(owner);
 			}
 			else
 			{
 				Log.Debug("CharacterSystem", $"{character.TeleporterName} not found!");
+			}
+		}
+
+		/// <summary>
+		/// Connections whose character has been handed off, mapped to the UTC deadline by which
+		/// they must have disconnected on their own.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, DateTime> pendingTransferDisconnects =
+			new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>Grace period a client gets to tear down its scene and disconnect by itself.</summary>
+		private static readonly TimeSpan TransferDisconnectGrace = TimeSpan.FromSeconds(15);
+
+		/// <summary>Interval in seconds between transfer-watchdog sweeps.</summary>
+		private const float TransferDisconnectSweepIntervalSeconds = 5f;
+
+		/// <summary>
+		/// Starts the watchdog that force-disconnects <paramref name="conn"/> if it has not left
+		/// on its own once its character has been released to another scene server.
+		/// </summary>
+		private void ArmTransferDisconnect(NetworkConnection conn)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+			pendingTransferDisconnects[conn.ClientId] = DateTime.UtcNow + TransferDisconnectGrace;
+		}
+
+		/// <summary>
+		/// Disconnects connections that were handed off but never left.
+		/// </summary>
+		private void OnPeriodicTransferDisconnectSweep(float deltaTime)
+		{
+			if (Server == null || Server.ServerState != ConnectionState.Started || pendingTransferDisconnects.IsEmpty)
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData);
+
+			foreach (var kvp in pendingTransferDisconnects)
+			{
+				if (nowUtc < kvp.Value)
+				{
+					continue;
+				}
+
+				pendingTransferDisconnects.TryRemove(kvp.Key, out _);
+
+				NetworkConnection conn = null;
+				if (ServerManager != null)
+				{
+					ServerManager.Clients.TryGetValue(kvp.Key, out conn);
+				}
+				if (conn == null || !conn.IsActive)
+				{
+					continue;
+				}
+
+				// FishNet recycles ClientIds. A connection that now holds a character is a
+				// different session and must be left alone.
+				if (mappingData != null &&
+					(mappingData.ConnectionCharacters.ContainsKey(conn) ||
+					 mappingData.WaitingSceneLoadCharacters.ContainsKey(conn)))
+				{
+					continue;
+				}
+
+				Log.Warning("CharacterSystem",
+					$"Connection {kvp.Key} did not disconnect after its character was transferred; disconnecting.");
+				conn.Disconnect(false);
 			}
 		}
 
@@ -333,11 +420,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
 				(!player.IsInInstance() && player.SceneName != player.BindScene))
 			{
+				// Respawning at a bind point in another scene is a scene-server transfer, so it
+				// has to follow the same order as the teleporter path.
+				//
+				// Previously this only mutated the character and disconnected, leaving the
+				// save and session release to the connection-stopped handler. By then SceneName
+				// had already been overwritten with BindScene, so every OnDisconnect subscriber
+				// — party, guild, and the scene server's own per-scene bookkeeping — was told
+				// the player left the scene they were respawning *into* rather than the one
+				// they died in.
+				OnDisconnect?.Invoke(conn, player);
+
 				player.SceneName = player.BindScene;
 				player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
 				player.DisableFlags(CharacterFlags.IsInInstance);
 				player.DisableFlags(CharacterFlags.IsLoaded);
-				player.NetworkObject.Owner.Disconnect(false);
+
+				// Save and release the session before dropping the connection so the
+				// destination scene server can claim the character.
+				RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
+
+				conn.Disconnect(false);
 			}
 			else
 			{

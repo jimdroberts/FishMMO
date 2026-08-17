@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FishMMO.Auth.Implementation;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
@@ -30,40 +32,31 @@ namespace FishMMO.Server.Implementation
 		public const int KekLength = 32;
 
 		/// <summary>
-		/// Loads the signing-key KEK from the <c>deployment_secrets</c> database table
-		/// using <paramref name="secretService"/>. The value for key 'signing_key_kek'
-		/// must be a Base64-encoded 32-byte AES-256 key.
-		/// Returns <c>true</c> with a 32-byte buffer on success; on failure returns
-		/// <c>false</c> and writes a non-null <paramref name="error"/>.
+		/// Loads the signing-key KEK from the <c>deployment_secrets</c> database table without
+		/// blocking any thread. This is the preferred entry point — the token-verification path
+		/// is already asynchronous and must never block a worker on a database round trip.
 		/// </summary>
-		public static bool TryLoadFromDatabase(IDeploymentSecretService secretService, out byte[] kek, out string error)
+		/// <param name="secretService">Deployment secret service.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The loaded key, or a failure carrying the reason.</returns>
+		public static async Task<KekLoadResult> LoadFromDatabaseAsync(
+			IDeploymentSecretService secretService,
+			CancellationToken cancellationToken = default)
 		{
-			kek = null;
-			error = null;
-
 			if (secretService == null)
 			{
-				error = "IDeploymentSecretService is null.";
-				return false;
+				return KekLoadResult.Failure("IDeploymentSecretService is null.");
 			}
 
 			try
 			{
-				// Escape Unity's SynchronizationContext via Task.Run before blocking with
-				// GetResult(). Awaiting FetchAsync directly on the main thread would deadlock:
-				// its continuation needs to resume on the main thread, which is the thread
-				// blocked waiting for it. Task.Run moves the await onto a thread-pool thread
-				// so its continuation doesn't need the main thread to complete. Same pattern
-				// used by the Task.Run(...).Wait(timeoutMs) calls in LoginServerSystem.
-				var result = System.Threading.Tasks.Task.Run(() =>
-					secretService.FetchAsync(DatabaseKey, System.Threading.CancellationToken.None))
-					.GetAwaiter().GetResult();
+				var result = await secretService.FetchAsync(DatabaseKey, cancellationToken).ConfigureAwait(false);
 
 				if (!result.IsSuccess || string.IsNullOrEmpty(result.Data))
 				{
-					error = $"Failed to fetch '{DatabaseKey}' from deployment_secrets: " +
-							$"[{result.ErrorCode}] {result.ErrorMessage ?? "No data returned"}.";
-					return false;
+					return KekLoadResult.Failure(
+						$"Failed to fetch '{DatabaseKey}' from deployment_secrets: " +
+						$"[{result.ErrorCode}] {result.ErrorMessage ?? "No data returned"}.");
 				}
 
 				byte[] decoded;
@@ -73,24 +66,50 @@ namespace FishMMO.Server.Implementation
 				}
 				catch (FormatException)
 				{
-					error = $"Signing-key KEK value from deployment_secrets is not valid Base64.";
-					return false;
+					return KekLoadResult.Failure("Signing-key KEK value from deployment_secrets is not valid Base64.");
 				}
 
 				if (decoded.Length != KekLength)
 				{
-					error = $"Signing-key KEK must decode to exactly {KekLength} bytes (got {decoded.Length}).";
-					return false;
+					return KekLoadResult.Failure(
+						$"Signing-key KEK must decode to exactly {KekLength} bytes (got {decoded.Length}).");
 				}
 
-				kek = decoded;
-				return true;
+				return KekLoadResult.Ok(decoded);
 			}
 			catch (Exception ex)
 			{
-				error = $"Exception loading signing_key_kek from deployment_secrets: {ex.Message}";
-				return false;
+				return KekLoadResult.Failure($"Exception loading signing_key_kek from deployment_secrets: {ex.Message}");
 			}
+		}
+
+		/// <summary>
+		/// Outcome of a KEK load. <see cref="Kek"/> is non-null only when <see cref="Success"/>
+		/// is <c>true</c>; otherwise <see cref="Error"/> explains why, for fail-closed callers.
+		/// </summary>
+		public readonly struct KekLoadResult
+		{
+			/// <summary>Whether a valid 32-byte KEK was loaded.</summary>
+			public bool Success { get; }
+
+			/// <summary>The loaded KEK, or <c>null</c> on failure.</summary>
+			public byte[] Kek { get; }
+
+			/// <summary>Failure reason, or <c>null</c> on success.</summary>
+			public string Error { get; }
+
+			private KekLoadResult(bool success, byte[] kek, string error)
+			{
+				Success = success;
+				Kek = kek;
+				Error = error;
+			}
+
+			/// <summary>Creates a successful result.</summary>
+			public static KekLoadResult Ok(byte[] kek) => new KekLoadResult(true, kek, null);
+
+			/// <summary>Creates a failed result.</summary>
+			public static KekLoadResult Failure(string error) => new KekLoadResult(false, null, error);
 		}
 
 		/// <summary>

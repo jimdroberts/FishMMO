@@ -85,7 +85,7 @@ Each `AchievementTemplate` contains a `List<AchievementTier>`. Tiers are ordered
 |----------|------|-------------|
 | `Value` | `uint` | Cumulative value required to complete this tier |
 | `TierCompleteMessage` | `string` | Message shown to the player on completion |
-| `CompleteSound` | `AudioClip` | Sound played on completion |
+| `CompleteSoundReference` | `AssetReference` | Addressable sound played on completion (client-side only) |
 | `AbilityRewards` | `List<BaseAbilityTemplate>` | Abilities granted on completion |
 | `AbilityEventRewards` | `List<AbilityEvent>` | Ability events granted on completion |
 | `ItemRewards` | `List<BaseItemTemplate>` | Items granted on completion |
@@ -105,7 +105,7 @@ A player with `CurrentTier=1, CurrentValue=85` needs 15 more to reach Tier 1's t
 
 ### Achievement Categories
 
-The `AchievementCategory` enum provides 19 categories for organizing achievements:
+The `AchievementCategory` enum provides 21 categories for organizing achievements:
 
 | Category | Description |
 |----------|-------------|
@@ -138,20 +138,20 @@ The `AchievementCategory` enum provides 19 categories for organizing achievement
 Gameplay systems call `AchievementController.Increment(template, amount)` to advance progress:
 
 ```csharp
-// In CharacterDamageController.Damage()
-achievementController.Increment(DamageAchievementTemplate, damageDealt);
+// In PetSystem, after a successful summon
+achievementController.Increment(PetSummonAchievementTemplate, 1);
 ```
 
 ### Increment Sources
 
 | Source | Achievement | Amount |
 |--------|------------|--------|
-| `CharacterDamageController.Damage()` | `DamageAchievementTemplate` (attacker) | Damage dealt |
-| `CharacterDamageController.Damage()` | `DamagedAchievementTemplate` (defender) | Damage received |
-| `CharacterDamageController.Kill()` | `KillAchievementTemplate` (killer) | 1 per kill |
-| `CharacterDamageController.Kill()` | `KilledAchievementTemplate` (victim) | 1 per death |
-| `CharacterDamageController.Heal()` | `HealAchievementTemplate` (healer) | Amount healed |
-| `CharacterDamageController.Heal()` | `HealedAchievementTemplate` (target) | Amount healed |
+| `GuildSystem` | `GuildCreateAchievementTemplate` / `GuildJoinAchievementTemplate` | 1 per create / join |
+| `PartySystem` | `PartyCreateAchievementTemplate` / `PartyJoinAchievementTemplate` | 1 per create / join |
+| `FriendSystem` | `FriendAddAchievementTemplate` | 1 per friend added |
+| `PetSystem` | `PetSummonAchievementTemplate` | 1 per summon |
+| `InteractableSystem` | The interactable's own `AchievementTemplate` field (merchant, banker, teleporter, dungeon entrance, ability crafter, …) | 1 per interaction |
+| `AchievementIncrementAction` (ECA) | Its configured `AchievementTemplate` | Action-configured value |
 
 Additional increment sources can be added by any system with access to `IAchievementController`.
 
@@ -313,7 +313,6 @@ Achievement/
 ├── Achievement.cs                 # Runtime achievement instance (tier, value, template ref)
 ├── AchievementCategory.cs         # Enum of achievement categories (Combat, Exploration, etc.)
 ├── AchievementController.cs       # Per-entity controller (CharacterBehaviour / NetworkBehaviour)
-├── IAchievementController.cs      # Achievement controller interface + static events
 └── Template/
     ├── AchievementTemplate.cs         # ScriptableObject blueprint (icon, category, tiers)
     ├── AchievementTemplateDatabase.cs # Name-to-template lookup database (ScriptableObject)
@@ -323,9 +322,10 @@ Achievement/
 ### Related Files (Outside This Directory)
 
 ```
+Shared/Core/Entity/Achievement/IAchievementController.cs                       # Achievement controller interface + static events
 Shared/Implementation/Network/Character/AchievementBroadcasts.cs              # FishNet broadcast structs for achievement updates
 Server/Implementation/World/SceneServer/Achievement/AchievementSystem.cs       # Server-side achievement tracking, rewards, and DB persistence
-Shared/Implementation/Entity/CharacterAttribute/CharacterDamageController.cs   # Calls Increment() for damage, kill, and heal achievements
+Shared/Implementation/Entity/ECA/Actions/Character/Achievement/AchievementIncrementAction.cs  # ECA action calling Increment()
 Client/Client.cs                                                               # Client-side OnCompleteAchievement handler
 Client/UI/Controls/World/Achievement/UIAchievements.cs                         # Achievement UI panel
 ```
@@ -356,7 +356,7 @@ CharacterBehaviour
 
 ```
 AchievementTier                    # [Serializable] class: Value threshold + reward lists
-AchievementCategory                # Enum: 19 categories (Ability, Character, Combat, etc.)
+AchievementCategory                # Enum: 21 categories (Ability, Character, Combat, etc.)
 ```
 
 ## Notes

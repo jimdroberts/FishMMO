@@ -171,8 +171,13 @@ public class PatchController : ControllerBase
 
 		if (clientVersion >= latestVersion)
 		{
+			// 204, not 200-with-a-body. This route streams a binary archive, and the
+			// launcher writes the response straight to disk without inspecting it. A JSON
+			// status document returned here would be saved as if it were the patch and
+			// handed to the Updater. 204 is also what the launcher already tests for to
+			// detect the up-to-date case.
 			Log.Info("PatchController", $"Client {clientVersion.FullVersion} already up to date.");
-			return Ok(new { status = "AlreadyUpdated" });
+			return NoContent();
 		}
 
 		var entry = versionService.TryGetPatch(clientVersion.FullVersion, latestVersion.FullVersion);

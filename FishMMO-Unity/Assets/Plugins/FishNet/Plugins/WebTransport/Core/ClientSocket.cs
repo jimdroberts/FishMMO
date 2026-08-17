@@ -13,7 +13,6 @@ namespace FishNet.Transporting.WebTransport.Client
 		#region Private Configuration
 		private string address = string.Empty;
 		private ushort port;
-		private int mtu;
 		private string serverName = string.Empty;
 		#endregion
 
@@ -209,13 +208,33 @@ namespace FishNet.Transporting.WebTransport.Client
 		}
 
 		/// <summary>
-		/// Initializes the client socket with the specified transport and MTU.
-		/// Must be called before <see cref="StartConnection"/>.
+		/// Comma-separated SHA-256 certificate fingerprints (hex) the browser should
+		/// accept in place of a publicly trusted chain. Empty means "require a
+		/// publicly trusted certificate", which is the correct production setting.
+		/// Only consulted on WebGL — native builds validate against the platform
+		/// trust store.
 		/// </summary>
+		private string serverCertificateHashes = "";
+
+		/// <summary>
+		/// Initializes the client socket. Must be called before <see cref="StartConnection"/>.
+		/// </summary>
+		/// <param name="mtu">
+		/// Unused; the datagram send limit is enforced by the transport (GetMTU) and the
+		/// receive limit by <see cref="CommonSocket.MaxDatagramReceiveSize"/>.
+		/// </param>
 		internal void Initialize(Transport t, int mtu)
 		{
 			base.transport = t;
-			this.mtu = mtu;
+		}
+
+		/// <summary>
+		/// Sets the pinned server certificate hashes used by WebGL builds.
+		/// Must be called before <see cref="StartConnection"/>.
+		/// </summary>
+		internal void SetServerCertificateHashes(string hashes)
+		{
+			this.serverCertificateHashes = hashes ?? "";
 		}
 
 		/// <summary>
@@ -292,6 +311,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			{
 				webglIndex = WebTransportJSLib.WTConnect(
 					url,
+					this.serverCertificateHashes,
 					webglStaticOnOpen,
 					webglStaticOnClose,
 					webglStaticOnStream,
@@ -458,7 +478,8 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		internal void ForceStopAndReset()
 		{
-			LogTransportWarning(
+			// Expected on every Login→World→Scene hop; Warning paints red in the WebGL console.
+			LogTransportDebug(
 				$"[FishWT] ForceStopAndReset priorState={base.GetConnectionState()} target={lastConnectTarget}");
 			// Clear guard so StopConnection can run even if a prior stop stalled.
 			System.Threading.Interlocked.Exchange(ref stopGuard, 0);
@@ -626,28 +647,28 @@ namespace FishNet.Transporting.WebTransport.Client
 						$"index={webglIndex} url={webglConnectUrl}");
 				}
 #else
-				int result;
-				if (pkt.Channel == 1)
-					result = WebTransportNative.wt_client_send_datagram(this.clientHandle, pkt.Data, pkt.Length);
-				else
-					result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
-				if (result == 0)
-				{
-					long n = System.Threading.Interlocked.Increment(ref wireSentOkCount);
-					System.Threading.Interlocked.Add(ref wireSentBytes, pkt.Length);
-					if (n <= 12 || (n % 50) == 0)
+					int result;
+					if (pkt.Channel == 1)
+						result = WebTransportNative.wt_client_send_datagram(this.clientHandle, pkt.Data, pkt.Length);
+					else
+						result = WebTransportNative.wt_client_send_stream(this.clientHandle, pkt.Data, pkt.Length);
+					if (result == 0)
 					{
-						UnityEngine.Debug.Log(
-							$"[FishWT] WIRE SEND OK #{n} ch={pkt.Channel} len={pkt.Length} native");
+						long n = System.Threading.Interlocked.Increment(ref wireSentOkCount);
+						System.Threading.Interlocked.Add(ref wireSentBytes, pkt.Length);
+						if (n <= 12 || (n % 50) == 0)
+						{
+							UnityEngine.Debug.Log(
+								$"[FishWT] WIRE SEND OK #{n} ch={pkt.Channel} len={pkt.Length} native");
+						}
 					}
-				}
-				else
-				{
-					System.Threading.Interlocked.Increment(ref wireSentFailCount);
-					transport.NetworkManager?.LogWarning(
-						$"[FishWT] WIRE SEND FAIL ch={pkt.Channel} len={pkt.Length}: " +
-						$"{WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
-				}
+					else
+					{
+						System.Threading.Interlocked.Increment(ref wireSentFailCount);
+						transport.NetworkManager?.LogWarning(
+							$"[FishWT] WIRE SEND FAIL ch={pkt.Channel} len={pkt.Length}: " +
+							$"{WebTransportNative.ErrorString((WebTransportNative.WTError)result)}");
+					}
 #endif
 				}
 				finally
@@ -718,7 +739,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			string url = socket.webglConnectUrl;
 			socket.incomingEvents.Enqueue(() =>
 			{
-				socket.LogTransportWarning($"[FishWT] close index={index} url={url}");
+				// Expected socket close on hop/teardown — not a transport failure.
+				socket.LogTransportDebug($"[FishWT] close index={index} url={url}");
 				socket.SetConnectionState(LocalConnectionState.Stopped, false);
 			});
 		}
@@ -761,7 +783,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		{
 			if (!TryGetWebGlSocket(index, out ClientSocket socket))
 				return;
-			if (length <= 0 || length > socket.mtu)
+			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				socket.LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
@@ -971,7 +993,7 @@ namespace FishNet.Transporting.WebTransport.Client
 		/// </summary>
 		private void HandleNativeDatagram(IntPtr context, IntPtr dataPtr, int length)
 		{
-			if (length <= 0 || length > this.mtu)
+			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;

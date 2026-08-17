@@ -130,6 +130,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> RefreshSessionLeaseAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Refreshes the session lease for many owned online characters in a single round trip.
+		/// </summary>
+		/// <remarks>
+		/// Session liveness must not depend on save throughput. Refreshing one character per
+		/// round trip inside the periodic save loop meant that on a busy shard with a slow
+		/// database the characters at the tail of the loop could exceed the lease duration
+		/// between refreshes and become claimable while still online. This performs the whole
+		/// population in one statement, so the cost is independent of how many characters are
+		/// resident.
+		/// <para>
+		/// Each entry is verified against the stored owner server and token, so a server that
+		/// no longer owns a session silently refreshes nothing rather than extending the
+		/// current owner's lease.
+		/// </para>
+		/// </remarks>
+		/// <param name="leases">Ownership triples to refresh. Invalid entries are skipped.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The number of leases actually refreshed.</returns>
+		Task<DatabaseResult<int>> RefreshSessionLeasesAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Updates the position and rotation of a character atomically.
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>

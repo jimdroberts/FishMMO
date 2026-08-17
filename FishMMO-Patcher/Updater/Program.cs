@@ -2,6 +2,7 @@
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using FishMMO.Patcher;
 using System.Collections.Concurrent;
@@ -9,6 +10,14 @@ using System.Collections.Concurrent;
 class Program
 {
 	private static readonly string WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory;
+
+	/// <summary>
+	/// Directory patch archives are read from. This must match
+	/// <c>FishMMO.Shared.Constants.GetPatchesDirectory()</c> on the client, which resolves
+	/// the same "Patches" folder relative to the install root. The launcher downloads into
+	/// that folder; if the two ever disagree, every update silently no-ops and the client
+	/// relaunches at the same version forever.
+	/// </summary>
 	private static readonly string PatchesDirectory = Path.Combine(WorkingDirectory, "Patches");
 
 	private static string Version;
@@ -22,6 +31,23 @@ class Program
 	// Configuration for robust file operations.
 	private const int MaxFileOperationRetries = 5;
 	private const int FileOperationRetryDelayMs = 200;
+
+	// Process shutdown tuning.
+	private const int GracefulExitTimeoutMs = 10000;
+	private const int ForceKillTimeoutMs = 5000;
+	private const int PostKillSettleMs = 500;
+
+	/// <summary>POSIX SIGTERM. Requests a graceful shutdown.</summary>
+	private const int SIGTERM = 15;
+
+	/// <summary>
+	/// POSIX <c>kill(2)</c>. Used to request a graceful shutdown on Linux/macOS, where
+	/// .NET exposes no managed equivalent — <see cref="Process.Kill()"/> sends SIGKILL,
+	/// which denies the client any chance to run its shutdown handlers, and
+	/// <see cref="Process.CloseMainWindow"/> is Windows-only.
+	/// </summary>
+	[DllImport("libc", SetLastError = true, EntryPoint = "kill")]
+	private static extern int SysKill(int pid, int sig);
 
 	/// <summary>
 	/// Helper method for robust file deletion with retries.
@@ -168,6 +194,8 @@ class Program
 			return;
 		}
 
+		// Naming scheme shared with the launcher's download path and the patcher server's
+		// index. See PatchesDirectory.
 		string expectedPatchFileName = $"{Version}-{LatestVersion}.zip";
 		string patchFilePath = Path.Combine(PatchesDirectory, expectedPatchFileName);
 
@@ -179,9 +207,26 @@ class Program
 		}
 
 		Console.WriteLine($"\nApplying patch: {Path.GetFileName(patchFilePath)}");
-		ApplyPatchFile(patchFilePath);
+		bool applied = ApplyPatchFile(patchFilePath);
 
-		Console.WriteLine("\nPatch applied. Client is up-to-date. Exiting patcher.");
+		if (applied)
+		{
+			Console.WriteLine("\nPatch applied. Client is up-to-date.");
+			// Remove the consumed archive so Patches/ does not accumulate every update the
+			// player has ever installed. Only on success — a failed apply rolls back, and
+			// keeping the archive allows a retry without re-downloading.
+			if (!TryDeleteFile(patchFilePath, MaxFileOperationRetries))
+			{
+				Console.WriteLine($"WARNING: Could not remove the applied patch archive '{patchFilePath}'. It can be deleted manually.");
+			}
+		}
+		else
+		{
+			Console.WriteLine("\nPatch application FAILED. The client has been rolled back to its previous state and remains on the old version.");
+			Console.WriteLine($"The patch archive has been left at '{patchFilePath}' for a retry.");
+		}
+
+		Console.WriteLine("Exiting patcher.");
 		TryStartExecutableAndExit(Executable, PID);
 	}
 
@@ -192,7 +237,12 @@ class Program
 	/// If any critical step fails, a full rollback is attempted.
 	/// </summary>
 	/// <param name="patchFilePath">The full path to the patch ZIP file.</param>
-	static void ApplyPatchFile(string patchFilePath)
+	/// <returns>
+	/// True when every operation committed successfully; false when the patch was rolled
+	/// back or otherwise did not complete. Callers must not treat a failed apply as an
+	/// upgrade — the install is still on the old version.
+	/// </returns>
+	static bool ApplyPatchFile(string patchFilePath)
 	{
 		// Lists to store paths for deferred sequential operations
 		List<string> filesToDelete = new List<string>();
@@ -218,7 +268,7 @@ class Program
 				{
 					Console.WriteLine($"Error: manifest.json not found in patch file '{Path.GetFileName(patchFilePath)}'. Skipping.");
 					overallSuccess = false; // Mark as failed
-					return; // Exit early
+					return false; // Exit early (the finally block still runs)
 				}
 
 				PatchManifest manifest;
@@ -584,6 +634,8 @@ class Program
 				}
 			}
 		}
+
+		return overallSuccess;
 	}
 
 	/// <summary>
@@ -662,62 +714,107 @@ class Program
 	}
 
 	/// <summary>
+	/// Requests a graceful shutdown of <paramref name="process"/> in a platform-appropriate
+	/// way. Returns true if the request was delivered; false if it could not be (in which
+	/// case the caller should fall back to a forced kill).
+	/// </summary>
+	/// <remarks>
+	/// <see cref="Process.CloseMainWindow"/> is Windows-only — on Linux and macOS .NET
+	/// throws <see cref="PlatformNotSupportedException"/>. The previous implementation
+	/// called it unconditionally and swallowed that exception in a broad catch, so on those
+	/// platforms the client was never asked to exit and never killed: the updater went on
+	/// to patch files underneath a live process and then started a second client instance
+	/// alongside the first.
+	/// </remarks>
+	private static bool TryRequestGracefulExit(Process process)
+	{
+		try
+		{
+			if (OperatingSystem.IsWindows())
+			{
+				return process.CloseMainWindow();
+			}
+
+			int result = SysKill(process.Id, SIGTERM);
+			if (result != 0)
+			{
+				Console.WriteLine($"WARNING: kill(SIGTERM) on PID {process.Id} failed with errno {Marshal.GetLastWin32Error()}.");
+				return false;
+			}
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"WARNING: Could not request graceful exit for PID {process.Id}: {ex.Message}");
+			return false;
+		}
+	}
+
+	/// <summary>
 	/// Attempts to gracefully close and then forcefully kill a process by its PID.
 	/// Includes robust waiting for process exit.
 	/// </summary>
 	/// <param name="pidToKill">The process ID of the launcher process to manage.</param>
 	private static void KillLauncherProcess(int pidToKill)
 	{
-		if (pidToKill > 0)
+		if (pidToKill <= 0)
 		{
-			try
+			return;
+		}
+
+		try
+		{
+			Process launcherProcess = Process.GetProcessById(pidToKill);
+			if (launcherProcess.HasExited)
 			{
-				Process launcherProcess = Process.GetProcessById(pidToKill);
-				if (!launcherProcess.HasExited)
-				{
-					Console.WriteLine($"Attempting to close launcher process with PID {pidToKill} gracefully...");
-					if (launcherProcess.CloseMainWindow())
-					{
-						Console.WriteLine($"Launcher process with PID {pidToKill} main window closed. Waiting for exit...");
-						if (!launcherProcess.WaitForExit(10000)) // Wait up to 10 seconds.
-						{
-							Console.WriteLine($"Launcher process with PID {pidToKill} did not exit after main window close, forcing kill...");
-							launcherProcess.Kill();
-							launcherProcess.WaitForExit(5000); // Wait up to 5 seconds for termination.
-							Console.WriteLine($"Killed launcher process with PID: {pidToKill}");
-						}
-						else
-						{
-							Console.WriteLine($"Launcher process with PID {pidToKill} exited gracefully after main window closed.");
-						}
-					}
-					else if (!launcherProcess.WaitForExit(5000)) // If no main window or graceful close failed.
-					{
-						Console.WriteLine($"Launcher process with PID {pidToKill} did not exit gracefully, forcing kill...");
-						launcherProcess.Kill();
-						launcherProcess.WaitForExit(5000);
-						Console.WriteLine($"Killed launcher process with PID: {pidToKill}");
-					}
-					else
-					{
-						Console.WriteLine($"Launcher process with PID {pidToKill} exited gracefully.");
-					}
-				}
-				else
-				{
-					Console.WriteLine($"Launcher process with PID {pidToKill} was already exited.");
-				}
+				Console.WriteLine($"Launcher process with PID {pidToKill} was already exited.");
+				return;
 			}
-			catch (ArgumentException)
+
+			Console.WriteLine($"Attempting to close launcher process with PID {pidToKill} gracefully...");
+
+			if (TryRequestGracefulExit(launcherProcess))
 			{
-				Console.WriteLine($"Launcher process with PID {pidToKill} not found (already exited or never started).");
+				if (launcherProcess.WaitForExit(GracefulExitTimeoutMs))
+				{
+					Console.WriteLine($"Launcher process with PID {pidToKill} exited gracefully.");
+					Thread.Sleep(PostKillSettleMs);
+					return;
+				}
+				Console.WriteLine($"Launcher process with PID {pidToKill} did not exit within {GracefulExitTimeoutMs}ms, forcing kill...");
 			}
-			catch (Exception ex)
+			else
 			{
-				Console.WriteLine($"Error managing launcher process {pidToKill}: {ex.Message}");
+				Console.WriteLine($"Graceful exit request could not be delivered to PID {pidToKill}, forcing kill...");
+			}
+
+			// Fall through to a forced kill on every path where the graceful request
+			// either failed to deliver or was ignored. Patching a live install is far
+			// worse than an ungraceful client shutdown.
+			launcherProcess.Kill();
+			if (launcherProcess.WaitForExit(ForceKillTimeoutMs))
+			{
+				Console.WriteLine($"Killed launcher process with PID: {pidToKill}");
+			}
+			else
+			{
+				Console.WriteLine($"ERROR: Launcher process with PID {pidToKill} is still running after a forced kill. Patching may fail on locked files.");
 			}
 		}
-		Thread.Sleep(500); // Small delay after attempting to kill the process.
+		catch (ArgumentException)
+		{
+			Console.WriteLine($"Launcher process with PID {pidToKill} not found (already exited or never started).");
+		}
+		catch (InvalidOperationException)
+		{
+			Console.WriteLine($"Launcher process with PID {pidToKill} exited while it was being shut down.");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error managing launcher process {pidToKill}: {ex.Message}");
+		}
+
+		Thread.Sleep(PostKillSettleMs); // Small delay after attempting to kill the process.
 	}
 
 	/// <summary>

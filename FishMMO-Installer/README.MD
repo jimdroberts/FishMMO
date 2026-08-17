@@ -322,7 +322,13 @@ Before any `dotnet` command runs on Linux, the installer prepares the runtime en
 | Startup project | `./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj` |
 | Migrations output | `Migrations/` (inside the FishMMO-DB project) |
 
-> **MSBuild note:** A `StashMigrations` target preserves generated migration files across `dotnet clean` and `dotnet build` cycles by temporarily copying them outside the output directory.
+> **MSBuild note:** There is no stash-and-restore step. The installer's
+> `CopyFishMMODatabase` target (in `FishMMO-Installer.csproj`) mirrors the
+> FishMMO-Database source tree into its output directory but **excludes**
+> `**\Migrations\**` — along with `bin`, `obj`, and `.vs`. Generated migrations
+> therefore stay solely in the real `FishMMO-DB` project and are never copied,
+> so an installer `dotnet clean` / `dotnet build` cycle cannot duplicate or
+> clobber them.
 
 ### Unity executable resolution
 

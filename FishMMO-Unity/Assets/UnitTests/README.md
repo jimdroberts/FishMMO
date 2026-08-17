@@ -38,16 +38,25 @@ Requirements: Unity 6.3 LTS, the `FishMMO-Auth` DLLs present in `Assets/Dependen
 
 ```
 Assets/UnitTests/
-├── FishMMO.UnitTests.asmdef         # EditMode-only assembly definition
-├── Auth/
-│   ├── AuthHarness.cs               # Pairs ClientAuthenticatorCore + SrpAuthenticatorCore in-process
-│   ├── InMemoryAccountStore.cs      # IAccountStore double (no DB)
-│   ├── FakeConnection.cs            # FishNet-free connection stub
-│   ├── LoginTests.cs                # Happy / unhappy login paths
-│   ├── TotpTests.cs                 # TOTP enrollment + 2FA login
-│   ├── HandshakeTests.cs            # X25519 + SRP-6a handshake invariants
-│   └── KickTests.cs                 # Server-initiated disconnect paths
-└── README.md                        # This document
+├── FishMMO.UnitTests.asmdef                  # EditMode-only assembly definition
+├── UnitTestMenu.cs                           # FishMMO / Unit Tests menu items
+├── TestAssemblySetup.cs                      # [SetUpFixture] — initialises FishMMO.Logging.Log
+├── Harness/
+│   ├── AuthTestHarness.cs                    # Pairs ClientAuthenticatorCore + SrpAuthenticatorCore in-process
+│   ├── TestClientCore.cs                     # ClientAuthenticatorCore subclass (payload capture + interceptors)
+│   ├── TestServerCore.cs                     # SrpAuthenticatorCore<int> subclass (routes broadcasts to the client)
+│   ├── InMemoryAccountStore.cs               # IAccountStore double (no DB)
+│   ├── AuthTestTrace.cs                      # Trace gateway (AuthTestTrace.Verbose)
+│   └── LogAssert.cs                          # NUnit assertion wrappers that log pass/fail
+├── LoginTests.cs                             # Happy / unhappy login paths
+├── RegisterTests.cs                          # Client-side registration validation
+├── TokenLoginTests.cs                        # Token-based authentication
+├── SecurityTests.cs                          # Adversarial SRP / handshake / input validation
+├── AttackAndFailureScenariosTests.cs         # Brute-force, ban, 2FA, online-check
+├── ServerAuthenticatorIntegrationTests.cs    # End-to-end SRP → token integration
+├── RateLimiterTests.cs                       # Per-IP handshake rate limiting
+├── Prediction/                               # Prediction / reconcile serializer tests (non-auth)
+└── README.md                                 # This document
 ```
 
 Tests do not touch PostgreSQL, FishNet, sockets, or any singleton state — each
@@ -57,9 +66,9 @@ test instantiates a fresh harness and account store.
 
 | Component | Purpose |
 | --- | --- |
-| `AuthHarness` | Constructs a paired client / server authenticator, wires `Send*` and `Broadcast*` to direct in-process calls, drives the test scenario. |
+| `AuthTestHarness` | Constructs a paired client / server authenticator, wires `Send*` and `Broadcast*` to direct in-process calls, drives the test scenario. |
 | `InMemoryAccountStore` | Implements the same surface as the production account store, but keeps state in dictionaries — see [`InMemoryAccountStore` API](#inmemoryaccountstore-api). |
-| `FakeConnection` | Replaces FishNet's `NetworkConnection` so the server authenticator can talk to a virtual client. |
+| `TestServerCore` | `SrpAuthenticatorCore<int>` subclass — FishNet's `NetworkConnection` is replaced by a plain `int` connection ID so the server authenticator can talk to a virtual client. |
 | Test classes | Cover login, TOTP, handshake, and kick scenarios — see [Test inventory](#test-inventory). |
 
 ## Configuration
@@ -67,7 +76,7 @@ test instantiates a fresh harness and account store.
 These tests are configuration-free: no environment variables, `appsettings`,
 or external services are read. Verbose logging is toggled via the
 `FishMMO / Unit Tests / Run All EditMode Tests (Verbose)` menu, which sets
-the `FISHMMO_TEST_VERBOSE` define for the run.
+the static `AuthTestTrace.Verbose` flag for the run.
 
 ---
 
@@ -94,12 +103,13 @@ Or use the Unity menu shortcuts:
 
 | File | Tests | Purpose |
 | --- | --- | --- |
-| `LoginTests.cs` | 5 | Full client↔server SRP login flow |
-| `RegisterTests.cs` | 5 | Client-side registration validation + `CreateAccount` emission |
+| `LoginTests.cs` | 6 | Full client↔server SRP login flow |
+| `RegisterTests.cs` | 6 | Client-side registration validation + `CreateAccount` emission |
 | `TokenLoginTests.cs` | 8 | Token-based authentication: lifecycle, edge cases, failure modes |
 | `SecurityTests.cs` | 19 methods (25+ cases) | Adversarial SRP, handshake attacks, ZK, input validation |
-| `AttackAndFailureScenariosTests.cs` | 7 | Brute-force, ban, 2FA, online-check, dropped-message attacks |
+| `AttackAndFailureScenariosTests.cs` | 8 | Brute-force, ban, 2FA, online-check, pending-kick, dropped-message attacks |
 | `ServerAuthenticatorIntegrationTests.cs` | 2 | End-to-end SRP→token integration and token lifecycle |
+| `RateLimiterTests.cs` | 3 | Per-source-IP handshake burst / sustained-flood throttling |
 | `TestAssemblySetup.cs` | — | `[SetUpFixture]` — initialises `FishMMO.Logging.Log` once for the assembly |
 
 ### Harness files (`Harness/`)
@@ -125,7 +135,8 @@ Or use the Unity menu shortcuts:
 | `Login_WrongPassword_ReturnsInvalidUsernameOrPassword` | `InvalidUsernameOrPassword` |
 | `Login_UnknownUser_ReturnsInvalidUsernameOrPasswordWithoutEnumeration` | `InvalidUsernameOrPassword` (same as wrong pw — anti-enumeration) |
 | `Login_UnverifiedAccount_ReturnsAccountUnverifiedAfterCorrectProof` | `AccountUnverified` |
-| `Login_TwoSequentialAttempts_BothComplete` | Both `LoginSuccess` |
+| `Login_SequentialSessionsSameServer_StateProperlyReset` | Both sessions `LoginSuccess`, with distinct per-session server pubkey / cookie |
+| `Login_SameCredentials_CaseSensitivePassword_Rejected` | `InvalidUsernameOrPassword` (SRP does not normalize case) |
 
 ### `RegisterTests.cs`
 
@@ -136,6 +147,7 @@ Or use the Unity menu shortcuts:
 | `Register_InvalidUsername_RejectedByClient` | `SetLoginCredentials` returns `false` |
 | `Register_InvalidPassword_RejectedByClient` | `SetLoginCredentials` returns `false` |
 | `Register_DifferentCredentials_ProduceDifferentEncryptedPayloads` | Ciphertexts are pairwise distinct |
+| `Register_SameCredentialsTwoAttempts_ProduceDifferentSalts` | Each attempt derives a fresh salt |
 
 ### `TokenLoginTests.cs`
 
@@ -217,6 +229,7 @@ Or use the Unity menu shortcuts:
 | `SrpProof_Dropped_NoSuccessDelivered` | Login times out; `ReceivedSuccess` remains `false` |
 | `Login_AlreadyOnline_ReturnsAlreadyOnline` | `AlreadyOnline` |
 | `TwoFactor_AccountRequires2FA_ReturnsTwoFactorRequired` | `TwoFactorRequired` after correct SRP proof on TOTP-enabled account |
+| `Login_PendingKick_AccountRejected` | Account flagged for kick is rejected |
 
 ### `ServerAuthenticatorIntegrationTests.cs`
 
@@ -317,13 +330,12 @@ h.Client.SrpProofInterceptor = original =>
 
 ```mermaid
 flowchart LR
-    Test[Test method] --> Harness[AuthHarness]
-    Harness --> Client[ClientAuthenticatorCore]
-    Harness --> Server[SrpAuthenticatorCore]
+    Test[Test method] --> Harness[AuthTestHarness]
+    Harness --> Client[TestClientCore : ClientAuthenticatorCore]
+    Harness --> Server[TestServerCore : SrpAuthenticatorCore&lt;int&gt;]
     Server --> Store[InMemoryAccountStore]
     Client -- Send/Broadcast --> Server
     Server -- Send/Broadcast --> Client
-    Server --> Conn[FakeConnection]
-    Harness --> Assertions[NUnit assertions]
+    Harness --> Assertions[LogAssert / NUnit assertions]
     Assertions -->|pass / fail| Test
 ```

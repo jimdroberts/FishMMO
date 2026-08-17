@@ -31,6 +31,23 @@ namespace FishMMO.Database.Npgsql
 		private int disposed;
 		private int shutdown;
 		private int activeContextCount;
+
+		/// <summary>
+		/// Signalled whenever <see cref="activeContextCount"/> reaches zero, so the synchronous
+		/// <see cref="Dispose"/> can wait for outstanding contexts without polling.
+		/// </summary>
+		/// <remarks>
+		/// This factory is loaded into the Unity server process, where <see cref="Dispose"/> can
+		/// end up running on the Unity main thread. A sleep-poll there stalls the player loop in
+		/// 50ms steps and wakes up to a full interval late; a single event wait blocks only as
+		/// long as contexts actually remain and returns the instant the last one is released.
+		/// <para>
+		/// Deliberately never disposed: a context released after teardown would raise
+		/// <see cref="ObjectDisposedException"/> from inside <see cref="OnContextDisposed"/>.
+		/// The factory only goes away at process exit, so the handle costs nothing.
+		/// </para>
+		/// </remarks>
+		private readonly ManualResetEventSlim contextsDrained = new ManualResetEventSlim(true);
 		private readonly NpgsqlDbConfiguration configuration;
 		private readonly DbContextOptions<NpgsqlDbContext> cachedOptions;
 		private readonly ConnectionPoolMetrics poolMetrics;
@@ -131,21 +148,21 @@ namespace FishMMO.Database.Npgsql
 
 			try
 			{
-				Interlocked.Increment(ref activeContextCount);
+				TrackContextCreated();
 				var context = new NpgsqlDbContext(cachedOptions, configuration.Schema);
 				context.Disposed += OnContextDisposed;
 				return context;
 			}
 			catch (NpgsqlException npgsqlEx) when (IsPoolExhaustionException(npgsqlEx))
 			{
-				Interlocked.Decrement(ref activeContextCount);
+				TrackContextReleased();
 				poolMetrics.RecordPoolExhaustion();
 				poolMetrics.RecordConnectionError();
 				throw;
 			}
 			catch
 			{
-				Interlocked.Decrement(ref activeContextCount);
+				TrackContextReleased();
 				poolMetrics.RecordConnectionError();
 				throw;
 			}
@@ -163,7 +180,33 @@ namespace FishMMO.Database.Npgsql
 			{
 				context.Disposed -= OnContextDisposed;
 			}
-			Interlocked.Decrement(ref activeContextCount);
+			TrackContextReleased();
+		}
+
+		/// <summary>
+		/// Records a newly created context and clears the drained signal.
+		/// </summary>
+		private void TrackContextCreated()
+		{
+			if (Interlocked.Increment(ref activeContextCount) == 1)
+			{
+				contextsDrained.Reset();
+			}
+		}
+
+		/// <summary>
+		/// Records a released context and signals when none remain.
+		/// </summary>
+		/// <remarks>
+		/// Dispose calls Shutdown first, after which CreateDbContext throws, so the count can only
+		/// fall while a disposer is waiting — no create can race a Set back to a stale signal.
+		/// </remarks>
+		private void TrackContextReleased()
+		{
+			if (Interlocked.Decrement(ref activeContextCount) == 0)
+			{
+				contextsDrained.Set();
+			}
 		}
 
 		/// <summary>
@@ -321,12 +364,15 @@ namespace FishMMO.Database.Npgsql
 			GC.SuppressFinalize(this);
 			Shutdown();
 
-			// Wait briefly for active contexts to complete (consistent with ShutdownGracefullyAsync behavior)
-			var elapsed = Stopwatch.StartNew();
-
-			while (Volatile.Read(ref activeContextCount) > 0 && elapsed.ElapsedMilliseconds < DisposeWaitTimeoutMs)
+			// Wait briefly for active contexts to complete (consistent with ShutdownGracefullyAsync
+			// behavior). A single event wait rather than a Thread.Sleep poll: this runs on the
+			// caller's thread, which in the Unity server is the main thread during teardown, and
+			// it returns the moment the last context is released instead of up to a poll interval
+			// later. Shutdown() above already blocks new contexts, so the count only falls here.
+			if (!contextsDrained.Wait(DisposeWaitTimeoutMs))
 			{
-				Thread.Sleep(ShutdownPollIntervalMs);
+				// Best effort: proceed with teardown rather than hold the process open further.
+				poolMetrics.RecordConnectionError();
 			}
 
 			performanceTracker.Dispose();

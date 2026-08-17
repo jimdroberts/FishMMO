@@ -462,12 +462,20 @@ static void huff_lut_init(void)
 /**
  * Decode a Huffman-encoded string per RFC 7541 Section 5.2.
  *
- * Uses an 8-bit lookup table for the common case (codes ≤ 8 bits,
- * which covers all ASCII alphanumeric and punctuation), falling
- * back to a linear scan over the remaining symbol space for codes
- * > 8 bits (rare: control characters, extended bytes).  The lookup
- * table eliminates data-dependent timing variation for the common
- * symbols and is ~20× faster than the previous per-symbol scan.
+ * Two-tier decode. Codes of 8 bits or fewer — every ASCII letter, digit,
+ * and the punctuation common in URLs — resolve in one 8-bit table lookup.
+ * Longer codes (up to 30 bits) fall back to a scan over increasing code
+ * lengths.
+ *
+ * The fallback is not optional: RFC 7541 Appendix B assigns codes longer
+ * than 8 bits to characters that appear in ordinary header values —
+ * `! " # $ ' ( ) + @ < > [ \ ] ^ { | } ~` and every byte ≥ 0x80. An
+ * earlier version gated the scan on `bits >= 5 && bits < 8`, which can
+ * never hold immediately after the LUT loop exits (it exits with
+ * bits >= 8), so no long code was ever decodable: the accumulator just
+ * filled until the 64-bit guard rejected the input. Any CONNECT carrying
+ * a quote or a bracket anywhere in a Huffman-coded header value failed
+ * the handshake with a generic "QPACK decode error".
  *
  * @param input           Encoded bytes (Huffman-coded).
  * @param input_len       Number of encoded bytes.
@@ -484,76 +492,81 @@ static int huffman_decode(const uint8_t* input, size_t input_len,
     /* One-time LUT initialization (cheap — 256 int8 + 256 uint8 writes) */
     huff_lut_init();
 
-    uint64_t buf = 0;       /* bit accumulator (MSB-aligned) */
+    uint64_t buf = 0;       /* bit accumulator (LSB-aligned, `bits` valid) */
     int bits = 0;            /* number of valid bits in buf */
     size_t out_pos = 0;
 
-    for (size_t i = 0; i < input_len; i++) {
-        /* Shift in 8 more bits */
-        buf = (buf << 8) | input[i];
-        bits += 8;
-
-        /* ── Overflow guard (FIX #1) ──────────────────────────
-         * If bits >= 64, the next shift in `buf >> (bits - 8)`
-         * would be undefined behavior.  A valid Huffman stream
-         * never accumulates this many unconsumed bits (the longest
-         * code is 30 bits and the LUT fast-path consumes codes
-         * ≤ 8 bits aggressively), so reaching 64+ bits means the
-         * input is deliberately malformed — reject it. */
-        if (bits >= 64) return -1;
-
-        /* Emit decoded symbols using the 8-bit LUT for the fast path */
-        while (bits >= 8) {
-            /* Extract top 8 bits and look up in the LUT */
-            uint8_t top8 = (uint8_t)(buf >> (bits - 8));
-            huff_lut_entry_t e = huff_lut[top8];
-
-            if (e.sym >= 0) {
-                /* LUT hit — single lookup, no scan */
-                if (out_pos >= output_capacity) return -1;
-                output[out_pos++] = (uint8_t)e.sym;
-                bits -= e.len;
-                if (bits > 0)
-                    buf = buf & ((1ULL << bits) - 1);
-                else
-                    buf = 0;
-            } else {
-                /* No code ≤ 8 bits matches — need more bits or
-                 * this is a longer code.  Fall through to the
-                 * linear scan below. */
-                break;
-            }
+    for (size_t i = 0; i <= input_len; i++) {
+        if (i < input_len) {
+            /* Shift in 8 more bits. The accumulator never exceeds
+             * 30 (longest code) + 7 (partial byte) + 8 = 45 bits,
+             * because the loop below always drains down below the
+             * longest code length before the next byte arrives. */
+            buf = (buf << 8) | input[i];
+            bits += 8;
         }
 
-        /* Linear-scan fallback for codes > 8 bits (rare).
-         * This runs only when bits >= 5 and the LUT missed. */
-        while (bits >= 5 && bits < 8) {
+        /* Emit every symbol that is fully determined by the buffered bits. */
+        for (;;) {
             bool matched = false;
-            for (int sym = 0; sym < 256; sym++) {
-                uint8_t code_len = kHuffLen[sym];
-                if (code_len > bits) continue;
 
-                uint32_t top = (uint32_t)(buf >> (bits - code_len));
-                if (top == kHuffCode[sym]) {
+            if (bits >= 8) {
+                /* Fast path: one lookup resolves any code ≤ 8 bits. */
+                uint8_t top8 = (uint8_t)(buf >> (bits - 8));
+                huff_lut_entry_t e = huff_lut[top8];
+                if (e.sym >= 0) {
                     if (out_pos >= output_capacity) return -1;
-                    output[out_pos++] = (uint8_t)sym;
-                    bits -= code_len;
-                    if (bits > 0)
-                        buf = buf & ((1ULL << bits) - 1);
-                    else
-                        buf = 0;
+                    output[out_pos++] = (uint8_t)e.sym;
+                    bits -= e.len;
+                    buf &= (bits > 0) ? ((1ULL << bits) - 1) : 0;
                     matched = true;
-                    break;
                 }
             }
-            if (!matched) break;
+
+            /* Slow path, for two cases the lookup table cannot serve:
+             *   - codes longer than 8 bits (up to 30);
+             *   - fewer than 8 bits buffered, which happens at the end of
+             *     the stream where a final short code may still be complete.
+             * Codes are prefix-free, so the shortest length that matches is
+             * the symbol. Scanning from the minimum length is redundant when
+             * the table already missed — a table miss proves no code ≤ 8 bits
+             * matches — but it keeps the two cases in one loop.
+             *
+             * Trailing padding is never mistaken for a symbol: RFC 7541 §5.2
+             * pads with all-1s bits, and no code of length 1–7 is all 1s. */
+            if (!matched) {
+                for (int code_len = 5; code_len <= 30 && code_len <= bits; code_len++) {
+                    uint64_t top = buf >> (bits - code_len);
+                    for (int sym = 0; sym < 256; sym++) {
+                        if (kHuffLen[sym] != code_len) continue;
+                        if (top != (uint64_t)kHuffCode[sym]) continue;
+                        if (out_pos >= output_capacity) return -1;
+                        output[out_pos++] = (uint8_t)sym;
+                        bits -= code_len;
+                        buf &= (bits > 0) ? ((1ULL << bits) - 1) : 0;
+                        matched = true;
+                        break;
+                    }
+                    if (matched) break;
+                }
+            }
+
+            if (!matched) break;   /* need more input, or only padding is left */
         }
+
+        /* The emit loop consumed everything decodable, so bits left over that
+         * exceed the longest code (30) can never resolve — the input is
+         * malformed. Rejecting here also keeps the accumulator well clear of
+         * a 64-bit shift overflow. */
+        if (bits > 30) return -1;
     }
 
     /* ── Padding check ────────────────────────────────────────
-     * RFC 7541 Section 5.2: The encoded string is padded at the
-     * end with 1-bits (the EOS symbol prefix). Any remaining bits
-     * in the buffer MUST be all 1's. */
+     * RFC 7541 Section 5.2: the encoded string is padded to a byte
+     * boundary with the most significant bits of the EOS symbol, which
+     * are all 1s. Padding is therefore strictly fewer than 8 bits and
+     * must be all 1s; anything else is a decoding error. */
+    if (bits >= 8) return -1;
     if (bits > 0) {
         uint64_t mask = (1ULL << bits) - 1;
         if ((buf & mask) != mask) {
@@ -865,11 +878,18 @@ static uint8_t* qpack_put_literal_static_name(
  * For server response (STATUS):
  *   Encodes: :status: <val>
  *
- * For client request (CONNECT):
+ * For client request (extended CONNECT, RFC 9220 §4):
  *   Encodes: :method: CONNECT
  *            :protocol: webtransport
+ *            :scheme: https
  *            :path: <path>
  *            :authority: <authority>
+ *            origin: <origin>            (when supplied)
+ *
+ * :scheme and :path are mandatory on an extended CONNECT. RFC 9114 §4.3.1
+ * exempts only the classic tunnelling form of CONNECT from carrying them;
+ * the extended form WebTransport uses must include both, and a request
+ * missing a required pseudo-header is malformed.
  *
  * Returns bytes written, or 0 on error.
  */
@@ -877,7 +897,8 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
                             int status_code,
                             const char* method,
                             const char* path,
-                            const char* authority)
+                            const char* authority,
+                            const char* origin)
 {
     /* Build the field section in a temp buffer first */
     uint8_t fields[2048];
@@ -910,31 +931,59 @@ static int h3_write_headers(uint8_t* out, size_t out_cap,
             fp = qpack_put_literal_static_name(fp, 15, method, strlen(method));
         }
 
-        /* :protocol: webtransport — literal without name ref (never-indexed).
-         * Format: 001 prefix with 4-bit name-length qpack varint
-         * (RFC 9204 §4.3.2: bits 7-5=001, bit 4=N, bits 3-0=4-bit prefix).
-         * Name ":protocol" = 10 bytes, encoded as:
-         *   byte 0: 001 N H LLLL = 001 1 0 1010 = 0x3A (single byte)
-         * Value length uses qpack_varint_encode with 7-bit prefix. */
+        /* :protocol: webtransport — Literal Field Line Without Name Reference
+         * (RFC 9204 §4.3.3). There is no static-table entry for :protocol, so
+         * the name is spelled out.
+         *
+         *   0   1   2   3   4   5   6   7
+         * +---+---+---+---+---+---+---+---+
+         * | 0 | 0 | 1 | N | H |NameLen(3+)|
+         * +---+---+---+---+---+---+---+---+
+         *
+         * The name-length prefix is 3 bits, not 4, and ":protocol" is 9
+         * characters. Encoding it with a 4-bit prefix and a length of 10 (as
+         * this did) produced 0x3A: the decoder reads bit 3 as the Huffman flag
+         * — set, in that byte — and the low 3 bits as a length of 2, so it
+         * looked for a 2-byte Huffman-coded name and failed. Every CONNECT
+         * this library generated was unparseable; it went unnoticed because
+         * only the client path encodes CONNECT, and the server decodes
+         * browser-generated requests. */
         const char* proto = "webtransport";
+        const char* proto_name = ":protocol";
+        size_t proto_name_len = strlen(proto_name);   /* 9 */
         size_t plen = strlen(proto);
         uint8_t nb[8], vb[8];
-        uint8_t nb_n = qpack_varint_encode(10, nb, 4);  /* ":protocol" = 10 bytes */
-        nb[0] |= 0x20 | 0x10;  /* set bits 7-5 = 001, bit 4 = N (never-indexed) */
+        uint8_t nb_n = qpack_varint_encode(proto_name_len, nb, 3);
+        nb[0] |= 0x20 | 0x10;   /* bits 7-5 = 001, bit 4 = N; bit 3 (H) stays 0 */
         memcpy(fp, nb, nb_n); fp += nb_n;
-        memcpy(fp, ":protocol", 10); fp += 10;
-        uint8_t vn = qpack_varint_encode(plen, vb, 7);
+        memcpy(fp, proto_name, proto_name_len); fp += proto_name_len;
+        uint8_t vn = qpack_varint_encode(plen, vb, 7);  /* H = 0 in bit 7 */
         memcpy(fp, vb, vn); fp += vn;
         memcpy(fp, proto, plen); fp += plen;
 
-        /* :path: <path> — literal + static name ref idx=1 (:path /). */
-        if (path && path[0]) {
-            fp = qpack_put_literal_static_name(fp, 1, path, strlen(path));
+        /* :scheme: https — indexed static entry 23 (RFC 9204 Appendix A).
+         * WebTransport runs over TLS unconditionally, so the scheme is
+         * always https and the one-byte indexed form always applies. */
+        *fp++ = (uint8_t)(0xC0 | 23);
+
+        /* :path: <path> — literal + static name ref idx=1 (:path /).
+         * Required on extended CONNECT, so fall back to "/" rather than
+         * omitting the pseudo-header when the caller passes nothing. */
+        {
+            const char* p = (path && path[0]) ? path : "/";
+            fp = qpack_put_literal_static_name(fp, 1, p, strlen(p));
         }
 
         /* :authority: <authority> — literal + static name ref idx=0 (:authority). */
         if (authority && authority[0]) {
             fp = qpack_put_literal_static_name(fp, 0, authority, strlen(authority));
+        }
+
+        /* origin: <origin> — literal + static name ref idx=90 (origin).
+         * Browsers always send this; a native client that omits it cannot
+         * connect to a server enforcing an origin allow-list. */
+        if (origin && origin[0]) {
+            fp = qpack_put_literal_static_name(fp, 90, origin, strlen(origin));
         }
     }
 
@@ -1615,12 +1664,33 @@ typedef struct {
 /** Forward decl for hex dump — defined below with HEADERS parser. */
 static void h3_hex_dump(const char* label, const uint8_t* data, size_t len);
 
+/* Per-control-stream frame bookkeeping, passed as the h3_parse_frames ctx. */
+typedef struct {
+    bool seen_first_frame;   /* set once the first control frame is seen */
+    bool settings_ok;        /* false if the first frame was not SETTINGS */
+} h3_control_state_t;
+
 /** Log peer SETTINGS frame id/value pairs with human-readable names. */
 static void h3_log_peer_settings_frame(void* ctx, uint64_t frame_type,
                                        const uint8_t* payload,
                                        uint64_t payload_len)
 {
-    (void)ctx;
+    /* RFC 9114 §6.2.1: the first frame on each control stream MUST be
+     * SETTINGS. A peer that opens with anything else is a connection error
+     * of type H3_MISSING_SETTINGS, not something to log and carry on with. */
+    h3_control_state_t* cs = (h3_control_state_t*)ctx;
+    if (cs && !cs->seen_first_frame) {
+        cs->seen_first_frame = true;
+        cs->settings_ok = (frame_type == H3_FRAME_SETTINGS);
+        if (!cs->settings_ok) {
+            WT_LOG_ERROR(
+                "H3: first control-stream frame is type=0x%llx, expected "
+                "SETTINGS (0x04) — H3_MISSING_SETTINGS",
+                (unsigned long long)frame_type);
+            return;
+        }
+    }
+
     if (frame_type != H3_FRAME_SETTINGS) {
         WT_LOG_INFO("H3: peer control frame type=0x%llx len=%llu",
                     (unsigned long long)frame_type,
@@ -2419,9 +2489,22 @@ int32_t h3_client_connect(h3_session_t* h3,
         sctx->next = h3->stream_ctx_list;
         h3->stream_ctx_list = sctx;
 
+        /* Derive an Origin from the authority. WebTransport is https-only,
+         * so a native client's natural origin is https://<authority> — the
+         * same value a browser page served from that host would send. A
+         * server enforcing an origin allow-list rejects a CONNECT without
+         * one, so omitting it makes the native client unable to reach any
+         * such deployment. */
+        char origin_buf[280];
+        origin_buf[0] = '\0';
+        if (authority && authority[0]) {
+            snprintf(origin_buf, sizeof(origin_buf), "https://%s", authority);
+        }
+
         uint8_t req_data[2048];
         int req_len = h3_write_headers(req_data, sizeof(req_data),
-                                        0, "CONNECT", path, authority);
+                                        0, "CONNECT", path, authority,
+                                        origin_buf[0] ? origin_buf : NULL);
         WT_LOG_INFO("H3-DEBUG: client built CONNECT request, req_len=%d path=%s authority=%s",
                     req_len, path ? path : "(null)", authority ? authority : "(null)");
         h3_hex_dump("H3-DEBUG: raw CONNECT request bytes", req_data, req_len > 0 ? (size_t)req_len : 0);
@@ -2444,8 +2527,14 @@ int32_t h3_client_connect(h3_session_t* h3,
              * past this call, so it must not be a local. See h3_send_buf_alloc. */
             h3_send_buf_t* sb = h3_send_buf_alloc(req_copy, (uint32_t)(req_len));
             free(req_copy);
+            /* QUIC_SEND_FLAG_NONE, never FIN: in WebTransport over HTTP/3
+             * the CONNECT stream *is* the session. Closing it — including
+             * half-closing it with a FIN on our send side — terminates the
+             * session, so a conformant server would tear us down the moment
+             * the request arrived. The stream stays open for the session's
+             * lifetime and is closed only to end the session. */
             st = sb ? MsQuic->StreamSend(req_stream, &sb->buf, 1,
-                                     QUIC_SEND_FLAG_FIN, sb)
+                                     QUIC_SEND_FLAG_NONE, sb)
                                       : QUIC_STATUS_OUT_OF_MEMORY;
             if (QUIC_FAILED(st)) {
                 free(sb);
@@ -2722,9 +2811,11 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
 
                 if (sctx->recv_offset > 1) {
                     size_t offset = 1; /* skip stream type byte */
+                    h3_control_state_t cs = { false, true };
                     h3_parse_frames(sctx->recv_buf + 1,
                                     sctx->recv_offset - 1,
-                                    &offset, h3_log_peer_settings_frame, NULL);
+                                    &offset, h3_log_peer_settings_frame, &cs);
+                    if (!cs.settings_ok) return -1;  /* H3_MISSING_SETTINGS */
                 }
                 return 0;
             }
@@ -2745,10 +2836,34 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                 return 0;
             }
 
-            /* Unknown uni stream type — ignore, never native-fallback. */
+            if (first_byte == H3_STREAM_WEBTRANSPORT_UNI) {
+                /* A WebTransport unidirectional stream (draft-ietf-webtrans-
+                 * http3 §4.1). The transport maps FishNet's reliable channel
+                 * onto bidirectional streams only, so nothing here consumes a
+                 * unidirectional one. Reject it explicitly: leaving it open
+                 * holds a stream context and a QUIC stream slot for the life
+                 * of the connection while never delivering data. */
+                sctx->stream_type = (int)first_byte;
+                WT_LOG_WARN("H3: peer opened a WebTransport unidirectional "
+                            "stream; this transport uses bidirectional "
+                            "streams only — aborting it");
+                MsQuic->StreamShutdown(sctx->quic_stream,
+                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                return 0;
+            }
+
+            /* Unknown uni stream type. RFC 9114 §6.2.3 allows a recipient to
+             * abort the reading side of a stream whose type it does not
+             * understand, and requires that it not treat the stream as an
+             * error. Aborting (rather than the previous silent ignore)
+             * releases the stream context instead of holding it until the
+             * connection ends, which an unauthenticated peer could otherwise
+             * repeat to exhaust memory. */
             sctx->stream_type = (int)first_byte;
-            WT_LOG_WARN("H3: ignoring unknown uni stream type=0x%02x",
+            WT_LOG_WARN("H3: aborting unknown uni stream type=0x%02x",
                         (unsigned)first_byte);
+            MsQuic->StreamShutdown(sctx->quic_stream,
+                QUIC_STREAM_SHUTDOWN_FLAG_ABORT_RECEIVE, 0);
             return 0;
         }
 
@@ -2793,9 +2908,11 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
         /* Parse SETTINGS from control stream data (after type byte) */
         if (sctx->recv_offset > 1) {
             size_t offset = 1;
+            h3_control_state_t cs = { false, true };
             h3_parse_frames(sctx->recv_buf + 1,
                             sctx->recv_offset - 1,
-                            &offset, h3_log_peer_settings_frame, NULL);
+                            &offset, h3_log_peer_settings_frame, &cs);
+            if (!cs.settings_ok) return -1;  /* H3_MISSING_SETTINGS */
         }
         return 0;
     }
@@ -2879,7 +2996,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                             "(configure allowed_origins=\"*\" for dev)");
                                                 uint8_t rej[128];
                                                 int rej_len = h3_write_headers(
-                                                    rej, sizeof(rej), 403, NULL, NULL, NULL);
+                                                    rej, sizeof(rej), 403, NULL, NULL, NULL, NULL);
                                                 if (rej_len > 0) {
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
@@ -2932,7 +3049,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                 WT_LOG_WARN("Rejected WebTransport CONNECT from origin: %s", phdr.origin);
                                                 uint8_t rej[128];
                                                 int rej_len = h3_write_headers(
-                                                    rej, sizeof(rej), 403, NULL, NULL, NULL);
+                                                    rej, sizeof(rej), 403, NULL, NULL, NULL, NULL);
                                                 if (rej_len > 0) {
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
@@ -2971,7 +3088,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                             h3->expected_authority);
                                                 uint8_t rej[128];
                                                 int rej_len = h3_write_headers(
-                                                    rej, sizeof(rej), 403, NULL, NULL, NULL);
+                                                    rej, sizeof(rej), 403, NULL, NULL, NULL, NULL);
                                                 if (rej_len > 0) {
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
@@ -3012,7 +3129,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                             phdr.authority, h3->expected_authority);
                                                 uint8_t rej[128];
                                                 int rej_len = h3_write_headers(
-                                                    rej, sizeof(rej), 403, NULL, NULL, NULL);
+                                                    rej, sizeof(rej), 403, NULL, NULL, NULL, NULL);
                                                 if (rej_len > 0) {
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
@@ -3052,7 +3169,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                             phdr.path);
                                                 uint8_t rej[128];
                                                 int rej_len = h3_write_headers(
-                                                    rej, sizeof(rej), 400, NULL, NULL, NULL);
+                                                    rej, sizeof(rej), 400, NULL, NULL, NULL, NULL);
                                                 if (rej_len > 0) {
                                                     uint8_t* rej_copy = (uint8_t*)malloc((size_t)rej_len);
                                                     if (rej_copy) {
@@ -3132,7 +3249,7 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                         /* Now send 200 OK — wt_session is ready to receive data */
                                         uint8_t resp[256];
                                         int resp_len = h3_write_headers(
-                                            resp, sizeof(resp), 200, NULL, NULL, NULL);
+                                            resp, sizeof(resp), 200, NULL, NULL, NULL, NULL);
 
                                         if (resp_len > 0) {
                                             uint8_t* resp_copy =
@@ -3334,7 +3451,7 @@ int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
 int32_t h3_send_wt_response(h3_session_t* h3, HQUIC req_stream)
 {
     uint8_t buf[256];
-    int len = h3_write_headers(buf, sizeof(buf), 200, NULL, NULL, NULL);
+    int len = h3_write_headers(buf, sizeof(buf), 200, NULL, NULL, NULL, NULL);
     if (len <= 0) return -1;
 
     return (h3_stream_send(req_stream, buf, (uint32_t)len) == QUIC_STATUS_SUCCESS)

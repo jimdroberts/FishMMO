@@ -84,6 +84,29 @@ typedef struct wt_session_s {
 
     wt_connection_id_t      conn_id;
 
+    /* ── HTTP/3 datagram framing (RFC 9297) ──────────────────────
+     * True when this session was established through a WebTransport
+     * CONNECT (a browser, or any HTTP/3 peer) rather than raw QUIC.
+     *
+     * On such a session a QUIC DATAGRAM frame does not carry the
+     * application payload directly. It carries an HTTP/3 Datagram:
+     *
+     *   HTTP/3 Datagram {
+     *     Quarter Stream ID (i),      ← CONNECT stream ID / 4
+     *     HTTP/3 Datagram Payload (..),
+     *   }
+     *
+     * The Quarter Stream ID is what associates the datagram with this
+     * WebTransport session; without it a browser has no session to
+     * deliver to and discards the datagram at the HTTP/3 layer, and an
+     * inbound datagram delivered without stripping it hands the
+     * application 1–4 bytes of protocol data as if it were payload.
+     *
+     * Native raw-QUIC peers exchange bare payloads — h3_datagrams is
+     * false for them and no prefix is added or expected. */
+    bool                    h3_datagrams;
+    uint64_t                wt_session_id;   /* CONNECT stream ID */
+
     /* Refcount: 1 on creation, +1 for each in-flight send.
      * Free only when refcount reaches 0 after the owner releases. */
     atomic_uint             ref_count;
@@ -161,6 +184,35 @@ int32_t wt_session_send_stream(
 
 int32_t wt_session_send_datagram(
     wt_session_t* session, const uint8_t* data, int32_t length);
+
+/**
+ * Mark this session as carrying HTTP/3 datagrams (RFC 9297) and record the
+ * WebTransport session ID (the CONNECT request stream ID). Call once, right
+ * after the WebTransport handshake completes and before any datagram send.
+ */
+void wt_session_enable_h3_datagrams(
+    wt_session_t* session, uint64_t connect_stream_id);
+
+/**
+ * Validate and strip the HTTP/3 Datagram header from a received QUIC
+ * datagram, yielding the application payload.
+ *
+ * For a raw-QUIC session this is a no-op that returns the buffer unchanged.
+ * For a WebTransport session it decodes the Quarter Stream ID and checks it
+ * against this session's own; a datagram addressed to a different session on
+ * the same connection is not ours to deliver.
+ *
+ * @param out_payload  Receives a pointer into @p data (no copy is made).
+ * @param out_length   Receives the payload length; may legitimately be 0.
+ * @return true if a payload was extracted, false if the datagram is
+ *         malformed or belongs to another session and must be dropped.
+ */
+bool wt_session_datagram_payload(
+    wt_session_t* session, const uint8_t* data, uint32_t length,
+    const uint8_t** out_payload, uint32_t* out_length);
+
+/** Maximum application bytes that fit in one datagram on this session. */
+int32_t wt_session_max_datagram_payload(wt_session_t* session);
 
 /** Acquire a reference for in-flight send. Returns true if acquired.
  *  If the session has been released (released==true), returns false.

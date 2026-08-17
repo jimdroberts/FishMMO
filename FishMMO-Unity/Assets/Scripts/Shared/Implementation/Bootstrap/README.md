@@ -21,6 +21,8 @@
 
 The Bootstrap system is the first code that executes when FishMMO launches. It provides a sequential, event-driven startup pipeline where each bootstrap stage loads Addressable assets and scenes through two phases (Preload and Postload), then chains to the next stage by discovering `BootstrapSystem` components in newly loaded scenes.
 
+Each phase waits on an `AddressableLoadBatch` — the handle returned by `AddressableLoadProcessor.BeginProcessQueue()`, which tracks exactly the items that call enqueued and raises `Completed` once those items, and only those items, have finished. Completion is deliberately *not* taken from the processor's global `OnProgressUpdate` event: that event is shared by every bootstrap system, both loading screens, and the world-scene readiness handshake, so any queue draining anywhere reported "done" to all of them at once.
+
 `MainBootstrapSystem` is the entry point placed in the initial Unity scene. It auto-starts via `Awake()`, initializes the structured logging framework (bridging Unity's `Debug.Log` with FishMMO's central `Log` manager), reads `VersionConfig` for game version validation, enqueues the first scene (`ServerLauncher` for server builds or `ClientPreboot` for client builds), and registers graceful shutdown handlers for both editor and standalone environments.
 
 `DynamicAddressableLoadPathSystem` allows runtime overriding of remote Addressable asset URLs — useful for IP discovery or CDN redirection — by replacing the domain portion of HTTP/HTTPS URLs while leaving local paths unchanged.
@@ -43,8 +45,11 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 ## Features
 
 - **Two-phase Addressable loading pipeline** — each `BootstrapSystem` runs a Preload phase then a Postload phase, each with platform-specific asset and scene lists selected at compile time (`UNITY_EDITOR`, `UNITY_WEBGL`, default Standalone).
-- **Automatic bootstrap chaining** — when a scene finishes loading, `OnBootstrapPostProcess` scans its root GameObjects for `BootstrapSystem` components and calls `StartBootstrap()` on each after the current stage completes.
-- **Virtual hook points** — `OnPreload()`, `OnPostLoad()`, `OnCompletePreload()`, `OnCompleteProcessing()`, and `OnDestroying()` allow subclasses to inject custom logic at every stage of the pipeline.
+- **Per-phase load batches** — each phase waits on its own `AddressableLoadBatch` rather than on a shared progress event, so one system's completion cannot be mistaken for another's.
+- **Failures never stall the chain** — a batch completes whether its items succeeded, failed, or were dropped. Failed items are logged by name through `AddressableLoadBatch.FailedItems` and boot continues; withholding completion would strand the client on a black screen with no UI and no way forward.
+- **Automatic bootstrap chaining** — when a scene finishes loading, `OnBootstrapPostProcess` scans its root GameObjects (including inactive children) for `BootstrapSystem` components and calls `StartBootstrap()` on each after the current stage completes.
+- **Accumulating discovery** — systems found across *every* scene a stage loads are accumulated, not overwritten per scene, so a stage that loads several scenes containing bootstraps starts all of them.
+- **Virtual hook points** — `OnPreload()`, `OnPostLoad()`, `OnCompletePreload()`, `OnCompleteProcessing()`, and `OnDestroying()` allow subclasses to inject custom logic at every stage of the pipeline. `Awake()` and `OnDestroy()` are `protected virtual` and must be **overridden**, never shadowed — Unity dispatches only the most-derived member, so a second `void Awake()` in a subclass silently suppresses the base one.
 - **Structured logging initialization** — `MainBootstrapSystem` configures `FishMMO.Logging.Log` with `UnityConsoleLogger`, `UnityConsoleFormatter`, `UnityLoggerBridge`, and a JSON-serializable `UnityConsoleLoggerConfig`.
 - **Bidirectional Unity ↔ FishMMO log bridging** — `UnityLoggerBridge` intercepts Unity `Debug.Log` calls and routes them to `Log.Write()`; `UnityConsoleLogger` writes back to `Debug.Log` with `IsLoggingInternally = true` to prevent infinite recursion.
 - **Rich-text columnar console output** — `UnityConsoleFormatter` renders timestamped, padded, color-coded log entries with exception details and additional data sections.
@@ -52,14 +57,16 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 - **Version management** — reads `VersionConfig` ScriptableObject and optionally validates against `version.txt` in standalone builds.
 - **Dynamic Addressable load-path override** — `DynamicAddressableLoadPathSystem` replaces remote asset URL domains at runtime via `Addressables.ResourceManager.InternalIdTransformFunc`.
 - **Graceful async shutdown** — handles `Application.wantsToQuit`, editor play-mode exit (`EditorApplication.playModeStateChanged`), and `OnDestroy` with deferred quit, logging config save, `Log.Shutdown()`, and Addressable asset release.
-- **Duplicate-start guard** — `BootstrapSystem.StartBootstrap()` tracks `hasStartedBootstrap` to prevent re-entrant initialization.
+- **Duplicate-start and duplicate-completion guards** — `StartBootstrap()` tracks `hasStartedBootstrap`; `hasCompletedPreload` and `hasCompletedPostload` ensure `OnCompletePreload()` and `OnCompleteProcessing()` each run at most once.
+- **Ownership-checked log hook release** — `Log.OnInternalLogMessage` is a single-cast static assigned by every bootstrap system's `Awake()`, so several are alive at once and the last to wake owns it. `OnDestroy()` clears it only if this instance is the current owner; clearing unconditionally silenced internal logging for every system still shutting down.
+- **Boot survives a missing `VersionConfig`** — `MainBootstrapSystem` logs the error and continues with an unknown version instead of aborting `OnPreload()`. Aborting left the load queue empty, which made every downstream phase report "done" instantly and produced a permanently black screen; carrying on lets the launcher come up and report the bad version to the player.
 
 ## Prerequisites
 
 - Unity 6.3 LTS with IL2CPP scripting backend.
 - Addressables package configured with valid asset groups and load paths.
 - `FishMMO.Logging` assembly (provides `Log`, `ILogger`, `IConsoleFormatter`, `ILoggerConfig`, `LogEntry`, `LogLevel`, `ConsoleFormatterHelpers`).
-- `AddressableLoadProcessor` — shared utility for queuing and processing Addressable loads.
+- `AddressableLoadProcessor` / `AddressableLoadBatch` — shared utility for queuing and draining Addressable loads, and the per-caller completion handle it hands back.
 - `VersionConfig` ScriptableObject assigned in the `MainBootstrapSystem` inspector.
 - `Constants` class providing `GetWorkingDirectory()`.
 - Initial Unity scene containing a GameObject with the `MainBootstrapSystem` component.
@@ -210,6 +217,8 @@ public class MyCustomBootstrap : BootstrapSystem
 | Postload phase completes | Watch console during startup | `Postload Complete` message for each `BootstrapSystem` |
 | Bootstrap chaining works | Load a scene containing another `BootstrapSystem` | `OnCompleteProcessing` triggers `StartBootstrap()` on discovered systems |
 | Duplicate start prevented | Attempt to call `StartBootstrap()` twice on same system | Warning: `BootstrapSystem tried to start multiple times. Ignoring.` |
+| Load failures do not stall boot | Point a preload entry at a missing Addressable key | `preload finished with N failed item(s). Continuing bootstrap.` and the chain still advances |
+| Missing VersionConfig does not hang | Clear the `versionConfig` reference and enter Play Mode | Error is logged, boot completes, and the launcher reports the version problem in its UI — never a black screen |
 | Logging bridge active | Call `Debug.Log("test")` during play | Message routed through `FishMMO.Logging.Log` with source `"UNITY"` |
 | Re-entrant loop prevention | `UnityConsoleLogger` writes to `Debug.Log` | No infinite loop; `IsLoggingInternally` flag prevents re-capture |
 | Graceful shutdown (Editor) | Exit Play Mode | `Editor exiting Play Mode. Initiating shutdown...` followed by synchronous `Log.Shutdown()` |
@@ -262,31 +271,36 @@ MainBootstrapSystem.Awake()
                     │       ├── UNITY_SERVER  → "ServerLauncher"
                     │       └── !UNITY_SERVER → "ClientPreboot"
                     │
-                    ├── Subscribe to AddressableLoadProcessor.OnProgressUpdate
-                    └── AddressableLoadProcessor.BeginProcessQueue()
+                    └── batch = AddressableLoadProcessor.BeginProcessQueue()
+                        batch.Completed += OnPreloadBatchCompleted
                             │
-                            └── OnPreloadProgressUpdate(progress)
+                            └── OnPreloadBatchCompleted(batch)
                                     │
-                                    ├── Wait until progress >= 1.0
-                                    ├── Unsubscribe from OnProgressUpdate
+                                    ├── Guard: hasCompletedPreload (run once)
+                                    ├── Log batch.FailedItems, if any — continue regardless
                                     └── OnCompletePreload()
                                             │
                                             └── InitializePostload()
                                                     │
                                                     ├── Enqueue platform-specific postload assets/scenes
                                                     ├── OnPostLoad() — virtual hook
-                                                    ├── Subscribe to OnProgressUpdate
-                                                    └── BeginProcessQueue()
+                                                    └── batch = BeginProcessQueue()
+                                                        batch.Completed += OnPostloadBatchCompleted
                                                             │
-                                                            └── OnPostloadProgressUpdate(progress)
+                                                            └── OnPostloadBatchCompleted(batch)
                                                                     │
-                                                                    ├── Wait until progress >= 1.0
-                                                                    ├── Unsubscribe from OnProgressUpdate
+                                                                    ├── Guard: hasCompletedPostload (run once)
+                                                                    ├── Log batch.FailedItems, if any
                                                                     └── OnCompleteProcessing()
                                                                             │
-                                                                            └── Start preloaded BootstrapSystems
-                                                                                (chaining to next stage)
+                                                                            └── Start discovered BootstrapSystems
+                                                                                (over a snapshot — starting one
+                                                                                 can append more to the list)
 ```
+
+A batch with nothing to claim is already complete when `BeginProcessQueue()`
+returns, and subscribing to it still invokes the handler — so a stage with an
+empty queue advances synchronously rather than hanging.
 
 ### Bootstrap Chain Across Builds
 
@@ -300,9 +314,25 @@ MainBootstrapSystem (initial scene)
     │
     └── Client path:
         └── Loads "ClientPreboot" scene
-            └── ClientPostbootSystem : BootstrapSystem
-                └── Loads client UI and gameplay scenes
+            └── plain BootstrapSystem component
+                │   (no subclass — the chain is driven entirely by its
+                │    Inspector scene lists, which differ per platform)
+                │
+                ├── Standalone → postload "ClientLauncher"
+                │       └── ClientLauncher : MonoBehaviour  (not a BootstrapSystem)
+                │           news + version check + patching, and on Play:
+                │           loads "ClientPostboot", calls StartBootstrap() on the
+                │           ClientPostbootSystem it finds there, then unloads itself
+                │
+                └── Editor / WebGL → postload "ClientPostboot" directly
+                        └── ClientPostbootSystem : BootstrapSystem
+                            └── Loads client UI and gameplay scenes
 ```
+
+The launcher is skipped in the Editor and on WebGL: neither can run the external
+updater, so there is nothing for it to do. `ClientLauncher` is deliberately not a
+`BootstrapSystem` — it is a terminal stage that hands control to the next
+bootstrap explicitly rather than being auto-discovered and chained.
 
 ### Logging Flow
 
@@ -423,15 +453,22 @@ ILoggerConfig
 |--------|------------|---------|
 | `OnPreload()` | After preload assets/scenes are enqueued | Subclass initialization before preload begins |
 | `OnPostLoad()` | After postload assets/scenes are enqueued | Subclass initialization before postload begins |
-| `OnCompletePreload()` | When preload progress reaches 1.0 | Triggers postload (can be overridden) |
-| `OnCompleteProcessing()` | When postload progress reaches 1.0 | Chains to next bootstrap stages (can be overridden) |
-| `OnDestroying()` | During OnDestroy cleanup | Custom cleanup logic |
+| `OnCompletePreload()` | When this system's preload batch completes | Triggers postload (can be overridden) |
+| `OnCompleteProcessing()` | When this system's postload batch completes | Chains to next bootstrap stages (can be overridden) |
+| `OnDestroying()` | During `OnDestroy` cleanup, before the log hook is released | Custom cleanup logic |
+
+`Awake()` and `OnDestroy()` are `protected virtual` Unity messages rather than
+hooks. Subclasses that need them must `override` and call `base` — `base.Awake()`
+first (it installs the internal-log callback), `base.OnDestroy()` last (it
+releases that callback, and your shutdown work still wants logging routed while
+it runs).
 
 ### External Dependencies
 
 | Dependency | Purpose |
 |------------|---------|
-| `AddressableLoadProcessor` | Queuing and processing Addressable asset/scene loads; progress events |
+| `AddressableLoadProcessor` | Queuing and draining Addressable asset/scene loads |
+| `AddressableLoadBatch` | Per-caller completion handle returned by `BeginProcessQueue()`; exposes `Completed`, `Progressed`, `HasFailures`, `FailedItems` |
 | `FishMMO.Logging.Log` | Central static log manager for routing entries to registered loggers |
 | `FishMMO.Logging.ILogger` | Interface implemented by `UnityConsoleLogger` |
 | `FishMMO.Logging.IConsoleFormatter` | Interface implemented by `UnityConsoleFormatter` |

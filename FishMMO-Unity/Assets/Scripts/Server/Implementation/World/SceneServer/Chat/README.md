@@ -393,7 +393,7 @@ OnDeinitialize → FlushPersistQueueSync
 │
 ├─ Signal IsShuttingDown = true
 ├─ Drain ALL remaining from PendingPersistQueue
-└─ PersistBatchAsync(...).GetAwaiter().GetResult() (blocking)
+└─ UnitySyncOverAsync.TryRun(ct => PersistBatchAsync(copy, ct)) (bounded block; shutdown only)
 ```
 
 ### Database Message Pump

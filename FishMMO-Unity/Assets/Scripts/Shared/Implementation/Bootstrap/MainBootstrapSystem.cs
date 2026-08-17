@@ -34,6 +34,24 @@ namespace FishMMO.Shared
 		private VersionConfig versionConfig;
 
 		/// <summary>
+		/// Frame rate the client is capped to during bootstrap, launcher, and the
+		/// login/character-select screens.
+		/// </summary>
+		/// <remarks>
+		/// Nothing sets <see cref="Application.targetFrameRate"/> before a network
+		/// connection exists, and its default is -1 (unlimited). The default quality
+		/// level also has vSync off, so the launcher and login menus render as fast as
+		/// the GPU allows and peg a CPU core to draw a static screen.
+		/// <para>This is only the pre-configuration default. The options UI persists a
+		/// "Refresh Rate" preference, and <c>RefreshRateSettingOption</c> /
+		/// <c>UITKOptions</c> call <c>Client.ApplyTargetFrameRate</c> when it loads, which
+		/// replaces this value with the user's choice. Failing that, FishNet's
+		/// <c>NetworkManager.UpdateFramerate</c> raises it from
+		/// <c>ClientManager.FrameRate</c> when the client connects.</para>
+		/// </remarks>
+		private const int BootstrapTargetFrameRate = 60;
+
+		/// <summary>
 		/// Indicates if shutdown is currently being initiated.
 		/// </summary>
 		private static bool isInitiatingShutdown = false;
@@ -46,8 +64,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unity Awake message. Starts the bootstrap initialization chain.
 		/// </summary>
-		void Awake()
+		/// <remarks>
+		/// Overrides rather than hides the base. Declaring a second <c>void Awake()</c>
+		/// shadowed the base implementation, so the base never ran for this system.
+		/// </remarks>
+		protected override void Awake()
 		{
+			base.Awake();
+
 			StartBootstrap();
 		}
 
@@ -213,24 +237,33 @@ namespace FishMMO.Shared
 		{
 			Debug.Log("[MainBootstrapSystem] Initializing...");
 
-#if !UNITY_SERVER
-			// The active QualitySettings level can have vSyncCount 0 (uncapped), and
-			// nothing sets Application.targetFrameRate until FishNet's NetworkManager
-			// starts a client/server manager. Without a cap here, the launcher/login
-			// screens render as fast as the GPU allows for a static UI, pinning a CPU
-			// core. NetworkManager.UpdateFramerate() overrides this once gameplay
-			// actually starts, using the configured ClientManager/ServerManager rate.
-			QualitySettings.vSyncCount = 0;
-			Application.targetFrameRate = 60;
-#endif
-
+			/* A missing VersionConfig used to return here. That aborted the rest of
+			 * OnPreload — including the EnqueueLoad of the first scene at the bottom of
+			 * this method — which left the load queue empty. BeginProcessQueue then
+			 * immediately reported 100%, postload found nothing, and OnCompleteProcessing
+			 * had no bootstrap systems to start: the client sat on a black screen forever
+			 * with nothing but a console error nobody could see.
+			 *
+			 * Carry on with a sentinel version instead. Boot completes, the launcher comes
+			 * up, and its version check reports the bad version to the player in the UI. */
 			if (versionConfig == null)
 			{
-				Debug.LogError("[MainBootstrapSystem] FATAL ERROR: Failed to initialize Version Config.");
-				return;
+				Debug.LogError("[MainBootstrapSystem] Failed to initialize Version Config. Continuing boot with an unknown version; the launcher will report this to the player.");
 			}
 
 			string workingDir = Constants.GetWorkingDirectory();
+
+#if !UNITY_SERVER
+			/* Cap the client before anything renders. See BootstrapTargetFrameRate:
+			 * without this the launcher and login screens run uncapped.
+			 * Headless servers are excluded — they do not render, and FishNet
+			 * derives the server frame rate from the tick rate instead.
+			 * vSyncCount is forced to 0 defensively: Application.targetFrameRate is
+			 * ignored whenever the active QualitySettings level has vSync enabled. */
+			QualitySettings.vSyncCount = 0;
+			Application.targetFrameRate = BootstrapTargetFrameRate;
+			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus (FishNet raises it on connect).");
+#endif
 
 			GameVersion = versionConfig?.FullVersion ?? "UNKNOWN";
 
@@ -301,7 +334,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unity OnDestroy message. Handles shutdown and cleanup when the object is destroyed.
 		/// </summary>
-		void OnDestroy()
+		protected override void OnDestroy()
 		{
 #if UNITY_EDITOR
 			EditorApplication.playModeStateChanged -= OnEditorPlayModeStateChanged;
@@ -317,6 +350,10 @@ namespace FishMMO.Shared
 			{
 				Debug.Log("[MainBootstrapSystem] OnDestroy called. (isInitiatingShutdown: " + isInitiatingShutdown + ", canQuitApplication: " + canQuitApplication + ")");
 			}
+
+			// Base last: it releases the internal-log hook, and the shutdown above still
+			// wants that routing available while it runs.
+			base.OnDestroy();
 		}
 	}
 }

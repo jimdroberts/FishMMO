@@ -91,12 +91,40 @@ Patcher/
 
 ## Endpoints
 
-### `GET /latest_version`
+### `GET /latest_version` · `HEAD /latest_version`
 
-Returns the latest patch version string as JSON:
+Metadata endpoint. Returns the latest patch version, and — when the caller
+identifies its own version — whether a patch path exists for it.
+
+Without `?from=`:
+
 ```json
 { "latest_version": "1.2.3" }
 ```
+
+With `?from={clientVersion}`, one of three shapes:
+
+```json
+{ "latest_version": "1.2.3", "up_to_date": true }
+{ "latest_version": "1.2.3", "patch_available": false }
+{ "latest_version": "1.2.3", "patch_available": true, "sha256": "<hex>", "size": 10485760 }
+```
+
+The client uses this to distinguish "you are current", "you are behind and we
+have a patch for you" (with the digest and byte size it should expect), and
+"you are behind but no patch upgrades *your* version" — the last of which is
+not retryable and drives the launcher's `PatchUnavailable` state.
+
+**Caching and integrity headers:**
+
+| Header | Meaning |
+|---|---|
+| `ETag` | Weak ETag derived from the answer (`W/"<sha256>"` when a patch is indexed, otherwise a version-derived token). New patches invalidate it immediately. |
+| `Cache-Control` | `public, max-age=30` — launchers polling on a tight loop do not hammer the origin. |
+| `X-FishMMO-Version-Signature` | HMAC-SHA256 over `latest_version=<v>&etag_source=<token>`, signed with the gate secret. Lets the client confirm the manifest came from an authentic patcher rather than a MITM proxy or spoofed DNS. |
+
+`If-None-Match` is honoured (RFC 7232 comma-separated list) and short-circuits
+with `304 Not Modified`. `HEAD` emits identical headers with no body.
 
 ### `GET /{version}`
 
@@ -105,16 +133,23 @@ Downloads the patch file for upgrading from `{version}` to the latest version.
 **Flow:**
 1. Parse client version via `VersionConfig.Parse(version)`.
 2. Parse server latest version via `VersionConfig.Parse(latest)`.
-3. If client >= latest: return `{ "status": "AlreadyUpdated" }`.
-4. Look for `Patches/{clientVersion}-{latestVersion}.zip`.
+3. If client >= latest: return `204 No Content`.
+4. Look for the patch indexed as `{clientVersion}-{latestVersion}.zip`.
 5. If found: stream as `application/octet-stream`.
+
+> This route streams a binary archive and the launcher writes the response body
+> straight to disk without inspecting it. The up-to-date case is therefore a
+> bodiless `204`, never a `200` carrying a JSON status document — such a
+> document would be saved as if it were the patch and handed to the Updater.
 
 **Response Codes:**
 
 | Code | Condition |
 |------|-----------|
-| 200 | Patch file streamed, or already up to date |
-| 400 | Invalid client version format |
+| 200 | Patch file streamed |
+| 204 | Client is already at or ahead of the latest version — nothing to download |
+| 304 | `latest_version` only: caller's `If-None-Match` matches the current ETag |
+| 400 | Invalid client version format (or invalid `?from=` value) |
 | 401 | Missing or invalid `X-FishMMO-Client` header (from ClientGate middleware) |
 | 404 | Patch file not found |
 | 429 | Rate limit exceeded (token bucket or sliding window) |
@@ -194,7 +229,7 @@ VALUES ('client_gate_secret', 'your-32+byte-secret', NOW(), NOW());
 **Shared secret:** The same secret must be deployed to all servers that validate `X-FishMMO-Client`:
 - **IPFetchServer** (via `GateSecretHolder`)
 - **Patcher** (via `GateSecretHolder`; also used by `PatchVersionService` to HMAC-sign version manifest responses)
-- **Unity client** (embedded via Unity Editor: **FishMMO > Security > Fetch Client Secrets**, which writes `ClientApiSecret.generated.cs`)
+- **Unity client** (embedded via Unity Editor: **FishMMO Dashboard** (`FishMMO > FishMMO Dashboard`, or Ctrl+Shift+D) > **Game Settings**, which writes `ClientApiSecret.generated.cs`)
 
 The `client_gate_secret` is a single value (or a comma-separated set for rotation). If a comma-separated keyset is provided, all keys are tried during verification so old clients continue to work during rotation.
 
@@ -229,17 +264,24 @@ flowchart TD
     Track --> Ready[Ready for requests]
     DB[("PostgreSQL\ndeployment_secrets")] -.-> LoadSecret
 
-    Client[Unity Client] -->|GET /latest_version| Ready
-    Ready -->|"{ latest_version }"| Client
+    Client[Unity Client] -->|"GET /latest_version?from=clientVer"| Meta{Compare versions}
+    Meta -- "client up to date" --> UpToDate["{ latest_version, up_to_date: true }"]
+    Meta -- "behind, patch indexed" --> HavePatch["{ latest_version, patch_available: true,<br/>sha256, size }"]
+    Meta -- "behind, no path" --> NoPatch["{ latest_version, patch_available: false }"]
+    UpToDate --> Signed
+    HavePatch --> Signed
+    NoPatch --> Signed
+    Signed["+ ETag, Cache-Control,<br/>X-FishMMO-Version-Signature"] --> Client
 
     Client -->|GET /clientVersion| Cmp{Client greater or equal to latest?}
-    Cmp -- yes --> AlreadyUpdated["{ status: AlreadyUpdated }"]
-    Cmp -- no --> Lookup["Look for Patches/clientVer-latestVer.zip"]
+    Cmp -- yes --> NoContent["204 No Content"]
+    Cmp -- no --> Lookup["Look for indexed clientVer-latestVer.zip"]
     Lookup -->|found| Stream[Stream as application/octet-stream]
     Lookup -->|missing| NotFound[404]
 
+    Ready -.->|serves both routes| Client
     Stream --> Client
-    AlreadyUpdated --> Client
+    NoContent --> Client
     NotFound --> Client
 ```
 - NGINX reverse proxy (recommended for production)

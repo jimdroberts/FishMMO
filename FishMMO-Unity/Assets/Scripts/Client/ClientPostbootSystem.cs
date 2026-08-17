@@ -11,6 +11,11 @@ namespace FishMMO.Client
 	public class ClientPostbootSystem : BootstrapSystem
 	{
 		/// <summary>
+		/// The client behaviour reference that must be initialized after the client bootstrap sequence finishes.
+		/// </summary>
+		public Client Client;
+
+		/// <summary>
 		/// Stores the initial position of the main camera for scene reloads.
 		/// </summary>
 		private Vector3 cameraInitialPosition;
@@ -18,6 +23,20 @@ namespace FishMMO.Client
 		/// Stores the initial rotation of the main camera for scene reloads.
 		/// </summary>
 		private Quaternion cameraInitialRotation;
+
+		public override void OnCompleteProcessing()
+		{
+			base.OnCompleteProcessing();
+
+			if (Client == null)
+			{
+				Log.Error("ClientPostbootSystem", $"Client script reference is missing...");
+			}
+			else
+			{
+				Client.Initialize();
+			}
+		}
 
 		/// <summary>
 		/// Called during preload phase. Captures initial camera state and loads template cache.
@@ -121,11 +140,22 @@ namespace FishMMO.Client
 			AddressableLoadProcessor.EnqueueLoad(PostloadScenes);
 			try
 			{
-				AddressableLoadProcessor.BeginProcessQueue();
+				// Watch the batch. This runs on quit-to-login, and a silent failure here
+				// leaves the player looking at an empty screen with the world torn down and
+				// no login UI to go back to.
+				AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+				batch.Completed += (b) =>
+				{
+					if (b.HasFailures)
+					{
+						Log.Error("ClientPostbootSystem",
+							$"Failed to reload login scene(s) after quitting to login: {string.Join(", ", b.FailedItems)}. The login UI will be missing.");
+					}
+				};
 			}
 			catch (UnityException ex)
 			{
-				Log.Error("ClientPostbootSystem", $"Failed to load preload scenes...", ex);
+				Log.Error("ClientPostbootSystem", $"Failed to reload postload scenes...", ex);
 			}
 		}
 	}

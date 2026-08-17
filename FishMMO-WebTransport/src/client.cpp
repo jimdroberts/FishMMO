@@ -615,12 +615,21 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
-                if (!wt_datagram_queue_push(
-                        &cli->dgram_queue, 0, buf->Buffer,
-                        (int32_t)buf->Length)) {
-                    int prev = atomic_fetch_add(&cli->dgram_drop_count, 1);
-                    if (prev % 100 == 0) {
-                        WT_LOG_WARN("Datagram queue full: %d drops so far", prev + 1);
+                /* No-op on the raw-QUIC path this client uses today; strips
+                 * the Quarter Stream ID if the H3 CONNECT path is enabled. */
+                const uint8_t* payload = NULL;
+                uint32_t payload_len = 0;
+                if (wt_session_datagram_payload(session, buf->Buffer,
+                                                buf->Length,
+                                                &payload, &payload_len) &&
+                    payload_len > 0) {
+                    if (!wt_datagram_queue_push(
+                            &cli->dgram_queue, 0, payload,
+                            (int32_t)payload_len)) {
+                        int prev = atomic_fetch_add(&cli->dgram_drop_count, 1);
+                        if (prev % 100 == 0) {
+                            WT_LOG_WARN("Datagram queue full: %d drops so far", prev + 1);
+                        }
                     }
                 }
             }

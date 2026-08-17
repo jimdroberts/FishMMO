@@ -40,12 +40,45 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the path to the temporary directory used for patch downloads and other transient files.
+		/// Returns the path to the temporary directory used for transient files.
 		/// </summary>
+		/// <remarks>
+		/// This is a <em>directory</em>, not a file path. Patch downloads must not be
+		/// written here — the Updater only reads from <see cref="GetPatchesDirectory"/>.
+		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string GetTemporaryPath()
 		{
 			return Path.Combine(GetWorkingDirectory(), "Temp");
+		}
+
+		/// <summary>
+		/// Returns the directory that patch archives are downloaded into by the launcher
+		/// and read from by the standalone Updater executable.
+		/// </summary>
+		/// <remarks>
+		/// The Updater resolves the same location from its own base directory. Both
+		/// processes run from the client install root, so the two agree. See
+		/// <see cref="Configuration.PatchesDirectoryName"/>.
+		/// </remarks>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static string GetPatchesDirectory()
+		{
+			return Path.Combine(GetWorkingDirectory(), Configuration.PatchesDirectoryName);
+		}
+
+		/// <summary>
+		/// Builds the patch archive file name for an upgrade from
+		/// <paramref name="fromVersion"/> to <paramref name="toVersion"/>.
+		/// </summary>
+		/// <remarks>
+		/// This naming scheme is a three-way contract between the patch generator, the
+		/// patcher web server's index regex, and the Updater's lookup. Changing it
+		/// requires changing all three.
+		/// </remarks>
+		public static string GetPatchFileName(string fromVersion, string toVersion)
+		{
+			return $"{fromVersion}-{toVersion}.zip";
 		}
 
 		public static class Configuration
@@ -90,6 +123,19 @@ namespace FishMMO.Shared
 #else
 				"Updater.exe";
 #endif
+
+			/// <summary>
+			/// Name of the directory (relative to the working directory) that patch
+			/// archives are downloaded into and applied from.
+			///
+			/// <para>
+			/// This is a contract shared with the standalone Updater executable, which
+			/// resolves <c>AppDomain.CurrentDomain.BaseDirectory/Patches</c> independently
+			/// (it cannot reference this assembly). Changing this value requires the same
+			/// change in <c>FishMMO-Patcher/Updater/Program.cs</c>.
+			/// </para>
+			/// </summary>
+			public const string PatchesDirectoryName = "Patches";
 
 			/// <summary>
 			/// Relative path to the FishMMO-Setup directory containing deployment config files.
@@ -138,37 +184,37 @@ namespace FishMMO.Shared
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
 			public static readonly string GameHost = GeneratedHostConfig.GameHost;
 
-				/// <summary>
-				/// Launcher HTML/news page URL.
-				///
-				/// <para>
-				/// Set at build time via <see cref="GeneratedHostConfig.LauncherHtmlUrl"/>,
-				/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
-				/// </para>
-				/// </summary>
-				/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-				public static readonly string LauncherHtmlUrl = GeneratedHostConfig.LauncherHtmlUrl;
+			/// <summary>
+			/// Launcher HTML/news page URL.
+			///
+			/// <para>
+			/// Set at build time via <see cref="GeneratedHostConfig.LauncherHtmlUrl"/>,
+			/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
+			/// </para>
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public static readonly string LauncherHtmlUrl = GeneratedHostConfig.LauncherHtmlUrl;
 
-				/// <summary>
-				/// SMTP from address for verification/notification emails.
-				///
-				/// <para>
-				/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromAddress"/>,
-				/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
-				/// </para>
-				/// </summary>
-				/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-				public static readonly string SmtpFromAddress = GeneratedHostConfig.SmtpFromAddress;
+			/// <summary>
+			/// SMTP from address for verification/notification emails.
+			///
+			/// <para>
+			/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromAddress"/>,
+			/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
+			/// </para>
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public static readonly string SmtpFromAddress = GeneratedHostConfig.SmtpFromAddress;
 
-				/// <summary>
-				/// SMTP from display name for outgoing emails.
-				///
-				/// <para>
-				/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromName"/>.
-				/// </para>
-				/// </summary>
-				/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-				public static readonly string SmtpFromName = GeneratedHostConfig.SmtpFromName;
+			/// <summary>
+			/// SMTP from display name for outgoing emails.
+			///
+			/// <para>
+			/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromName"/>.
+			/// </para>
+			/// </summary>
+			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
+			public static readonly string SmtpFromName = GeneratedHostConfig.SmtpFromName;
 
 			/// <summary>
 			/// Root path for Unity scene assets.
@@ -317,7 +363,7 @@ namespace FishMMO.Shared
 				if (layer < 0) return 0;
 				return 1 << layer;
 			}
-			
+
 			static Layers()
 			{
 				var missing = Validate();

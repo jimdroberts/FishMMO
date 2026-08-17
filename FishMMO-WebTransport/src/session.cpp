@@ -232,6 +232,105 @@ int32_t wt_session_send_stream(
     return wt_stream_manager_send(session->stream_mgr, data, length);
 }
 
+/* ── HTTP/3 Datagram framing (RFC 9297 §2.1) ──────────────────── */
+
+/** Encode @p val as a QUIC varint (RFC 9000 §16). Returns bytes written. */
+static size_t wt_dgram_varint_encode(uint64_t val, uint8_t* out)
+{
+    if (val < 64) {
+        out[0] = (uint8_t)val;
+        return 1;
+    }
+    if (val < 16384) {
+        out[0] = (uint8_t)(0x40 | (val >> 8));
+        out[1] = (uint8_t)(val & 0xFF);
+        return 2;
+    }
+    if (val < 1073741824ull) {
+        out[0] = (uint8_t)(0x80 | (val >> 24));
+        out[1] = (uint8_t)((val >> 16) & 0xFF);
+        out[2] = (uint8_t)((val >> 8) & 0xFF);
+        out[3] = (uint8_t)(val & 0xFF);
+        return 4;
+    }
+    out[0] = (uint8_t)(0xC0 | ((val >> 56) & 0x3F));
+    out[1] = (uint8_t)((val >> 48) & 0xFF);
+    out[2] = (uint8_t)((val >> 40) & 0xFF);
+    out[3] = (uint8_t)((val >> 32) & 0xFF);
+    out[4] = (uint8_t)((val >> 24) & 0xFF);
+    out[5] = (uint8_t)((val >> 16) & 0xFF);
+    out[6] = (uint8_t)((val >> 8) & 0xFF);
+    out[7] = (uint8_t)(val & 0xFF);
+    return 8;
+}
+
+/** Decode a QUIC varint. Returns bytes consumed, or 0 if truncated. */
+static size_t wt_dgram_varint_decode(const uint8_t* buf, size_t len,
+                                     uint64_t* out_val)
+{
+    if (len < 1) return 0;
+    size_t need = (size_t)1u << (buf[0] >> 6);
+    if (len < need) return 0;
+    uint64_t v = (uint64_t)(buf[0] & 0x3F);
+    for (size_t i = 1; i < need; i++)
+        v = (v << 8) | buf[i];
+    *out_val = v;
+    return need;
+}
+
+void wt_session_enable_h3_datagrams(
+    wt_session_t* session, uint64_t connect_stream_id)
+{
+    if (!session) return;
+    session->h3_datagrams = true;
+    session->wt_session_id = connect_stream_id;
+}
+
+bool wt_session_datagram_payload(
+    wt_session_t* session, const uint8_t* data, uint32_t length,
+    const uint8_t** out_payload, uint32_t* out_length)
+{
+    if (!data || !out_payload || !out_length) return false;
+
+    if (!session || !session->h3_datagrams) {
+        /* Raw QUIC peer — the datagram is the payload. */
+        *out_payload = data;
+        *out_length = length;
+        return true;
+    }
+
+    uint64_t quarter = 0;
+    size_t n = wt_dgram_varint_decode(data, length, &quarter);
+    if (n == 0) {
+        WT_LOG_WARN("Datagram dropped: truncated Quarter Stream ID (len=%u)",
+                    length);
+        return false;
+    }
+    if (quarter != (session->wt_session_id / 4)) {
+        WT_LOG_WARN(
+            "Datagram dropped: Quarter Stream ID %llu is not this session's "
+            "(%llu)",
+            (unsigned long long)quarter,
+            (unsigned long long)(session->wt_session_id / 4));
+        return false;
+    }
+
+    *out_payload = data + n;
+    *out_length = length - (uint32_t)n;
+    return true;
+}
+
+int32_t wt_session_max_datagram_payload(wt_session_t* session)
+{
+    int32_t budget = (int32_t)WT_DGRAM_MAX_SIZE;
+    if (session && session->h3_datagrams) {
+        uint8_t tmp[8];
+        budget -= (int32_t)wt_dgram_varint_encode(
+            session->wt_session_id / 4, tmp);
+    }
+    return budget;
+}
+
 int32_t wt_session_send_datagram(
     wt_session_t* session, const uint8_t* data, int32_t length)
 {
@@ -246,11 +345,12 @@ int32_t wt_session_send_datagram(
     if (session->stream_mgr && atomic_load(&session->stream_mgr->conn_closed))
         return WT_ERR_INVALID_STATE;
 
-    if ((uint32_t)length > (uint32_t)WT_DGRAM_MAX_SIZE) {
+    /* HTTP/3 sessions spend part of the datagram budget on the Quarter
+     * Stream ID, so the usable payload is smaller than the raw QUIC one. */
+    if (length > wt_session_max_datagram_payload(session)) {
         WT_LOG_ERROR(
-            "DatagramSend rejected: len=%d > WT_DGRAM_MAX_SIZE=%d (conn=%llu) "
-            "stamp=SAFE_SHUTDOWN_V4",
-            length, (int)WT_DGRAM_MAX_SIZE,
+            "DatagramSend rejected: len=%d > max payload %d (conn=%llu)",
+            length, (int)wt_session_max_datagram_payload(session),
             (unsigned long long)session->conn_id);
         return WT_ERR_SEND_FAILED;
     }
@@ -259,15 +359,26 @@ int32_t wt_session_send_datagram(
     if (!qconn)
         return WT_ERR_INVALID_STATE;
 
-    /* sizeof includes data[1]; allocate length-1 extra bytes. */
-    size_t bytes = offsetof(wt_dgram_send_ctx_t, data) + (size_t)length;
+    /* Build the HTTP/3 Datagram header, if this session uses one. */
+    uint8_t h3_hdr[8];
+    size_t h3_hdr_len = 0;
+    if (session->h3_datagrams) {
+        h3_hdr_len = wt_dgram_varint_encode(
+            session->wt_session_id / 4, h3_hdr);
+    }
+
+    /* sizeof includes data[1]; allocate the rest. */
+    size_t total = h3_hdr_len + (size_t)length;
+    size_t bytes = offsetof(wt_dgram_send_ctx_t, data) + total;
     wt_dgram_send_ctx_t* ctx = (wt_dgram_send_ctx_t*)malloc(bytes);
     if (!ctx) return WT_ERR_SEND_FAILED;
     ctx->magic = WT_DGRAM_SEND_CTX_MAGIC;
     atomic_init(&ctx->freed, 0);
-    memcpy(ctx->data, data, (size_t)length);
+    if (h3_hdr_len > 0)
+        memcpy(ctx->data, h3_hdr, h3_hdr_len);
+    memcpy(ctx->data + h3_hdr_len, data, (size_t)length);
     ctx->buf.Buffer = ctx->data;
-    ctx->buf.Length = (uint32_t)length;
+    ctx->buf.Length = (uint32_t)total;
 
     QUIC_STATUS status = MsQuic->DatagramSend(
         qconn, &ctx->buf, 1,

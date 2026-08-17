@@ -92,7 +92,7 @@ These features are implemented by the concrete authenticators that consume the c
 - **AccountManager backstop sweep** — `ArrivalOrderTracker` with oldest-first traversal purges stale SRP/encryption state.
 - **Max pending auth cap** — `MaxPendingAuthConnections` (10,000) prevents memory exhaustion from half-open connection floods.
 - **Bounded channel capacity** — verify: 500, proof: 500, token: 500, account creation: 1000; all with `DropWrite` → `ServerBusy`.
-- **Time-sliced main-thread drain** — `MaxMainThreadActionsPerUpdate` (100) prevents frame spikes from queue bursts.
+- **Time-sliced main-thread drain** — `maxMainThreadActionsPerUpdate` (100) prevents frame spikes from queue bursts.
 
 ## Prerequisites
 
@@ -189,11 +189,11 @@ The core authentication types are compiled as part of the server core assembly a
 |-----------|---------|-------------|
 | `AuthStaleTtlSeconds` | 15 s | Max time for a connection to complete authentication before purge |
 | `AuthHardDeadlineSeconds` | 60 s | Absolute limit from auth start; prevents unbounded TTL extension |
-| `AuthSweepIntervalSeconds` | 1 s | How often stale auth entries are scanned |
+| *(no interval constant)* | every frame | Sweeps run from `BaseAuthenticatorCore.Tick()`, which `BaseServerAuthenticator` calls each Unity frame — the scan/removal caps below bound the cost, not a timer |
 | `AuthSweepMaxScan` | 256 | Max entries evaluated per sweep cycle |
 | `AuthSweepMaxRemovals` | 64 | Max entries purged per sweep cycle |
 | `MaxPendingAuthConnections` | 10,000 | Cap on concurrent pending auth connections |
-| `MaxMainThreadActionsPerUpdate` | 100 | Max queued actions drained per Unity frame |
+| `maxMainThreadActionsPerUpdate` | 100 | Max queued actions drained per Unity frame |
 
 ### Rate Limiting
 
@@ -202,7 +202,6 @@ The core authentication types are compiled as part of the server core assembly a
 | `IpAuthAttemptDebounceSeconds` | 1 s | Min seconds between SRP verify attempts from the same IP |
 | `AccountVerifyDebounceSeconds` | 2 s | Min seconds between SRP verify attempts for the same account |
 | `KickRequestDebounceSeconds` | 10 s | Min seconds between persisted kick requests per account |
-| `KickDebounceSweepIntervalSeconds` | 60 s | Sweep interval for expired kick-request debounce entries |
 
 ### SRP Parameters
 
@@ -366,7 +365,7 @@ private async Task ProcessSrpVerifyAsync(
 | Account creation completes | Connect with `register: true` and valid credentials | `ClientAuthResultBroadcast` with `AccountCreated` |
 | Token reconnection works | After SRP login, connect to World server | `TokenAuthBroadcast` sent; `WorldLoginSuccess` received |
 | Stale auth purged | Start handshake but do not complete SRP within 15 seconds | Connection disconnected and all state purged |
-| In-flight gating prevents duplicates | Send duplicate `SrpVerifyBroadcast` while first is processing | Second packet silently dropped |
+| In-flight gating prevents duplicates | Send duplicate `SrpVerifyRequestBroadcast` while first is processing | Second packet silently dropped |
 | Rate limiting rejects rapid attempts | Send multiple SRP verify from same IP within 1 second | Subsequent attempts debounced before channel write |
 | AES-GCM failure disconnects | Send corrupted encrypted payload | `CryptographicException` caught; generic failure broadcast; disconnect; state purged |
 | Malformed UTF-8 disconnects | Send invalid UTF-8 in encrypted field | `DecoderFallbackException` caught; disconnect; buffers zeroed |
@@ -420,7 +419,7 @@ Network Thread (UDP Gates)              Worker Threads (Async)              Main
 ### SRP Request Lifecycle
 
 ```
-SrpVerifyBroadcast arrives (network thread)
+SrpVerifyRequestBroadcast arrives (network thread)
     │
     ├── Validate connection exists
     ├── Check in-flight gate (verifyInFlightByClientId)
@@ -484,10 +483,10 @@ Client                              LoginServer                          WorldSe
   │   { X25519 PublicKey, Cookie }       │                                    │
   │                                      │                                    │
   │  [Login Path]                        │                                    │
-  │── SrpVerifyBroadcast ──────────────► │  UDP Gate → verifyChannel          │
+  │── SrpVerifyRequestBroadcast ───────► │  UDP Gate → verifyChannel          │
   │   { Username(enc), Ephemeral(enc) }  │  Worker: decrypt, DB fetch,        │
   │                                      │    SRP state setup                 │
-  │◄── SrpVerifyBroadcast ──────────── │                                    │
+  │◄── SrpVerifyResponseBroadcast ──── │                                    │
   │   { Salt(enc), ServerEphemeral(enc)} │                                    │
   │                                      │                                    │
   │  SRP proof computation               │                                    │
@@ -615,7 +614,8 @@ Client/Authentication/
 Shared/Implementation/Network/Authentication/
 ├── ClientHandshake.cs            # Broadcast: client public key + cookie + version range
 ├── ServerHandshake.cs            # Broadcast: server public key + cookie + agreed version
-├── SrpVerifyBroadcast.cs         # Broadcast: encrypted username/ephemeral (request) or salt/ephemeral (response)
+├── SrpVerifyRequestBroadcast     # Broadcast: encrypted username + client public ephemeral
+├── SrpVerifyResponseBroadcast    # Broadcast: encrypted salt + server public ephemeral
 ├── SrpProofBroadcast.cs          # Broadcast: encrypted client proof
 ├── SrpSuccessBroadcast.cs        # Broadcast: encrypted server proof + auth token + result
 ├── CreateAccountBroadcast.cs     # Broadcast: encrypted username, salt, verifier

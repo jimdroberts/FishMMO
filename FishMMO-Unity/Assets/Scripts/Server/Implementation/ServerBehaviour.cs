@@ -5,6 +5,7 @@ using UnityEngine;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
 using FishMMO.Logging;
@@ -64,9 +65,74 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Asynchronous initialization entry point used by the server startup chain.
+		/// Sets server and manager references, then awaits <see cref="InitializeOnceAsync"/>.
+		/// </summary>
+		/// <param name="server">The server instance.</param>
+		/// <param name="serverManager">The server manager instance.</param>
+		/// <param name="cancellationToken">Cancelled when the server shuts down mid-startup.</param>
+		internal async Task<ServerComponentInitializationStatus> InternalInitializeOnceAsync(
+			IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server,
+			ServerManager serverManager,
+			CancellationToken cancellationToken)
+		{
+			if (Initialized)
+			{
+				return ServerComponentInitializationStatus.AlreadyInitialized;
+			}
+
+			if (server == null)
+			{
+				return ServerComponentInitializationStatus.FailedToFindServer;
+			}
+
+			if (serverManager == null)
+			{
+				return ServerComponentInitializationStatus.FailedToFindServerManager;
+			}
+
+			Server = server;
+			ServerManager = serverManager;
+
+			// No ConfigureAwait(false): this is started from the Unity main thread, so the
+			// continuation is posted back to Unity's SynchronizationContext and resumes on the
+			// main thread. That is what makes Unity API access legal after an await here — and
+			// it only works because the main thread is never blocked waiting on this task.
+			ServerComponentInitializationStatus initializationStatus = await InitializeOnceAsync(cancellationToken);
+
+			if (initializationStatus == ServerComponentInitializationStatus.Initialized)
+			{
+				Initialized = true;
+			}
+			return initializationStatus;
+		}
+
+		/// <summary>
 		/// Called once to initialize the behaviour. Must be implemented by derived classes.
 		/// </summary>
+		/// <remarks>
+		/// Behaviours that need to await I/O (database registration, for example) must override
+		/// <see cref="InitializeOnceAsync"/> instead of blocking in here. The Unity main thread
+		/// must never block on I/O: it is the thread that drains async continuations, so
+		/// blocking it can deadlock startup before the transport ever binds.
+		/// </remarks>
 		public abstract ServerComponentInitializationStatus InitializeOnce();
+
+		/// <summary>
+		/// Asynchronous initialization hook. The default implementation simply runs the
+		/// synchronous <see cref="InitializeOnce"/>, so behaviours with no I/O need not change.
+		/// </summary>
+		/// <param name="cancellationToken">Cancelled when the server shuts down mid-startup.</param>
+		/// <returns>The initialization status.</returns>
+		/// <remarks>
+		/// Overrides are invoked on the Unity main thread. Awaiting without
+		/// <c>ConfigureAwait(false)</c> resumes on the main thread, so Unity APIs remain safe to
+		/// touch after an await.
+		/// </remarks>
+		public virtual Task<ServerComponentInitializationStatus> InitializeOnceAsync(CancellationToken cancellationToken)
+		{
+			return Task.FromResult(InitializeOnce());
+		}
 
 		/// <summary>
 		/// Called when the behaviour is being deinitialized. Must be implemented by derived classes.

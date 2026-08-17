@@ -75,7 +75,30 @@ Network Thread (UDP Gates)              Worker Threads (Async)              Main
 |--------|-----------------|------------------|
 | **Network Thread** | UDP gate handlers — validate, in-flight gate, enqueue | **No** (zero blocking) |
 | **Worker Threads** | AES decryption, StrictUtf8 decode, database I/O, SRP math, ZeroMemory | **Yes** (async/await) |
-| **Main Thread** | `Broadcast()`, `Disconnect()`, `OnAuthenticationResult` | N/A (Unity main loop) |
+| **Main Thread** | `Broadcast()`, `Disconnect()`, `OnAuthenticationResult` | **No** — see below |
+
+**Never block the Unity main thread on I/O.** It is the thread that drains async
+continuations, so blocking it stalls the very work being waited on. `LoginServerSystem`
+used to resolve the signing-key KEK synchronously during `InitializeOnce`, and the process
+stayed alive with `login_servers.last_pulse` frozen and WebTransport never binding `:7770`.
+
+The rules that replaced it:
+
+- **Startup** — behaviours override `ServerBehaviour.InitializeOnceAsync` and `await` their
+  I/O. `Server` drives them from a coroutine and starts the transport from the completion
+  callback, so the player loop keeps running and continuations can be drained.
+- **Worker paths** — stay asynchronous end to end. `TokenServerAuthenticator` gates its
+  cached KEK with a `SemaphoreSlim` and awaits `SigningKeyKekProvider.LoadFromDatabaseAsync`,
+  so a token verification never parks a pool thread on a database round trip.
+- **Shutdown only** — `OnDestroy`/`OnApplicationQuit` cannot yield and the process exits
+  immediately after, so a bounded block is the only way to flush. Route it through
+  `UnitySyncOverAsync`, which starts the work off the synchronization context, cancels on
+  timeout, rethrows the original exception rather than an `AggregateException`, and clamps
+  every call to a shared budget so teardown fits inside a supervisor's grace period.
+
+`ConfigureAwait(false)` on your own awaits is **not** sufficient protection: it only governs
+the await it is attached to, and it says nothing about a caller that blocks. The fix is to
+not block, not to annotate.
 
 Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `BaseServerAuthenticator`, drained each frame by `Update()` → `DrainMainThreadQueue()`. A per-frame cap (`maxMainThreadActionsPerUpdate = 100`, Inspector-configurable) time-slices draining to avoid frame spikes, with back-pressure logging when the queue is not fully drained.
 
@@ -182,7 +205,7 @@ The following constants are defined in `BaseAuthenticatorCore<TConnection>` and 
 |----------|-------|-------------|
 | `AuthStaleTtlSeconds` | 15 s | TTL for stale-auth sweep |
 | `AuthHardDeadlineSeconds` | 60 s | Absolute auth deadline (cannot be extended) |
-| `AuthSweepIntervalSeconds` | 1 s | Sweep interval for stale auth cleanup |
+| *(no interval constant)* | every frame | `Core.Tick()` runs the stale-auth sweep each Unity frame; the caps below bound its cost |
 | `AuthSweepMaxScan` | 256 | Max entries scanned per stale-auth sweep |
 | `AuthSweepMaxRemovals` | 64 | Max entries purged per stale-auth sweep |
 | `MaxPendingAuthConnections` | 10,000 | Cap on concurrent half-open auth connections |
@@ -267,9 +290,12 @@ authenticator.OnClientAuthenticationResult += (conn, authenticated) =>
 
 | Check | How to Verify |
 |-------|---------------|
+| LoginServer reached the transport | Log: `[wt:INFO] Server started on <address>:7770`. If the process is alive but this never appears and `login_servers.last_pulse` is stale, startup stalled before `StartServer()` |
+| Startup registration recovered | On a database that is slow to come up, expect retry lines, then success. After the final attempt the process exits with code 1 rather than idling unbound |
+| Signing-key KEK loaded | No `"Signing-key KEK not provisioned — persisting raw HMAC key"` warning. That warning means World/Scene servers cannot unwrap tokens |
 | Workers started | Log output: `"Workers initialized (Verify=2, Proof=2)"` or `"Workers initialized (Token=2)"` |
 | Handshake completing | Client receives `ServerHandshake` with X25519 public key and agreed version |
-| SRP verify processing | Client receives `SrpVerifyBroadcast` response with encrypted salt and server ephemeral |
+| SRP verify processing | Client receives `SrpVerifyResponseBroadcast` with encrypted salt and server ephemeral |
 | SRP proof accepted | Client receives `SrpSuccessBroadcast` with encrypted server proof and auth token |
 | Token auth accepted | Client receives `ClientAuthResultBroadcast` with `LoginSuccess` / `WorldLoginSuccess` / `SceneLoginSuccess` |
 | Stale auth sweep active | Log warnings for purged connections exceeding 15 s TTL |
@@ -324,7 +350,7 @@ Client                              Server (Network Thread)
 ```
 Client                              Server
   │                                      │
-  │── SrpVerifyBroadcast ──────────────► │  UDP Gate → verifyChannel
+  │── SrpVerifyRequestBroadcast ───────► │  UDP Gate → verifyChannel
   │   { Username (enc), Ephemeral (enc)} │    • Per-IP debounce (1 s)
   │                                      │    • AuthState: Handshake → VerifyPending
   │                                      │    • DropWrite rollback on channel full
@@ -341,7 +367,7 @@ Client                              Server
   │                                      │    • Non-existent account → fake SRP tuple + per-username HMAC salt
   │                                      │    • AddConnectionAccount (VerifyPending → WaitingForProof)
   │                                      │    • AES-GCM encrypt salt + server ephemeral
-  │◄── SrpVerifyBroadcast ──────────── │    • Enqueue → Main Thread Broadcast
+  │◄── SrpVerifyResponseBroadcast ──── │    • Enqueue → Main Thread Broadcast
   │   { Salt (enc), Ephemeral (enc) }   │
 ```
 
@@ -499,7 +525,9 @@ Server/
 │   ├── IServerAuthenticator.cs                # Interface: Server ref + worker lifecycle
 │   ├── BaseServerAuthenticator.cs             # Composition host: owns Core, routes FishNet events to core
 │   ├── ServerAuthenticator.cs                 # SRP wrapper: inner ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConnection>
-│   └── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
+│   ├── TokenServerAuthenticator.cs            # Token wrapper: inner TokenCore : TokenAuthenticatorCore<NetworkConnection>
+│   ├── AccountVerificationPolicy.cs           # Single source of truth for the email-verification gate (AutoVerifyAccounts)
+│   └── SigningKeyKekProvider.cs               # Loads signing_key_kek from deployment_secrets (async; never blocks)
 │
 └── Implementation/World/
     ├── WorldServer/Authentication/
@@ -559,7 +587,8 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 |-----------|-----------|----------|
 | `ClientHandshake` | Client → Server | X25519 public key, cookie (phase 2), min/max protocol version |
 | `ServerHandshake` | Server → Client | X25519 public key (phase 2) or cookie (phase 1), agreed version |
-| `SrpVerifyBroadcast` | Bidirectional | Encrypted username/salt + public ephemeral |
+| `SrpVerifyRequestBroadcast` | Client → Server | Encrypted username + client public ephemeral |
+| `SrpVerifyResponseBroadcast` | Server → Client | Encrypted salt + server public ephemeral |
 | `SrpProofBroadcast` | Client → Server | Encrypted client proof |
 | `SrpSuccessBroadcast` | Server → Client | Encrypted server proof + auth result + encrypted token |
 | `TokenAuthBroadcast` | Client → Server | Encrypted auth token |

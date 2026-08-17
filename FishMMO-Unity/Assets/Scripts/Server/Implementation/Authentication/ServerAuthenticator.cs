@@ -437,11 +437,20 @@ namespace FishMMO.Server.Implementation
 				IsSuccess = true,
 				// Grace period: unverified accounts can log in until the verification
 				// email is actually sent. Once sent, login is blocked until verified.
-				IsVerified = d.Verified || d.VerificationEmailSentAt == null,
+				// AutoVerifyAccounts (development builds only) bypasses the gate outright so
+				// that accounts already stamped with VerificationEmailSentAt — created before
+				// the flag was set, or against a production build — are not permanently
+				// locked out of a local server.
+				IsVerified = d.Verified ||
+					d.VerificationEmailSentAt == null ||
+					AccountVerificationPolicy.IsAutoVerifyEnabled(Server?.Configuration),
 				Salt = d.Salt,
 				Verifier = d.Verifier,
 				AccessLevel = (AccessLevel)d.AccessLevel,
 				TotpEnabled = d.TotpEnabled,
+				// Required by the core's expired-verify-code resend. Leaving this unset left it
+				// null for every account, which silently disabled the resend entirely.
+				VerifyCodeExpiresUtc = d.VerifyCodeExpiresUtc,
 			};
 		}
 
@@ -595,13 +604,17 @@ namespace FishMMO.Server.Implementation
 			protected override string? ResolveClientRealIp(NetworkConnection conn)
 			{
 				if (conn == null) return null;
-				// Look up the real IP that was recovered from the connection token
-				// (or stateless HMAC token) during the ClientHandshake.
+				// Authenticator-owned cache is the source of truth (written during
+				// ClientHandshake token verify). The account-creation cache is a
+				// Login-only mirror and can miss after ClientId reuse.
+				string? ip = outer.ResolveRateLimitKey(conn);
+				if (!string.IsNullOrEmpty(ip))
+					return ip;
 				if (outer.Server?.DataContainerRegistry != null &&
 					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 					rt.ConnectionIpCache != null)
 				{
-					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ip))
+					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out ip))
 						return ip;
 				}
 				return null;
@@ -751,7 +764,11 @@ namespace FishMMO.Server.Implementation
 					await Log.Warning(outer.LogPrefix, $"IEmailQueueService not registered -- verification email resend skipped for '{username}'.");
 				}
 
-				await outer.PersistVerificationEmailSentCoreAsync(username);
+				// VerificationEmailSentAt is deliberately NOT stamped here. Queueing an email
+				// is not sending one: the queue processor stamps it after SMTP confirms
+				// delivery. Stamping on enqueue ended the grace period for a mail that may
+				// never go out — with an unreachable SMTP host, a single expired-code login
+				// attempt locked the account out permanently.
 				return true;
 			}
 		}
@@ -759,19 +776,6 @@ namespace FishMMO.Server.Implementation
 		#endregion
 
 
-		/// <summary>
-		/// Sets VerificationEmailSentAt after resending a verification email during login.
-		/// </summary>
-		private async Task PersistVerificationEmailSentCoreAsync(string username)
-		{
-			if (Server?.Database?.ServiceRegistry != null &&
-				Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
-			{
-				var r = await accountService.PersistVerificationEmailSentAsync(username);
-				if (!r.IsSuccess)
-					await Log.Warning(LogPrefix, $"PersistVerificationEmailSentAsync DB error for '{username}': {r.ErrorCode} - {r.ErrorMessage}");
-			}
-		}
 		/// <summary>
 		/// Builds the HTML body for a login-triggered verification email resend.
 		/// </summary>

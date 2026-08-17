@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Server Select system manages the world server list workflow on the login server. When an authenticated client sends a `RequestServerListBroadcast`, the system validates the connection, applies per-connection in-flight gating and cooldown checks, then offloads the database query onto `AsyncWorkerData` to keep the network handler non-blocking. Active world servers are fetched via `IWorldServerService.FetchActiveAsync` with an `IdleTimeout` filter (default 60 seconds), mapped from `WorldServerData` rows into `WorldServerDetails` DTOs, and the `ServerListBroadcast` response is marshalled back to the main thread through a dedicated queue container (`ServerSelectSystemMainThreadQueueData`).
+The Server Select system manages the world server list workflow on the login server. When an authenticated client sends a `RequestServerListBroadcast`, the system validates the connection, applies per-connection in-flight gating and cooldown checks, then offloads the database query onto `AsyncWorkerData` to keep the network handler non-blocking. Active world servers are fetched via `IWorldServerService.FetchActiveAsync` with an `idleTimeout` filter (default 60 seconds), mapped from `WorldServerData` rows into `WorldServerDetails` DTOs, and the `ServerListBroadcast` response is marshalled back to the main thread through a dedicated queue container (`ServerSelectSystemMainThreadQueueData`).
 
 Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) prevents frame spikes, while per-connection in-flight gating and a post-release cooldown (`serverListCooldownMilliseconds = 1000`) prevent concurrent and rapid sequential request spam.
 

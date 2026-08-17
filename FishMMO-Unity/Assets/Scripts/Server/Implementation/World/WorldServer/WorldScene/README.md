@@ -124,7 +124,7 @@ The asset is created via the Unity menu: **Assets → Create → FishMMO → Ser
 
 | Constant | Value | Description |
 |---|---|---|
-| `MAX_CLIENTS_PER_INSTANCE` | `500` | Hard cap on clients per scene instance; `GetMaxClients` clamps to `[1, MAX_CLIENTS_PER_INSTANCE]` |
+| `MaxClientsPerInstance` | `500` | Hard cap on clients per scene instance; `GetMaxClients` clamps to `[1, MaxClientsPerInstance]` |
 | `MAX_WAITING_QUEUE_SIZE` | `2500` | Per-queue-type cap preventing unbounded memory growth; effective global limit is 5000 (2 × 2500) |
 
 ### Runtime Data Defaults

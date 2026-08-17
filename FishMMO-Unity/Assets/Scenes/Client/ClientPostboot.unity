@@ -150,7 +150,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c2edaa6d4e0fd4393eb1def39f4f2f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  loginServerCacheTtlSeconds: 55
+  loginServerPorts: 
   loginServerRequestTimeoutSeconds: 10
   probeStaggerInterval: 0.25
   worldPreloadScenes:
@@ -208,6 +208,7 @@ MonoBehaviour:
   - SceneName: ClientLoginGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
+  Client: {fileID: 1045518712}
 --- !u!114 &1045518715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -437,7 +438,7 @@ MonoBehaviour:
   _dropExcessiveReplicates: 1
   _maximumServerReplicates: 15
   _createLocalStates: 1
-  _stateInterpolation: 1
+  _stateInterpolation: 2
   _stateOrder: 1
 --- !u!114 &6776049995475983710
 MonoBehaviour:
@@ -494,6 +495,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8605cf07f1216f2f7a7d7d1b8c81f66b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: WebTransport::FishNet.Transporting.WebTransport.WebTransport
+  serverTimeout: 120
+  clientTimeout: 20
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

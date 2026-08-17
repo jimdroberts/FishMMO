@@ -78,17 +78,22 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
     wt_session_wire_callbacks(session);
 
     /* Browser CONNECT sessions need WEBTRANSPORT_STREAM framing on data
-     * streams so Chrome associates them with the WT session. Native raw
-     * clients leave use_wt_stream_header=false (default). */
-    if (sconn->h3_session && sconn->h3_session->is_webtransport &&
-        session->stream_mgr) {
-        session->stream_mgr->use_wt_stream_header = true;
-        session->stream_mgr->wt_session_id =
-            sconn->h3_session->connect_stream_id;
+     * streams so the peer associates them with the WT session, and HTTP/3
+     * Datagram framing (RFC 9297) on the unreliable channel for the same
+     * reason. Native raw clients use neither. */
+    if (sconn->h3_session && sconn->h3_session->is_webtransport) {
+        uint64_t connect_stream_id = sconn->h3_session->connect_stream_id;
+        if (session->stream_mgr) {
+            session->stream_mgr->use_wt_stream_header = true;
+            session->stream_mgr->wt_session_id = connect_stream_id;
+        }
+        wt_session_enable_h3_datagrams(session, connect_stream_id);
         WT_LOG_INFO(
-            "Client %llu WT stream framing ON session_id=%llu",
+            "Client %llu WebTransport framing ON session_id=%llu "
+            "(quarter=%llu)",
             (unsigned long long)sconn->id,
-            (unsigned long long)session->stream_mgr->wt_session_id);
+            (unsigned long long)connect_stream_id,
+            (unsigned long long)(connect_stream_id / 4));
     }
 
     /* ── CRITICAL: announce the connection BEFORE replaying data ──
@@ -117,33 +122,18 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
 
         if (nsctx->recv_buf && nsctx->recv_offset > 0 &&
             session->stream_mgr) {
-            /* Accept the stream into the stream manager.
-             * After this, the stream_manager owns the QUIC stream
-             * and its callback handler replaces h3_stream_cb. */
-            wt_stream_manager_accept_stream(
-                session->stream_mgr, nsctx->quic_stream);
-
-            /* Look up the stream_id assigned by accept_stream.
-             * Safe: the slot was just booked and no other thread
-             * knows about it yet. */
-            wt_stream_id_t stream_id = 0;
-            for (uint32_t _i = 0; _i < WT_MAX_STREAMS; _i++) {
-                if (session->stream_mgr->streams[_i].quic_stream ==
-                    nsctx->quic_stream) {
-                    stream_id = session->stream_mgr->streams[_i].id;
-                    break;
-                }
-            }
-
-            if (stream_id > 0 &&
-                session->stream_mgr->on_stream_data) {
-                session->stream_mgr->on_stream_data(
-                    session->stream_mgr->callback_ctx,
-                    session->stream_mgr->conn_id,
-                    stream_id,
-                    nsctx->recv_buf,
-                    (int32_t)nsctx->recv_offset);
-            }
+            /* Accept the stream into the stream manager, handing over the
+             * bytes h3 buffered during protocol detection. After this the
+             * stream_manager owns the QUIC stream and its callback handler
+             * replaces h3_stream_cb.
+             *
+             * The prefill variant runs the replayed bytes through the
+             * message-framing parser. Delivering nsctx->recv_buf straight to
+             * on_stream_data (as this used to) hands the application whatever
+             * arrived in one QUIC read — which is not a message boundary. */
+            wt_stream_manager_accept_stream_prefill(
+                session->stream_mgr, nsctx->quic_stream,
+                nsctx->recv_buf, nsctx->recv_offset);
         }
 
         /* Free the orphaned h3 stream context and its buffer.
@@ -262,35 +252,17 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
                 for (int i = 0; i < pending_count; i++) {
                     if (!pending[i].quic_stream) continue;
 
-                    wt_stream_manager_accept_stream(
+                    /* Hand the buffered bytes over with the stream so they
+                     * pass through the message-framing parser rather than
+                     * being delivered as one opaque blob. */
+                    wt_stream_manager_accept_stream_prefill(
                         session->stream_mgr,
-                        pending[i].quic_stream);
+                        pending[i].quic_stream,
+                        pending[i].recv_buf,
+                        pending[i].recv_offset);
                     /* Stream's callback handler is now the stream_manager's
                      * handler, not h3_stream_cb — safe to free the old sctx. */
                     free(pending[i].sctx);
-
-                    if (pending[i].recv_buf &&
-                        pending[i].recv_offset > 0 &&
-                        session->stream_mgr->on_stream_data) {
-                        wt_stream_id_t sid = 0;
-                        for (uint32_t _i = 0; _i < WT_MAX_STREAMS; _i++) {
-                            if (session->stream_mgr->streams[_i]
-                                    .quic_stream ==
-                                pending[i].quic_stream) {
-                                sid = session->stream_mgr
-                                    ->streams[_i].id;
-                                break;
-                            }
-                        }
-                        if (sid > 0) {
-                            session->stream_mgr->on_stream_data(
-                                session->stream_mgr->callback_ctx,
-                                session->stream_mgr->conn_id,
-                                sid,
-                                pending[i].recv_buf,
-                                (int32_t)pending[i].recv_offset);
-                        }
-                    }
                     free(pending[i].recv_buf);
                 }
                 if ((char*)pending != stack_buf)
@@ -1040,11 +1012,7 @@ int32_t wt_server_send_datagram_impl(
                 wt_session_release(session);
                 continue;
             }
-            int32_t r;
-            if (session->stream_mgr && session->stream_mgr->use_wt_stream_header)
-                r = wt_session_send_stream(session, data, length);
-            else
-                r = wt_session_send_datagram(session, data, length);
+            int32_t r = wt_session_send_datagram(session, data, length);
             if (r != WT_OK) worst = r;
             wt_session_release(session);
         }
@@ -1070,15 +1038,11 @@ int32_t wt_server_send_datagram_impl(
             return WT_ERR_NOT_FOUND;
         }
 
-        int32_t result;
-        /* Browser WebTransport sessions (use_wt_stream_header == true)
-         * route datagram traffic over the reliable stream path because
-         * datagram sends can cause crashes in msquic's datagram encoder
-         * near login completion.  Native clients use the normal path. */
-        if (session->stream_mgr && session->stream_mgr->use_wt_stream_header)
-            result = wt_session_send_stream(session, data, length);
-        else
-            result = wt_session_send_datagram(session, data, length);
+        /* Both browser and native sessions send real datagrams. Browser
+         * sessions previously rerouted onto the reliable stream because the
+         * datagrams lacked their RFC 9297 header and no browser could accept
+         * them; wt_session_send_datagram now adds it. */
+        int32_t result = wt_session_send_datagram(session, data, length);
         wt_session_release(session);
         return result;
     }
@@ -2150,14 +2114,23 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             const QUIC_BUFFER* buf = event->DATAGRAM_RECEIVED.Buffer;
             if (buf && buf->Length > 0 &&
                 buf->Length <= WT_DGRAM_MAX_SIZE) {
-                if (!wt_datagram_queue_push(
-                        &sconn->owner->dgram_queue,
-                        sconn->id, buf->Buffer,
-                        (int32_t)buf->Length)) {
-                    int prev = atomic_fetch_add(&sconn->dgram_drop_count, 1);
-                    if (prev % 100 == 0) {
-                        WT_LOG_WARN("Datagram queue full: %d drops for client %llu",
-                                    prev + 1, (unsigned long long)sconn->id);
+                /* Strip the HTTP/3 Datagram header on WebTransport sessions
+                 * so the application never sees the Quarter Stream ID. */
+                const uint8_t* payload = NULL;
+                uint32_t payload_len = 0;
+                if (wt_session_datagram_payload(session, buf->Buffer,
+                                                buf->Length,
+                                                &payload, &payload_len) &&
+                    payload_len > 0) {
+                    if (!wt_datagram_queue_push(
+                            &sconn->owner->dgram_queue,
+                            sconn->id, payload,
+                            (int32_t)payload_len)) {
+                        int prev = atomic_fetch_add(&sconn->dgram_drop_count, 1);
+                        if (prev % 100 == 0) {
+                            WT_LOG_WARN("Datagram queue full: %d drops for client %llu",
+                                        prev + 1, (unsigned long long)sconn->id);
+                        }
                     }
                 }
             } else if (buf && buf->Length > WT_DGRAM_MAX_SIZE) {

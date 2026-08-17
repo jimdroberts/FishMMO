@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace FishMMO.Server.Core
 {
 	/// <summary>
@@ -19,5 +23,21 @@ namespace FishMMO.Server.Core
 		// - T Get<T>()
 		// - void InitializeAll(IServer<TNetworkManager, TConnection, TBehaviour> server)
 		// - void DeinitializeAll()
+
+		/// <summary>
+		/// Initializes all registered behaviours without blocking the caller's thread, one at a
+		/// time in registration order so a behaviour may depend on state published by an earlier
+		/// one. This is the entry point the server startup chain uses: behaviour initialization
+		/// performs I/O, and the Unity main thread must stay free to drain the continuations that
+		/// I/O depends on.
+		/// </summary>
+		/// <param name="server">The server instance.</param>
+		/// <param name="cancellationToken">Cancelled when the server shuts down mid-startup.</param>
+		/// <returns>
+		/// The behaviours that failed, with their status. Empty when every behaviour initialized.
+		/// </returns>
+		Task<IReadOnlyList<(string Name, ServerComponentInitializationStatus Status)>> InitializeAllAsync(
+			IServer server,
+			CancellationToken cancellationToken);
 	}
 }

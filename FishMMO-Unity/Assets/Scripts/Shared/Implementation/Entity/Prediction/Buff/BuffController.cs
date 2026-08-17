@@ -683,7 +683,8 @@ namespace FishMMO.Shared
 			{
 				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
 				{
-					Log.Warning("BuffController",
+					// Expected until the first replicate arrives — reconcile corrects it.
+					Log.Debug("BuffController",
 						$"ResolveAuthoritativeTick called before first OnReplicate. serverTick={serverTick} returned untranslated. ExpiryTick will be corrected by reconcile.");
 					resolveAuthoritativeWarningLogged = true;
 				}

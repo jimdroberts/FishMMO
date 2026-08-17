@@ -41,6 +41,7 @@
 
 # Visual Studio cache directory
 .vs/
+.vscode
 
 # Gradle cache directory
 .gradle/
@@ -71,8 +72,28 @@ ExportedObj/
 # Unity3D generated file on crash reports
 sysinfo.txt
 
+# Generated files hold real hosts, certificate pins, and the client gate secret.
+# Tracked sentinel templates live in GeneratedFileTemplates/ and are restored
+# automatically on Editor load (see that folder's README).
+*.generated.cs
+*.generated.cs.meta
+*.blob
+
+# --- Specific Assets/Config to Ignore ---
+/[Aa]ssets/Plugins/Editor/JetBrains*
+/[Aa]ssets/DefaultPrefabObjects.asset
+/[Aa]ssets/UniversalRenderPipelineGlobalSettings.asset
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
 # Mono auto generated files
 mono_crash.*
+
+# --- Local & Dependencies ---
+/[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
+/[Aa]ssets/Resources/Prefabs/Shared/WorldSceneDetails*
+/[Aa]ssets/[Dd]ependencies*
 
 # Builds
 *.apk

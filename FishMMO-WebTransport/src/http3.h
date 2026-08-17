@@ -47,6 +47,10 @@ extern "C" {
 #define H3_STREAM_QPACK_ENCODER 0x02
 #define H3_STREAM_QPACK_DECODER 0x03
 #define H3_STREAM_REQUEST       0x04  /* CONNECT request stream */
+/* draft-ietf-webtrans-http3 §4.1: unidirectional WebTransport stream.
+ * Recognised so it can be rejected deliberately — this transport carries
+ * FishNet's reliable channel on bidirectional streams only. */
+#define H3_STREAM_WEBTRANSPORT_UNI 0x54
 
 /* ── HTTP/3 Frame Types ─────────────────────────────────────── */
 

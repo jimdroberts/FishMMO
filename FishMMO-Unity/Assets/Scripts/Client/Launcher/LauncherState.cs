@@ -54,6 +54,12 @@ namespace FishMMO.Client
 		/// </summary>
 		LaunchFailed,
 		/// <summary>
+		/// The client is out of date but the server has no patch that upgrades from the
+		/// client's specific version to the latest. Retrying the download cannot succeed;
+		/// the player needs a full reinstall.
+		/// </summary>
+		PatchUnavailable,
+		/// <summary>
 		/// There was an error with the client or server version.
 		/// </summary>
 		VersionError,

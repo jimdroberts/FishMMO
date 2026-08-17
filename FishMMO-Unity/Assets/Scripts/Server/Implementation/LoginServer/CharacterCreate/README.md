@@ -41,7 +41,7 @@ All Unity object access (templates, prefabs, `SpawnablePrefabs`) occurs on the m
 
 ## Features
 
-- Character name validation via `Authentication.IsAllowedCharacterName` with field-length guards (`MaxSceneFieldLength = 256`)
+- Character name validation via `Authentication.IsAllowedCharacterName` with field-length guards (`maxSceneFieldLength`, default `256`)
 - Account binding verification through `AccountManager.GetAccountNameByConnection`
 - Race template and model validation via `RaceTemplate.Get<RaceTemplate>(msg.RaceTemplateID)` and `GetModelReference(msg.ModelIndex)`
 - Spawnable prefab validation through `IPlayerCharacter` component check and `SpawnablePrefabs.GetObject`
@@ -127,12 +127,7 @@ This is an integrated module within the FishMMO server architecture. No separate
 | `startingAbilities` | `List<AbilityTemplate>` | empty | Global ability templates granted to all new characters on creation. |
 | `startingInventoryItems` | `List<BaseItemTemplate>` | empty | Global item templates added to all new characters' inventory on creation. |
 | `startingEquipment` | `List<EquippableItemTemplate>` | empty | Global equipment templates equipped on all new characters at creation. |
-
-### Constants
-
-| Constant | Value | Description |
-|---|---|---|
-| `MaxSceneFieldLength` | `256` | Maximum allowed length for `SceneName` and `SpawnerName` fields from client messages. Oversized fields result in a kick. |
+| `maxSceneFieldLength` | `int` | `256` | Maximum allowed length for `SceneName` and `SpawnerName` fields from client messages. Oversized fields result in a kick. |
 
 ## Usage Examples
 
@@ -185,7 +180,7 @@ Equipment uses `ItemGenerator.Generate(1, template)` to produce a deterministic 
 |---|---|---|
 | System initializes | `Log.Debug("CharacterCreateSystem", "Initialized")` | Requires all three data containers registered |
 | Character name validation | Rejects names failing `Authentication.IsAllowedCharacterName` | Returns `InvalidCharacterName` result |
-| Scene/spawner field length | Fields > 256 characters trigger kick | `MaxSceneFieldLength` constant |
+| Scene/spawner field length | Fields > 256 characters trigger kick | `maxSceneFieldLength` inspector field |
 | Account not bound | Connection kicked | `KickReason.UnusualActivity` |
 | Invalid race/model/prefab | Connection kicked | `KickReason.UnusualActivity` |
 | Invalid spawn scene | Returns `InvalidSpawn` | Scene not in `WorldSceneDetailsCache` |

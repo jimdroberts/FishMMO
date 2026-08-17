@@ -45,7 +45,7 @@ All public methods acquire `lock(syncRoot)` before accessing any internal state.
 - **Thread-safe account/connection management** — All public methods synchronize via `lock(syncRoot)`, supporting concurrent access from FishNet broadcast handlers, async worker threads, and scene-server handoff operations.
 - **Unified AuthState machine** — A single `AuthState` enum (8 states, `byte`-backed) replaces former per-flow in-flight dictionaries. All transitions use atomic compare-and-swap under lock.
 - **Bidirectional account ↔ connection maps** — `connectionAccounts` (connection → name) and `accountConnections` (name → connection) are kept in sync by all add/remove operations, providing O(1) lookup in both directions.
-- **X25519 encryption key exchange** — `AddConnectionEncryptionData` stores the client's X25519 public key and creates `AccountData` at `Handshake` state. Directional AES-256-GCM keys and nonce contexts are established later via `PromoteToDirectional` after ECDH key agreement.
+- **X25519 encryption key exchange** — `TryAddConnectionEncryptionData` stores the client's X25519 public key and creates `AccountData` at `Handshake` state. Directional AES-256-GCM keys and nonce contexts are established later via `PromoteToDirectional` after ECDH key agreement.
 - **SRP authentication (LoginServer)** — `SrpAccountManager.AddConnectionAccount` creates `ServerSrpData` (2048-bit SRP parameters, SHA-512), generates server ephemeral values, and advances auth state to `WaitingForProof`. Proof verification via `ServerSrpData.GetProof` derives the session.
 - **Token authentication (World/Scene)** — `TokenAccountManager.AddConnectionAccount` registers account name and access level without SRP state. Used for post-login reconnection via signed tokens.
 - **Oldest-first stale-connection sweeps** — `SweepUnauthenticatedConnections` processes the `ArrivalOrderTracker` head-first, dropping authenticated entries from tracking and purging stale unauthenticated entries with configurable `maxScan` and `maxRemovals` per sweep.
@@ -78,7 +78,7 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 ### Using SrpAccountManager (LoginServer)
 
 1. Create an `SrpAccountManager` instance in the login server's initialization.
-2. When a client connects and sends its public key, call `AddConnectionEncryptionData(connection, publicKey)` — this creates `AccountData` at `Handshake` state and begins unauthenticated tracking.
+2. When a client connects and sends its public key, call `TryAddConnectionEncryptionData(connection, publicKey)` — this creates `AccountData` at `Handshake` state and begins unauthenticated tracking.
 3. On receiving an SRP verify request, advance state with `TryAdvanceAuthState(connection, Handshake, VerifyPending)`.
 4. In the async worker, call `AddConnectionAccount(connection, accountName, publicClientEphemeral, salt, verifier, accessLevel)` — this creates `ServerSrpData`, generates server ephemeral values, and advances to `WaitingForProof`.
 5. Send the server's ephemeral and salt back to the client.
@@ -89,7 +89,7 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 ### Using TokenAccountManager (World/Scene Server)
 
 1. Create a `TokenAccountManager` instance in the world or scene server's initialization.
-2. On public-key handshake, call `AddConnectionEncryptionData(connection, publicKey)`.
+2. On public-key handshake, call `TryAddConnectionEncryptionData(connection, publicKey)`.
 3. On receiving a token, advance with `TryAdvanceAuthState(connection, Handshake, TokenPending)`.
 4. In the async worker, validate the token against the database. On success, call `AddConnectionAccount(connection, accountName, accessLevel)` and advance to `Authenticated`.
 
@@ -197,7 +197,7 @@ accountManager.Clear();
 | Check | How to Verify | Expected Result |
 |-------|---------------|-----------------|
 | Encryption data stored | Call `GetConnectionEncryptionData` after handshake | Returns `true`, non-null `ConnectionEncryptionData` with public key |
-| AccountData created at handshake | Call `GetConnectionAccountData` after `AddConnectionEncryptionData` | Returns `true`, `AuthState == Handshake` |
+| AccountData created at handshake | Call `GetConnectionAccountData` after `TryAddConnectionEncryptionData` | Returns `true`, `AuthState == Handshake` |
 | SRP state transitions | Advance through `Handshake → VerifyPending → WaitingForProof → ProofPending → SrpSuccess → Authenticated` | Each `TryAdvanceAuthState` returns `true` in order |
 | Token state transitions | Advance through `Handshake → TokenPending → Authenticated` | Each `TryAdvanceAuthState` returns `true` in order |
 | Bidirectional map consistency | Call `GetAccountNameByConnection` and `GetConnectionByAccountName` after `AddConnectionAccount` | Both return `true` and cross-reference correctly |
@@ -228,7 +228,7 @@ flowchart LR
 │                                                                         │
 │  1. Client Connects — Public Key Handshake                              │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │ AddConnectionEncryptionData(connection, publicKey)                 │ │
+│  │ TryAddConnectionEncryptionData(connection, publicKey)              │ │
 │  │   ├── Store ConnectionEncryptionData (X25519 public key)          │ │
 │  │   ├── Create AccountData { AuthState = Handshake }                │ │
 │  │   └── Track in unauthenticatedTracker (arrival-ordered)           │ │
@@ -440,7 +440,7 @@ All public methods acquire `lock(syncRoot)`. The `TryAdvanceAuthState` callback 
 | Consumer | Interface Used | Role |
 |----------|---------------|------|
 | Login ServerBehaviour | `SrpAccountManager` | Creates manager; passes to `SrpAuthenticatorCore` via `InitializeCoreInstance` |
-| `SrpAuthenticatorCore` (FishMMO-Auth) | `ISrpAccountManager<NetworkConnection>` | Calls `AddConnectionEncryptionData`, drives all SRP state transitions, runs `SweepUnauthenticatedConnections` |
+| `SrpAuthenticatorCore` (FishMMO-Auth) | `ISrpAccountManager<NetworkConnection>` | Calls `TryAddConnectionEncryptionData`, drives all SRP state transitions, runs `SweepUnauthenticatedConnections` |
 | `TokenAuthenticatorCore` (FishMMO-Auth) | `ITokenAccountManager<NetworkConnection>` | Drives `Handshake → TokenPending → Authenticated` transitions |
 | World/Scene Servers | `AccountManager` (base) | Query `GetAccountNameByConnection` and `GetConnectionAccountData` for permission checks |
 | Disconnect Handling | `AccountManager` (base) | Calls `RemoveConnectionAccount` to clean up all mappings |

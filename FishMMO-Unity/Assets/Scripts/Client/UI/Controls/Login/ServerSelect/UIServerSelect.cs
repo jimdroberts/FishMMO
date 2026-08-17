@@ -48,13 +48,31 @@ namespace FishMMO.Client
 		/// Time until next allowed refresh.
 		/// </summary>
 		private float nextRefresh = 0.0f;
+		/// <summary>
+		/// Cached label of <see cref="RefreshButton"/>, resolved on first use.
+		/// </summary>
+		private TMPro.TMP_Text refreshButtonLabel;
+		/// <summary>
+		/// The button's original text, restored when the cooldown ends.
+		/// </summary>
+		private string refreshButtonReadyText = "Refresh";
+		/// <summary>
+		/// Last countdown value written to the label, so it is only rewritten on change.
+		/// -1 forces the first update through.
+		/// </summary>
+		private int lastShownCooldownSeconds = -1;
 
 		/// <summary>
 		/// Called when the client is set. Registers for server list and authentication events.
 		/// </summary>
 		public override void OnClientSet()
 		{
-			nextRefresh = RefreshRate;
+			/* Start ready rather than on cooldown. The cooldown exists to stop the list
+			 * being spammed, which the first request cannot do — and blocking it meant a
+			 * player who arrived before the server's own push (or whose push failed) had a
+			 * dead Refresh button for five seconds with no indication why. */
+			nextRefresh = 0.0f;
+			UpdateRefreshButton();
 
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
 
@@ -87,7 +105,54 @@ namespace FishMMO.Client
 			if (nextRefresh > 0.0f)
 			{
 				nextRefresh -= Time.deltaTime;
+				UpdateRefreshButton();
 			}
+		}
+
+		/// <summary>
+		/// Keeps the refresh button's enabled state and label in step with the cooldown.
+		/// </summary>
+		/// <remarks>
+		/// The refresh request is gated on <see cref="nextRefresh"/>, so for the first few
+		/// seconds after this panel appears the button silently did nothing when clicked. A
+		/// player waiting on a server list that has not arrived reads that as the client
+		/// having hung. Disabling the button and counting down makes the wait legible.
+		/// <para>Redundant writes are skipped: the label is rebuilt only when the displayed
+		/// whole second actually changes, not every frame.</para>
+		/// </remarks>
+		private void UpdateRefreshButton()
+		{
+			if (RefreshButton == null)
+			{
+				return;
+			}
+
+			bool ready = nextRefresh <= 0.0f;
+			if (RefreshButton.interactable != ready)
+			{
+				RefreshButton.interactable = ready;
+			}
+
+			if (refreshButtonLabel == null)
+			{
+				refreshButtonLabel = RefreshButton.GetComponentInChildren<TMPro.TMP_Text>();
+				if (refreshButtonLabel == null)
+				{
+					return;
+				}
+				refreshButtonReadyText = refreshButtonLabel.text;
+			}
+
+			int secondsLeft = ready ? 0 : Mathf.CeilToInt(nextRefresh);
+			if (secondsLeft == lastShownCooldownSeconds)
+			{
+				return;
+			}
+			lastShownCooldownSeconds = secondsLeft;
+
+			refreshButtonLabel.text = ready
+				? refreshButtonReadyText
+				: $"{refreshButtonReadyText} ({secondsLeft})";
 		}
 
 		/// <summary>
@@ -250,9 +315,12 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Refresh()
 		{
-			if (nextRefresh < 0)
+			/* <= 0, not < 0: the cooldown is initialised to exactly 0 so the first
+			 * request is allowed immediately, and a strict < would never match it. */
+			if (nextRefresh <= 0.0f)
 			{
 				nextRefresh = RefreshRate;
+				UpdateRefreshButton();
 
 				// Request an updated server list
 				RequestServerListBroadcast requestServerList = new RequestServerListBroadcast();

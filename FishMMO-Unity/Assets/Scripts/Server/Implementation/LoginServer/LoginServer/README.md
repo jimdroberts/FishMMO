@@ -21,7 +21,7 @@
 
 The Login Server system manages the full lifecycle of a FishMMO login server instance inside the database. On startup it resolves the server's identity (name + public address), registers a login-server row in the database, generates an HMAC signing key for authentication token issuance, persists that key, and configures the `ServerAuthenticator` so it can sign tokens. A periodic heartbeat pulse is then scheduled to keep the server's liveness timestamp current.
 
-All database work during initialization is executed via `Task.Run` with a 30-second timeout to avoid deadlocks from Unity's `SynchronizationContext` when blocking on async during init. Heartbeat pulses are dispatched through `AsyncWorkerData` so the main update loop stays non-blocking.
+Initialization is asynchronous: `InitializeOnceAsync` awaits its database work rather than blocking, and `Server` starts the transport from the completion callback. The Unity main thread is what drains async continuations, so blocking it there would stall the very work being awaited — the failure mode was a live LoginServer that never bound its port. If registration fails, `Server` retries with backoff (5 attempts by default) and then exits the process so a supervisor can restart it. Heartbeat pulses are dispatched through `AsyncWorkerData` so the main update loop stays non-blocking.
 
 On shutdown the system performs an orderly cleanup: it zeros the in-memory signing key, deletes the signing-key row from the database, deregisters the login-server record, and resets runtime state.
 
@@ -38,13 +38,13 @@ On shutdown the system performs an orderly cleanup: it zeros the in-memory signi
 
 ## Features
 
-- **Database registration** — Persists a login-server row (name, address, port) via `ILoginServerService.PersistAsync` with a 30-second timeout.
+- **Database registration** — Persists a login-server row (name, address, port) by awaiting `ILoginServerService.PersistAsync`; `Server` bounds the whole attempt and retries with backoff.
 - **HMAC signing-key generation** — Generates a cryptographically random HMAC key (`CryptoHelper.GenerateKey`) and persists it via `ILoginServerSigningKeyService.UpsertAsync`.
 - **Authenticator configuration** — Injects the HMAC key and login-server ID into the `ServerAuthenticator` so it can issue signed authentication tokens.
 - **Periodic heartbeat** — Schedules `OnPeriodicPulse` through `IPeriodicUpdateSystem` at a configurable cadence (default 5 s).
 - **Async heartbeat dispatch** — Heartbeat database calls are enqueued to `AsyncWorkerData` via `TryEnqueueAsyncWork`, keeping the main thread free.
 - **Graceful shutdown** — Zeros the in-memory signing key with `CryptographicOperations.ZeroMemory`, deletes the signing-key DB row, deregisters the login-server DB row, and resets runtime data.
-- **Timeout-guarded initialization** — All blocking database operations use explicit timeouts to prevent indefinite hangs.
+- **Non-blocking initialization** — Startup database work is awaited, never blocked on. Shutdown cleanup, which runs in `OnDeinitialize` where Unity cannot yield, uses `UnitySyncOverAsync` for a bounded, cancellable wait.
 - **Structured error logging** — Every failure path logs contextual error/warning messages through `FishMMO.Logging.Log`.
 
 ## Prerequisites
@@ -157,17 +157,18 @@ flowchart LR
 │                    LoginServerSystem Lifecycle                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  InitializeOnce()                                                   │
+│  InitializeOnceAsync(cancellationToken)                             │
 │  ┌────────────────────────────────────────────────────────────────┐ │
 │  │ 1. Validate Server + DataContainerRegistry                    │ │
 │  │ 2. Resolve server address (IServerAddressProvider)            │ │
 │  │ 3. Read ServerName from IServerConfiguration                  │ │
 │  │ 4. Resolve ILoginServerService from DB service registry       │ │
-│  │ 5. Task.Run → PersistAsync(name, address, port) [30s timeout] │ │
+│  │ 5. await PersistAsync(name, address, port, ct)                │ │
 │  │ 6. Store returned DB ID → ILoginServerRuntimeData.ID         │ │
 │  │ 7. Resolve ILoginServerSigningKeyService                      │ │
 │  │ 8. CryptoHelper.GenerateKey(HmacKeyLength)                   │ │
-│  │ 9. Task.Run → UpsertAsync(serverId, hmacKey) [30s timeout]   │ │
+│  │ 8b. await SigningKeyKekProvider.LoadFromDatabaseAsync(ct)     │ │
+│  │ 9. await UpsertAsync(serverId, wrappedHmacKey, ct)            │ │
 │  │ 10. Configure ServerAuthenticator (TokenSigningKey, ID)       │ │
 │  │ 11. Register periodic callback (PulseRate, OnPeriodicPulse)   │ │
 │  └────────────────────────────────────────────────────────────────┘ │

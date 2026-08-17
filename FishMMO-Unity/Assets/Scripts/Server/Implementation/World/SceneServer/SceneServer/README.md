@@ -45,7 +45,7 @@ The subsystem uses a split execution model:
 - **Scene instance lifecycle management** — loads and unloads scene instances on demand from database-queued requests using FishNet's `SceneManager`
 - **Periodic heartbeat pulses** — sends server and per-scene heartbeat data to the database at a configurable interval, using an atomic `Interlocked.CompareExchange` gate to prevent overlapping pulses
 - **Zero-allocation pulse collection** — reusable runtime buffers with manual `foreach` loops (no `AddRange` enumerator boxing) eliminate per-pulse GC pressure; pulse data is snapshotted before async dispatch
-- **Simplified pulse payload** — only `(Handle, CharacterCount)` tuples are sent to the async worker; stale-pulse detection (`StalePulse`, `TimeSinceLastExit`) stays local on the main thread
+- **Simplified pulse payload** — only `(Handle, CharacterCount)` tuples are sent to the async worker; stale-pulse detection (`StalePulse`, `LastExit`) stays local on the main thread
 - **Scene load rate limiting** — `maxScenesLoadedPerPulse` bounds the dequeue loop per pulse cycle to prevent DB flood from overwhelming the scene server
 - **Duplicate load guard** — `TryAdd` atomically rejects duplicate scene IDs in `PendingScenes`, preventing races when two queued callbacks target the same scene
 - **Pending scene TTL** — bounded sweep with configurable timeout, interval, and max removals per pass; expired requests are failed in the database and cleaned up locally
@@ -67,7 +67,7 @@ The subsystem uses a split execution model:
 - Database layer implementing `ISceneServerService` and `ISceneService` (Npgsql-backed)
 - `WorldSceneDetailsCache` ScriptableObject populated with valid scene names
 - `ICharacterSystem<NetworkConnection, Scene>` and `ICharacterMappingData<NetworkConnection>` registered in the server behaviour/data registries
-- `IAddressProvider` returning a valid `ServerAddress` for this node
+- `IServerAddressProvider` returning a valid `ServerAddress` for this node
 
 ## Installation / Build
 

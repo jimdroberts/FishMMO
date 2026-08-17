@@ -18,6 +18,129 @@ QUIC/HTTP3 transport for FishMMO via FishNet.
 - **Channel 0 (Reliable)**: WebTransport bidirectional streams
 - **Channel 1 (Unreliable)**: QUIC DATAGRAM frames
 
+Both channels are real. Nothing is remapped: unreliable traffic travels as
+datagrams on every platform, browsers included.
+
+## Wire format
+
+A QUIC stream is an ordered byte stream, not a message stream — writes may be
+coalesced or split arbitrarily. Every application message on the reliable
+channel is therefore length-delimited:
+
+```
+Message {
+  Length (i),       QUIC variable-length integer (RFC 9000 §16)
+  Payload (..),     exactly Length bytes
+}
+```
+
+On a browser session the stream opens with the WEBTRANSPORT_STREAM header
+(type `0x41`, encoded as the two bytes `40 41`, followed by the Session ID);
+framed messages begin immediately after it.
+
+Unreliable traffic on a browser session is an HTTP/3 Datagram (RFC 9297 §2.1):
+a Quarter Stream ID varint — the CONNECT stream ID divided by four — followed
+by the payload. Native raw-QUIC peers exchange bare payloads.
+
+> **Compatibility:** framing is a wire-format change. A client and server must
+> both be built from this revision or later; a pre-framing peer cannot
+> interoperate with a framing one.
+
+## WebGL bridge
+
+`WebGL/plugin/WebTransport.jslib` is the browser half of the transport, driven
+from `WebGL/WebTransportJSLib.cs`. Three rules in it are non-obvious and easy to
+undo by accident.
+
+### Session liveness is not `readyState`
+
+Nothing in the bridge gates traffic on `wt.readyState === 'connected'`. That
+property is absent on some Chromium builds and can still read `'connecting'`
+immediately after the `ready()` promise resolves, so gating on it dropped the
+very first `ClientHandshake` — the client logged `WIRE SEND FAIL` while the
+server logged `prefill=0`, and the connection stalled until it timed out.
+
+The single source of truth is the `_isLive(session)` helper: once `ready()`
+resolves it sets `session._ready` and the session counts as live until it is
+explicitly `'closed'`/`'failed'` or `WTDisconnect` sets `session._closed`. Send
+paths, the datagram pump, and the incoming-stream pump all call it. Reintroducing
+a bare `readyState` check anywhere brings the dropped handshake back.
+
+### One persistent outgoing stream, opened before Started
+
+Reliable sends share a single bidirectional stream whose writer is cached in
+`session._streamWriter`; a new stream is opened only when the cached writer dies
+(`desiredSize === null`). Opening a stream per packet exhausts the browser's
+~100–200 stream limit within seconds at gameplay rates.
+
+That stream is warmed up inside `wt.ready` — `_writeReliable(session, null)`
+creates it *before* the `onOpen` callback tells C# the socket is Started, so the
+first handshake packet cannot race `createBidirectionalStream()`. Sends issued
+while the stream is still resolving are queued in `session._sendQueue` and
+flushed in order once the writer exists, so ordering holds either way.
+
+The readable half of that client-opened stream is pumped too: the server replies
+on the stream the client opened, and leaving it undrained silently discards every
+login result, spawn, and RPC.
+
+### Freeing heap pointers: call `WTFree`, never `_free`
+
+`WTGetLastErrorMessage` returns a `_malloc`'d UTF-8 pointer that managed code
+must release. C# frees it through the `WTFree` jslib export, wrapped by
+`WebTransportJSLib.WASMFree`:
+
+```csharp
+IntPtr msgPtr = WebTransportJSLib.WTGetLastErrorMessage(index);
+if (msgPtr != IntPtr.Zero)
+{
+    string detail = Marshal.PtrToStringUTF8(msgPtr);
+    WebTransportJSLib.WASMFree(msgPtr);
+}
+```
+
+Do **not** replace that with `[DllImport("__Internal", EntryPoint = "_free")]`.
+IL2CPP resolves a `DllImport` entry point against the linked libc symbol name,
+which modern Emscripten (Unity 6) emits as `free`, so the `_free` spelling fails
+the WebGL link with `undefined symbol: _free`. Inside the `.jslib` the leading
+underscore *is* correct — `_free` there is the JS-side name of the same
+allocator as `_malloc`. The underscore rule is opposite on each side of the
+boundary, which is exactly why the wrapper exists.
+
+## TLS
+
+The **server** presents a certificate the same way it always has, via
+`CertificatePath` / `PrivateKeyPath` in its `.cfg`. Nothing about server TLS
+changed, and the server never uses the JavaScript bridge — that exists only in
+WebGL *client* builds.
+
+`SetServerCertificateHashes` is a **client** setting despite the name, which
+comes from the W3C option it feeds (`serverCertificateHashes` — "hashes *of the*
+server's certificate", supplied by whoever connects). It exists because browsers
+only open a WebTransport session against a publicly trusted chain, so a WebGL
+build cannot reach a server with a self-signed certificate at all. For local
+development, pin it on the connecting client:
+
+```csharp
+webTransport.SetServerCertificateHashes("A1:B2:…");   // WebGL clients only
+```
+
+```bash
+openssl x509 -in cert.pem -noout -fingerprint -sha256
+```
+
+The pinned certificate must be ECDSA P-256 with a validity window of 14 days or
+less — a browser rule. Native clients ignore this and validate against the
+platform trust store. Leave it unset in production.
+
+## Browser support
+
+| Browser | WebTransport | Notes |
+|---------|--------------|-------|
+| Chrome / Edge / Opera | Yes (97+) | Streams and datagrams |
+| Firefox | Yes (114+) | Streams and datagrams |
+| Safari / iOS WebKit | **No** | Behind a flag in Technology Preview only; needs a fallback transport |
+| Internet Explorer | **No** | No HTTP/3, no QUIC, end-of-life; Edge is the successor |
+
 ## Production Deployment
 
 - **NGINX L4 UDP proxy** fronts all game servers in production. Clients connect to the NGINX public endpoint, which forwards raw UDP to the correct backend game server on loopback. This allows multiple game server processes to share a single public port and provides a clean layer-4 boundary.

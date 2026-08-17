@@ -63,11 +63,19 @@ typedef struct {
     wt_stream_manager_t* mgr;
     wt_stream_id_t       stream_id;
     HQUIC                quic_stream;
+    /* Reassembly accumulator. Holds bytes received but not yet consumed by
+     * a complete framed message (see WT_MAX_FRAMED_MESSAGE). Unlike the
+     * pre-framing implementation this buffer PERSISTS across RECEIVE events:
+     * a partial message stays here until its remaining bytes arrive. */
     uint8_t*             recv_buf;
     uint32_t             recv_offset;
-    /* True after we have handled the optional WEBTRANSPORT_STREAM capsule
+    /* True after we have handled the optional WEBTRANSPORT_STREAM header
      * at the start of a browser data stream (or decided none is present). */
     bool                 header_checked;
+    /* Set when the peer's framing is unrecoverable (oversized length, or a
+     * zero-length message). The stream is aborted and no further data is
+     * delivered — resynchronising a byte stream is not possible. */
+    bool                 framing_error;
     /* Prevent double StreamClose (mgr shutdown race vs SHUTDOWN_COMPLETE). */
     bool                 close_done;
     /* Outbound payload waiting for START_COMPLETE before StreamSend.
@@ -173,23 +181,33 @@ static size_t sm_varint_encode(uint64_t val, uint8_t* out)
 /**
  * If buf starts with WEBTRANSPORT_STREAM (type 0x41 as QUIC varint), skip it.
  *
- * Wire format (draft-ietf-webtrans-http3 / Chromium):
- *   Type (i) = 0x41          ← QUIC varint (Chrome may use 1-byte 0x41 OR
- *                              2-byte 0x40 0x41; never assume single byte)
- *   Session ID (i)
- *   … Stream Data (app)      ← no length field
+ * Wire format (draft-ietf-webtrans-http3 §4.2, bidirectional streams):
+ *   Type (i) = 0x41          ← QUIC varint; 65 does not fit the 1-byte form
+ *                              (0..63), so it is always the two bytes
+ *                              0x40 0x41 on the wire
+ *   Session ID (i)           ← the CONNECT request stream ID
+ *   … Stream Data (app)      ← no length field at this layer
  *
  * Production bug: first=40 41 00 11 was delivered whole because we only
  * matched buf[0]==0x41 and ignored 2-byte varint type encoding → FishNet
- * saw capsule garbage → disconnect → unsafe shutdown → quic_bugcheck.
+ * saw header garbage → disconnect → unsafe shutdown → quic_bugcheck.
  *
- * Returns byte offset of application data (0 if not a WT stream capsule).
- * incomplete=true if type or session-id varint is truncated.
+ * @param expect_session_id  The session's CONNECT stream ID. A header naming
+ *                           any other session belongs to a WebTransport
+ *                           session we are not part of; per the draft it must
+ *                           not be treated as ours, so it is reported as a
+ *                           mismatch rather than silently accepted.
+ * @param incomplete  Set when the type or session-id varint is truncated —
+ *                    the caller must wait for more bytes, not decide.
+ * @param mismatch    Set when a well-formed header names a different session.
+ * @return byte offset of application data (0 if this is not a WT header).
  */
 static size_t sm_skip_wt_stream_header(const uint8_t* buf, size_t len,
-                                       bool* incomplete)
+                                       uint64_t expect_session_id,
+                                       bool* incomplete, bool* mismatch)
 {
     *incomplete = false;
+    *mismatch = false;
     if (len < 1) { *incomplete = true; return 0; }
 
     uint64_t type = 0;
@@ -209,18 +227,92 @@ static size_t sm_skip_wt_stream_header(const uint8_t* buf, size_t len,
         return 0;
     }
     off += sid_n;
+
+    if (session_id != expect_session_id) {
+        WT_LOG_WARN(
+            "WEBTRANSPORT_STREAM header names session %llu, expected %llu",
+            (unsigned long long)session_id,
+            (unsigned long long)expect_session_id);
+        *mismatch = true;
+        return 0;
+    }
     return off;
 }
 
-/** True if buffer looks like a (possibly incomplete) WEBTRANSPORT_STREAM head. */
-static bool sm_looks_like_wt_capsule(const uint8_t* buf, size_t len)
+/* ── Reliable-channel message framing ───────────────────────────
+ * Every application message on a stream is preceded by its length as a
+ * QUIC varint. See WT_MAX_FRAMED_MESSAGE in webtransport_internal.h for
+ * the wire format and why it is required.
+ *
+ * Encoding a length costs 1 byte below 64, 2 below 16384 — FishNet
+ * bundles are MTU-bounded, so in practice this is 2 bytes per message. */
+
+/**
+ * Consume every complete framed message sitting in sctx->recv_buf and hand
+ * each one to the application, then compact the buffer so a partial trailing
+ * message is retained for the next RECEIVE event.
+ *
+ * This is the whole point of the framing layer: msquic delivers whatever
+ * bytes have arrived, which may be several messages at once, half a message,
+ * or a message split across many events. Only whole messages are delivered
+ * upward.
+ *
+ * @return true to continue, false if the peer's framing is broken and the
+ *         caller must abort the stream.
+ */
+static bool sm_drain_framed_messages(stream_ctx_t* sctx)
 {
-    if (len < 1) return false;
-    uint64_t type = 0;
-    size_t type_n = 0;
-    if (sm_varint_decode(buf, len, &type, &type_n) < 0)
-        return true; /* incomplete multi-byte type — treat as possible capsule */
-    return type == WT_STREAM_CAPSULE_TYPE;
+    wt_stream_manager_t* mgr = sctx->mgr;
+    size_t consumed = 0;
+    const size_t avail = sctx->recv_offset;
+
+    while (consumed < avail) {
+        uint64_t msg_len = 0;
+        size_t len_n = 0;
+        if (sm_varint_decode(sctx->recv_buf + consumed, avail - consumed,
+                             &msg_len, &len_n) < 0)
+            break;  /* length varint itself is not fully here yet */
+
+        if (msg_len == 0 || msg_len > WT_MAX_FRAMED_MESSAGE) {
+            /* A byte stream cannot be resynchronised once the length field
+             * is wrong — every subsequent offset is derived from it. Fail
+             * the stream rather than deliver shifted garbage upward. */
+            WT_LOG_ERROR(
+                "Stream %llu: invalid framed message length %llu "
+                "(max %d) — aborting stream",
+                (unsigned long long)sctx->stream_id,
+                (unsigned long long)msg_len,
+                (int)WT_MAX_FRAMED_MESSAGE);
+            sctx->framing_error = true;
+            return false;
+        }
+
+        if (avail - consumed - len_n < msg_len)
+            break;  /* payload incomplete — wait for the rest */
+
+        consumed += len_n;
+
+        if (mgr->on_stream_data && mgr->callback_ctx) {
+            mgr->on_stream_data(
+                mgr->callback_ctx,
+                mgr->conn_id,
+                sctx->stream_id,
+                sctx->recv_buf + consumed,
+                (int32_t)msg_len);
+        }
+        consumed += (size_t)msg_len;
+    }
+
+    if (consumed > 0) {
+        size_t remaining = avail - consumed;
+        if (remaining > 0) {
+            /* Retain the partial message at the front of the buffer. */
+            memmove(sctx->recv_buf, sctx->recv_buf + consumed, remaining);
+        }
+        sctx->recv_offset = (uint32_t)remaining;
+        atomic_fetch_sub(&mgr->total_recv_bytes, (uint32_t)consumed);
+    }
+    return true;
 }
 
 /* ── Forward ────────────────────────────────────────────────── */
@@ -274,7 +366,11 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             }
         }
 
-        /* Append into recv_buf (may need prior partial WT header bytes). */
+        if (sctx->framing_error)
+            return QUIC_STATUS_ABORTED;
+
+        /* Append into recv_buf. The buffer persists across events — it holds
+         * any partial WT header and any partial framed message. */
         uint32_t needed = sctx->recv_offset + total;
         uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, needed);
         if (!newbuf) {
@@ -289,112 +385,53 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             sctx->recv_offset += bufs[i].Length;
         }
 
-        /*
-         * Deliver on RECEIVE (Chrome keeps a persistent bidi stream open).
-         * Strip WEBTRANSPORT_STREAM capsule first so FishNet never sees 0x41.
-         */
-        const uint8_t* app = sctx->recv_buf;
-        size_t app_len = sctx->recv_offset;
-
+        /* ── One-time WEBTRANSPORT_STREAM header strip ──────────────
+         * Browser sessions open each data stream with type 0x41 + Session
+         * ID. It appears exactly once, before the first framed message. */
         if (!sctx->header_checked) {
             if (sctx->mgr->use_wt_stream_header) {
-                bool incomplete = false;
-                size_t skip = sm_skip_wt_stream_header(app, app_len, &incomplete);
-                if (incomplete) {
-                    /* Wait for more bytes to finish the capsule. */
-                    return QUIC_STATUS_SUCCESS;
+                bool incomplete = false, mismatch = false;
+                size_t skip = sm_skip_wt_stream_header(
+                    sctx->recv_buf, sctx->recv_offset,
+                    sctx->mgr->wt_session_id, &incomplete, &mismatch);
+
+                if (incomplete)
+                    return QUIC_STATUS_SUCCESS;  /* wait for the rest */
+
+                if (mismatch) {
+                    sctx->framing_error = true;
+                    MsQuic->StreamShutdown(stream,
+                                            QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                    return QUIC_STATUS_ABORTED;
                 }
+
                 if (skip > 0) {
+                    size_t remaining = sctx->recv_offset - skip;
+                    if (remaining > 0)
+                        memmove(sctx->recv_buf, sctx->recv_buf + skip, remaining);
+                    sctx->recv_offset = (uint32_t)remaining;
+                    atomic_fetch_sub(&sctx->mgr->total_recv_bytes,
+                                     (uint32_t)skip);
                     WT_LOG_INFO(
-                        "Stream %llu: stripped WEBTRANSPORT_STREAM capsule "
-                        "skip=%zu raw_first=%02x %02x %02x %02x "
-                        "app_payload=%zu app_first=%02x %02x %02x %02x "
-                        "stamp=WT_CAPSULE_VARINT_TYPE_V2",
-                        (unsigned long long)sctx->stream_id,
-                        skip,
-                        app_len > 0 ? app[0] : 0,
-                        app_len > 1 ? app[1] : 0,
-                        app_len > 2 ? app[2] : 0,
-                        app_len > 3 ? app[3] : 0,
-                        app_len - skip,
-                        app_len > skip ? app[skip] : 0,
-                        app_len > skip + 1 ? app[skip + 1] : 0,
-                        app_len > skip + 2 ? app[skip + 2] : 0,
-                        app_len > skip + 3 ? app[skip + 3] : 0);
-                    app += skip;
-                    app_len -= skip;
-                } else if (sm_looks_like_wt_capsule(app, app_len)) {
-                    /* Should have been incomplete or skip>0 — don't deliver garbage. */
-                    WT_LOG_ERROR(
-                        "Stream %llu: capsule expected but strip returned 0 "
-                        "raw_first=%02x %02x %02x %02x len=%zu — holding",
-                        (unsigned long long)sctx->stream_id,
-                        app_len > 0 ? app[0] : 0,
-                        app_len > 1 ? app[1] : 0,
-                        app_len > 2 ? app[2] : 0,
-                        app_len > 3 ? app[3] : 0,
-                        app_len);
-                    return QUIC_STATUS_SUCCESS;
+                        "Stream %llu: stripped WEBTRANSPORT_STREAM header "
+                        "(%zu bytes, session_id=%llu)",
+                        (unsigned long long)sctx->stream_id, skip,
+                        (unsigned long long)sctx->mgr->wt_session_id);
                 }
             }
             sctx->header_checked = true;
         }
 
-        if (app_len > 0 &&
-            sctx->mgr->on_stream_data &&
-            sctx->mgr->callback_ctx) {
-            /* Refuse to deliver if first byte still looks like unstripped capsule. */
-            if (sctx->mgr->use_wt_stream_header &&
-                sm_looks_like_wt_capsule(app, app_len) &&
-                app[0] == 0x40 /* 2-byte varint lead */ ) {
-                WT_LOG_ERROR(
-                    "Stream %llu: refusing deliver of likely unstripped capsule "
-                    "first=%02x %02x %02x %02x — abort stream only (not process)",
-                    (unsigned long long)sctx->stream_id,
-                    app_len > 0 ? app[0] : 0,
-                    app_len > 1 ? app[1] : 0,
-                    app_len > 2 ? app[2] : 0,
-                    app_len > 3 ? app[3] : 0);
-                atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
-                free(sctx->recv_buf);
-                sctx->recv_buf = NULL;
-                sctx->recv_offset = 0;
-                MsQuic->StreamShutdown(stream,
-                                        QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-                return QUIC_STATUS_ABORTED;
-            }
-            WT_LOG_INFO(
-                "Stream %llu: FIRST_APP_PAYLOAD_AFTER_SESSION deliver %zu bytes "
-                "to app (conn=%llu) first=%02x %02x %02x %02x "
-                "stamp=WT_CAPSULE_VARINT_TYPE_V2",
-                (unsigned long long)sctx->stream_id,
-                app_len,
-                (unsigned long long)sctx->mgr->conn_id,
-                app_len > 0 ? app[0] : 0,
-                app_len > 1 ? app[1] : 0,
-                app_len > 2 ? app[2] : 0,
-                app_len > 3 ? app[3] : 0);
-            sctx->mgr->on_stream_data(
-                sctx->mgr->callback_ctx,
-                sctx->mgr->conn_id,
-                sctx->stream_id,
-                app,
-                (int32_t)app_len);
-        } else if (app_len == 0) {
-            WT_LOG_INFO(
-                "Stream %llu: recv after header strip empty (conn=%llu) "
-                "raw_len=%u header_checked=%d",
-                (unsigned long long)sctx->stream_id,
-                (unsigned long long)sctx->mgr->conn_id,
-                (unsigned)sctx->recv_offset,
-                sctx->header_checked ? 1 : 0);
+        /* Deliver every complete message; retain any partial tail. */
+        if (!sm_drain_framed_messages(sctx)) {
+            atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
+            free(sctx->recv_buf);
+            sctx->recv_buf = NULL;
+            sctx->recv_offset = 0;
+            MsQuic->StreamShutdown(stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            return QUIC_STATUS_ABORTED;
         }
-
-        /* Data delivered (or empty after header strip) — free buffer. */
-        atomic_fetch_sub(&sctx->mgr->total_recv_bytes, sctx->recv_offset);
-        free(sctx->recv_buf);
-        sctx->recv_buf = NULL;
-        sctx->recv_offset = 0;
         return QUIC_STATUS_SUCCESS;
     }
 
@@ -407,30 +444,34 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * Auto-graceful-shutdown left send_closed=false while the handle was
          * no longer writable → StreamSend INVALID_STATE (0x8007139f) and
          * later msquic worker access violations after login. */
-        if (sctx->recv_buf && sctx->recv_offset > 0 &&
-            sctx->mgr->on_stream_data && sctx->mgr->callback_ctx) {
-            const uint8_t* app = sctx->recv_buf;
-            size_t app_len = sctx->recv_offset;
+        if (sctx->recv_buf && sctx->recv_offset > 0 && !sctx->framing_error) {
             if (!sctx->header_checked && sctx->mgr->use_wt_stream_header) {
-                bool incomplete = false;
-                size_t skip = sm_skip_wt_stream_header(app, app_len, &incomplete);
-                if (!incomplete && skip > 0) {
-                    app += skip;
-                    app_len -= skip;
+                bool incomplete = false, mismatch = false;
+                size_t skip = sm_skip_wt_stream_header(
+                    sctx->recv_buf, sctx->recv_offset,
+                    sctx->mgr->wt_session_id, &incomplete, &mismatch);
+                if (!incomplete && !mismatch && skip > 0) {
+                    size_t remaining = sctx->recv_offset - skip;
+                    if (remaining > 0)
+                        memmove(sctx->recv_buf, sctx->recv_buf + skip, remaining);
+                    sctx->recv_offset = (uint32_t)remaining;
+                    atomic_fetch_sub(&sctx->mgr->total_recv_bytes,
+                                     (uint32_t)skip);
                 }
                 sctx->header_checked = true;
             }
-            if (app_len > 0) {
-                WT_LOG_INFO(
-                    "Stream %llu: deliver %zu bytes on peer FIN first=%02x %02x",
-                    (unsigned long long)sctx->stream_id, app_len,
-                    app[0], app_len > 1 ? app[1] : 0);
-                sctx->mgr->on_stream_data(
-                    sctx->mgr->callback_ctx,
-                    sctx->mgr->conn_id,
-                    sctx->stream_id,
-                    app,
-                    (int32_t)app_len);
+
+            /* Deliver whatever whole messages are still buffered. Anything
+             * left after this is a message the peer began but never finished
+             * before closing its send side — it is incomplete by definition
+             * and must be dropped rather than delivered truncated. */
+            sm_drain_framed_messages(sctx);
+            if (sctx->recv_offset > 0) {
+                WT_LOG_WARN(
+                    "Stream %llu: peer FIN with %u trailing bytes of an "
+                    "incomplete message — discarding",
+                    (unsigned long long)sctx->stream_id,
+                    (unsigned)sctx->recv_offset);
             }
         }
 
@@ -828,8 +869,12 @@ static void sm_mark_send_closed(
 
 /**
  * Send on an already-started stream (peer-initiated preferred path on server).
- * No WEBTRANSPORT_STREAM header: capsule was already on the client open;
- * subsequent server writes on the same bidi stream are raw app bytes.
+ *
+ * No WEBTRANSPORT_STREAM header: that appears once, when the stream is
+ * opened, and this stream is already open. The message still carries its
+ * length prefix — every message on a stream does, or the peer cannot find
+ * its boundaries.
+ *
  * Does NOT set FIN so the peer can keep writing on the same stream.
  */
 static int32_t sm_send_on_open_stream(
@@ -839,7 +884,10 @@ static int32_t sm_send_on_open_stream(
     const uint8_t* data,
     int32_t length)
 {
-    sm_send_req_t* req = sm_send_req_alloc(NULL, 0, data, length);
+    uint8_t len_hdr[8];
+    size_t len_n = sm_varint_encode((uint64_t)length, len_hdr);
+
+    sm_send_req_t* req = sm_send_req_alloc(len_hdr, len_n, data, length);
     if (!req)
         return WT_ERR_BUFFER_FULL;
 
@@ -884,6 +932,14 @@ int32_t wt_stream_manager_send(
     wt_stream_manager_t* mgr, const uint8_t* data, int32_t length)
 {
     if (!data || length <= 0) return WT_ERR_SEND_FAILED;
+    if (length > WT_MAX_FRAMED_MESSAGE) {
+        /* The receiver rejects anything larger, so failing here gives the
+         * caller a usable error instead of a stream abort on the far side. */
+        WT_LOG_ERROR(
+            "Stream send rejected: len=%d exceeds WT_MAX_FRAMED_MESSAGE=%d",
+            length, (int)WT_MAX_FRAMED_MESSAGE);
+        return WT_ERR_SEND_FAILED;
+    }
     if (atomic_load(&mgr->shutting_down)) return WT_ERR_INVALID_STATE;
     if (atomic_load(&mgr->conn_closed)) return WT_ERR_INVALID_STATE;
 
@@ -943,32 +999,25 @@ int32_t wt_stream_manager_send(
                 (unsigned long long)reuse_id,
                 (int)r,
                 mgr->is_server ? 1 : 0);
-            /* Browser server sessions: NEVER open a server-initiated bidi stream.
-             * Chrome rejects WEBTRANSPORT_STREAM on server StreamOpen with
-             * H3_FRAME_UNEXPECTED / H3_FRAME_ERROR and tears down the session
-             * right after LoginSuccess (post-auth Authenticated packet). */
-            if (mgr->use_wt_stream_header) {
-                WT_LOG_ERROR(
-                    "Browser client: refusing server StreamOpen fallback "
-                    "conn=%llu len=%d stamp=NO_SERVER_STREAM_OPEN_V1",
-                    (unsigned long long)mgr->conn_id, length);
-                return WT_ERR_SEND_FAILED;
-            }
+            /* Falls through to opening a new local stream.
+             *
+             * This used to refuse outright for browser sessions, because
+             * Chrome answered a server-opened stream with H3_FRAME_UNEXPECTED
+             * and tore the session down. The cause was the header this code
+             * wrote, not the act of opening a stream: the WEBTRANSPORT_STREAM
+             * frame type went out as the single byte 0x41, which is not a
+             * valid varint for 65 and decodes as frame type 0x0104. With the
+             * type encoded correctly (0x40 0x41) a server-initiated stream is
+             * exactly what draft-ietf-webtrans-http3 §4.2 describes, and
+             * refusing to open one left the server unable to send anything at
+             * all to a client that had not spoken first. */
             WT_LOG_WARN(
-                "SAME_STREAM_REPLY failed conn=%llu — falling back to new "
-                "local stream (native) stamp=STREAM_REUSE_POLICY_V2",
+                "Stream reuse failed conn=%llu — opening a new local stream",
                 (unsigned long long)mgr->conn_id);
-        } else if (mgr->use_wt_stream_header) {
-            /* No open peer stream yet — cannot reply to Chrome safely. */
-            WT_LOG_ERROR(
-                "Browser client: no peer stream for reply conn=%llu len=%d "
-                "stamp=NO_SERVER_STREAM_OPEN_V1",
-                (unsigned long long)mgr->conn_id, length);
-            return WT_ERR_SEND_FAILED;
         }
     }
 
-    /* ── Fallback: open a new server-initiated bidi stream (native only) ── */
+    /* ── Fallback: open a new locally-initiated bidi stream ── */
     int slot = -1;
     sm_lock(mgr);
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
@@ -1042,29 +1091,41 @@ int32_t wt_stream_manager_send(
     mgr->streams[slot].quic_stream = quic_stream;
     sm_unlock(mgr);
 
+    /* Prefix layout for the first write on a stream we opened:
+     *   [WEBTRANSPORT_STREAM type + Session ID]   (browser sessions only)
+     *   [message length varint]                   (always) */
     size_t header_len = 0;
-    uint8_t header[1 + 8];
+    uint8_t header[8 + 8 + 8];
     if (mgr->use_wt_stream_header) {
-        header[0] = (uint8_t)WT_STREAM_CAPSULE_TYPE;
-        size_t sid_n = sm_varint_encode(mgr->wt_session_id, header + 1);
-        header_len = 1 + sid_n;
+        /* The frame type is a QUIC varint, and 0x41 (65) does not fit the
+         * 1-byte form — that form only encodes 0..63. Writing the raw byte
+         * 0x41 produces a 2-byte varint whose value is 0x0104, an unknown
+         * frame type that a browser rejects with H3_FRAME_UNEXPECTED. Encode
+         * it properly: 0x41 becomes the two bytes 0x40 0x41. */
+        header_len = sm_varint_encode(WT_STREAM_CAPSULE_TYPE, header);
+        header_len += sm_varint_encode(mgr->wt_session_id, header + header_len);
         WT_LOG_INFO(
             "Stream send: WEBTRANSPORT_STREAM session_id=%llu header_len=%zu "
-            "app_len=%d stamp=WT_CAPSULE_NO_LEN_V1",
+            "app_len=%d",
             (unsigned long long)mgr->wt_session_id, header_len, length);
     }
+    header_len += sm_varint_encode((uint64_t)length, header + header_len);
 
-    sm_send_req_t* req = sm_send_req_alloc(
-        header_len > 0 ? header : NULL, header_len, data, length);
+    sm_send_req_t* req = sm_send_req_alloc(header, header_len, data, length);
     if (!req) {
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
         return WT_ERR_BUFFER_FULL;
     }
     sctx->pending_send = req;
-    /* Client: keep bidi open for many FishNet reliable packets.
-     * Server fallback (rare native): one-shot FIN after first payload. */
-    sctx->pending_send_fin = mgr->is_server ? 1 : 0;
+    /* Never FIN: the stream stays open so subsequent messages reuse it.
+     *
+     * The server used to FIN after its first payload here. With message
+     * framing that is both unnecessary (boundaries no longer depend on the
+     * stream ending) and harmful: a FIN'd stream is unusable for the next
+     * send, so every push would open another one, and browsers cap
+     * concurrent streams at around a hundred. */
+    sctx->pending_send_fin = 0;
 
     status = MsQuic->StreamStart(quic_stream,
                                   QUIC_STREAM_START_FLAG_IMMEDIATE);
@@ -1096,7 +1157,9 @@ int32_t wt_stream_manager_send(
         sctx->pending_send_fin ? 1 : 0,
         mgr->is_server ? 1 : 0);
 
-    /* Server one-shot fallback FINs; client keeps send open for reuse. */
+    /* pending_send_fin is always 0 now, so the send side stays open and the
+     * slot remains eligible for reuse. Kept as a conditional because the flag
+     * is still honoured by START_COMPLETE for any future one-shot sender. */
     if (sctx->pending_send_fin) {
         sm_lock(mgr);
         mgr->streams[slot].send_closed = true;
@@ -1107,6 +1170,13 @@ int32_t wt_stream_manager_send(
 
 void wt_stream_manager_accept_stream(
     wt_stream_manager_t* mgr, HQUIC quic_stream)
+{
+    wt_stream_manager_accept_stream_prefill(mgr, quic_stream, NULL, 0);
+}
+
+void wt_stream_manager_accept_stream_prefill(
+    wt_stream_manager_t* mgr, HQUIC quic_stream,
+    const uint8_t* data, uint32_t length)
 {
     /* Find and reserve a free slot under lock — concurrent with send
      * on the application thread. */
@@ -1175,15 +1245,72 @@ void wt_stream_manager_accept_stream(
     sctx->stream_id = stream_id;
     sctx->quic_stream = quic_stream;
 
+    /* Seed the reassembly buffer with bytes the caller already received. */
+    if (data && length > 0) {
+        sctx->recv_buf = (uint8_t*)malloc(length);
+        if (!sctx->recv_buf) {
+            WT_LOG_ERROR(
+                "Accept prefill: malloc(%u) failed conn=%llu stream_id=%llu — "
+                "replayed bytes lost",
+                length, (unsigned long long)mgr->conn_id,
+                (unsigned long long)stream_id);
+        } else {
+            memcpy(sctx->recv_buf, data, length);
+            sctx->recv_offset = length;
+            atomic_fetch_add(&mgr->total_recv_bytes, length);
+        }
+    }
+
     WT_LOG_INFO(
         "Accept peer stream conn=%llu stream_id=%llu peer_initiated=1 "
-        "stamp=ACCEPT_SLOT_ID_FIX_V1",
+        "prefill=%u",
         (unsigned long long)mgr->conn_id,
-        (unsigned long long)stream_id);
+        (unsigned long long)stream_id,
+        (unsigned)sctx->recv_offset);
 
     /* SetCallbackHandler outside lock — safe because the slot is already
      * registered above. If SHUTDOWN_COMPLETE fires synchronously it will
      * find the slot via stream_id and clean up correctly. */
     MsQuic->SetCallbackHandler(quic_stream,
                                 (void*)(uintptr_t)k_stream_handler, sctx);
+
+    /* Run the replayed bytes through the same strip + framing path as live
+     * data. Safe to do after SetCallbackHandler: this runs on the
+     * connection's QUIC worker thread (the caller is inside an h3 stream
+     * callback), so msquic cannot deliver a concurrent RECEIVE for this
+     * stream and race the buffer. */
+    if (sctx->recv_offset > 0) {
+        if (!sctx->header_checked) {
+            if (mgr->use_wt_stream_header) {
+                bool incomplete = false, mismatch = false;
+                size_t skip = sm_skip_wt_stream_header(
+                    sctx->recv_buf, sctx->recv_offset,
+                    mgr->wt_session_id, &incomplete, &mismatch);
+                if (incomplete)
+                    return;  /* keep buffered; finish on the next RECEIVE */
+                if (mismatch) {
+                    sctx->framing_error = true;
+                    MsQuic->StreamShutdown(quic_stream,
+                                            QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+                    return;
+                }
+                if (skip > 0) {
+                    size_t remaining = sctx->recv_offset - skip;
+                    if (remaining > 0)
+                        memmove(sctx->recv_buf, sctx->recv_buf + skip, remaining);
+                    sctx->recv_offset = (uint32_t)remaining;
+                    atomic_fetch_sub(&mgr->total_recv_bytes, (uint32_t)skip);
+                }
+            }
+            sctx->header_checked = true;
+        }
+        if (!sm_drain_framed_messages(sctx)) {
+            atomic_fetch_sub(&mgr->total_recv_bytes, sctx->recv_offset);
+            free(sctx->recv_buf);
+            sctx->recv_buf = NULL;
+            sctx->recv_offset = 0;
+            MsQuic->StreamShutdown(quic_stream,
+                                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+        }
+    }
 }

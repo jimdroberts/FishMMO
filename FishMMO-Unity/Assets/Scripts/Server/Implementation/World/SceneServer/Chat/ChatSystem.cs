@@ -96,6 +96,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxPersistBatchSize = 2000;
 
 		/// <summary>
+		/// Maximum time the shutdown flush blocks the main thread waiting on the database.
+		/// Shorter than the 30s startup default: a stalled database must not hold process exit
+		/// open, and losing the tail of the chat log is preferable to a hung shutdown.
+		/// </summary>
+		private const int persistFlushTimeoutMs = 10_000;
+
+		/// <summary>
 		/// Interval in seconds between outbound World/Trade broadcast flushes.
 		/// Buffered messages are batched per-world and sent in a single burst,
 		/// reducing per-message network overhead for large channels.
@@ -849,10 +856,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (batch.Count > 0)
 				{
-					DatabaseResult result = chatService.PersistBatchAsync(batch).GetAwaiter().GetResult();
-					if (!result.IsSuccess)
+					// Hand the write a private copy. PersistBatchBuffer is shared and is cleared
+					// (then nulled) by ChatSystemRuntimeData.OnDeinitialize immediately after this
+					// method returns — if the write is still reading it on a worker thread after a
+					// timeout, that is a torn read of a List<T> being mutated concurrently.
+					var pending = new List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)>(batch);
+
+					// Shutdown flush runs on the Unity main thread: never block on the raw EF task
+					// (same deadlock as the KEK load). A timeout here drops the batch, so log it.
+					if (UnitySyncOverAsync.TryRun(
+						cancellationToken => chatService.PersistBatchAsync(pending, cancellationToken: cancellationToken),
+						out DatabaseResult result,
+						persistFlushTimeoutMs))
 					{
-						Log.Warning("ChatSystem", $"FlushPersistQueueSync DB error ({batch.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");
+						if (!result.IsSuccess)
+						{
+							Log.Warning("ChatSystem", $"FlushPersistQueueSync DB error ({pending.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");
+						}
+					}
+					else
+					{
+						Log.Warning("ChatSystem", $"FlushPersistQueueSync timed out after {persistFlushTimeoutMs}ms; {pending.Count} message(s) were not persisted.");
 					}
 				}
 			}

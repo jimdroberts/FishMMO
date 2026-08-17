@@ -617,14 +617,7 @@ namespace FishNet.Managing.Timing
                 _networkTrafficStatistics.AddOutboundPacketIdData(PacketId.PingPong, string.Empty, writer.Length, gameObject: null, asServer: false);
 #endif
 
-            // WebGL remaps Unreliable→stream; keep channel Reliable so it rides the same
-            // path as remapped prediction (see TransportManager.CheckSetReliableChannel).
-#if UNITY_WEBGL && !UNITY_EDITOR
-            Channel pingChannel = Channel.Reliable;
-#else
-            Channel pingChannel = Channel.Unreliable;
-#endif
-            NetworkManager.TransportManager.SendToServer((byte)pingChannel, writer.GetArraySegment());
+            NetworkManager.TransportManager.SendToServer((byte)Channel.Unreliable, writer.GetArraySegment());
             writer.Store();
         }
 

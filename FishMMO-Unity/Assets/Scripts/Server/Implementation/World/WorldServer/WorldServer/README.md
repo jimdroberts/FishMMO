@@ -25,7 +25,7 @@ The implementation uses a split execution model:
 
 - **Main thread / periodic callback:** dependency validation, registration call orchestration, pulse scheduling, and connection count reads from `IWorldSceneMappingData<NetworkConnection>`.
 - **Async worker:** non-blocking database pulse updates dispatched via `TryEnqueueAsyncWork` onto `AsyncWorkerData`.
-- **Startup registration:** executed through `Task.Run(...).GetAwaiter().GetResult()` to avoid deadlocking Unity's synchronization context while guaranteeing registration completes before startup continues.
+- **Startup registration:** `InitializeOnceAsync` awaits `RegisterAsync`, so the main thread stays free to drain continuations. `Server` starts the transport only once every behaviour reports success, preserving the guarantee that registration completes before startup continues.
 
 This separation avoids blocking frame/update loops during normal operation while still guaranteeing deterministic registration at startup.
 

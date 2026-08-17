@@ -1,7 +1,12 @@
+# Repository-root ignores.
+#
+# The Unity project has its own rules in FishMMO-Unity/.gitignore; this file
+# covers the solution root, the .NET projects, and the native library.
+
 # --- OS Metadata ---
 .DS_Store
 Thumbs.db
-*.*~
+*~
 *.swp
 
 # --- IDEs & Editors ---
@@ -18,25 +23,29 @@ Thumbs.db
 *.pem
 *.pfx
 *.cert
+*.key
 *.secret
+.env
+.env.*
+
 # Local environment overrides (may contain secrets)
 appsettings.Development.json
 appsettings.Production.json
 
 # --- Build & Output (General) ---
+# Each of these matches a directory of that exact name at any depth.
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
 x64/
 x86/
-build/
+[Bb]uild/
+[Bb]uilds/
 bld/
 [Bb]in/
 [Oo]bj/
 [Oo]ut/
-bin/
-obj/
 publish/
 msbuild.log
 msbuild.err
@@ -48,7 +57,14 @@ project.lock.json
 *.pyc
 nupkg/
 packages/
-[Mm]igrations*
+
+# --- Crash dumps ---
+mono_crash.*
+core.[0-9]*
+
+# --- Entity Framework ---
+# Generated per project and applied locally, not shared through source control.
+[Mm]igrations/
 
 # --- Unity ---
 # Note: FishMMO-Unity/.gitignore (standard github/gitignore Unity template) already
@@ -80,3 +96,12 @@ FishMMO-WebTransport/openssl_cache.cmake
 # FishMMO-Setup/ templates — may contain local DB credentials.
 FishMMO-WebServers/**/appsettings.json
 FishMMO-CMS/**/appsettings.json
+
+# --- API Documentation (docfx) ---
+# docfx.json, toc.yml, docs/, publish.sh, etc. are tracked; only the
+# generated metadata/site output is not.
+/Documentation/
+
+# Local clone of the gh-pages doc-hosting repo (jimdroberts/FishMMO-Website).
+# Not part of this repo; publish.sh syncs built docs into it.
+/FishMMO-Website/

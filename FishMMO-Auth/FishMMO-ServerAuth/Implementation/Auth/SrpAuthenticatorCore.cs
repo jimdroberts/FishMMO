@@ -785,17 +785,17 @@ namespace FishMMO.Auth.Implementation
 				// useful information to the legitimate owner anyway).
 				bool isUnverified = false;
 
-					// Guard: fakeSaltKey must have been initialized by InitializeWorkersCore.
-					// If it is null, the server was started without calling InitializeWorkers,
-					// which is a fatal configuration error.
-					if (fakeSaltKey == null)
-					{
-						throw new InvalidOperationException(
-							"fakeSaltKey is null \u2014 InitializeWorkersCore was not called before processing SRP verify requests. " +
-							"This is a fatal configuration error. Ensure the authenticator's InitializeWorkers is called during server startup.");
-					}
+				// Guard: fakeSaltKey must have been initialized by InitializeWorkersCore.
+				// If it is null, the server was started without calling InitializeWorkers,
+				// which is a fatal configuration error.
+				if (fakeSaltKey == null)
+				{
+					throw new InvalidOperationException(
+						"fakeSaltKey is null \u2014 InitializeWorkersCore was not called before processing SRP verify requests. " +
+						"This is a fatal configuration error. Ensure the authenticator's InitializeWorkers is called during server startup.");
+				}
 
-					if (!lookupResult.IsSuccess)
+				if (!lookupResult.IsSuccess)
 				{
 					salt = SrpService.DerivePerUsernameFakeSalt(username!, fakeSaltKey);
 					verifier = SrpService.GetStaticFakeData().Verifier;
@@ -827,6 +827,12 @@ namespace FishMMO.Auth.Implementation
 							verifier = lookupResult.Verifier;
 							accessLevel = lookupResult.AccessLevel;
 							isUnverified = true;
+							// Cache the verify-code expiry on this branch too. ProcessSrpProofAsync
+							// reads it to decide whether to issue a fresh code, and that decision is
+							// only ever reached for an unverified account — recording the expiry
+							// solely on the verified branch below left the lookup permanently empty,
+							// so an expired code could never be refreshed by attempting to log in.
+							verifyCodeExpiryByClientId[GetConnectionClientId(conn)] = lookupResult.VerifyCodeExpiresUtc;
 							await Log.Debug(LogPrefix, "Carrying real SRP state for unverified username-based login; AccountUnverified deferred until after M1.");
 						}
 					}
@@ -1014,14 +1020,14 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-				// Reject banned accounts after SRP proof succeeds so that wrong-password
-				// attempts on banned accounts still return InvalidUsernameOrPassword
-				// (same as non-existent accounts), preventing username enumeration.
-				if (accessLevel == AccessLevel.Banned)
-				{
-					RejectAndPurge(conn, ClientAuthenticationResult.Banned);
-					return;
-				}
+			// Reject banned accounts after SRP proof succeeds so that wrong-password
+			// attempts on banned accounts still return InvalidUsernameOrPassword
+			// (same as non-existent accounts), preventing username enumeration.
+			if (accessLevel == AccessLevel.Banned)
+			{
+				RejectAndPurge(conn, ClientAuthenticationResult.Banned);
+				return;
+			}
 
 			RefreshAuthTtl(conn);
 
@@ -1198,6 +1204,7 @@ namespace FishMMO.Auth.Implementation
 			// TOTP success — complete login
 			totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
 			totpEnabledByClientId.TryRemove(GetConnectionClientId(conn), out _);
+			verifyCodeExpiryByClientId.TryRemove(GetConnectionClientId(conn), out _);
 
 			byte[] encryptedServerProof = SrpService.EncryptServerProof(pendingState.ServerProof!, pendingState.EncryptionData);
 			byte[]? encryptedToken = (IsConnectionActive(conn))

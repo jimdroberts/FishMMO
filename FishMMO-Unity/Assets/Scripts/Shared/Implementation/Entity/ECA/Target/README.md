@@ -34,32 +34,40 @@ Requirements: Unity 6.3 LTS with FishNet. Selectors depend only on the shared Fi
 
 ## Architecture
 
-Selectors are pure data: a `BaseTargetSelector` subclass holds parameters in `[SerializeField]` fields and exposes a `Resolve(...)` method. Triggers / conditions / actions invoke `Resolve` to obtain an `IReadOnlyList<GameObject>` and then operate on that list. There is no runtime registration step — types are discovered by Unity's `SerializeReference` system.
+Selectors are pure data: a `TargetSelector` subclass holds parameters in serialized fields and implements `IEnumerable<GameObject> SelectTargets(EventData eventData)`. Triggers, conditions, and actions call `SelectTargets` to obtain candidates and then operate on them. There is no runtime registration step — types are discovered by Unity's `SerializeReference` system and picked in the Inspector through `[SubclassSelector]`.
 
 ```
 Entity/ECA/Target/
-├── BaseTargetSelector.cs          # Abstract base (Resolve + helpers)
-├── SelfTargetSelector.cs          # The invoking entity
-├── OwnerTargetSelector.cs         # The owner / source character
-├── NearestTargetSelector.cs       # Closest matching candidate
-├── RadiusTargetSelector.cs        # All entities within radius
-├── ConeTargetSelector.cs          # Cone-shaped AoE
-├── TaggedTargetSelector.cs        # Filter by tag
-├── FactionTargetSelector.cs       # Filter by faction relationship
-└── ChainTargetSelector.cs         # Chain / composite selectors
+├── TargetSelector.cs                     # Abstract base (SelectTargets + Conditions + helpers)
+├── InitiatorTargetSelector.cs            # The entity that fired the trigger
+├── EventTargetSelector.cs                # Whatever the event already carries as Target
+├── NearestTargetSelector.cs              # Closest candidate within a radius
+├── FurthestTargetSelector.cs             # Furthest candidate within a radius
+├── RandomTargetSelector.cs               # Random pick within a radius (uses EventData.RNG)
+├── AreaTargetSelector.cs                 # Sphere overlap around the context point
+├── ConeTargetSelector.cs                 # Cone-shaped AoE
+├── LineTargetSelector.cs                 # Ray / line cast from the context point
+├── ChainTargetSelector.cs                # Bounces target-to-target up to a hop limit
+├── ChildrenTargetSelector.cs             # Direct children of the context object
+├── AllCharactersTargetSelector.cs        # Every ICharacter in the active scene
+├── NamedSceneObjectTargetSelector.cs     # Scene object resolved by name at fire time
+└── TaggedSceneObjectTargetSelector.cs    # Scene objects resolved by Unity tag at fire time
 ```
 
 ## Key Components
 
 | Component | Purpose |
 | --- | --- |
-| `BaseTargetSelector` | Abstract base; defines `Resolve(context, candidates)` and helper filters. |
-| `SelfTargetSelector` | Returns the invoking `GameObject`. |
-| `NearestTargetSelector` | Returns the single closest valid target from a candidate set. |
-| `RadiusTargetSelector` | Returns all valid entities within a configured radius. |
-| `ConeTargetSelector` | Returns entities inside a forward-facing cone. |
-| `TaggedTargetSelector` / `FactionTargetSelector` | Filtering selectors layered on top of source selectors. |
-| `ChainTargetSelector` | Pipes one selector's output into the next. |
+| `TargetSelector` | Abstract base; declares `SelectTargets(eventData)`, carries the per-candidate `Conditions` list, and provides the `GetContext` / `AreConditionsMet` helpers. |
+| `InitiatorTargetSelector` | Returns the initiator's `GameObject`. |
+| `EventTargetSelector` | Returns the target already present on the `EventData`. |
+| `NearestTargetSelector` / `FurthestTargetSelector` | Single closest / furthest valid candidate within a radius, excluding the context object. |
+| `RandomTargetSelector` | One random valid candidate within a radius, drawn from `EventData.RNG` so server and client agree. |
+| `AreaTargetSelector` / `ConeTargetSelector` / `LineTargetSelector` | Geometric queries around the context point. |
+| `ChainTargetSelector` | Walks target to target, accumulating a chain up to a configured hop count. |
+| `NamedSceneObjectTargetSelector` / `TaggedSceneObjectTargetSelector` | Asset-safe scene lookup by name or tag, resolved at fire time. |
+
+Filtering is not a selector. Rather than layering "tag" or "faction" selectors over source selectors, every selector carries its own `Conditions` list and yields only candidates that satisfy it — see [Anatomy of `TargetSelector`](#3-anatomy-of-targetselector).
 
 ## Configuration
 
@@ -71,8 +79,7 @@ Selectors are configured in-place on `ScriptableObject` assets that reference tr
 
 | Layer | File | Purpose |
 |---|---|---|
-| Core base class | [TargetSelector.cs](TargetSelector.cs) | Abstract base; per-target conditions + fork helpers |
-| Core interface | [IConditionalTargetSelector.cs](IConditionalTargetSelector.cs) | Marker interface exposing `Conditions` |
+| Core base class | [TargetSelector.cs](TargetSelector.cs) | Abstract base; `SelectTargets`, per-target `Conditions`, and fork helpers |
 | Identity / event | [InitiatorTargetSelector.cs](InitiatorTargetSelector.cs), [EventTargetSelector.cs](EventTargetSelector.cs) | Use the event's own Initiator / Target |
 | Spatial | [AreaTargetSelector.cs](AreaTargetSelector.cs), [ConeTargetSelector.cs](ConeTargetSelector.cs), [LineTargetSelector.cs](LineTargetSelector.cs), [ChainTargetSelector.cs](ChainTargetSelector.cs) | Geometric queries around a context point |
 | Distance | [NearestTargetSelector.cs](NearestTargetSelector.cs), [FurthestTargetSelector.cs](FurthestTargetSelector.cs) | Closest / furthest within a radius |
@@ -301,13 +308,13 @@ These are not selector features, but they directly affect how Triggers behave ar
 
 ### 10.1 `BaseCondition.Invert` (centralized)
 
-Every concrete condition inherits an `Invert` toggle from [BaseCondition](../../../Core/Entity/ECA/Core/Condition/BaseCondition.cs). The framework evaluates conditions through the non-virtual `Check(initiator, eventData)` wrapper, which calls the derived `Evaluate(...)` and flips the result when `Invert` is set. Implementers write **plain positive logic** in `Evaluate` and never re-derive `Invert ? !x : x` themselves.
+Every concrete condition inherits an `Invert` toggle from [BaseCondition](../../../../Core/Entity/ECA/Core/Condition/BaseCondition.cs). The framework evaluates conditions through the non-virtual `Check(initiator, eventData)` wrapper, which calls the derived `Evaluate(...)` and flips the result when `Invert` is set. Implementers write **plain positive logic** in `Evaluate` and never re-derive `Invert ? !x : x` themselves.
 
-Callers that previously called `condition.Evaluate(...)` directly have been migrated to `condition.Check(...)` (see [Trigger.cs](../../../Core/Entity/ECA/Core/Trigger.cs), [CompositeCondition.cs](../../../Core/Entity/ECA/Core/Condition/CompositeCondition.cs), and [Ability.cs](../../Prediction/Ability/Ability.cs)).
+Callers that previously called `condition.Evaluate(...)` directly have been migrated to `condition.Check(...)` (see [Trigger.cs](../../../../Core/Entity/ECA/Core/Trigger.cs), [CompositeCondition.cs](../../../../Core/Entity/ECA/Core/Condition/CompositeCondition.cs), and [Ability.cs](../../Prediction/Ability/Ability.cs)).
 
 ### 10.2 `BaseAction.StopChainOnFailure` + `IAbortableAction` (opt-in)
 
-[BaseAction](../../../Core/Entity/ECA/Core/Action/BaseAction.cs) exposes a `StopChainOnFailure` bool. By itself it is inert \u2014 the action must also implement `IAbortableAction` to be cancellable:
+[BaseAction](../../../../Core/Entity/ECA/Core/Action/BaseAction.cs) exposes a `StopChainOnFailure` bool. By itself it is inert \u2014 the action must also implement `IAbortableAction` to be cancellable:
 
 ```csharp
 public interface IAbortableAction { bool TryExecute(ICharacter initiator, EventData eventData); }

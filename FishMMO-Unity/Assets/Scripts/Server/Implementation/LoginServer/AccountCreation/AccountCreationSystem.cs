@@ -890,25 +890,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
 
 							// Determine whether to auto-verify (skip 2FA/email).
-							// Controlled by a compile-time guard AND a runtime AutoVerifyAccounts config flag.
+							// Controlled by a compile-time guard AND a runtime AutoVerifyAccounts config flag;
+							// see AccountVerificationPolicy, which the login path consults with the same rules.
 							// Account is created, immediately verified, and has no TOTP requirement when enabled.
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-							// In development builds, check the runtime AutoVerifyAccounts config.
-							// Default to true when the config key is absent (dev convention).
-							bool shouldAutoVerify = false;
-							if (Server.Configuration.TryGetString("AutoVerifyAccounts", out string autoVerifyStr))
-							{
-								bool.TryParse(autoVerifyStr, out shouldAutoVerify);
-							}
-							else
-							{
-								shouldAutoVerify = true;
-							}
-#else
-							bool shouldAutoVerify = false;
-#endif
+							bool shouldAutoVerify = AccountVerificationPolicy.IsAutoVerifyEnabled(Server.Configuration);
 							if (shouldAutoVerify)
 							{
+								// Persist verified=true so the database agrees with the AccountVerified
+								// response. Reporting verification to the client without writing the column
+								// left the row unverified, and login then succeeded only for as long as the
+								// account stayed inside the VerificationEmailSentAt grace period.
+								DatabaseResult autoVerifyResult = await accountService.PersistAutoVerifiedAsync(username);
+								if (!autoVerifyResult.IsSuccess)
+								{
+									await Log.Warning("AccountCreationSystem", $"PersistAutoVerifiedAsync DB error for user '{username}': {autoVerifyResult.ErrorCode} - {autoVerifyResult.ErrorMessage}");
+								}
 								result = ClientAuthenticationResult.AccountVerified;
 							}
 							else

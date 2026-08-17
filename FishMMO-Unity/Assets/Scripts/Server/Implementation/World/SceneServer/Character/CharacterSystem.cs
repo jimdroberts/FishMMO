@@ -36,6 +36,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxMainThreadActionsPerFrame = 200;
 
 		/// <summary>
+		/// Maximum time the shutdown character save / session release blocks the main thread.
+		/// Generous because losing character progress is expensive, but still bounded so an
+		/// unresponsive database cannot hold process exit open indefinitely.
+		/// </summary>
+		private const int shutdownFlushTimeoutMs = 30_000;
+
+		/// <summary>
 		/// Interval in seconds between periodic character saves.
 		/// </summary>
 		[Tooltip("Interval in seconds between periodic character saves")]
@@ -46,6 +53,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		[Tooltip("Interval in seconds between out-of-bounds checks")]
 		[SerializeField][Min(0.1f)] private float outOfBoundsCheckRate = 2.5f;
+
+		/// <summary>
+		/// Interval in seconds between batched session-lease refreshes.
+		/// </summary>
+		/// <remarks>
+		/// Must stay comfortably under the database's session lease duration (2 minutes) so a
+		/// few missed passes cannot let a live character's claim lapse and be stolen by another
+		/// scene server. The refresh is a single statement for the whole population, so a short
+		/// interval is cheap regardless of how many characters are resident.
+		/// </remarks>
+		[Tooltip("Interval in seconds between batched session lease refreshes. Must stay well under the 2 minute lease duration.")]
+		[SerializeField][Min(1f)] private float sessionLeaseRefreshRate = 20.0f;
 
 		/// <summary>
 		/// Triggered before a character is loaded from the database. <conn, CharacterID>
@@ -146,11 +165,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Periodic callbacks
 			saveRate = Mathf.Max(1f, saveRate);
 			outOfBoundsCheckRate = Mathf.Max(0.1f, outOfBoundsCheckRate);
+			sessionLeaseRefreshRate = Mathf.Max(1f, sessionLeaseRefreshRate);
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(saveRate, OnPeriodicSave);
 				periodicSystem.RegisterPeriodicCallback(outOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
 				periodicSystem.RegisterPeriodicCallback(30f, OnPeriodicRespawnResurrectSweep);
+				periodicSystem.RegisterPeriodicCallback(sessionLeaseRefreshRate, OnPeriodicSessionLeaseRefresh);
+				periodicSystem.RegisterPeriodicCallback(PendingFlushRetryIntervalSeconds, OnPeriodicPendingFlushRetry);
+				periodicSystem.RegisterPeriodicCallback(TransferDisconnectSweepIntervalSeconds, OnPeriodicTransferDisconnectSweep);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
@@ -206,6 +229,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSave);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicRespawnResurrectSweep);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSessionLeaseRefresh);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPendingFlushRetry);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicTransferDisconnectSweep);
 			}
 
 			// Save all characters and release all sessions before shutdown
@@ -231,14 +257,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Capture all session tokens (spawned + waiting-to-load characters)
 					var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
 
-					Task.Run(async () =>
+					// Bounded: an unresponsive database must not hold process exit open forever.
+					// Characters already saved before the deadline keep their progress; the token
+					// cancels the in-flight write rather than leaving it running unobserved.
+					bool flushed = UnitySyncOverAsync.TryRun(async cancellationToken =>
 					{
 						// Save all spawned characters
 						foreach (var charData in characterDataList)
 						{
+							cancellationToken.ThrowIfCancellationRequested();
 							try
 							{
-								DatabaseResult result = await characterService.PersistAsync(charData);
+								DatabaseResult result = await characterService.PersistAsync(charData, cancellationToken);
 								if (!result.IsSuccess)
 								{
 									await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
@@ -250,9 +280,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 						}
 
+						// Flush anything still queued for retry before releasing live sessions,
+						// so a save or release that the async worker pool dropped earlier is
+						// not lost to shutdown as well.
+						foreach (var kvp in DrainPendingFlushes())
+						{
+							cancellationToken.ThrowIfCancellationRequested();
+							try
+							{
+								if (kvp.Value.CharacterData.HasValue)
+								{
+									await characterService.PersistAsync(kvp.Value.CharacterData.Value, cancellationToken);
+								}
+								if (kvp.Value.Session.HasValue)
+								{
+									await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.Session.Value.ServerID, kvp.Value.Session.Value.Token);
+								}
+							}
+							catch (Exception ex)
+							{
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to flush pending work for character {kvp.Key}: {ex}");
+							}
+						}
+
 						// Release all claimed sessions (spawned + waiting-to-load characters)
 						foreach (var kvp in sessionTokens)
 						{
+							cancellationToken.ThrowIfCancellationRequested();
 							try
 							{
 								await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.ServerID, kvp.Value.Token);
@@ -262,7 +316,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to release session for character {kvp.Key}: {ex}");
 							}
 						}
-					}).GetAwaiter().GetResult();
+					}, shutdownFlushTimeoutMs);
+
+					if (!flushed)
+					{
+						Log.Warning("CharacterSystem", $"OnDeinitialize: character save/session release timed out after {shutdownFlushTimeoutMs}ms; some progress may not have been persisted.");
+					}
 				}
 			}
 		}

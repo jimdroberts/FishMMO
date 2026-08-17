@@ -24,10 +24,18 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		/// [AOT.MonoPInvokeCallback] for IL2CPP compatibility.
 		/// </summary>
 		/// <param name="url">Full URL, e.g. "https://game.fishmmo.com/wt/7770"</param>
+		/// <param name="certificateHashes">
+		/// Comma-separated SHA-256 certificate fingerprints in hex, or null/empty to
+		/// require a publicly trusted certificate chain. Supplying hashes lets a browser
+		/// accept a self-signed certificate, which is the only way to reach a development
+		/// server from a WebGL build. The certificate must be ECDSA P-256 with a validity
+		/// window of at most 14 days — a browser requirement, not one this code imposes.
+		/// </param>
 		/// <returns>Transport index (handle) or -1 on failure.</returns>
 		[DllImport("__Internal")]
 		internal static extern int WTConnect(
 			string url,
+			string certificateHashes,
 			WTIndexCallback onOpen,
 			WTIndexCallback onClose,
 			WTDataCallback onStream,
@@ -85,11 +93,22 @@ namespace FishNet.Transporting.WebTransport.WebGL
 
 		/// <summary>
 		/// Frees a pointer previously allocated on the WASM heap.
-		/// Maps to Emscripten's built-in _free() via EntryPoint.
-		/// Required to release memory returned by <see cref="WTGetLastErrorMessage"/>.
+		/// Calls the jslib <c>WTFree</c> wrapper, which forwards to Emscripten's
+		/// JS-side <c>_free</c>. Do NOT DllImport <c>_free</c> directly: IL2CPP
+		/// resolves the entry point against the linked libc symbol, and modern
+		/// Emscripten (Unity 6) emits that as <c>free</c>, so
+		/// <c>EntryPoint = "_free"</c> fails the WebGL link with
+		/// <c>undefined symbol: _free</c>.
 		/// </summary>
-		[DllImport("__Internal", EntryPoint = "_free")]
-		internal static extern void WASMFree(IntPtr ptr);
+		[DllImport("__Internal")]
+		private static extern void WTFree(IntPtr ptr);
+
+		/// <summary>
+		/// Releases memory returned by <see cref="WTGetLastErrorMessage"/>.
+		/// Kept under the original name so callers are platform-agnostic — the
+		/// non-WebGL stub below exposes the same signature.
+		/// </summary>
+		internal static void WASMFree(IntPtr ptr) => WTFree(ptr);
 	}
 #else
 	/// <summary>
@@ -99,6 +118,7 @@ namespace FishNet.Transporting.WebTransport.WebGL
 	{
 		internal static int WTConnect(
 			string url,
+			string certificateHashes,
 			WTIndexCallback onOpen,
 			WTIndexCallback onClose,
 			WTDataCallback onStream,

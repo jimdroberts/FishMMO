@@ -121,24 +121,23 @@ buffController.RemoveRandom(rng, includeBuffs: true, includeDebuffs: true);
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `FXPrefab` | `GameObject` | Visual effect prefab instantiated on the character (client-side only) |
+| `FXPrefabReference` | `AssetReferenceGameObject` | Addressable visual effect prefab instantiated on the character (client-side only) |
 | `Description` | `string` | Tooltip description text |
-| `Icon` | `Sprite` | UI icon |
+| `Icon` | `Sprite` | UI icon (loaded at runtime from the serialized `icon` addressable reference) |
 | `Duration` | `float` | Total duration in seconds (0 = permanent or event-driven) |
 | `TickRate` | `float` | Interval in seconds between `OnTick` calls |
-| `UseCount` | `uint` | Number of times the buff can be triggered |
 | `MaxStacks` | `uint` | Maximum stack count (0 = no stacking) |
 | `IsPermanent` | `bool` | If true, buff does not expire and `RemoveAll` / `RemoveRandom` skip it |
 | `IsDebuff` | `bool` | Determines buff vs debuff categorization for events and UI |
 
 ### Attribute Modification
 
-`AttributeBuffTemplate` is one of five concrete template types. It modifies character attributes and holds a `List<BuffAttributeTemplate>` where each entry pairs a `CharacterAttributeTemplate` with an `int Value`.
+`AttributeBuffTemplate` is one of five concrete template types. It modifies character attributes and holds a `List<BuffAttributeTemplate> BonusAttributes` where each entry pairs a `CharacterAttributeTemplate Template` with an `int Value`.
 
 | Hook | Effect |
 |------|--------|
-| `OnApply` | For each `BonusAttribute`: `characterAttribute.AddModifier(+Value)` |
-| `OnRemove` | For each `BonusAttribute`: `characterAttribute.AddModifier(-Value)` |
+| `OnApply` | For each entry in `BonusAttributes`: `characterAttribute.AddModifier(+Value)` |
+| `OnRemove` | For each entry in `BonusAttributes`: `characterAttribute.AddModifier(-Value)` |
 | `OnApplyStack` | Delegates to `OnApply` (adds another `+Value`) |
 | `OnRemoveStack` | Delegates to `OnRemove` (adds another `-Value`) |
 | `OnTick` | No-op for attribute buffs |
@@ -176,7 +175,7 @@ The buff system is consumed by and interacts with:
 - **CharacterDamageController** — `RemoveAll()` is called on kill to clear all non-permanent buffs.
 - **Item System** — Items may apply buffs on use or equip.
 - **Database Layer** — Buffs are persisted and restored via `CharacterBuffData` DTO and loaded through `ReadPayload` → `Apply(Buff buff)`.
-- **UI** — Buff icons, tooltips, and timers are driven by `OnAddBuff`/`OnRemoveBuff`/`OnSubtractTime` events.
+- **UI** — Buff icons, tooltips, and timers are driven by the `OnAddBuff`/`OnRemoveBuff`/`OnAddDebuff`/`OnRemoveDebuff`/`OnBuffTick` events.
 
 ### Notes
 

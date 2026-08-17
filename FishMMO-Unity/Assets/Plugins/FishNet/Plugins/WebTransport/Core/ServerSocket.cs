@@ -38,7 +38,6 @@ namespace FishNet.Transporting.WebTransport.Server
 		#region Private Configuration
 		private ushort port;
 		private int maximumClients;
-		private int mtu;
 		private string certificatePath;
 		private string privateKeyPath;
 		#endregion
@@ -127,20 +126,20 @@ namespace FishNet.Transporting.WebTransport.Server
 		// for callers that explicitly set to null.
 		public string Alpn { get => alpn; set => alpn = value ?? "h3"; }
 
-			/// <summary>
-			/// Comma-separated list of allowed Origin header values for browser
-			/// WebTransport CORS validation (e.g. "https://play.fishmmo.com").
-			/// Empty string or null means allow all origins (development/testing only).
-			/// In production, this MUST be set to a specific origin to prevent
-			/// cross-site WebTransport connection attempts.
-			/// </summary>
-			private string allowedOrigins = "";
-			/// <summary>
-			/// Gets or sets the allowed origins for browser WebTransport CORS
-			/// validation. Must be called before <see cref="StartConnection"/>.
-			/// Pass an empty string or null to allow all origins (dev/testing only).
-			/// </summary>
-			public string AllowedOrigins { get => allowedOrigins; set => allowedOrigins = value ?? ""; }
+		/// <summary>
+		/// Comma-separated list of allowed Origin header values for browser
+		/// WebTransport CORS validation (e.g. "https://play.fishmmo.com").
+		/// Empty string or null means allow all origins (development/testing only).
+		/// In production, this MUST be set to a specific origin to prevent
+		/// cross-site WebTransport connection attempts.
+		/// </summary>
+		private string allowedOrigins = "";
+		/// <summary>
+		/// Gets or sets the allowed origins for browser WebTransport CORS
+		/// validation. Must be called before <see cref="StartConnection"/>.
+		/// Pass an empty string or null to allow all origins (dev/testing only).
+		/// </summary>
+		public string AllowedOrigins { get => allowedOrigins; set => allowedOrigins = value ?? ""; }
 
 		/// <summary>
 		/// Atomic guard to ensure StopConnection runs exactly once,
@@ -253,13 +252,12 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// Must be called before <see cref="StartConnection"/>.
 		/// </summary>
 		/// <param name="t">The parent transport instance.</param>
-		/// <param name="mtuValue">The maximum transmission unit for datagrams.</param>
+		/// <param name="mtuValue">Unused; the send limit lives on the transport (GetMTU) and the receive limit is MaxDatagramReceiveSize.</param>
 		/// <param name="certPath">Path to the TLS certificate PEM file.</param>
 		/// <param name="keyPath">Path to the TLS private key PEM file.</param>
 		internal void Initialize(Transport t, int mtuValue, string certPath, string keyPath)
 		{
 			base.transport = t;
-			this.mtu = mtuValue;
 			this.certificatePath = certPath ?? "";
 			this.privateKeyPath = keyPath ?? "";
 		}
@@ -716,9 +714,9 @@ namespace FishNet.Transporting.WebTransport.Server
 				{
 					byte* p = (byte*)remoteAddressPtr;
 					// Cap at MaxAddrLen-1 to guarantee null-terminator space in the
-			// fixed-size native buffer (256 bytes). Without this, a 256-byte
-			// address with no null would cause MemoryCopy to read past the buffer.
-			while (addrLen < MaxAddrLen - 1 && p[addrLen] != 0) addrLen++;
+					// fixed-size native buffer (256 bytes). Without this, a 256-byte
+					// address with no null would cause MemoryCopy to read past the buffer.
+					while (addrLen < MaxAddrLen - 1 && p[addrLen] != 0) addrLen++;
 				}
 				if (addrLen > 0)
 				{
@@ -751,7 +749,7 @@ namespace FishNet.Transporting.WebTransport.Server
 
 					// Atomic allocation with overflow protection and collision retry.
 					int fishNetId;
-					for (;;)
+					for (; ; )
 					{
 						fishNetId = System.Threading.Interlocked.Increment(ref this.nextConnectionId);
 						// Overflow protection: wrap to 1 if the counter overflows past
@@ -919,7 +917,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		{
 			/* Security: reject invalid or oversized datagrams. Datagrams larger than the MTU
              * should never arrive from a compliant peer, but we validate defensively. */
-			if (length <= 0 || length > this.mtu)
+			if (length <= 0 || length > MaxDatagramReceiveSize)
 			{
 				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid datagram length {length} from connection {nativeConnectionId}. Dropping.");
 				return;

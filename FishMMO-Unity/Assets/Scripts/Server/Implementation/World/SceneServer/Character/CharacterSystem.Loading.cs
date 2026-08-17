@@ -144,6 +144,74 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Attempts to claim the character's session, retrying briefly while the previous
+		/// owner is still handing it back.
+		/// </summary>
+		/// <remarks>
+		/// A scene transfer releases the character on the source scene server and claims it on
+		/// the destination, and those are two independent asynchronous operations against the
+		/// database. The client's journey between them — disconnect, reconnect to the world
+		/// server, re-authenticate, connect to the destination — normally takes far longer than
+		/// the release, but under database load the order can invert. A single attempt then
+		/// turned a few hundred milliseconds of overlap into a kick, which the player sees as a
+		/// failed transfer even though the reconnect loop eventually recovers.
+		/// <para>
+		/// Only contention is retried. A missing or deleted character is a permanent condition
+		/// and fails immediately.
+		/// </para>
+		/// </remarks>
+		/// <returns>The session token on success, or <see cref="Guid.Empty"/> if the claim failed (the connection has then been kicked).</returns>
+		private async Task<Guid> ClaimCharacterSessionAsync(NetworkConnection conn, ICharacterService characterService, long characterID, long serverID)
+		{
+			const int maxAttempts = 5;
+			const int retryDelayStepMs = 150;
+
+			DatabaseResult<Guid> claimResult = default;
+
+			for (int attempt = 1; attempt <= maxAttempts; attempt++)
+			{
+				claimResult = await characterService.TryClaimAsync(characterID, serverID);
+				if (claimResult.IsSuccess)
+				{
+					if (attempt > 1)
+					{
+						await Log.Debug("CharacterSystem", $"Claimed character {characterID} on attempt {attempt}.");
+					}
+					return claimResult.Data;
+				}
+
+				// Anything other than "someone else owns it" will not resolve by waiting.
+				if (claimResult.ErrorCode != DatabaseErrorCodes.InvalidOperation)
+				{
+					break;
+				}
+
+				if (attempt == maxAttempts)
+				{
+					break;
+				}
+
+				// The connection going away mid-retry makes the claim pointless.
+				if (conn == null || !conn.IsActive)
+				{
+					return Guid.Empty;
+				}
+
+				await Task.Delay(retryDelayStepMs * attempt);
+			}
+
+			await Log.Error("CharacterSystem", $"TryClaimAsync failed for character {characterID}: {claimResult.ErrorCode} - {claimResult.ErrorMessage}");
+			TryEnqueueMainThread(() =>
+			{
+				if (conn != null && conn.IsActive)
+				{
+					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				}
+			});
+			return Guid.Empty;
+		}
+
+		/// <summary>
 		/// Asynchronously fetches the selected character and ALL related sub-entity data
 		/// from the database using a Unit of Work for a consistent snapshot, then queues
 		/// the main-thread instantiation and scene loading.
@@ -186,6 +254,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterFactionData> factionData = null;
 				IReadOnlyList<CharacterQuestData> questData = null;
 
+				// --- Fetch the character row and claim its session BEFORE the Unit of Work ---
+				// The claim is the gate: if another server already owns this character we fail
+				// before spending resources on 13 sub-entity fetches, prefab instantiation and
+				// scene loading. It runs outside the UoW because it may have to retry, and
+				// retrying inside an open transaction would hold that transaction for the whole
+				// backoff.
+				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
+				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
+				{
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Log.Debug("CharacterSystem", "No selected character found for account.");
+							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+						}
+					});
+					return;
+				}
+
+				charData = fetchResult.Data.Value;
+				long characterID = charData.ID;
+
+				sessionToken = await ClaimCharacterSessionAsync(conn, characterService, characterID, serverID);
+				if (sessionToken == Guid.Empty)
+				{
+					// ClaimCharacterSessionAsync has already logged and kicked.
+					return;
+				}
+
+				// Re-read the character now that we hold the claim. The row above was read
+				// without ownership, so on a scene transfer it can predate the previous
+				// server's final save — the save that recorded the destination scene and the
+				// position the player is supposed to arrive at. Loading that stale copy puts
+				// the player back where they started, and the retry above makes the window
+				// wider precisely when a transfer is contended. Everything read from here on
+				// is protected by the claim.
+				DatabaseResult<CharacterData?> ownedFetch = await characterService.FetchByAccountAsync(accountName, selected: true);
+				if (!ownedFetch.IsSuccess || !ownedFetch.Data.HasValue || ownedFetch.Data.Value.ID != characterID)
+				{
+					// The account's selected character changed between the two reads, so the
+					// claim we hold is for a character this connection is no longer loading.
+					await Log.Warning("CharacterSystem", $"Selected character changed while claiming {characterID}; abandoning load.");
+					await ReleaseCharacterSessionAsync(characterID, serverID, sessionToken);
+					sessionToken = Guid.Empty;
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+						}
+					});
+					return;
+				}
+				charData = ownedFetch.Data.Value;
+
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
 				{
@@ -197,49 +321,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 						}
 					});
+					// The claim is committed at this point, so it has to be handed back
+					// explicitly rather than relying on a transaction rollback.
+					await ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken);
+					sessionToken = Guid.Empty;
 					return;
 				}
 
 				await using (IUnitOfWork uow = uowResult.Data)
 				{
-					// Fetch only the selected character for the account (single row, no full list)
-					DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
-					if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
-					{
-						TryEnqueueMainThread(() =>
-						{
-							if (conn != null && conn.IsActive)
-							{
-								Log.Debug("CharacterSystem", "No selected character found for account.");
-								conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
-							}
-						});
-						return;
-					}
-
-					charData = fetchResult.Data.Value;
-					long characterID = charData.ID;
-
-					// --- Claim the character session BEFORE loading sub-entity data ---
-					// This is the gate: if another server already owns this character,
-					// we fail fast before spending resources on 13 sub-entity fetches,
-					// prefab instantiation, and scene loading.
-					DatabaseResult<Guid> claimResult = await characterService.TryClaimAsync(characterID, serverID);
-					if (!claimResult.IsSuccess)
-					{
-						await Log.Error("CharacterSystem", $"TryClaimAsync failed for character {characterID}: {claimResult.ErrorCode} - {claimResult.ErrorMessage}");
-						TryEnqueueMainThread(() =>
-						{
-							if (conn != null && conn.IsActive)
-							{
-								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							}
-						});
-						return;
-					}
-
-					sessionToken = claimResult.Data;
-
 					// All fetches share the same ambient DbContext/transaction (sequential, consistent snapshot)
 					if (serviceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
 					{
@@ -387,13 +477,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (conn == null || !conn.IsActive)
 			{
 				// Connection died between async load and main-thread marshal — release the claimed session
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				return;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
@@ -401,14 +491,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (mappingData.CharactersByID.ContainsKey(charData.ID))
 			{
 				Log.Debug("CharacterSystem", $"{charData.ID} is already loaded or loading.");
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
@@ -420,7 +510,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (raceTemplate == null || raceTemplate.Prefab == null)
 			{
 				Log.Debug("CharacterSystem", "Failed to fetch character: invalid race template.");
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -433,7 +523,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (nob == null)
 			{
 				Log.Debug("CharacterSystem", "Failed to instantiate character prefab.");
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -443,7 +533,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
 				Log.Debug("CharacterSystem", "Failed to get IPlayerCharacter from instantiated prefab.");
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
@@ -718,7 +808,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", "Failed to load scene for connection.");
 
-				EnqueueAsyncWork(() => ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken));
+				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
 				conn.Disconnect(false);
@@ -926,23 +1016,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Rate-limit scene unload broadcasts to prevent spam disconnects.
-			DateTime now2 = DateTime.UtcNow;
-			if (sceneUnloadLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastUnload) &&
-				(now2 - lastUnload).TotalSeconds < 5.0)
-				return;
-			sceneUnloadLastTimeByClientId[conn.ClientId] = now2;
-
-			// Check if the connection has a character loaded.
+			// Check whether the connection still has a character BEFORE consulting the rate
+			// limiter. A client unloads scenes on the way in as well as on the way out, so the
+			// benign entry-time broadcast used to stamp the limiter and then swallow the
+			// teleport broadcast that arrived within the next five seconds — leaving the player
+			// connected to a scene server that had already released their character, with
+			// nothing left to move them on. Teleporters placed near a spawn point hit this
+			// every time.
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.ConnectionCharacters.TryGetValue(conn, out var character))
+				mappingData.ConnectionCharacters.ContainsKey(conn))
 			{
 				return;
 			}
 
+			// No character: the connection has nothing left to do here and must be sent back to
+			// the world server. Rate-limit only this branch, and only to avoid repeating the
+			// disconnect for a client that keeps talking while the disconnect settles.
+			DateTime nowUtc = DateTime.UtcNow;
+			if (sceneUnloadLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastUnload) &&
+				(nowUtc - lastUnload).TotalSeconds < 5.0)
+			{
+				return;
+			}
+			sceneUnloadLastTimeByClientId[conn.ClientId] = nowUtc;
+
 			//Log.Debug($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
 
-			// Otherwise disconnect the connection.
 			conn.Disconnect(false);
 		}
 

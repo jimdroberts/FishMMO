@@ -1,0 +1,16 @@
+{
+    "name": "FishMMO.GeneratedFiles.Editor",
+    "rootNamespace": "FishMMO.GeneratedFiles",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

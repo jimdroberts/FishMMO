@@ -15,7 +15,7 @@
   <Project Path="QuickOutline.csproj" />
   <Project Path="FishMMO.Client.Security.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
-  <Project Path="Assembly-CSharp-firstpass.csproj" />
+  <Project Path="FishMMO.GeneratedFiles.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />

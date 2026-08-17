@@ -157,13 +157,13 @@ flowchart LR
     subgraph Server[WebGLServer]
         Kestrel --> Fwd[ForwardedHeaders]
         Fwd --> NullGuard[Null-IP Rejection]
-        NullGuard --> SecHdr[SecurityHeaders\nCOOP/COEP/CSP]
+        NullGuard --> SecHdr["SecurityHeaders<br/>COOP/COEP/CSP"]
         SecHdr --> Cors[CORS Public]
         Cors --> RateLimit[Rate Limiter]
         RateLimit --> Compress[ResponseCompression]
         Compress --> Defaults[UseDefaultFiles index.html]
-        Defaults --> Static[UseStaticFiles\n(range requests natively supported)]
-        Static -->|file found| OK[200 full / 206 partial]
+        Defaults --> Static["UseStaticFiles<br/>(range requests natively supported)"]
+        Static -->|file found| OK["200 full / 206 partial"]
         Static -->|not found| NF[404]
     end
     OK --> Browser
