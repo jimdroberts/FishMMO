@@ -48,6 +48,7 @@ namespace FishMMO.Client
 		private const string INSTALL_PATH_NAME = "launcher-install-path";
 		private const string SETTING_PATCHDIR_NAME = "launcher-setting-patchdir";
 		private const string PATCHDIR_NOTE_NAME = "launcher-patchdir-note";
+		private const string PATCHDIR_BROWSE_NAME = "launcher-patchdir-browse";
 
 		/// <summary>USS class that hides an element. Defined in FishMMO-Theme.uss.</summary>
 		private const string HIDDEN_CLASS = "fish-hidden";
@@ -79,6 +80,7 @@ namespace FishMMO.Client
 		private Label installPathLabel;
 		private TextField patchDirField;
 		private Label patchDirNote;
+		private Button patchDirBrowseButton;
 
 		private bool elementsResolved;
 		private bool settingsOpen;
@@ -155,6 +157,7 @@ namespace FishMMO.Client
 			this.installPathLabel = this.root.Q<Label>(INSTALL_PATH_NAME);
 			this.patchDirField = this.root.Q<TextField>(SETTING_PATCHDIR_NAME);
 			this.patchDirNote = this.root.Q<Label>(PATCHDIR_NOTE_NAME);
+			this.patchDirBrowseButton = this.root.Q<Button>(PATCHDIR_BROWSE_NAME);
 
 			BindSettings();
 
@@ -258,7 +261,37 @@ namespace FishMMO.Client
 				});
 			}
 
+			if (this.patchDirBrowseButton != null)
+			{
+				// Hidden rather than disabled where no native dialog exists. A permanently
+				// greyed-out button reads as something broken; the text field beside it is the
+				// real control on every platform, so its absence costs nothing.
+				SetHidden(this.patchDirBrowseButton, !NativeFolderPicker.IsSupported);
+				this.patchDirBrowseButton.clicked += BrowseForPatchDirectory;
+			}
+
 			RefreshSettingsNote();
+			RefreshPatchDirectoryNote();
+		}
+
+		/// <summary>
+		/// Opens the OS folder dialog and stores the chosen directory.
+		/// </summary>
+		/// <remarks>
+		/// A cancelled dialog returns null and is left alone rather than clearing the field —
+		/// backing out of a picker should not silently reset the setting to the default.
+		/// </remarks>
+		private void BrowseForPatchDirectory()
+		{
+			string chosen = NativeFolderPicker.PickFolder("Choose where patch downloads are stored");
+			if (string.IsNullOrWhiteSpace(chosen))
+			{
+				return;
+			}
+
+			this.patchDirField?.SetValueWithoutNotify(chosen);
+			LauncherSettings.PatchDirectoryOverride = chosen;
+			LauncherSettings.Save();
 			RefreshPatchDirectoryNote();
 		}
 
