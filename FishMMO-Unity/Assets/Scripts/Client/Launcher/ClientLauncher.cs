@@ -391,6 +391,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private void Awake()
 		{
+			// Before anything reads a setting. The launcher is the first thing to run, so
+			// nothing else has loaded the configuration file by this point.
+			LauncherSettings.EnsureLoaded();
+
 			// Resolved first so that even the fatal-dependency path below has somewhere to
 			// report to. A player who hits that path has no access to the log file.
 			this.view = ResolveView();
@@ -622,6 +626,11 @@ namespace FishMMO.Client
 					break;
 				case LauncherState.CheckingVersion:
 					buttonText = UIText.StatusCheckingVersion;
+					break;
+				case LauncherState.UpdateAvailable:
+					buttonText = UIText.ButtonUpdate;
+					isButtonInteractable = true;
+					buttonAction = PlayButtonUpdate;
 					break;
 				case LauncherState.DownloadingPatch:
 					buttonText = UIText.StatusDownloadingPatch;
@@ -1195,7 +1204,21 @@ namespace FishMMO.Client
 						yield break;
 					}
 
-					PlayButtonUpdate();
+					if (LauncherSettings.AutoUpdate)
+					{
+						PlayButtonUpdate();
+					}
+					else
+					{
+						// The player asked to be consulted. Park on an Update button rather
+						// than starting a download they have not agreed to — which on a metered
+						// connection is the difference between a convenience and a cost.
+						string sizeNote = this.expectedPatchSize > 0
+							? $" ({DownloadStats.FormatBytes((ulong)this.expectedPatchSize)})"
+							: string.Empty;
+						SetLauncherState(LauncherState.UpdateAvailable,
+							$"Version {this.latestVersionString} is available{sizeNote}. Press Update to download it.");
+					}
 #endif
 				}
 				else if (clientVersion > serverVersion)

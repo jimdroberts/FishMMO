@@ -59,6 +59,23 @@ namespace FishMMO.Client
 		/// </summary>
 		public int WebRequestTimeout => webRequestTimeout;
 
+		/*
+		 * Resolved per request rather than cached, so a settings change applies to the next
+		 * attempt instead of requiring a restart. The serialized field is the fallback: an
+		 * install where the player has never touched these behaves exactly as it always has.
+		 *
+		 * Only this service honours them. The news fetcher deliberately runs with no retries
+		 * because it is cosmetic, and a player raising the download retry count has not asked
+		 * to spend that budget on the news pane.
+		 */
+
+		/// <summary>Retry count for this request, from settings or the serialized default.</summary>
+		private int EffectiveMaxRetries => LauncherSettings.GetMaxRetries(this.maxRetries);
+		/// <summary>Retry delay for this request, from settings or the serialized default.</summary>
+		private float EffectiveRetryDelay => LauncherSettings.GetRetryDelay(this.retryDelay);
+		/// <summary>Timeout for this request, from settings or the serialized default.</summary>
+		private int EffectiveTimeout => LauncherSettings.GetRequestTimeout(this.webRequestTimeout);
+
 		/// <summary>
 		/// Unity Awake method. Validates dependencies and disables script if missing.
 		/// </summary>
@@ -127,9 +144,9 @@ namespace FishMMO.Client
 				Method = UnityWebRequest.kHttpVerbGET,
 				Headers = headers,
 				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
-				MaxRetries = this.maxRetries,
-				RetryDelay = this.retryDelay,
-				Timeout = this.webRequestTimeout,
+				MaxRetries = this.EffectiveMaxRetries,
+				RetryDelay = this.EffectiveRetryDelay,
+				Timeout = this.EffectiveTimeout,
 				OnProgress = null,
 				OnComplete = (request) =>
 				{
@@ -257,9 +274,9 @@ namespace FishMMO.Client
 #else
 				DownloadHandlerFactory = () => new DownloadHandlerBuffer(),
 #endif
-				MaxRetries = this.maxRetries,
-				RetryDelay = this.retryDelay,
-				Timeout = this.webRequestTimeout,
+				MaxRetries = this.EffectiveMaxRetries,
+				RetryDelay = this.EffectiveRetryDelay,
+				Timeout = this.EffectiveTimeout,
 				OnProgress = (request, progress) =>
 				{
 					ulong downloaded = request.downloadedBytes;

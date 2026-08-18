@@ -18,6 +18,15 @@ namespace FishMMO.Client
 		/// </summary>
 		CheckingVersion,
 		/// <summary>
+		/// An update exists and is waiting for the player to start it.
+		/// </summary>
+		/// <remarks>
+		/// Only reachable when <see cref="LauncherSettings.AutoUpdate"/> is off. With it on —
+		/// the default, and how the launcher has always behaved — an out-of-date client goes
+		/// straight to <see cref="DownloadingPatch"/> without stopping here.
+		/// </remarks>
+		UpdateAvailable,
+		/// <summary>
 		/// The launcher is downloading a patch.
 		/// </summary>
 		DownloadingPatch,

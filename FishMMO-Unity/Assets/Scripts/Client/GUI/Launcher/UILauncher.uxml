@@ -6,10 +6,20 @@
             <ui:VisualElement name="launcher-header" class="fish-panel__header launcher-header">
                 <ui:VisualElement class="fish-panel__icon launcher-icon" />
                 <ui:Label name="launcher-title" text="FishMMO" class="fish-panel__title" />
+                <ui:VisualElement class="launcher-header-spacer" />
+                <ui:Button name="launcher-settings-btn" text="Settings" class="fish-tab launcher-header-btn" />
             </ui:VisualElement>
             <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
                 <ui:VisualElement name="launcher-news" class="launcher-news" />
             </ui:ScrollView>
+            <ui:VisualElement name="launcher-settings" class="launcher-settings fish-hidden">
+                <ui:Label text="DOWNLOAD" class="fish-attr-category launcher-settings-heading" />
+                <ui:Toggle name="launcher-setting-autoupdate" label="Download updates automatically" class="launcher-setting" />
+                <ui:SliderInt name="launcher-setting-timeout" label="Request timeout (s)" low-value="5" high-value="300" show-input-field="true" class="launcher-setting" />
+                <ui:SliderInt name="launcher-setting-retries" label="Retry attempts" low-value="0" high-value="10" show-input-field="true" class="launcher-setting" />
+                <ui:Slider name="launcher-setting-retrydelay" label="Retry delay (s)" low-value="0" high-value="30" show-input-field="true" class="launcher-setting" />
+                <ui:Label name="launcher-settings-note" text="" class="launcher-settings-note" />
+            </ui:VisualElement>
             <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
                 <ui:Label name="launcher-status" text="" class="launcher-status" />
                 <ui:VisualElement name="launcher-progress" class="launcher-progress fish-hidden">

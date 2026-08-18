@@ -36,6 +36,56 @@
     margin-right: 10px;
 }
 
+/* Pushes the header buttons to the right edge without absolute positioning. */
+.launcher-header-spacer {
+    flex-grow: 1;
+}
+
+.launcher-header-btn {
+    height: 24px;
+    min-width: 76px;
+    margin-right: 8px;
+}
+
+/* ── Settings ───────────────────────────────────────────── */
+
+/*
+    Sits between the news pane and the footer rather than overlaying them, so opening it
+    never covers the progress bar or the Play button — the launcher can be mid-download
+    while the player is reading this.
+*/
+.launcher-settings {
+    flex-direction: column;
+    padding: 10px 16px;
+    background-color: rgb(28, 31, 34);
+    border-top-color: rgb(46, 51, 59);
+    border-top-width: 1px;
+    flex-shrink: 0;
+}
+
+.launcher-settings-heading {
+    margin-bottom: 6px;
+    padding-bottom: 2px;
+}
+
+.launcher-setting {
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: rgb(200, 205, 214);
+}
+
+.launcher-setting > .unity-base-field__label {
+    min-width: 180px;
+    color: rgb(138, 147, 162);
+}
+
+.launcher-settings-note {
+    font-size: 10px;
+    color: rgb(90, 98, 114);
+    white-space: normal;
+    margin-top: 4px;
+}
+
 /* ── News pane ──────────────────────────────────────────── */
 
 /*

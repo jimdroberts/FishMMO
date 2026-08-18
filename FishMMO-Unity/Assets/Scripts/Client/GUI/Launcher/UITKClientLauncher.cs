@@ -36,6 +36,13 @@ namespace FishMMO.Client
 		private const string PROGRESS_TEXT_NAME = "launcher-progress-text";
 		private const string PLAY_BUTTON_NAME = "launcher-play-btn";
 		private const string QUIT_BUTTON_NAME = "launcher-quit-btn";
+		private const string SETTINGS_BUTTON_NAME = "launcher-settings-btn";
+		private const string SETTINGS_PANEL_NAME = "launcher-settings";
+		private const string SETTING_AUTOUPDATE_NAME = "launcher-setting-autoupdate";
+		private const string SETTING_TIMEOUT_NAME = "launcher-setting-timeout";
+		private const string SETTING_RETRIES_NAME = "launcher-setting-retries";
+		private const string SETTING_RETRYDELAY_NAME = "launcher-setting-retrydelay";
+		private const string SETTINGS_NOTE_NAME = "launcher-settings-note";
 
 		/// <summary>USS class that hides an element. Defined in FishMMO-Theme.uss.</summary>
 		private const string HIDDEN_CLASS = "fish-hidden";
@@ -56,8 +63,16 @@ namespace FishMMO.Client
 		private Label progressTextLabel;
 		private Button playButton;
 		private Button quitButton;
+		private Button settingsButton;
+		private VisualElement settingsPanel;
+		private Toggle autoUpdateToggle;
+		private SliderInt timeoutSlider;
+		private SliderInt retriesSlider;
+		private Slider retryDelaySlider;
+		private Label settingsNote;
 
 		private bool elementsResolved;
+		private bool settingsOpen;
 
 		// Recorded state, applied whenever the visual tree becomes available.
 		private string pendingTitle = string.Empty;
@@ -119,6 +134,15 @@ namespace FishMMO.Client
 			this.progressTextLabel = this.root.Q<Label>(PROGRESS_TEXT_NAME);
 			this.playButton = this.root.Q<Button>(PLAY_BUTTON_NAME);
 			this.quitButton = this.root.Q<Button>(QUIT_BUTTON_NAME);
+			this.settingsButton = this.root.Q<Button>(SETTINGS_BUTTON_NAME);
+			this.settingsPanel = this.root.Q<VisualElement>(SETTINGS_PANEL_NAME);
+			this.autoUpdateToggle = this.root.Q<Toggle>(SETTING_AUTOUPDATE_NAME);
+			this.timeoutSlider = this.root.Q<SliderInt>(SETTING_TIMEOUT_NAME);
+			this.retriesSlider = this.root.Q<SliderInt>(SETTING_RETRIES_NAME);
+			this.retryDelaySlider = this.root.Q<Slider>(SETTING_RETRYDELAY_NAME);
+			this.settingsNote = this.root.Q<Label>(SETTINGS_NOTE_NAME);
+
+			BindSettings();
 
 			// Registered once and dispatched through the fields, so replacing an action is a
 			// field assignment. Re-registering per state change would accumulate callbacks and
@@ -134,6 +158,96 @@ namespace FishMMO.Client
 
 			this.elementsResolved = true;
 			return true;
+		}
+
+		/// <summary>
+		/// Seeds the settings controls from stored values and persists any change.
+		/// </summary>
+		/// <remarks>
+		/// Values are read through <see cref="LauncherSettings"/> rather than from the
+		/// configuration store directly, so the clamping applied to a hand-edited config file
+		/// is the same clamping the sliders enforce. Reading raw would let the UI display an
+		/// out-of-range value that the download path then silently ignores.
+		/// <para>
+		/// Each change is saved immediately. The launcher has no OK button, and it is routinely
+		/// terminated by the updater taking over the process — deferring the write to teardown
+		/// would lose it exactly when an update is happening.
+		/// </para>
+		/// </remarks>
+		private void BindSettings()
+		{
+			if (this.settingsButton != null)
+			{
+				this.settingsButton.clicked += ToggleSettings;
+			}
+
+			if (this.autoUpdateToggle != null)
+			{
+				this.autoUpdateToggle.SetValueWithoutNotify(LauncherSettings.AutoUpdate);
+				this.autoUpdateToggle.RegisterValueChangedCallback(evt =>
+				{
+					LauncherSettings.AutoUpdate = evt.newValue;
+					LauncherSettings.Save();
+					RefreshSettingsNote();
+				});
+			}
+
+			if (this.timeoutSlider != null)
+			{
+				this.timeoutSlider.SetValueWithoutNotify(LauncherSettings.GetRequestTimeout(10));
+				this.timeoutSlider.RegisterValueChangedCallback(evt =>
+				{
+					LauncherSettings.SetRequestTimeout(evt.newValue);
+					LauncherSettings.Save();
+				});
+			}
+
+			if (this.retriesSlider != null)
+			{
+				this.retriesSlider.SetValueWithoutNotify(LauncherSettings.GetMaxRetries(3));
+				this.retriesSlider.RegisterValueChangedCallback(evt =>
+				{
+					LauncherSettings.SetMaxRetries(evt.newValue);
+					LauncherSettings.Save();
+				});
+			}
+
+			if (this.retryDelaySlider != null)
+			{
+				this.retryDelaySlider.SetValueWithoutNotify(LauncherSettings.GetRetryDelay(1.0f));
+				this.retryDelaySlider.RegisterValueChangedCallback(evt =>
+				{
+					LauncherSettings.SetRetryDelay(evt.newValue);
+					LauncherSettings.Save();
+				});
+			}
+
+			RefreshSettingsNote();
+		}
+
+		/// <summary>
+		/// Shows or hides the settings section.
+		/// </summary>
+		private void ToggleSettings()
+		{
+			this.settingsOpen = !this.settingsOpen;
+			SetHidden(this.settingsPanel, !this.settingsOpen);
+		}
+
+		/// <summary>
+		/// Explains the consequence of the current auto-update choice, so the toggle is not
+		/// just a label the player has to guess the meaning of.
+		/// </summary>
+		private void RefreshSettingsNote()
+		{
+			if (this.settingsNote == null)
+			{
+				return;
+			}
+
+			this.settingsNote.text = LauncherSettings.AutoUpdate
+				? "Updates start downloading as soon as one is found."
+				: "The launcher will wait and show an Update button instead.";
 		}
 
 		/// <summary>
