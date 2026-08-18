@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using HtmlAgilityPack;
+using FishMMO.Shared;
 using FishMMO.Logging;
 
 namespace FishMMO.Client
@@ -44,6 +45,9 @@ namespace FishMMO.Client
 		private const string SETTING_RETRYDELAY_NAME = "launcher-setting-retrydelay";
 		private const string SETTINGS_NOTE_NAME = "launcher-settings-note";
 		private const string DISK_SIZE_NAME = "launcher-disk-size";
+		private const string INSTALL_PATH_NAME = "launcher-install-path";
+		private const string SETTING_PATCHDIR_NAME = "launcher-setting-patchdir";
+		private const string PATCHDIR_NOTE_NAME = "launcher-patchdir-note";
 
 		/// <summary>USS class that hides an element. Defined in FishMMO-Theme.uss.</summary>
 		private const string HIDDEN_CLASS = "fish-hidden";
@@ -72,6 +76,9 @@ namespace FishMMO.Client
 		private Slider retryDelaySlider;
 		private Label settingsNote;
 		private Label diskSizeLabel;
+		private Label installPathLabel;
+		private TextField patchDirField;
+		private Label patchDirNote;
 
 		private bool elementsResolved;
 		private bool settingsOpen;
@@ -145,6 +152,9 @@ namespace FishMMO.Client
 			this.retryDelaySlider = this.root.Q<Slider>(SETTING_RETRYDELAY_NAME);
 			this.settingsNote = this.root.Q<Label>(SETTINGS_NOTE_NAME);
 			this.diskSizeLabel = this.root.Q<Label>(DISK_SIZE_NAME);
+			this.installPathLabel = this.root.Q<Label>(INSTALL_PATH_NAME);
+			this.patchDirField = this.root.Q<TextField>(SETTING_PATCHDIR_NAME);
+			this.patchDirNote = this.root.Q<Label>(PATCHDIR_NOTE_NAME);
 
 			BindSettings();
 
@@ -226,7 +236,70 @@ namespace FishMMO.Client
 				});
 			}
 
+			if (this.installPathLabel != null)
+			{
+				this.installPathLabel.text = $"Installed at: {Constants.GetWorkingDirectory()}";
+			}
+
+			if (this.patchDirField != null)
+			{
+				this.patchDirField.SetValueWithoutNotify(LauncherSettings.PatchDirectoryOverride);
+				/* Committed on blur or Enter rather than per keystroke. RegisterValueChangedCallback
+				 * fires on every character, so a path typed by hand would be written to disk —
+				 * and validated — dozens of times, most of them against a prefix that is not yet
+				 * a real directory. */
+				this.patchDirField.RegisterCallback<FocusOutEvent>(_ => CommitPatchDirectory());
+				this.patchDirField.RegisterCallback<KeyDownEvent>(evt =>
+				{
+					if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+					{
+						CommitPatchDirectory();
+					}
+				});
+			}
+
 			RefreshSettingsNote();
+			RefreshPatchDirectoryNote();
+		}
+
+		/// <summary>
+		/// Stores the typed patch directory and reports where patches will actually land.
+		/// </summary>
+		private void CommitPatchDirectory()
+		{
+			if (this.patchDirField == null)
+			{
+				return;
+			}
+
+			LauncherSettings.PatchDirectoryOverride = this.patchDirField.value?.Trim() ?? string.Empty;
+			LauncherSettings.Save();
+			RefreshPatchDirectoryNote();
+		}
+
+		/// <summary>
+		/// Reports the directory patches will actually be written to.
+		/// </summary>
+		/// <remarks>
+		/// Shows the resolved path rather than echoing what was typed. An unusable override
+		/// falls back to the install's own folder, and a player who is not told that will
+		/// reasonably believe their setting took effect.
+		/// </remarks>
+		private void RefreshPatchDirectoryNote()
+		{
+			if (this.patchDirNote == null)
+			{
+				return;
+			}
+
+			string fallback = Constants.GetPatchesDirectory();
+			string resolved = LauncherSettings.ResolvePatchDirectory(fallback);
+
+			this.patchDirNote.text = string.IsNullOrWhiteSpace(LauncherSettings.PatchDirectoryOverride)
+				? $"Leave empty to use the install folder. Currently: {resolved}"
+				: (resolved == fallback
+					? $"That path could not be used — falling back to {resolved}"
+					: $"Patches will download to {resolved}");
 		}
 
 		/// <summary>

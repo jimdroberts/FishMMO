@@ -22,7 +22,10 @@
                 <ui:Slider name="launcher-setting-retrydelay" label="Retry delay (s)" low-value="0" high-value="30" show-input-field="true" class="launcher-setting" />
                 <ui:Label name="launcher-settings-note" text="" class="launcher-settings-note" />
                 <ui:Label text="STORAGE" class="fish-attr-category launcher-settings-heading launcher-settings-heading--spaced" />
+                <ui:Label name="launcher-install-path" text="" class="launcher-settings-note launcher-path" />
                 <ui:Label name="launcher-disk-size" text="Installation size: measuring..." class="launcher-settings-note" />
+                <ui:TextField name="launcher-setting-patchdir" label="Patch download folder" class="launcher-setting" />
+                <ui:Label name="launcher-patchdir-note" text="" class="launcher-settings-note" />
             </ui:VisualElement>
             <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
                 <ui:Label name="launcher-status" text="" class="launcher-status" />

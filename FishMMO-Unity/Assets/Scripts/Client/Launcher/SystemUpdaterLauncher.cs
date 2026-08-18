@@ -53,10 +53,11 @@ namespace FishMMO.Client
 		/// <param name="updaterPath">Path to the updater executable.</param>
 		/// <param name="currentClientVersion">Current client version string.</param>
 		/// <param name="latestServerVersion">Latest server version string.</param>
+		/// <param name="patchesDirectory">Directory the patch archive was downloaded into.</param>
 		/// <param name="onComplete">Callback invoked once the updater has started successfully and taken over.</param>
 		/// <param name="onError">Callback invoked when updater fails to start or exits with an error before handoff.</param>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		public IEnumerator LaunchUpdater(string updaterPath, string currentClientVersion, string latestServerVersion, Action onComplete, Action<string> onError)
+		public IEnumerator LaunchUpdater(string updaterPath, string currentClientVersion, string latestServerVersion, string patchesDirectory, Action onComplete, Action<string> onError)
 		{
 #if UNITY_WEBGL && !UNITY_EDITOR
 			// WebGL builds run in the browser sandbox (MEMFS in-memory virtual filesystem);
@@ -120,6 +121,12 @@ namespace FishMMO.Client
 					startInfo.ArgumentList.Add($"-latestversion={latestServerVersion}");
 					startInfo.ArgumentList.Add($"-pid={Process.GetCurrentProcess().Id}");
 					startInfo.ArgumentList.Add($"-exe={Constants.Configuration.ClientExecutable}");
+					// Only sent when set, so an updater built before this argument existed is
+					// still launched with exactly the arguments it understands.
+					if (!string.IsNullOrWhiteSpace(patchesDirectory))
+					{
+						startInfo.ArgumentList.Add($"-patches={patchesDirectory}");
+					}
 				}
 				catch (NotSupportedException)
 				{
@@ -129,6 +136,10 @@ namespace FishMMO.Client
 						+ $"-latestversion=\"{latestServerVersion}\"" + " "
 						+ $"-pid={Process.GetCurrentProcess().Id}" + " "
 						+ $"-exe=\"{Constants.Configuration.ClientExecutable}\"";
+					if (!string.IsNullOrWhiteSpace(patchesDirectory))
+					{
+						startInfo.Arguments += $" -patches=\"{patchesDirectory}\"";
+					}
 				}
 
 				process = new Process { StartInfo = startInfo };

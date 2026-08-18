@@ -12,13 +12,31 @@ class Program
 	private static readonly string WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
 	/// <summary>
-	/// Directory patch archives are read from. This must match
-	/// <c>FishMMO.Shared.Constants.GetPatchesDirectory()</c> on the client, which resolves
-	/// the same "Patches" folder relative to the install root. The launcher downloads into
-	/// that folder; if the two ever disagree, every update silently no-ops and the client
-	/// relaunches at the same version forever.
+	/// Where the install itself lives. Always the updater's own directory — the updater ships
+	/// beside the client binaries it patches, so this is the install root by construction and
+	/// is not configurable. Relocating an install means moving the updater with it.
 	/// </summary>
-	private static readonly string PatchesDirectory = Path.Combine(WorkingDirectory, "Patches");
+	private static string InstallDirectory => WorkingDirectory;
+
+	/// <summary>
+	/// Directory patch archives are read from. Defaults to "Patches" under the install root
+	/// and is overridden by <c>-patches=</c>.
+	/// </summary>
+	/// <remarks>
+	/// This must resolve to the same folder the launcher downloaded into
+	/// (<c>FishMMO.Shared.Constants.GetPatchesDirectory()</c>, which honours the same setting).
+	/// If the two ever disagree the archive is not found, the update silently no-ops, and the
+	/// client relaunches at the same version forever — so the launcher passes its resolved path
+	/// explicitly rather than both sides deriving it and hoping they agree.
+	/// <para>
+	/// Overriding this does not weaken the integrity guarantee: the launcher hashes the archive
+	/// against the server-supplied SHA-256 before invoking the updater at all, and anyone able
+	/// to write the launcher's configuration file could equally write a file into the default
+	/// location. The override changes where a verified archive is read from, not whether it is
+	/// verified.
+	/// </para>
+	/// </remarks>
+	private static string PatchesDirectory = Path.Combine(WorkingDirectory, "Patches");
 
 	private static string Version;
 	private static string LatestVersion;
@@ -48,6 +66,50 @@ class Program
 	/// </summary>
 	[DllImport("libc", SetLastError = true, EntryPoint = "kill")]
 	private static extern int SysKill(int pid, int sig);
+
+	/// <summary>
+	/// Points <see cref="PatchesDirectory"/> at <paramref name="path"/> when it is usable,
+	/// otherwise leaves the default in place.
+	/// </summary>
+	/// <remarks>
+	/// Falling back rather than failing is deliberate. The override is a convenience — it lets
+	/// a player keep patch archives off a small system drive — and an unusable one should cost
+	/// them the convenience, not the update. The default location is where the launcher writes
+	/// when its own setting is unusable, so the two still agree after the fallback.
+	/// </remarks>
+	private static void ApplyPatchesDirectoryOverride(string path)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+		{
+			return;
+		}
+
+		try
+		{
+			// Rooted only. A relative path resolves against the updater's current directory,
+			// which is not guaranteed to be the install root when it is started by the OS
+			// rather than by the launcher — so the same string could mean two places.
+			if (!Path.IsPathRooted(path))
+			{
+				Console.WriteLine($"WARNING: Ignoring -patches='{path}' because it is not an absolute path. Using '{PatchesDirectory}'.");
+				return;
+			}
+
+			string full = Path.GetFullPath(path);
+			if (!Directory.Exists(full))
+			{
+				Console.WriteLine($"WARNING: Ignoring -patches='{full}' because the directory does not exist. Using '{PatchesDirectory}'.");
+				return;
+			}
+
+			PatchesDirectory = full;
+			Console.WriteLine($"Patch archives will be read from '{PatchesDirectory}'.");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"WARNING: Ignoring -patches='{path}' ({ex.Message}). Using '{PatchesDirectory}'.");
+		}
+	}
 
 	/// <summary>
 	/// Helper method for robust file deletion with retries.
@@ -179,6 +241,16 @@ class Program
 			{
 				var splitArg = arg.Split('=');
 				if (splitArg.Length == 2) Executable = splitArg[1];
+			}
+			if (arg.StartsWith("-patches"))
+			{
+				// Split on the first '=' only. A Windows path can contain '=', and
+				// Split('=') would truncate it at the first one.
+				int separator = arg.IndexOf('=');
+				if (separator > 0 && separator < arg.Length - 1)
+				{
+					ApplyPatchesDirectoryOverride(arg.Substring(separator + 1));
+				}
 			}
 		}
 

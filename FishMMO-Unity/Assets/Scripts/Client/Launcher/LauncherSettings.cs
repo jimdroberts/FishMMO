@@ -33,6 +33,81 @@ namespace FishMMO.Client
 		public const string KeyWindowWidth = "Launcher.WindowWidth";
 		/// <summary>Last window height the player used.</summary>
 		public const string KeyWindowHeight = "Launcher.WindowHeight";
+		/// <summary>Override for where patch archives are downloaded to and read from.</summary>
+		public const string KeyPatchDirectory = "Launcher.PatchDirectory";
+
+		/// <summary>
+		/// Where patch archives are stored, or empty to use the install's own Patches folder.
+		/// </summary>
+		/// <remarks>
+		/// This is not a "move the game" setting and cannot be one: the updater patches files
+		/// relative to its own location and ships beside the client binaries, so the install
+		/// root is fixed by construction. What it does allow is keeping the archives — which
+		/// are large and transient — off a small system drive.
+		/// <para>
+		/// Whatever this resolves to has to be the same folder on both sides. The launcher
+		/// downloads here and passes the resolved path to the updater explicitly rather than
+		/// letting both derive it, because a disagreement is silent: the updater finds no
+		/// archive, does nothing, and relaunches the client at the same version forever.
+		/// </para>
+		/// </remarks>
+		public static string PatchDirectoryOverride
+		{
+			get
+			{
+				if (Configuration.GlobalSettings == null)
+				{
+					return string.Empty;
+				}
+				Configuration.GlobalSettings.TryGetString(KeyPatchDirectory, out string value, string.Empty);
+				return value ?? string.Empty;
+			}
+			set => SetValue(KeyPatchDirectory, value ?? string.Empty);
+		}
+
+		/// <summary>
+		/// Returns the directory patch archives should be written to and read from.
+		/// </summary>
+		/// <param name="defaultDirectory">
+		/// The install's own Patches folder, used when no override is set or the override is
+		/// unusable.
+		/// </param>
+		/// <remarks>
+		/// Creates the directory if it does not exist — the player is naming a location, not
+		/// promising to have made it. Any failure falls back to the default rather than
+		/// propagating: the override is a convenience, and an unusable one should cost the
+		/// convenience, not the update. The updater applies the same rule, so both sides land
+		/// on the default together.
+		/// </remarks>
+		public static string ResolvePatchDirectory(string defaultDirectory)
+		{
+			string configured = PatchDirectoryOverride;
+			if (string.IsNullOrWhiteSpace(configured))
+			{
+				return defaultDirectory;
+			}
+
+			try
+			{
+				// Rooted only, matching the updater. A relative path resolves against the
+				// working directory of whichever process reads it, so the same string could
+				// name two different folders across the handoff.
+				if (!System.IO.Path.IsPathRooted(configured))
+				{
+					Log.Warning("LauncherSettings", $"Ignoring patch directory '{configured}': it must be an absolute path.");
+					return defaultDirectory;
+				}
+
+				string full = System.IO.Path.GetFullPath(configured);
+				System.IO.Directory.CreateDirectory(full);
+				return full;
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("LauncherSettings", $"Ignoring patch directory '{configured}' ({ex.Message}). Using '{defaultDirectory}'.");
+				return defaultDirectory;
+			}
+		}
 
 		/// <summary>
 		/// Whether an available update starts downloading automatically.

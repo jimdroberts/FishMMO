@@ -138,6 +138,12 @@
     margin-top: 4px;
 }
 
+/* Paths wrap rather than clip — a truncated path is useless for diagnosing anything. */
+.launcher-path {
+    white-space: normal;
+    color: rgb(138, 147, 162);
+}
+
 /* ── News pane ──────────────────────────────────────────── */
 
 /*

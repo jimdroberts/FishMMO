@@ -1117,13 +1117,15 @@ namespace FishMMO.Client
 
 			SetLauncherState(LauncherState.DownloadingPatch);
 
-			/* The patch must land where the Updater will look for it. The Updater resolves
-			 * <install root>/Patches/<from>-<to>.zip from its own base directory and will
-			 * not search anywhere else — if the archive is not at exactly this path it
-			 * reports "patch file not found", relaunches the client unchanged, and the
-			 * launcher detects the same version mismatch again on the next run. */
+			/* The patch must land where the Updater will look for it. Both sides used to
+			 * derive <install root>/Patches independently and agree only by convention; the
+			 * directory is now resolved once here and handed to the Updater explicitly,
+			 * because a disagreement fails silently — the Updater reports "patch file not
+			 * found", relaunches the client unchanged, and the launcher detects the same
+			 * version mismatch again on the next run, forever. */
+			string patchesDirectory = LauncherSettings.ResolvePatchDirectory(Constants.GetPatchesDirectory());
 			string patchFilePath = Path.Combine(
-				Constants.GetPatchesDirectory(),
+				patchesDirectory,
 				Constants.GetPatchFileName(MainBootstrapSystem.GameVersion, this.latestVersionString));
 
 			// Use the APIHost that succeeded during the version check so the patch we
@@ -1162,6 +1164,7 @@ namespace FishMMO.Client
 						this.updaterPath,
 						MainBootstrapSystem.GameVersion,
 						this.latestVersionString,
+						patchesDirectory,
 						onComplete: () =>
 						{
 							// The updater is running and owns the install; it will terminate
