@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../FishMMO-Theme.uss" />
+    <Style src="UILauncher.uss" />
+    <ui:VisualElement name="launcher-root" class="launcher-screen">
+        <ui:VisualElement name="launcher-panel" class="fish-panel launcher-panel">
+            <ui:VisualElement name="launcher-header" class="fish-panel__header launcher-header">
+                <ui:VisualElement class="fish-panel__icon launcher-icon" />
+                <ui:Label name="launcher-title" text="FishMMO" class="fish-panel__title" />
+            </ui:VisualElement>
+            <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
+                <ui:VisualElement name="launcher-news" class="launcher-news" />
+            </ui:ScrollView>
+            <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
+                <ui:Label name="launcher-status" text="" class="launcher-status" />
+                <ui:VisualElement name="launcher-progress" class="launcher-progress fish-hidden">
+                    <ui:VisualElement name="launcher-progress-bar" class="fish-bar launcher-progress-bar">
+                        <ui:VisualElement name="launcher-progress-fill" class="fish-bar__fill launcher-progress-fill" />
+                    </ui:VisualElement>
+                    <ui:Label name="launcher-progress-text" text="" class="launcher-progress-text" />
+                </ui:VisualElement>
+                <ui:VisualElement name="launcher-buttons" class="launcher-buttons">
+                    <ui:Button name="launcher-play-btn" text="Connect" class="fish-tab launcher-btn launcher-btn--primary" />
+                    <ui:Button name="launcher-quit-btn" text="Quit" class="fish-tab launcher-btn" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
