@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Managing.Timing;
@@ -483,7 +484,52 @@ namespace FishMMO.Shared
 			if (Character.TryGet(out ICharacterAnimationController anim))
 				anim.TriggerDeath();
 
-			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
+			InvokeKilledIsolated(killer, Character);
+		}
+
+		/// <summary>
+		/// Raises <see cref="ICharacterDamageController.OnKilled"/>, invoking each subscriber
+		/// independently so one failure cannot suppress the rest.
+		/// </summary>
+		/// <remarks>
+		/// A plain multicast invoke abandons the remainder of the list at the first exception.
+		/// That is unusually costly for this event: its subscribers are the scene server's
+		/// <c>CharacterSystem</c> — which sets <see cref="CharacterFlags.IsDead"/> and sends the
+		/// client its <c>DeathBroadcast</c> — plus one <c>AggressionState</c> per aggressive NPC,
+		/// registered at runtime. A single throwing NPC handler could therefore stop a player
+		/// ever being told they died, leaving them with no death dialog and no way to respawn.
+		/// <para>
+		/// It would also disarm this method's own re-entry guard, which tests the very flag that
+		/// <c>CharacterSystem</c>'s handler sets: with that handler skipped, the character is
+		/// never marked dead and a subsequent <see cref="Kill"/> would run the whole path again.
+		/// </para>
+		/// <para>
+		/// Applied here and not to <c>OnDamaged</c>/<c>OnHealed</c> deliberately.
+		/// <see cref="Delegate.GetInvocationList"/> allocates an array per call, which is
+		/// acceptable for a death and not for something raised on every hit.
+		/// </para>
+		/// </remarks>
+		private static void InvokeKilledIsolated(ICharacter killer, ICharacter victim)
+		{
+			Action<ICharacter, ICharacter> handler = ICharacterDamageController.OnKilled;
+			if (handler == null)
+			{
+				return;
+			}
+
+			Delegate[] subscribers = handler.GetInvocationList();
+			for (int i = 0; i < subscribers.Length; ++i)
+			{
+				try
+				{
+					((Action<ICharacter, ICharacter>)subscribers[i]).Invoke(killer, victim);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("CharacterDamageController",
+						$"An OnKilled subscriber threw while handling the death of {victim?.ID}: {ex}");
+				}
+			}
 		}
 
 		/// <summary>
@@ -497,6 +543,18 @@ namespace FishMMO.Shared
 		/// <param name="ignoreAchievements">If true, suppresses ECA trigger dispatch.</param>
 		public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false)
 		{
+			/* A character at zero health is dead and cannot be healed — only revived.
+			 *
+			 * The test is the health value rather than CharacterFlags.IsDead on purpose. This
+			 * runs in the prediction path, and Flags travels only in the spawn payload and is
+			 * never re-synced, so a client's copy is stale from the first death onward; gating
+			 * on it here would make client and server disagree about every later heal. The
+			 * health value is replicated each reconcile, so both sides agree.
+			 *
+			 * That equivalence is only sound because nothing else raises health off zero
+			 * behind this guard: Revive is the single sanctioned route (and it clears the dead
+			 * flag), CompleteHeal applies the same zero test, and regeneration is skipped
+			 * entirely while health is depleted — see CharacterAttributeController.Regenerate. */
 			if (ResourceInstance == null || ResourceInstance.CurrentValue <= 0.0f)
 			{
 				return;
@@ -559,6 +617,17 @@ namespace FishMMO.Shared
 		public void Revive(ICharacter resurrector, int amount)
 		{
 			if (ResourceInstance == null || amount <= 0) return;
+
+			/* Clearing the flag is part of reviving, not a step callers are trusted to remember.
+			 *
+			 * It used to be done by the two CharacterSystem broadcast handlers and nowhere else,
+			 * so any other caller — an ability's ApplyReviveAction, a future system revive —
+			 * restored health while leaving CharacterFlags.IsDead set. That character is then
+			 * alive to everything that tests health and dead to everything that tests the flag:
+			 * Kill() early-returns on the flag, so it can never be killed again, while Heal()
+			 * sees a non-zero value and starts working. Doing it here makes "has health" and
+			 * "is not dead" impossible to disagree, whoever performs the revive. */
+			Character.DisableFlags(CharacterFlags.IsDead);
 
 			// Gain bypasses Heal() dead-character guard -- works on CurrentValue == 0.
 			ResourceInstance.Gain(amount);

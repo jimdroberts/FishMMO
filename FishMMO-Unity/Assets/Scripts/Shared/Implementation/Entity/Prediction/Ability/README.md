@@ -173,6 +173,27 @@ The controller tracks what the character has learned:
 | Event                | Signature                          | Description                        |
 |----------------------|------------------------------------|------------------------------------|
 | `OnCanManipulate`    | `Func<bool>`                       | Checked before activation (e.g., not stunned) |
+
+### Death gate
+
+`OnReplicate` refuses to **start** a new activation while the character is not alive
+(`CanStartActivation`, backed by `ICharacterDamageController.IsAlive`).
+
+Ability activation does not arrive by broadcast — it rides the predicted replicate stream — so
+it bypassed `CharacterStateValidation.CanAct`, the gate every server broadcast handler uses and
+which already rejects dead characters. A player could keep casting from the floor.
+
+The gate sits on the *start* decision only, not at the top of `OnReplicate`:
+
+- an already-active cast still processes (`Kill` cancels it server-side);
+- the deterministic cooldown and resource simulation keeps running, so cooldowns continue to
+  tick while dead instead of freezing and desyncing on revive;
+- a refusal falls through the shared `tried && !started` path, so the server still records the
+  denial and the client reconciles its prediction away.
+
+It tests health rather than `CharacterFlags.IsDead` for the reason given in
+[CharacterAttribute](../CharacterAttribute/README.md#the-dead-state-invariant): flags are
+spawn-payload only and go stale on the client after the first death.
 | `OnUpdate`           | `Action<string, float, float>`     | UI cast bar updates                |
 | `OnInterrupt`        | `Action`                           | Current ability interrupted        |
 | `OnCancel`           | `Action`                           | Current ability cancelled          |

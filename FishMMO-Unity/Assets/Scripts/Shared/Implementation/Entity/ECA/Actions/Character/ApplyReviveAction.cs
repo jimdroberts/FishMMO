@@ -6,9 +6,20 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Action that resurrects a dead target character using a configurable value provider.
-	/// Unlike <see cref="ApplyHealAction"/>, this works on dead characters (CurrentValue == 0).
+	/// Action that offers a resurrect to a dead target character.
+	/// Unlike <see cref="ApplyHealAction"/>, this applies to dead characters (CurrentValue == 0).
 	/// Used by resurrect/resurrection ability templates.
+	/// <para>
+	/// For a player with a live connection this sends a <see cref="ResurrectOfferBroadcast"/> and
+	/// stops there — the death dialog surfaces its "Accept Resurrect" button and the player
+	/// chooses between that and respawning at their bind point. The revive itself happens in
+	/// <c>CharacterSystem</c>'s accept handler, which is the only place that both clears
+	/// <see cref="CharacterFlags.IsDead"/> and restores health.
+	/// </para>
+	/// <para>
+	/// A target that cannot be asked — an NPC, or a player with no active connection — is
+	/// revived outright, so scripted and system resurrects still work.
+	/// </para>
 	/// </summary>
 	[Serializable]
 	public class ApplyReviveAction : BaseAction
@@ -38,26 +49,45 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (target.TryGet(out ICharacterDamageController defenderDamageController))
+			if (!target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				int amount = ReviveValue.GetValue(initiator, eventData);
-				defenderDamageController.Revive(initiator, amount);
-
-				// Send resurrect offer broadcast to the dead player so their
-				// death dialog shows the "Accept Resurrect" button.
-				if (initiator.NetworkObject != null &&
-					initiator.NetworkObject.IsServerStarted &&
-					target is IPlayerCharacter playerCharacter &&
-					playerCharacter.Owner != null &&
-					playerCharacter.Owner.IsValid)
-				{
-					playerCharacter.NetworkObject.NetworkManager.ServerManager.Broadcast(
-						playerCharacter.Owner,
-						new ResurrectOfferBroadcast { ResurrectorID = initiator.ID },
-						true,
-						FishNet.Transporting.Channel.Reliable);
-				}
+				return;
 			}
+
+			int amount = ReviveValue.GetValue(initiator, eventData);
+
+			/* A player is offered the revive; they are not revived by it.
+			 *
+			 * This used to call Revive first and then send the offer, which made the offer
+			 * meaningless and left the target in a contradictory state: health restored, but
+			 * CharacterFlags.IsDead still set because only the accept handler clears it. That
+			 * character could not be killed again (Kill early-returns on the flag) yet could be
+			 * healed (Heal only tests health), and a player who simply ignored the prompt stayed
+			 * that way indefinitely.
+			 *
+			 * The decision belongs to the player: they may prefer to respawn at their bind point
+			 * rather than get up where they fell. CharacterSystem's ResurrectAcceptBroadcast
+			 * handler performs the actual revive, and it is the only path that both clears the
+			 * flag and restores health. */
+			bool canPrompt = target is IPlayerCharacter playerCharacter &&
+							 playerCharacter.Owner != null &&
+							 playerCharacter.Owner.IsValid &&
+							 playerCharacter.NetworkObject != null &&
+							 playerCharacter.NetworkObject.IsServerStarted;
+
+			if (!canPrompt)
+			{
+				/* Nothing to prompt: an NPC, or a player with no live connection to answer —
+				 * a combat-logout body, for instance. Revive outright so a system or scripted
+				 * resurrect still works on targets that cannot be asked. */
+				defenderDamageController.Revive(initiator, amount);
+				return;
+			}
+
+			/* Hand the offer to the server's character system rather than broadcasting from
+			 * here. It records what was offered, by whom, and for how much, so the matching
+			 * accept can be checked against a real offer instead of being taken on trust. */
+			ICharacterDamageController.OnResurrectOffered?.Invoke(initiator, target, amount);
 		}
 	}
 }

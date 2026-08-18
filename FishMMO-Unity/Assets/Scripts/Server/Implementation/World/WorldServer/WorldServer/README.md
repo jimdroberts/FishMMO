@@ -301,3 +301,15 @@ RuntimeDataContainer
 ## License
 
 This module is part of the FishMMO project and is subject to the FishMMO project license.
+
+## Registration is mandatory
+
+`InitializeOnceAsync` fails with `FailedToFindRequiredDependency` when the server address or
+`IWorldSceneSystem` cannot be resolved, matching `SceneServerSystem`.
+
+Both lookups previously gated the registration call inside a single combined `if`, so a failure
+of either skipped registration and still returned `Initialized`. A world server in that state
+comes up healthy and accepts logins with its database ID left at 0 — and every routing decision
+is keyed on that ID, so `FetchAvailableAsync` matched no scene rows and no player was ever
+assigned an instance. They sat in the open-world queue until the 45 s TTL sweep kicked them,
+with nothing in the log explaining why.

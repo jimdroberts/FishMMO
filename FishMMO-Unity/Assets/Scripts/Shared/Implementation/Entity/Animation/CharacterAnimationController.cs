@@ -76,6 +76,43 @@ namespace FishMMO.Shared
 			{
 				animator = meshRoot.GetComponentInChildren<Animator>();
 			}
+
+			RestorePoseForCurrentState();
+		}
+
+		/// <summary>
+		/// Puts a character that is already dead into the death pose as soon as its animator
+		/// exists.
+		/// </summary>
+		/// <remarks>
+		/// Death is applied through an Animator <em>trigger</em>, which is a one-shot: it is
+		/// consumed by the state machine and leaves nothing behind to restore. The only place
+		/// that fires it is <c>CharacterDamageController.Kill</c>, at the moment of dying — so a
+		/// character that arrives already dead has never had it fired for this animator and
+		/// comes up in the default state, standing and idling.
+		/// <para>
+		/// That is what a player sees after reconnecting on a corpse: health zero, death dialog
+		/// open, character standing upright. It applies equally to observers who walk up to
+		/// someone else's corpse, since their animator is created when the character enters
+		/// their observation range, long after the death.
+		/// </para>
+		/// <para>
+		/// Called from <see cref="TryAcquireAnimator"/> so it runs on both acquisition paths —
+		/// <see cref="OnStartCharacter"/> and the guaranteed <see cref="OnModelReady"/> — and
+		/// re-applies correctly if the model is swapped.
+		/// </para>
+		/// </remarks>
+		private void RestorePoseForCurrentState()
+		{
+			if (animator == null || Character == null)
+			{
+				return;
+			}
+
+			if (Character.IsFlagged(CharacterFlags.IsDead))
+			{
+				TriggerDeath();
+			}
 		}
 #endif
 
