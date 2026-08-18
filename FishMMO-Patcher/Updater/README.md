@@ -177,7 +177,7 @@ overridden by editing the source.
 |---|---|---|
 | `MaxFileOperationRetries` | `5` | Retry count for transient file I/O errors. |
 | `FileOperationRetryDelayMs` | `200` | Delay between retries. |
-| `PatchesDirectory` | `Patches` | Directory (relative to the updater's base directory) holding patch ZIPs. |
+| `PatchesDirectory` | `Patches` | Directory (relative to the updater's base directory) holding patch ZIPs. Overridable at runtime with `-patches=`. |
 | `GracefulExitTimeoutMs` | `10000` | How long to wait for the client to exit after the graceful request before forcing a kill. |
 | `ForceKillTimeoutMs` | `5000` | How long to wait for the process to disappear after `Kill()`. |
 | `PostKillSettleMs` | `500` | Settle delay after shutdown, so the OS releases file handles before patching. |
@@ -192,12 +192,29 @@ overridden by editing the source.
 | `-latestversion=<latestVersion>` | Yes | The target version to upgrade to. |
 | `-pid=<launcherPID>` | Yes | Process ID of the launcher; updater will close/kill it before patching. |
 | `-exe=<executablePath>` | Optional | Path to the client executable to start when the updater is done, relative to the updater's base directory. |
+| `-patches=<absoluteDir>` | Optional | Directory to read patch archives from. Defaults to `Patches` under the updater's base directory. |
 
 Arguments are matched by prefix, so `-version` also matches `-versionfoo`; pass
 them exactly as listed. If `-version` and `-latestversion` are equal the updater
 does nothing but restart `-exe`. If the single archive `<version>-<latestversion>.zip`
-is missing from `Patches/`, it reports the missing file and restarts the client
-unchanged.
+is missing from the patches directory, it reports the missing file and restarts the
+client unchanged.
+
+`-patches` must be **absolute**. A relative path resolves against whatever the current
+directory happens to be, which is not guaranteed to be the install root when the updater
+is started by the OS rather than by the launcher — so the same string could name two
+different folders. A path that is relative, missing, or unreadable is ignored with a
+warning and the default is used; the launcher applies the identical rule to its own
+setting, so both sides fall back together rather than to different places.
+
+This argument only changes where a **verified** archive is read from. The launcher hashes
+the download against the server-supplied SHA-256 before the updater is invoked at all, and
+anyone able to write the launcher's configuration file could equally drop a file into the
+default location — so redirecting it does not weaken the integrity check.
+
+**It does not relocate the install.** The updater patches files relative to its own
+directory and ships beside the client binaries, so the install root is fixed by
+construction; moving an install means moving the updater with it.
 
 ---
 

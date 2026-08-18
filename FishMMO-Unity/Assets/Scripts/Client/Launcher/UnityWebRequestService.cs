@@ -232,18 +232,9 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Formats a byte count (ulong) into a human-readable string (e.g., "1.2 MB").
-		/// This helper is placed here as it's often used in conjunction with network downloads.
-		/// </summary>
-		/// <param name="bytes">The number of bytes.</param>
-		/// <returns>A formatted string representing the byte count.</returns>
-		public string FormatBytes(ulong bytes)
-		{
-			if (bytes < 1024) return $"{bytes} B";
-			if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-			if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0):F1} MB";
-			return $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} GB";
-		}
+		// Byte formatting moved to DownloadStats.FormatBytes when progress reporting became
+		// structured. It lives with the data it formats, and being static it is reachable
+		// without a component reference. Two copies of the same formatter would eventually
+		// disagree about what a megabyte looks like.
 	}
 }
