@@ -545,7 +545,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   webRequestService: {fileID: 468852881}
-  maxRetries: 3
+  maxRetries: 0
   retryDelay: 1
   webRequestTimeout: 10
   htmlPxToTmpSizeFactor: 1.5

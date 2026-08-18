@@ -238,7 +238,12 @@ namespace FishMMO.Client
 				// WebGL runs under Emscripten's MEMFS (in-memory virtual FS); the
 				// file is lost when the tab closes and may silently fail on large
 				// writes. Fall back to DownloadHandlerBuffer + manual write below.
-				DownloadHandlerFactory = () => new DownloadHandlerFile(destinationFilePath),
+				// removeFileOnAbort: the handler leaves whatever it has already written on disk
+				// when the request is aborted rather than completed. The launcher aborts any
+				// in-flight request when it is torn down, which happens the moment the player
+				// launches the game — so without this a quit mid-download strands a truncated
+				// archive at the exact path the next run treats as its patch file.
+				DownloadHandlerFactory = () => new DownloadHandlerFile(destinationFilePath) { removeFileOnAbort = true },
 #else
 				DownloadHandlerFactory = () => new DownloadHandlerBuffer(),
 #endif
