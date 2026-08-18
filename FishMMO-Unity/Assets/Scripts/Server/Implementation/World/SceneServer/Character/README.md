@@ -655,3 +655,88 @@ RuntimeDataContainer
 ## License
 
 This module is part of the FishMMO project and is subject to the FishMMO project license.
+
+## Session claims are binding on writes
+
+`TryClaimAsync` / `ReleaseAsync` / `RefreshSessionLeasesAsync` gate who may **load** a
+character. Until recently nothing gated who may **write** one: `PersistAsync` was guarded only
+by the monotonic `Version`, which does not identify the writer.
+
+That made a lease lapse corrupting rather than untidy. A scene server whose lease expired while
+it was still running (a database outage or async-worker saturation lasting past the two-minute
+lease) kept simulating and saving characters another server had legitimately claimed — and
+reliably **won**, because its version counter had been climbing all session while the new owner
+restarted from the persisted row. Every periodic save overwrote the live session.
+
+Two changes close it:
+
+- **`ICharacterService.PersistOwnedAsync`** puts the ownership triple in the same `UPDATE` as
+  the write, so there is no check-then-write window. A displaced server gets
+  `DatabaseErrorCodes.Forbidden`, checked *before* the version comparison — a displaced server
+  usually looks version-stale too, and reporting that as a benign stale write is what let it
+  retry forever. Every save path that holds a claim uses it: periodic save, save-and-release,
+  combat-linger snapshot, linger reattach, pending-flush retry, and the shutdown flush.
+- **`ICharacterService.FetchUnownedSessionsAsync`** resolves *which* claims were lost when the
+  batched lease refresh reports a short count, so eviction happens within one refresh interval
+  (~20 s) rather than waiting for a save to be refused.
+
+### Lost-claim eviction
+
+`EvictLostCharacter` removes a character this server no longer owns. It deliberately does
+**not** save and does **not** release:
+
+- not save, because the other server has been authoritative since it loaded — writing this
+  server's diverged snapshot would overwrite the live session's progress, which loses strictly
+  more than discarding it;
+- not release, because the row's owner token belongs to somebody else.
+
+It logs at Error with the character ID, name and discarded version, removes the mappings, fires
+`OnDisconnect` so scene counts and social systems stay in step, despawns, and disconnects the
+client — which reconnects through the world server and reloads the authoritative row.
+
+> **Residual.** Sub-entity writes (inventory, buffs, attributes, abilities) remain version-gated
+> only. The window is bounded to one refresh interval instead of being unbounded, and within it
+> both servers write the same `version + 1`, so it degrades to last-writer-wins per row rather
+> than systematic overwrite. Extending the ownership gate to those services is a mechanical
+> follow-up.
+
+## Death, respawn and resurrect
+
+`CharacterDamageController_OnKilled` flags `IsDead` **first**, before any side-effecting call.
+`CharacterDamageController.Kill` guards re-entry on that flag but never sets it — this handler
+does, and it is invoked at the very end of `Kill`. Anything side-effecting that ran before the
+flag was set executed inside a window where a second `Kill` would sail past the guard and
+recurse; buff removal, which invokes each buff's removal effects, is exactly such a call.
+
+The handler never revives, teleports, or moves the character. Bind-point movement happens only
+in `OnClientRespawnAtBindPointBroadcastReceived`, in response to an explicit client request.
+
+### Resurrect offers
+
+`ApplyReviveAction` **offers** a resurrect to a player rather than applying one — the revive
+happens only if they accept. It previously called `Revive` and *then* sent the offer, which
+made the prompt meaningless and left the target with health restored but `IsDead` still set,
+because only the accept handler cleared it. A player who ignored the prompt stayed in that
+contradictory state indefinitely.
+
+Offers are recorded server-side (`pendingResurrectOffers`: who offered, how much, 30 s expiry)
+and raised through `ICharacterDamageController.OnResurrectOffered`, so the shared ECA action
+does not need to reference server types.
+
+`OnClientResurrectAcceptBroadcastReceived` requires a matching, unexpired recorded offer.
+Previously it only checked that the named resurrector existed and shared the scene — **not that
+they had offered anything** — so a dead player could revive themselves at full health at will
+by naming any nearby character. The accept now applies the offer's configured amount, credited
+to the actual resurrector so their ECA resurrect triggers fire, instead of a blanket full heal.
+Choosing bind-point respawn declines any outstanding offer; unanswered offers expire on the
+existing respawn/resurrect sweep.
+
+### Reconnecting while dead
+
+Death survives a disconnect intact: combat-logout linger declines a dead character, the save
+preserves `IsDead` (only `IsInCombat` is masked), and health persists at zero. On reload the
+flag and health are restored, scene entry re-sends `DeathBroadcast`, and `Immortal` is cleared.
+The character cannot regenerate, be healed, be damaged further, move, or cast.
+`CharacterAnimationController` re-applies the death pose when the animator appears, because
+death is an Animator *trigger* — a one-shot with nothing to restore — so a character that
+arrives already dead would otherwise stand and idle.

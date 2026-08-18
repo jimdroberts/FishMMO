@@ -586,10 +586,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			/* Refuse while in combat, for the same reason CharacterSystem.IPlayerCharacter_OnTeleport
-			 * does: a channel switch is a voluntary move to another scene instance, and allowing
-			 * it mid-fight makes it a cleaner escape than a teleporter — instant, and it lands
-			 * the player on an instance their attacker is not in.
+			/* Gate on the same predicate every other state-changing handler uses. CanActOrMove
+			 * rejects a character that is dead, teleporting, frozen, not finished loading, or in
+			 * combat — a channel switch is a voluntary move to another scene instance and none of
+			 * those states may initiate one.
+			 *
+			 * Combat matters for the same reason CharacterSystem.IPlayerCharacter_OnTeleport
+			 * refuses a teleport mid-fight: allowing it makes a channel switch a cleaner escape
+			 * than a teleporter — instant, and it lands the player on an instance their attacker
+			 * is not in.
 			 *
 			 * It is also actively corrupting rather than merely unfair. The switch works by
 			 * rewriting SceneHandle to the target and then dropping the connection, which lands
@@ -602,9 +607,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the linger expires. AdjustLingeringSceneCount also books the body against the
 			 * target handle, which this server does not host, so the scene population goes wrong
 			 * and logs an error on every adjustment. */
-			if (character.IsFlagged(CharacterFlags.IsInCombat))
+			if (!CharacterStateValidation.CanActOrMove(character))
 			{
-				Log.Debug("SceneChannelSystem", $"Channel switch refused for {character.CharacterName}: in combat.");
+				Log.Debug("SceneChannelSystem", $"Channel switch refused for {character.CharacterName}: not in an actionable state.");
 				return;
 			}
 
@@ -753,12 +758,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					/* Re-check combat on the authoritative side. The validation above went to the
-					 * database, so the player may have been pulled into a fight while it ran;
-					 * applying the switch now would start the linger described in OnChannelSelect. */
-					if (character.IsFlagged(CharacterFlags.IsInCombat))
+					/* Re-check on the authoritative side. The validation above went to the
+					 * database, so the character's state may have changed while it ran — pulled
+					 * into a fight, or killed. Applying the switch now would start the linger
+					 * described in OnChannelSelect, or transfer a corpse. */
+					if (!CharacterStateValidation.CanActOrMove(character))
 					{
-						Log.Debug("SceneChannelSystem", $"Channel switch aborted for {character.CharacterName}: entered combat during validation.");
+						Log.Debug("SceneChannelSystem", $"Channel switch aborted for {character.CharacterName}: state changed during validation.");
 						return;
 					}
 

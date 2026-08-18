@@ -523,7 +523,26 @@ namespace FishMMO.Shared
 				bool tried = activationData.QueuedAbilityID != NO_ABILITY;
 				bool started;
 
-				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
+				if (!CanStartActivation())
+				{
+					/* Dead characters start nothing. Every server broadcast handler routes
+					 * through CharacterStateValidation.CanAct, which refuses a dead character,
+					 * but ability activation does not arrive by broadcast — it rides the
+					 * predicted replicate stream and so bypassed that gate entirely. A player
+					 * could keep casting from the floor, and after a reconnect-while-dead the
+					 * character even stood upright while doing it.
+					 *
+					 * Placed here rather than at the top of OnReplicate on purpose: only the
+					 * decision to *start* is refused. An already-active cast still processes
+					 * (Kill cancels it server-side), and the deterministic cooldown and
+					 * resource simulation further down keeps running, so cooldowns continue to
+					 * tick while dead instead of freezing and desyncing on revive.
+					 *
+					 * Falls through to the shared `tried && !started` path below, so the server
+					 * still records the denial and the client reconciles its prediction away. */
+					started = false;
+				}
+				else if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
 				{
 					started = TryStartConsumable(activationData);
 				}
@@ -553,6 +572,26 @@ namespace FishMMO.Shared
 					ProcessActiveAbility(activationData, state, deltaTime);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Returns whether the character is in a state that may begin a new activation.
+		/// </summary>
+		/// <remarks>
+		/// Tests health rather than <see cref="CharacterFlags.IsDead"/> because this runs inside
+		/// the predicted replicate stream. Flags travel only in the spawn payload and are never
+		/// re-synced, so a client's copy is stale from its first death onward — gating on it
+		/// would make owner and server disagree about every activation for the rest of the
+		/// session. Resource state is reconciled to the owner every tick, so both sides reach
+		/// the same answer for the same tick and the client predicts the refusal correctly
+		/// instead of casting and being rolled back.
+		/// <para>
+		/// A character with no damage controller has no health to lose and is not gated.
+		/// </para>
+		/// </remarks>
+		private bool CanStartActivation()
+		{
+			return cachedDamageController == null || cachedDamageController.IsAlive;
 		}
 
 		/// <summary>

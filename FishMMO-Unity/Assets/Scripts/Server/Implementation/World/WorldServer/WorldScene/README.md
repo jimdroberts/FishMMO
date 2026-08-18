@@ -408,3 +408,27 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 ## License
 
 This module is part of the FishMMO project and is subject to the FishMMO project license.
+
+## Routing safety nets
+
+**Residency watchdog.** The world server is a router: a client authenticates, receives a
+`WorldSceneConnectBroadcast`, and disconnects on its own to dial the scene server. Every step in
+between can drop the client somewhere no sweep would find it — the routing snapshot empties the
+waiting queues before going async, and both delivery paths go through `TryEnqueueMainThread`,
+which returns false and discards the action when the main-thread queue is saturated. A
+connection lost that way sits authenticated on the world server forever with no scene and no
+error.
+
+`worldResidencyDeadlineByClientId` bounds every such path at once: a connection still here
+`WorldResidencyGraceSeconds` (90 s) after authenticating, and **not in any waiting queue**, is
+disconnected so its own reconnect loop brings it back to be routed again. Queued connections
+have their deadline pushed forward rather than being kicked — `PurgeExpiredWaitingConnections`
+owns that case with its own shorter TTL, and kicking here would interrupt the combat-logout
+routing deferral, which deliberately holds a connection for up to 150 s.
+
+**Bounded main-thread dispatch.** `RunOnMainThreadAsync` times out after 30 s. A successful
+enqueue only promises the action is *queued*; it is run by `OnUpdate`, which stops being called
+the moment this behaviour is deinitialized or the server stops. Anything queued after the single
+drain in `OnDeinitialize` never ran, and the awaiting worker waited forever — holding an
+async-worker slot for the life of the process. Enough of those starve the shared pool, at which
+point every system's database work is silently rejected.

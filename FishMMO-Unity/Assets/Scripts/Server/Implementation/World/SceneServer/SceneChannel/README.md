@@ -420,3 +420,26 @@ Lifecycle:
 ## License
 
 This project is subject to the FishMMO project license.
+
+## Eligibility
+
+`OnChannelSelect` gates on `CharacterStateValidation.CanActOrMove`, the same predicate every
+other state-changing handler uses. It rejects a character that is dead, teleporting, frozen,
+not finished loading, or **in combat**, and the check is repeated on the main thread after the
+database validation returns, because the character's state can change while that runs.
+
+Combat matters for the same reason `CharacterSystem.IPlayerCharacter_OnTeleport` refuses a
+teleport mid-fight: a channel switch is a voluntary move to another scene instance, so allowing
+it in combat makes it a cleaner escape than a teleporter — instant, and it lands the player on
+an instance their attacker is not in.
+
+It is also actively corrupting rather than merely unfair. The switch works by rewriting
+`SceneHandle` and dropping the connection, which lands in `CharacterSystem.OnRemoteConnectionStopped`
+— the one path that passes `allowCombatLinger: true`. In combat that starts a combat-logout
+linger: the body stays on the **old** instance holding the character's session claim, while the
+row now says the character belongs to the **target** handle. The world server then routes the
+reconnect to the target scene server, which has no body to reattach, tries a fresh claim, loses
+to the still-held one, and kicks the player — repeatedly, until the linger expires.
+
+`OnRequestChannelList` is deliberately left ungated: it is a read-only query, treated the same
+way as the chat and name-lookup handlers. The authoritative gate is on the action.

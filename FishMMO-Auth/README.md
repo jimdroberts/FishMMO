@@ -425,3 +425,19 @@ FishMMO-Auth/
 
 ## License
 See the main FishMMO repository for license information.
+
+## Account ↔ connection mapping on reconnect
+
+`AccountManager` keeps both directions: `connectionAccounts` (connection → account) and
+`accountConnections` (account → connection). `AddConnectionAccount` overwrites the reverse entry
+when an account authenticates on a new connection — a normal reconnect — but leaves the *old*
+connection's forward entry, because only that connection's own disconnect removes it.
+
+`RemoveConnectionAccount` therefore removes the reverse mapping **only if it still points at the
+connection being removed**. Removing it unconditionally meant a reconnect that landed before the
+previous QUIC connection had timed out ended with the old connection's cleanup deleting the
+*live* connection's mapping. The account then had no resolvable connection at all, which
+silently disabled everything that looks a player up by name — most importantly
+`KickRequestSystem`, whose entire purpose is to disconnect an existing session so a new login can
+take it over. The kick found nothing and did nothing, so "account is already online" became
+unrecoverable for that session.
