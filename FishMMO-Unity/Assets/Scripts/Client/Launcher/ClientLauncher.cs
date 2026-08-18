@@ -422,32 +422,48 @@ namespace FishMMO.Client
 			 *
 			 * Neither depends on the other, so neither waits for the other. The fetch now only
 			 * writes into the news pane whenever it lands, and startup proceeds immediately. */
-			if (this.HtmlText != null)
+			/* No feed configured is a valid deployment, not a failure. Dispatching the fetch
+			 * anyway reaches UnityWebRequestService's empty-URL branch, which logs an error and
+			 * raises OnFailure — so a launcher with news deliberately switched off reported a
+			 * fetch failure to the player and left "Could not display news content" sitting in
+			 * the pane. Hide the pane instead and never issue the request. */
+			if (string.IsNullOrWhiteSpace(this.HtmlViewURL))
 			{
-				this.HtmlText.text = UIText.StatusLoadingNews;
+				Log.Debug("ClientLauncher", "No launcher news URL configured; skipping the news fetch.");
+				if (this.HTMLView != null)
+				{
+					this.HTMLView.SetActive(false);
+				}
 			}
+			else
+			{
+				if (this.HtmlText != null)
+				{
+					this.HtmlText.text = UIText.StatusLoadingNews;
+				}
 
-			StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
-				this.HtmlViewURL,
-				this.DivClass,
-				onHtmlReady: (htmlContent) =>
-				{
-					if (this.HtmlText != null)
+				StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
+					this.HtmlViewURL,
+					this.DivClass,
+					onHtmlReady: (htmlContent) =>
 					{
-						this.HtmlText.text = htmlContent;
-					}
-				},
-				onError: (error) =>
-				{
-					// Reporting this as "Connection Failed" would also mislead the player into
-					// thinking the game servers are down. If the network really is down, the
-					// version check reports that accurately on its own.
-					Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
-					if (this.HtmlText != null)
+						if (this.HtmlText != null)
+						{
+							this.HtmlText.text = htmlContent;
+						}
+					},
+					onError: (error) =>
 					{
-						this.HtmlText.text = UIText.ErrorNoNewsContent;
-					}
-				}));
+						// Reporting this as "Connection Failed" would also mislead the player into
+						// thinking the game servers are down. If the network really is down, the
+						// version check reports that accurately on its own.
+						Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
+						if (this.HtmlText != null)
+						{
+							this.HtmlText.text = UIText.ErrorNoNewsContent;
+						}
+					}));
+			}
 
 			BeginStartupFlow();
 
