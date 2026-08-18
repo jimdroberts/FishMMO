@@ -32,9 +32,19 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Maximum number of retries for each web request.
 		/// </summary>
-		[Tooltip("Maximum number of retries for each web request.")]
+		/// <remarks>
+		/// Defaults to 0 (a single attempt) because this fetcher serves the launcher's news
+		/// pane, which is purely cosmetic but sits on the critical path: the version check and
+		/// launch only begin once this request settles. Retrying stacked the per-attempt
+		/// timeout and the inter-attempt delay in front of every startup — with the previous
+		/// value of 3 and an unreachable host that times out rather than refusing, that is
+		/// 4 x 10s + 3 x 1s of the player watching "Loading News..." before the game even
+		/// checks its version. A decorative panel is not worth retrying; the news pane simply
+		/// shows an error and startup continues.
+		/// </remarks>
+		[Tooltip("Maximum number of retries for each web request. 0 = a single attempt (news is cosmetic and blocks startup).")]
 		[SerializeField]
-		private int maxRetries = 3;
+		private int maxRetries = 0;
 		/// <summary>
 		/// Maximum number of retries for each web request.
 		/// </summary>

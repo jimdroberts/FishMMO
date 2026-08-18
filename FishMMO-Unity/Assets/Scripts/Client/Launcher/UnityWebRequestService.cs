@@ -12,6 +12,69 @@ namespace FishMMO.Client
 	public class UnityWebRequestService : MonoBehaviour
 	{
 		/// <summary>
+		/// The request currently in flight, or null when idle.
+		/// </summary>
+		/// <remarks>
+		/// Tracked so <see cref="OnDestroy"/> can abort and dispose it. The request is created
+		/// inside a <c>using</c> in <see cref="SendWebRequestWithRetries"/>, which disposes it
+		/// on every path the coroutine actually runs to — but a coroutine killed by its
+		/// GameObject being destroyed is abandoned rather than disposed, so <c>using</c> never
+		/// executes and the native handle (and its socket) leaks until finalization.
+		/// <para>
+		/// That is reachable in normal play: the launcher scene unloads the moment the player
+		/// launches the game, which can happen while the news fetch or a patch download is
+		/// still in flight.
+		/// </para>
+		/// </remarks>
+		private UnityWebRequest inFlightRequest;
+
+		/// <summary>
+		/// Aborts and disposes any request still in flight when this service is destroyed.
+		/// </summary>
+		private void OnDestroy()
+		{
+			DisposeInFlightRequest();
+		}
+
+		/// <summary>
+		/// Aborts and disposes <see cref="inFlightRequest"/> if set, then clears it.
+		/// Safe to call when idle.
+		/// </summary>
+		private void DisposeInFlightRequest()
+		{
+			UnityWebRequest request = this.inFlightRequest;
+			this.inFlightRequest = null;
+			if (request == null)
+			{
+				return;
+			}
+
+			try
+			{
+				// Abort first so an in-progress transfer stops rather than running to its
+				// timeout after nothing is left to receive the result.
+				request.Abort();
+			}
+			catch (System.Exception ex)
+			{
+				Log.Warning("UnityWebRequestService", $"Abort of in-flight request failed during teardown: {ex.Message}");
+			}
+
+			try
+			{
+				request.Dispose();
+			}
+			catch (System.ObjectDisposedException)
+			{
+				// Already disposed by the using block; nothing to do.
+			}
+			catch (System.Exception ex)
+			{
+				Log.Warning("UnityWebRequestService", $"Dispose of in-flight request failed during teardown: {ex.Message}");
+			}
+		}
+
+		/// <summary>
 		/// Configuration object for web requests.
 		/// </summary>
 		public class WebRequestConfig
@@ -125,6 +188,10 @@ namespace FishMMO.Client
 						request.downloadHandler = new DownloadHandlerBuffer();
 					}
 
+					// Publish for teardown. Cleared on every path that leaves this using block,
+					// so OnDestroy never sees a request the using has already disposed.
+					this.inFlightRequest = request;
+
 					UnityWebRequestAsyncOperation operation = request.SendWebRequest();
 					while (!operation.isDone)
 					{
@@ -139,6 +206,7 @@ namespace FishMMO.Client
 
 					if (request.result == UnityWebRequest.Result.Success)
 					{
+						this.inFlightRequest = null;
 						config.OnComplete?.Invoke(request);
 						yield break;
 					}
@@ -147,10 +215,15 @@ namespace FishMMO.Client
 						Log.Warning("UnityWebRequestService", $"Request failed ({config.URL}). Attempt {i + 1}/{config.MaxRetries + 1}. Error: {request.error}");
 						if (i < config.MaxRetries)
 						{
+							// Cleared before the retry delay: this request is disposed by the
+							// using block as the loop iterates, so it must not remain published
+							// across the wait where teardown could reach it.
+							this.inFlightRequest = null;
 							yield return new WaitForSeconds(config.RetryDelay);
 						}
 						else
 						{
+							this.inFlightRequest = null;
 							config.OnFailure?.Invoke(request);
 							yield break;
 						}

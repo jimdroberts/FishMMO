@@ -9011,6 +9011,10 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   CloseOnQuitToMenu: 1
+  MinimapCamera: {fileID: 1180360727}
+  AdditionalLayers:
+    serializedVersion: 2
+    m_Bits: 0
 --- !u!1 &2146917995920697483
 GameObject:
   m_ObjectHideFlags: 0

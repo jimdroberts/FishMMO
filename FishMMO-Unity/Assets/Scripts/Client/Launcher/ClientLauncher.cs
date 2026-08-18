@@ -409,34 +409,47 @@ namespace FishMMO.Client
 				this.QuitButton.onClick.AddListener(Quit);
 			}
 
-			SetLauncherState(LauncherState.LoadingNews);
-
 			// Catch-all so no async failure can leave the player on a dead button.
 			StartCoroutine(TransientStateWatchdog());
 
-			// Delegate HTML fetching to the dedicated service
+			/* News and the version check run concurrently.
+			 *
+			 * The news pane is cosmetic, but it used to sit on the critical path: the version
+			 * check only began once this request settled, so every startup paid the full news
+			 * round trip — and, when the host was unreachable, its timeout as well. Against a
+			 * host that drops packets rather than refusing, that was the request timeout in
+			 * front of every launch with the Play button disabled and nothing to look at.
+			 *
+			 * Neither depends on the other, so neither waits for the other. The fetch now only
+			 * writes into the news pane whenever it lands, and startup proceeds immediately. */
+			if (this.HtmlText != null)
+			{
+				this.HtmlText.text = UIText.StatusLoadingNews;
+			}
+
 			StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
 				this.HtmlViewURL,
 				this.DivClass,
 				onHtmlReady: (htmlContent) =>
 				{
-					this.HtmlText.text = htmlContent;
-					ContinueAfterNews();
+					if (this.HtmlText != null)
+					{
+						this.HtmlText.text = htmlContent;
+					}
 				},
 				onError: (error) =>
 				{
-					// News is cosmetic. Failing to fetch it must not block the version
-					// check — and reporting it as "Connection Failed" misleads the player
-					// into thinking the game servers are down. Show it in the news pane and
-					// carry on; if the network really is down, the version check reports
-					// that accurately a moment later.
+					// Reporting this as "Connection Failed" would also mislead the player into
+					// thinking the game servers are down. If the network really is down, the
+					// version check reports that accurately on its own.
 					Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
 					if (this.HtmlText != null)
 					{
 						this.HtmlText.text = UIText.ErrorNoNewsContent;
 					}
-					ContinueAfterNews();
 				}));
+
+			BeginStartupFlow();
 
 			// Construct the full path to the updater executable
 			this.updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
@@ -454,10 +467,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Advances out of the news-loading state once the news fetch has settled, whether
-		/// it succeeded or not.
+		/// Starts the version check that gates launching. Runs immediately at startup,
+		/// independently of the news fetch.
 		/// </summary>
-		private void ContinueAfterNews()
+		private void BeginStartupFlow()
 		{
 #if !UNITY_EDITOR
 			PlayButtonConnect();
@@ -1133,6 +1146,30 @@ namespace FishMMO.Client
 					string host = candidates[i];
 					bool callbackFired = false;
 					string attemptError = null;
+
+					/* Heartbeat, and the only feedback this state offers.
+					 *
+					 * Each candidate costs up to the request timeout times its retry count
+					 * before the next is tried, so a check across several unreachable hosts
+					 * runs for minutes. Nothing here refreshed lastStateActivityTime, so the
+					 * transient watchdog measured the whole sweep as a single stall and could
+					 * abort a check that was still working through its candidates. Marking
+					 * activity per attempt scopes that to one host's budget.
+					 *
+					 * The player otherwise sees a frozen "Checking Version..." for the whole
+					 * sweep, which is indistinguishable from a hang; the counter shows it is
+					 * still working through hosts. */
+					this.lastStateActivityTime = Time.realtimeSinceStartup;
+
+					/* Written to the button label rather than through SetStatus: that falls back
+					 * to ProgressText when StatusText is unassigned (it is), and ProgressText
+					 * sits inside ProgressBarGroup, which this state deactivates — so the
+					 * message would render to a hidden object. The button label is the one
+					 * status surface guaranteed to be visible here. */
+					if (candidates.Count > 1 && this.PlayButtonText != null)
+					{
+						this.PlayButtonText.text = $"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})";
+					}
 
 					yield return StartCoroutine(this.patchServerService.GetLatestVersion(
 						host,

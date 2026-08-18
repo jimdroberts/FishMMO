@@ -81,9 +81,15 @@ namespace FishMMO.Client
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
-			if (Character == null || Character.MeshRoot == null)
+			/* MinimapCamera is checked here for the same reason OnStarting and the Update
+			 * paths check it: it is an inspector reference that is legitimately null when the
+			 * panel is placed without a minimap camera. Omitting it from this guard threw a
+			 * NullReferenceException out of SetCharacter, which runs during world entry — so
+			 * an unassigned minimap camera aborted the whole entry sequence rather than just
+			 * disabling the minimap. */
+			if (Character == null || Character.MeshRoot == null || MinimapCamera == null)
 			{
-				Log.Warning("UITKMinimap", "Character or Character.MeshRoot is null on OnPostSetCharacter.");
+				Log.Warning("UITKMinimap", $"Skipping camera placement: Character null={Character == null}, MeshRoot null={Character?.MeshRoot == null}, MinimapCamera null={MinimapCamera == null}.");
 				return;
 			}
 
