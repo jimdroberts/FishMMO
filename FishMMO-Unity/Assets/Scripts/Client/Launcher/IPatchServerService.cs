@@ -31,6 +31,10 @@ namespace FishMMO.Client
 		/// <param name="patchUrl">The full URL of the patch file to download.</param>
 		/// <param name="destinationFilePath">Full path (including file name) the patch archive is written to. Parent directories are created if missing.</param>
 		/// <param name="expectedSha256">Lowercase hex SHA-256 the downloaded file must match, or null/empty to skip verification.</param>
+		/// <param name="expectedTotalBytes">
+		/// Total size the download is expected to be, from the version manifest's
+		/// <see cref="PatchInfo.Size"/>, or 0 when the server did not report one.
+		/// </param>
 		/// <param name="onComplete">
 		/// Callback invoked upon successful download (and verification, if requested).
 		/// The argument is <c>true</c> when a patch archive was written to
@@ -38,8 +42,15 @@ namespace FishMMO.Client
 		/// reported the client is already up to date and there is nothing to apply.
 		/// </param>
 		/// <param name="onError">Callback invoked with an error message upon failure.</param>
-		/// <param name="onProgress">Callback invoked periodically with download progress (0.0 to 1.0) and a formatted string.</param>
+		/// <param name="onProgress">
+		/// Callback invoked periodically with a <see cref="DownloadStats"/> snapshot.
+		/// </param>
+		/// <remarks>
+		/// The expected size is passed in rather than read from the response so the caller can
+		/// display a total before the first byte arrives, and so a truncated or chunked
+		/// response cannot change what the player was told the download would be.
+		/// </remarks>
 		/// <returns>An IEnumerator for use in a Unity Coroutine.</returns>
-		IEnumerator DownloadPatch(string patchUrl, string destinationFilePath, string expectedSha256, Action<bool> onComplete, Action<string> onError, Action<float, string> onProgress);
+		IEnumerator DownloadPatch(string patchUrl, string destinationFilePath, string expectedSha256, long expectedTotalBytes, Action<bool> onComplete, Action<string> onError, Action<DownloadStats> onProgress);
 	}
 }

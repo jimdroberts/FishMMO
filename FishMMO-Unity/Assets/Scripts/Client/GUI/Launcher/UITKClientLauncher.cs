@@ -188,16 +188,11 @@ namespace FishMMO.Client
 		}
 
 		/// <inheritdoc />
-		public void SetProgress(float normalizedProgress)
+		public void SetProgress(DownloadStats stats)
 		{
-			this.pendingProgress = Mathf.Clamp01(normalizedProgress);
+			this.pendingProgress = Mathf.Clamp01(stats.NormalizedProgress);
+			this.pendingProgressText = stats.ToDisplayString();
 			ApplyProgress();
-		}
-
-		/// <inheritdoc />
-		public void SetProgressText(string text)
-		{
-			this.pendingProgressText = text;
 			ApplyProgressText();
 		}
 

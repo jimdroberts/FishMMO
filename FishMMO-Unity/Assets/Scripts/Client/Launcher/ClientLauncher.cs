@@ -300,6 +300,15 @@ namespace FishMMO.Client
 		/// </summary>
 		private string expectedPatchSha256;
 		/// <summary>
+		/// Size in bytes of the patch for the current client version, as reported by the patch
+		/// server, or 0 when it did not supply one.
+		/// </summary>
+		/// <remarks>
+		/// Captured from the version check so the download can show a total from its first
+		/// frame instead of waiting on response headers.
+		/// </remarks>
+		private long expectedPatchSize;
+		/// <summary>
 		/// Base URL of the APIHost candidate that responded successfully during the
 		/// most recent version check. Used so that the subsequent patch download
 		/// targets the same endpoint (instead of re-randomizing and potentially
@@ -971,6 +980,7 @@ namespace FishMMO.Client
 				$"{patchApiHost}{MainBootstrapSystem.GameVersion}",
 				patchFilePath,
 				this.expectedPatchSha256,
+				this.expectedPatchSize,
 				onComplete: (patchWritten) =>
 				{
 					if (!patchWritten)
@@ -1015,14 +1025,13 @@ namespace FishMMO.Client
 					// Attempt to clean up any partially downloaded file if an error occurs.
 					TryDeletePatchFile(patchFilePath);
 				},
-				onProgress: (progress, progressString) =>
+				onProgress: (stats) =>
 				{
 					// Heartbeat: a large patch on a slow link must not trip the transient
 					// state watchdog while it is genuinely still downloading.
 					this.lastStateActivityTime = Time.realtimeSinceStartup;
 
-					this.view.SetProgress(progress);
-					this.view.SetProgressText(progressString);
+					this.view.SetProgress(stats);
 				}));
 		}
 
@@ -1147,6 +1156,7 @@ namespace FishMMO.Client
 				this.selectedApiHost = successfulHost;
 				this.latestVersionString = serverVersion.FullVersion; // Store for updater launch
 				this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
+				this.expectedPatchSize = patchInfo.Size; // May be 0 when not provided.
 				Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
 
 				// VersionConfig.Parse returns null for malformed input rather than throwing,

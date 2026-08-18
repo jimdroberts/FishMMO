@@ -183,20 +183,15 @@ namespace FishMMO.Client
 		}
 
 		/// <inheritdoc />
-		public void SetProgress(float normalizedProgress)
+		public void SetProgress(DownloadStats stats)
 		{
 			if (this.progressSlider != null)
 			{
-				this.progressSlider.value = normalizedProgress;
+				this.progressSlider.value = stats.NormalizedProgress;
 			}
-		}
-
-		/// <inheritdoc />
-		public void SetProgressText(string text)
-		{
 			if (this.progressText != null)
 			{
-				this.progressText.text = text;
+				this.progressText.text = stats.ToDisplayString();
 			}
 		}
 

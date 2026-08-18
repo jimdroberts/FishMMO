@@ -179,11 +179,12 @@ namespace FishMMO.Client
 		/// <param name="patchUrl">The URL to download the patch from.</param>
 		/// <param name="destinationFilePath">Full path (including file name) to save the patch archive to.</param>
 		/// <param name="expectedSha256">Lowercase hex SHA-256 the downloaded file must match, or null/empty to skip verification.</param>
+		/// <param name="expectedTotalBytes">Expected size from the version manifest, or 0 when unknown.</param>
 		/// <param name="onComplete">Callback for successful download. The argument is false when the server reported the client is already up to date.</param>
 		/// <param name="onError">Callback for error handling.</param>
 		/// <param name="onProgress">Callback for progress updates.</param>
 		/// <returns>Coroutine enumerator.</returns>
-		public IEnumerator DownloadPatch(string patchUrl, string destinationFilePath, string expectedSha256, Action<bool> onComplete, Action<string> onError, Action<float, string> onProgress)
+		public IEnumerator DownloadPatch(string patchUrl, string destinationFilePath, string expectedSha256, long expectedTotalBytes, Action<bool> onComplete, Action<string> onError, Action<DownloadStats> onProgress)
 		{
 			if (this.webRequestService == null)
 			{
@@ -227,6 +228,15 @@ namespace FishMMO.Client
 			// Sign patch download requests so the public web gateway accepts them.
 			ClientApiSigner.SignAndAdd(headers, UnityWebRequest.kHttpVerbGET, patchUrl);
 
+			// Per-download, so a retry after a failure does not inherit the previous attempt's
+			// rate history and report a throughput that is no longer happening.
+			DownloadRateTracker rateTracker = new DownloadRateTracker();
+
+			// Emitted before the request is sent so the UI opens on "0 B of 240 MB" rather than
+			// an empty bar. Without this the player sees nothing at all until the first
+			// progress callback, which on a slow connect is several seconds of blank UI.
+			onProgress?.Invoke(new DownloadStats(0UL, expectedTotalBytes, 0, null, 0f));
+
 			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
 				URL = patchUrl,
@@ -252,8 +262,15 @@ namespace FishMMO.Client
 				Timeout = this.webRequestTimeout,
 				OnProgress = (request, progress) =>
 				{
-					string progressText = $"{Mathf.RoundToInt(progress * 100f)}% ({this.webRequestService.FormatBytes(request.downloadedBytes)})";
-					onProgress?.Invoke(progress, progressText);
+					ulong downloaded = request.downloadedBytes;
+					rateTracker.Sample(Time.realtimeSinceStartup, downloaded);
+
+					onProgress?.Invoke(new DownloadStats(
+						downloaded,
+						expectedTotalBytes,
+						rateTracker.BytesPerSecond,
+						rateTracker.EstimateSecondsRemaining(downloaded, expectedTotalBytes),
+						progress));
 				},
 				OnComplete = (request) =>
 				{
@@ -279,7 +296,7 @@ namespace FishMMO.Client
 						// written worth applying, so discard whatever landed on disk and
 						// tell the caller there is no patch to hand to the Updater.
 						TryDeleteTempFile(destinationFilePath);
-						onProgress?.Invoke(1f, "100% (Already Updated)");
+						onProgress?.Invoke(new DownloadStats(0UL, 0L, 0, null, 1f));
 						onComplete?.Invoke(false);
 						return;
 					}
@@ -291,7 +308,17 @@ namespace FishMMO.Client
 						return;
 					}
 
-					onProgress?.Invoke(1f, "100%");
+					// Marked complete rather than simply 100%: the shape check and SHA-256 pass
+					// below stream the whole file, which on a large patch is seconds of work
+					// after the transfer has visibly finished. Without saying so, the launcher
+					// sits at a full bar looking hung.
+					onProgress?.Invoke(new DownloadStats(
+						request.downloadedBytes,
+						expectedTotalBytes,
+						0,
+						null,
+						1f,
+						isComplete: true));
 
 					// Shape check before anything downstream trusts this file. A 200 with a
 					// JSON/HTML body (an error page, or a gateway that answers the patch

@@ -49,14 +49,16 @@ namespace FishMMO.Client
 		void SetQuitAction(Action action);
 
 		/// <summary>
-		/// Sets download progress, from 0 to 1.
+		/// Reports the state of an in-progress download.
 		/// </summary>
-		void SetProgress(float normalizedProgress);
-
-		/// <summary>
-		/// Sets the text shown alongside the progress bar (byte counts, transfer rate).
-		/// </summary>
-		void SetProgressText(string text);
+		/// <remarks>
+		/// Takes the whole snapshot rather than a progress fraction and a prepared string, so a
+		/// view can present as much of it as it has room for. Use
+		/// <see cref="DownloadStats.ToDisplayString"/> for the standard line unless there is a
+		/// reason to differ — it already omits whatever is not yet known, which matters because
+		/// a rate and a remaining time do not exist for the first second of any transfer.
+		/// </remarks>
+		void SetProgress(DownloadStats stats);
 
 		/// <summary>
 		/// Shows or hides the progress bar. Hiding also resets progress to zero, so a later
