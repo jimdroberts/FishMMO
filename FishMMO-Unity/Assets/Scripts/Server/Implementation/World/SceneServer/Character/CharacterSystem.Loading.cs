@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
@@ -59,6 +60,79 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Minimum seconds between validated-scene broadcasts per connection.
 		/// </summary>
 		private const float ValidatedSceneBroadcastCooldownSeconds = 2.0f;
+
+		/// <summary>
+		/// Deadline by which a connection in <c>WaitingSceneLoadCharacters</c> must have
+		/// completed the scene handshake, keyed by ClientId.
+		/// </summary>
+		/// <remarks>
+		/// Entering <c>WaitingSceneLoadCharacters</c> means the character is already claimed and
+		/// recorded in <c>SessionTokens</c>, so the lease refresher keeps the claim alive
+		/// indefinitely. The only exits were the client's own
+		/// <c>ClientValidatedSceneBroadcast</c> and the connection dropping — so a client that
+		/// authenticated and then simply stopped talking (hung, modified, or one whose broadcast
+		/// was lost) held its character Online, and therefore unloadable on any server, for as
+		/// long as it kept the transport open. This bounds that window.
+		/// </remarks>
+		private readonly ConcurrentDictionary<int, DateTime> sceneLoadDeadlines =
+			new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>How long a client has to finish the scene handshake before it is disconnected.</summary>
+		private static readonly TimeSpan SceneLoadHandshakeTimeout = TimeSpan.FromSeconds(90);
+
+		/// <summary>Interval in seconds between scene-handshake timeout sweeps.</summary>
+		private const float SceneLoadTimeoutSweepIntervalSeconds = 10f;
+
+		/// <summary>
+		/// Disconnects connections that claimed a character but never completed the scene
+		/// handshake, so the claim is released instead of being held for the life of the socket.
+		/// </summary>
+		private void OnPeriodicSceneLoadTimeoutSweep(float deltaTime)
+		{
+			if (Server == null || Server.ServerState != ConnectionState.Started || sceneLoadDeadlines.IsEmpty)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+
+			foreach (var kvp in sceneLoadDeadlines)
+			{
+				if (nowUtc < kvp.Value)
+				{
+					continue;
+				}
+
+				sceneLoadDeadlines.TryRemove(kvp.Key, out _);
+
+				NetworkConnection conn = null;
+				if (ServerManager != null)
+				{
+					ServerManager.Clients.TryGetValue(kvp.Key, out conn);
+				}
+				if (conn == null || !conn.IsActive)
+				{
+					continue;
+				}
+
+				// Only act while the connection is still stuck in the waiting state. A
+				// recycled ClientId, or one that completed the handshake between the deadline
+				// and this sweep, must be left alone.
+				if (!mappingData.WaitingSceneLoadCharacters.ContainsKey(conn))
+				{
+					continue;
+				}
+
+				Log.Warning("CharacterSystem",
+					$"Connection {kvp.Key} never acknowledged its scene load within {SceneLoadHandshakeTimeout.TotalSeconds:F0}s; disconnecting to release its character claim.");
+				conn.Disconnect(false);
+			}
+		}
 
 		/// <summary>
 		/// Handles client authentication results, loads character data and initiates scene loading.
@@ -134,6 +208,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Error("CharacterSystem", "Authenticator_OnClientAuthenticationResult: Server ID is invalid, cannot claim session.");
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				return;
+			}
+
+			// If this account left a body behind mid-combat and it is still standing, hand that
+			// body's state and its existing claim to the load rather than starting a fresh one.
+			// Checked before the normal path because the claim is still held here: a plain load
+			// would contend with ourselves and be kicked.
+			if (TryReattachLingeringCharacter(conn, accountName, characterService, serverID))
+			{
 				return;
 			}
 
@@ -216,7 +299,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// from the database using a Unit of Work for a consistent snapshot, then queues
 		/// the main-thread instantiation and scene loading.
 		/// </summary>
-		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID)
+		/// <param name="conn">Connection to load for.</param>
+		/// <param name="accountName">Authenticated account.</param>
+		/// <param name="characterService">Character service.</param>
+		/// <param name="serverID">This scene server's ID.</param>
+		/// <param name="preClaimedSessionToken">
+		/// An ownership token this server already holds for the character, supplied when
+		/// reclaiming a combat-logout body. When set the claim step is skipped entirely — the
+		/// character is already ours, and claiming again would contend with our own session.
+		/// </param>
+		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID, Guid preClaimedSessionToken = default)
 		{
 			CharacterData charData = default;
 			Guid sessionToken = Guid.Empty;
@@ -277,11 +369,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				charData = fetchResult.Data.Value;
 				long characterID = charData.ID;
 
-				sessionToken = await ClaimCharacterSessionAsync(conn, characterService, characterID, serverID);
-				if (sessionToken == Guid.Empty)
+				if (preClaimedSessionToken != Guid.Empty)
 				{
-					// ClaimCharacterSessionAsync has already logged and kicked.
-					return;
+					// Reclaiming our own combat-logout body: the claim never left this server.
+					sessionToken = preClaimedSessionToken;
+				}
+				else
+				{
+					sessionToken = await ClaimCharacterSessionAsync(conn, characterService, characterID, serverID);
+					if (sessionToken == Guid.Empty)
+					{
+						// ClaimCharacterSessionAsync has already logged and kicked.
+						return;
+					}
 				}
 
 				// Re-read the character now that we hold the claim. The row above was read
@@ -565,6 +665,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// The save path also strips this flag, but sanitize on load for defense-in-depth.
 			character.DisableFlags(CharacterFlags.IsInCombat);
 
+			// The character is being loaded into a live session, so by definition it is no
+			// longer an unattended body. This is not merely tidiness: IsCombatLogged is what
+			// makes AnyOnlineAsync skip a character, so a row that kept the flag — which is
+			// exactly what a scene server crash mid-linger leaves behind — would let the account
+			// log in a second time while this session is still running. Clearing it here bounds
+			// that to the crash itself rather than to every session afterwards.
+			character.DisableFlags(CharacterFlags.IsCombatLogged);
+
 			if (character.IsInInstance())
 			{
 				character.InstancePosition = new Vector3(charData.InstanceX, charData.InstanceY, charData.InstanceZ);
@@ -803,6 +911,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// will handle cleanup via the SessionTokens dictionary.
 				mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
 				mappingData.WaitingSceneLoadCharacters.Add(conn, character);
+				sceneLoadDeadlines[conn.ClientId] = DateTime.UtcNow + SceneLoadHandshakeTimeout;
 			}
 			else
 			{
@@ -849,6 +958,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Log.Debug("CharacterSystem", "Scene is not valid.");
 
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
+				sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
 
 				TryExtractAndReleaseSession(mappingData, character.ID);
 
@@ -890,6 +1000,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Remove the waiting scene load character
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
+				sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
 
 				// Add a connection->character map for ease of use
 				mappingData.ConnectionCharacters[conn] = character;

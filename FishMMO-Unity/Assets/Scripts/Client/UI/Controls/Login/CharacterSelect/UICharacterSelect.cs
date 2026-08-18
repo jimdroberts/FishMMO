@@ -73,6 +73,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
 
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
@@ -86,6 +87,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
 
 			if (Client.LoginAuthenticator != null)
 			{
@@ -401,6 +403,37 @@ namespace FishMMO.Client
 		/// Sets locked state for connect button (enables/disables connect button).
 		/// </summary>
 		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
+		/// <summary>
+		/// Handles a refused character selection so the player is told why rather than being
+		/// left on a screen that appears to have ignored the click.
+		/// </summary>
+		/// <param name="msg">The refusal message.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterSelectResultBroadcastReceived(CharacterSelectResultBroadcast msg, Channel channel)
+		{
+			if (msg.Result == CharacterSelectResult.Success)
+			{
+				return;
+			}
+
+			// The connect button was locked when the request went out; a refusal never reaches
+			// the world-server-list path that would normally unlock it.
+			SetConnectButtonLocked(false);
+
+			string message = msg.Result == CharacterSelectResult.OtherCharacterInWorld
+				? $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat."
+				: "Character selection failed. Please try again.";
+
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+			{
+				dialogBox.Open(message);
+			}
+			else
+			{
+				FishMMO.Logging.Log.Warning("UICharacterSelect", message);
+			}
+		}
+
 		private void SetConnectButtonLocked(bool locked)
 		{
 			ConnectButton.interactable = !locked;

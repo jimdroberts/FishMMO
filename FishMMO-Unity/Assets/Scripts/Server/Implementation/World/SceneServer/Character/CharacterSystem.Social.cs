@@ -369,7 +369,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.CharactersByLowerCaseName.TryGetValue(characterName.ToLowerInvariant(), out var character))
 			{
-				character.Owner.Broadcast(msg);
+				Server.NetworkWrapper.Broadcast(character.Owner, msg);
 				return true;
 			}
 			return false;
@@ -387,7 +387,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
 				mappingData.CharactersByID.TryGetValue(characterID, out var character))
 			{
-				character.Owner.Broadcast(msg);
+				Server.NetworkWrapper.Broadcast(character.Owner, msg);
 				return true;
 			}
 			return false;

@@ -39,14 +39,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// Nothing sets <see cref="Application.targetFrameRate"/> before a network
-		/// connection exists, and its default is -1 (unlimited). The default quality
-		/// level also has vSync off, so the launcher and login menus render as fast as
-		/// the GPU allows and peg a CPU core to draw a static screen.
-		/// <para>This is only the pre-configuration default. The options UI persists a
-		/// "Refresh Rate" preference, and <c>RefreshRateSettingOption</c> /
-		/// <c>UITKOptions</c> call <c>Client.ApplyTargetFrameRate</c> when it loads, which
-		/// replaces this value with the user's choice. Failing that, FishNet's
-		/// <c>NetworkManager.UpdateFramerate</c> raises it from
+		/// connection exists, and its default is -1 (unlimited), so the launcher and login
+		/// menus render as fast as the GPU allows and peg a CPU core to draw a static screen.
+		/// <para>This is only the pre-configuration default. The options UI persists both a
+		/// "Refresh Rate" and a "VSync" preference and applies them when it loads —
+		/// <c>RefreshRateSettingOption</c> / <c>UITKOptions</c> call
+		/// <c>Client.ApplyTargetFrameRate</c>, and <c>VSyncSettingOption</c> /
+		/// <c>UITKOptions</c> write <c>QualitySettings.vSyncCount</c> — which replaces both
+		/// values set here with the user's choice. Failing that, FishNet's
+		/// <c>NetworkManager.UpdateFramerate</c> raises the frame rate from
 		/// <c>ClientManager.FrameRate</c> when the client connects.</para>
 		/// </remarks>
 		private const int BootstrapTargetFrameRate = 60;
@@ -257,7 +258,15 @@ namespace FishMMO.Shared
 			/* Cap the client before anything renders. See BootstrapTargetFrameRate:
 			 * without this the launcher and login screens run uncapped.
 			 * Headless servers are excluded — they do not render, and FishNet
-			 * derives the server frame rate from the tick rate instead. */
+			 * derives the server frame rate from the tick rate instead.
+			 *
+			 * vSyncCount is forced to 0 first: Application.targetFrameRate is ignored entirely
+			 * whenever the active QualitySettings level has vSync enabled, so the cap silently
+			 * did nothing on any such level (the "Balanced" level ships with vSyncCount: 1).
+			 * This only sets the boot-time default — the player's saved VSync preference is
+			 * applied later by the options UI (UIOptions.OnStarting -> VSyncSettingOption.Load,
+			 * UITKOptions.InitializeVSync), so nothing here overrides a user choice. */
+			QualitySettings.vSyncCount = 0;
 			Application.targetFrameRate = BootstrapTargetFrameRate;
 			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus (FishNet raises it on connect).");
 #endif

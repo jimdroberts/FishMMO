@@ -301,6 +301,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// ownership operations (<see cref="TryClaimAsync"/>, <see cref="ReleaseAsync"/>,
 		/// <see cref="RefreshSessionLeaseAsync"/>, <see cref="RefreshSessionLeasesAsync"/>),
 		/// all of which verify ownership before writing.
+		/// <para>
+		/// It also does not write <c>selected</c>. That column belongs to the login flow —
+		/// character creation sets it, <see cref="SetSelectedAsync"/> moves it — and a gameplay
+		/// save has no business asserting it. It used to write <c>true</c> unconditionally, so a
+		/// save replayed after the player had already picked a different character (the retry
+		/// queue does exactly this after a database hiccup) left two rows marked selected, and
+		/// the account would enter the world as whichever one the next lookup returned first.
+		/// </para>
 		/// </remarks>
 		public async Task<DatabaseResult> PersistAsync(CharacterData characterData, CancellationToken cancellationToken = default)
 		{
@@ -327,36 +335,35 @@ namespace FishMMO.Database.Npgsql.Services
 				var sql = $@"UPDATE {TableName}
 					SET name = {{0}},
 						account = {{1}},
-						selected = {{2}},
-						world_server_id = {{3}},
-						scene_name = {{4}},
-						scene_handle = {{5}},
-						bind_scene = {{6}},
-						bind_x = {{7}},
-						bind_y = {{8}},
-						bind_z = {{9}},
-						instance_id = {{10}},
-						instance_x = {{11}},
-						instance_y = {{12}},
-						instance_z = {{13}},
-						instance_rot_x = {{14}},
-						instance_rot_y = {{15}},
-						instance_rot_z = {{16}},
-						instance_rot_w = {{17}},
-						race_id = {{18}},
-						model_index = {{19}},
-						x = {{20}},
-						y = {{21}},
-						z = {{22}},
-						rot_x = {{23}},
-						rot_y = {{24}},
-						rot_z = {{25}},
-						rot_w = {{26}},
-						access_level = {{27}},
-						flags = {{28}},
-						version = {{29}},
-						last_saved = {{30}}
-					WHERE id = {{31}} AND deleted = FALSE AND version < {{29}}";
+						world_server_id = {{2}},
+						scene_name = {{3}},
+						scene_handle = {{4}},
+						bind_scene = {{5}},
+						bind_x = {{6}},
+						bind_y = {{7}},
+						bind_z = {{8}},
+						instance_id = {{9}},
+						instance_x = {{10}},
+						instance_y = {{11}},
+						instance_z = {{12}},
+						instance_rot_x = {{13}},
+						instance_rot_y = {{14}},
+						instance_rot_z = {{15}},
+						instance_rot_w = {{16}},
+						race_id = {{17}},
+						model_index = {{18}},
+						x = {{19}},
+						y = {{20}},
+						z = {{21}},
+						rot_x = {{22}},
+						rot_y = {{23}},
+						rot_z = {{24}},
+						rot_w = {{25}},
+						access_level = {{26}},
+						flags = {{27}},
+						version = {{28}},
+						last_saved = {{29}}
+					WHERE id = {{30}} AND deleted = FALSE AND version < {{28}}";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
@@ -364,7 +371,6 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						characterData.Name,
 						characterData.Account,
-						characterData.Selected,
 						characterData.WorldServerID,
 						sceneName,
 						characterData.SceneHandle,
@@ -1064,7 +1070,69 @@ namespace FishMMO.Database.Npgsql.Services
 			return DatabaseResult<IReadOnlyList<CharacterData>>.Success(allResults);
 		}
 
+		/// <summary>
+		/// Bit mask for <c>CharacterFlags.IsCombatLogged</c> (bit 13).
+		/// </summary>
+		/// <remarks>
+		/// Written as a literal rather than referencing the enum so the expression stays
+		/// translatable to SQL — <c>IsFlagged</c> is a generic extension method EF cannot
+		/// convert. Kept in sync with <c>FishMMO.Shared.CharacterFlags.IsCombatLogged</c>.
+		/// </remarks>
+		private const int CombatLoggedFlagMask = 1 << 13;
+
 		/// <inheritdoc/>
+		public async Task<DatabaseResult> ClearCombatLoggedAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				// Deliberately not version-gated: this clears a single derived bit rather than
+				// competing with gameplay state, and the caller resorts to it precisely when the
+				// server that would have bumped the version is gone.
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET flags = flags & {~CombatLoggedFlagMask}
+					WHERE id = {{0}} AND deleted = false",
+					characterId).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterData?>> FetchInWorldCharacterAsync(string account, CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(account))
+			{
+				return DatabaseResult<CharacterData?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			return await ExecuteReadAsync<CharacterData?>(async dbContext =>
+			{
+				var entity = await dbContext.Characters
+					.AsNoTracking()
+					.FirstOrDefaultAsync(c => c.Account == account &&
+											  !c.Deleted &&
+											  c.SessionState != CharacterSessionState.Offline, cancellationToken)
+					.ConfigureAwait(false);
+
+				return entity == null ? (CharacterData?)null : MapEntityToData(entity);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// A character whose body is running out a combat-logout timer is deliberately NOT
+		/// counted as online. Its session is still claimed — that is what keeps the body
+		/// authoritative and stops another server taking it — but the player who owns it must
+		/// be able to log back in and rejoin it. Counting it here would lock them out of their
+		/// own character for the whole linger window, which is the opposite of the intent.
+		/// A genuine second session still blocks, because a live session never carries this flag.
+		/// </remarks>
 		public async Task<DatabaseResult<bool>> AnyOnlineAsync(string account, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedUsername(account))
@@ -1076,7 +1144,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return await dbContext.Characters
 					.AsNoTracking()
-					.AnyAsync(c => c.Account == account && !c.Deleted && c.SessionState != CharacterSessionState.Offline, cancellationToken)
+					.AnyAsync(c => c.Account == account &&
+								   !c.Deleted &&
+								   c.SessionState != CharacterSessionState.Offline &&
+								   (c.Flags & CombatLoggedFlagMask) == 0, cancellationToken)
 					.ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;

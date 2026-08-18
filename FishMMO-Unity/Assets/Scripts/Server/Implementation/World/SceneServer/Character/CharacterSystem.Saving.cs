@@ -104,6 +104,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// (BuildCharacterData also masks the flag for defense-in-depth.)
 			character.DisableFlags(CharacterFlags.IsInCombat);
 
+			// The body is going away, so it is no longer waiting to be reclaimed. Clearing this
+			// centrally — rather than at each call site — is what guarantees the flag cannot
+			// survive in the database: a stuck IsCombatLogged would make AnyOnlineAsync ignore
+			// the character permanently and let the account hold two live sessions at once.
+			character.DisableFlags(CharacterFlags.IsCombatLogged);
+
 			// Remove loaded state so when a character is reloaded into a different scene/server, it will properly clamp attributes
 			// and prevent actions until fully loaded in the new scene.
 			character.DisableFlags(CharacterFlags.IsLoaded);

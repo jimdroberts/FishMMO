@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
+using FishMMO.Logging;
 using System.Runtime.CompilerServices;
 using UnityEngine.InputSystem.EnhancedTouch;
 
@@ -69,14 +71,38 @@ namespace FishMMO.Client
 		/// <param name="character">Player character to inject.</param>
 		internal static void SetCharacter(IPlayerCharacter character)
 		{
-			foreach (UICharacterControl control in characterControls.Values)
+			/* Each control is isolated. This runs inside Client.OnCharacterStartLocal, which
+			 * also dismisses the loading screen and wires up the player input controller — so
+			 * an exception from any single panel aborted world entry entirely, leaving the
+			 * player on a black screen with the loading overlay never dismissed and no input.
+			 * A misconfigured panel must cost only that panel.
+			 *
+			 * The dictionary key is used for the log label rather than control.Name: Name reads
+			 * gameObject.name, which throws MissingReferenceException on a destroyed control —
+			 * a throw from inside the handler meant to contain throws. The key is the same
+			 * string (Register maps controls by Name) and is always safe to read. */
+			foreach (KeyValuePair<string, UICharacterControl> kvp in characterControls)
 			{
-				control.SetCharacter(character);
+				try
+				{
+					kvp.Value.SetCharacter(character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed for control '{kvp.Key}'.", ex);
+				}
 			}
 
-			foreach (UITKCharacterControl control in tkCharacterControls.Values)
+			foreach (KeyValuePair<string, UITKCharacterControl> kvp in tkCharacterControls)
 			{
-				control.SetCharacter(character);
+				try
+				{
+					kvp.Value.SetCharacter(character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed for UIToolkit control '{kvp.Key}'.", ex);
+				}
 			}
 		}
 
@@ -85,14 +111,32 @@ namespace FishMMO.Client
 		/// </summary>
 		internal static void UnsetCharacter()
 		{
-			foreach (UICharacterControl control in characterControls.Values)
+			// Isolated for the same reason as SetCharacter: teardown runs on logout and on
+			// character despawn from Client.OnCharacterStopLocal, which still has to
+			// deinitialize input and destroy the character object afterwards. One panel
+			// failing here must not strand the rest or leak the character GameObject.
+			foreach (KeyValuePair<string, UICharacterControl> kvp in characterControls)
 			{
-				control.UnsetCharacter();
+				try
+				{
+					kvp.Value.UnsetCharacter();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"UnsetCharacter failed for control '{kvp.Key}'.", ex);
+				}
 			}
 
-			foreach (UITKCharacterControl control in tkCharacterControls.Values)
+			foreach (KeyValuePair<string, UITKCharacterControl> kvp in tkCharacterControls)
 			{
-				control.UnsetCharacter();
+				try
+				{
+					kvp.Value.UnsetCharacter();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"UnsetCharacter failed for UIToolkit control '{kvp.Key}'.", ex);
+				}
 			}
 		}
 

@@ -77,7 +77,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			playerCharacter.Owner.Broadcast(new AchievementUpdateBroadcast()
+			Server.NetworkWrapper.Broadcast(playerCharacter.Owner, new AchievementUpdateBroadcast()
 			{
 				TemplateID = achievement.Template.ID,
 				Value = achievement.CurrentValue,
@@ -173,7 +173,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (broadcasts.Count > 0)
 			{
-				character.Owner.Broadcast(multiBroadcastFactory(broadcasts), true, Channel.Reliable);
+				Server.NetworkWrapper.Broadcast(character.Owner, multiBroadcastFactory(broadcasts), true, Channel.Reliable);
 			}
 		}
 
@@ -302,7 +302,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				if (modifiedItemBroadcasts.Count > 0)
 				{
-					character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+					Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
 					{
 						Items = modifiedItemBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
@@ -355,7 +355,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				if (modifiedItemBroadcasts.Count > 0)
 				{
-					character.Owner.Broadcast(new BankSetMultipleItemsBroadcast()
+					Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
 					{
 						Items = modifiedItemBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
@@ -365,7 +365,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				// Both inventory and bank are full — notify the player so items are not silently lost.
 				Log.Warning("AchievementSystem", $"Achievement item rewards dropped for CharID={character.ID}: both inventory and bank are full ({itemRewards.Count} items lost).");
-				character.Owner.Broadcast(new ChatBroadcast()
+				Server.NetworkWrapper.Broadcast(character.Owner, new ChatBroadcast()
 				{
 					Channel = ChatChannel.System,
 					Text = "Your inventory and bank are full. Achievement item rewards could not be delivered.",

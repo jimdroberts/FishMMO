@@ -39,4 +39,30 @@ namespace FishMMO.Shared
 		/// <summary>Name of the character to select.</summary>
 		public string CharacterName;
 	}
+
+	/// <summary>
+	/// Why a character selection could not be honoured.
+	/// </summary>
+	public enum CharacterSelectResult : byte
+	{
+		/// <summary>Selection was accepted; the world server list follows.</summary>
+		Success = 0,
+		/// <summary>
+		/// A different character on this account is still in the world — either playing or
+		/// running out a combat-logout timer — so the account cannot switch to another one yet.
+		/// </summary>
+		OtherCharacterInWorld = 1,
+	}
+
+	/// <summary>
+	/// Broadcast sent when a character selection is refused, so the client can explain why
+	/// instead of appearing to hang on an unanswered request.
+	/// </summary>
+	public struct CharacterSelectResultBroadcast : IBroadcast
+	{
+		/// <summary>Reason the selection was refused.</summary>
+		public CharacterSelectResult Result;
+		/// <summary>Name of the character responsible for the refusal, when applicable.</summary>
+		public string CharacterName;
+	}
 }

@@ -62,5 +62,18 @@
 		/// Prevents teleportation and other combat-escape exploits.
 		/// </summary>
 		IsInCombat,
+		/// <summary>
+		/// Character left the world while in combat and its body is still present on a Scene
+		/// Server, or was still present when the server last persisted it.
+		/// <para>
+		/// Unlike <see cref="IsInCombat"/> this flag IS persisted, because it is what lets the
+		/// login path tell "this account is genuinely playing elsewhere" apart from "this
+		/// account owns a body that is running out its combat-logout timer". The former must
+		/// block a second login; the latter must not, or the player could never get back to the
+		/// character they are being invited to rejoin.
+		/// </para>
+		/// Cleared when the body is despawned or the player reconnects to it.
+		/// </summary>
+		IsCombatLogged,
 	}
 }

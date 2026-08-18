@@ -381,7 +381,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			questController.Quests.Remove(questName);
 
 			// Remove the quest from the client's quest log
-			playerCharacter.Owner.Broadcast(new QuestRemoveBroadcast()
+			Server.NetworkWrapper.Broadcast(playerCharacter.Owner, new QuestRemoveBroadcast()
 			{
 				TemplateID = quest.Template.ID,
 			}, true, Channel.Reliable);
@@ -464,7 +464,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			questController.Quests.Remove(questName);
 
-			playerCharacter.Owner.Broadcast(new QuestRemoveBroadcast()
+			Server.NetworkWrapper.Broadcast(playerCharacter.Owner, new QuestRemoveBroadcast()
 			{
 				TemplateID = quest.Template.ID,
 			}, true, Channel.Reliable);
@@ -718,7 +718,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			long[] objectiveValues = BuildObjectiveValues(quest);
 
-			character.Owner.Broadcast(new QuestUpdateBroadcast()
+			Server.NetworkWrapper.Broadcast(character.Owner, new QuestUpdateBroadcast()
 			{
 				TemplateID = quest.Template.ID,
 				Status = quest.Status,
@@ -921,7 +921,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			else
 			{
 				Log.Warning("QuestSystem", $"Quest item rewards dropped for CharID={character.ID}: both inventory and bank are full ({allRewards.Count} items lost).");
-				character.Owner.Broadcast(new ChatBroadcast()
+				Server.NetworkWrapper.Broadcast(character.Owner, new ChatBroadcast()
 				{
 					Channel = ChatChannel.System,
 					Text = "Your inventory and bank are full. Quest item rewards could not be delivered.",
@@ -980,7 +980,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (modifiedItemBroadcasts.Count > 0)
 			{
-				character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+				Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
 				{
 					Items = modifiedItemBroadcasts.ToArray(),
 				}, true, Channel.Reliable);
@@ -1038,7 +1038,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (modifiedItemBroadcasts.Count > 0)
 			{
-				character.Owner.Broadcast(new BankSetMultipleItemsBroadcast()
+				Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
 				{
 					Items = modifiedItemBroadcasts.ToArray(),
 				}, true, Channel.Reliable);

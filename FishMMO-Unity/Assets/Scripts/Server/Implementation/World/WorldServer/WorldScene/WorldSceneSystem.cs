@@ -601,6 +601,52 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 
 				int preferredHandle = charData.SceneHandle;
+				bool preferredAvailable = preferredHandle != 0 &&
+					capacityByHandle.TryGetValue(preferredHandle, out int prefCheck) &&
+					prefCheck > 0 &&
+					serverInfoByHandle.ContainsKey(preferredHandle);
+
+				/* A combat-logout body exists on exactly ONE scene server, and only that server
+				 * can hand it back — it still holds the character's session claim. Falling back
+				 * to a different instance sends the player somewhere that cannot claim them, so
+				 * they are kicked, reconnect, and are kicked again until the linger expires.
+				 * Hold them in the queue instead of routing them somewhere useless.
+				 *
+				 * The wait is bounded from both ends: a live scene server clears the flag when
+				 * the linger ends, and if the server died instead the grace below expires. The
+				 * grace deliberately exceeds the database session lease, so by the time we give
+				 * up, a dead server's claim has lapsed and the destination can actually take
+				 * the character rather than kicking it for contention. */
+				if (!preferredAvailable && charData.Flags.IsFlagged(CharacterFlags.IsCombatLogged))
+				{
+					DateTime deferredSince = combatLogoutRoutingDeferredSince.GetOrAdd(charData.ID, _ => DateTime.UtcNow);
+					if ((DateTime.UtcNow - deferredSince).TotalSeconds < CombatLogoutRoutingGraceSeconds)
+					{
+						await Log.Debug("WorldSceneSystem",
+							$"Holding character {charData.ID} for scene handle {preferredHandle}: its combat-logout body lives there.");
+						RequeueOpenWorldConnection(conn, sceneName);
+						continue;
+					}
+
+					// The owning scene instance never came back. Treat the body as gone — the
+					// whole scene was scrubbed with the server — and let the character in.
+					combatLogoutRoutingDeferredSince.TryRemove(charData.ID, out _);
+					await Log.Warning("WorldSceneSystem",
+						$"Character {charData.ID} waited {CombatLogoutRoutingGraceSeconds}s for scene handle {preferredHandle} and it never returned; " +
+						"clearing its combat-logout flag and routing normally.");
+
+					DatabaseResult clearResult = await charService.ClearCombatLoggedAsync(charData.ID);
+					if (!clearResult.IsSuccess)
+					{
+						await Log.Warning("WorldSceneSystem",
+							$"Failed to clear combat-logout flag for character {charData.ID}: {clearResult.ErrorCode} - {clearResult.ErrorMessage}");
+					}
+				}
+				else if (preferredAvailable)
+				{
+					combatLogoutRoutingDeferredSince.TryRemove(charData.ID, out _);
+				}
+
 				if (preferredHandle != 0 &&
 					capacityByHandle.TryGetValue(preferredHandle, out int prefRemaining) &&
 					prefRemaining > 0 &&
@@ -1314,6 +1360,52 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
+		/// When each character was first deferred because its combat-logout body's scene
+		/// instance was unavailable, keyed by character ID.
+		/// </summary>
+		/// <remarks>
+		/// Needed because the queue snapshot clears <c>WaitingQueueEnteredUtcByClientId</c> and
+		/// re-queuing resets it, so the queue's own timestamp cannot measure how long we have
+		/// been holding out for a specific scene instance.
+		/// </remarks>
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<long, DateTime> combatLogoutRoutingDeferredSince =
+			new System.Collections.Concurrent.ConcurrentDictionary<long, DateTime>();
+
+		/// <summary>
+		/// How long to hold a combat-logged character waiting for its own scene instance before
+		/// concluding the owning scene server is gone.
+		/// </summary>
+		/// <remarks>
+		/// Must exceed the database session lease (2 minutes) so that when we do give up, the
+		/// dead server's claim has already expired and the character can be claimed elsewhere
+		/// instead of being kicked for contention.
+		/// </remarks>
+		private const double CombatLogoutRoutingGraceSeconds = 150.0;
+
+		/// <summary>
+		/// Puts a connection back on the open-world waiting queue for another routing pass.
+		/// </summary>
+		/// <remarks>
+		/// The routing snapshot empties the queue, so any connection this pass declines to route
+		/// is dropped entirely — it would sit on the world server with no scene assignment and
+		/// no retry, which the client cannot recover from on its own.
+		/// </remarks>
+		private void RequeueOpenWorldConnection(NetworkConnection conn, string sceneName)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn == null || !conn.IsActive)
+				{
+					return;
+				}
+				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+				{
+					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+				}
+			});
+		}
+
+		/// <summary>
 		/// Enqueues a race-guarded <see cref="WorldSceneConnectBroadcast"/> for a connection.
 		/// Skips the broadcast if the connection has been re-queued during async processing.
 		/// </summary>
@@ -1462,6 +1554,38 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				now, TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds), 64, 32);
 			runtimeData.SceneServerAddressCache?.SweepExpired(
 				now, TimeSpan.FromSeconds(sceneServerCacheTtlSeconds), 64, 32);
+			SweepCombatLogoutRoutingDeferrals(now);
+		}
+
+		/// <summary>
+		/// Drops combat-logout routing deferrals that can no longer be acted on.
+		/// </summary>
+		/// <remarks>
+		/// Entries are normally removed the moment a character is routed or its grace expires,
+		/// but a player who gives up and closes the client mid-deferral leaves theirs behind with
+		/// nothing to clear it. Each is only a character ID and a timestamp, yet on a long-lived
+		/// world server the map would accumulate one per character that ever combat-logged and
+		/// walked away, and never shrink.
+		/// <para>
+		/// Anything older than twice the grace has already had its decision made — the routing
+		/// pass either honoured it or timed it out — so it cannot influence a future pass and is
+		/// safe to forget. A returning player simply starts a fresh deferral.
+		/// </para>
+		/// </remarks>
+		private void SweepCombatLogoutRoutingDeferrals(DateTime nowUtc)
+		{
+			if (combatLogoutRoutingDeferredSince.IsEmpty)
+			{
+				return;
+			}
+
+			foreach (var kvp in combatLogoutRoutingDeferredSince)
+			{
+				if ((nowUtc - kvp.Value).TotalSeconds >= CombatLogoutRoutingGraceSeconds * 2.0)
+				{
+					combatLogoutRoutingDeferredSince.TryRemove(kvp.Key, out _);
+				}
+			}
 		}
 
 		#endregion

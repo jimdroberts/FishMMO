@@ -63,5 +63,21 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </summary>
 		/// <param name="handle">The handle of the scene instance to unload.</param>
 		void UnloadScene(int handle);
+
+		/// <summary>
+		/// Adjusts the tracked character count for a scene instance.
+		/// </summary>
+		/// <remarks>
+		/// Exposed so the character system can keep a scene populated while it holds a
+		/// combat-logout body. Those bodies are removed from the connection maps the count is
+		/// otherwise derived from, so without this a scene containing only unattended bodies
+		/// reports itself empty — it becomes a stale-pulse candidate for unload, and the world
+		/// server sees capacity that is not really there.
+		/// </remarks>
+		/// <param name="worldServerID">World server that owns the scene instance.</param>
+		/// <param name="sceneName">Scene name.</param>
+		/// <param name="sceneHandle">Scene handle.</param>
+		/// <param name="amount">Amount to adjust by.</param>
+		void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount);
 	}
 }

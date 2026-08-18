@@ -111,6 +111,30 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Returns the account's character that currently holds a session, if any.
+		/// </summary>
+		/// <remarks>
+		/// Unlike <see cref="AnyOnlineAsync"/> this counts combat-logout bodies as well, because
+		/// the caller needs to know a body exists in order to refuse switching away from it. An
+		/// account may only ever have one character in the world, so at most one row matches.
+		/// </remarks>
+		/// <param name="account">Account to inspect.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The in-world character, or <c>null</c> when the account has none.</returns>
+		Task<DatabaseResult<CharacterData?>> FetchInWorldCharacterAsync(string account, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Clears the combat-logout flag on a character.
+		/// </summary>
+		/// <remarks>
+		/// Used when the scene server that held a character's body is judged to be gone, so the
+		/// character is no longer waiting for a body that will never be handed back.
+		/// </remarks>
+		/// <param name="characterId">Character to clear.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> ClearCombatLoggedAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Attempts to claim ownership of a character session (Offline → Online).
 		/// </summary>
 		/// <remarks>

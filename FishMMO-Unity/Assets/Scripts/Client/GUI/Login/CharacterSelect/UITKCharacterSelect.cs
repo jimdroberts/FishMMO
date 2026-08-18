@@ -159,6 +159,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
 
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
@@ -172,6 +173,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
 
 			if (Client.LoginAuthenticator != null)
 			{
@@ -335,6 +337,37 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Handles a refused character selection so the player is told why rather than being
+		/// left on a screen that appears to have ignored the click.
+		/// </summary>
+		/// <param name="msg">The refusal message.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterSelectResultBroadcastReceived(CharacterSelectResultBroadcast msg, Channel channel)
+		{
+			if (msg.Result == CharacterSelectResult.Success)
+			{
+				return;
+			}
+
+			// The connect button was locked when the request went out; a refusal never reaches
+			// the world-server-list path that would normally unlock it.
+			SetConnectButtonLocked(false);
+
+			string message = msg.Result == CharacterSelectResult.OtherCharacterInWorld
+				? $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat."
+				: "Character selection failed. Please try again.";
+
+			if (UIManager.TryGetTK("UITKDialogBox", out UITKDialogBox dialogBox))
+			{
+				dialogBox.Open(message);
+			}
+			else
+			{
+				FishMMO.Logging.Log.Warning("UITKCharacterSelect", message);
+			}
+		}
+
+		/// <summary>
 		/// Handles a character deletion broadcast and removes the matching character row.
 		/// </summary>
 		/// <param name="msg">The broadcast message for character deletion.</param>
@@ -380,7 +413,12 @@ namespace FishMMO.Client
 			Label name = new Label(details.CharacterName);
 			name.AddToClassList(CHARACTER_ROW_NAME_CLASS);
 
-			Label scene = new Label(details.SceneName);
+			// A character whose body is still in the world reads as an ordinary row otherwise,
+			// so the player would select it with no idea they are resuming a session that kept
+			// running — and possibly ended — without them.
+			Label scene = new Label(details.IsCombatLogged
+				? $"{details.SceneName} — still in world (combat logout), select to rejoin"
+				: details.SceneName);
 			scene.AddToClassList(CHARACTER_ROW_SCENE_CLASS);
 
 			rowRoot.Add(name);

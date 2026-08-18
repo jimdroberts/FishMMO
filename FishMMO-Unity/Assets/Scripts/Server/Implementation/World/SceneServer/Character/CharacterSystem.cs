@@ -67,6 +67,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField][Min(1f)] private float sessionLeaseRefreshRate = 20.0f;
 
 		/// <summary>
+		/// Whether a character that disconnects while in combat leaves its body in the world.
+		/// </summary>
+		/// <remarks>
+		/// Disabling this restores the previous behaviour, in which closing the client removed
+		/// the character within milliseconds — making Alt+F4 a reliable way to win any losing
+		/// fight.
+		/// </remarks>
+		[Tooltip("Keep a character's body in the world when its owner disconnects during combat, so quitting is not an escape.")]
+		[SerializeField] private bool enableCombatLogoutLinger = true;
+
+		/// <summary>
+		/// Hard cap in seconds on how long a combat-logout body remains in the world.
+		/// </summary>
+		/// <remarks>
+		/// In the ordinary case the body is removed sooner than this: the linger sweep drops it
+		/// as soon as the character leaves combat, which is
+		/// <c>CharacterDamageController.CombatDurationTicks</c> (20s by default) after the last
+		/// attack. This value only bites when something keeps refreshing that window — someone
+		/// still hitting the body — so it is the guarantee that a player cannot be pinned in the
+		/// world indefinitely by an attacker who refuses to let them go.
+		/// <para>
+		/// Reading the combat flag is only safe because
+		/// <c>CharacterDamageController.EvaluateCombatTimer</c> re-baselines on a backwards tick;
+		/// removing ownership switches the timer's tick domain, and read naively that regression
+		/// would clear combat instantly and defeat the whole feature.
+		/// </para>
+		/// <para>
+		/// Set to 0 to keep the feature enabled elsewhere but never actually hold a body.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Maximum seconds a combat-logout body stays in the world. Normally removed sooner — as soon as the character leaves combat, dies, or its owner reconnects.")]
+		[SerializeField][Min(0f)] private float combatLogoutLingerSeconds = 60.0f;
+
+		/// <summary>
 		/// Triggered before a character is loaded from the database. <conn, CharacterID>
 		/// </summary>
 		public event Action<NetworkConnection, long> OnBeforeLoadCharacter;
@@ -174,6 +208,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(sessionLeaseRefreshRate, OnPeriodicSessionLeaseRefresh);
 				periodicSystem.RegisterPeriodicCallback(PendingFlushRetryIntervalSeconds, OnPeriodicPendingFlushRetry);
 				periodicSystem.RegisterPeriodicCallback(TransferDisconnectSweepIntervalSeconds, OnPeriodicTransferDisconnectSweep);
+				periodicSystem.RegisterPeriodicCallback(SceneLoadTimeoutSweepIntervalSeconds, OnPeriodicSceneLoadTimeoutSweep);
+				periodicSystem.RegisterPeriodicCallback(CombatLingerSweepIntervalSeconds, OnPeriodicCombatLingerSweep);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
@@ -232,7 +268,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSessionLeaseRefresh);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPendingFlushRetry);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicTransferDisconnectSweep);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSceneLoadTimeoutSweep);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCombatLingerSweep);
 			}
+
+			// Bring every lingering body back into the normal save/despawn/release path before
+			// the shutdown snapshot below runs, so its state is captured and its claim handed
+			// back rather than being left Online until the lease expires.
+			FinalizeAllCombatLingers("scene server shutting down");
 
 			// Save all characters and release all sessions before shutdown
 			if (Server.Database?.ServiceRegistry != null &&

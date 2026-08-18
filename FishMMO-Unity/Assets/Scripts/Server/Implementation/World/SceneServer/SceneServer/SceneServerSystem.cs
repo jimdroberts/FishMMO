@@ -392,7 +392,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sceneName">Scene name.</param>
 		/// <param name="sceneHandle">Scene handle.</param>
 		/// <param name="amount">Amount to adjust by (+1 or -1).</param>
-		private void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount)
+		public void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount)
 		{
 			if (TryGetSceneInstanceDetails(worldServerID,
 											sceneName,
@@ -443,7 +443,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Include bodies left behind by a combat logout. They are not in ConnectionCharacters
+			// — they have no connection — but they are still resident, still simulated and still
+			// holding a session claim, so reporting without them understates this server's load.
 			int characterCount = characterMappingData.ConnectionCharacters.Count;
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> lingerCharacterSystem))
+			{
+				characterCount += lingerCharacterSystem.LingeringCharacterCount;
+			}
 
 			// Collect scene pulse data on the main thread before async work.
 			// Reuse runtime-data buffers to avoid per-pulse GC allocations (P9 fix).

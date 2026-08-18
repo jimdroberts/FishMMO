@@ -19,6 +19,17 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface ICharacterSystem<TConnection, TScene> : IServerBehaviour
 	{
 		/// <summary>
+		/// Number of characters whose bodies remain in the world after a combat logout.
+		/// </summary>
+		/// <remarks>
+		/// These have no connection, so they are absent from the connection maps population
+		/// counts are normally derived from — but they are still resident and still hold a
+		/// session claim, so anything reporting load or deciding whether a scene is empty has to
+		/// account for them.
+		/// </remarks>
+		int LingeringCharacterCount { get; }
+
+		/// <summary>
 		/// Raised immediately before a character load is initiated for the given
 		/// connection. The long parameter is the persistent character id requested
 		/// by the client.

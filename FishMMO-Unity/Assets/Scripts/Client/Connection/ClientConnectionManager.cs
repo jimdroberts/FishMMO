@@ -108,10 +108,24 @@ namespace FishMMO.Client
 		/// <summary>Fired when a non-reconnectable connection attempt fails (e.g. login server unreachable).</summary>
 		public event Action OnConnectionAttemptFailed;
 
-		/// <summary>Returns true if the current connection type supports reconnection (World or Scene).</summary>
+		/// <summary>Returns true if the current connection type supports reconnection
+		/// (World, Scene, or an in-flight world connect).</summary>
+		/// <remarks>
+		/// ConnectingToWorld counts. <see cref="ConnectToServer"/> sets it for every world
+		/// connect — including the reconnects <see cref="TryReconnect"/> issues — and
+		/// <see cref="OnClientConnectionState"/> clears CurrentConnectionType to None on the
+		/// drop that arms the retry, so by the time an attempt fails ConnectingToWorld is the
+		/// only type left describing it. Without it here, a failed reconnect read as a
+		/// non-reconnectable failure: no further retry was armed, so MaxReconnectAttempts
+		/// never counted past one, OnReconnectFailed (and its quit-to-login forward) never
+		/// fired, and the client sat disconnected with no path forward. lastWorldAddress is
+		/// assigned before StartConnection on that same path, so a retry always has an
+		/// address to dial — and TryReconnect no-ops when it does not.
+		/// </remarks>
 		public bool CanReconnect =>
 				CurrentConnectionType == ServerConnectionType.World ||
-				CurrentConnectionType == ServerConnectionType.Scene;
+				CurrentConnectionType == ServerConnectionType.Scene ||
+				CurrentConnectionType == ServerConnectionType.ConnectingToWorld;
 
 		/// <summary>Creates a ClientConnectionManager and subscribes to NetworkManager connection events.</summary>
 		/// <param name="networkManager">The FishNet NetworkManager to manage.</param>
@@ -204,7 +218,17 @@ namespace FishMMO.Client
 				{
 					ReconnectsAttempted++;
 					OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
-					ConnectToServer(lastWorldAddress, lastWorldPort);
+					/* isWorldServer: true — lastWorldAddress/lastWorldPort are by definition the
+					 * world server, so the reconnect must be typed as one. Omitting it left
+					 * CurrentConnectionType at None (OnClientConnectionState clears it on the
+					 * drop that armed this retry), which made a failed attempt look like a
+					 * non-reconnectable failure: CanReconnect was false, so no further retry was
+					 * armed and OnConnectionAttemptFailed fired instead — wrongly invalidating
+					 * the cached login server list for what was a world-server outage. It also
+					 * made the establish-timeout message name the login server while actually
+					 * dialing the world server. See CanReconnect, which must accept
+					 * ConnectingToWorld for the retry loop to survive past the first attempt. */
+					ConnectToServer(lastWorldAddress, lastWorldPort, isWorldServer: true);
 				}
 			}
 			else

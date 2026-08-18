@@ -852,7 +852,7 @@ Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has
 stateDiagram-v2
     [*] --> Connected: Initial connection
     Connected --> Disconnected: Connection lost
-    Disconnected --> Reconnecting: CanReconnect? (World/Scene only)
+    Disconnected --> Reconnecting: CanReconnect? (World / Scene / ConnectingToWorld)
     Disconnected --> LoginScreen: Cannot reconnect (Login)
     Reconnecting --> Connected: Reconnect success
     Reconnecting --> Reconnecting: Attempt failed, (exponential backoff + jitter)
@@ -867,6 +867,21 @@ stateDiagram-v2
         Max 10 attempts
     end note
 ```
+
+**The `Reconnecting → Reconnecting` self-loop depends on `ConnectingToWorld` being
+reconnectable.** The retry sequence changes connection type as it runs: the drop clears
+`CurrentConnectionType` to `None`, then `TryReconnect()` calls
+`ConnectToServer(..., isWorldServer: true)`, which sets `ConnectingToWorld` for the in-flight
+attempt. By the time an attempt *fails*, `ConnectingToWorld` is the only type left describing
+it — so a `CanReconnect` covering only `World` and `Scene` collapsed the loop after a single
+attempt: no retry re-armed, `OnReconnectFailed` never fired, and the client reached neither
+`Connected` nor `LoginScreen`. `OnConnectionAttemptFailed` fired in its place, discarding the
+cached login server list over a world server outage.
+
+The same gate governs the initial Login→World hop, which carries the same type. A world
+server that is down at server-select now enters this loop rather than failing on the first
+attempt, and exits it through the same `Max attempts exhausted → LoginScreen` edge —
+cancellable at any point from `UIReconnectDisplay`.
 
 **Token rejection short-circuits the retry loop.** A server that answers `TokenExpired`,
 `TokenInvalid` or `TokenRevoked` has refused the exact credential the client would present
