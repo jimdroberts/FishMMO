@@ -242,6 +242,23 @@ namespace FishMMO.Client
 		/// </summary>
 		public HttpPatchServerService PatchServerService => patchServerService;
 		/// <summary>
+		/// Optional view component that renders this launcher. Must implement
+		/// <see cref="ILauncherView"/>.
+		/// </summary>
+		/// <remarks>
+		/// Typed as <see cref="MonoBehaviour"/> because Unity cannot serialize an interface
+		/// reference. Leave unassigned to render through the legacy uGUI elements above; assign
+		/// a UI Toolkit view component to render through that instead. The fallback is what
+		/// keeps every existing scene working untouched.
+		/// </remarks>
+		[Tooltip("Optional. A component implementing ILauncherView. Leave empty to use the uGUI elements above.")]
+		[SerializeField]
+		private MonoBehaviour launcherViewComponent;
+		/// <summary>
+		/// The active view. Never null after <see cref="Awake"/>.
+		/// </summary>
+		private ILauncherView view;
+		/// <summary>
 		/// The updater launcher used to start the external updater process.
 		/// </summary>
 		private IUpdaterLauncher updaterLauncher;
@@ -365,6 +382,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private void Awake()
 		{
+			// Resolved first so that even the fatal-dependency path below has somewhere to
+			// report to. A player who hits that path has no access to the log file.
+			this.view = ResolveView();
+
 			// SystemUpdaterLauncher is a plain C# class, directly instantiate it
 			this.updaterLauncher = new SystemUpdaterLauncher();
 
@@ -376,38 +397,18 @@ namespace FishMMO.Client
 				this.htmlContentFetcher.WebRequestService == null || this.patchServerService.WebRequestService == null)
 			{
 				Log.Error("ClientLauncher", "One or more required service dependencies are not assigned in the Inspector or are missing!");
-				if (this.PlayButtonText != null)
-				{
-					this.PlayButtonText.text = "Fatal Error";
-				}
-				if (this.PlayButton != null)
-				{
-					this.PlayButton.interactable = false;
-				}
-				// Surface the reason rather than only logging it — a player hitting this
-				// has no access to the log file.
-				if (this.ProgressSlider != null)
-				{
-					this.ProgressSlider.gameObject.SetActive(false);
-				}
-				ShowStatusPanel("The launcher is missing required components and cannot start. Please reinstall the client.");
+				this.view.SetButtonText("Fatal Error");
+				this.view.SetButtonInteractable(false);
+				this.view.SetProgressVisible(false);
+				this.view.ShowStatus("The launcher is missing required components and cannot start. Please reinstall the client.");
 				enabled = false; // Disable this script if dependencies aren't met
 				return;
-			}
-
-			if (this.HtmlTextLinkHandler != null)
-			{
-				this.HtmlTextLinkHandler.OnLinkClicked += HandleHtmlLinkClicked;
 			}
 
 			// Wire Quit in code. The scene's persistent UnityEvent listener had a null
 			// target, so the button silently did nothing; a code-side listener cannot be
 			// broken by a scene re-save.
-			if (this.QuitButton != null)
-			{
-				this.QuitButton.onClick.RemoveAllListeners();
-				this.QuitButton.onClick.AddListener(Quit);
-			}
+			this.view.SetQuitAction(Quit);
 
 			// Catch-all so no async failure can leave the player on a dead button.
 			StartCoroutine(TransientStateWatchdog());
@@ -430,27 +431,19 @@ namespace FishMMO.Client
 			if (string.IsNullOrWhiteSpace(this.HtmlViewURL))
 			{
 				Log.Debug("ClientLauncher", "No launcher news URL configured; skipping the news fetch.");
-				if (this.HTMLView != null)
-				{
-					this.HTMLView.SetActive(false);
-				}
+				this.view.SetNewsVisible(false);
 			}
 			else
 			{
-				if (this.HtmlText != null)
-				{
-					this.HtmlText.text = UIText.StatusLoadingNews;
-				}
+				this.view.SetNewsVisible(true);
+				this.view.SetNewsMessage(UIText.StatusLoadingNews);
 
-				StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
+				StartCoroutine(this.htmlContentFetcher.FetchAndExtract(
 					this.HtmlViewURL,
 					this.DivClass,
-					onHtmlReady: (htmlContent) =>
+					onContentReady: (content) =>
 					{
-						if (this.HtmlText != null)
-						{
-							this.HtmlText.text = htmlContent;
-						}
+						this.view.SetNewsContent(content);
 					},
 					onError: (error) =>
 					{
@@ -458,14 +451,9 @@ namespace FishMMO.Client
 						// thinking the game servers are down. If the network really is down, the
 						// version check reports that accurately on its own.
 						Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
-						if (this.HtmlText != null)
-						{
-							this.HtmlText.text = UIText.ErrorNoNewsContent;
-						}
+						this.view.SetNewsMessage(UIText.ErrorNoNewsContent);
 					}));
 			}
-
-			BeginStartupFlow();
 
 			// Construct the full path to the updater executable
 			this.updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
@@ -478,8 +466,49 @@ namespace FishMMO.Client
 			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
 				? MainBootstrapSystem.GameVersion
 				: "0.0.0-unknown";
-			this.Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
-			this.ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
+			this.view.SetTitle($"{Constants.Configuration.ProjectName} v{versionString}");
+			this.view.SetProgressVisible(false); // Ensure progress bar is hidden initially.
+
+			// Last, so that the state machine's first transition is what the player ends up
+			// looking at rather than being overwritten by the chrome initialisation above.
+			BeginStartupFlow();
+		}
+
+		/// <summary>
+		/// Returns the view this launcher should render through: the assigned view component
+		/// when one implements <see cref="ILauncherView"/>, otherwise an adapter over the
+		/// legacy uGUI elements serialized on this component.
+		/// </summary>
+		private ILauncherView ResolveView()
+		{
+			if (this.launcherViewComponent is ILauncherView assigned)
+			{
+				return assigned;
+			}
+
+			if (this.launcherViewComponent != null)
+			{
+				Log.Error("ClientLauncher", $"Assigned launcher view '{this.launcherViewComponent.GetType().Name}' does not implement ILauncherView. Falling back to the uGUI view.");
+			}
+
+			// The size factor lives on the fetcher so the scene keeps its configured value.
+			// Guarded because this runs before the dependency check, on the path where the
+			// fetcher may be exactly what is missing.
+			float pxToTmpSizeFactor = this.htmlContentFetcher != null ? this.htmlContentFetcher.HtmlPxToTmpSizeFactor : 1.5f;
+
+			return new UGUILauncherView(
+				this.title,
+				this.htmlView,
+				this.progressBarGroup,
+				this.progressSlider,
+				this.progressText,
+				this.quitButton,
+				this.playButton,
+				this.playButtonText,
+				this.htmlText,
+				this.htmlTextLinkHandler,
+				this.statusText,
+				pxToTmpSizeFactor);
 		}
 
 		/// <summary>
@@ -500,41 +529,23 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
-			if (this.HtmlTextLinkHandler != null)
-			{
-				this.HtmlTextLinkHandler.OnLinkClicked -= HandleHtmlLinkClicked;
-			}
-			if (this.QuitButton != null)
-			{
-				this.QuitButton.onClick.RemoveListener(Quit);
-			}
+			// Null when Awake bailed before resolving a view.
+			this.view?.Teardown();
 		}
 		#endregion
 
 		#region UI STATE MANAGEMENT
 		/// <summary>
-		/// True when status messages have to borrow <see cref="ProgressText"/> because no
-		/// dedicated <see cref="StatusText"/> element is assigned. In that case the
-		/// containing progress group must be made visible for the message to be seen.
-		/// </summary>
-		private bool UsesProgressTextForStatus => this.StatusText == null && this.ProgressText != null;
-
-		/// <summary>
-		/// Writes a human-readable status or error message to the player-facing UI.
-		/// Prefers <see cref="StatusText"/> when assigned; falls back to
-		/// <see cref="ProgressText"/> so messages are visible even without a
-		/// dedicated status element. Also logs the message.
+		/// Logs a human-readable status or error message and hands it to the view to display.
 		/// </summary>
 		/// <remarks>
-		/// When falling back to <see cref="ProgressText"/>, this also forces
-		/// <see cref="ProgressBarGroup"/> active. That element is the progress text's
-		/// parent, and the state machine hides the group for every non-download state — so
-		/// without this every error detail was written to an inactive object and the player
-		/// saw nothing but a two-word button label.
+		/// Always logs so operators can correlate what the player saw with the log file. How
+		/// the message is made visible is the view's problem — that used to be decided here,
+		/// which meant one view's quirk (no dedicated status element, so the progress label
+		/// gets borrowed and its parent group forced active) was baked into shared logic.
 		/// </remarks>
 		private void SetStatus(string message, LogLevel level = LogLevel.Info)
 		{
-			// Always log so operators can correlate.
 			switch (level)
 			{
 				case LogLevel.Warning:
@@ -549,49 +560,7 @@ namespace FishMMO.Client
 					break;
 			}
 
-			ShowStatusPanel(message);
-		}
-
-		/// <summary>
-		/// Displays <paramref name="message"/> on the player-facing status element and
-		/// ensures whatever container it lives in is visible. Does not log — callers that
-		/// want logging use <see cref="SetStatus"/>.
-		/// </summary>
-		private void ShowStatusPanel(string message)
-		{
-			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
-			if (target == null)
-			{
-				return;
-			}
-
-			target.text = message;
-
-			if (this.StatusText != null)
-			{
-				this.StatusText.gameObject.SetActive(true);
-				return;
-			}
-
-			// Borrowing the progress text: reveal its group, but keep the slider hidden so
-			// a message is not mistaken for a stalled progress bar. The slider is
-			// re-enabled by SetLauncherState for genuine progress states.
-			if (this.ProgressBarGroup != null)
-			{
-				this.ProgressBarGroup.SetActive(true);
-			}
-		}
-
-		/// <summary>
-		/// Clears the status text so stale error messages don't linger.
-		/// </summary>
-		private void ClearStatus()
-		{
-			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
-			if (target != null)
-			{
-				target.text = string.Empty;
-			}
+			this.view.ShowStatus(message);
 		}
 
 		/// <summary>
@@ -627,7 +596,6 @@ namespace FishMMO.Client
 		{
 			this.currentLauncherState = newState;
 			this.lastStateActivityTime = Time.realtimeSinceStartup;
-			this.PlayButton.onClick.RemoveAllListeners(); // Always clear to ensure only one listener.
 
 			bool isButtonInteractable = false;
 			string buttonText = "";
@@ -729,28 +697,16 @@ namespace FishMMO.Client
 					break;
 			}
 
-			this.PlayButtonText.text = buttonText;
-			this.PlayButton.interactable = isButtonInteractable;
+			this.view.SetButtonText(buttonText);
+			this.view.SetButtonInteractable(isButtonInteractable);
+			// Replaces whatever the previous state attached, so the button never carries more
+			// than the action belonging to the state currently displayed.
+			this.view.SetButtonAction(buttonAction);
 
 			// Fall back to a standard explanation so no state can present a bare label.
 			string detail = !string.IsNullOrEmpty(errorDetail) ? errorDetail : GetDefaultDetail(newState);
 
-			// The progress group has to stay visible whenever it is carrying a status
-			// message, not only during a download — otherwise the message is written to an
-			// inactive object. The slider inside it is shown only for real progress.
-			bool groupVisible = progressBarVisible || (UsesProgressTextForStatus && !string.IsNullOrEmpty(detail));
-			if (this.ProgressBarGroup != null)
-			{
-				this.ProgressBarGroup.SetActive(groupVisible);
-			}
-			if (this.ProgressSlider != null)
-			{
-				this.ProgressSlider.gameObject.SetActive(progressBarVisible);
-				if (!progressBarVisible)
-				{
-					this.ProgressSlider.value = 0f;
-				}
-			}
+			this.view.SetProgressVisible(progressBarVisible);
 
 			// Display error/status detail to the player when available.
 			if (!string.IsNullOrEmpty(detail))
@@ -759,12 +715,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				ClearStatus();
-			}
-
-			if (buttonAction != null)
-			{
-				this.PlayButton.onClick.AddListener(() => buttonAction.Invoke());
+				this.view.ClearStatus();
 			}
 		}
 
@@ -832,34 +783,6 @@ namespace FishMMO.Client
 
 		#region UI INTERACTION HANDLERS (Delegate actions to services)
 		/// <summary>
-		/// Handles clicks on links embedded within the HTML news text.
-		/// Opens external URLs in the default web browser.
-		/// </summary>
-		/// <param name="link">The URL string extracted from the clicked link.</param>
-		private void HandleHtmlLinkClicked(string link)
-		{
-			// Strict URI parsing + scheme allowlist. The previous substring check would
-			// happily open "javascript:...", "file://...", or anything containing the
-			// literal string "http" (e.g. "chrome-http-pwn://...") through the OS URL
-			// handler. Restrict to absolute http(s) URIs only.
-			if (string.IsNullOrWhiteSpace(link))
-			{
-				return;
-			}
-			if (!Uri.TryCreate(link, UriKind.Absolute, out Uri uri))
-			{
-				Log.Warning("ClientLauncher", $"Refusing to open non-absolute link: {link}");
-				return;
-			}
-			if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-			{
-				Log.Warning("ClientLauncher", $"Refusing to open link with disallowed scheme '{uri.Scheme}': {link}");
-				return;
-			}
-			Application.OpenURL(uri.AbsoluteUri);
-		}
-
-		/// <summary>
 		/// Initiates the connection process to check for game updates.
 		/// All requests go through the unified API gateway (Constants.Configuration.APIHost).
 		/// </summary>
@@ -881,10 +804,9 @@ namespace FishMMO.Client
 			{
 				this.isLaunching = true;
 				SetLauncherState(LauncherState.ReadyToPlay);
-				if (this.PlayButton != null)
-				{
-					this.PlayButton.interactable = false;
-				}
+				// ReadyToPlay leaves the button enabled; disable it now that the launch is
+				// actually under way so it cannot be pressed twice.
+				this.view.SetButtonInteractable(false);
 
 				// A retry after a failed launch would otherwise dead-end: EnqueueLoad
 				// silently no-ops when the scene is already tracked as loaded, so
@@ -1099,14 +1021,8 @@ namespace FishMMO.Client
 					// state watchdog while it is genuinely still downloading.
 					this.lastStateActivityTime = Time.realtimeSinceStartup;
 
-					if (this.ProgressSlider != null)
-					{
-						this.ProgressSlider.value = progress;
-					}
-					if (this.ProgressText != null)
-					{
-						this.ProgressText.text = progressString;
-					}
+					this.view.SetProgress(progress);
+					this.view.SetProgressText(progressString);
 				}));
 		}
 
@@ -1177,14 +1093,14 @@ namespace FishMMO.Client
 					 * still working through hosts. */
 					this.lastStateActivityTime = Time.realtimeSinceStartup;
 
-					/* Written to the button label rather than through SetStatus: that falls back
-					 * to ProgressText when StatusText is unassigned (it is), and ProgressText
-					 * sits inside ProgressBarGroup, which this state deactivates — so the
-					 * message would render to a hidden object. The button label is the one
-					 * status surface guaranteed to be visible here. */
-					if (candidates.Count > 1 && this.PlayButtonText != null)
+					/* Written to the button label rather than through SetStatus. On the uGUI
+					 * view a status message falls back to the progress label, which sits inside
+					 * the progress group this state hides — so the message would render to a
+					 * hidden object. The button label is the one status surface every view is
+					 * guaranteed to be showing here. */
+					if (candidates.Count > 1)
 					{
-						this.PlayButtonText.text = $"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})";
+						this.view.SetButtonText($"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})");
 					}
 
 					yield return StartCoroutine(this.patchServerService.GetLatestVersion(

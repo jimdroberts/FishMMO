@@ -32,6 +32,17 @@ Everything it does over the network goes through an injected service so the flow
 | News HTML | `IHtmlContentFetcher` | `UnityHtmlContentFetcher` |
 | Version + patch download | `IPatchServerService` | `HttpPatchServerService` |
 | Updater process | `IUpdaterLauncher` | `SystemUpdaterLauncher` |
+| Presentation | `ILauncherView` | `UGUILauncherView` |
+
+Rendering is behind `ILauncherView` so the state machine, version check, and patch flow exist
+once regardless of which UI technology draws them. `ClientLauncher` falls back to
+`UGUILauncherView` — built from the element references already serialized on it — whenever no
+view component is assigned, so existing scenes keep working untouched.
+
+The interface deliberately expresses intent (*show this status*) rather than widget
+manipulation (*set this label, activate that group*). The uGUI view has no dedicated status
+element and has to borrow the progress label and reveal its parent group to be seen at all;
+encoding that quirk in the interface would export one view's limitation to every other.
 
 ## Supported Platforms
 
@@ -200,14 +211,19 @@ flowchart TD
 
 ```
 Client/Launcher/
-├── ClientLauncher.cs            # MonoBehaviour: UI, state machine, orchestration
+├── ClientLauncher.cs            # MonoBehaviour: state machine, orchestration
 ├── LauncherState.cs             # The 15 UI/process states
 ├── PatchInfo.cs                 # Server patch metadata: UpToDate, PatchAvailable, Sha256, Size
 ├── VersionFetch.cs              # Version response parsing
 │
+├── ILauncherView.cs             # Contract: the presentation surface the state machine drives
+├── UGUILauncherView.cs          #   → legacy uGUI/TextMeshPro implementation
+├── HtmlToTmpTextConverter.cs    # News node tree → TextMeshPro rich text (uGUI view only)
+├── LauncherLinkPolicy.cs        # Scheme allowlist for opening news links (shared by all views)
+│
 ├── IPatchServerService.cs       # Contract: GetLatestVersion, DownloadPatch
 ├── HttpPatchServerService.cs    #   → HTTP implementation with SHA-256 verification
-├── IHtmlContentFetcher.cs       # Contract: fetch a page, extract a div's text
+├── IHtmlContentFetcher.cs       # Contract: fetch a page, extract a div as a parsed node
 ├── UnityHtmlContentFetcher.cs   #   → UnityWebRequest implementation
 ├── IUpdaterLauncher.cs          # Contract: start the external updater and hand off
 ├── SystemUpdaterLauncher.cs     #   → Process.Start implementation
