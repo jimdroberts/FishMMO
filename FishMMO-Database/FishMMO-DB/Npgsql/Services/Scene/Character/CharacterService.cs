@@ -23,6 +23,8 @@ namespace FishMMO.Database.Npgsql.Services
 			Success = 0,
 			NotFound = 1,
 			AuthorityLost = 2,
+			/// <summary>The caller no longer holds the character's session claim.</summary>
+			OwnershipLost = 3,
 		}
 
 		/// <summary>
@@ -310,7 +312,31 @@ namespace FishMMO.Database.Npgsql.Services
 		/// the account would enter the world as whichever one the next lookup returned first.
 		/// </para>
 		/// </remarks>
-		public async Task<DatabaseResult> PersistAsync(CharacterData characterData, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult> PersistAsync(CharacterData characterData, CancellationToken cancellationToken = default)
+			=> PersistInternalAsync(characterData, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> PersistOwnedAsync(CharacterData characterData, CharacterSessionLeaseData ownership, CancellationToken cancellationToken = default)
+		{
+			if (!ownership.IsValid || ownership.CharacterID != characterData.ID)
+			{
+				return Task.FromResult(DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Ownership triple is missing, malformed, or refers to a different character."));
+			}
+			return PersistInternalAsync(characterData, ownership, cancellationToken);
+		}
+
+		/// <summary>
+		/// Shared implementation of the character-row write.
+		/// </summary>
+		/// <param name="characterData">Snapshot to persist.</param>
+		/// <param name="ownership">
+		/// When supplied, the write additionally requires that the row is still claimed by this
+		/// server under this token. See <see cref="PersistOwnedAsync"/>.
+		/// </param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult> PersistInternalAsync(CharacterData characterData, CharacterSessionLeaseData? ownership, CancellationToken cancellationToken = default)
 		{
 			if (characterData.ID <= 0)
 			{
@@ -363,11 +389,12 @@ namespace FishMMO.Database.Npgsql.Services
 						flags = {{27}},
 						version = {{28}},
 						last_saved = {{29}}
-					WHERE id = {{30}} AND deleted = FALSE AND version < {{28}}";
+					WHERE id = {{30}} AND deleted = FALSE AND version < {{28}}"
+					+ (ownership.HasValue
+						? $" AND session_state = {{31}} AND session_owner_server_id = {{32}} AND session_owner_token = {{33}}"
+						: string.Empty);
 
-				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
-					sql,
-					new object[]
+				var parameters = new object[]
 					{
 						characterData.Name,
 						characterData.Account,
@@ -400,7 +427,23 @@ namespace FishMMO.Database.Npgsql.Services
 						characterData.Version,
 						now,
 						characterData.ID,
-					},
+					};
+
+				if (ownership.HasValue)
+				{
+					// Appended rather than interleaved so the existing parameter indices above
+					// stay stable.
+					var owned = new object[parameters.Length + 3];
+					Array.Copy(parameters, owned, parameters.Length);
+					owned[parameters.Length] = (short)CharacterSessionState.Online;
+					owned[parameters.Length + 1] = ownership.Value.OwnerServerID;
+					owned[parameters.Length + 2] = ownership.Value.OwnerToken;
+					parameters = owned;
+				}
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					parameters,
 					cancellationToken).ConfigureAwait(false);
 
 				if (rowsAffected > 0)
@@ -418,6 +461,18 @@ namespace FishMMO.Database.Npgsql.Services
 				if (current == null)
 				{
 					return SaveCharacterWriteOutcome.NotFound;
+				}
+
+				// Checked before the version comparison: losing the claim is the more specific
+				// and more serious condition, and a server that has lost it will usually ALSO
+				// look version-stale once the new owner has saved once. Reporting that as a
+				// benign stale write is what let a displaced server keep trying forever.
+				if (ownership.HasValue &&
+					(current.SessionState != CharacterSessionState.Online ||
+					 current.SessionOwnerServerId != ownership.Value.OwnerServerID ||
+					 current.SessionOwnerToken != ownership.Value.OwnerToken))
+				{
+					return SaveCharacterWriteOutcome.OwnershipLost;
 				}
 
 				if (current.Version > characterData.Version)
@@ -445,6 +500,10 @@ namespace FishMMO.Database.Npgsql.Services
 					return DatabaseResult.Failure(
 						DatabaseErrorCodes.StaleState,
 						"A newer server process has already saved this character. Refusing to overwrite progress.");
+				case SaveCharacterWriteOutcome.OwnershipLost:
+					return DatabaseResult.Failure(
+						DatabaseErrorCodes.Forbidden,
+						"This server no longer holds the character's session claim. Refusing to overwrite the current owner's state.");
 				default:
 					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "Unexpected save outcome.");
 			}
@@ -906,6 +965,85 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<long>>> FetchUnownedSessionsAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default)
+		{
+			if (leases == null || leases.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Success(Array.Empty<long>());
+			}
+
+			// Deduplicate and index by character so the comparison below is a dictionary hit
+			// rather than a scan, and a caller that passes the same character twice cannot
+			// report it twice.
+			var expected = new Dictionary<long, CharacterSessionLeaseData>(leases.Count);
+			foreach (var lease in leases)
+			{
+				if (lease.IsValid)
+				{
+					expected[lease.CharacterID] = lease;
+				}
+			}
+
+			if (expected.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Success(Array.Empty<long>());
+			}
+
+			var ids = new List<long>(expected.Keys);
+
+			return await ExecuteReadAsync<IReadOnlyList<long>>(async dbContext =>
+			{
+				var rows = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => ids.Contains(c.ID))
+					.Select(c => new
+					{
+						c.ID,
+						c.Deleted,
+						c.SessionState,
+						c.SessionOwnerServerId,
+						c.SessionOwnerToken,
+					})
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var lost = new List<long>();
+				var seen = new HashSet<long>(rows.Count);
+
+				foreach (var row in rows)
+				{
+					seen.Add(row.ID);
+
+					if (!expected.TryGetValue(row.ID, out CharacterSessionLeaseData lease))
+					{
+						continue;
+					}
+
+					if (row.Deleted ||
+						row.SessionState != CharacterSessionState.Online ||
+						row.SessionOwnerServerId != lease.OwnerServerID ||
+						row.SessionOwnerToken != lease.OwnerToken)
+					{
+						lost.Add(row.ID);
+					}
+				}
+
+				// A row that no longer exists cannot be owned either. Reporting it keeps the
+				// caller's eviction path total: every ID it asked about is either still owned
+				// or returned here.
+				foreach (long id in ids)
+				{
+					if (!seen.Contains(id))
+					{
+						lost.Add(id);
+					}
+				}
+
+				return (IReadOnlyList<long>)lost;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		/// <remarks>
 		/// <para><b>Last-writer-wins (intentional — no version gating):</b></para>
 		/// This update intentionally does NOT use version gating (no <c>AND version &lt; {version_param}</c>)
@@ -1111,13 +1249,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterData?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
 			}
 
+			var nowUtc = DateTime.UtcNow;
+
 			return await ExecuteReadAsync<CharacterData?>(async dbContext =>
 			{
+				// Same expired-lease rule as AnyOnlineAsync: a claim whose lease has lapsed
+				// belongs to a server that is no longer there, so it must not block the player
+				// from selecting a different character.
 				var entity = await dbContext.Characters
 					.AsNoTracking()
 					.FirstOrDefaultAsync(c => c.Account == account &&
 											  !c.Deleted &&
-											  c.SessionState != CharacterSessionState.Offline, cancellationToken)
+											  c.SessionState != CharacterSessionState.Offline &&
+											  c.SessionLeaseExpiresUtc > nowUtc, cancellationToken)
 					.ConfigureAwait(false);
 
 				return entity == null ? (CharacterData?)null : MapEntityToData(entity);
@@ -1132,6 +1276,15 @@ namespace FishMMO.Database.Npgsql.Services
 		/// be able to log back in and rejoin it. Counting it here would lock them out of their
 		/// own character for the whole linger window, which is the opposite of the intent.
 		/// A genuine second session still blocks, because a live session never carries this flag.
+		/// <para>
+		/// A claim whose lease has expired does not count either. <see cref="TryClaimAsync"/>
+		/// treats an expired lease as free — that is the whole recovery path for a scene server
+		/// that died holding characters — but this check did not, so the row a crashed server
+		/// left behind reported its owner as permanently online. The account was then refused at
+		/// login forever with "already online", against a session that no longer existed and a
+		/// character any server was free to claim. Matching the claim predicate here bounds that
+		/// to one lease duration.
+		/// </para>
 		/// </remarks>
 		public async Task<DatabaseResult<bool>> AnyOnlineAsync(string account, CancellationToken cancellationToken = default)
 		{
@@ -1140,6 +1293,8 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
 			}
 
+			var nowUtc = DateTime.UtcNow;
+
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				return await dbContext.Characters
@@ -1147,6 +1302,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.AnyAsync(c => c.Account == account &&
 								   !c.Deleted &&
 								   c.SessionState != CharacterSessionState.Offline &&
+								   c.SessionLeaseExpiresUtc > nowUtc &&
 								   (c.Flags & CombatLoggedFlagMask) == 0, cancellationToken)
 					.ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);

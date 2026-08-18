@@ -283,13 +283,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 				{
-					// Snapshot character data on the main thread (Unity API access required)
-					var characterDataList = new List<CharacterData>();
+					// Capture all session tokens (spawned + waiting-to-load characters)
+					var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
+
+					// Snapshot character data on the main thread (Unity API access required),
+					// paired with the claim held for each so the shutdown write can prove
+					// ownership. A server that lost a claim before shutting down must not use
+					// its final flush to overwrite the state of whichever server owns it now.
+					var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership)>();
 					foreach (var character in data.CharactersByID.Values)
 					{
 						try
 						{
-							characterDataList.Add(BuildCharacterData(character));
+							CharacterSessionInfo? ownership = sessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
+								? held
+								: (CharacterSessionInfo?)null;
+							characterDataList.Add((BuildCharacterData(character), ownership));
 						}
 						catch (Exception ex)
 						{
@@ -297,29 +306,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}
 
-					// Capture all session tokens (spawned + waiting-to-load characters)
-					var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
-
 					// Bounded: an unresponsive database must not hold process exit open forever.
 					// Characters already saved before the deadline keep their progress; the token
 					// cancels the in-flight write rather than leaving it running unobserved.
 					bool flushed = UnitySyncOverAsync.TryRun(async cancellationToken =>
 					{
 						// Save all spawned characters
-						foreach (var charData in characterDataList)
+						foreach (var entry in characterDataList)
 						{
 							cancellationToken.ThrowIfCancellationRequested();
 							try
 							{
-								DatabaseResult result = await characterService.PersistAsync(charData, cancellationToken);
+								CharacterData charData = entry.Data;
+								DatabaseResult result = entry.Ownership.HasValue
+									? await characterService.PersistOwnedAsync(
+										charData,
+										new CharacterSessionLeaseData(charData.ID, entry.Ownership.Value.ServerID, entry.Ownership.Value.Token),
+										cancellationToken)
+									: await characterService.PersistAsync(charData, cancellationToken);
+
 								if (!result.IsSuccess)
 								{
-									await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+									// Forbidden is not a transient failure: the claim is gone and
+									// the snapshot is unpersistable by design. Name it plainly so
+									// a shutdown after a lease lapse is not mistaken for data loss
+									// caused by the shutdown itself.
+									if (result.ErrorCode == DatabaseErrorCodes.Forbidden)
+									{
+										await Log.Error("CharacterSystem",
+											$"OnDeinitialize: character {charData.ID} is no longer claimed by this server; " +
+											"its unsaved state is discarded rather than overwriting the current owner's.");
+									}
+									else
+									{
+										await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+									}
 								}
 							}
 							catch (Exception ex)
 							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {charData.ID}: {ex}");
+								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {entry.Data.ID}: {ex}");
 							}
 						}
 

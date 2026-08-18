@@ -298,7 +298,34 @@ namespace FishMMO.Client
 		{
 			OnCharacterListStart?.Invoke();
 
-			Client.StartCoroutine(OnProcessCharacterList());
+			StopProcessCharacterList();
+			processCharacterListRoutine = Client.StartCoroutine(OnProcessCharacterList());
+		}
+
+		/// <summary>
+		/// Handle for the in-flight <see cref="OnProcessCharacterList"/> coroutine.
+		/// </summary>
+		/// <remarks>
+		/// <c>StopCoroutine(OnProcessCharacterList())</c> builds a brand new enumerator and asks
+		/// Unity to stop that one, which never matches the running instance — so the coroutine
+		/// carried on and called <see cref="UITKControl.Show"/> on this panel after the player
+		/// had already quit to login, putting it back on top of the login screen. Keeping the
+		/// handle is what makes stopping it actually work.
+		/// </remarks>
+		private Coroutine processCharacterListRoutine;
+
+		/// <summary>Stops the character-list post-processing coroutine if one is running.</summary>
+		private void StopProcessCharacterList()
+		{
+			if (processCharacterListRoutine == null)
+			{
+				return;
+			}
+			if (Client != null)
+			{
+				Client.StopCoroutine(processCharacterListRoutine);
+			}
+			processCharacterListRoutine = null;
 		}
 
 		/// <summary>
@@ -314,6 +341,8 @@ namespace FishMMO.Client
 				{
 				}, true);
 			}
+
+			processCharacterListRoutine = null;
 
 			OnCharacterListEnd?.Invoke();
 			Show();
@@ -352,6 +381,12 @@ namespace FishMMO.Client
 			// The connect button was locked when the request went out; a refusal never reaches
 			// the world-server-list path that would normally unlock it.
 			SetConnectButtonLocked(false);
+
+			/* Put the panel back. OnClick_SelectCharacter hides it optimistically, and only the
+			 * success path (ServerListBroadcast -> UITKServerSelect.Show) puts anything else on
+			 * screen. A refusal therefore left the player looking at an empty scene with no way
+			 * back once the dialog below was dismissed. */
+			Show();
 
 			string message = msg.Result == CharacterSelectResult.OtherCharacterInWorld
 				? $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat."
@@ -519,7 +554,7 @@ namespace FishMMO.Client
 		{
 			base.OnQuitToLogin();
 
-			Client.StopCoroutine(OnProcessCharacterList());
+			StopProcessCharacterList();
 
 			SetDeleteButtonLocked(false);
 			SetConnectButtonLocked(false);
@@ -530,7 +565,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_QuitToLogin()
 		{
-			Client.StopCoroutine(OnProcessCharacterList());
+			StopProcessCharacterList();
 
 			Client.QuitToLogin();
 		}

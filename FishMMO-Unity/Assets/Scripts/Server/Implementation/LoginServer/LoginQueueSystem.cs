@@ -172,7 +172,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (conn != null && conn.IsActive)
 						{
 							SendPositionUpdate(conn, -1, 0, 0);
-							conn.Disconnect(true);
+							// Not immediately: the cancellation notice above still has to reach
+							// the client. See PurgeStaleEntries.
+							conn.Disconnect(false);
 						}
 					}
 					catch { }
@@ -450,7 +452,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							// Position -1 = queue cancelled
 							SendPositionUpdate(conn, -1, 0, 0);
-							conn.Disconnect(true);
+							/* Not immediately. Disconnect(true) stops the transport connection
+							 * outright, discarding anything still queued for send — including the
+							 * cancellation notice on the line above, which is the only thing that
+							 * tells the client its queue wait ended and closes the
+							 * "Queue position: N" dialog. Passing false marks the connection dirty
+							 * so the server flushes pending sends first, which is what every other
+							 * disconnect in the character and scene systems does. */
+							conn.Disconnect(false);
 						}
 					}
 					catch (Exception ex)
@@ -473,10 +482,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		#region Helpers
 
 		/// <summary>
-		/// Sends a queue position update to a single client via unreliable broadcast.
+		/// Sends a queue position update to a single client.
 		/// The client does not need to be authenticated — the broadcast is sent with
 		/// <c>requireAuthentication: false</c>.
 		/// </summary>
+		/// <remarks>
+		/// Channel selection is by meaning, not by convenience. A positive position is a
+		/// periodic progress report: it is re-sent every <c>queueUpdateRateSeconds</c> and any
+		/// individual loss is corrected by the next sweep, so Unreliable is correct and keeps a
+		/// large queue off the reliable channel.
+		/// <para>
+		/// Position 0 (admitted — re-send your handshake) and position -1 (queue cancelled) are
+		/// one-shot state transitions with nothing behind them. Sending those unreliably meant a
+		/// single dropped datagram stranded the client: it had already been popped off the
+		/// queue, so no later sweep would mention it again, and it sat connected and silent
+		/// until the authenticator's 15s handshake timeout disconnected it with no explanation.
+		/// On a lossy link that turns into "logging in randomly does nothing".
+		/// </para>
+		/// </remarks>
 		private void SendPositionUpdate(NetworkConnection conn, int position,
 			int estimatedWaitSeconds, int totalQueued)
 		{
@@ -490,7 +513,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					TotalQueued = totalQueued,
 				},
 				requireAuthentication: false,
-				Channel.Unreliable);
+				position > 0 ? Channel.Unreliable : Channel.Reliable);
 		}
 
 		/// <summary>

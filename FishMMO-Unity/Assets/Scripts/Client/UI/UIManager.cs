@@ -152,6 +152,14 @@ namespace FishMMO.Client
 			}
 			if (controls.ContainsKey(control.Name))
 			{
+				/* Controls are keyed by GameObject name, and every lookup in the codebase is by
+				 * that string. Dropping a duplicate silently meant a control could be present in
+				 * the scene, fully wired, and simply never reachable — indistinguishable from
+				 * not being there at all, and only discovered when whatever needed it did
+				 * nothing. Name it. */
+				Log.Warning("UIManager",
+					$"A UIControl named '{control.Name}' is already registered; ignoring the duplicate on " +
+					$"GameObject '{control.gameObject.name}'. Lookups by this name will resolve to the first one only.");
 				return;
 			}
 
@@ -198,6 +206,10 @@ namespace FishMMO.Client
 			}
 			if (tkControls.ContainsKey(control.Name))
 			{
+				// Same silent-drop hazard as Register above.
+				Log.Warning("UIManager",
+					$"A UITKControl named '{control.Name}' is already registered; ignoring the duplicate on " +
+					$"GameObject '{control.gameObject.name}'. Lookups by this name will resolve to the first one only.");
 				return;
 			}
 

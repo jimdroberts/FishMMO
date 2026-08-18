@@ -128,6 +128,11 @@ namespace FishMMO.Client
 		/// </summary>
 		private Action onReconnectFailed;
 		/// <summary>
+		/// Backing field for <see cref="OnReconnectPending"/>.
+		/// Accumulates subscribers even before <see cref="Connection"/> is created.
+		/// </summary>
+		private Action onReconnectPending;
+		/// <summary>
 		/// Stored delegate for the OnReconnectFailed -> OnQuitToLogin forwarding subscription.
 		/// Must be held as a field so it can be unsubscribed in <see cref="OnDestroy"/>.
 		/// </summary>
@@ -147,6 +152,19 @@ namespace FishMMO.Client
 		/// preload and send a duplicate acknowledgement.
 		/// </summary>
 		private bool isPreloadingWorldScenes;
+		/// <summary>
+		/// The world-scene preload batch this client is currently waiting on, or null.
+		/// </summary>
+		/// <remarks>
+		/// The batch outlives the session that started it: <see cref="AddressableLoadProcessor"/>
+		/// keeps draining after a quit-to-login, and a batch always completes rather than being
+		/// cancelled. Without an identity check, that late completion acknowledged scene
+		/// validation on whatever connection happened to be current — most damagingly the next
+		/// login's scene server, where it burns the validated-scene rate-limit window and makes
+		/// the real acknowledgement get dropped, leaving the client on a loading screen until
+		/// the server's 90s scene handshake timeout disconnects it.
+		/// </remarks>
+		private AddressableLoadBatch worldPreloadBatch;
 
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectAttempt"/>.</summary>
 		public event Action<int, int> OnReconnectAttempt
@@ -159,6 +177,12 @@ namespace FishMMO.Client
 		{
 			add { this.onReconnectFailed += value; if (Connection != null) Connection.OnReconnectFailed += value; }
 			remove { this.onReconnectFailed -= value; if (Connection != null) Connection.OnReconnectFailed -= value; }
+		}
+		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnReconnectPending"/>.</summary>
+		public event Action OnReconnectPending
+		{
+			add { this.onReconnectPending += value; if (Connection != null) Connection.OnReconnectPending += value; }
+			remove { this.onReconnectPending -= value; if (Connection != null) Connection.OnReconnectPending -= value; }
 		}
 		/// <summary>Forwarded to <see cref="ClientConnectionManager.OnConnectionSuccessful"/>.</summary>
 		public event Action OnConnectionSuccessful
@@ -246,8 +270,19 @@ namespace FishMMO.Client
 			Connection = new ClientConnectionManager(NetworkManager);
 			Connection.EnsureConnectionToken = EnsureConnectionTokenRoutine;
 
-			// Initialize the OnReconnectFailed -> OnQuitToLogin forwarding delegate.
-			this.onReconnectFailedQuitToLogin = () => OnQuitToLogin?.Invoke();
+			/* Exhausting the reconnect attempts must run the full quit-to-login teardown, not
+			 * just raise the event that repaints the UI.
+			 *
+			 * Raising OnQuitToLogin alone put the login panels back on screen while the client
+			 * was still in its world state: world scenes loaded, fog manager running, the auth
+			 * token unrevoked, the reconnect manager still holding the dead world address, and
+			 * — most visibly — LoadingSuppressed still latched, so the next login ran its whole
+			 * world entry with no loading screen at all. QuitToLogin raises the same event at
+			 * the end, so subscribers still see exactly one notification.
+			 *
+			 * No recursion: QuitToLogin reaches the connection manager through ForceDisconnect
+			 * and ResetReconnectState, neither of which raises OnReconnectFailed. */
+			this.onReconnectFailedQuitToLogin = () => QuitToLogin();
 
 			// Forward any event subscribers that were queued before Connection was created.
 			if (this.onReconnectAttempt != null)
@@ -256,6 +291,9 @@ namespace FishMMO.Client
 			if (this.onReconnectFailed != null)
 				foreach (var d in this.onReconnectFailed.GetInvocationList())
 					Connection.OnReconnectFailed += (Action)d;
+			if (this.onReconnectPending != null)
+				foreach (var d in this.onReconnectPending.GetInvocationList())
+					Connection.OnReconnectPending += (Action)d;
 			if (this.onConnectionSuccessful != null)
 				foreach (var d in this.onConnectionSuccessful.GetInvocationList())
 					Connection.OnConnectionSuccessful += (Action)d;
@@ -279,6 +317,22 @@ namespace FishMMO.Client
 					this.loginServerPorts = null;
 					this.cachedConnectionToken = null;
 				}
+
+				/* Return to the login screen. This event fires only for a connection that
+				 * stopped without being reconnectable and without being torn down on purpose —
+				 * in practice, losing the login server. Nothing used to act on it, and no login
+				 * panel watches for it either: UICharacterSelect hides itself on any Stopped,
+				 * UILogin only clears its handshake text, and neither shows anything again. A
+				 * client kicked (or timed out, or caught by a login-server restart) while on
+				 * character select was therefore left staring at an empty scene with no panel
+				 * and no button, recoverable only by restarting the client.
+				 *
+				 * QuitToLogin is the established path back and every panel already implements
+				 * OnQuitToLogin correctly, so routing here reuses it rather than teaching each
+				 * panel a second recovery route. Deliberate teardowns (server hops,
+				 * ForceDisconnect from an auth-error dialog) never raise this event, so it
+				 * cannot interrupt a healthy Login -> World transition. */
+				QuitToLogin(forceDisconnect: false);
 			};
 
 			this.combatDisplay = new ClientCombatDisplay();
@@ -466,6 +520,16 @@ namespace FishMMO.Client
 			RestoreLoadingScreen();
 
 			this.fogManager?.Stop();
+
+			/* Abandon any world-scene preload this session started. The flag is what stops a
+			 * second preload from being kicked off, and it is only ever cleared by the batch's
+			 * own completion — so leaving it set here meant a quit-to-login during the preload
+			 * latched it for the rest of the process: every later OnValidatedScene returned
+			 * early, the client never acknowledged, and the scene server disconnected it after
+			 * the handshake timeout. Every login after the first would fail to enter the world. */
+			this.isPreloadingWorldScenes = false;
+			this.worldPreloadBatch = null;
+
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
 			UnloadWorldScenes();
@@ -823,11 +887,13 @@ namespace FishMMO.Client
 
 				this.isPreloadingWorldScenes = true;
 				AddressableLoadBatch batch = AddressableLoadProcessor.BeginProcessQueue();
+				this.worldPreloadBatch = batch;
 				batch.Completed += OnWorldPreloadComplete;
 			}
 			catch (UnityException ex)
 			{
 				this.isPreloadingWorldScenes = false;
+				this.worldPreloadBatch = null;
 				Log.Error("Client", "Preload failed", ex);
 			}
 		}
@@ -838,9 +904,17 @@ namespace FishMMO.Client
 		/// <param name="batch">The completed world preload batch.</param>
 		private void OnWorldPreloadComplete(AddressableLoadBatch batch)
 		{
-			this.isPreloadingWorldScenes = false;
+			// A batch this client is no longer waiting on (quit to login, or a newer scene
+			// transition superseded it) must not acknowledge anything. See worldPreloadBatch.
+			if (batch == null || !ReferenceEquals(batch, this.worldPreloadBatch))
+			{
+				return;
+			}
 
-			if (batch != null && batch.HasFailures)
+			this.isPreloadingWorldScenes = false;
+			this.worldPreloadBatch = null;
+
+			if (batch.HasFailures)
 			{
 				// Do not claim readiness for a scene set that did not load — the server
 				// would spawn the character into a world this client cannot render.
@@ -922,7 +996,33 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The death broadcast message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnDeathBroadcast(DeathBroadcast msg, Channel ch) { try { if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog d)) d.ShowDeathDialog(); } catch (Exception ex) { Log.Error("Client", $"OnDeathBroadcast: {ex}"); } }
+		private void OnDeathBroadcast(DeathBroadcast msg, Channel ch)
+		{
+			try
+			{
+				if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog deathDialog))
+				{
+					deathDialog.ShowDeathDialog();
+					return;
+				}
+
+				/* Loud, not silent. Respawning and accepting a resurrect are reachable only
+				 * through this dialog, so a build where it is missing from the scene leaves a
+				 * dead player with no way back into the world at all — and the previous
+				 * one-line body swallowed that case completely, which is how it survived
+				 * unnoticed. The lookup key is the control's GameObject name, so this also
+				 * catches the dialog being present but named something else. */
+				Log.Error("Client",
+					"Player died but no death dialog is registered under 'UITKDeathDialog'. " +
+					"The respawn and resurrect controls are unreachable, so this character cannot " +
+					"return to the world. Check that the UITKDeathDialog object exists in the world " +
+					"GUI scene, is active, and that its GameObject is named 'UITKDeathDialog'.");
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnDeathBroadcast: {ex}");
+			}
+		}
 
 		// ── Auth ────────────────────────────────────────────────────────
 

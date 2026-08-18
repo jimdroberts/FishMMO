@@ -92,16 +92,33 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			// Register the world server in the database if all required systems are available.
-			if (Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-				Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem))
+			/* Registration is mandatory, not best-effort.
+			 *
+			 * These two lookups used to gate the registration call inside a single combined
+			 * `if`, so a failure of either skipped registration and still returned Initialized.
+			 * A world server in that state comes up healthy and accepts logins with its database
+			 * ID left at 0 — and every routing decision is keyed on that ID. FetchAvailableAsync
+			 * matches no scene rows, so no player is ever assigned an instance; they sit in the
+			 * open-world queue until the 45s TTL sweep kicks them, with nothing in the log
+			 * saying why. Fail startup instead, matching SceneServerSystem, which already
+			 * returns FailedToFindRequiredDependency for the same address lookup. */
+			if (!Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server))
 			{
-				int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;
+				_ = Log.Error("WorldServerSystem", "InitializeOnce: Could not get server IP address");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
 
-				if (!await RegisterAsync(server.Address, server.Port, characterCount, cancellationToken))
-				{
-					return ServerComponentInitializationStatus.FailedToGetDbContext;
-				}
+			if (!Server.BehaviourRegistry.TryGet(out IWorldSceneSystem _))
+			{
+				_ = Log.Error("WorldServerSystem", "InitializeOnce: IWorldSceneSystem not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;
+
+			if (!await RegisterAsync(server.Address, server.Port, characterCount, cancellationToken))
+			{
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			// Periodic callbacks

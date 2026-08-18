@@ -57,14 +57,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Snapshot character data on the main thread
-			var characterDataList = new List<CharacterData>(data.CharactersByID.Count);
+			// Snapshot character data on the main thread, pairing each with the claim this
+			// server holds for it so the write can prove ownership.
+			var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership)>(data.CharactersByID.Count);
 			var buffDataList = new List<CharacterBuffData>(data.CharactersByID.Count * 4);
 			var attributeDataList = new List<CharacterAttributeData>(data.CharactersByID.Count * 16);
 			var abilityDataList = new List<CharacterAbilityData>(data.CharactersByID.Count * 8);
 			foreach (var character in data.CharactersByID.Values)
 			{
-				characterDataList.Add(BuildCharacterData(character));
+				CharacterSessionInfo? ownership = data.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
+					? held
+					: (CharacterSessionInfo?)null;
+				characterDataList.Add((BuildCharacterData(character), ownership));
 				AppendBuffData(character, buffDataList);
 				AppendAttributeData(character, attributeDataList);
 				AppendAbilityData(character, abilityDataList);
@@ -215,7 +219,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <c>true</c> when the row is persisted, or when the write was rejected for a reason
 		/// that retrying cannot change; <c>false</c> for transient failures worth retrying.
 		/// </returns>
-		private async Task<bool> SaveCharacterAsync(CharacterData charData)
+		private async Task<bool> SaveCharacterAsync(CharacterData charData, CharacterSessionInfo? ownership = null)
 		{
 			try
 			{
@@ -225,9 +229,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return false;
 				}
 
-				DatabaseResult result = await characterService.PersistAsync(charData);
+				/* Write through the ownership-gated path whenever this server holds a claim.
+				 *
+				 * The plain PersistAsync is guarded only by the monotonic Version, which does
+				 * not identify the writer. A server whose lease lapsed while it was still
+				 * running therefore kept saving characters another server had legitimately
+				 * claimed — and won, because its version counter had been climbing for the
+				 * whole session while the new owner restarted from the persisted row. The
+				 * claim was advisory on the write path; this makes it binding. */
+				DatabaseResult result = ownership.HasValue
+					? await characterService.PersistOwnedAsync(
+						charData,
+						new CharacterSessionLeaseData(charData.ID, ownership.Value.ServerID, ownership.Value.Token))
+					: await characterService.PersistAsync(charData);
+
 				if (result.IsSuccess)
 				{
+					return true;
+				}
+
+				if (result.ErrorCode == DatabaseErrorCodes.Forbidden)
+				{
+					/* The claim is gone: another server owns this character now and has been
+					 * authoritative since it loaded. Everything accumulated here since the last
+					 * successful save is unpersistable — writing it would overwrite the live
+					 * session's progress, which is a worse loss than dropping ours. Say exactly
+					 * what was dropped, then evict so we stop simulating a character we cannot
+					 * save. Retrying is pointless: the claim never comes back. */
+					await Log.Error("CharacterSystem",
+						$"Character {charData.ID} ('{charData.Name}') is no longer claimed by this server; " +
+						$"discarding the unsaved snapshot at version {charData.Version} and evicting it. " +
+						"This means the session lease lapsed while the character was still resident — " +
+						"check for database outages or async-worker saturation lasting over the lease duration.");
+					RequestEviction(charData.ID, "session claim lost");
 					return true;
 				}
 
@@ -253,8 +287,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private async Task SaveAndReleaseCharacterAsync(CharacterData charData, CharacterSessionInfo? sessionInfo)
 		{
-			// Save first — we must persist while still holding the session lock
-			bool saved = await SaveCharacterAsync(charData);
+			// Save first — we must persist while still holding the session lock, and prove that
+			// ownership in the same statement so a lapsed lease cannot overwrite the new owner.
+			bool saved = await SaveCharacterAsync(charData, sessionInfo);
 
 			// Release regardless of whether the save landed. Holding the claim back because a
 			// write failed would strand the character far more visibly than losing one save:
@@ -282,29 +317,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// timer by <see cref="OnPeriodicSessionLeaseRefresh"/> so that liveness of a claim
 		/// never depends on how long this sequential save walk takes.
 		/// </remarks>
-		private async Task SaveAllCharactersAsync(List<CharacterData> characterDataList)
+		private async Task SaveAllCharactersAsync(List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterDataList)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out _))
 				{
 					return;
 				}
 
-				foreach (CharacterData charData in characterDataList)
+				foreach (var entry in characterDataList)
 				{
 					try
 					{
-						DatabaseResult result = await characterService.PersistAsync(charData);
-						if (!result.IsSuccess)
-						{
-							await Log.Warning("CharacterSystem", $"SaveAllCharactersAsync DB error for character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
-						}
+						/* Routed through SaveCharacterAsync rather than calling the service
+						 * directly, so the periodic save gets the same ownership gate and the
+						 * same lost-claim eviction as every other write path. This loop was the
+						 * main corruption vector: a server whose lease had lapsed kept rewriting
+						 * characters another server owned, every save interval, indefinitely. */
+						await SaveCharacterAsync(entry.Data, entry.Ownership);
 					}
 					catch (Exception ex)
 					{
-						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {charData.ID}: {ex}");
+						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {entry.Data.ID}: {ex}");
 					}
 				}
 			}
@@ -510,9 +546,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (pending.CharacterData.HasValue)
 				{
-					// A stale snapshot is rejected by the version guard rather than
-					// overwriting newer state, so replaying it is safe.
-					if (await SaveCharacterAsync(pending.CharacterData.Value))
+					/* Gated on the claim when we still hold one. When we do not (the release
+					 * already landed and only the save is outstanding) the version guard is the
+					 * only protection available, and dropping the write entirely would lose the
+					 * state outright — so the ungated path stays for that case, as before. */
+					if (await SaveCharacterAsync(pending.CharacterData.Value, pending.Session))
 					{
 						pending.CharacterData = null;
 					}
@@ -552,6 +590,132 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					pending.NextAttemptUtc = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Min(3 * pending.Attempts, 30));
 				}
 				Interlocked.Exchange(ref pending.InFlight, 0);
+			}
+		}
+
+		#endregion
+
+		#region Lost-Claim Eviction
+
+		/// <summary>
+		/// Character IDs already scheduled for eviction, so a claim lost during a batch does
+		/// not queue one eviction per failing save.
+		/// </summary>
+		private readonly ConcurrentDictionary<long, byte> evictionRequested = new ConcurrentDictionary<long, byte>();
+
+		/// <summary>
+		/// Schedules <paramref name="characterID"/> to be removed from this server because its
+		/// session claim is no longer held here.
+		/// </summary>
+		/// <remarks>
+		/// Safe to call from an async worker; the removal itself is marshalled to the main
+		/// thread, which is the only place FishNet and the mapping dictionaries may be touched.
+		/// </remarks>
+		private void RequestEviction(long characterID, string reason)
+		{
+			if (characterID <= 0 || !evictionRequested.TryAdd(characterID, 0))
+			{
+				return;
+			}
+
+			if (!TryEnqueueMainThread(() => EvictLostCharacter(characterID, reason)))
+			{
+				// Nothing will run the eviction, so allow a later save failure to try again.
+				evictionRequested.TryRemove(characterID, out _);
+				Log.Error("CharacterSystem",
+					$"Could not schedule eviction of character {characterID} ({reason}); it will keep failing to save until the next attempt succeeds.");
+			}
+		}
+
+		/// <summary>
+		/// Removes a character this server no longer owns, without saving or releasing it.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately does not save: another server has held the claim since it loaded, and
+		/// the state here has been diverging ever since. Writing it would overwrite the live
+		/// session's progress — the opposite of preserving information. It also does not
+		/// release: the row's owner token is somebody else's, so a release would either match
+		/// nothing or, worse, would be wrong to perform.
+		/// <para>
+		/// The connection is disconnected rather than left in place. The client's reconnect
+		/// loop takes it back through the world server, which routes it to whichever scene
+		/// server actually owns the character, and it reloads the authoritative row — the same
+		/// recovery path a dropped scene server already produces.
+		/// </para>
+		/// </remarks>
+		private void EvictLostCharacter(long characterID, string reason)
+		{
+			evictionRequested.TryRemove(characterID, out _);
+
+			// The snapshot queued for retry belongs to a session we no longer own.
+			pendingFlushes.TryRemove(characterID, out _);
+
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			{
+				return;
+			}
+
+			// Drop the claim bookkeeping without releasing — see the remarks above.
+			data.SessionTokens.Remove(characterID);
+
+			/* A lingering body has no connection and is not in CharactersByID, so it is removed
+			 * through its own path: balance the scene count the linger took and despawn. That
+			 * path is terminal for this character, so return once it runs. */
+			if (lingeringCharacters.ContainsKey(characterID))
+			{
+				Log.Error("CharacterSystem",
+					$"Evicting combat-logout body for character {characterID}: {reason}. " +
+					"Its unsaved damage is discarded; the owning server's state stands.");
+				DropLingeringCharacter(characterID);
+				return;
+			}
+
+			if (!data.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character))
+			{
+				// Not resident (already gone, or still in the waiting-scene-load stage keyed by
+				// connection). The waiting case is handled by its own handshake timeout.
+				Log.Warning("CharacterSystem", $"Evicting character {characterID} ({reason}): not resident; claim bookkeeping dropped.");
+				return;
+			}
+
+			Log.Error("CharacterSystem",
+				$"Evicting {character.CharacterName} ({characterID}) from this scene server: {reason}. " +
+				"Its client will reconnect and reload the state held by the server that owns it now.");
+
+			NetworkConnection owner = character.Owner;
+
+			data.CharactersByID.Remove(characterID);
+			data.CharactersByLowerCaseName.Remove(character.CharacterNameLower);
+			if (data.CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> worldChars))
+			{
+				worldChars.Remove(characterID);
+			}
+			if (owner != null)
+			{
+				data.ConnectionCharacters.Remove(owner);
+			}
+
+			// Keeps scene population and every social system in step, exactly as a normal
+			// disconnect would.
+			OnDisconnect?.Invoke(owner, character);
+
+			if (character.NetworkObject != null)
+			{
+				OnDespawnCharacter?.Invoke(owner, character);
+
+				if (character.NetworkObject.IsSpawned)
+				{
+					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+				}
+				else
+				{
+					Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
+				}
+			}
+
+			if (owner != null && owner.IsActive)
+			{
+				owner.Disconnect(false);
 			}
 		}
 
@@ -616,13 +780,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (result.Data < leases.Count)
 				{
-					// Every entry we send is a session this server believes it owns, so a short
-					// count means at least one claim is gone — released underneath us, or taken
-					// over after a lease lapse. Worth surfacing: it is the signature of the
-					// split-brain window the lease exists to bound.
+					/* Every entry we send is a session this server believes it owns, so a short
+					 * count means at least one claim is gone — released underneath us, or taken
+					 * over by another server after our lease lapsed.
+					 *
+					 * The count alone does not say which, and until it did, nothing could act on
+					 * it: this server kept simulating and saving characters it no longer owned,
+					 * overwriting the live owner's state on every periodic save. Resolve the
+					 * specific characters and evict them. The ownership-gated save in
+					 * SaveCharacterAsync is the hard guarantee; this is what makes the recovery
+					 * prompt (one refresh interval) instead of waiting for a save to be refused. */
 					await Log.Warning("CharacterSystem",
 						$"Session lease refresh updated {result.Data} of {leases.Count} held sessions; " +
-						"the remainder are no longer owned by this server.");
+						"identifying the claims this server has lost.");
+
+					DatabaseResult<IReadOnlyList<long>> lostResult = await characterService.FetchUnownedSessionsAsync(leases);
+					if (!lostResult.IsSuccess || lostResult.Data == null)
+					{
+						await Log.Error("CharacterSystem",
+							$"Could not identify lost session claims: {lostResult.ErrorCode} - {lostResult.ErrorMessage}. " +
+							"Affected characters will be evicted when their next save is refused.");
+						return;
+					}
+
+					foreach (long characterID in lostResult.Data)
+					{
+						RequestEviction(characterID, "session lease lapsed and the claim was taken by another server");
+					}
 				}
 			}
 			catch (Exception ex)

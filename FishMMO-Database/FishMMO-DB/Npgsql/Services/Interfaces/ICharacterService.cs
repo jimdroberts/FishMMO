@@ -175,6 +175,55 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<int>> RefreshSessionLeasesAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Persists a character row, requiring that the caller still holds its session claim.
+		/// </summary>
+		/// <remarks>
+		/// The claim taken by <see cref="TryClaimAsync"/> gates who may <em>load</em> a
+		/// character. Without this method nothing gated who may <em>write</em> one: the plain
+		/// <c>PersistAsync</c> is guarded only by the monotonic <c>Version</c>, so a server
+		/// whose lease lapsed while it was still running kept saving a character another server
+		/// had legitimately claimed — and reliably won, because its version counter had been
+		/// climbing for the whole session while the new owner started again from the persisted
+		/// row. The claim was advisory on the write path, which is what made a lease lapse
+		/// corrupting rather than merely untidy.
+		/// <para>
+		/// Ownership is verified in the same statement as the write, so there is no window
+		/// between checking and writing. A caller that no longer owns the row gets
+		/// <see cref="DatabaseErrorCodes.Forbidden"/> and must stop simulating the character
+		/// rather than retrying — the current owner's state is authoritative, and replaying a
+		/// stale snapshot over it would destroy exactly the progress this refuses to overwrite.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterData">Snapshot to persist. Its <c>Version</c> must exceed the stored version.</param>
+		/// <param name="ownership">The claim this server holds, as returned by <see cref="TryClaimAsync"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// Success when written; <see cref="DatabaseErrorCodes.Forbidden"/> when the claim is no
+		/// longer held; <see cref="DatabaseErrorCodes.StaleState"/> when a newer version is
+		/// already stored; <see cref="DatabaseErrorCodes.NotFound"/> when the row is gone.
+		/// </returns>
+		Task<DatabaseResult> PersistOwnedAsync(CharacterData characterData, CharacterSessionLeaseData ownership, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Returns the subset of <paramref name="leases"/> whose sessions the database no longer
+		/// attributes to the supplied owner — that is, the claims the caller has lost.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="RefreshSessionLeasesAsync"/> reports only how many rows it refreshed, so a
+		/// short count says a claim was lost without saying which. This resolves that, and is
+		/// meant to be called only on the short-count path: it is a diagnostic read, not part of
+		/// the refresh hot path.
+		/// <para>
+		/// A character reported here is being simulated by a server that can no longer persist
+		/// it. The caller must evict it locally; see <see cref="PersistOwnedAsync"/>.
+		/// </para>
+		/// </remarks>
+		/// <param name="leases">Ownership triples the caller believes it holds.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Character IDs no longer owned by the supplied server/token, including rows that have been deleted.</returns>
+		Task<DatabaseResult<IReadOnlyList<long>>> FetchUnownedSessionsAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Updates the position and rotation of a character atomically.
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>

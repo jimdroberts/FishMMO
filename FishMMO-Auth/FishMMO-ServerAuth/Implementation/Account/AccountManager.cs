@@ -121,7 +121,30 @@ namespace FishMMO.Auth.Implementation
 				if (connectionAccounts.TryGetValue(connection, out string accountName))
 				{
 					connectionAccounts.Remove(connection);
-					accountConnections.Remove(accountName);
+
+					/* Only drop the reverse mapping if it still points at THIS connection.
+					 *
+					 * An account can legitimately be registered against a newer connection
+					 * while the old one is still being torn down: AddConnectionAccount
+					 * overwrites accountConnections[account] on a reconnect (and logs
+					 * "Replacing existing connection for account"), but leaves the old
+					 * connection's forward entry in place because only its own disconnect
+					 * removes it. A reconnect that lands before the previous QUIC connection
+					 * has timed out therefore ended with the OLD connection's cleanup deleting
+					 * the LIVE connection's account mapping.
+					 *
+					 * The account then has no resolvable connection at all, which silently
+					 * disables everything that looks a player up by name — most importantly
+					 * KickRequestSystem, whose whole purpose is to disconnect an existing
+					 * session so a new login can take it over. The kick found nothing and did
+					 * nothing, so "account is already online" became unrecoverable for that
+					 * session.
+					 */
+					if (accountConnections.TryGetValue(accountName, out TConnection mapped) &&
+						EqualityComparer<TConnection>.Default.Equals(mapped, connection))
+					{
+						accountConnections.Remove(accountName);
+					}
 				}
 			}
 		}

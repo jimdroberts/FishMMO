@@ -276,6 +276,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Removes a lingering body's bookkeeping without saving or releasing it.
+		/// </summary>
+		/// <remarks>
+		/// Used only when this server has lost the character's session claim. The normal exit is
+		/// <see cref="FinalizeCombatLinger"/>, which saves and hands the claim back; neither is
+		/// valid once the claim belongs to someone else, so this just balances the scene count
+		/// and drops the entry. The caller despawns the body.
+		/// </remarks>
+		private void DropLingeringCharacter(long characterID)
+		{
+			if (!lingeringCharacters.TryGetValue(characterID, out LingeringCharacter entry))
+			{
+				return;
+			}
+
+			lingeringCharacters.Remove(characterID);
+			if (entry.Account != null &&
+				lingeringCharactersByAccount.TryGetValue(entry.Account, out long mapped) &&
+				mapped == characterID)
+			{
+				lingeringCharactersByAccount.Remove(entry.Account);
+			}
+			pendingLingerReasons.Remove(characterID);
+
+			// Balance the increment taken when the linger began.
+			AdjustLingeringSceneCount(entry.Character, -1);
+
+			DespawnLingeringBody(entry.Character);
+		}
+
+		/// <summary>
 		/// Ends every active linger. Used on shutdown so no body is left owning a claim.
 		/// </summary>
 		private void FinalizeAllCombatLingers(string reason)
@@ -461,7 +492,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Ordering matters: the load below re-reads this row, so anything not written yet is
 			// silently rolled back — most visibly the health the character lost while it was
 			// standing there unattended.
-			if (!await SaveCharacterAsync(charData))
+			//
+			// Ownership-gated: this write carries the claim the lingering body was holding, so
+			// if that claim lapsed while the body stood there the reclaimed state is refused
+			// rather than overwriting whichever server took the character.
+			if (!await SaveCharacterAsync(charData, new CharacterSessionInfo(heldToken, serverID)))
 			{
 				await Log.Error("CharacterSystem",
 					$"Failed to persist reclaimed body for character {charData.ID}; the reload may restore pre-logout state.");
@@ -489,6 +524,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void PersistCharacterSnapshot(IPlayerCharacter character)
 		{
+			// The linger keeps its claim in SessionTokens on purpose, so this write can prove
+			// ownership like every other save the server makes while it holds one.
+			CharacterSessionInfo? ownership = null;
+			if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData) &&
+				mappingData.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held))
+			{
+				ownership = held;
+			}
+
 			CharacterData charData = BuildCharacterData(character);
 			var buffDataList = new List<CharacterBuffData>(8);
 			var attributeDataList = new List<CharacterAttributeData>(16);
@@ -497,7 +541,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendAttributeData(character, attributeDataList);
 			AppendAbilityData(character, abilityDataList);
 
-			if (!EnqueueAsyncWork(() => SaveCharacterAsync(charData)))
+			if (!EnqueueAsyncWork(() => SaveCharacterAsync(charData, ownership)))
 			{
 				QueuePendingFlush(charData.ID, charData, null);
 			}

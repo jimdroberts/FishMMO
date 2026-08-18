@@ -978,20 +978,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnClientValidatedSceneBroadcastReceived(NetworkConnection conn, ClientValidatedSceneBroadcast msg, Channel channel)
 		{
-			// Rate-limit validated-scene broadcasts to prevent spam.
-			DateTime now2 = DateTime.UtcNow;
-			if (validatedSceneLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastValidated) &&
-				(now2 - lastValidated).TotalSeconds < ValidatedSceneBroadcastCooldownSeconds)
-				return;
-			validatedSceneLastTimeByClientId[conn.ClientId] = now2;
-
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
 				return;
 			}
 
+			/* Rate-limit only the acknowledgement that actually does work.
+			 *
+			 * Stamping the limiter before checking WaitingSceneLoadCharacters meant any earlier
+			 * broadcast on this connection — a duplicate from a client that acknowledged twice,
+			 * or a stale acknowledgement left over from a previous session on a recycled
+			 * ClientId — silently swallowed the real one that arrived within the cooldown. The
+			 * connection then sat in WaitingSceneLoadCharacters holding its character claim
+			 * until the 90s handshake timeout disconnected it, which the player experiences as
+			 * a loading screen that never ends. A connection with nothing waiting reaches only
+			 * a dictionary lookup here, so leaving it unlimited costs nothing.
+			 *
+			 * Same ordering rule as OnClientScenesUnloadedBroadcastReceived below. */
 			if (mappingData.WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
+				DateTime now2 = DateTime.UtcNow;
+				if (validatedSceneLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastValidated) &&
+					(now2 - lastValidated).TotalSeconds < ValidatedSceneBroadcastCooldownSeconds)
+				{
+					return;
+				}
+				validatedSceneLastTimeByClientId[conn.ClientId] = now2;
+
 				if (character == null)
 				{
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
