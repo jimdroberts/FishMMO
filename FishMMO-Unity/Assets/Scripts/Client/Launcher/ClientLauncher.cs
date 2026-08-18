@@ -242,6 +242,23 @@ namespace FishMMO.Client
 		/// </summary>
 		public HttpPatchServerService PatchServerService => patchServerService;
 		/// <summary>
+		/// Optional view component that renders this launcher. Must implement
+		/// <see cref="ILauncherView"/>.
+		/// </summary>
+		/// <remarks>
+		/// Typed as <see cref="MonoBehaviour"/> because Unity cannot serialize an interface
+		/// reference. Leave unassigned to render through the legacy uGUI elements above; assign
+		/// a UI Toolkit view component to render through that instead. The fallback is what
+		/// keeps every existing scene working untouched.
+		/// </remarks>
+		[Tooltip("Optional. A component implementing ILauncherView. Leave empty to use the uGUI elements above.")]
+		[SerializeField]
+		private MonoBehaviour launcherViewComponent;
+		/// <summary>
+		/// The active view. Never null after <see cref="Awake"/>.
+		/// </summary>
+		private ILauncherView view;
+		/// <summary>
 		/// The updater launcher used to start the external updater process.
 		/// </summary>
 		private IUpdaterLauncher updaterLauncher;
@@ -282,6 +299,42 @@ namespace FishMMO.Client
 		/// supply one; in that case the download is not integrity-checked.
 		/// </summary>
 		private string expectedPatchSha256;
+		/// <summary>
+		/// Size in bytes of the patch for the current client version, as reported by the patch
+		/// server, or 0 when it did not supply one.
+		/// </summary>
+		/// <remarks>
+		/// Captured from the version check so the download can show a total from its first
+		/// frame instead of waiting on response headers.
+		/// </remarks>
+		private long expectedPatchSize;
+		/// <summary>
+		/// Guards the install-size measurement so it runs at most once per launcher session.
+		/// </summary>
+		private bool installSizeRequested;
+		/// <summary>
+		/// Window dimensions observed on the previous frame, used to detect a resize.
+		/// </summary>
+		private int lastKnownWidth;
+		private int lastKnownHeight;
+		/// <summary>
+		/// False until the first observed window size has been discarded as the one the
+		/// launcher itself requested rather than one the player chose.
+		/// </summary>
+		private bool windowSizeInitialised;
+		/// <summary>
+		/// True when a resize has been observed but not yet written to settings.
+		/// </summary>
+		private bool windowSizeDirty;
+		/// <summary>
+		/// <see cref="Time.realtimeSinceStartup"/> of the most recent resize.
+		/// </summary>
+		private float lastResizeTime;
+		/// <summary>
+		/// Seconds a window size must hold steady before it is persisted, so one drag-resize
+		/// costs one write rather than one per frame.
+		/// </summary>
+		private const float WindowSizeSaveDelay = 0.75f;
 		/// <summary>
 		/// Base URL of the APIHost candidate that responded successfully during the
 		/// most recent version check. Used so that the subsequent patch download
@@ -365,6 +418,14 @@ namespace FishMMO.Client
 		/// </summary>
 		private void Awake()
 		{
+			// Before anything reads a setting. The launcher is the first thing to run, so
+			// nothing else has loaded the configuration file by this point.
+			LauncherSettings.EnsureLoaded();
+
+			// Resolved first so that even the fatal-dependency path below has somewhere to
+			// report to. A player who hits that path has no access to the log file.
+			this.view = ResolveView();
+
 			// SystemUpdaterLauncher is a plain C# class, directly instantiate it
 			this.updaterLauncher = new SystemUpdaterLauncher();
 
@@ -376,38 +437,18 @@ namespace FishMMO.Client
 				this.htmlContentFetcher.WebRequestService == null || this.patchServerService.WebRequestService == null)
 			{
 				Log.Error("ClientLauncher", "One or more required service dependencies are not assigned in the Inspector or are missing!");
-				if (this.PlayButtonText != null)
-				{
-					this.PlayButtonText.text = "Fatal Error";
-				}
-				if (this.PlayButton != null)
-				{
-					this.PlayButton.interactable = false;
-				}
-				// Surface the reason rather than only logging it — a player hitting this
-				// has no access to the log file.
-				if (this.ProgressSlider != null)
-				{
-					this.ProgressSlider.gameObject.SetActive(false);
-				}
-				ShowStatusPanel("The launcher is missing required components and cannot start. Please reinstall the client.");
+				this.view.SetButtonText("Fatal Error");
+				this.view.SetButtonInteractable(false);
+				this.view.SetProgressVisible(false);
+				this.view.ShowStatus("The launcher is missing required components and cannot start. Please reinstall the client.");
 				enabled = false; // Disable this script if dependencies aren't met
 				return;
-			}
-
-			if (this.HtmlTextLinkHandler != null)
-			{
-				this.HtmlTextLinkHandler.OnLinkClicked += HandleHtmlLinkClicked;
 			}
 
 			// Wire Quit in code. The scene's persistent UnityEvent listener had a null
 			// target, so the button silently did nothing; a code-side listener cannot be
 			// broken by a scene re-save.
-			if (this.QuitButton != null)
-			{
-				this.QuitButton.onClick.RemoveAllListeners();
-				this.QuitButton.onClick.AddListener(Quit);
-			}
+			this.view.SetQuitAction(Quit);
 
 			// Catch-all so no async failure can leave the player on a dead button.
 			StartCoroutine(TransientStateWatchdog());
@@ -430,27 +471,19 @@ namespace FishMMO.Client
 			if (string.IsNullOrWhiteSpace(this.HtmlViewURL))
 			{
 				Log.Debug("ClientLauncher", "No launcher news URL configured; skipping the news fetch.");
-				if (this.HTMLView != null)
-				{
-					this.HTMLView.SetActive(false);
-				}
+				this.view.SetNewsVisible(false);
 			}
 			else
 			{
-				if (this.HtmlText != null)
-				{
-					this.HtmlText.text = UIText.StatusLoadingNews;
-				}
+				this.view.SetNewsVisible(true);
+				this.view.SetNewsMessage(UIText.StatusLoadingNews);
 
-				StartCoroutine(this.htmlContentFetcher.FetchAndProcessHtml(
+				StartCoroutine(this.htmlContentFetcher.FetchAndExtract(
 					this.HtmlViewURL,
 					this.DivClass,
-					onHtmlReady: (htmlContent) =>
+					onContentReady: (content) =>
 					{
-						if (this.HtmlText != null)
-						{
-							this.HtmlText.text = htmlContent;
-						}
+						this.view.SetNewsContent(content);
 					},
 					onError: (error) =>
 					{
@@ -458,10 +491,7 @@ namespace FishMMO.Client
 						// thinking the game servers are down. If the network really is down, the
 						// version check reports that accurately on its own.
 						Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
-						if (this.HtmlText != null)
-						{
-							this.HtmlText.text = UIText.ErrorNoNewsContent;
-						}
+						this.view.SetNewsMessage(UIText.ErrorNoNewsContent);
 					}));
 			}
 
@@ -469,15 +499,13 @@ namespace FishMMO.Client
 			this.updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
 #if !UNITY_EDITOR
-			// Set screen resolution for non-editor builds
-			try { Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio); }
-			catch { Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, new RefreshRate() { numerator = 60, denominator = 1 }); }
+			ApplyWindowSize();
 #endif
 			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
 				? MainBootstrapSystem.GameVersion
 				: "0.0.0-unknown";
-			this.Title.text = $"{Constants.Configuration.ProjectName} v{versionString}";
-			this.ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
+			this.view.SetTitle($"{Constants.Configuration.ProjectName} v{versionString}");
+			this.view.SetProgressVisible(false); // Ensure progress bar is hidden initially.
 
 			/* Last, so the version check never observes a half-initialised launcher.
 			 *
@@ -489,6 +517,132 @@ namespace FishMMO.Client
 			 * decoupling it from the news fetch was to stop waiting on a network round trip, not
 			 * to run before Awake has finished. */
 			BeginStartupFlow();
+		}
+
+		/// <summary>
+		/// Smallest window the launcher layout stays usable at. Mirrors the min-width and
+		/// min-height in UILauncher.uss — below this the footer buttons start to be squeezed.
+		/// </summary>
+		private const int MinWindowWidth = 480;
+		private const int MinWindowHeight = 360;
+
+		/// <summary>
+		/// Opens the launcher at the size the player last used, or the configured default the
+		/// first time.
+		/// </summary>
+		/// <remarks>
+		/// The window is resizable, so pinning it to a fixed size on every launch would undo
+		/// the player's choice each time. The stored size is clamped against the current
+		/// display by <see cref="LauncherSettings.GetWindowSize"/>, which matters when a window
+		/// saved on a larger monitor is restored on a smaller one.
+		/// </remarks>
+		private void ApplyWindowSize()
+		{
+			Vector2Int stored = LauncherSettings.GetWindowSize(MinWindowWidth, MinWindowHeight);
+			int width = stored.x > 0 ? stored.x : this.DefaultScreenWidth;
+			int height = stored.y > 0 ? stored.y : this.DefaultScreenHeight;
+
+			try
+			{
+				Screen.SetResolution(width, height, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio);
+			}
+			catch
+			{
+				// Some display configurations report a refresh rate SetResolution rejects.
+				Screen.SetResolution(width, height, FullScreenMode.Windowed, new RefreshRate() { numerator = 60, denominator = 1 });
+			}
+		}
+
+		/// <summary>
+		/// Records the window size when the player changes it, so the next launch reopens at
+		/// the same dimensions.
+		/// </summary>
+		/// <remarks>
+		/// Written shortly after the resize settles rather than on quit: the updater terminates
+		/// this process to apply a patch, so a launcher that is killed rather than closed would
+		/// never persist anything saved at shutdown.
+		/// <para>
+		/// Debounced because a drag-resize changes the window size every frame, and writing the
+		/// configuration file per frame would mean hundreds of disk writes for one gesture.
+		/// </para>
+		/// </remarks>
+		private void Update()
+		{
+			if (Screen.width != this.lastKnownWidth || Screen.height != this.lastKnownHeight)
+			{
+				this.lastKnownWidth = Screen.width;
+				this.lastKnownHeight = Screen.height;
+
+				// The first observed size is the one this launcher just asked for, not one the
+				// player chose. Recording it would overwrite a stored size with the default.
+				if (!this.windowSizeInitialised)
+				{
+					this.windowSizeInitialised = true;
+					return;
+				}
+
+				this.windowSizeDirty = true;
+				this.lastResizeTime = Time.realtimeSinceStartup;
+				return;
+			}
+
+			if (!this.windowSizeDirty)
+			{
+				return;
+			}
+			if (Time.realtimeSinceStartup - this.lastResizeTime < WindowSizeSaveDelay)
+			{
+				return;
+			}
+
+			this.windowSizeDirty = false;
+
+			// Only windowed dimensions are worth remembering; a maximised or full-screen size
+			// is the display's, not a size the player picked for this window.
+			if (Screen.fullScreenMode != FullScreenMode.Windowed)
+			{
+				return;
+			}
+
+			LauncherSettings.SetWindowSize(this.lastKnownWidth, this.lastKnownHeight);
+			LauncherSettings.Save();
+		}
+
+		/// <summary>
+		/// Returns the view this launcher should render through: the assigned view component
+		/// when one implements <see cref="ILauncherView"/>, otherwise an adapter over the
+		/// legacy uGUI elements serialized on this component.
+		/// </summary>
+		private ILauncherView ResolveView()
+		{
+			if (this.launcherViewComponent is ILauncherView assigned)
+			{
+				return assigned;
+			}
+
+			if (this.launcherViewComponent != null)
+			{
+				Log.Error("ClientLauncher", $"Assigned launcher view '{this.launcherViewComponent.GetType().Name}' does not implement ILauncherView. Falling back to the uGUI view.");
+			}
+
+			// The size factor lives on the fetcher so the scene keeps its configured value.
+			// Guarded because this runs before the dependency check, on the path where the
+			// fetcher may be exactly what is missing.
+			float pxToTmpSizeFactor = this.htmlContentFetcher != null ? this.htmlContentFetcher.HtmlPxToTmpSizeFactor : 1.5f;
+
+			return new UGUILauncherView(
+				this.title,
+				this.htmlView,
+				this.progressBarGroup,
+				this.progressSlider,
+				this.progressText,
+				this.quitButton,
+				this.playButton,
+				this.playButtonText,
+				this.htmlText,
+				this.htmlTextLinkHandler,
+				this.statusText,
+				pxToTmpSizeFactor);
 		}
 
 		/// <summary>
@@ -509,41 +663,23 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
-			if (this.HtmlTextLinkHandler != null)
-			{
-				this.HtmlTextLinkHandler.OnLinkClicked -= HandleHtmlLinkClicked;
-			}
-			if (this.QuitButton != null)
-			{
-				this.QuitButton.onClick.RemoveListener(Quit);
-			}
+			// Null when Awake bailed before resolving a view.
+			this.view?.Teardown();
 		}
 		#endregion
 
 		#region UI STATE MANAGEMENT
 		/// <summary>
-		/// True when status messages have to borrow <see cref="ProgressText"/> because no
-		/// dedicated <see cref="StatusText"/> element is assigned. In that case the
-		/// containing progress group must be made visible for the message to be seen.
-		/// </summary>
-		private bool UsesProgressTextForStatus => this.StatusText == null && this.ProgressText != null;
-
-		/// <summary>
-		/// Writes a human-readable status or error message to the player-facing UI.
-		/// Prefers <see cref="StatusText"/> when assigned; falls back to
-		/// <see cref="ProgressText"/> so messages are visible even without a
-		/// dedicated status element. Also logs the message.
+		/// Logs a human-readable status or error message and hands it to the view to display.
 		/// </summary>
 		/// <remarks>
-		/// When falling back to <see cref="ProgressText"/>, this also forces
-		/// <see cref="ProgressBarGroup"/> active. That element is the progress text's
-		/// parent, and the state machine hides the group for every non-download state — so
-		/// without this every error detail was written to an inactive object and the player
-		/// saw nothing but a two-word button label.
+		/// Always logs so operators can correlate what the player saw with the log file. How
+		/// the message is made visible is the view's problem — that used to be decided here,
+		/// which meant one view's quirk (no dedicated status element, so the progress label
+		/// gets borrowed and its parent group forced active) was baked into shared logic.
 		/// </remarks>
 		private void SetStatus(string message, LogLevel level = LogLevel.Info)
 		{
-			// Always log so operators can correlate.
 			switch (level)
 			{
 				case LogLevel.Warning:
@@ -558,49 +694,7 @@ namespace FishMMO.Client
 					break;
 			}
 
-			ShowStatusPanel(message);
-		}
-
-		/// <summary>
-		/// Displays <paramref name="message"/> on the player-facing status element and
-		/// ensures whatever container it lives in is visible. Does not log — callers that
-		/// want logging use <see cref="SetStatus"/>.
-		/// </summary>
-		private void ShowStatusPanel(string message)
-		{
-			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
-			if (target == null)
-			{
-				return;
-			}
-
-			target.text = message;
-
-			if (this.StatusText != null)
-			{
-				this.StatusText.gameObject.SetActive(true);
-				return;
-			}
-
-			// Borrowing the progress text: reveal its group, but keep the slider hidden so
-			// a message is not mistaken for a stalled progress bar. The slider is
-			// re-enabled by SetLauncherState for genuine progress states.
-			if (this.ProgressBarGroup != null)
-			{
-				this.ProgressBarGroup.SetActive(true);
-			}
-		}
-
-		/// <summary>
-		/// Clears the status text so stale error messages don't linger.
-		/// </summary>
-		private void ClearStatus()
-		{
-			TMP_Text target = this.StatusText != null ? this.StatusText : this.ProgressText;
-			if (target != null)
-			{
-				target.text = string.Empty;
-			}
+			this.view.ShowStatus(message);
 		}
 
 		/// <summary>
@@ -636,7 +730,6 @@ namespace FishMMO.Client
 		{
 			this.currentLauncherState = newState;
 			this.lastStateActivityTime = Time.realtimeSinceStartup;
-			this.PlayButton.onClick.RemoveAllListeners(); // Always clear to ensure only one listener.
 
 			bool isButtonInteractable = false;
 			string buttonText = "";
@@ -654,6 +747,11 @@ namespace FishMMO.Client
 					break;
 				case LauncherState.CheckingVersion:
 					buttonText = UIText.StatusCheckingVersion;
+					break;
+				case LauncherState.UpdateAvailable:
+					buttonText = UIText.ButtonUpdate;
+					isButtonInteractable = true;
+					buttonAction = PlayButtonUpdate;
 					break;
 				case LauncherState.DownloadingPatch:
 					buttonText = UIText.StatusDownloadingPatch;
@@ -738,28 +836,16 @@ namespace FishMMO.Client
 					break;
 			}
 
-			this.PlayButtonText.text = buttonText;
-			this.PlayButton.interactable = isButtonInteractable;
+			this.view.SetButtonText(buttonText);
+			this.view.SetButtonInteractable(isButtonInteractable);
+			// Replaces whatever the previous state attached, so the button never carries more
+			// than the action belonging to the state currently displayed.
+			this.view.SetButtonAction(buttonAction);
 
 			// Fall back to a standard explanation so no state can present a bare label.
 			string detail = !string.IsNullOrEmpty(errorDetail) ? errorDetail : GetDefaultDetail(newState);
 
-			// The progress group has to stay visible whenever it is carrying a status
-			// message, not only during a download — otherwise the message is written to an
-			// inactive object. The slider inside it is shown only for real progress.
-			bool groupVisible = progressBarVisible || (UsesProgressTextForStatus && !string.IsNullOrEmpty(detail));
-			if (this.ProgressBarGroup != null)
-			{
-				this.ProgressBarGroup.SetActive(groupVisible);
-			}
-			if (this.ProgressSlider != null)
-			{
-				this.ProgressSlider.gameObject.SetActive(progressBarVisible);
-				if (!progressBarVisible)
-				{
-					this.ProgressSlider.value = 0f;
-				}
-			}
+			this.view.SetProgressVisible(progressBarVisible);
 
 			// Display error/status detail to the player when available.
 			if (!string.IsNullOrEmpty(detail))
@@ -768,13 +854,37 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				ClearStatus();
+				this.view.ClearStatus();
 			}
 
-			if (buttonAction != null)
+			MeasureInstallSizeWhenIdle(newState);
+		}
+
+		/// <summary>
+		/// Kicks off the install-size measurement once the launcher has settled.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not started in Awake. Walking a full client install is tens of
+		/// thousands of stat calls, and doing it while the version check or a patch download is
+		/// in flight puts it in direct contention with them for disk — slowing the thing the
+		/// player is actually waiting on to populate a readout they are not yet looking at.
+		/// Idle states only, and only once per run.
+		/// </remarks>
+		private void MeasureInstallSizeWhenIdle(LauncherState state)
+		{
+			if (this.installSizeRequested)
 			{
-				this.PlayButton.onClick.AddListener(() => buttonAction.Invoke());
+				return;
 			}
+			if (state != LauncherState.ReadyToPlay && state != LauncherState.UpdateAvailable)
+			{
+				return;
+			}
+
+			this.installSizeRequested = true;
+			StartCoroutine(InstallSizeProbe.Measure(
+				Constants.GetWorkingDirectory(),
+				sizeBytes => this.view.SetInstallSize(sizeBytes)));
 		}
 
 		/// <summary>
@@ -841,34 +951,6 @@ namespace FishMMO.Client
 
 		#region UI INTERACTION HANDLERS (Delegate actions to services)
 		/// <summary>
-		/// Handles clicks on links embedded within the HTML news text.
-		/// Opens external URLs in the default web browser.
-		/// </summary>
-		/// <param name="link">The URL string extracted from the clicked link.</param>
-		private void HandleHtmlLinkClicked(string link)
-		{
-			// Strict URI parsing + scheme allowlist. The previous substring check would
-			// happily open "javascript:...", "file://...", or anything containing the
-			// literal string "http" (e.g. "chrome-http-pwn://...") through the OS URL
-			// handler. Restrict to absolute http(s) URIs only.
-			if (string.IsNullOrWhiteSpace(link))
-			{
-				return;
-			}
-			if (!Uri.TryCreate(link, UriKind.Absolute, out Uri uri))
-			{
-				Log.Warning("ClientLauncher", $"Refusing to open non-absolute link: {link}");
-				return;
-			}
-			if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-			{
-				Log.Warning("ClientLauncher", $"Refusing to open link with disallowed scheme '{uri.Scheme}': {link}");
-				return;
-			}
-			Application.OpenURL(uri.AbsoluteUri);
-		}
-
-		/// <summary>
 		/// Initiates the connection process to check for game updates.
 		/// All requests go through the unified API gateway (Constants.Configuration.APIHost).
 		/// </summary>
@@ -890,10 +972,9 @@ namespace FishMMO.Client
 			{
 				this.isLaunching = true;
 				SetLauncherState(LauncherState.ReadyToPlay);
-				if (this.PlayButton != null)
-				{
-					this.PlayButton.interactable = false;
-				}
+				// ReadyToPlay leaves the button enabled; disable it now that the launch is
+				// actually under way so it cannot be pressed twice.
+				this.view.SetButtonInteractable(false);
 
 				// A retry after a failed launch would otherwise dead-end: EnqueueLoad
 				// silently no-ops when the scene is already tracked as loaded, so
@@ -1036,13 +1117,15 @@ namespace FishMMO.Client
 
 			SetLauncherState(LauncherState.DownloadingPatch);
 
-			/* The patch must land where the Updater will look for it. The Updater resolves
-			 * <install root>/Patches/<from>-<to>.zip from its own base directory and will
-			 * not search anywhere else — if the archive is not at exactly this path it
-			 * reports "patch file not found", relaunches the client unchanged, and the
-			 * launcher detects the same version mismatch again on the next run. */
+			/* The patch must land where the Updater will look for it. Both sides used to
+			 * derive <install root>/Patches independently and agree only by convention; the
+			 * directory is now resolved once here and handed to the Updater explicitly,
+			 * because a disagreement fails silently — the Updater reports "patch file not
+			 * found", relaunches the client unchanged, and the launcher detects the same
+			 * version mismatch again on the next run, forever. */
+			string patchesDirectory = LauncherSettings.ResolvePatchDirectory(Constants.GetPatchesDirectory());
 			string patchFilePath = Path.Combine(
-				Constants.GetPatchesDirectory(),
+				patchesDirectory,
 				Constants.GetPatchFileName(MainBootstrapSystem.GameVersion, this.latestVersionString));
 
 			// Use the APIHost that succeeded during the version check so the patch we
@@ -1058,6 +1141,7 @@ namespace FishMMO.Client
 				$"{patchApiHost}{MainBootstrapSystem.GameVersion}",
 				patchFilePath,
 				this.expectedPatchSha256,
+				this.expectedPatchSize,
 				onComplete: (patchWritten) =>
 				{
 					if (!patchWritten)
@@ -1080,6 +1164,7 @@ namespace FishMMO.Client
 						this.updaterPath,
 						MainBootstrapSystem.GameVersion,
 						this.latestVersionString,
+						patchesDirectory,
 						onComplete: () =>
 						{
 							// The updater is running and owns the install; it will terminate
@@ -1102,20 +1187,13 @@ namespace FishMMO.Client
 					// Attempt to clean up any partially downloaded file if an error occurs.
 					TryDeletePatchFile(patchFilePath);
 				},
-				onProgress: (progress, progressString) =>
+				onProgress: (stats) =>
 				{
 					// Heartbeat: a large patch on a slow link must not trip the transient
 					// state watchdog while it is genuinely still downloading.
 					this.lastStateActivityTime = Time.realtimeSinceStartup;
 
-					if (this.ProgressSlider != null)
-					{
-						this.ProgressSlider.value = progress;
-					}
-					if (this.ProgressText != null)
-					{
-						this.ProgressText.text = progressString;
-					}
+					this.view.SetProgress(stats);
 				}));
 		}
 
@@ -1186,14 +1264,14 @@ namespace FishMMO.Client
 					 * still working through hosts. */
 					this.lastStateActivityTime = Time.realtimeSinceStartup;
 
-					/* Written to the button label rather than through SetStatus: that falls back
-					 * to ProgressText when StatusText is unassigned (it is), and ProgressText
-					 * sits inside ProgressBarGroup, which this state deactivates — so the
-					 * message would render to a hidden object. The button label is the one
-					 * status surface guaranteed to be visible here. */
-					if (candidates.Count > 1 && this.PlayButtonText != null)
+					/* Written to the button label rather than through SetStatus. On the uGUI
+					 * view a status message falls back to the progress label, which sits inside
+					 * the progress group this state hides — so the message would render to a
+					 * hidden object. The button label is the one status surface every view is
+					 * guaranteed to be showing here. */
+					if (candidates.Count > 1)
 					{
-						this.PlayButtonText.text = $"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})";
+						this.view.SetButtonText($"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})");
 					}
 
 					yield return StartCoroutine(this.patchServerService.GetLatestVersion(
@@ -1240,6 +1318,7 @@ namespace FishMMO.Client
 				this.selectedApiHost = successfulHost;
 				this.latestVersionString = serverVersion.FullVersion; // Store for updater launch
 				this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
+				this.expectedPatchSize = patchInfo.Size; // May be 0 when not provided.
 				Log.Debug("ClientLauncher", string.Format(UIText.LogDebugLatestServerVersion, latestVersionString));
 
 				// VersionConfig.Parse returns null for malformed input rather than throwing,
@@ -1278,7 +1357,21 @@ namespace FishMMO.Client
 						yield break;
 					}
 
-					PlayButtonUpdate();
+					if (LauncherSettings.AutoUpdate)
+					{
+						PlayButtonUpdate();
+					}
+					else
+					{
+						// The player asked to be consulted. Park on an Update button rather
+						// than starting a download they have not agreed to — which on a metered
+						// connection is the difference between a convenience and a cost.
+						string sizeNote = this.expectedPatchSize > 0
+							? $" ({DownloadStats.FormatBytes((ulong)this.expectedPatchSize)})"
+							: string.Empty;
+						SetLauncherState(LauncherState.UpdateAvailable,
+							$"Version {this.latestVersionString} is available{sizeNote}. Press Update to download it.");
+					}
 #endif
 				}
 				else if (clientVersion > serverVersion)

@@ -1,0 +1,299 @@
+/*
+    UILauncher.uss
+    Layout for the launcher screen. Colours come from FishMMO-Theme.uss.
+
+    The news block classes at the bottom are applied by UITKHtmlContentRenderer to
+    elements it builds at runtime, so they have no counterpart in UILauncher.uxml.
+*/
+
+/*
+    The window is resizable, so nothing here may assume a size. Every band is either
+    flex-shrink: 0 (chrome that must stay legible) or flex-grow: 1 (the news pane, which
+    absorbs all the slack). The only fixed numbers are minimums.
+*/
+.launcher-screen {
+    flex-grow: 1;
+    padding: 0;
+}
+
+.launcher-panel {
+    flex-grow: 1;
+    flex-direction: column;
+    border-radius: 0;
+    border-width: 0;
+    border-top-width: 2px;
+    min-width: 480px;
+    min-height: 360px;
+}
+
+/* ── Art hooks ──────────────────────────────────────────── */
+
+/*
+    Both of these are empty by design. Point them at art from USS alone — no C# involved:
+
+        .launcher-backdrop { background-image: url("project://database/Assets/.../bg.png"); }
+        .launcher-logo     { background-image: url("project://database/Assets/.../logo.png"); }
+
+    The backdrop sits behind everything at position: absolute so it never participates in
+    layout; giving it a size here would make the panel depend on the artwork's dimensions.
+*/
+.launcher-backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.launcher-logo {
+    width: 22px;
+    height: 22px;
+    margin-right: 10px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: rgb(255, 107, 26);
+    border-radius: 3px;
+}
+
+/*
+    Hero art band. Collapsed until given a background-image, so the launcher looks
+    deliberate rather than gap-toothed before any art exists:
+
+        .launcher-hero { height: 180px; background-image: url("..."); }
+*/
+.launcher-hero {
+    height: 0;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.launcher-header {
+    height: 42px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 12px;
+    flex-shrink: 0;
+}
+
+/* Pushes the header buttons to the right edge without absolute positioning. */
+.launcher-header-spacer {
+    flex-grow: 1;
+}
+
+.launcher-header-btn {
+    height: 24px;
+    min-width: 76px;
+    margin-right: 8px;
+}
+
+/* ── Settings ───────────────────────────────────────────── */
+
+/*
+    Sits between the news pane and the footer rather than overlaying them, so opening it
+    never covers the progress bar or the Play button — the launcher can be mid-download
+    while the player is reading this.
+*/
+/*
+    Allowed to shrink, unlike the rest of the chrome. At the smallest permitted window the
+    footer must stay reachable — losing the bottom of the settings list is recoverable,
+    losing the Play button is not.
+*/
+.launcher-settings {
+    flex-direction: column;
+    padding: 10px 16px;
+    background-color: rgb(28, 31, 34);
+    border-top-color: rgb(46, 51, 59);
+    border-top-width: 1px;
+    flex-shrink: 1;
+    max-height: 45%;
+    overflow: hidden;
+}
+
+.launcher-settings-heading {
+    margin-bottom: 6px;
+    padding-bottom: 2px;
+}
+
+.launcher-setting {
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: rgb(200, 205, 214);
+}
+
+.launcher-setting > .unity-base-field__label {
+    min-width: 180px;
+    color: rgb(138, 147, 162);
+}
+
+.launcher-settings-heading--spaced {
+    margin-top: 10px;
+}
+
+.launcher-settings-note {
+    font-size: 10px;
+    color: rgb(90, 98, 114);
+    white-space: normal;
+    margin-top: 4px;
+}
+
+/* Paths wrap rather than clip — a truncated path is useless for diagnosing anything. */
+.launcher-path {
+    white-space: normal;
+    color: rgb(138, 147, 162);
+}
+
+/* ── News pane ──────────────────────────────────────────── */
+
+/*
+    flex-grow claims the space between header and footer, and min-height:0 lets it
+    shrink below its content size. Without the latter a flex child is floored at its
+    content height, so a long news page pushes the footer — and therefore the Play
+    button — off the bottom of the screen instead of scrolling.
+*/
+.launcher-news-scroll {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.launcher-news {
+    flex-direction: column;
+    padding: 12px 16px;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.launcher-footer {
+    flex-direction: column;
+    padding: 10px 12px;
+    flex-shrink: 0;
+}
+
+.launcher-status {
+    font-size: 11px;
+    color: rgb(138, 147, 162);
+    white-space: normal;
+    -unity-text-align: middle-left;
+    margin-bottom: 6px;
+}
+
+.launcher-progress {
+    flex-direction: column;
+    margin-bottom: 8px;
+}
+
+.launcher-progress-bar {
+    height: 8px;
+    width: 100%;
+}
+
+.launcher-progress-fill {
+    height: 100%;
+    width: 0;
+}
+
+.launcher-progress-text {
+    font-size: 10px;
+    color: rgb(90, 98, 114);
+    -unity-text-align: middle-right;
+    margin-top: 4px;
+}
+
+.launcher-buttons {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.launcher-btn {
+    height: 34px;
+    min-width: 120px;
+    margin-left: 8px;
+    font-size: 11px;
+}
+
+.launcher-btn--primary {
+    color: rgb(255, 140, 69);
+    border-color: rgba(255, 107, 26, 0.40);
+    background-color: rgba(255, 107, 26, 0.12);
+}
+
+.launcher-btn:disabled {
+    opacity: 0.45;
+    cursor: arrow;
+}
+
+/* ── News content (built at runtime) ────────────────────── */
+
+.launcher-news__block {
+    flex-direction: column;
+    margin-bottom: 6px;
+}
+
+.launcher-news__text {
+    font-size: 12px;
+    color: rgb(200, 205, 214);
+    white-space: normal;
+}
+
+.launcher-news__h1 {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: rgb(200, 205, 214);
+    white-space: normal;
+    margin-top: 10px;
+    margin-bottom: 4px;
+}
+
+.launcher-news__h2 {
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: rgb(200, 205, 214);
+    white-space: normal;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.launcher-news__h3 {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 173, 118);
+    white-space: normal;
+    margin-top: 6px;
+    margin-bottom: 3px;
+}
+
+.launcher-news__list-item {
+    flex-direction: row;
+    margin-left: 8px;
+    margin-bottom: 2px;
+}
+
+.launcher-news__bullet {
+    font-size: 12px;
+    color: rgb(255, 107, 26);
+    margin-right: 6px;
+}
+
+.launcher-news__rule {
+    height: 1px;
+    background-color: rgb(46, 51, 59);
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+/*
+    Links are Labels rather than Buttons: a Button would inherit centred text and its own
+    box model, which breaks them out of the surrounding flow of text.
+*/
+.launcher-news__link {
+    font-size: 12px;
+    color: rgb(255, 107, 26);
+    white-space: normal;
+    cursor: link;
+}
+
+.launcher-news__link:hover {
+    color: rgb(255, 140, 69);
+    -unity-font-style: bold;
+}
