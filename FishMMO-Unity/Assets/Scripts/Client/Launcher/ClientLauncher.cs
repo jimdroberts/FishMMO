@@ -507,8 +507,15 @@ namespace FishMMO.Client
 			this.view.SetTitle($"{Constants.Configuration.ProjectName} v{versionString}");
 			this.view.SetProgressVisible(false); // Ensure progress bar is hidden initially.
 
-			// Last, so that the state machine's first transition is what the player ends up
-			// looking at rather than being overwritten by the chrome initialisation above.
+			/* Last, so the version check never observes a half-initialised launcher.
+			 *
+			 * PlayButtonConnect runs synchronously up to GetLatestVersion's first yield, and
+			 * SetLauncherState drives the UI immediately — so starting it earlier in Awake put
+			 * that work ahead of updaterPath being assigned and ahead of the line above that
+			 * hides the progress bar, letting later initialisation quietly undo what the state
+			 * change had just set up. Nothing downstream needs it to start sooner: the point of
+			 * decoupling it from the news fetch was to stop waiting on a network round trip, not
+			 * to run before Awake has finished. */
 			BeginStartupFlow();
 		}
 

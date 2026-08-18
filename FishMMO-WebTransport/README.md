@@ -134,10 +134,11 @@ All functions return `WT_OK` (0) on success or a negative error code.
 > against the locally-installed OpenSSL and msquic libraries — pre-built binaries
 > from a different machine may have ABI incompatibilities.
 >
-> **Pre-built binaries:** Only the Linux x86_64 binary (`libfishmmo_webtransport.so`)
-> is pre-built for development convenience. All other platforms — macOS, Windows, and
-> even Linux for production — MUST compile the WebTransport C++ project before running.
-> Do not rely on pre-built binaries for production deployments.
+> **Pre-built binaries:** There are none. No native binary for any platform is tracked —
+> `FishMMO-Unity/.gitignore` excludes every platform subdirectory of the plugins folder
+> (`/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/*/`), Linux included. Every
+> platform must compile the WebTransport C++ project before first run, on a fresh clone
+> as much as on a deployment server.
 >
 > **Stripping for production:** On Linux, use `strip` to reduce binary size and remove
 > debug symbols before deployment:
@@ -173,7 +174,22 @@ FishMMO-WebTransport/
 ├── build_linux.sh              Linux native build
 ├── build_windows.ps1           Windows native build (PowerShell)
 ├── build_windows_cross.sh      Windows cross-compile from Linux (Zig)
+├── build_windows_schannel.ps1  Windows build against Schannel / NuGet msquic
+├── build_local.bat             Windows convenience wrapper (Schannel, or -Static)
 ├── build_macos.sh              macOS native build
+├── rebuild_only.ps1            Recompile without re-fetching dependencies
+├── rebuild_only.bat            cmd.exe wrapper for rebuild_only.ps1
 ├── README.md
 └── src/                        C++ source (7 .cpp + 7 .h)
 ```
+
+### Generated, not tracked
+
+| Path | Ignored by |
+|---|---|
+| `build/` | root `.gitignore` — the general `[Bb]uild/` rule |
+| `build_win_schannel/` | root `.gitignore` — an explicit entry; `[Bb]uild/` matches that exact directory name only, so it does not cover this one |
+| `openssl_cache.cmake` | root `.gitignore` — an explicit entry |
+
+If you add a build script that writes to a new intermediate directory, add a matching entry
+to the root `.gitignore` — only the exact name `build/` is covered by the general rule.

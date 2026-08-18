@@ -743,6 +743,8 @@ Write these values from the Unity Editor via **FishMMO Dashboard → Game Settin
 
 Each server type reads a `.cfg` file from its working directory. Templates are in `FishMMO-Setup/Development/` and `FishMMO-Setup/Production/`.
 
+> Only the templates under `FishMMO-Setup/` are tracked. The `.cfg` files a server actually reads are per-deployment copies and are gitignored, so edits to them never reach source control — change the template, not the copy. In the Editor, `Constants.GetWorkingDirectory()` resolves to the repository root, so running a server from Play Mode drops `LoginServer.cfg`, `WorldServer.cfg`, and `SceneServer.cfg` there; the root `.gitignore` excludes those three paths by name. Runtime `appsettings.json` for the web servers is copied to `$(OutDir)` / `$(PublishDir)`, both under `bin/`, which the general `[Bb]in/` rule already covers.
+
 #### LoginServer.cfg
 
 ```ini

@@ -9,7 +9,15 @@ excludes every platform subdirectory of this folder:
 
 ```gitignore
 /Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/*/
+/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64.meta
+/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/mac_x86_64.meta
 ```
+
+The first rule ends in `/`, so it matches directories only. Unity still generates a sidecar
+`.meta` next to each platform folder, which that rule leaves untracked but *not* ignored —
+hence the two explicit entries. `linux_x86_64.meta` is deliberately absent from the list: it
+is tracked, so the folder keeps a stable Unity GUID on the platform everyone develops on.
+Add a matching `.meta` line if a new platform folder is introduced.
 
 Every platform, Linux included, must be built from the
 [FishMMO-WebTransport](../../../../../../../FishMMO-WebTransport) C++ project

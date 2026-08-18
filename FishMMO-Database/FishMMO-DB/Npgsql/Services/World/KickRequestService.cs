@@ -22,6 +22,20 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
+		/// <summary>
+		/// How long a kick request stays authoritative for <see cref="HasPendingAsync"/>.
+		/// </summary>
+		/// <remarks>
+		/// A kick request is deleted by whichever game server acts on it, from its
+		/// connection-stopped handler — so the normal lifetime is seconds. If the server holding
+		/// the session dies before polling, nothing ever deletes the row, and an unbounded
+		/// <see cref="HasPendingAsync"/> then reported the account as "already online" at every
+		/// future login for the life of the database. Bounding it to slightly more than the
+		/// character session lease means recovery takes at most one lease, which is the same
+		/// window every other crash-recovery path in the session protocol uses.
+		/// </remarks>
+		private static readonly TimeSpan PendingKickRequestTtl = TimeSpan.FromMinutes(3);
+
 		/// <inheritdoc/>
 		/// <remarks>
 		/// <para><b>Race Condition Protection:</b></para>
@@ -76,11 +90,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Account name must not be empty.");
 			}
 
+			var staleBeforeUtc = DateTime.UtcNow - PendingKickRequestTtl;
+
 			return await ExecuteReadAsync(async dbContext =>
 			{
 				return await dbContext.KickRequests
 					.AsNoTracking()
-					.AnyAsync(kr => kr.AccountName == accountName, cancellationToken)
+					.AnyAsync(kr => kr.AccountName == accountName &&
+									kr.TimeCreated > staleBeforeUtc, cancellationToken)
 					.ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}

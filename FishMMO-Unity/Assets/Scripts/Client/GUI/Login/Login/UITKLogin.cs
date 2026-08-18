@@ -84,6 +84,26 @@ namespace FishMMO.Client
 		private string pendingVerifyUsername;
 
 		/// <summary>
+		/// True when this panel owns the active authentication flow (login, account
+		/// verification, or TOTP). Gates auth-result handling so results belonging to
+		/// <see cref="UITKRegister"/> — which shares the same
+		/// <see cref="ClientLoginAuthenticator.OnClientAuthenticationResult"/> event — are not
+		/// acted on here.
+		/// </summary>
+		/// <remarks>
+		/// Panel visibility cannot serve this purpose, even though it looks equivalent. Both
+		/// multi-step flows hide this panel while a modal dialog collects the next input:
+		/// <see cref="OnAccountUnverified"/> and <see cref="OnTwoFactorRequired"/> call
+		/// <see cref="Hide"/> before opening theirs. Gating on <c>Visible</c> therefore dropped
+		/// every result that arrived after that point — the <c>AccountVerified</c> that follows
+		/// a correct verification code, and the <c>LoginSuccess</c> or <c>TwoFactorInvalid</c>
+		/// that follows a TOTP code — so an account with 2FA enabled could enter the right code
+		/// and simply sit on the dialog forever. <see cref="UILogin"/> and
+		/// <see cref="UITKRegister"/> both use an explicit flag for exactly this reason.
+		/// </remarks>
+		private bool isAuthFlowActive;
+
+		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -206,12 +226,9 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
-			// Only react while this panel is shown. ClientLoginAuthenticator raises this
-			// event to every subscriber, so a hidden login panel would otherwise act on
-			// results belonging to server select or character select. UILogin gates the same
-			// event on its isAuthFlowActive flag; this stack has no such flag, and panel
-			// visibility is the equivalent signal here.
-			if (!Visible) return;
+			// Only process auth results when this panel owns the active flow. See
+			// isAuthFlowActive for why panel visibility is not a usable substitute.
+			if (!isAuthFlowActive) return;
 
 			switch (result)
 			{
@@ -376,11 +393,15 @@ namespace FishMMO.Client
 		private void OnVersionMismatch()
 		{
 			string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			// TryGetTK, not TryGet: every other dialog in this panel uses the UI Toolkit box,
+			// and a UI Toolkit scene has no UGUI UIDialogBox registered — so this lookup always
+			// failed and the player was disconnected with no explanation at all.
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{
 				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
 			}
 			Client.ForceDisconnect();
+			SetSignInLocked(false);
 		}
 
 		/// <summary>
@@ -612,6 +633,10 @@ namespace FishMMO.Client
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetSignInLocked(bool locked)
 		{
+			// Track auth-flow ownership: locking = start, unlocking = end. Every path that
+			// begins a login or a verification step locks, and every terminal path unlocks.
+			isAuthFlowActive = locked;
+
 			if (registerButton != null)
 			{
 				registerButton.SetEnabled(!locked);

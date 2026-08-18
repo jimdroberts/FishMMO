@@ -71,32 +71,37 @@ namespace FishMMO.Client
 		/// <param name="character">Player character to inject.</param>
 		internal static void SetCharacter(IPlayerCharacter character)
 		{
-			/* Each control is isolated. This runs inside OnCharacterStartLocal, which also
-			 * dismisses the loading screen and wires up player input — so an exception from
-			 * any single panel used to abort world entry entirely, leaving the player on a
-			 * black screen with the loading overlay never dismissed and no input controller.
-			 * A broken panel must cost only that panel. */
-			foreach (UICharacterControl control in characterControls.Values)
+			/* Each control is isolated. This runs inside Client.OnCharacterStartLocal, which
+			 * also dismisses the loading screen and wires up the player input controller — so
+			 * an exception from any single panel aborted world entry entirely, leaving the
+			 * player on a black screen with the loading overlay never dismissed and no input.
+			 * A misconfigured panel must cost only that panel.
+			 *
+			 * The dictionary key is used for the log label rather than control.Name: Name reads
+			 * gameObject.name, which throws MissingReferenceException on a destroyed control —
+			 * a throw from inside the handler meant to contain throws. The key is the same
+			 * string (Register maps controls by Name) and is always safe to read. */
+			foreach (KeyValuePair<string, UICharacterControl> kvp in characterControls)
 			{
 				try
 				{
-					control.SetCharacter(character);
+					kvp.Value.SetCharacter(character);
 				}
 				catch (Exception ex)
 				{
-					Log.Error("UIManager", $"SetCharacter failed for UGUI control '{control?.Name}': {ex}");
+					Log.Error("UIManager", $"SetCharacter failed for control '{kvp.Key}'.", ex);
 				}
 			}
 
-			foreach (UITKCharacterControl control in tkCharacterControls.Values)
+			foreach (KeyValuePair<string, UITKCharacterControl> kvp in tkCharacterControls)
 			{
 				try
 				{
-					control.SetCharacter(character);
+					kvp.Value.SetCharacter(character);
 				}
 				catch (Exception ex)
 				{
-					Log.Error("UIManager", $"SetCharacter failed for UITK control '{control?.Name}': {ex}");
+					Log.Error("UIManager", $"SetCharacter failed for UIToolkit control '{kvp.Key}'.", ex);
 				}
 			}
 		}
@@ -106,14 +111,32 @@ namespace FishMMO.Client
 		/// </summary>
 		internal static void UnsetCharacter()
 		{
-			foreach (UICharacterControl control in characterControls.Values)
+			// Isolated for the same reason as SetCharacter: teardown runs on logout and on
+			// character despawn from Client.OnCharacterStopLocal, which still has to
+			// deinitialize input and destroy the character object afterwards. One panel
+			// failing here must not strand the rest or leak the character GameObject.
+			foreach (KeyValuePair<string, UICharacterControl> kvp in characterControls)
 			{
-				control.UnsetCharacter();
+				try
+				{
+					kvp.Value.UnsetCharacter();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"UnsetCharacter failed for control '{kvp.Key}'.", ex);
+				}
 			}
 
-			foreach (UITKCharacterControl control in tkCharacterControls.Values)
+			foreach (KeyValuePair<string, UITKCharacterControl> kvp in tkCharacterControls)
 			{
-				control.UnsetCharacter();
+				try
+				{
+					kvp.Value.UnsetCharacter();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"UnsetCharacter failed for UIToolkit control '{kvp.Key}'.", ex);
+				}
 			}
 		}
 
@@ -129,6 +152,14 @@ namespace FishMMO.Client
 			}
 			if (controls.ContainsKey(control.Name))
 			{
+				/* Controls are keyed by GameObject name, and every lookup in the codebase is by
+				 * that string. Dropping a duplicate silently meant a control could be present in
+				 * the scene, fully wired, and simply never reachable — indistinguishable from
+				 * not being there at all, and only discovered when whatever needed it did
+				 * nothing. Name it. */
+				Log.Warning("UIManager",
+					$"A UIControl named '{control.Name}' is already registered; ignoring the duplicate on " +
+					$"GameObject '{control.gameObject.name}'. Lookups by this name will resolve to the first one only.");
 				return;
 			}
 
@@ -175,6 +206,10 @@ namespace FishMMO.Client
 			}
 			if (tkControls.ContainsKey(control.Name))
 			{
+				// Same silent-drop hazard as Register above.
+				Log.Warning("UIManager",
+					$"A UITKControl named '{control.Name}' is already registered; ignoring the duplicate on " +
+					$"GameObject '{control.gameObject.name}'. Lookups by this name will resolve to the first one only.");
 				return;
 			}
 

@@ -623,10 +623,16 @@ namespace FishMMO.Server.Implementation
 			/// <inheritdoc/>
 			protected override bool OnHandshakeDeferred(NetworkConnection conn)
 			{
-				// NOTE: Both code paths below broadcast ServerBusy. The queue-rejection path
-				// returns false, and the caller (the core handshake handler) may also broadcast
-				// a separate ServerBusy result. Ensure the client handles duplicate ServerBusy
-				// gracefully.
+				/* NOTE: Both code paths below broadcast ServerBusy. The queue-rejection path
+				 * returns false, and the caller (the core handshake handler) may also broadcast
+				 * a separate ServerBusy result. The client handles duplicate ServerBusy
+				 * gracefully (it opens the same dialog twice at worst).
+				 *
+				 * Reliable, matching every other BroadcastAuthResult call site in the auth core.
+				 * This is the terminal answer to a handshake — there is no retry behind it and
+				 * nothing else will ever be sent on this connection. Dropping it left the client
+				 * sitting on "Connecting..." for the full 15s server-side handshake timeout and
+				 * then being disconnected with no reason given. */
 				if (outer.Server?.BehaviourRegistry != null &&
 					outer.Server.BehaviourRegistry.TryGet<LoginServer.LoginQueueSystem>(out var queueSystem))
 				{
@@ -641,12 +647,12 @@ namespace FishMMO.Server.Implementation
 					}
 					// Queue is full — tell the client so they don't hang waiting
 					// for a handshake response that will never arrive.
-					BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
+					BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true);
 					return false;
 				}
 				// No queue system and auth cap reached — reject immediately with
 				// a clear signal rather than leaving the client hanging.
-				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: false);
+				BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true);
 				return false;
 			}
 

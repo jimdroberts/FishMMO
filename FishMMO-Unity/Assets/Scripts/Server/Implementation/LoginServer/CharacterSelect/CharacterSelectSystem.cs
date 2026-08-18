@@ -178,6 +178,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						CharacterName = data.Name,
 						SceneName = data.SceneName,
 						RaceTemplateID = data.RaceID,
+						IsCombatLogged = data.Flags.IsFlagged(CharacterFlags.IsCombatLogged),
 					});
 				}
 
@@ -471,6 +472,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 							if (conn != null && conn.IsActive)
 							{
 								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							}
+						});
+						return;
+					}
+
+					/* Refuse to switch characters while one is still in the world.
+					 *
+					 * SetSelectedAsync below rewrites `selected` across the whole account, so
+					 * without this an account with a character still held by a scene server —
+					 * a live session mid-handover, or a combat-logout body running out its
+					 * timer — could point `selected` at a different character and walk a second
+					 * one into the world. The scene server would then be holding a claim for a
+					 * character the account is no longer considered to be playing, and the
+					 * lingering body's own save (which always writes selected = true) would
+					 * race the new selection, leaving two rows claiming to be selected.
+					 *
+					 * Re-selecting the SAME character is allowed: that is exactly the path a
+					 * player takes to rejoin the body they left behind. */
+					DatabaseResult<CharacterData?> inWorldResult = await characterService.FetchInWorldCharacterAsync(accountName);
+					if (inWorldResult.IsSuccess &&
+						inWorldResult.Data.HasValue &&
+						inWorldResult.Data.Value.ID != character.ID)
+					{
+						CharacterData inWorld = inWorldResult.Data.Value;
+						await Log.Warning("CharacterSelectSystem",
+							$"Account '{accountName}' tried to select '{characterName}' while '{inWorld.Name}' is still in the world; refusing.");
+
+						TryEnqueueMainThread(() =>
+						{
+							if (conn != null && conn.IsActive)
+							{
+								Server.NetworkWrapper.Broadcast(conn, new CharacterSelectResultBroadcast()
+								{
+									Result = CharacterSelectResult.OtherCharacterInWorld,
+									CharacterName = inWorld.Name,
+								}, true, Channel.Reliable);
 							}
 						});
 						return;

@@ -193,6 +193,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
+			// Before any early return: this is process-local state with no dependencies.
+			ClearResidencyWatchdog();
+			combatLogoutRoutingDeferredSince.Clear();
+
 			if (Server == null)
 			{
 				Log.Error("WorldSceneSystem", "OnDeinitialize: Server is null");
@@ -265,6 +269,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			DrainMainThreadQueue<IWorldSceneSystemMainThreadQueueData>(maxMainThreadActionsPerFrame, drainAll);
 		}
 
+		/// <summary>Drops all residency-watchdog state. Called during teardown.</summary>
+		private void ClearResidencyWatchdog() => worldResidencyDeadlineByClientId.Clear();
+
 		/// <summary>
 		/// Enqueues an action to be executed on the main thread.
 		/// </summary>
@@ -275,11 +282,31 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
+		/// Seconds an async worker will wait for a queued main-thread action before giving up.
+		/// </summary>
+		/// <remarks>
+		/// A successful enqueue only promises the action is <em>queued</em>; it is run by
+		/// <see cref="OnUpdate"/>, which stops being called the moment this behaviour is
+		/// deinitialized or the server stops. Anything queued after the single drain in
+		/// <see cref="OnDeinitialize"/> therefore never runs, and a caller awaiting it waited
+		/// forever — holding an async-worker slot for the life of the process. Enough of those
+		/// (one per queue-processing cycle that straddled a shutdown) starve the shared worker
+		/// pool, at which point every system's database work is silently rejected.
+		/// <para>
+		/// The bound is well beyond any legitimate main-thread stall; reaching it means the
+		/// queue is not being drained at all, and the caller's own failure path (abandon this
+		/// routing pass, connections stay queued for the next one) is the correct response.
+		/// </para>
+		/// </remarks>
+		private const int MainThreadDispatchTimeoutMs = 30_000;
+
+		/// <summary>
 		/// Enqueues an action on the main thread and returns a task that completes when the action finishes.
 		/// If the enqueue fails (queue full or unavailable), the returned task completes immediately with false.
-		/// Prevents the caller from hanging forever on an unfulfilled TaskCompletionSource.
+		/// If the queued action is never drained, the task completes with false after
+		/// <see cref="MainThreadDispatchTimeoutMs"/> rather than hanging.
 		/// </summary>
-		private Task<bool> RunOnMainThreadAsync(Action action)
+		private async Task<bool> RunOnMainThreadAsync(Action action)
 		{
 			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 			if (!TryEnqueueMainThread(() =>
@@ -295,9 +322,26 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 			}))
 			{
-				tcs.TrySetResult(false);
+				return false;
 			}
-			return tcs.Task;
+
+			using (var timeoutCts = new System.Threading.CancellationTokenSource())
+			{
+				Task timeoutTask = Task.Delay(MainThreadDispatchTimeoutMs, timeoutCts.Token);
+				Task completed = await Task.WhenAny(tcs.Task, timeoutTask);
+				if (!ReferenceEquals(completed, tcs.Task))
+				{
+					await Log.Error("WorldSceneSystem",
+						$"Main-thread dispatch was not drained within {MainThreadDispatchTimeoutMs}ms; abandoning the operation. " +
+						"The world server's main-thread queue is stalled or the system has been deinitialized.");
+					return false;
+				}
+				timeoutCts.Cancel();
+			}
+
+			// Awaited rather than returned so an exception thrown by the action surfaces here
+			// (the caller's try/catch), exactly as it did before the timeout was added.
+			return await tcs.Task;
 		}
 
 		/// <summary>
@@ -306,10 +350,68 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="conn">The network connection.</param>
 		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
+			worldResidencyDeadlineByClientId.TryRemove(conn.ClientId, out _);
+
 			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 			{
 				RemoveFromQueue(conn, mappingData.OpenWorldConnectionScenes, mappingData.WaitingOpenWorldConnections);
 				RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+			}
+		}
+
+		/// <summary>
+		/// Disconnects connections that authenticated but were never routed to a scene server.
+		/// </summary>
+		/// <remarks>See <see cref="worldResidencyDeadlineByClientId"/>.</remarks>
+		private void SweepStrandedResidents()
+		{
+			if (worldResidencyDeadlineByClientId.IsEmpty)
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			var serverManager = Server?.NetworkWrapper?.NetworkManager?.ServerManager;
+			Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData);
+
+			foreach (var kvp in worldResidencyDeadlineByClientId)
+			{
+				if (nowUtc < kvp.Value)
+				{
+					continue;
+				}
+
+				NetworkConnection conn = null;
+				serverManager?.Clients.TryGetValue(kvp.Key, out conn);
+				if (conn == null || !conn.IsActive)
+				{
+					worldResidencyDeadlineByClientId.TryRemove(kvp.Key, out _);
+					continue;
+				}
+
+				/* A connection sitting in a waiting queue is not stranded — it is waiting, and
+				 * PurgeExpiredWaitingConnections owns that case with its own (shorter) TTL.
+				 * Push the deadline out instead of kicking, so this watchdog measures only
+				 * continuous time spent outside every queue.
+				 *
+				 * This matters for the combat-logout deferral, which deliberately holds a
+				 * connection in the open-world queue for up to CombatLogoutRoutingGraceSeconds
+				 * (150s) waiting for its body's scene instance to come back. Kicking at 90s
+				 * would interrupt a wait that is working as designed. */
+				if (mappingData != null &&
+					(mappingData.OpenWorldConnectionScenes.ContainsKey(conn) ||
+					 mappingData.InstanceConnectionScenes.ContainsKey(conn)))
+				{
+					worldResidencyDeadlineByClientId[kvp.Key] = nowUtc.AddSeconds(WorldResidencyGraceSeconds);
+					continue;
+				}
+
+				worldResidencyDeadlineByClientId.TryRemove(kvp.Key, out _);
+
+				Log.Warning("WorldSceneSystem",
+					$"Connection {kvp.Key} spent {WorldResidencyGraceSeconds:F0}s on the world server without being " +
+					"queued or routed to a scene server; disconnecting so the client can retry.");
+				conn.Disconnect(false);
 			}
 		}
 
@@ -332,6 +434,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				runtimeData.NextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
 				PurgeExpiredWaitingConnections(runtimeData);
+				SweepStrandedResidents();
 			}
 
 			runtimeData.NextDebounceCleanup -= deltaTime;
@@ -607,6 +710,52 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 
 				int preferredHandle = charData.SceneHandle;
+				bool preferredAvailable = preferredHandle != 0 &&
+					capacityByHandle.TryGetValue(preferredHandle, out int prefCheck) &&
+					prefCheck > 0 &&
+					serverInfoByHandle.ContainsKey(preferredHandle);
+
+				/* A combat-logout body exists on exactly ONE scene server, and only that server
+				 * can hand it back — it still holds the character's session claim. Falling back
+				 * to a different instance sends the player somewhere that cannot claim them, so
+				 * they are kicked, reconnect, and are kicked again until the linger expires.
+				 * Hold them in the queue instead of routing them somewhere useless.
+				 *
+				 * The wait is bounded from both ends: a live scene server clears the flag when
+				 * the linger ends, and if the server died instead the grace below expires. The
+				 * grace deliberately exceeds the database session lease, so by the time we give
+				 * up, a dead server's claim has lapsed and the destination can actually take
+				 * the character rather than kicking it for contention. */
+				if (!preferredAvailable && charData.Flags.IsFlagged(CharacterFlags.IsCombatLogged))
+				{
+					DateTime deferredSince = combatLogoutRoutingDeferredSince.GetOrAdd(charData.ID, _ => DateTime.UtcNow);
+					if ((DateTime.UtcNow - deferredSince).TotalSeconds < CombatLogoutRoutingGraceSeconds)
+					{
+						await Log.Debug("WorldSceneSystem",
+							$"Holding character {charData.ID} for scene handle {preferredHandle}: its combat-logout body lives there.");
+						RequeueOpenWorldConnection(conn, sceneName);
+						continue;
+					}
+
+					// The owning scene instance never came back. Treat the body as gone — the
+					// whole scene was scrubbed with the server — and let the character in.
+					combatLogoutRoutingDeferredSince.TryRemove(charData.ID, out _);
+					await Log.Warning("WorldSceneSystem",
+						$"Character {charData.ID} waited {CombatLogoutRoutingGraceSeconds}s for scene handle {preferredHandle} and it never returned; " +
+						"clearing its combat-logout flag and routing normally.");
+
+					DatabaseResult clearResult = await charService.ClearCombatLoggedAsync(charData.ID);
+					if (!clearResult.IsSuccess)
+					{
+						await Log.Warning("WorldSceneSystem",
+							$"Failed to clear combat-logout flag for character {charData.ID}: {clearResult.ErrorCode} - {clearResult.ErrorMessage}");
+					}
+				}
+				else if (preferredAvailable)
+				{
+					combatLogoutRoutingDeferredSince.TryRemove(charData.ID, out _);
+				}
+
 				if (preferredHandle != 0 &&
 					capacityByHandle.TryGetValue(preferredHandle, out int prefRemaining) &&
 					prefRemaining > 0 &&
@@ -1055,6 +1204,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			// Arm the residency watchdog: from here the client must be routed and gone.
+			worldResidencyDeadlineByClientId[conn.ClientId] =
+				DateTime.UtcNow.AddSeconds(WorldResidencyGraceSeconds);
+
 			// Queue async instance connection processing
 			if (!TryBeginInstanceLookup(accountName))
 			{
@@ -1334,6 +1487,88 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
+		/// Deadline by which each authenticated connection must have left this world server,
+		/// keyed by ClientId.
+		/// </summary>
+		/// <remarks>
+		/// The world server is a router: a client authenticates, gets a
+		/// <see cref="WorldSceneConnectBroadcast"/>, and disconnects on its own to dial the
+		/// scene server. Every step in between can drop the client without leaving it anywhere
+		/// a sweep would find it — the routing snapshot empties the waiting queues before going
+		/// async, and both <see cref="BroadcastSceneConnect"/> and the instance path deliver
+		/// through <c>TryEnqueueMainThread</c>, which returns false and discards the action when
+		/// the main-thread queue is saturated. A connection lost that way is in no queue, so
+		/// <see cref="PurgeExpiredWaitingConnections"/> never sees it, and it sits authenticated
+		/// on the world server forever with no scene and no error.
+		/// <para>
+		/// This bounds every such path at once rather than patching each delivery site: staying
+		/// here past the deadline means routing failed, whatever the cause. Disconnecting hands
+		/// the client back to its own reconnect loop, which returns to this world server and
+		/// tries again — the same recovery a dropped connection already gets.
+		/// </para>
+		/// </remarks>
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> worldResidencyDeadlineByClientId =
+			new System.Collections.Concurrent.ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// How long an authenticated connection may remain on the world server before it is
+		/// treated as failed routing.
+		/// </summary>
+		/// <remarks>
+		/// Comfortably above <see cref="waitingQueueTtlSeconds"/> (45s), which already kicks a
+		/// connection that legitimately waits too long in a queue. This is the backstop for
+		/// connections that are not in a queue at all, so it must not fire first and pre-empt
+		/// the more specific check.
+		/// </remarks>
+		private const double WorldResidencyGraceSeconds = 90.0;
+
+		/// <summary>
+		/// When each character was first deferred because its combat-logout body's scene
+		/// instance was unavailable, keyed by character ID.
+		/// </summary>
+		/// <remarks>
+		/// Needed because the queue snapshot clears <c>WaitingQueueEnteredUtcByClientId</c> and
+		/// re-queuing resets it, so the queue's own timestamp cannot measure how long we have
+		/// been holding out for a specific scene instance.
+		/// </remarks>
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<long, DateTime> combatLogoutRoutingDeferredSince =
+			new System.Collections.Concurrent.ConcurrentDictionary<long, DateTime>();
+
+		/// <summary>
+		/// How long to hold a combat-logged character waiting for its own scene instance before
+		/// concluding the owning scene server is gone.
+		/// </summary>
+		/// <remarks>
+		/// Must exceed the database session lease (2 minutes) so that when we do give up, the
+		/// dead server's claim has already expired and the character can be claimed elsewhere
+		/// instead of being kicked for contention.
+		/// </remarks>
+		private const double CombatLogoutRoutingGraceSeconds = 150.0;
+
+		/// <summary>
+		/// Puts a connection back on the open-world waiting queue for another routing pass.
+		/// </summary>
+		/// <remarks>
+		/// The routing snapshot empties the queue, so any connection this pass declines to route
+		/// is dropped entirely — it would sit on the world server with no scene assignment and
+		/// no retry, which the client cannot recover from on its own.
+		/// </remarks>
+		private void RequeueOpenWorldConnection(NetworkConnection conn, string sceneName)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (conn == null || !conn.IsActive)
+				{
+					return;
+				}
+				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+				{
+					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+				}
+			});
+		}
+
+		/// <summary>
 		/// Enqueues a race-guarded <see cref="WorldSceneConnectBroadcast"/> for a connection.
 		/// Skips the broadcast if the connection has been re-queued during async processing.
 		/// </summary>
@@ -1483,6 +1718,38 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				now, TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds), 64, 32);
 			runtimeData.SceneServerAddressCache?.SweepExpired(
 				now, TimeSpan.FromSeconds(sceneServerCacheTtlSeconds), 64, 32);
+			SweepCombatLogoutRoutingDeferrals(now);
+		}
+
+		/// <summary>
+		/// Drops combat-logout routing deferrals that can no longer be acted on.
+		/// </summary>
+		/// <remarks>
+		/// Entries are normally removed the moment a character is routed or its grace expires,
+		/// but a player who gives up and closes the client mid-deferral leaves theirs behind with
+		/// nothing to clear it. Each is only a character ID and a timestamp, yet on a long-lived
+		/// world server the map would accumulate one per character that ever combat-logged and
+		/// walked away, and never shrink.
+		/// <para>
+		/// Anything older than twice the grace has already had its decision made — the routing
+		/// pass either honoured it or timed it out — so it cannot influence a future pass and is
+		/// safe to forget. A returning player simply starts a fresh deferral.
+		/// </para>
+		/// </remarks>
+		private void SweepCombatLogoutRoutingDeferrals(DateTime nowUtc)
+		{
+			if (combatLogoutRoutingDeferredSince.IsEmpty)
+			{
+				return;
+			}
+
+			foreach (var kvp in combatLogoutRoutingDeferredSince)
+			{
+				if ((nowUtc - kvp.Value).TotalSeconds >= CombatLogoutRoutingGraceSeconds * 2.0)
+				{
+					combatLogoutRoutingDeferredSince.TryRemove(kvp.Key, out _);
+				}
+			}
 		}
 
 		#endregion

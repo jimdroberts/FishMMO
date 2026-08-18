@@ -31,6 +31,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Clean up per-connection validated-scene rate-limit tracking.
 			validatedSceneLastTimeByClientId.TryRemove(conn.ClientId, out _);
 
+			// The scene handshake can no longer complete or time out for a dead connection.
+			sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
+
 			// Clean up per-account auth callback rate-limit tracking.
 			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
@@ -39,7 +42,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
-				RemoveCharacterConnectionMapping(conn);
+				// This is the only path where combat-logout linger applies: an actual dropped
+				// connection. Teleport and bind-point respawn also route through
+				// RemoveCharacterConnectionMapping, but those are deliberate transfers whose
+				// character must be released promptly for the destination server to claim it.
+				RemoveCharacterConnectionMapping(conn, allowCombatLinger: true);
 			}
 		}
 
@@ -50,7 +57,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="conn">Network connection to remove.</param>
 		/// <param name="skipOnDisconnect">If true, skips OnDisconnect event invocation.</param>
-		private void RemoveCharacterConnectionMapping(NetworkConnection conn, bool skipOnDisconnect = false)
+		/// <param name="allowCombatLinger">
+		/// If true, a character that is in combat keeps its body in the world instead of being
+		/// despawned. Only the genuine disconnect path passes true — deliberate transfers
+		/// (teleport, bind-point respawn) must release promptly so the destination server can claim.
+		/// </param>
+		private void RemoveCharacterConnectionMapping(NetworkConnection conn, bool skipOnDisconnect = false, bool allowCombatLinger = false)
 		{
 			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 			{
@@ -92,6 +104,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				OnDisconnect?.Invoke(conn, character);
 			}
 
+			// Combat logout: keep the body in the world rather than despawning it. The session
+			// token stays in SessionTokens on purpose — it is what keeps the lease refreshed and
+			// this server authoritative over a body that can still be damaged and killed.
+			if (allowCombatLinger && TryBeginCombatLinger(character))
+			{
+				return;
+			}
+
 			// Extract session info so SaveAndDespawnCharacter can release AFTER the save completes
 			CharacterSessionInfo? sessionInfo = null;
 			if (data.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo si))
@@ -127,12 +147,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// teleport to a different scene to avoid death or PvP.
 			if (character.IsFlagged(CharacterFlags.IsInCombat))
 			{
+				CancelTeleport(character, "in combat");
 				return;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
-				Log.Debug("CharacterSystem", "SceneServerSystem not found!");
+				CancelTeleport(character, "SceneServerSystem not found");
 				return;
 			}
 
@@ -142,7 +163,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
 				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails details))
 			{
-				Log.Debug("CharacterSystem", currentScene + " not found!");
+				CancelTeleport(character, $"scene '{currentScene}' not found in the world scene details cache");
 				return;
 			}
 
@@ -187,8 +208,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			else
 			{
-				Log.Debug("CharacterSystem", $"{character.TeleporterName} not found!");
+				CancelTeleport(character, $"teleporter '{character.TeleporterName}' not found in scene '{currentScene}'");
 			}
+		}
+
+		/// <summary>
+		/// Abandons an in-progress teleport, clearing the pending destination so the character
+		/// is no longer considered mid-teleport.
+		/// </summary>
+		/// <remarks>
+		/// This is mandatory on every path that declines a teleport.
+		/// <see cref="IPlayerCharacter.IsTeleporting"/> is derived purely from
+		/// <see cref="IPlayerCharacter.TeleporterName"/> being non-empty, and
+		/// <see cref="SceneTeleporter"/> sets that name *before* raising the event this handler
+		/// serves. Returning without clearing it therefore left the character permanently
+		/// "teleporting", which is not a cosmetic state:
+		/// <list type="bullet">
+		/// <item><description><c>KCCPlayer.OnReplicate</c> drops all movement input.</description></item>
+		/// <item><description><c>AbilityController</c> refuses to activate anything.</description></item>
+		/// <item><description><c>Region</c> enter/exit callbacks stop firing.</description></item>
+		/// <item><description><see cref="SceneTeleporter"/> ignores every future trigger, so the character can never teleport again.</description></item>
+		/// </list>
+		/// Only a despawn clears it (via <c>PlayerCharacter.ResetState</c>), so the player was
+		/// frozen in place until they relogged. The combat rejection above made this trivially
+		/// reachable: walk into any scene teleporter while in combat.
+		/// </remarks>
+		/// <param name="character">Character whose teleport is being cancelled.</param>
+		/// <param name="reason">Why the teleport was declined, for diagnostics.</param>
+		private void CancelTeleport(IPlayerCharacter character, string reason)
+		{
+			Log.Debug("CharacterSystem", $"Teleport cancelled for {character.CharacterName}: {reason}.");
+			character.TeleporterName = string.Empty;
 		}
 
 		/// <summary>
@@ -357,6 +407,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Mark the player as dead and show the death dialog.
 				// Do NOT revive or teleport here - the player chooses Respawn or Resurrect.
 				playerCharacter.EnableFlags(CharacterFlags.IsDead);
+
+				// A combat-logged body has no owner to notify — it was killed precisely because
+				// nobody was driving it. Skip the broadcast and end the linger now: the death is
+				// the outcome the body was left exposed for, and persisting it immediately means
+				// a crash cannot undo it.
+				if (playerCharacter.Owner == null || !playerCharacter.Owner.IsActive)
+				{
+					if (lingeringCharacters.ContainsKey(playerCharacter.ID))
+					{
+						FinalizeCombatLinger(playerCharacter.ID, "killed while logged out");
+					}
+					return;
+				}
 
 				// Send the death broadcast to the owning client so the death dialog appears.
 				Server.NetworkWrapper.Broadcast(playerCharacter.Owner,

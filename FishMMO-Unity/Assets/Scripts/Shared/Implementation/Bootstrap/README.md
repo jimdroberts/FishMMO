@@ -60,6 +60,7 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 - **Duplicate-start and duplicate-completion guards** — `StartBootstrap()` tracks `hasStartedBootstrap`; `hasCompletedPreload` and `hasCompletedPostload` ensure `OnCompletePreload()` and `OnCompleteProcessing()` each run at most once.
 - **Ownership-checked log hook release** — `Log.OnInternalLogMessage` is a single-cast static assigned by every bootstrap system's `Awake()`, so several are alive at once and the last to wake owns it. `OnDestroy()` clears it only if this instance is the current owner; clearing unconditionally silenced internal logging for every system still shutting down.
 - **Boot survives a missing `VersionConfig`** — `MainBootstrapSystem` logs the error and continues with an unknown version instead of aborting `OnPreload()`. Aborting left the load queue empty, which made every downstream phase report "done" instantly and produced a permanently black screen; carrying on lets the launcher come up and report the bad version to the player.
+- **Client frame rate capped before anything renders** — `MainBootstrapSystem.OnPreload()` sets `Application.targetFrameRate` to `BootstrapTargetFrameRate` (60) and zeroes `QualitySettings.vSyncCount`. Nothing else sets a target before a network connection exists and the default is `-1` (unlimited), so the launcher and login menus would otherwise render as fast as the GPU allows and peg a CPU core drawing a static screen. Headless servers are excluded (`#if !UNITY_SERVER`) — they do not render, and FishNet derives the server frame rate from the tick rate.
 
 ## Prerequisites
 
@@ -108,6 +109,31 @@ Ensure the initial scene in your build settings contains a `MainBootstrapSystem`
 |----------|------|-------------|
 | `configFileName` | `string` | Name of the logging configuration JSON file (default: `"logging.json"`) |
 | `versionConfig` | `VersionConfig` | Reference to the VersionConfig ScriptableObject |
+
+### Bootstrap Frame Rate Cap
+
+`BootstrapTargetFrameRate` is a private const (60) rather than an Inspector field — it is a
+floor for the pre-configuration window only, not a user-facing setting. Two values are
+written together in `OnPreload()`, both guarded by `#if !UNITY_SERVER`:
+
+| Value | Set to | Reason |
+|---|---|---|
+| `Application.targetFrameRate` | `BootstrapTargetFrameRate` (60) | Default is `-1` (unlimited) until a network connection exists |
+| `QualitySettings.vSyncCount` | `0` | `targetFrameRate` is **ignored entirely** while the active quality level has vSync on |
+
+The vSync write is not cosmetic. `ProjectSettings/QualitySettings.asset` ships the
+**Balanced** level with `vSyncCount: 1`, so on that level the cap silently did nothing and
+the menus ran uncapped regardless.
+
+Neither value survives past configuration load, and neither overrides a player's choice:
+
+| Stage | What replaces it |
+|---|---|
+| Options UI loads | `RefreshRateSettingOption.Load()` / `UITKOptions` → `Client.ApplyTargetFrameRate`, and `VSyncSettingOption.Load()` / `UITKOptions.InitializeVSync` → `QualitySettings.vSyncCount`, both from the saved `Configuration.GlobalSettings` preference |
+| Client connects | FishNet's `NetworkManager.UpdateFramerate` raises `targetFrameRate` from `ClientManager.FrameRate` |
+
+A player who wants vSync still gets it — the options UI reapplies the saved preference when
+`UIOptions.OnStarting()` runs, which is after bootstrap.
 
 ### BootstrapSystem Inspector Properties
 
@@ -219,6 +245,9 @@ public class MyCustomBootstrap : BootstrapSystem
 | Duplicate start prevented | Attempt to call `StartBootstrap()` twice on same system | Warning: `BootstrapSystem tried to start multiple times. Ignoring.` |
 | Load failures do not stall boot | Point a preload entry at a missing Addressable key | `preload finished with N failed item(s). Continuing bootstrap.` and the chain still advances |
 | Missing VersionConfig does not hang | Clear the `versionConfig` reference and enter Play Mode | Error is logged, boot completes, and the launcher reports the version problem in its UI — never a black screen |
+| Frame rate cap applied | Watch console during client startup | `Client frame rate capped to 60 for bootstrap and menus (FishNet raises it on connect).` |
+| Cap holds on a vSync quality level | Set quality to **Balanced** (`vSyncCount: 1`), enter Play Mode, watch the launcher | Frame rate settles at ~60, not the display refresh rate or uncapped |
+| VSync preference is not clobbered | Enable VSync in Options, restart the client, reopen Options | Toggle still reads on, and `QualitySettings.vSyncCount` is `1` once the options UI has loaded |
 | Logging bridge active | Call `Debug.Log("test")` during play | Message routed through `FishMMO.Logging.Log` with source `"UNITY"` |
 | Re-entrant loop prevention | `UnityConsoleLogger` writes to `Debug.Log` | No infinite loop; `IsLoggingInternally` flag prevents re-capture |
 | Graceful shutdown (Editor) | Exit Play Mode | `Editor exiting Play Mode. Initiating shutdown...` followed by synchronous `Log.Shutdown()` |
@@ -259,6 +288,9 @@ MainBootstrapSystem.Awake()
                     │
                     ├── OnPreload() — MainBootstrapSystem overrides:
                     │   ├── Load VersionConfig (asset + optional version.txt validation)
+                    │   ├── Cap the client frame rate (!UNITY_SERVER only):
+                    │   │   ├── QualitySettings.vSyncCount  = 0   (else the cap is ignored)
+                    │   │   └── Application.targetFrameRate = 60
                     │   ├── Set GameVersion static string
                     │   ├── Register editor play-mode state handler (editor only)
                     │   ├── Register Application.wantsToQuit handler

@@ -1,0 +1,127 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIDeathDialog.uss
+    Layout for the death dialog. Colour, type and transition
+    rules live in FishMMO-Theme.uss and are not repeated here.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+/* ═══════════════════════════════════════════════════════════
+   OVERLAY
+   Fills the panel and centres the dialog. No background of its
+   own: dimming the screen would also dim the corpse and the
+   world the player is deciding about.
+   ═══════════════════════════════════════════════════════════ */
+.death-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL
+   ═══════════════════════════════════════════════════════════ */
+.death-panel {
+    width: 420px;
+    flex-direction: column;
+}
+/* No picking-mode here: it is a UXML attribute, not a USS property, and an
+   element whose parent is PickingMode.Ignore is still picked itself. The
+   overlay ignores picking so clicks reach the world; the panel keeps the
+   default Position mode and its buttons stay clickable. */
+
+/* ── HEADER ─────────────────────────────────────────────── */
+.death-header {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.death-header__icon {
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+}
+
+.death-header__title {
+    flex-shrink: 1;
+}
+
+/* ── BODY ───────────────────────────────────────────────── */
+.death-body {
+    flex-direction: column;
+    padding-top: 16px;
+    padding-bottom: 8px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.death-message {
+    font-size: 13px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+    margin-bottom: 14px;
+}
+
+.death-divider {
+    margin-bottom: 2px;
+    flex-shrink: 0;
+}
+
+/* ── ACTIONS ────────────────────────────────────────────── */
+.death-actions {
+    flex-direction: column;
+    padding: 12px;
+}
+
+.death-btn {
+    height: 34px;
+    border-width: 1px;
+    border-radius: 5px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin: 0;
+    padding: 0;
+    cursor: link;
+    transition:
+        background-color 0.12s ease,
+        border-color     0.12s ease,
+        color            0.12s ease;
+}
+
+/* Primary action: respawn. Ember accent, matching .fish-close-btn:hover. */
+.death-btn--primary {
+    background-color: rgba(255, 107, 26, 0.12);
+    border-color: rgb(255, 107, 26);
+    color: rgb(255, 173, 118);
+}
+
+.death-btn--primary:hover {
+    background-color: rgba(255, 107, 26, 0.25);
+    color: rgb(255, 140, 69);
+}
+
+/* Secondary action: accept a resurrect. Teal, the theme's positive colour. */
+.death-btn--accept {
+    background-color: rgba(88, 214, 178, 0.12);
+    border-color: rgb(88, 214, 178);
+    color: rgb(88, 214, 178);
+    margin-top: 8px;
+}
+
+.death-btn--accept:hover {
+    background-color: rgba(88, 214, 178, 0.25);
+}
+
+/* Collapses rather than merely hiding, so the panel shrinks to fit. */
+.death-hidden {
+    display: none;
+}

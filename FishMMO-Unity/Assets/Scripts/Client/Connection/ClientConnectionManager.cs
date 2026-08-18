@@ -107,11 +107,38 @@ namespace FishMMO.Client
 		public event Action OnReconnectFailed;
 		/// <summary>Fired when a non-reconnectable connection attempt fails (e.g. login server unreachable).</summary>
 		public event Action OnConnectionAttemptFailed;
+		/// <summary>
+		/// Fired the moment a reconnect is armed, before the backoff delay begins.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="OnReconnectAttempt"/> fires when the retry actually starts, which leaves
+		/// the whole backoff window unreported. That window is not idle time during a scene
+		/// transfer: the scene server has already unloaded the client's scene, so the loading
+		/// overlay has been dismissed by the unload-end event and the player is looking at an
+		/// empty world until the retry fires. Shortening the delay for a deliberate hop reduces
+		/// that to a flicker; this event closes it, by letting the overlay treat "a reconnect is
+		/// coming" as a transition in progress rather than waiting for it to begin.
+		/// </remarks>
+		public event Action OnReconnectPending;
 
-		/// <summary>Returns true if the current connection type supports reconnection (World or Scene).</summary>
+		/// <summary>Returns true if the current connection type supports reconnection
+		/// (World, Scene, or an in-flight world connect).</summary>
+		/// <remarks>
+		/// ConnectingToWorld counts. <see cref="ConnectToServer"/> sets it for every world
+		/// connect — including the reconnects <see cref="TryReconnect"/> issues — and
+		/// <see cref="OnClientConnectionState"/> clears CurrentConnectionType to None on the
+		/// drop that arms the retry, so by the time an attempt fails ConnectingToWorld is the
+		/// only type left describing it. Without it here, a failed reconnect read as a
+		/// non-reconnectable failure: no further retry was armed, so MaxReconnectAttempts
+		/// never counted past one, OnReconnectFailed (and its quit-to-login forward) never
+		/// fired, and the client sat disconnected with no path forward. lastWorldAddress is
+		/// assigned before StartConnection on that same path, so a retry always has an
+		/// address to dial — and TryReconnect no-ops when it does not.
+		/// </remarks>
 		public bool CanReconnect =>
 				CurrentConnectionType == ServerConnectionType.World ||
-				CurrentConnectionType == ServerConnectionType.Scene;
+				CurrentConnectionType == ServerConnectionType.Scene ||
+				CurrentConnectionType == ServerConnectionType.ConnectingToWorld;
 
 		/// <summary>Creates a ClientConnectionManager and subscribes to NetworkManager connection events.</summary>
 		/// <param name="networkManager">The FishNet NetworkManager to manage.</param>
@@ -140,6 +167,7 @@ namespace FishMMO.Client
 			OnReconnectAttempt = null;
 			OnReconnectFailed = null;
 			OnConnectionAttemptFailed = null;
+			OnReconnectPending = null;
 			EnsureConnectionToken = null;
 		}
 
@@ -171,8 +199,32 @@ namespace FishMMO.Client
 			// concurrent coroutines that would both call StartConnection().
 			if (System.Threading.Interlocked.CompareExchange(ref connectingGuard, 1, 0) != 0)
 			{
-				Log.Warning("ClientConnection", "ConnectToServer already in progress; ignoring duplicate call.");
-				return;
+				/* Leaked-guard recovery. Every exit path in OnAwaitingConnectionReady releases
+				 * the guard, but the coroutine has to actually run for that to happen — and
+				 * CoroutineRunner hosts it on a GameObject this class does not own. If the
+				 * coroutine never starts or is stopped from outside, the guard stays acquired
+				 * and every subsequent connect attempt is refused for the life of the process,
+				 * which presents as a login button that silently stops working.
+				 *
+				 * The bound is generous: it must exceed the worst legitimate acquisition,
+				 * which is the stop wait plus the token fetch plus the establish wait. */
+				double guardAge = (double)Time.realtimeSinceStartup - connectingGuardAcquiredAt;
+				double guardMaxAge = ConnectionStopTimeoutSeconds * 2.0 + ConnectionEstablishTimeoutSeconds + 30.0;
+				if (connectingGuardAcquiredAt <= 0.0 || guardAge < guardMaxAge)
+				{
+					Log.Warning("ClientConnection", "ConnectToServer already in progress; ignoring duplicate call.");
+					return;
+				}
+
+				Log.Error("ClientConnection",
+					$"Connection guard held for {guardAge:F1}s with no in-flight connect (limit {guardMaxAge:F0}s); " +
+					"reclaiming it. The previous connection coroutine was stopped without releasing.");
+				if (inFlightConnectionCoroutine != null)
+				{
+					CoroutineRunner.Stop(inFlightConnectionCoroutine);
+					inFlightConnectionCoroutine = null;
+				}
+				// The guard is already 1; leave it acquired and continue as the new owner.
 			}
 			connectingGuardAcquiredAt = (double)Time.realtimeSinceStartup;
 			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
@@ -206,10 +258,14 @@ namespace FishMMO.Client
 					OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
 					/* isWorldServer: true — lastWorldAddress/lastWorldPort are by definition the
 					 * world server, so the reconnect must be typed as one. Omitting it left
-					 * CurrentConnectionType at whatever the dropped connection was (Scene, after a
-					 * world->scene hop), so a reconnect to the world server was recorded as a scene
-					 * connection: CanReconnect and the world-address cache then described a
-					 * connection that no longer matched reality. */
+					 * CurrentConnectionType at None (OnClientConnectionState clears it on the
+					 * drop that armed this retry), which made a failed attempt look like a
+					 * non-reconnectable failure: CanReconnect was false, so no further retry was
+					 * armed and OnConnectionAttemptFailed fired instead — wrongly invalidating
+					 * the cached login server list for what was a world-server outage. It also
+					 * made the establish-timeout message name the login server while actually
+					 * dialing the world server. See CanReconnect, which must accept
+					 * ConnectingToWorld for the retry loop to survive past the first attempt. */
 					ConnectToServer(lastWorldAddress, lastWorldPort, isWorldServer: true);
 				}
 			}
@@ -224,16 +280,41 @@ namespace FishMMO.Client
 		public void CancelReconnect() { ReconnectsAttempted = 0; nextReconnect = -1; OnReconnectFailed?.Invoke(); }
 
 		/// <summary>Forces the connection closed and prevents auto-reconnect until reset.</summary>
+		/// <remarks>
+		/// The suppression flag is only latched when there is a connection left to tear down.
+		/// <see cref="OnClientConnectionState"/> is what consumes it, so latching it against a
+		/// connection that is already Stopped strands it: no further Stopped transition is
+		/// raised to clear it, and the next <see cref="ConnectToServer"/> aborts inside
+		/// <see cref="OnAwaitingConnectionReady"/> — silently, with the guard released and no
+		/// connection started. The login screen reaches that state routinely, because every
+		/// auth-error dialog calls this whether or not the transport is still up.
+		/// </remarks>
 		public void ForceDisconnect()
 		{
-			forceDisconnect = true;
+			if (ClientState != LocalConnectionState.Stopped)
+			{
+				forceDisconnect = true;
+			}
+			// A deliberate disconnect supersedes any reconnect still counting down.
+			nextReconnect = -1;
 			NetworkManager.ClientManager.StopConnection();
 		}
 
 		/// <summary>Resets all reconnect state: attempt count, connection type, stored address.</summary>
 		public void ResetReconnectState()
 		{
-			forceDisconnect = false;
+			/* Only clear the suppression flag when the teardown it was latched for has already
+			 * landed. QuitToLogin calls ForceDisconnect and then this method on the same
+			 * synchronous path, but the transport reports Stopped a frame or more later — so
+			 * clearing unconditionally meant that Stopped arrived with nothing left to mark it
+			 * deliberate, and OnClientConnectionState reported a perfectly ordinary quit-to-
+			 * login as a failed connection attempt (invalidating the cached login server list
+			 * and logging an error for it). The Stopped handler clears the flag itself, so
+			 * preserving it here cannot strand it. */
+			if (ClientState == LocalConnectionState.Stopped)
+			{
+				forceDisconnect = false;
+			}
 			stoppingForConnect = false;
 			ReconnectsAttempted = 0; nextReconnect = -1;
 			CurrentConnectionType = ServerConnectionType.None;
@@ -268,9 +349,39 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>
+		/// Delay used for the first retry after a scene server hands the client back, instead of
+		/// the full backoff. Jittered so a scene-wide event does not send every client at once.
+		/// </summary>
+		/// <remarks>
+		/// A scene-to-scene transfer is implemented as a deliberate drop: the scene server
+		/// releases the character and disconnects, and the client is expected to return to the
+		/// world server to be re-routed. That return went through the ordinary reconnect
+		/// backoff, so every teleport and channel switch cost a full
+		/// <see cref="ReconnectAttemptWaitTime"/> (5s) of dead time — during which the scene has
+		/// already unloaded and the loading overlay has already been dismissed by
+		/// <c>OnSceneEndUnload</c>, leaving the player looking at an empty world.
+		/// <para>
+		/// Only the first attempt is fast-pathed, and only from a Scene connection. If that
+		/// attempt fails the normal exponential backoff resumes from attempt 1, so a genuinely
+		/// unreachable world server is still not hammered.
+		/// </para>
+		/// </remarks>
+		public float SceneHandoffReconnectDelay { get; set; } = 0.25f;
+
 		/// <summary>Computes the reconnect delay with exponential backoff and jitter for the given attempt number.</summary>
-		private float ComputeReconnectDelay(int attempt)
+		/// <param name="attempt">Number of reconnect attempts already made.</param>
+		/// <param name="fromSceneHandoff">
+		/// True when the drop that armed this retry came from a Scene connection, which is how a
+		/// deliberate scene transfer presents. See <see cref="SceneHandoffReconnectDelay"/>.
+		/// </param>
+		private float ComputeReconnectDelay(int attempt, bool fromSceneHandoff = false)
 		{
+			if (fromSceneHandoff && attempt <= 0)
+			{
+				return Mathf.Max(0f, SceneHandoffReconnectDelay) * UnityEngine.Random.Range(0.75f, 1.25f);
+			}
+
 			float d = ReconnectAttemptWaitTime <= 0 ? 1f : ReconnectAttemptWaitTime;
 			int shift = attempt < 0 ? 0 : Math.Min(attempt, 6);
 			float backoff = d * (1 << shift);
@@ -294,17 +405,29 @@ namespace FishMMO.Client
 						stoppingForConnect = false;
 						break;
 					}
+					// Snapshot before consuming: this transition is the one ForceDisconnect
+					// latched the flag for, so it must be cleared here. Leaving it set for a
+					// later reader means the next ConnectToServer sees a stale suppression and
+					// aborts its own connect attempt (see ForceDisconnect).
+					bool wasForced = forceDisconnect;
+					forceDisconnect = false;
 					// Check CanReconnect BEFORE clearing CurrentConnectionType —
 					// CanReconnect reads CurrentConnectionType to decide whether
 					// World/Scene reconnection is applicable.
-					if (!forceDisconnect && CanReconnect)
+					if (!wasForced && CanReconnect)
 					{
-						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted);
+						// A drop from a Scene connection is how a deliberate transfer presents:
+						// the scene server released the character and sent us back to the world
+						// server on purpose. Do not make the player wait out a failure backoff
+						// for it. Read before CurrentConnectionType is cleared below.
+						bool fromSceneHandoff = CurrentConnectionType == ServerConnectionType.Scene;
+						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted, fromSceneHandoff);
+						OnReconnectPending?.Invoke();
 						// OnReconnectAttempt is intentionally NOT fired here — it fires
 						// once in TryReconnect() when the actual reconnect begins, so
 						// consumers don't receive duplicate events per cycle.
 					}
-					else if (!forceDisconnect)
+					else if (!wasForced)
 					{
 						// Non-reconnectable connection failed (e.g. login server).
 						// Fire so listeners can invalidate cached discovery data.

@@ -6,6 +6,11 @@
 # This template is maintained from the github/gitignore repository
 # and distributed under Creative Commons Zero v1.0 Universal license.
 
+# --- Built native plugins (not tracked) ---
+/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/*/
+/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/windows_x86_64.meta
+/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/mac_x86_64.meta
+
 # This .gitignore file should be placed at the root of your Unity project directory
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore

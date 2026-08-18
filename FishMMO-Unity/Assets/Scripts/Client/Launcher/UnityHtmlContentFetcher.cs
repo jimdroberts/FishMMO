@@ -40,6 +40,11 @@ namespace FishMMO.Client
 		/// inter-attempt delay for content nobody is waiting on — with the previous value of 3
 		/// and an unreachable host that times out rather than refusing, that is 4 x 10s + 3 x 1s
 		/// of requests for a decorative panel. The news pane simply shows an error instead.
+		/// <para>
+		/// This used to also sit on the critical path, with the version check waiting on it.
+		/// It no longer does — startup and the news fetch are dispatched independently — so the
+		/// retry count now costs only the news pane, not the launch.
+		/// </para>
 		/// </remarks>
 		[Tooltip("Maximum number of retries for each web request. 0 = a single attempt (news is cosmetic).")]
 		[SerializeField]

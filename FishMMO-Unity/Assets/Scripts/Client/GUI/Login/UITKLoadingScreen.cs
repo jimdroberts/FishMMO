@@ -90,6 +90,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnUnloadStart += OnSceneStartUnload;
 			Client.NetworkManager.SceneManager.OnUnloadEnd += OnSceneEndUnload;
 
+			Client.OnReconnectPending += Client_OnReconnectPending;
 			Client.OnReconnectAttempt += Client_OnReconnectAttempt;
 			Client.OnReconnectFailed += Client_OnReconnectFailed;
 		}
@@ -105,6 +106,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnUnloadStart -= OnSceneStartUnload;
 			Client.NetworkManager.SceneManager.OnUnloadEnd -= OnSceneEndUnload;
 
+			Client.OnReconnectPending -= Client_OnReconnectPending;
 			Client.OnReconnectAttempt -= Client_OnReconnectAttempt;
 			Client.OnReconnectFailed -= Client_OnReconnectFailed;
 		}
@@ -117,6 +119,24 @@ namespace FishMMO.Client
 		/// True while a FishNet scene load/unload or a reconnect attempt is driving the overlay.
 		/// </summary>
 		private bool sceneTransitionActive;
+		/// <summary>
+		/// True from the moment a reconnect is armed until the overlay is dismissed.
+		/// </summary>
+		/// <remarks>
+		/// A scene-to-scene transfer is a deliberate disconnect: the scene server unloads the
+		/// client's scene and drops it, and the client returns through the world server. The
+		/// unload finishes first, so <see cref="OnSceneEndUnload"/> cleared the only active
+		/// driver and the overlay came down over an emptied world — the player then watched
+		/// nothing at all until the retry fired and raised it again.
+		/// <para>
+		/// Arming is the earliest honest signal that the transition is still running, so it gets
+		/// its own driver rather than being folded into <see cref="sceneTransitionActive"/>,
+		/// which the unload events own and will clear. Cleared only by <see cref="Hide"/> —
+		/// reached on reconnect failure, and on world entry via
+		/// <c>Client.DismissLoadingScreen</c> once the player character actually exists.
+		/// </para>
+		/// </remarks>
+		private bool reconnectPendingActive;
 
 		/// <summary>
 		/// Shows the overlay while any driver is active and hides it only once every driver
@@ -135,7 +155,7 @@ namespace FishMMO.Client
 		/// </param>
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
-			bool shouldShow = addressableLoadActive || sceneTransitionActive;
+			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive;
 
 			if (shouldShow && (forceRefresh || !Visible))
 			{
@@ -201,8 +221,20 @@ namespace FishMMO.Client
 		{
 			addressableLoadActive = false;
 			sceneTransitionActive = false;
+			reconnectPendingActive = false;
 
 			base.Hide();
+		}
+
+		/// <summary>
+		/// Raises the overlay as soon as a reconnect is armed, before its delay elapses.
+		/// </summary>
+		/// <remarks>See <see cref="reconnectPendingActive"/>.</remarks>
+		public void Client_OnReconnectPending()
+		{
+			SetLoadingImage(DefaultLoadingScreenSprite);
+			reconnectPendingActive = true;
+			RefreshVisibility();
 		}
 
 		/// <summary>
@@ -213,6 +245,7 @@ namespace FishMMO.Client
 		public void Client_OnReconnectAttempt(int attempts, int maxAttempts)
 		{
 			SetLoadingImage(DefaultLoadingScreenSprite);
+			reconnectPendingActive = true;
 			sceneTransitionActive = true;
 			RefreshVisibility();
 		}

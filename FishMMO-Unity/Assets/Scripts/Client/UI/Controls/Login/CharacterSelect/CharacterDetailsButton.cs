@@ -58,10 +58,15 @@ namespace FishMMO.Client
 				CharacterNameLabel.text = details.CharacterName;
 				labelColor = CharacterNameLabel.color;
 			}
-			// Set character scene name
+			// Set character scene name. A character whose body is still in the world after a
+			// combat logout is called out here — otherwise the row is indistinguishable from a
+			// normal one and the player rejoins a session that kept running, and possibly
+			// ended, without them.
 			if (CharacterSceneLabel != null)
 			{
-				CharacterSceneLabel.text = details.SceneName;
+				CharacterSceneLabel.text = details.IsCombatLogged
+					? $"{details.SceneName} — still in world (combat logout), select to rejoin"
+					: details.SceneName;
 			}
 			// Ensure the button is active in the UI
 			gameObject.SetActive(true);

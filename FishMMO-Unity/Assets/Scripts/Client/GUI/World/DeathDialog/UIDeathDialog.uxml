@@ -1,0 +1,90 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIDeathDialog.uxml   —   FishMMO Death Dialog               ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss   — colors, fonts, transitions       ║
+    ║    2. UIDeathDialog.uss   — sizes, flex, spacing             ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    death-*  Layout class        (UIDeathDialog.uss)          ║
+    ║                                                              ║
+    ║  Element names are contract, not decoration — UITKDeathDialog ║
+    ║  resolves them by name:                                      ║
+    ║    death-message        Label   status text                  ║
+    ║    death-respawn-btn    Button  respawn at bind point        ║
+    ║    death-resurrect-btn  Button  accept another player's rez  ║
+    ║                                                              ║
+    ║  There is deliberately NO close button. Respawning is the    ║
+    ║  only way out of the dead state, so a control that dismisses ║
+    ║  the dialog would strand the player as a corpse with no UI.  ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIDeathDialog.uss" />
+
+    <!-- ══════════════════════════════════════════════════════
+         SCREEN OVERLAY
+         Fills the panel so the dialog can be centred, but does
+         not swallow input: picking-mode Ignore lets clicks pass
+         through to the world everywhere except on the panel
+         itself, so a dead player can still pan the camera.
+    ══════════════════════════════════════════════════════ -->
+    <ui:VisualElement name="death-overlay" class="death-overlay" picking-mode="Ignore">
+
+        <!-- fish-panel  → background, border, radius, overflow -->
+        <!-- death-panel → width, flex-direction               -->
+        <ui:VisualElement name="death-panel" class="fish-panel death-panel">
+
+            <!-- ── HEADER ──────────────────────────────────── -->
+            <ui:VisualElement name="death-header" class="fish-panel__header death-header">
+                <ui:VisualElement name="death-header-icon" class="fish-panel__icon death-header__icon" />
+                <ui:Label name="death-header-title"
+                          class="fish-panel__title death-header__title"
+                          text="YOU HAVE DIED" />
+            </ui:VisualElement>
+
+            <!-- ── BODY ────────────────────────────────────── -->
+            <ui:VisualElement name="death-body" class="death-body">
+
+                <!-- Text is set from code; the authored value is the
+                     resting state so the panel is never blank. -->
+                <ui:Label name="death-message"
+                          class="fish-text--secondary death-message"
+                          text="You have died." />
+
+                <ui:VisualElement class="fish-divider death-divider" />
+
+            </ui:VisualElement>
+
+            <!-- ── ACTIONS ─────────────────────────────────── -->
+            <ui:VisualElement name="death-actions" class="fish-panel__footer death-actions">
+
+                <!-- Always available. -->
+                <ui:Button name="death-respawn-btn"
+                           class="death-btn death-btn--primary"
+                           text="RESPAWN AT BIND POINT" />
+
+                <!--
+                    Hidden until a ResurrectOfferBroadcast arrives.
+                    Authored hidden as well as toggled from code so it
+                    cannot flash on the first frame of the dialog.
+                -->
+                <ui:Button name="death-resurrect-btn"
+                           class="death-btn death-btn--accept death-hidden"
+                           text="ACCEPT RESURRECT" />
+
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+        <!-- /death-panel -->
+
+    </ui:VisualElement>
+    <!-- /death-overlay -->
+
+</ui:UXML>

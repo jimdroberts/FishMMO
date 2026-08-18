@@ -84,7 +84,9 @@ FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Plugins/mac_x86_64.met
 # Client/server build output produced by the FishMMO Dashboard build panel.
 /Builds/
 # Native WebTransport CMake build directories and cache.
-FishMMO-WebTransport/build/
+# build/ is already covered by the [Bb]uild/ rule above; the Schannel tree is not,
+# because that rule matches the exact directory name only.
+# See FishMMO-WebTransport/build_windows_schannel.ps1.
 FishMMO-WebTransport/build_win_schannel/
 FishMMO-WebTransport/openssl_cache.cmake
 # Per-deployment server config copied to the deploy root at build/install time —
@@ -96,6 +98,23 @@ FishMMO-WebTransport/openssl_cache.cmake
 # FishMMO-Setup/ templates — may contain local DB credentials.
 FishMMO-WebServers/**/appsettings.json
 FishMMO-CMS/**/appsettings.json
+
+# Per-deployment server config, copied to the working directory to run a server.
+# In the Editor, Constants.GetWorkingDirectory() resolves to this repo root, so these
+# land here. The tracked source templates live under FishMMO-Setup/Development|Production/.
+/LoginServer.cfg
+/WorldServer.cfg
+/SceneServer.cfg
+
+# Runtime appsettings.json copied into each web server's output directory from the
+# FishMMO-Setup/ templates. These hold real database credentials at runtime and must never
+# be committed. Scoped to these two trees on purpose: the tracked templates live at
+# FishMMO-Setup/Development|Production/appsettings.json and are deliberately not matched.
+FishMMO-WebServers/**/appsettings.json
+FishMMO-CMS/**/appsettings.json
+
+# Client/server build output produced by the FishMMO Dashboard build panel.
+/Builds/
 
 # --- API Documentation (docfx) ---
 # docfx.json, toc.yml, docs/, publish.sh, etc. are tracked; only the

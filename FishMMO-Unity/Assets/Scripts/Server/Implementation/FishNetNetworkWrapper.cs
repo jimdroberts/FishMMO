@@ -374,9 +374,20 @@ namespace FishMMO.Server.Implementation
 		/// <param name="broadcast">The broadcast message.</param>
 		/// <param name="requireAuthentication">Whether authentication is required.</param>
 		/// <param name="channel">The channel to use for broadcasting.</param>
+		/// <remarks>
+		/// A null or inactive connection is a no-op rather than a throw. Server-side characters
+		/// are no longer guaranteed to have an owner: a combat-logout body stays spawned and
+		/// keeps taking damage, firing the same achievement, quest and status events a played
+		/// character does — every one of which would otherwise dereference a null connection
+		/// somewhere deep in a gameplay system and abort whatever was in progress.
+        /// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Broadcast<T>(NetworkConnection conn, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
 			conn.Broadcast(broadcast, requireAuthentication, channel);
 		}
 	}

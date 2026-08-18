@@ -215,11 +215,73 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (currentTick - lastCombatTick >= combatDurationTicks)
+			if (EvaluateCombatTimer(currentTick, combatDurationTicks, ref lastCombatTick) == CombatTimerStep.Expired)
 			{
 				combatTimerActive = false;
 				Character.DisableFlags(CharacterFlags.IsInCombat);
 			}
+		}
+
+		/// <summary>
+		/// Outcome of one evaluation of the combat timer.
+		/// </summary>
+		public enum CombatTimerStep
+		{
+			/// <summary>Still in combat; the window has not elapsed.</summary>
+			Continue = 0,
+			/// <summary>
+			/// The reference tick moved backwards, so the window was re-measured from the new
+			/// value. The character stays in combat.
+			/// </summary>
+			Rebaselined = 1,
+			/// <summary>The window elapsed; the character should leave combat.</summary>
+			Expired = 2,
+		}
+
+		/// <summary>
+		/// Decides whether the combat window has elapsed, tolerating a reference tick that moves
+		/// backwards.
+		/// </summary>
+		/// <remarks>
+		/// Pure and static so the arithmetic can be proven in isolation — the surrounding
+		/// behaviour needs a live FishNet TimeManager, which would otherwise make this logic
+		/// untestable.
+		/// <para>
+		/// The subtraction is unsigned, so a regression of even one tick becomes a value near
+		/// <see cref="uint.MaxValue"/>, trivially satisfies the expiry test, and silently drops
+		/// the character out of combat. That is the state the teleport gate and the
+		/// combat-logout hold both key off, so it reads as a combat-escape exploit rather than a
+		/// clock glitch.
+		/// </para>
+		/// <para>
+		/// The regression is not hypothetical. <c>ResolveCurrentCombatTick</c> prefers the
+		/// owner's replicate tick, which in client-side prediction runs AHEAD of the server's
+		/// local tick; the moment ownership is removed — which is exactly what starting a
+		/// combat-logout linger does — <c>IsController</c> flips true on the server and the
+		/// resolver falls back to that slower local tick. A client hitch or a reconnect moves it
+		/// backwards the same way.
+		/// </para>
+		/// <para>
+		/// Re-baselining rather than expiring means the character stays in combat and the window
+		/// is measured afresh from the new domain, so an ownership handover costs the player a
+		/// fresh combat window instead of instantly clearing their combat state.
+		/// </para>
+		/// </remarks>
+		/// <param name="currentTick">The tick to evaluate against.</param>
+		/// <param name="combatDurationTicks">Ticks of inactivity before combat ends.</param>
+		/// <param name="lastCombatTick">Tick of the last combat action; re-baselined on regression.</param>
+		/// <returns>What the caller should do about this tick.</returns>
+		public static CombatTimerStep EvaluateCombatTimer(uint currentTick, uint combatDurationTicks, ref uint lastCombatTick)
+		{
+			if (currentTick < lastCombatTick)
+			{
+				lastCombatTick = currentTick;
+				return CombatTimerStep.Rebaselined;
+			}
+
+			return currentTick - lastCombatTick >= combatDurationTicks
+				? CombatTimerStep.Expired
+				: CombatTimerStep.Continue;
 		}
 
 		/// <summary>

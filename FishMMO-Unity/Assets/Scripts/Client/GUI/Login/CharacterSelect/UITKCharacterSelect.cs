@@ -159,6 +159,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
 
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
@@ -172,6 +173,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
 
 			if (Client.LoginAuthenticator != null)
 			{
@@ -296,7 +298,34 @@ namespace FishMMO.Client
 		{
 			OnCharacterListStart?.Invoke();
 
-			Client.StartCoroutine(OnProcessCharacterList());
+			StopProcessCharacterList();
+			processCharacterListRoutine = Client.StartCoroutine(OnProcessCharacterList());
+		}
+
+		/// <summary>
+		/// Handle for the in-flight <see cref="OnProcessCharacterList"/> coroutine.
+		/// </summary>
+		/// <remarks>
+		/// <c>StopCoroutine(OnProcessCharacterList())</c> builds a brand new enumerator and asks
+		/// Unity to stop that one, which never matches the running instance — so the coroutine
+		/// carried on and called <see cref="UITKControl.Show"/> on this panel after the player
+		/// had already quit to login, putting it back on top of the login screen. Keeping the
+		/// handle is what makes stopping it actually work.
+		/// </remarks>
+		private Coroutine processCharacterListRoutine;
+
+		/// <summary>Stops the character-list post-processing coroutine if one is running.</summary>
+		private void StopProcessCharacterList()
+		{
+			if (processCharacterListRoutine == null)
+			{
+				return;
+			}
+			if (Client != null)
+			{
+				Client.StopCoroutine(processCharacterListRoutine);
+			}
+			processCharacterListRoutine = null;
 		}
 
 		/// <summary>
@@ -312,6 +341,8 @@ namespace FishMMO.Client
 				{
 				}, true);
 			}
+
+			processCharacterListRoutine = null;
 
 			OnCharacterListEnd?.Invoke();
 			Show();
@@ -332,6 +363,43 @@ namespace FishMMO.Client
 				RaceTemplateID = msg.RaceTemplateID,
 			};
 			CreateCharacterRow(details);
+		}
+
+		/// <summary>
+		/// Handles a refused character selection so the player is told why rather than being
+		/// left on a screen that appears to have ignored the click.
+		/// </summary>
+		/// <param name="msg">The refusal message.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterSelectResultBroadcastReceived(CharacterSelectResultBroadcast msg, Channel channel)
+		{
+			if (msg.Result == CharacterSelectResult.Success)
+			{
+				return;
+			}
+
+			// The connect button was locked when the request went out; a refusal never reaches
+			// the world-server-list path that would normally unlock it.
+			SetConnectButtonLocked(false);
+
+			/* Put the panel back. OnClick_SelectCharacter hides it optimistically, and only the
+			 * success path (ServerListBroadcast -> UITKServerSelect.Show) puts anything else on
+			 * screen. A refusal therefore left the player looking at an empty scene with no way
+			 * back once the dialog below was dismissed. */
+			Show();
+
+			string message = msg.Result == CharacterSelectResult.OtherCharacterInWorld
+				? $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat."
+				: "Character selection failed. Please try again.";
+
+			if (UIManager.TryGetTK("UITKDialogBox", out UITKDialogBox dialogBox))
+			{
+				dialogBox.Open(message);
+			}
+			else
+			{
+				FishMMO.Logging.Log.Warning("UITKCharacterSelect", message);
+			}
 		}
 
 		/// <summary>
@@ -380,7 +448,12 @@ namespace FishMMO.Client
 			Label name = new Label(details.CharacterName);
 			name.AddToClassList(CHARACTER_ROW_NAME_CLASS);
 
-			Label scene = new Label(details.SceneName);
+			// A character whose body is still in the world reads as an ordinary row otherwise,
+			// so the player would select it with no idea they are resuming a session that kept
+			// running — and possibly ended — without them.
+			Label scene = new Label(details.IsCombatLogged
+				? $"{details.SceneName} — still in world (combat logout), select to rejoin"
+				: details.SceneName);
 			scene.AddToClassList(CHARACTER_ROW_SCENE_CLASS);
 
 			rowRoot.Add(name);
@@ -481,7 +554,7 @@ namespace FishMMO.Client
 		{
 			base.OnQuitToLogin();
 
-			Client.StopCoroutine(OnProcessCharacterList());
+			StopProcessCharacterList();
 
 			SetDeleteButtonLocked(false);
 			SetConnectButtonLocked(false);
@@ -492,7 +565,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_QuitToLogin()
 		{
-			Client.StopCoroutine(OnProcessCharacterList());
+			StopProcessCharacterList();
 
 			Client.QuitToLogin();
 		}
