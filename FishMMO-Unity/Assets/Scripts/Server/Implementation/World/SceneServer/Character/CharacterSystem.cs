@@ -195,6 +195,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Character events
 			IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
 			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
+			ICharacterDamageController.OnResurrectOffered += CharacterDamageController_OnResurrectOffered;
 
 			// Periodic callbacks
 			saveRate = Mathf.Max(1f, saveRate);
@@ -258,6 +259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Character events
 			IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
 			ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
+			ICharacterDamageController.OnResurrectOffered -= CharacterDamageController_OnResurrectOffered;
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
