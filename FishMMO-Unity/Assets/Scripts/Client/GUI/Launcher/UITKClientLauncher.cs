@@ -43,6 +43,7 @@ namespace FishMMO.Client
 		private const string SETTING_RETRIES_NAME = "launcher-setting-retries";
 		private const string SETTING_RETRYDELAY_NAME = "launcher-setting-retrydelay";
 		private const string SETTINGS_NOTE_NAME = "launcher-settings-note";
+		private const string DISK_SIZE_NAME = "launcher-disk-size";
 
 		/// <summary>USS class that hides an element. Defined in FishMMO-Theme.uss.</summary>
 		private const string HIDDEN_CLASS = "fish-hidden";
@@ -70,9 +71,11 @@ namespace FishMMO.Client
 		private SliderInt retriesSlider;
 		private Slider retryDelaySlider;
 		private Label settingsNote;
+		private Label diskSizeLabel;
 
 		private bool elementsResolved;
 		private bool settingsOpen;
+		private string pendingDiskSizeText = "Installation size: measuring...";
 
 		// Recorded state, applied whenever the visual tree becomes available.
 		private string pendingTitle = string.Empty;
@@ -141,6 +144,7 @@ namespace FishMMO.Client
 			this.retriesSlider = this.root.Q<SliderInt>(SETTING_RETRIES_NAME);
 			this.retryDelaySlider = this.root.Q<Slider>(SETTING_RETRYDELAY_NAME);
 			this.settingsNote = this.root.Q<Label>(SETTINGS_NOTE_NAME);
+			this.diskSizeLabel = this.root.Q<Label>(DISK_SIZE_NAME);
 
 			BindSettings();
 
@@ -264,6 +268,15 @@ namespace FishMMO.Client
 			ApplyStatus();
 			ApplyNewsVisible();
 			ApplyNewsBody();
+			ApplyDiskSize();
+		}
+
+		private void ApplyDiskSize()
+		{
+			if (this.diskSizeLabel != null)
+			{
+				this.diskSizeLabel.text = this.pendingDiskSizeText;
+			}
 		}
 
 		#region ILauncherView
@@ -359,6 +372,17 @@ namespace FishMMO.Client
 			this.pendingNewsContent = content;
 			this.pendingNewsMessage = null;
 			ApplyNewsBody();
+		}
+
+		/// <inheritdoc />
+		public void SetInstallSize(long? sizeBytes)
+		{
+			// "Unavailable" rather than "0 B" when unknown: a zero would read as an empty
+			// installation, which is a different and alarming claim.
+			this.pendingDiskSizeText = sizeBytes.HasValue
+				? $"Installation size: {DownloadStats.FormatBytes((ulong)sizeBytes.Value)}"
+				: "Installation size: unavailable";
+			ApplyDiskSize();
 		}
 
 		/// <inheritdoc />

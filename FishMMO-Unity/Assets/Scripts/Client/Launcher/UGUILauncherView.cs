@@ -283,6 +283,14 @@ namespace FishMMO.Client
 		}
 
 		/// <inheritdoc />
+		public void SetInstallSize(long? sizeBytes)
+		{
+			// The uGUI launcher has no element for this. It is the legacy fallback view and is
+			// not gaining new scene objects — adding one would mean editing the scene that this
+			// view exists specifically to leave untouched.
+		}
+
+		/// <inheritdoc />
 		public void SetNewsContent(HtmlNode content)
 		{
 			if (this.htmlText != null)

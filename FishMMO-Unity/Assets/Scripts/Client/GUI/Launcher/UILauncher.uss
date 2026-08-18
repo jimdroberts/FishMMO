@@ -6,34 +6,75 @@
     elements it builds at runtime, so they have no counterpart in UILauncher.uxml.
 */
 
+/*
+    The window is resizable, so nothing here may assume a size. Every band is either
+    flex-shrink: 0 (chrome that must stay legible) or flex-grow: 1 (the news pane, which
+    absorbs all the slack). The only fixed numbers are minimums.
+*/
 .launcher-screen {
     flex-grow: 1;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
+    padding: 0;
 }
 
 .launcher-panel {
-    width: 100%;
-    max-width: 900px;
-    height: 100%;
+    flex-grow: 1;
     flex-direction: column;
+    border-radius: 0;
+    border-width: 0;
+    border-top-width: 2px;
+    min-width: 480px;
+    min-height: 360px;
+}
+
+/* ── Art hooks ──────────────────────────────────────────── */
+
+/*
+    Both of these are empty by design. Point them at art from USS alone — no C# involved:
+
+        .launcher-backdrop { background-image: url("project://database/Assets/.../bg.png"); }
+        .launcher-logo     { background-image: url("project://database/Assets/.../logo.png"); }
+
+    The backdrop sits behind everything at position: absolute so it never participates in
+    layout; giving it a size here would make the panel depend on the artwork's dimensions.
+*/
+.launcher-backdrop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.launcher-logo {
+    width: 22px;
+    height: 22px;
+    margin-right: 10px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: rgb(255, 107, 26);
+    border-radius: 3px;
+}
+
+/*
+    Hero art band. Collapsed until given a background-image, so the launcher looks
+    deliberate rather than gap-toothed before any art exists:
+
+        .launcher-hero { height: 180px; background-image: url("..."); }
+*/
+.launcher-hero {
+    height: 0;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-and-crop;
 }
 
 /* ── Header ─────────────────────────────────────────────── */
 
 .launcher-header {
-    height: 38px;
+    height: 42px;
     flex-direction: row;
     align-items: center;
     padding-left: 12px;
     flex-shrink: 0;
-}
-
-.launcher-icon {
-    width: 10px;
-    height: 10px;
-    margin-right: 10px;
 }
 
 /* Pushes the header buttons to the right edge without absolute positioning. */
@@ -54,13 +95,20 @@
     never covers the progress bar or the Play button — the launcher can be mid-download
     while the player is reading this.
 */
+/*
+    Allowed to shrink, unlike the rest of the chrome. At the smallest permitted window the
+    footer must stay reachable — losing the bottom of the settings list is recoverable,
+    losing the Play button is not.
+*/
 .launcher-settings {
     flex-direction: column;
     padding: 10px 16px;
     background-color: rgb(28, 31, 34);
     border-top-color: rgb(46, 51, 59);
     border-top-width: 1px;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    max-height: 45%;
+    overflow: hidden;
 }
 
 .launcher-settings-heading {
@@ -77,6 +125,10 @@
 .launcher-setting > .unity-base-field__label {
     min-width: 180px;
     color: rgb(138, 147, 162);
+}
+
+.launcher-settings-heading--spaced {
+    margin-top: 10px;
 }
 
 .launcher-settings-note {

@@ -2,13 +2,15 @@
     <Style src="../FishMMO-Theme.uss" />
     <Style src="UILauncher.uss" />
     <ui:VisualElement name="launcher-root" class="launcher-screen">
+        <ui:VisualElement name="launcher-backdrop" class="launcher-backdrop" />
         <ui:VisualElement name="launcher-panel" class="fish-panel launcher-panel">
             <ui:VisualElement name="launcher-header" class="fish-panel__header launcher-header">
-                <ui:VisualElement class="fish-panel__icon launcher-icon" />
+                <ui:VisualElement name="launcher-logo" class="launcher-logo" />
                 <ui:Label name="launcher-title" text="FishMMO" class="fish-panel__title" />
                 <ui:VisualElement class="launcher-header-spacer" />
                 <ui:Button name="launcher-settings-btn" text="Settings" class="fish-tab launcher-header-btn" />
             </ui:VisualElement>
+            <ui:VisualElement name="launcher-hero" class="launcher-hero" />
             <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
                 <ui:VisualElement name="launcher-news" class="launcher-news" />
             </ui:ScrollView>
@@ -19,6 +21,8 @@
                 <ui:SliderInt name="launcher-setting-retries" label="Retry attempts" low-value="0" high-value="10" show-input-field="true" class="launcher-setting" />
                 <ui:Slider name="launcher-setting-retrydelay" label="Retry delay (s)" low-value="0" high-value="30" show-input-field="true" class="launcher-setting" />
                 <ui:Label name="launcher-settings-note" text="" class="launcher-settings-note" />
+                <ui:Label text="STORAGE" class="fish-attr-category launcher-settings-heading launcher-settings-heading--spaced" />
+                <ui:Label name="launcher-disk-size" text="Installation size: measuring..." class="launcher-settings-note" />
             </ui:VisualElement>
             <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
                 <ui:Label name="launcher-status" text="" class="launcher-status" />

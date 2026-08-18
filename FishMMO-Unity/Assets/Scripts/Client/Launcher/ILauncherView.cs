@@ -113,6 +113,17 @@ namespace FishMMO.Client
 		void SetNewsContent(HtmlNode content);
 
 		/// <summary>
+		/// Reports how much disk space the installation occupies, or null when it could not be
+		/// determined.
+		/// </summary>
+		/// <remarks>
+		/// Null is a real and expected outcome — a permission-restricted install directory, or
+		/// a measurement that has not run yet. Views must show "unavailable" rather than "0 B",
+		/// which would read as an empty installation.
+		/// </remarks>
+		void SetInstallSize(long? sizeBytes);
+
+		/// <summary>
 		/// Releases anything the view subscribed to. Called from the launcher's OnDestroy.
 		/// </summary>
 		/// <remarks>

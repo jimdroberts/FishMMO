@@ -309,6 +309,33 @@ namespace FishMMO.Client
 		/// </remarks>
 		private long expectedPatchSize;
 		/// <summary>
+		/// Guards the install-size measurement so it runs at most once per launcher session.
+		/// </summary>
+		private bool installSizeRequested;
+		/// <summary>
+		/// Window dimensions observed on the previous frame, used to detect a resize.
+		/// </summary>
+		private int lastKnownWidth;
+		private int lastKnownHeight;
+		/// <summary>
+		/// False until the first observed window size has been discarded as the one the
+		/// launcher itself requested rather than one the player chose.
+		/// </summary>
+		private bool windowSizeInitialised;
+		/// <summary>
+		/// True when a resize has been observed but not yet written to settings.
+		/// </summary>
+		private bool windowSizeDirty;
+		/// <summary>
+		/// <see cref="Time.realtimeSinceStartup"/> of the most recent resize.
+		/// </summary>
+		private float lastResizeTime;
+		/// <summary>
+		/// Seconds a window size must hold steady before it is persisted, so one drag-resize
+		/// costs one write rather than one per frame.
+		/// </summary>
+		private const float WindowSizeSaveDelay = 0.75f;
+		/// <summary>
 		/// Base URL of the APIHost candidate that responded successfully during the
 		/// most recent version check. Used so that the subsequent patch download
 		/// targets the same endpoint (instead of re-randomizing and potentially
@@ -472,9 +499,7 @@ namespace FishMMO.Client
 			this.updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
 #if !UNITY_EDITOR
-			// Set screen resolution for non-editor builds
-			try { Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio); }
-			catch { Screen.SetResolution(this.DefaultScreenWidth, this.DefaultScreenHeight, FullScreenMode.Windowed, new RefreshRate() { numerator = 60, denominator = 1 }); }
+			ApplyWindowSize();
 #endif
 			string versionString = !string.IsNullOrEmpty(MainBootstrapSystem.GameVersion)
 				? MainBootstrapSystem.GameVersion
@@ -485,6 +510,95 @@ namespace FishMMO.Client
 			// Last, so that the state machine's first transition is what the player ends up
 			// looking at rather than being overwritten by the chrome initialisation above.
 			BeginStartupFlow();
+		}
+
+		/// <summary>
+		/// Smallest window the launcher layout stays usable at. Mirrors the min-width and
+		/// min-height in UILauncher.uss — below this the footer buttons start to be squeezed.
+		/// </summary>
+		private const int MinWindowWidth = 480;
+		private const int MinWindowHeight = 360;
+
+		/// <summary>
+		/// Opens the launcher at the size the player last used, or the configured default the
+		/// first time.
+		/// </summary>
+		/// <remarks>
+		/// The window is resizable, so pinning it to a fixed size on every launch would undo
+		/// the player's choice each time. The stored size is clamped against the current
+		/// display by <see cref="LauncherSettings.GetWindowSize"/>, which matters when a window
+		/// saved on a larger monitor is restored on a smaller one.
+		/// </remarks>
+		private void ApplyWindowSize()
+		{
+			Vector2Int stored = LauncherSettings.GetWindowSize(MinWindowWidth, MinWindowHeight);
+			int width = stored.x > 0 ? stored.x : this.DefaultScreenWidth;
+			int height = stored.y > 0 ? stored.y : this.DefaultScreenHeight;
+
+			try
+			{
+				Screen.SetResolution(width, height, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio);
+			}
+			catch
+			{
+				// Some display configurations report a refresh rate SetResolution rejects.
+				Screen.SetResolution(width, height, FullScreenMode.Windowed, new RefreshRate() { numerator = 60, denominator = 1 });
+			}
+		}
+
+		/// <summary>
+		/// Records the window size when the player changes it, so the next launch reopens at
+		/// the same dimensions.
+		/// </summary>
+		/// <remarks>
+		/// Written shortly after the resize settles rather than on quit: the updater terminates
+		/// this process to apply a patch, so a launcher that is killed rather than closed would
+		/// never persist anything saved at shutdown.
+		/// <para>
+		/// Debounced because a drag-resize changes the window size every frame, and writing the
+		/// configuration file per frame would mean hundreds of disk writes for one gesture.
+		/// </para>
+		/// </remarks>
+		private void Update()
+		{
+			if (Screen.width != this.lastKnownWidth || Screen.height != this.lastKnownHeight)
+			{
+				this.lastKnownWidth = Screen.width;
+				this.lastKnownHeight = Screen.height;
+
+				// The first observed size is the one this launcher just asked for, not one the
+				// player chose. Recording it would overwrite a stored size with the default.
+				if (!this.windowSizeInitialised)
+				{
+					this.windowSizeInitialised = true;
+					return;
+				}
+
+				this.windowSizeDirty = true;
+				this.lastResizeTime = Time.realtimeSinceStartup;
+				return;
+			}
+
+			if (!this.windowSizeDirty)
+			{
+				return;
+			}
+			if (Time.realtimeSinceStartup - this.lastResizeTime < WindowSizeSaveDelay)
+			{
+				return;
+			}
+
+			this.windowSizeDirty = false;
+
+			// Only windowed dimensions are worth remembering; a maximised or full-screen size
+			// is the display's, not a size the player picked for this window.
+			if (Screen.fullScreenMode != FullScreenMode.Windowed)
+			{
+				return;
+			}
+
+			LauncherSettings.SetWindowSize(this.lastKnownWidth, this.lastKnownHeight);
+			LauncherSettings.Save();
 		}
 
 		/// <summary>
@@ -735,6 +849,35 @@ namespace FishMMO.Client
 			{
 				this.view.ClearStatus();
 			}
+
+			MeasureInstallSizeWhenIdle(newState);
+		}
+
+		/// <summary>
+		/// Kicks off the install-size measurement once the launcher has settled.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not started in Awake. Walking a full client install is tens of
+		/// thousands of stat calls, and doing it while the version check or a patch download is
+		/// in flight puts it in direct contention with them for disk — slowing the thing the
+		/// player is actually waiting on to populate a readout they are not yet looking at.
+		/// Idle states only, and only once per run.
+		/// </remarks>
+		private void MeasureInstallSizeWhenIdle(LauncherState state)
+		{
+			if (this.installSizeRequested)
+			{
+				return;
+			}
+			if (state != LauncherState.ReadyToPlay && state != LauncherState.UpdateAvailable)
+			{
+				return;
+			}
+
+			this.installSizeRequested = true;
+			StartCoroutine(InstallSizeProbe.Measure(
+				Constants.GetWorkingDirectory(),
+				sizeBytes => this.view.SetInstallSize(sizeBytes)));
 		}
 
 		/// <summary>
