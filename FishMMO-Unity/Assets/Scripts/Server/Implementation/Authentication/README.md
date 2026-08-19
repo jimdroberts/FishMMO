@@ -735,6 +735,10 @@ Queue purge and shutdown also use `conn.Disconnect(false)` rather than `true`: t
 form stops the transport outright and discards anything still queued for send — including the
 cancellation notice sent on the line above.
 
+`WorldSceneSystem` applies the same three rules to `WorldSceneQueuePositionBroadcast`, which
+gives the World → Scene hop the feedback this queue gives the login hop. See
+[World Scene System → Scene-routing queue feedback](../World/WorldServer/WorldScene/README.md#scene-routing-queue-feedback).
+
 > Handshake receipt is logged at **Debug**, not Warning. It fires on every connection attempt
 > including every healthy one, and at Warning level a busy login server buries its real warnings
 > under one line per attempt.

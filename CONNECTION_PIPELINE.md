@@ -19,6 +19,7 @@
   - [Phase 7: Token Issuance & Character Select](#phase-7-token-issuance--character-select)
   - [Phase 8: World Server Connection](#phase-8-world-server-connection)
   - [Phase 9: Scene Server Connection](#phase-9-scene-server-connection)
+  - [Phase 9a: Scene-Routing Queue](#phase-9a-scene-routing-queue)
   - [Phase 10: Token Renewal & Revocation](#phase-10-token-renewal--revocation)
   - [Phase 11: Scene Transfer & Character Session Ownership](#phase-11-scene-transfer--character-session-ownership)
 - [Protocol Layers](#protocol-layers)
@@ -559,6 +560,66 @@ sequenceDiagram
     Note over Client,Scene: 🎮 Gameplay active, • Prediction pipeline running, • Observer LOD system active, • All scene systems operational
 ```
 
+### Phase 9a: Scene-Routing Queue
+
+Phase 9 assumes the World server has somewhere to send the client. It often does not — every
+instance of the target scene can be full, the instance may still be loading on a scene server,
+or the character's combat-logout body may be standing in one specific instance that is the only
+place it can go. All three are legitimate waits, and the client spends them sitting
+authenticated on the World server behind a loading overlay.
+
+That wait used to be both **silent and unbounded**, which is indistinguishable from a hang.
+
+```mermaid
+sequenceDiagram
+    participant Client as Client
+    participant World as WorldServer
+
+    Note over Client,World: After WorldLoginSuccess, before Phase 9
+
+    World->>World: ProcessOpenWorldQueueAsync, • no capacity / no instance / combat-logout hold, • connection stays in the waiting queue
+
+    loop every queuePositionUpdateRateSeconds (2s)
+        World-->>Client: WorldSceneQueuePositionBroadcast {, QueuePosition: n, TotalQueued, , EstimatedWaitSeconds, Reason, }
+        Client->>Client: Wait dialog: position + reason, ("Close" leaves the queue → QuitToLogin)
+    end
+
+    alt Capacity found
+        World-->>Client: WorldSceneQueuePositionBroadcast { QueuePosition: 0 }
+        World-->>Client: WorldSceneConnectBroadcast { Port }
+        Note over Client: Dialog dismissed, Phase 9 begins
+    else Wait exceeded its TTL
+        World-->>Client: WorldSceneQueuePositionBroadcast { QueuePosition: -1 }
+        World->>World: conn.Disconnect(false), (not Kick — that discards the notice)
+        Client->>Client: QuitToLogin + "could not find room"
+    end
+```
+
+**Position semantics** are identical to the login queue: `> 0` waiting, `0` routed, `-1`
+abandoned. Positive positions go Unreliable (re-sent every sweep); `0` and `-1` go Reliable
+because they are one-shot transitions and losing one strands the dialog on screen.
+
+**The three reasons have different bounds**, and the client names each one:
+
+| `Reason` | Meaning | Bounded by |
+|---|---|---|
+| `Capacity` | Every instance of the target scene is full | `waitingQueueTtlSeconds` (45 s) |
+| `SceneLoading` | An instance was requested and is still loading | `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier` (180 s) — a large world scene can take longer to load than the capacity TTL allows |
+| `CombatLogoutBody` | Only the instance holding the character's body can hand it back | `CombatLogoutRoutingGraceSeconds` (150 s), which exceeds the 2-minute session lease so giving up is safe |
+
+**A healthy login never sees the dialog.** Every routed client passes through this queue, so a
+sweep landing between enqueue and the next routing cycle would flash a position at someone who
+was never really queued. Connections are ranked across the whole group but only notified once
+they have waited longer than one full routing cycle.
+
+**Making the TTL real was a prerequisite.** `AddToQueue` re-stamped the arrival time on every
+add and the routing snapshot cleared it outright, so `waitingQueueTtlSeconds` measured "time
+since the last routing cycle touched this connection" (≈ 2 s) and the purge could never fire.
+`SweepStrandedResidents` pushes its own 90 s deadline forward for any connection that *is*
+queued, so nothing bounded the wait at all. The arrival stamp now survives re-queue cycles and
+is cleared only by a terminal outcome — routed, purged, or disconnected — with the
+combat-logout hold as the single documented exception.
+
 ### Phase 10: Token Renewal & Revocation
 
 Renewal runs on a timer, not just once at authentication. A scene transfer is a
@@ -897,6 +958,12 @@ leaving the player looking at an empty world. The first retry from a `Scene` dro
 `SceneHandoffReconnectDelay` (0.25 s, jittered); if it fails, normal exponential backoff resumes
 from attempt 1. `OnReconnectPending` fires when a retry is *armed* rather than when it starts, so
 both loading screens hold the overlay across the whole handoff instead of dropping it in the gap.
+
+**A wait is not a failure, and is now reported as neither.** A client held in the World
+server's scene-routing queue is not disconnected and not reconnecting — it is waiting, which
+this diagram does not model because no connection state changes. Phase 9a covers it: the client
+receives its queue position on a timer and can leave the queue at any point, and the wait is
+bounded so it ends in `LoginScreen` rather than never ending.
 
 **Losing the login server returns to the login screen.** `OnConnectionAttemptFailed` fires only
 for a connection that stopped without being reconnectable and without being torn down on

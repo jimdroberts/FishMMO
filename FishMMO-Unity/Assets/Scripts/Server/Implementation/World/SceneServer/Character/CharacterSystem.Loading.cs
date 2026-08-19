@@ -308,10 +308,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// reclaiming a combat-logout body. When set the claim step is skipped entirely — the
 		/// character is already ours, and claiming again would contend with our own session.
 		/// </param>
-		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID, Guid preClaimedSessionToken = default)
+		/// <param name="preClaimedCharacterID">
+		/// Character the <paramref name="preClaimedSessionToken"/> belongs to.
+		/// </param>
+		/// <remarks>
+		/// A pre-claimed token has to be released on every path that abandons the load, exactly
+		/// like one claimed here. It is handed over by
+		/// <see cref="TryReattachLingeringCharacter"/>, which has already removed it from
+		/// <c>SessionTokens</c> — so if this method returns without either installing it or
+		/// giving it back, nothing in the process holds it any more and the character stays
+		/// Online in the database until its lease expires, kicking the player from every scene
+		/// server in the meantime. That is why the token is tracked from the first line rather
+		/// than from the point the claim step would otherwise assign it, and why
+		/// <paramref name="preClaimedCharacterID"/> exists: the early failures happen before
+		/// any character row has been read, so there would otherwise be no ID to release under.
+		/// </remarks>
+		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID, Guid preClaimedSessionToken = default, long preClaimedCharacterID = 0)
 		{
 			CharacterData charData = default;
-			Guid sessionToken = Guid.Empty;
+			// Tracked from here, not from the claim step, so an abandoned load always has
+			// something to hand back. See the remarks above.
+			Guid sessionToken = preClaimedSessionToken;
+			long sessionCharacterID = preClaimedSessionToken != Guid.Empty ? preClaimedCharacterID : 0;
+
+			// Releases whatever claim is currently held, if any, so the caller can return.
+			async Task ReleaseHeldSessionAsync()
+			{
+				if (sessionToken == Guid.Empty || sessionCharacterID <= 0)
+				{
+					return;
+				}
+				Guid releasing = sessionToken;
+				long releasingID = sessionCharacterID;
+				sessionToken = Guid.Empty;
+				sessionCharacterID = 0;
+				await ReleaseCharacterSessionAsync(releasingID, serverID, releasing);
+			}
 
 			try
 			{
@@ -319,6 +351,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!serviceRegistry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 				{
+					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
@@ -355,6 +388,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
 				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 				{
+					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
@@ -369,10 +403,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				charData = fetchResult.Data.Value;
 				long characterID = charData.ID;
 
-				if (preClaimedSessionToken != Guid.Empty)
+				if (sessionToken != Guid.Empty)
 				{
-					// Reclaiming our own combat-logout body: the claim never left this server.
-					sessionToken = preClaimedSessionToken;
+					/* Reclaiming our own combat-logout body: the claim never left this server.
+					 *
+					 * The claim is for one specific character, so it can only be reused if the
+					 * account's selected character is still that one. CharacterSelectSystem
+					 * refuses to move the selection while a character is in the world, which is
+					 * what normally guarantees it — but relying on that silently would mean a
+					 * mismatch installs the lingering body's token under a different character's
+					 * ID, leaving the new character unclaimed (free for a second scene server to
+					 * take) and the body's claim unreleasable. Fail the load instead. */
+					if (sessionCharacterID != characterID)
+					{
+						await Log.Error("CharacterSystem",
+							$"Reclaimed session belongs to character {sessionCharacterID} but the account's selected character is {characterID}; abandoning load.");
+						await ReleaseHeldSessionAsync();
+						TryEnqueueMainThread(() =>
+						{
+							if (conn != null && conn.IsActive)
+							{
+								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							}
+						});
+						return;
+					}
 				}
 				else
 				{
@@ -382,6 +437,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// ClaimCharacterSessionAsync has already logged and kicked.
 						return;
 					}
+					sessionCharacterID = characterID;
 				}
 
 				// Re-read the character now that we hold the claim. The row above was read
@@ -397,8 +453,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// The account's selected character changed between the two reads, so the
 					// claim we hold is for a character this connection is no longer loading.
 					await Log.Warning("CharacterSystem", $"Selected character changed while claiming {characterID}; abandoning load.");
-					await ReleaseCharacterSessionAsync(characterID, serverID, sessionToken);
-					sessionToken = Guid.Empty;
+					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
@@ -423,8 +478,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					});
 					// The claim is committed at this point, so it has to be handed back
 					// explicitly rather than relying on a transaction rollback.
-					await ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken);
-					sessionToken = Guid.Empty;
+					await ReleaseHeldSessionAsync();
 					return;
 				}
 
@@ -518,22 +572,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					achievementData, friendData,
 					guildData, partyData,
 					hotkeyData, buffData, factionData, questData);
-				TryEnqueueMainThread(() => InstantiateAndLoadCharacter(loadContext));
+				/* The main-thread queue is bounded and drops work when it is saturated, and this
+				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
+				 * item therefore left the character Online with nothing left holding its token —
+				 * the exact stranded-claim state every other path here goes out of its way to
+				 * avoid — so the destination scene server kicked the player on every retry until
+				 * the lease expired. */
+				if (!TryEnqueueMainThread(() => InstantiateAndLoadCharacter(loadContext)))
+				{
+					await Log.Error("CharacterSystem",
+						$"Main-thread queue rejected the character spawn for {charData.ID}; releasing its session.");
+					await ReleaseHeldSessionAsync();
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+						}
+					});
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"LoadCharacterAsync failed: {ex}");
 
-				// If we successfully claimed the session before the failure, release it
-				if (sessionToken != Guid.Empty && charData.ID > 0)
+				// If a session is held — claimed here, or handed over by a combat-logout
+				// reattach — it has to go back before this load is abandoned.
+				if (sessionToken != Guid.Empty && sessionCharacterID > 0)
 				{
 					try
 					{
-						await ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken);
+						await ReleaseHeldSessionAsync();
 					}
 					catch (Exception releaseEx)
 					{
-						await Log.Error("CharacterSystem", $"LoadCharacterAsync: Failed to release session after error for character {charData.ID}: {releaseEx.Message}");
+						await Log.Error("CharacterSystem", $"LoadCharacterAsync: Failed to release session after error for character {sessionCharacterID}: {releaseEx.Message}");
 					}
 				}
 
@@ -1147,8 +1220,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// connected to a scene server that had already released their character, with
 			// nothing left to move them on. Teleporters placed near a spawn point hit this
 			// every time.
+			//
+			// WaitingSceneLoadCharacters counts as "still has a character". A connection in
+			// that map is mid-handshake: its character is claimed and instantiated but not yet
+			// spawned, and the client is actively swapping scenes to get there — so the unload
+			// report it sends on the way in is the most ordinary thing it can do. Treating it
+			// as "nothing left here" disconnected the client during its own world entry, which
+			// released the claim and sent it back around the login loop.
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.ConnectionCharacters.ContainsKey(conn))
+				(mappingData.ConnectionCharacters.ContainsKey(conn) ||
+				 mappingData.WaitingSceneLoadCharacters.ContainsKey(conn)))
 			{
 				return;
 			}

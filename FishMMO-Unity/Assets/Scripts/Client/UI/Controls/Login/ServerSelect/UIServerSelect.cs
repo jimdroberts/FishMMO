@@ -241,11 +241,25 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < serverList.Count; ++i)
 				{
+					// Null check first: touching OnServerSelected on an already-destroyed
+					// button throws MissingReferenceException, which aborts the rest of the
+					// teardown and leaks every entry after it.
+					if (serverList[i] == null)
+					{
+						continue;
+					}
 					serverList[i].OnServerSelected -= OnServerSelected;
 					Destroy(serverList[i].gameObject);
 				}
 				serverList.Clear();
 			}
+
+			/* Clear the selection with the list it points into. A refresh destroys every
+			 * button, so leaving this set left it referencing a destroyed component — which
+			 * Unity reports as null, so the Connect button silently did nothing until the
+			 * player noticed they had to pick a server again. UITKServerSelect already does
+			 * this; this is the copy that did not. */
+			selectedServer = null;
 		}
 
 		/// <summary>
@@ -297,7 +311,8 @@ namespace FishMMO.Client
 		public void OnClick_ConnectToServer()
 		{
 			if (Client.IsConnectionReady() &&
-				selectedServer != null)
+				selectedServer != null &&
+				selectedServer.Details != null)
 			{
 				SetConnectToServerLocked(true);
 

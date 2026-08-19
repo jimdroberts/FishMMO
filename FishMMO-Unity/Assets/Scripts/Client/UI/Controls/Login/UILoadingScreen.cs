@@ -248,6 +248,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Re-asserts the overlay's own state after the quit-to-login teardown.
+		/// </summary>
+		/// <remarks>
+		/// The base handler forces visibility straight from <c>CloseOnQuitToMenu</c>, and it does
+		/// so through a path that bypasses this control's <see cref="Show"/>/<see cref="Hide"/>
+		/// overrides — so the driver flags are left exactly as they were while the panel is
+		/// switched underneath them. Either half of that mismatch is a visible fault: flags left
+		/// set behind a hidden panel pop the overlay back up on the next progress tick, and a
+		/// panel forced visible with no driver set has nothing that will ever take it down.
+		/// Re-running the normal decision leaves the two in agreement whichever way the flag is
+		/// configured.
+		/// </remarks>
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			RefreshVisibility(forceRefresh: true);
+		}
+
+		/// <summary>
 		/// Raises the overlay as soon as a reconnect is armed, before its delay elapses.
 		/// </summary>
 		/// <remarks>See <see cref="reconnectPendingActive"/>.</remarks>
@@ -304,6 +324,7 @@ namespace FishMMO.Client
 			}
 
 			if (Details != null &&
+				Details.Scenes != null &&
 				Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&
 				details.SceneTransitionImage != null)
 			{

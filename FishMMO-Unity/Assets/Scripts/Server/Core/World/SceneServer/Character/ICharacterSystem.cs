@@ -30,6 +30,27 @@ namespace FishMMO.Server.Core.World.SceneServer
 		int LingeringCharacterCount { get; }
 
 		/// <summary>
+		/// Declares that the next disconnect on <paramref name="connection"/> is a deliberate
+		/// hand-off to another scene server, not a player leaving.
+		/// </summary>
+		/// <remarks>
+		/// Combat-logout linger exists to stop a player escaping a fight by closing the client,
+		/// so it applies to dropped connections — and a transfer is implemented as a dropped
+		/// connection. A transfer that lingered would leave the body (and its session claim) on
+		/// the source server while the client arrives at the destination, which then cannot
+		/// claim the character and kicks it, repeatedly, until the linger expires.
+		/// <para>
+		/// The teleport and bind-point-respawn paths avoid this by releasing the character
+		/// themselves before disconnecting. Callers that instead rely on the ordinary disconnect
+		/// pipeline — a channel switch does — must announce the intent here first. The marker is
+		/// consumed by that disconnect, so it cannot leak onto a later session on a recycled
+		/// connection id.
+		/// </para>
+		/// </remarks>
+		/// <param name="connection">Connection about to be disconnected for a transfer.</param>
+		void BeginDeliberateTransfer(TConnection connection);
+
+		/// <summary>
 		/// Raised immediately before a character load is initiated for the given
 		/// connection. The long parameter is the persistent character id requested
 		/// by the client.

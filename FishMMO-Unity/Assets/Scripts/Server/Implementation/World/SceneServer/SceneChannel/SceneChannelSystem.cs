@@ -776,6 +776,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Prevent gameplay actions during the transition
 					character.DisableFlags(CharacterFlags.IsLoaded);
 
+					/* Announce the transfer before dropping the connection.
+					 *
+					 * The disconnect below is the whole transfer mechanism, and the character
+					 * system treats a dropped connection as a possible combat logout — so a
+					 * character that entered combat between the state check above and the
+					 * disconnect actually landing would have its body held in the scene it is
+					 * leaving, along with its session claim. The client would arrive at the
+					 * target channel, fail to claim itself, and be kicked on every retry until
+					 * the linger expired. */
+					if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem))
+					{
+						characterSystem.BeginDeliberateTransfer(conn);
+					}
+
 					// Disconnect the client. This triggers:
 					//   CharacterSystem.OnRemoteConnectionStopped
 					//     → RemoveCharacterConnectionMapping

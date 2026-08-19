@@ -16,6 +16,8 @@
 - [Flow Diagram](#flow-diagram)
 - [Project Structure](#project-structure)
 - [License](#license)
+- [Scene-routing queue feedback](#scene-routing-queue-feedback)
+- [Routing safety nets](#routing-safety-nets)
 
 ## Overview
 
@@ -46,7 +48,8 @@ A runtime-data processing gate (`Interlocked.CompareExchange`) prevents overlapp
 - Authentication handoff via `WorldServerAuthenticator.OnClientAuthenticationResult` triggering the instance routing flow
 - Connection disconnect cleanup via `ServerManager.OnRemoteConnectionState` subscription removing connections from all queues
 - Per-account instance-lookup debounce (`ExpiringKeyTracker<string>`) preventing DB flood from rapid reconnect attempts
-- Waiting queue TTL purge sweeps removing stale connections that exceed `waitingQueueTtlSeconds`, kicking active stale waiters and silently cleaning inactive entries
+- Waiting queue TTL purge sweeps removing stale connections that exceed `waitingQueueTtlSeconds`, kicking active stale waiters and silently cleaning inactive entries. The TTL measures the **total** wait: the arrival stamp survives re-queue cycles, and only a terminal outcome (routed, purged, disconnected) clears it
+- Scene-routing queue feedback: waiting clients receive a periodic `WorldSceneQueuePositionBroadcast` carrying their position, the size of the queue they are in, an estimated wait, and *why* they are waiting (`Capacity`, `SceneLoading`, `CombatLogoutBody`)
 - Defense-in-depth queue size cap (`MAX_WAITING_QUEUE_SIZE = 2500` per queue type) preventing unbounded memory growth
 - Write-through TTL cache for scene-instance query results (`AvailableSceneCache`, default 5 s) and scene-server addresses (`SceneServerAddressCache`, default 10 s) with failure-triggered invalidation
 - Cache-aware `FetchAvailableScenesAsync` and `FetchSceneServerAddressAsync` wrappers with bypass when TTL is set to 0
@@ -116,6 +119,7 @@ The asset is created via the Unity menu: **Assets → Create → FishMMO → Ser
 | `debounceCleanupMaxScanPerSweep` | `int` | `256` | ≥ 1 | Max account debounce entries scanned per cleanup sweep |
 | `debounceCleanupMaxRemovalsPerSweep` | `int` | `128` | ≥ 1 | Max account debounce entries removed per cleanup sweep |
 | `waitingQueuePurgeMaxPerSweep` | `int` | `128` | ≥ 1 | Max stale queued connections purged per waiting-queue sweep |
+| `queuePositionUpdateRateSeconds` | `float` | `2.0` | ≥ 0.5 | Seconds between scene-routing queue position broadcasts sent to waiting clients |
 | `sceneInstanceCacheTtlSeconds` | `float` | `5.0` | ≥ 0.0 | Seconds before cached scene-instance query results expire (0 disables caching) |
 | `sceneServerCacheTtlSeconds` | `float` | `10.0` | ≥ 0.0 | Seconds before cached scene-server address results expire (0 disables caching) |
 | `worldSceneDetailsCache` | `WorldSceneDetailsCache` | — | — | ScriptableObject with per-scene max client metadata |
@@ -126,6 +130,8 @@ The asset is created via the Unity menu: **Assets → Create → FishMMO → Ser
 |---|---|---|
 | `MaxClientsPerInstance` | `500` | Hard cap on clients per scene instance; `GetMaxClients` clamps to `[1, MaxClientsPerInstance]` |
 | `MAX_WAITING_QUEUE_SIZE` | `2500` | Per-queue-type cap preventing unbounded memory growth; effective global limit is 5000 (2 × 2500) |
+| `CombatLogoutRoutingGraceSeconds` | `150.0` | How long a combat-logged character is held for the one scene instance that can hand its body back. Exceeds the 2-minute database session lease so that giving up is safe |
+| `SceneLoadWaitTtlMultiplier` | `4.0` | Applied to `waitingQueueTtlSeconds` while the wait is on a scene instance still being created |
 
 ### Runtime Data Defaults
 
@@ -134,6 +140,7 @@ The asset is created via the Unity menu: **Assets → Create → FishMMO → Ser
 | `WaitQueueRateSeconds` | `2.0` (clamped ≥ 0.5) | Queue tick interval in seconds |
 | `NextWaitingQueueSweep` | Set to `waitingQueueSweepIntervalSeconds` | Countdown until first stale-queue purge |
 | `NextDebounceCleanup` | Set to `debounceCleanupIntervalSeconds` | Countdown until first debounce cleanup |
+| `NextQueuePositionUpdate` | `0.0` | Countdown until the next queue position broadcast |
 
 ## Usage Examples
 
@@ -206,7 +213,10 @@ await FallbackToWorldSceneAsync(conn, accountName);
 | Connection count | `WorldSceneMappingData.ConnectionCount` | Sum of DB scene characters + open-world waiting + instance waiting |
 | Queue processing active | `WorldSceneSystemRuntimeData.TryBeginProcessing()` returns `false` when busy | Gate prevents overlapping cycles |
 | Debounce active | Rapid same-account reconnects within `instanceLookupDebounceSeconds` | Second attempt is silently dropped |
-| TTL purge active | Connection in queue > `waitingQueueTtlSeconds` | Connection kicked with "Waiting queue TTL exceeded" |
+| TTL purge active | Connection in queue > its effective TTL | `WorldSceneQueuePositionBroadcast { QueuePosition = -1 }` sent, then the connection is closed with `Disconnect(false)` and the log shows "waiting queue TTL exceeded" |
+| Queue feedback flowing | Client waiting on a full or loading scene | `WorldSceneQueuePositionBroadcast` every `queuePositionUpdateRateSeconds` with a 1-based position; the client shows a wait dialog with a Close button |
+| Scene-load wait allowance | Client waiting while a scene instance loads | Not purged until `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier` |
+| Combat-logout hold | Character with `IsCombatLogged` whose instance is unavailable | Held up to `CombatLogoutRoutingGraceSeconds`, reported to the client as `CombatLogoutBody`, then routed normally |
 | Queue cap enforced | Queue size reaches `MAX_WAITING_QUEUE_SIZE` | New connections kicked with "Waiting queue capacity exceeded" |
 | Scene cache hit | Repeat `FetchAvailableScenesAsync` within TTL | Returns cached result, no DB call |
 | Server cache invalidation | Scene server fetch fails | Cache entry invalidated, next call re-fetches |
@@ -408,6 +418,71 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 ## License
 
 This module is part of the FishMMO project and is subject to the FishMMO project license.
+
+## Scene-routing queue feedback
+
+The World → Scene hop is the only leg of the connection pipeline that can legitimately wait a
+long time, and it used to do so in complete silence: the client sits behind a loading overlay
+with no panel, no position and no way to give up. That is indistinguishable from a hang, and it
+is exactly the problem the LoginServer's admission queue already solved one hop earlier.
+
+`WorldSceneQueuePositionBroadcast` is that same channel applied here. `BroadcastQueuePositions`
+runs on the main thread every `queuePositionUpdateRateSeconds`, ranks each waiting connection
+within its own group — by scene name for the open-world queue, by instance id for the instance
+queue — and sends each one its position.
+
+| Field | Meaning |
+|---|---|
+| `QueuePosition` | 1-based position while waiting; `0` = routed (a `WorldSceneConnectBroadcast` follows); `-1` = the wait was abandoned and the connection is closing |
+| `TotalQueued` | Size of the group this client is waiting in |
+| `EstimatedWaitSeconds` | Derived from `routedLastCycleByScene`; `0` means unknown, which the client renders as "Please wait…" rather than as no wait |
+| `Reason` | `Capacity`, `SceneLoading`, or `CombatLogoutBody` |
+
+**A healthy login never sees this dialog.** Every routed client passes through the queue — it
+is enqueued on authentication and emptied by the next routing cycle — so a sweep landing in
+that gap would flash "Queue position: 1 of 1" over a login that was never really queued.
+Connections are ranked across the whole group but only *notified* once they have waited longer
+than one full routing cycle (`QueueFeedbackDelayCycles`, floored at
+`QueueFeedbackDelayMinSeconds`), so a client that crosses the threshold still sees its true
+position.
+
+Positions go out on the unreliable channel — they are re-sent every sweep, so a lost one is
+corrected by the next. `0` and `-1` are one-shot transitions with nothing behind them and go
+reliably; losing one strands the wait dialog on screen. For the same reason the TTL purge sends
+`-1` and then calls `Disconnect(false)` rather than `Kick`, because `Kick` calls
+`Disconnect(true)`, which drops the transport immediately and discards the notice with it.
+
+### Why the reason matters
+
+The three waits look identical to a player and mean very different things:
+
+- **`Capacity`** — every running instance of the target scene is full. Bounded by
+  `waitingQueueTtlSeconds`.
+- **`SceneLoading`** — a scene instance has been requested and is still loading on a scene
+  server. Bounded by `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier`, because a large
+  world scene can take longer to load than the capacity TTL allows, and purging then bounces a
+  player whose zone was seconds from ready straight into a reconnect that re-enters the same
+  queue.
+- **`CombatLogoutBody`** — the character's body is still standing in one specific instance and
+  only the scene server holding it can hand it back. Bounded by
+  `CombatLogoutRoutingGraceSeconds` instead of by the TTL, which it keeps at bay by restarting
+  the wait clock on every cycle it holds.
+
+### The TTL had to be made real first
+
+None of this helps if the wait is unbounded, and it was. `AddToQueue` re-stamped the arrival
+time on every add, and the routing snapshot cleared it outright — so `waitingQueueTtlSeconds`
+measured "time since the last routing cycle touched this connection" (≈ 2 s) and the purge could
+never fire. Meanwhile `SweepStrandedResidents` pushes its own deadline forward for any
+connection that *is* queued, so nothing else bounded it either: a client waiting on capacity
+that never arrived waited forever.
+
+The arrival stamp now survives re-queue cycles. `RecordQueueEntryTime` only stamps a connection
+that does not already have one, `RemoveFromQueue` deliberately leaves it alone, and
+`ClearQueueTracking` is called from the three terminal outcomes — routed
+(`BroadcastSceneConnect`), purged (`PurgeExpiredWaitingConnections`), and disconnected
+(`OnRemoteConnectionStopped`). `ResetQueueEntryTime` is the single documented exception, used
+only by the combat-logout hold.
 
 ## Routing safety nets
 

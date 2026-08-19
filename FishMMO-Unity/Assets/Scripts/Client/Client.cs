@@ -361,11 +361,9 @@ namespace FishMMO.Client
 			
 			if (pendingErrorStackTrace != null)
 			{
-				string st = pendingErrorStackTrace;
+				string stackTrace = pendingErrorStackTrace;
 				pendingErrorStackTrace = null;
-				if (Connection?.ClientState == LocalConnectionState.Stopped) return;
-				try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
-				Connection?.ForceDisconnect();
+				HandleNetworkStackException(stackTrace);
 			}
 		}
 
@@ -445,6 +443,7 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnValidatedScene);
 			NetworkManager.ClientManager.RegisterBroadcast<ServerBusyBroadcast>(OnServerBusy);
 			NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
+			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneQueuePositionBroadcast>(OnWorldSceneQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
@@ -520,6 +519,22 @@ namespace FishMMO.Client
 			// Leaving the world: re-arm the incidental loading overlay that world entry
 			// latched off, so the next login/world-entry cycle shows loading progress again.
 			RestoreLoadingScreen();
+
+			/* Take the overlay down as well, not just re-arm it.
+			 *
+			 * Both loading screens keep a set of independent "drivers", and one of them —
+			 * reconnectPendingActive — is cleared only by Hide(). Every route into this method
+			 * that comes from a lost connection has that driver latched: the drop armed a
+			 * reconnect, the retry reached the server, and the server rejected the stale token,
+			 * landing here. Nothing else clears it, so the login scene reloaded *behind* an
+			 * overlay that could never come down, and the player was left staring at a loading
+			 * bar at 100% with no way forward. The same applies to sceneTransitionActive when
+			 * the connection dies part-way through a scene load and OnLoadEnd never arrives.
+			 *
+			 * Dismissing without suppression is safe here because the world is being torn down:
+			 * the login scenes ClientPostbootSystem reloads raise the overlay again through the
+			 * ordinary Addressable progress path and drop it when they finish. */
+			DismissLoadingScreen(suppress: false);
 
 			this.fogManager?.Stop();
 
@@ -866,7 +881,26 @@ namespace FishMMO.Client
 		/// the World Server first: the Scene Server is behind the same proxy and needs the
 		/// real IP, and the World Server is the only party still holding it.
 		/// </summary>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) RequestHopTokenThenConnect(msg.Port, false); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch)
+		{
+			try
+			{
+				/* Close the wait dialog here as well as on the queue's own position 0.
+				 * That message is the tidy signal, but it is one message: this is the event
+				 * that actually ends the wait, and leaving the dialog up over the scene
+				 * transition would block the world behind a stale "queue position" box. */
+				HideQueueDialog();
+
+				if (IsConnectionReady())
+				{
+					RequestHopTokenThenConnect(msg.Port, false);
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnWorldSceneConnect: {ex}");
+			}
+		}
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>
@@ -937,66 +971,234 @@ namespace FishMMO.Client
 		/// <param name="ch">The network channel.</param>
 		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGet("UIDialogBox", out UIDialogBox d)) d.Open("Server is busy. Please try again."); }
 
-	/// <summary>
-	/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer,
-	/// displaying the current queue position to the user.  Position &gt; 0 shows
-	/// a waiting dialog; position 0 means the client has been admitted and should
-	/// retry the handshake; position -1 means the queue entry was cancelled.
-	/// </summary>
-	private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel ch)
-	{
-		if (msg.QueuePosition > 0)
-		{
-			string text = msg.EstimatedWaitSeconds > 0
-				? $"Queue position: {msg.QueuePosition} of {msg.TotalQueued}\nEstimated wait: ~{msg.EstimatedWaitSeconds}s"
-				: $"Queue position: {msg.QueuePosition} of {msg.TotalQueued}\nPlease wait...";
+		// ── Queue feedback ──────────────────────────────────────────────
 
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d))
+		/// <summary>
+		/// Shows, or live-updates, the shared queue-wait dialog.
+		/// </summary>
+		/// <remarks>
+		/// Both queues in the connection pipeline — the LoginServer's admission queue and the
+		/// WorldServer's scene-routing queue — present through this one control so they cannot
+		/// drift apart, and so a client cannot end up showing two competing wait dialogs.
+		/// <see cref="UIDialogBox.Open"/> is a no-op while the box is already visible, which is
+		/// why an update has to go through <see cref="UIDialogBox.SetText"/> instead.
+		/// <para>
+		/// Opened with no accept handler, which makes the remaining button read "Close" — the
+		/// only action a waiting player has is to give up, and that is what
+		/// <paramref name="onLeave"/> does.
+		/// </para>
+		/// </remarks>
+		/// <param name="text">Body text to display.</param>
+		/// <param name="onLeave">Invoked if the player abandons the wait.</param>
+		private static void ShowQueueDialog(string text, Action onLeave)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
 			{
-				if (d.Visible)
-					d.SetText(text);
+				if (dialogBox.Visible)
+				{
+					dialogBox.SetText(text);
+				}
 				else
-					d.Open(text, onAccept: null, onCancel: () =>
-					{
-						// User chose to leave the queue — disconnect and return to login.
-						ForceDisconnect();
-						QuitToLogin();
-					});
+				{
+					dialogBox.Open(text, onAccept: null, onCancel: onLeave);
+				}
+				return;
 			}
-		}
-		else if (msg.QueuePosition == 0)
-		{
-			// Admitted from queue — retry the handshake on the existing connection.
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
-				d.Hide();
 
-			/* async void local function captures Unity's SynchronizationContext
-			 * so the continuation after await runs on the main thread.
-			 * ContinueWith would run on the ThreadPool, making Log.Error
-			 * and any future Unity API calls unsafe. */
-			async void RetryWithFaultHandling()
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox))
 			{
-				try
+				if (tkDialogBox.Visible)
 				{
-					if (loginAuthenticator != null)
-						await loginAuthenticator.RetryHandshakeAsync();
+					tkDialogBox.SetText(text);
 				}
-				catch (Exception ex)
+				else
 				{
-					Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
+					tkDialogBox.Open(text, onAccept: null, onCancel: onLeave);
 				}
 			}
-			RetryWithFaultHandling();
 		}
-		else // position -1 = cancelled (timeout / shutdown)
-		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
-				d.Hide();
 
-			ForceDisconnect();
-			QuitToLogin();
+		/// <summary>
+		/// Dismisses the shared queue-wait dialog if it is showing.
+		/// </summary>
+		private static void HideQueueDialog()
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox) && dialogBox.Visible)
+			{
+				dialogBox.Hide();
+				return;
+			}
+
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox) && tkDialogBox.Visible)
+			{
+				tkDialogBox.Hide();
+			}
 		}
-	}
+
+		/// <summary>
+		/// Opens a one-off informational dialog through whichever dialog control this build
+		/// registers.
+		/// </summary>
+		/// <remarks>
+		/// The UGUI and UI Toolkit control sets live in separate registries, and a build ships
+		/// one or the other. Resolving both here is what keeps the queue messages from silently
+		/// doing nothing on a UI Toolkit build — which is how the login queue's own dialogs
+		/// behaved, because they only ever asked for the UGUI control.
+		/// </remarks>
+		/// <param name="text">Message to display.</param>
+		private static void ShowInfoDialog(string text)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+			{
+				dialogBox.Open(text);
+				return;
+			}
+
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox))
+			{
+				tkDialogBox.Open(text);
+			}
+		}
+
+		/// <summary>
+		/// Builds the body text for a queue-wait dialog.
+		/// </summary>
+		/// <remarks>
+		/// An estimate of zero means the server could not derive one — most often because the
+		/// queue is not draining at all — so it is rendered as "Please wait...". Printing
+		/// "~0s" over a queue that is going nowhere would be worse than saying nothing.
+		/// </remarks>
+		/// <param name="heading">One line explaining what is being waited for.</param>
+		/// <param name="position">1-based position in the queue.</param>
+		/// <param name="total">Total number of clients waiting.</param>
+		/// <param name="estimatedWaitSeconds">Server estimate in seconds, or 0 when unknown.</param>
+		private static string FormatQueueText(string heading, int position, int total, int estimatedWaitSeconds)
+		{
+			string tail = estimatedWaitSeconds > 0
+				? $"Estimated wait: ~{estimatedWaitSeconds}s"
+				: "Please wait...";
+
+			return $"{heading}\nQueue position: {position} of {total}\n{tail}";
+		}
+
+		/// <summary>
+		/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer,
+		/// displaying the current queue position to the user.  Position &gt; 0 shows
+		/// a waiting dialog; position 0 means the client has been admitted and should
+		/// retry the handshake; position -1 means the queue entry was cancelled.
+		/// </summary>
+		private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel ch)
+		{
+			if (msg.QueuePosition > 0)
+			{
+				ShowQueueDialog(
+					FormatQueueText("Waiting to log in.", msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
+					// The player chose to leave the queue.
+					onLeave: () => QuitToLogin());
+				return;
+			}
+
+			HideQueueDialog();
+
+			if (msg.QueuePosition == 0)
+			{
+				// Admitted from queue — retry the handshake on the existing connection.
+
+				/* async void local function captures Unity's SynchronizationContext
+				 * so the continuation after await runs on the main thread.
+				 * ContinueWith would run on the ThreadPool, making Log.Error
+				 * and any future Unity API calls unsafe. */
+				async void RetryWithFaultHandling()
+				{
+					try
+					{
+						if (loginAuthenticator != null)
+							await loginAuthenticator.RetryHandshakeAsync();
+					}
+					catch (Exception ex)
+					{
+						Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
+					}
+				}
+				RetryWithFaultHandling();
+				return;
+			}
+
+			// position -1 = cancelled (timeout / shutdown)
+			QuitToLogin();
+
+			/* Explain it, and only after the teardown. QuitToLogin drives every panel through
+			 * its quit-to-login handler, which closes the dialog box along with everything else
+			 * — so a message opened before it is swallowed and the player is returned to the
+			 * login screen with no idea why their wait ended. */
+			ShowInfoDialog("The login queue timed out. Please try again.");
+		}
+
+		/// <summary>
+		/// Handles a <see cref="WorldSceneQueuePositionBroadcast"/> from the WorldServer while it
+		/// is waiting for somewhere to put this client.
+		/// </summary>
+		/// <remarks>
+		/// The World → Scene hop is the only leg of the connection pipeline that could stall for
+		/// a long time with nothing on screen but a loading overlay: no capacity in any instance
+		/// of the target scene, an instance still loading on a scene server, or a combat-logout
+		/// body that only one specific instance can hand back. All three are legitimate waits
+		/// and all three were completely silent, which is indistinguishable from a hang. This is
+		/// the same feedback the login queue gives, one hop later.
+		/// <para>
+		/// Position 0 arrives immediately before <c>WorldSceneConnectBroadcast</c> and just
+		/// closes the dialog; -1 means the server gave up, and is terminal — the connection is
+		/// already closing, so retrying in place would only re-enter the same queue.
+		/// </para>
+		/// </remarks>
+		private void OnWorldSceneQueuePosition(WorldSceneQueuePositionBroadcast msg, Channel ch)
+		{
+			if (msg.QueuePosition > 0)
+			{
+				ShowQueueDialog(
+					FormatQueueText(DescribeWorldSceneQueueReason(msg.Reason), msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
+					// The player chose not to keep waiting for a world slot.
+					onLeave: () => QuitToLogin());
+				return;
+			}
+
+			HideQueueDialog();
+
+			if (msg.QueuePosition == 0)
+			{
+				// Routed. The scene connect broadcast is right behind this one.
+				return;
+			}
+
+			// position -1 = the world server abandoned the wait and is closing the connection.
+			QuitToLogin();
+
+			ShowInfoDialog("The world server could not find room for your character. Please try again.");
+		}
+
+		/// <summary>
+		/// Turns a <see cref="WorldSceneQueueReason"/> into a line the player can act on.
+		/// </summary>
+		/// <remarks>
+		/// The three waits look identical from the outside but mean very different things — one
+		/// is the world being full, one is a zone starting up, and one is the player's own body
+		/// still standing in a fight they disconnected from. Only the last of those is
+		/// self-inflicted, and a player who is not told about it has no way to understand why
+		/// they are waiting when the world is visibly not busy.
+		/// </remarks>
+		private static string DescribeWorldSceneQueueReason(WorldSceneQueueReason reason)
+		{
+			switch (reason)
+			{
+				case WorldSceneQueueReason.SceneLoading:
+					return "Preparing your zone.";
+				case WorldSceneQueueReason.CombatLogoutBody:
+					return "Your character is still in combat where you left it.\nWaiting for it to become available.";
+				case WorldSceneQueueReason.Capacity:
+				default:
+					return "Waiting for space in the world.";
+			}
+		}
 		/// <summary>
 		/// Handles a death broadcast by showing the death dialog UI.
 		/// </summary>
@@ -1304,16 +1506,84 @@ namespace FishMMO.Client
 		private void OnLogMessage(string condition, string stackTrace, LogType type)
 		{
 			if (type != LogType.Exception) return;
-			Log.Error("Client", stackTrace);
+			Log.Error("Client", string.IsNullOrEmpty(condition) ? stackTrace : $"{condition}\n{stackTrace}");
 			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkStack(stackTrace)) return;
 			pendingErrorStackTrace = stackTrace;
 		}
 		/// <summary>
-		/// Determines whether a stack trace originates from the networking layer.
+		/// Tears the session down after an unhandled exception escaped the networking stack.
 		/// </summary>
+		/// <remarks>
+		/// This used to revoke the token and call <see cref="ClientConnectionManager.ForceDisconnect"/>
+		/// and stop there. ForceDisconnect deliberately suppresses both the reconnect timer and
+		/// <c>OnConnectionAttemptFailed</c> for the stop it causes, so nothing downstream ran:
+		/// the world scenes stayed loaded, the HUD stayed on screen, no login panel was shown,
+		/// and — because the token had just been revoked — no amount of waiting could recover
+		/// it. The player was left standing in a frozen world with no way back short of
+		/// restarting the client.
+		/// <para>
+		/// <see cref="QuitToLogin"/> does the same disconnect and revocation as part of a
+		/// teardown that actually lands somewhere: world scenes unloaded, login scenes
+		/// reloaded, panels restored. It is the only honest destination once the token is gone.
+		/// </para>
+		/// </remarks>
+		/// <param name="stackTrace">Stack trace of the exception that triggered this, for diagnostics.</param>
+		private void HandleNetworkStackException(string stackTrace)
+		{
+			// Nothing to tear down. Returning to login from here would put the login screen up
+			// over whatever the player is already looking at — which, with no connection, is
+			// the login screen.
+			if (Connection == null || Connection.ClientState == LocalConnectionState.Stopped)
+			{
+				return;
+			}
+
+			Log.Error("Client",
+				"An unhandled exception escaped the networking stack; the connection can no longer be trusted. " +
+				$"Returning to the login screen.\n{stackTrace}");
+
+			// QuitToLogin revokes the token itself; doing it here as well would try to send the
+			// revocation twice and clear the local copy before the teardown could use it.
+			QuitToLogin();
+		}
+
+		/// <summary>
+		/// Determines whether an exception was thrown <i>by</i> the networking layer, as opposed
+		/// to merely having passed through it.
+		/// </summary>
+		/// <remarks>
+		/// Only the throwing frame counts, and getting this wrong is expensive. Testing the
+		/// whole stack — which this used to do — matched <c>FishNet.Managing.</c> for every
+		/// exception raised inside <i>any</i> broadcast or RPC handler, because that is the code
+		/// that dispatches them. A null reference in a HUD panel reacting to a chat message was
+		/// therefore indistinguishable from a corrupted transport stream, and the response to
+		/// both is to revoke the session token and return to the login screen. Losing a session
+		/// over a cosmetic UI bug is far worse than the bug.
+		/// <para>
+		/// The first line of a Unity stack trace is the throw site; its callers follow beneath
+		/// it. Matching only that line keeps the teardown for faults raised inside the reader,
+		/// the transport or the authenticator — those genuinely mean the connection can no
+		/// longer be trusted — while a handler's own bug is logged and otherwise left alone.
+		/// </para>
+		/// </remarks>
 		/// <param name="st">The stack trace to inspect.</param>
-		/// <returns>True if the stack trace matches known networking namespaces; otherwise, false.</returns>
-		private static bool IsNetworkStack(string st) => st.IndexOf("FishNet.Managing.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishNet.Serializing.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishMMO.Shared.Network.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishMMO.Client.Authentication", StringComparison.Ordinal) >= 0 || st.IndexOf("LoginAuthenticator", StringComparison.Ordinal) >= 0 || st.IndexOf("SrpAuthenticator", StringComparison.Ordinal) >= 0 || st.IndexOf("ClientAuthenticator", StringComparison.Ordinal) >= 0;
+		/// <returns>True when the throwing frame belongs to the networking layer.</returns>
+		private static bool IsNetworkStack(string st)
+		{
+			// First line = the frame that threw. Callers, including the broadcast dispatcher
+			// that would match every handler in the game, are deliberately not considered.
+			int lineEnd = st.IndexOf('\n');
+			string throwSite = lineEnd >= 0 ? st.Substring(0, lineEnd) : st;
+
+			return throwSite.IndexOf("FishNet.Managing.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishNet.Serializing.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishMMO.Shared.Network.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishMMO.Client.Authentication", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("LoginAuthenticator", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("SrpAuthenticator", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("ClientAuthenticator", StringComparison.Ordinal) >= 0;
+		}
 
 		// ── App lifecycle ───────────────────────────────────────────────
 

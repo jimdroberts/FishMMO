@@ -516,7 +516,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await SaveAbilitiesAsync(abilities);
 			}
 
-			await LoadCharacterAsync(conn, accountName, characterService, serverID, heldToken);
+			// The character ID travels with the token: LoadCharacterAsync has to be able to hand
+			// this claim back on any path that abandons the load, including the ones that fail
+			// before a character row has been read.
+			await LoadCharacterAsync(conn, accountName, characterService, serverID, heldToken, charData.ID);
 		}
 
 		/// <summary>

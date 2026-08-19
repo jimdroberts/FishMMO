@@ -395,7 +395,8 @@ namespace FishMMO.Client
 		public void OnClick_ConnectToServer()
 		{
 			if (Client.IsConnectionReady() &&
-				selectedServer != null)
+				selectedServer != null &&
+				selectedServer.Details != null)
 			{
 				SetConnectToServerLocked(true);
 

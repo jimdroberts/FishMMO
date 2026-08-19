@@ -192,6 +192,16 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `OnDespawnCharacter` | `Action<NetworkConnection, IPlayerCharacter>` | After character is despawned during save-and-despawn |
 | `OnPetKilled` | `Action<NetworkConnection, IPlayerCharacter>` | After a pet owned by a player character is killed |
 
+It also exposes one command, `BeginDeliberateTransfer(conn)`. It marks the next disconnect on
+that connection as a hand-off to another scene server rather than a player leaving, which
+suppresses the combat-logout linger for it. Only callers that transfer a character *through*
+the ordinary disconnect pipeline need it — `SceneChannelSystem` is the one that does.
+`IPlayerCharacter_OnTeleport` and the cross-scene bind-point respawn instead release the
+character themselves before disconnecting, so they never reach the linger check. A transfer
+that lingered would leave the body and its session claim on the source server while the client
+arrived at the destination, which could then not claim the character and would kick it on every
+retry until the linger expired.
+
 ### Character Load Pipeline
 
 **Step 1 — Authentication callback** (`Authenticator_OnClientAuthenticationResult`):
@@ -255,11 +265,13 @@ Character sessions are explicitly claimed/released to prevent dual-server owners
 
 | Operation | Method | When |
 |---|---|---|
-| Claim | `TryClaimAsync(characterID, serverID)` | During `LoadCharacterAsync`, before sub-entity hydration. Succeeds only when the row is `Offline` or its lease has expired. |
+| Claim | `TryClaimAsync(characterID, serverID)` | During `LoadCharacterAsync`, before sub-entity hydration. Succeeds only when the row is `Offline` or its lease has expired. Skipped when a combat-logout reattach hands the load a claim this server already holds. |
 | Lease refresh | `RefreshSessionLeasesAsync(leases)` | `OnPeriodicSessionLeaseRefresh`, batched across every held session in one statement |
 | Release | `ReleaseAsync(characterID, serverID, token)` | On disconnect, teleport, bind-point respawn into another scene, load failure, scene validation failure, deinitialize |
 
 Claim, release and lease refresh all verify the full ownership triple (character, owner server, owner token), so a stale server can neither free nor extend a claim it no longer holds.
+
+A claim handed to `LoadCharacterAsync` by a combat-logout reattach is tracked from the method's first line, alongside the character ID it belongs to, so the abandon paths that run *before* any character row has been read still have something to give back — and so a reattach whose account no longer selects that character is refused rather than installing the token under the wrong ID. The final hand-off to the main thread is checked too: it is the only step that installs the claim in `SessionTokens`, so a rejected enqueue releases instead of stranding it.
 
 All release paths follow **save-then-release** ordering via `SaveAndReleaseCharacterAsync` to ensure data is persisted while the session lock is still held. `TryExtractAndReleaseSession` is used for non-save release paths (waiting-to-load characters, scene validation failures), and every path ultimately routes through `ReleaseSessionSafely`.
 
@@ -371,7 +383,8 @@ respawning *into* rather than the one they died in.
 
 1. Removes the transfer watchdog entry, scene-unload and validated-scene rate-limit tracking for the connection.
 2. Removes auth callback rate-limit tracking for the account.
-3. Calls `RemoveCharacterConnectionMapping(conn)`.
+3. Consumes any `BeginDeliberateTransfer` marker for the connection.
+4. Calls `RemoveCharacterConnectionMapping(conn, allowCombatLinger: <not a deliberate transfer>)`.
 
 `RemoveCharacterConnectionMapping(conn, skipOnDisconnect)`:
 

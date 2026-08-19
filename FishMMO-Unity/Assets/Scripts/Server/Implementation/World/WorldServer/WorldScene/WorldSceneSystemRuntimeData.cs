@@ -93,6 +93,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		public float NextWaitQueueUpdate { get; set; }
 
 		/// <summary>
+		/// Time remaining until the next scene-routing queue position broadcast.
+		/// </summary>
+		public float NextQueuePositionUpdate { get; set; }
+
+		/// <summary>
 		/// Initializes the runtime data once. Called when the data container is first set up.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -103,6 +108,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			NextDebounceCleanup = 0.0f;
 			LoginAuthenticator = null;
 			NextWaitQueueUpdate = 0.0f;
+			NextQueuePositionUpdate = 0.0f;
 			InstanceLookupDebounce = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 			WaitingQueueEnteredUtcByClientId = new Dictionary<int, DateTime>();
 			AvailableSceneCache = new TimedCache<string, IReadOnlyList<SceneData>>(StringComparer.OrdinalIgnoreCase);
@@ -123,6 +129,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			NextDebounceCleanup = 0.0f;
 			LoginAuthenticator = null;
 			NextWaitQueueUpdate = 0.0f;
+			NextQueuePositionUpdate = 0.0f;
 			InstanceLookupDebounce?.Clear();
 			WaitingQueueEnteredUtcByClientId?.Clear();
 			AvailableSceneCache?.Clear();

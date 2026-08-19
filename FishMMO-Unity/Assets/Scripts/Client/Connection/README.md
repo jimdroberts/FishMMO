@@ -106,6 +106,53 @@ as a login button that silently stops working. `ConnectToServer` therefore check
 the acquisition when the CAS fails, and reclaims a guard held longer than any legitimate
 acquisition could last (stop wait × 2 + establish timeout + 30 s).
 
+## Abort paths clear `stoppingForConnect`
+
+`ConnectToServer` sets `stoppingForConnect` and expects the Stopped transition it asked for to
+consume it. Every abort inside `OnAwaitingConnectionReady` is reached in exactly the cases
+where that does not happen — the teardown timed out, or the connection was already stopped so
+no transition was ever raised. `AbortConnectAttempt` therefore clears the flag along with the
+guard; leaving it latched handed it to the *next* Stopped, which is a real drop, and a drop
+marked deliberate arms no reconnect and raises no `OnConnectionAttemptFailed`, so the client
+sat disconnected with nothing driving it anywhere.
+
+## Loop guards are sized from the timeout, not a frame count
+
+The waits inside `OnAwaitingConnectionReady` are bounded by `Time.realtimeSinceStartup`
+deadlines. Their iteration counters are only a backstop against a clock that stops advancing,
+so they are derived from the timeout (`IterationCapForSeconds`). Fixed frame counts made the
+counter the *tighter* bound on any client rendering faster than count ÷ timeout — routine,
+since FishNet's `ClientManager.FrameRate` defaults to 500 and the login screen renders almost
+nothing. The 20 s establish wait aborted after roughly five seconds and reported an internal
+"iteration limit exceeded" instead of a connection failure.
+
+## Waiting is not disconnecting
+
+Two of the pipeline's queues hold a client on a live, authenticated connection while it waits:
+the LoginServer's admission queue, and the WorldServer's scene-routing queue (see
+[World Scene System → Scene-routing queue feedback](../../Server/Implementation/World/WorldServer/WorldScene/README.md#scene-routing-queue-feedback)).
+Neither involves this class — no connection state changes, so nothing here fires — which is
+exactly why they need their own feedback channel. `Client` presents both through one shared
+wait dialog so they cannot drift apart or fight over the same control, and the dialog's only
+action leaves the queue via `QuitToLogin`.
+
+## Unhandled exceptions from the networking stack
+
+`Client.OnLogMessage` watches for exceptions raised inside the networking layer and tears the
+session down, because a connection whose reader or transport has thrown cannot be trusted. Two
+rules keep that from doing more harm than the fault it responds to:
+
+- **Only the throwing frame counts.** Matching the whole stack caught `FishNet.Managing.` for
+  every exception raised inside *any* broadcast or RPC handler, since that is the code that
+  dispatches them — so a null reference in a HUD panel was indistinguishable from a corrupted
+  transport stream, and both cost the player their session. `IsNetworkStack` now reads only the
+  first line of the stack trace, which is the throw site.
+- **It ends somewhere.** The teardown used to be `RevokeAndClearAuthToken` plus
+  `ForceDisconnect`, and `ForceDisconnect` deliberately suppresses both the reconnect timer and
+  `OnConnectionAttemptFailed` — so nothing ran afterwards. World scenes stayed loaded, no login
+  panel appeared, and the token was already revoked, so waiting could not recover it. It routes
+  through `QuitToLogin` instead.
+
 ## Thread Safety
 
 - `connectingGuard` uses `Interlocked.CompareExchange` for CAS-based concurrency control

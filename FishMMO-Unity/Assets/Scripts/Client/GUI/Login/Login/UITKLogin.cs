@@ -265,14 +265,17 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.ServerBusy:
 					OnLoginAuthenticationDialog("Server is busy. Please try again.");
 					break;
-				case ClientAuthenticationResult.TokenInvalid:
-				case ClientAuthenticationResult.TokenExpired:
-				case ClientAuthenticationResult.TokenRevoked:
 				case ClientAuthenticationResult.VersionMismatch:
 					OnVersionMismatch();
 					break;
+				/* A rejected session token is not a version problem. Reporting it as one told
+				 * the player to update a client that is perfectly current, and hid the real
+				 * cause — an expired or revoked session — behind advice that cannot fix it. */
+				case ClientAuthenticationResult.TokenInvalid:
+				case ClientAuthenticationResult.TokenExpired:
+				case ClientAuthenticationResult.TokenRevoked:
 				case ClientAuthenticationResult.TokenDecryptFailed:
-					OnLoginAuthenticationDialog("Authentication failed. Please log in again.");
+					OnLoginAuthenticationDialog("Your session has expired. Please log in again.");
 					break;
 				// Not applicable during login flow.
 				case ClientAuthenticationResult.SrpVerify:

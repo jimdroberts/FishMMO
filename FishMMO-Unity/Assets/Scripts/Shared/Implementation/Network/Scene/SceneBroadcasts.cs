@@ -146,4 +146,77 @@ namespace FishMMO.Shared
 		/// </summary>
 		public int TotalQueued;
 	}
+
+	/// <summary>
+	/// Why a client is waiting in the WorldServer's scene-routing queue.
+	/// </summary>
+	/// <remarks>
+	/// The three waits look identical to a player — a loading screen that is not
+	/// progressing — but they have very different causes and very different expected
+	/// durations, and only one of them is the server being full. Naming the cause is the
+	/// difference between "the game has hung" and "the game is waiting for something
+	/// specific".
+	/// </remarks>
+	public enum WorldSceneQueueReason : byte
+	{
+		/// <summary>Every running instance of the target scene is at capacity.</summary>
+		Capacity = 0,
+
+		/// <summary>A scene instance has been requested and is still loading on a scene server.</summary>
+		SceneLoading = 1,
+
+		/// <summary>
+		/// The character's combat-logout body is still standing in a specific scene instance,
+		/// and only the scene server holding it can hand it back.
+		/// </summary>
+		CombatLogoutBody = 2,
+	}
+
+	/// <summary>
+	/// Broadcast sent by the WorldServer to a client waiting to be routed to a SceneServer,
+	/// with its current position in the scene-routing queue. Sent periodically at a
+	/// server-configured rate.
+	///
+	/// <para><b>Position semantics</b> (identical to <see cref="LoginQueuePositionBroadcast"/>):</para>
+	/// <list type="bullet">
+	///   <item><b>&gt; 0</b> — Waiting in queue. Display the position to the user.</item>
+	///   <item><b>0</b> — Routed. A <see cref="WorldSceneConnectBroadcast"/> follows; dismiss the wait UI.</item>
+	///   <item><b>-1</b> — Cancelled. The wait was abandoned and the connection is being closed.</item>
+	/// </list>
+	///
+	/// <para><b>Why this exists.</b> The World → Scene hop is the one leg of the connection
+	/// pipeline that could stall indefinitely with nothing on screen but a loading overlay.
+	/// A client with no scene instance to go to is held in the WorldServer's queue and
+	/// re-evaluated every cycle, so the wait is legitimate — but it was completely silent,
+	/// which is indistinguishable from a hang. This is the login queue's feedback channel
+	/// applied to the same problem one hop later.</para>
+	///
+	/// <para><b>Server-authoritative update rate:</b> The WorldServer controls how often this
+	/// broadcast is sent. Clients are passive receivers only — there is no request path.</para>
+	/// </summary>
+	public struct WorldSceneQueuePositionBroadcast : IBroadcast
+	{
+		/// <summary>
+		/// Current 1-based queue position. 0 = routed, -1 = cancelled.
+		/// </summary>
+		public int QueuePosition;
+
+		/// <summary>
+		/// Rough estimated wait in seconds, derived from how many connections the last
+		/// routing cycle actually placed. 0 when unknown — which is the normal case while
+		/// nothing is draining, and the client must present it as such rather than as
+		/// "no wait".
+		/// </summary>
+		public int EstimatedWaitSeconds;
+
+		/// <summary>
+		/// Total number of clients waiting for the same scene or instance.
+		/// </summary>
+		public int TotalQueued;
+
+		/// <summary>
+		/// Why this client is waiting. See <see cref="WorldSceneQueueReason"/>.
+		/// </summary>
+		public WorldSceneQueueReason Reason;
+	}
 }

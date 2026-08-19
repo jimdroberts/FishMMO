@@ -99,6 +99,34 @@ namespace FishMMO.Client
 		/// <summary>Timeout in seconds waiting for a new connection to reach Started state. Default 20.</summary>
 		public float ConnectionEstablishTimeoutSeconds { get; set; } = 20f;
 
+		/// <summary>
+		/// Upper bound on frames rendered per second, used only to size the runaway-loop
+		/// guards in <see cref="OnAwaitingConnectionReady"/>.
+		/// </summary>
+		/// <remarks>
+		/// Those loops are bounded by a wall-clock deadline; the iteration counters exist so a
+		/// clock that stops advancing cannot spin forever. Sizing them from a fixed frame count
+		/// made them the *tighter* bound on any client rendering faster than that count divided
+		/// by the timeout — which is routine, because FishNet's ClientManager.FrameRate defaults
+		/// to 500 and the login screen renders essentially nothing. A 20s establish timeout was
+		/// therefore aborted after roughly five seconds, reported as an internal
+		/// "iteration limit exceeded" error rather than as the connection failure it was, so a
+		/// player on a slow link saw the login button silently stop working.
+		/// <para>Deliberately far above any real refresh rate: overshooting only weakens a
+		/// backstop that the deadline already covers, while undershooting reintroduces the bug.</para>
+		/// </remarks>
+		private const float MaxExpectedFramesPerSecond = 2000f;
+
+		/// <summary>
+		/// Converts a timeout in seconds into a frame-iteration cap that cannot expire before
+		/// the timeout does. See <see cref="MaxExpectedFramesPerSecond"/>.
+		/// </summary>
+		private static int IterationCapForSeconds(float seconds)
+		{
+			double frames = (double)Mathf.Max(0.1f, seconds) * MaxExpectedFramesPerSecond;
+			return frames >= int.MaxValue ? int.MaxValue : (int)frames + 1;
+		}
+
 		/// <summary>Fired when a connection to the server is successfully established.</summary>
 		public event Action OnConnectionSuccessful;
 		/// <summary>Fired on each reconnect attempt with current and max attempt counts.</summary>
@@ -447,13 +475,13 @@ namespace FishMMO.Client
 			if (ClientState != LocalConnectionState.Stopped)
 			{
 				float deadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
-				int maxWaitIters = 1000;
+				int maxWaitIters = IterationCapForSeconds(ConnectionStopTimeoutSeconds);
 				while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < deadline)
 				{
 					if (--maxWaitIters <= 0)
 					{
 						Log.Error("ClientConnection", "Connection stop wait iteration limit exceeded.");
-						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+						AbortConnectAttempt();
 						yield break;
 					}
 					yield return null;
@@ -466,13 +494,13 @@ namespace FishMMO.Client
 					// Without this wait, StartConnection may fail because the transport
 					// is still in Stopping state.
 					float forcedDeadline = Time.realtimeSinceStartup + Mathf.Max(0.1f, ConnectionStopTimeoutSeconds);
-					int maxForcedIters = 1000;
+					int maxForcedIters = IterationCapForSeconds(ConnectionStopTimeoutSeconds);
 					while (ClientState != LocalConnectionState.Stopped && Time.realtimeSinceStartup < forcedDeadline)
 					{
 						if (--maxForcedIters <= 0)
 						{
 							Log.Error("ClientConnection", "Forced stop wait iteration limit exceeded.");
-							System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+							AbortConnectAttempt();
 							yield break;
 						}
 						yield return null;
@@ -481,7 +509,7 @@ namespace FishMMO.Client
 					{
 						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");
 						forceDisconnect = false;
-						System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+						AbortConnectAttempt();
 						yield break;
 					}
 				}
@@ -494,7 +522,7 @@ namespace FishMMO.Client
 			if (forceDisconnect)
 			{
 				forceDisconnect = false;
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				AbortConnectAttempt();
 				yield break;
 			}
 			if (isWorldServer) { lastWorldAddress = address; lastWorldPort = port; }
@@ -533,7 +561,7 @@ namespace FishMMO.Client
 			catch (System.Exception ex)
 			{
 				Log.Error("ClientConnection", $"StartConnection threw: {ex}");
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				AbortConnectAttempt();
 				yield break;
 			}
 
@@ -542,14 +570,14 @@ namespace FishMMO.Client
 			// concurrent ConnectToServer calls from starting a second connection
 			// while this one is still being established.
 			float connectDeadline = Time.realtimeSinceStartup + Mathf.Max(1f, ConnectionEstablishTimeoutSeconds);
-			int connectMaxIters = Mathf.CeilToInt(ConnectionEstablishTimeoutSeconds * 120f); // ~120 checks/s
+			int connectMaxIters = IterationCapForSeconds(ConnectionEstablishTimeoutSeconds);
 			while (ClientState == LocalConnectionState.Starting && Time.realtimeSinceStartup < connectDeadline)
 			{
 				if (--connectMaxIters <= 0)
 				{
 					Log.Error("ClientConnection", "Connection establish wait iteration limit exceeded.");
 					NetworkManager.ClientManager.StopConnection();
-					System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+					AbortConnectAttempt();
 					yield break;
 				}
 				yield return null;
@@ -561,7 +589,7 @@ namespace FishMMO.Client
 				// Log context and release the guard — the UI layer will surface the error.
 				Log.Error("ClientConnection", $"Connection to {address}:{port} failed before reaching Started state. " +
 					"The transport reported an error — check preceding [WebTransport Client] log lines for the specific reason.");
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				AbortConnectAttempt();
 				yield break;
 			}
 
@@ -573,10 +601,32 @@ namespace FishMMO.Client
 					$"within {ConnectionEstablishTimeoutSeconds}s. " +
 					"Check network/UDP (QUIC), DNS resolution, and that the server is running and accepting connections on this port.");
 				NetworkManager.ClientManager.StopConnection();
-				System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+				AbortConnectAttempt();
 				yield break;
 			}
 
+			inFlightConnectionCoroutine = null;
+			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+		}
+
+		/// <summary>
+		/// Releases the in-flight connection guard for an attempt that is giving up before
+		/// <c>StartConnection</c> could report anything.
+		/// </summary>
+		/// <remarks>
+		/// Clearing <see cref="stoppingForConnect"/> is the part that matters. The flag is
+		/// normally consumed by the Stopped transition that <see cref="ConnectToServer"/>
+		/// asked for, but every abort path here is reached precisely when that transition did
+		/// not arrive (the teardown timed out) or was never raised at all (the connection was
+		/// already stopped). Leaving it latched hands it to the *next* Stopped transition,
+		/// which is a genuine drop — and one marked deliberate arms no reconnect and raises no
+		/// <see cref="OnConnectionAttemptFailed"/>, so the client sits disconnected with
+		/// nothing driving it back to the login screen.
+		/// </remarks>
+		private void AbortConnectAttempt()
+		{
+			stoppingForConnect = false;
+			inFlightConnectionCoroutine = null;
 			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
 		}
 	}

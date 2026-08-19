@@ -26,6 +26,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// The connection is gone, so the transfer watchdog has nothing left to enforce.
 			pendingTransferDisconnects.TryRemove(conn.ClientId, out _);
 
+			// Consume any deliberate-transfer marker for this connection. Read here, before
+			// RemoveCharacterConnectionMapping decides whether the body may linger.
+			bool deliberateTransfer = deliberateTransferClientIds.TryRemove(conn.ClientId, out _);
+
 			// Clean up per-connection scene-unload rate-limit tracking.
 			sceneUnloadLastTimeByClientId.TryRemove(conn.ClientId, out _);
 
@@ -47,7 +51,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// connection. Teleport and bind-point respawn also route through
 				// RemoveCharacterConnectionMapping, but those are deliberate transfers whose
 				// character must be released promptly for the destination server to claim it.
-				RemoveCharacterConnectionMapping(conn, allowCombatLinger: true);
+				//
+				// A channel switch is the same kind of transfer and yet reaches the character
+				// system only through this handler, so it announces itself in advance — see
+				// BeginDeliberateTransfer. Without that, a character pulled into combat between
+				// the switch's last state check and the disconnect landing left a body behind in
+				// the scene it was leaving, and the destination kicked the arriving client for
+				// contention on every retry until the linger ran out.
+				RemoveCharacterConnectionMapping(conn, allowCombatLinger: !deliberateTransfer);
 			}
 		}
 
@@ -240,6 +251,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			Log.Debug("CharacterSystem", $"Teleport cancelled for {character.CharacterName}: {reason}.");
 			character.TeleporterName = string.Empty;
+		}
+
+		/// <summary>
+		/// Connections whose imminent disconnect is a deliberate transfer rather than a player
+		/// leaving. See <see cref="BeginDeliberateTransfer"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> deliberateTransferClientIds =
+			new ConcurrentDictionary<int, byte>();
+
+		/// <inheritdoc/>
+		public void BeginDeliberateTransfer(NetworkConnection connection)
+		{
+			if (connection == null)
+			{
+				return;
+			}
+			deliberateTransferClientIds[connection.ClientId] = 0;
 		}
 
 		/// <summary>
