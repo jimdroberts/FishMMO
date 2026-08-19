@@ -160,6 +160,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ApplyFill()
 		{
+			// Null until OnStarting has run, which does not happen until this panel's visual
+			// tree exists — and an attribute update can arrive before that. The value is not
+			// lost: UITKCharacterControl re-applies the character once the tree is available.
+			if (fill == null)
+			{
+				return;
+			}
 			fill.style.width = Length.Percent(Mathf.Clamp01(displayedValue) * 100.0f);
 		}
 	}

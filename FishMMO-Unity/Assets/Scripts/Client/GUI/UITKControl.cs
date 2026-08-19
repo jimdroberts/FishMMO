@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -55,25 +56,109 @@ namespace FishMMO.Client
 		protected VisualElement Root => Document != null ? Document.rootVisualElement : null;
 
 		/// <summary>
-		/// Registers this control with the <see cref="UIManager"/>, calls <see cref="OnStarting"/>,
-		/// and hides the panel if <see cref="StartOpen"/> is false.
+		/// True once <see cref="OnStarting"/> has run against a populated visual tree.
+		/// </summary>
+		private bool hasStarted;
+
+		/// <summary>
+		/// Registers this control with the <see cref="UIManager"/>, applies
+		/// <see cref="StartOpen"/>, and runs <see cref="OnStarting"/> as soon as the visual
+		/// tree exists.
 		/// </summary>
 		private void Awake()
 		{
 			UIManager.RegisterTK(this);
 
-			OnStarting();
-
+			// Applied before OnStarting, and independently of it. A panel's initial visibility
+			// must not wait on the visual tree, and a hidden panel disables its UIDocument —
+			// which is precisely why OnStarting cannot run here for every control.
 			if (!StartOpen)
 			{
 				Hide();
 			}
+
+			if (!TryStart())
+			{
+				StartCoroutine(WaitForVisualTree());
+			}
 		}
 
 		/// <summary>
-		/// Called at the end of the MonoBehaviour Awake function.
+		/// Retries initialisation until the visual tree exists.
+		/// </summary>
+		/// <remarks>
+		/// A coroutine rather than <c>Update</c> deliberately. Unity dispatches magic methods to
+		/// the most-derived declaration, and several controls — <c>UITKResourceBar</c> and
+		/// <c>UITKHotkeyBar</c> among them — declare their own <c>Update</c>, which would shadow
+		/// a base one and silently disable this retry for exactly the panels that need it.
+		/// A coroutine cannot be shadowed that way.
+		/// <para>
+		/// A panel that starts hidden has its UIDocument disabled and therefore no tree, so this
+		/// keeps waiting until something shows it. The GameObject itself stays active
+		/// throughout — only the document is disabled — so the coroutine survives.
+		/// </para>
+		/// </remarks>
+		private IEnumerator WaitForVisualTree()
+		{
+			while (!TryStart())
+			{
+				yield return null;
+			}
+		}
+
+		/// <summary>
+		/// Runs <see cref="OnStarting"/> exactly once, and only when the visual tree is
+		/// actually populated.
+		/// </summary>
+		/// <remarks>
+		/// This used to be called directly from <see cref="Awake"/>, which was too early.
+		/// <see cref="UIDocument"/> allocates <c>rootVisualElement</c> up front but only clones
+		/// the UXML into it during its own <c>OnEnable</c> — after every component's Awake — so
+		/// Awake sees a real but empty root. Every <c>Q&lt;&gt;</c> in an override returned
+		/// null, was cached as null, and never re-resolved, leaving controls that looked
+		/// initialised but were wired to nothing.
+		/// </remarks>
+		private bool TryStart()
+		{
+			if (this.hasStarted)
+			{
+				return true;
+			}
+
+			VisualElement root = Root;
+			if (root == null || root.childCount == 0)
+			{
+				// Not an error: the document may be disabled, or its tree not cloned yet.
+				return false;
+			}
+
+			this.hasStarted = true;
+			OnStarting();
+			OnAfterStarting();
+			return true;
+		}
+
+		/// <summary>
+		/// Called immediately after <see cref="OnStarting"/>. Override to re-apply any state
+		/// that arrived before the visual tree existed.
+		/// </summary>
+		/// <remarks>
+		/// Initialisation is no longer guaranteed to happen before the control is given data.
+		/// A panel that starts hidden has no visual tree until it is shown, and world entry can
+		/// hand it a character in the meantime — so whatever it was told before it had elements
+		/// to write into has to be applied again here, or the panel stays blank.
+		/// </remarks>
+		protected virtual void OnAfterStarting() { }
+
+		/// <summary>
+		/// Called once the control's visual tree is available.
 		/// Override to perform one-time initialisation against <see cref="Root"/>.
 		/// </summary>
+		/// <remarks>
+		/// Guaranteed to see a populated <see cref="Root"/>. For a control that starts hidden
+		/// this runs when it is first shown rather than at Awake, because a hidden panel's
+		/// UIDocument is disabled and has no tree to query.
+		/// </remarks>
 		public virtual void OnStarting() { }
 
 		/// <summary>
@@ -131,6 +216,14 @@ namespace FishMMO.Client
 				Show();
 			}
 			OnQuitToLogin();
+
+			/* OnQuitToLogin stops all coroutines by default, which would silently take the
+			 * initialisation retry with it — leaving a control that had not yet seen its visual
+			 * tree permanently uninitialised after a single quit to login. Restart it. */
+			if (!this.hasStarted)
+			{
+				StartCoroutine(WaitForVisualTree());
+			}
 		}
 
 		/// <summary>
