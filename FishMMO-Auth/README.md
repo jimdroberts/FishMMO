@@ -16,6 +16,8 @@ A set of three transport-agnostic .NET authentication libraries (AuthShared, Cli
 - [Flow Diagram](#flow-diagram)
 - [Project Structure](#project-structure)
 - [License](#license)
+- [Re-handshaking on a live connection](#re-handshaking-on-a-live-connection)
+- [Account ↔ connection mapping on reconnect](#account--connection-mapping-on-reconnect)
 
 ## Overview
 
@@ -59,7 +61,7 @@ The server-side authenticator infrastructure — engine-independent cores, colle
 - `BaseAuthenticatorCore<TConnection>` — stateless HMAC cookie challenge, X25519 ECDH key agreement, stale-auth TTL sweeps (bounded scan/remove), per-IP debounce, and global handshake-per-second cap.
 - `SrpAuthenticatorCore<TConnection>` — bounded-channel SRP verify/proof workers, per-IP SRP rate limiting, account-verify debouncing, TOTP two-factor gate (semaphore-limited concurrency, per-username failure lockout), kick-request tracking, and auth token issuance with hash persistence.
 - `TokenAuthenticatorCore<TConnection>` — bounded-channel token auth worker with timing-equalization dummy-key path and revocation check.
-- `ClientAuthenticatorCore` — full client-side auth state machine with cookie echo, ECDH, SRP verify/proof, TOTP, token path, and zeroing key material cleanup.
+- `ClientAuthenticatorCore` — full client-side auth state machine with cookie echo, ECDH, SRP verify/proof, TOTP, token path, and zeroing key material cleanup. Separates *connection ended* (`OnDisconnected`) from *handshake again on the same connection* (`OnRehandshakeRequired`) — see [Re-handshaking on a live connection](#re-handshaking-on-a-live-connection).
 
 ### Handshake and session establishment:
 - Stateless HMAC-SHA256 cookie challenge with rollover validation (`ComputeHandshakeCookie`, `VerifyHandshakeCookieWithRollover`).
@@ -221,6 +223,10 @@ public class MyClientAuth : ClientAuthenticatorCore
     // On connect, set credentials first:
     // auth.SetLoginCredentials(username, password);
     // Then call auth.OnConnected() from your transport OnConnected callback.
+    //
+    // If the server later invites a second handshake on the SAME connection
+    // (login-queue admission), call auth.OnRehandshakeRequired() before
+    // auth.OnConnected() — NOT auth.OnDisconnected(). See the section below.
 
     protected override void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion, string gameVersion) { /* send broadcast */ }
     protected override void SendTokenAuth(byte[] encryptedToken, uint seq) { /* send broadcast */ }
@@ -314,6 +320,7 @@ Use this checklist when validating a deployment or integration:
 - Zero raw tokens and temporary sensitive byte buffers after use.
 - Clear per-connection SRP state after successful SRP auth (`ClearSrpState`).
 - Call `ClearKeyMaterial()` on the client after key material is no longer needed.
+- Call `OnRehandshakeRequired()`, never `OnDisconnected()`, when re-handshaking on a still-open connection.
 - Rotate signing keys and cookie HMAC keys according to your security policy.
 
 ### 2FA checks:
@@ -425,6 +432,39 @@ FishMMO-Auth/
 
 ## License
 See the main FishMMO repository for license information.
+
+## Re-handshaking on a live connection
+
+`OnDisconnected()` and `OnRehandshakeRequired()` both reset the per-connection cryptographic
+state — the ephemeral keypair, the derived session keys, the nonce contexts, the SRP state and
+the duplicate-message guards. They differ in one thing: `OnDisconnected()` also clears the
+credentials, and `OnRehandshakeRequired()` preserves them.
+
+That distinction only matters in one place, but it is load-bearing there. A server may defer a
+handshake and invite the client to send another one **on the same transport connection** — the
+login admission queue does exactly this, holding the client at the QUIC layer and answering with
+`LoginQueuePositionBroadcast` until it reaches the front. The queue defers *before* SRP begins,
+so at the moment of admission the username and password handed to `SetLoginCredentials` are the
+only copy in existence: SRP has not run, so nothing has derived a verifier from them, and no UI
+will ever supply them again.
+
+Reusing `OnDisconnected()` for that retry wiped them. The re-handshake completed ECDH normally
+and then reached the credential pre-validation in `OnServerHandshakeReceived`, found an empty
+username, and called `Disconnect()` — with no auth result, so the client had nothing to report.
+Every queued client was silently dropped the instant it was admitted, which made the queue
+unable to admit anyone at all.
+
+```
+Queued client, admitted:
+    OnRehandshakeRequired()   ← clears keys, KEEPS username/password/register/email/age
+    OnConnected(null)         ← new keypair, guards reset, sends ClientHandshake
+                                 (no connection token: the real IP was already
+                                  recovered by the handshake that triggered queueing)
+```
+
+`OnConnected` is still what the caller invokes next: it regenerates the keypair and resets
+`cookieEchoed` / `srpVerifyProcessed` / `srpSuccessProcessed`, which a second handshake on one
+connection also depends on.
 
 ## Account ↔ connection mapping on reconnect
 

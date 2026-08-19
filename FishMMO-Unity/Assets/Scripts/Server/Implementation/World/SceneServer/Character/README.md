@@ -45,7 +45,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 
 ## Features
 
-- Authentication-triggered character load with per-connection rate limiting (`AuthCallbackCooldownSeconds = 2.0s`)
+- Authentication-triggered character load with per-account rate limiting (`AuthCallbackCooldownSeconds = 2.0s`). A refused callback disconnects with `DisconnectNoticeReason.RateLimited` rather than returning silently — this callback is the only thing that starts a character load, so a quiet return left the client authenticated, in no map, and watched by nothing
 - Async database fetch of character and 13 sub-entity data sets within a single Unit of Work for a consistent snapshot
 - Early session claim (`TryClaimAsync`) before sub-entity hydration to fail fast if another server owns the character, with a bounded retry (5 attempts, ~1.5s) that absorbs the hand-off window during a scene transfer instead of kicking
 - Authoritative re-read of the character row **after** the claim succeeds, so a transfer cannot load a snapshot that predates the source server's final save
@@ -67,6 +67,8 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Periodic out-of-bounds check with respawn point teleportation for characters outside scene boundaries
 - Teleport flow: teleporter validation, scene unload, immortality, position/scene update, instance flag removal, save-then-release with reconnect through world routing
 - Transfer watchdog: a connection whose character has been handed off is force-disconnected after `TransferDisconnectGrace` (15s) if the client never reports its scene unload, so a crashed or modified client cannot idle on a server that no longer holds its character
+- Residency watchdog: a connection that authenticated but still has no character after `CharacterResidencyTimeout` (60s) is disconnected with `ServerError`, bounding every load path that can fail without delivering its own disconnect
+- Scene-handshake watchdog: a character parked in `WaitingSceneLoadCharacters` that never acknowledges its scene within `SceneLoadHandshakeTimeout` (90s) is disconnected with `SceneHandshakeTimedOut`, so its session claim is released instead of being held for the life of the socket
 - Death/respawn: player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene follows the same ordering as the teleporter path, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
 - Connection disconnect cleanup: waiting-scene-load character pool return with session release, spawned character mapping removal with save-then-despawn
 - Graceful deinitialize: main-thread DTO snapshot of all characters, async persist all, release all sessions (spawned + waiting-to-load)
@@ -118,12 +120,16 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 | Constant | Value | Description |
 |---|---|---|
-| `AuthCallbackCooldownSeconds` | 2.0 | Minimum seconds between auth-callback character load requests per connection |
+| `AuthCallbackCooldownSeconds` | 2.0 | Minimum seconds between auth-callback character load requests per account. Exceeding it disconnects with `RateLimited` |
 | `ValidatedSceneBroadcastCooldownSeconds` | 2.0 | Minimum seconds between validated-scene broadcasts per connection |
 | `PendingFlushRetryIntervalSeconds` | 3.0 | Interval between pending save/release retry passes |
 | `MaxPendingFlushAttempts` | 12 | Attempts before abandoning a pending flush (spans past the 2-minute lease, after which the claim frees itself) |
 | `TransferDisconnectGrace` | 15s | Grace period for a handed-off client to disconnect on its own before the watchdog forces it |
 | `TransferDisconnectSweepIntervalSeconds` | 5.0 | Interval between transfer watchdog sweeps |
+| `CharacterResidencyTimeout` | 60s | How long an authenticated connection may go without a character before the residency watchdog disconnects it |
+| `CharacterResidencySweepIntervalSeconds` | 10.0 | Interval between residency watchdog sweeps |
+| `SceneLoadHandshakeTimeout` | 90s | How long a character in `WaitingSceneLoadCharacters` has to acknowledge its scene load |
+| `SceneLoadTimeoutSweepIntervalSeconds` | 10.0 | Interval between scene-handshake watchdog sweeps |
 | `DefaultSessionLeaseDuration` | 2 min | Database-side lease duration (`CharacterService`), the backstop that frees a claim held by a dead server |
 
 ### Required Data Containers
@@ -239,9 +245,11 @@ refusing to let their combat timer lapse.
 
 **Step 1 — Authentication callback** (`Authenticator_OnClientAuthenticationResult`):
 
-1. Rate-limits per-connection auth callbacks (`AuthCallbackCooldownSeconds`).
-2. Validates: connection not already loading, authenticated, account name resolved, `ISceneServerSystem` available, `ICharacterService` available, server ID valid.
-3. Enqueues `LoadCharacterAsync` to the async worker.
+1. Arms the residency watchdog (`CharacterResidencyTimeout`) before any branch below can return.
+2. Rate-limits per-account auth callbacks (`AuthCallbackCooldownSeconds`); a refusal disconnects with `RateLimited`.
+3. Validates: connection not already loading, authenticated, account name resolved, `ISceneServerSystem` available, `ICharacterService` available, server ID valid.
+4. Hands off to `TryReattachLingeringCharacter` when this account left a combat-logout body on this server, which carries the existing claim into the load instead of contending with it.
+5. Enqueues `LoadCharacterAsync` to the async worker.
 
 **Step 2 — Async DB snapshot + session claim** (`LoadCharacterAsync`):
 
@@ -414,7 +422,7 @@ respawning *into* rather than the one they died in.
 
 `OnRemoteConnectionStopped(conn)`:
 
-1. Removes the transfer watchdog entry, scene-unload and validated-scene rate-limit tracking for the connection.
+1. Removes the transfer watchdog entry, the residency and scene-handshake deadlines, and scene-unload and validated-scene rate-limit tracking for the connection.
 2. Removes auth callback rate-limit tracking for the account.
 3. Consumes any `BeginDeliberateTransfer` marker for the connection.
 4. Calls `RemoveCharacterConnectionMapping(conn, allowCombatLinger: <not a deliberate transfer>)`.
@@ -432,13 +440,16 @@ respawning *into* rather than the one they died in.
 `OnDeinitialize`:
 
 1. Unregisters all event handlers (authenticator, broadcasts, scene manager, connection state, character events, periodic callbacks).
-2. Snapshots all character DTOs on the main thread.
-3. Captures all session tokens (spawned + waiting-to-load).
-4. Synchronously runs async task (bounded by `shutdownFlushTimeoutMs`): persists all characters, drains the pending-flush retry queue, then releases all sessions.
+2. Clears every per-connection watchdog and rate-limit map. This behaviour is a `ScriptableObject`, so its fields outlive a play-session restart in the editor while FishNet reissues `ClientId`s from zero — a stale entry whose id is reissued would be read as the new connection's state, and for a deadline map one that expired long ago.
+3. Finalizes every combat-logout linger so no unattended body is left holding a claim.
+4. Snapshots all character DTOs on the main thread.
+5. Captures all session tokens (spawned + waiting-to-load).
+6. Synchronously runs async task (bounded by `shutdownFlushTimeoutMs`): persists all characters, drains the pending-flush retry queue, then releases all sessions.
 
 ### Failure Semantics
 
-- Auth rate-limited connections are silently skipped (timestamp not updated).
+- Auth rate-limited connections are disconnected with `RateLimited` (timestamp not updated). They are **not** silently skipped: the auth callback is the only entry point to a character load, and every other watchdog on this server is armed downstream of it, so a quiet return left the connection authenticated, in no map, driven by nothing, and behind a client-side loading screen until the player killed the process.
+- A connection that authenticates but never ends up in `WaitingSceneLoadCharacters` or `ConnectionCharacters` is disconnected by the residency watchdog after `CharacterResidencyTimeout`. This is the backstop for load paths whose own failure branch is delivered through `TryEnqueueMainThread`, which is bounded and drops work when saturated — precisely when the load has also failed.
 - Invalid authentication state results in `Kick(UnusualActivity)`.
 - `TryClaimAsync` contention is retried up to 5 times before kicking; non-contention errors kick immediately. No sub-entity data is fetched in either case.
 - A selected character that changes between the pre-claim and post-claim reads releases the claim and kicks.
@@ -460,7 +471,8 @@ respawning *into* rather than the one they died in.
 | Scene server system available | Verify `ISceneServerSystem<NetworkConnection>` resolves from `BehaviourRegistry` |
 | Authenticator found | Verify `SceneServerAuthenticator` exists in the scene and `OnClientAuthenticationResult` is subscribed |
 | Character service available | Verify `ICharacterService` resolves from `Database.ServiceRegistry` |
-| Auth rate limiting | Send rapid repeated auth callbacks from the same connection; confirm excess requests are logged as rate-limited |
+| Auth rate limiting | Send rapid repeated auth callbacks from the same account; confirm excess requests are logged as rate-limited **and** disconnected with a `RateLimited` notice rather than left hanging |
+| Residency watchdog | Force a character load to fail without disconnecting (e.g. saturate the main-thread queue); confirm the connection is dropped within `CharacterResidencyTimeout` and the client returns to world routing |
 | Character load | Authenticate a client with a selected character; confirm character is loaded, hydrated, and placed in `WaitingSceneLoadCharacters` |
 | Session claim | During load, confirm `TryClaimAsync` succeeds and session token is stored in `SessionTokens` |
 | Session claim conflict | Attempt to load a character already claimed by another server; confirm `TryClaimAsync` fails and connection is kicked |
@@ -507,10 +519,12 @@ flowchart LR
 ```
 Authenticator_OnClientAuthenticationResult(conn, authenticated)
 │
-├─ 1. Rate-limit check (AuthCallbackCooldownSeconds)
-├─ 2. Validate: not already loading, authenticated, account name, dependencies
-├─ 3. Resolve serverID on main thread
-└─ 4. EnqueueAsyncWork → LoadCharacterAsync
+├─ 1. Arm residency watchdog (CharacterResidencyTimeout)
+├─ 2. Rate-limit check (AuthCallbackCooldownSeconds) → DisconnectWithNotice(RateLimited)
+├─ 3. Validate: not already loading, authenticated, account name, dependencies
+├─ 4. Resolve serverID on main thread
+├─ 5. TryReattachLingeringCharacter (combat-logout body on this server)
+└─ 6. EnqueueAsyncWork → LoadCharacterAsync
        │
        ├─ IUnitOfWorkService.BeginAsync → UoW
        ├─ ICharacterService.FetchByAccountAsync(accountName, selected: true)
@@ -568,7 +582,7 @@ OnClientValidatedSceneBroadcastReceived(conn, msg, channel)
 ```
 OnRemoteConnectionStopped(conn)
 │
-├─ Remove auth rate-limit tracking
+├─ Remove auth rate-limit tracking, residency + scene-handshake deadlines
 └─ RemoveCharacterConnectionMapping(conn)
        │
        ├─ [Waiting character] Remove from WaitingSceneLoadCharacters

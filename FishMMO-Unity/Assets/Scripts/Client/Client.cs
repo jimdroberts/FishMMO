@@ -338,6 +338,26 @@ namespace FishMMO.Client
 				 * panel a second recovery route. Deliberate teardowns (server hops,
 				 * ForceDisconnect from an auth-error dialog) never raise this event, so it
 				 * cannot interrupt a healthy Login -> World transition. */
+
+				/* Give the teardown something to say, if nothing already has.
+				 *
+				 * QuitToLogin only shows a notice the server sent, and a login server that
+				 * restarts, times the connection out, or is killed sends nothing at all — so a
+				 * player sitting on character select was returned to the login screen with no
+				 * indication that anything had gone wrong, which reads as the client having
+				 * dropped them for no reason.
+				 *
+				 * Gated on holding a session token, which is only true once login has actually
+				 * succeeded. Without that gate this would also fire when the very first connect
+				 * attempt fails, where "you were disconnected" is untrue and the login panel
+				 * already reports the failure in terms that fit ("the server closed the
+				 * connection before it answered"). ?? rather than =: a reason the server did
+				 * send is always more specific than this one. */
+				if (this.loginAuthenticator != null && this.loginAuthenticator.HasAuthToken)
+				{
+					this.pendingDisconnectNotice ??= DisconnectNoticeReason.Unspecified;
+				}
+
 				QuitToLogin(forceDisconnect: false);
 			};
 
@@ -1387,6 +1407,8 @@ namespace FishMMO.Client
 					return "You are doing that too quickly.\nPlease wait a moment and try again.";
 				case DisconnectNoticeReason.ProtocolViolation:
 					return "The server rejected this connection.\nIf this keeps happening, please contact support.";
+				case DisconnectNoticeReason.AdministrativeKick:
+					return "You have been disconnected by a game administrator.";
 				case DisconnectNoticeReason.ServerError:
 					return "The server ran into a problem handling your login.\nPlease try again in a moment.";
 				case DisconnectNoticeReason.Unspecified:

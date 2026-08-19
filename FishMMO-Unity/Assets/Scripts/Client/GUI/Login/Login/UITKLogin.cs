@@ -104,6 +104,26 @@ namespace FishMMO.Client
 		private bool isAuthFlowActive;
 
 		/// <summary>
+		/// True once the server has answered this panel's in-flight request with an
+		/// authentication result, so the player has already been told what happened.
+		/// </summary>
+		/// <remarks>
+		/// The login handshake is refused before authentication for reasons the server
+		/// deliberately does not put on the wire — an expired or unverifiable connection token,
+		/// a protocol version outside the supported range, an oversized field, a tripped
+		/// handshake rate limit. Every one of those is a bare transport close, and the Stopped
+		/// handler's job is to hand the controls back, so the player clicked Sign In and watched
+		/// the form reset with no message at all. Losing the login server mid-flow looked
+		/// identical.
+		/// <para>
+		/// This distinguishes "the server said no" from "the server said nothing": a result of
+		/// any kind means the specific message has already been shown and the generic one would
+		/// only contradict it. Reset when a new attempt starts.
+		/// </para>
+		/// </remarks>
+		private bool authResultSeen;
+
+		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -154,9 +174,39 @@ namespace FishMMO.Client
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
 		}
+
+		/// <summary>
+		/// Keeps the reply watchdog alive while this client is waiting in the login queue.
+		/// </summary>
+		/// <remarks>
+		/// The queue is the one place a login legitimately takes longer than
+		/// <see cref="PendingReplyGuard.DefaultTimeoutSeconds"/>, and its position updates are
+		/// handled by <see cref="Client"/> rather than by this panel — so the watchdog saw a
+		/// server that had said nothing for thirty seconds, announced that it had not responded,
+		/// and handed the sign-in controls back while the queue dialog was still counting down
+		/// beside it. Clicking sign-in from there only produced "connection already in progress".
+		/// <para>
+		/// A position update is proof the server is still working this login, so it buys the
+		/// deadline again exactly like an intermediate auth result does. Positions above zero
+		/// travel unreliably, but they are re-sent every couple of seconds, so a dropped one
+		/// costs nothing.
+		/// </para>
+		/// </remarks>
+		private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel channel)
+		{
+			// -1 means the wait was abandoned; Client tears the session down and explains it,
+			// and refreshing a deadline for a login that is over would only delay this panel
+			// noticing.
+			if (msg.QueuePosition >= 0)
+			{
+				replyGuard.Refresh();
+			}
+		}
+
 
 		/// <summary>
 		/// Unsubscribes from connection and authentication events when the client is cleared.
@@ -164,6 +214,7 @@ namespace FishMMO.Client
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed -= ClientManager_OnReconnectFailed;
 		}
@@ -202,12 +253,45 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
+				// Read before SetSignInLocked below, which clears isAuthFlowActive.
+				bool droppedWithoutExplanation = isAuthFlowActive && !authResultSeen;
+
 				if (handshakeMessage != null)
 				{
 					handshakeMessage.text = "";
 				}
 				SetSignInLocked(false);
 				pendingVerifyUsername = null;
+
+				if (droppedWithoutExplanation)
+				{
+					ShowUnexplainedDisconnect();
+				}
+			}
+		}
+
+		/// <summary>
+		/// Tells the player that sign-in ended without the server saying why.
+		/// </summary>
+		/// <remarks>See <see cref="authResultSeen"/> for when this applies.</remarks>
+		private void ShowUnexplainedDisconnect()
+		{
+			const string message = "Could not sign in.\nThe connection to the login server was closed before it answered.\n" +
+				"Please check your connection and try again, and make sure your client is up to date.";
+
+			Show();
+			if (handshakeMessage != null)
+			{
+				handshakeMessage.text = "Sign-in failed. The server closed the connection.";
+			}
+
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open(message);
+			}
+			else
+			{
+				Log.Warning("UITKLogin", message);
 			}
 		}
 
@@ -235,6 +319,9 @@ namespace FishMMO.Client
 			// Only process auth results when this panel owns the active flow. See
 			// isAuthFlowActive for why panel visibility is not a usable substitute.
 			if (!isAuthFlowActive) return;
+
+			// The server answered, so whatever happens next has an explanation of its own.
+			authResultSeen = true;
 
 			switch (result)
 			{
@@ -546,6 +633,7 @@ namespace FishMMO.Client
 				return;
 			}
 
+			authResultSeen = false;
 			SetSignInLocked(true);
 
 			StartCoroutine(Client.GetLoginServerList((e) =>

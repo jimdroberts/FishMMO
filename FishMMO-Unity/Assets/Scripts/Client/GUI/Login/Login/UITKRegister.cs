@@ -184,6 +184,18 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
+				/* Explain the drop before unlocking the form.
+				 *
+				 * Registration is refused before authentication for reasons the server
+				 * deliberately keeps off the wire — an unverifiable connection token, an
+				 * unsupported protocol version, a tripped handshake rate limit — and every one
+				 * of those is a bare transport close. Clearing the status text and handing the
+				 * form back is then indistinguishable from the button having done nothing.
+				 * <see cref="UIRegister"/> already reported this; this is the copy that did not.
+				 *
+				 * Read before SetFormLocked below, which clears isAuthFlowActive. */
+				bool droppedWithoutExplanation = isAuthFlowActive;
+
 				if (statusMessage != null)
 				{
 					statusMessage.text = "";
@@ -191,6 +203,12 @@ namespace FishMMO.Client
 				SetFormLocked(false);
 				pendingVerifyUsername = null;
 				DeleteSavedTwoFactorSetupFile();
+
+				if (droppedWithoutExplanation)
+				{
+					ShowValidationError("Connection to login server lost. Please check your network and try again. " +
+						"If the problem persists, the login server may be temporarily down.");
+				}
 			}
 		}
 

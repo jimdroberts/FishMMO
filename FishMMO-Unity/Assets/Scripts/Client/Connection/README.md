@@ -22,6 +22,13 @@ running `QuitToLogin`. Without the second half, a client kicked or timed out on 
 server was left with no visible panel at all: `UICharacterSelect` hides itself on any stop and
 `UILogin` never re-showed, so the only recovery was restarting the client.
 
+That teardown also stages an `Unspecified` disconnect notice when the client is holding a
+session token, so the player is told *something* — a login server that restarts or times a
+connection out sends nothing, and `QuitToLogin` only surfaces a reason the server supplied. The
+token check is what keeps it from firing on a first connect attempt that never reached a server,
+where the login panel's own message ("the connection was closed before it answered") is both
+more specific and more accurate.
+
 - Maximum attempts: 10 (configurable)
 - Base delay: 5 seconds (configurable)
 - Maximum delay: 60 seconds (configurable)
@@ -161,6 +168,12 @@ Three properties matter:
 - **Progress refreshes it.** Any auth result at all is proof the server is still working the
   request — the SRP exchange and the two-factor prompt both report progress before they finish,
   and a client can sit in the login queue for minutes. Each one buys the deadline again.
+- **So does a queue position.** The login queue is the one place a login legitimately outlasts
+  the deadline, and its `LoginQueuePositionBroadcast` is handled by `Client`, not by the panels.
+  Both login panels therefore register for it themselves and refresh the guard on any position
+  ≥ 0. Without that the panel announced "the server did not respond" *beside* a live queue
+  dialog, with sign-in re-enabled — and clicking it only produced "connection already in
+  progress".
 
 Server-select is deliberately **not** guarded. Its lock spans a whole multi-hop journey — world
 login, scene routing, scene load — not one round trip, and that journey has its own queue

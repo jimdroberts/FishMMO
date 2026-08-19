@@ -15,12 +15,14 @@
   - [Phase 3: QUIC/WebTransport Connection](#phase-3-quicwebtransport-connection)
   - [Phase 4: Cryptographic Handshake (X25519 ECDH)](#phase-4-cryptographic-handshake-x25519-ecdh)
   - [Phase 5: SRP-6a Authentication](#phase-5-srp-6a-authentication)
+  - [Phase 5a: Login Admission Queue](#phase-5a-login-admission-queue)
   - [Phase 6: TOTP Two-Factor Authentication](#phase-6-totp-two-factor-authentication)
   - [Phase 7: Token Issuance & Character Select](#phase-7-token-issuance--character-select)
   - [Phase 8: World Server Connection](#phase-8-world-server-connection)
   - [Phase 9: Scene Server Connection](#phase-9-scene-server-connection)
   - [Phase 9a: Scene-Routing Queue](#phase-9a-scene-routing-queue)
   - [Phase 10: Token Renewal & Revocation](#phase-10-token-renewal--revocation)
+  - [Deliberate disconnects explain themselves](#deliberate-disconnects-explain-themselves)
   - [Phase 11: Scene Transfer & Character Session Ownership](#phase-11-scene-transfer--character-session-ownership)
 - [Protocol Layers](#protocol-layers)
 - [Security Properties](#security-properties)
@@ -406,6 +408,71 @@ sequenceDiagram
     end
 ```
 
+### Phase 5a: Login Admission Queue
+
+Phase 5 assumes the login server has authentication capacity. When it does not, the handshake is
+**deferred rather than refused**: `OnHandshakeDeferred` hands the connection to
+`LoginQueueSystem`, which holds it open at the QUIC layer — unauthenticated, but connected —
+and answers with a position on a timer. Admission is rate-smoothed so a drained queue cannot
+immediately re-saturate the auth workers.
+
+```mermaid
+sequenceDiagram
+    participant Client as ClientAuthenticatorCore
+    participant Auth as ServerAuthenticator
+    participant Queue as LoginQueueSystem
+
+    Client->>Auth: ClientHandshake
+    Auth->>Auth: Auth capacity reached → OnHandshakeDeferred
+    Auth->>Queue: TryEnqueue(conn)
+
+    alt Queue has room
+        Auth->>Auth: ClearHandshakeRateLimit(conn), (the retry below is server-invited)
+        loop every LoginQueueUpdateRateSeconds (2s)
+            Queue-->>Client: LoginQueuePositionBroadcast { n, TotalQueued, EstimatedWaitSeconds }
+            Client->>Client: Queue dialog + refresh the panel's reply deadline
+        end
+        Queue-->>Client: LoginQueuePositionBroadcast { QueuePosition: 0 }
+        Client->>Client: RetryHandshakeAsync: jitter 0-1s, OnRehandshakeRequired() + OnConnected(null)
+        Client->>Auth: ClientHandshake (no connection token), → Phase 4 cookie challenge → Phase 5 SRP
+    else Queue full
+        Auth-->>Client: ClientAuthResultBroadcast { ServerBusy }
+    else Wait exceeded LoginQueueTimeoutSeconds
+        Queue-->>Client: LoginQueuePositionBroadcast { QueuePosition: -1 }
+        Queue->>Queue: conn.Disconnect(false), (not Kick — that discards the notice)
+        Client->>Client: QuitToLogin + "the login queue timed out"
+    end
+```
+
+**The re-handshake must not clear the credentials.** This is the subtlety that makes or breaks
+the whole feature. Resetting the client's per-connection crypto state for the retry is correct —
+the server generates a fresh keypair for the new handshake — but the queue defers *before* SRP
+begins, so the username and password handed to `SetLoginCredentials` are still the only copy in
+existence at the moment of admission. `ClientAuthenticatorCore.OnDisconnected()` clears them
+along with the key material; `OnRehandshakeRequired()` does not. Using the former meant the
+re-handshake completed ECDH, reached the client's own credential pre-validation with an empty
+username, and called `Disconnect()` with no auth result — so **every queued client was silently
+dropped the instant it was admitted**, and the queue could never admit anybody.
+
+**Three things keep a queued connection alive** that would otherwise tear it down:
+
+| Mechanism | Why it is needed |
+|---|---|
+| `IsConnectionAwaitingQueueAdmission` | The handshake-timeout sweep drops any connection that has not handshaked within `authHandshakeTimeoutSeconds` (15 s). A queued client is by definition one of those. The exemption covers the admitted-but-not-yet-re-handshaked window too (`recentlyAdmitted`, 15 s TTL), which comfortably spans the client's 0–1 s admission jitter |
+| `ClearHandshakeRateLimit` on enqueue | The initial cookieless handshake is rate-limited per connection. The retry is a *second* cookieless handshake that the server itself invited, so it must not be gated by the window the first one opened |
+| Real-IP cache, not a fresh token | The retry deliberately carries no connection token — IPFetch mints those one per request and the client has already spent its. The server accepts a tokenless handshake precisely when it already has a real IP cached for that `ClientId`, which the queueing handshake established |
+
+**Position semantics:** `> 0` waiting (Unreliable, re-sent every sweep), `0` admitted and `-1`
+cancelled (both Reliable — one-shot transitions whose loss would strand the dialog).
+
+**The wait must not look like a hang to the client's own watchdogs, either.** The login panels
+disable their sign-in controls while a reply is outstanding and give up after
+`PendingReplyGuard.DefaultTimeoutSeconds` (30 s). Queue positions are handled by `Client`, not by
+the panels, so a wait longer than 30 s produced "The server did not respond" *beside* a live
+queue dialog, with sign-in re-enabled — and clicking it only produced "connection already in
+progress". A position update is proof the server is still working the login, so the panels
+refresh the deadline on every one.
+
 ### Phase 6: TOTP Two-Factor Authentication
 
 ```mermaid
@@ -579,6 +646,31 @@ sequenceDiagram
 
     Note over Client,Scene: 🎮 Gameplay active, • Prediction pipeline running, • Observer LOD system active, • All scene systems operational
 ```
+
+**Nothing in Phase 9 may fail quietly.** The client is behind a loading overlay from the moment
+it leaves the world server until its character actually spawns, so a scene server that stops
+making progress without closing the connection is indistinguishable from a hang. Three watchdogs
+cover the whole phase, each picking up where the previous one stops:
+
+| Watchdog | Covers | Bound | On expiry |
+|---|---|---|---|
+| Residency (`characterResidencyDeadlines`) | Armed on the auth callback; cleared once the character reaches `WaitingSceneLoadCharacters` **or** `ConnectionCharacters` | `CharacterResidencyTimeout` (60 s) | `ServerError`, non-terminal — the client's reconnect loop returns through the world server and is routed again |
+| Scene handshake (`sceneLoadDeadlines`) | Armed when the character enters `WaitingSceneLoadCharacters`; cleared by `ClientValidatedSceneBroadcast` | `SceneLoadHandshakeTimeout` (90 s) | `SceneHandshakeTimedOut` — releases the session claim instead of holding it for the life of the socket |
+| Transfer (`pendingTransferDisconnects`) | Armed when a character is handed off to another scene server and the client is expected to leave on its own | `TransferDisconnectGrace` (15 s) | `conn.Disconnect(false)` |
+
+The residency watchdog is the one that makes the others safe to rely on. `LoadCharacterAsync`
+runs on an async worker and marshals every outcome — success *and* failure — back through
+`TryEnqueueMainThread`, which is bounded and drops work when saturated. A load that failed
+because the queue was full then tried to deliver its own disconnect through that same full
+queue. Anything lost that way is authenticated, in no map, and driven by nothing. The same
+applied to the auth callback's per-account rate limit, which returned silently: it is the only
+entry point to a character load, so a quiet return stranded the connection permanently. It now
+disconnects with `RateLimited`.
+
+> These maps live on a `ScriptableObject`, so they outlive a play-session restart in the editor
+> while FishNet reissues `ClientId`s from zero. `OnDeinitialize` clears them — a stale entry
+> whose id is reissued would be read as the new connection's state, and for a deadline map, one
+> that expired long ago.
 
 ### Phase 9a: Scene-Routing Queue
 
@@ -763,6 +855,41 @@ message until the retries run out.
 The notice is shown at the end of `QuitToLogin`, after the login panels are restored — a dialog
 opened before that is closed again by the panels' own quit-to-login handlers. It is cleared on
 any successful connection, so it can never outlive the session it describes.
+
+**Administrative kicks go through the same path.** `KickRequestSystem` used `conn.Kick(...)`,
+which carries nothing to the client, so an operator kick landed the player on the login screen
+with no explanation *and* left their reconnect loop to spend all ten attempts dialling back into
+a server that would refuse them again. It now sends `AdministrativeKick` with `Terminal = true`.
+
+#### A drop before authentication has no notice to carry
+
+`DisconnectNoticeBroadcast` covers deliberate disconnects of connections the server is willing to
+talk to. It deliberately does **not** cover the pre-authentication rejections in
+`OnServerClientHandshakeReceivedAsync` — an unverifiable or expired connection token, a protocol
+version outside the supported range, an oversized handshake field, a tripped handshake rate
+limit. Those are bare `Disconnect(true)` calls, and they should stay that way: narrating the
+rejection to an unauthenticated peer hands an attacker a probe oracle for the token key, the
+version window and the rate limiter.
+
+The client is therefore the only party that can explain them, and it now does. The login panels
+track whether the server answered with *any* `ClientAuthenticationResult` before the connection
+stopped:
+
+- **A result arrived** → the specific message has already been shown (`Invalid Username or
+  Password`, `Account is banned`, `ServerFull`, …) and nothing further is added.
+- **No result arrived** → the panel says so: *"Could not sign in. The connection to the login
+  server was closed before it answered."*
+
+Without this, the Stopped handler's ordinary job — clear the status text, hand the controls back
+— was the entire user-visible outcome, so the player clicked Sign In and watched the form reset
+in silence. `UIRegister` already reported this case; `UILogin`, `UITKLogin` and `UITKRegister`
+did not.
+
+Losing the login server *after* login is the mirror image: the server sends nothing because it
+is gone. `OnConnectionAttemptFailed` now stages an `Unspecified` notice before running
+`QuitToLogin`, gated on the client actually holding a session token — that gate is what keeps it
+from firing on a first connect attempt that never reached the server, where the panel's own
+message is both more specific and more accurate.
 
 ### Phase 11: Scene Transfer & Character Session Ownership
 
@@ -971,10 +1098,19 @@ Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has
 │  ├─ Global hourly account creation cap                      │
 │  ├─ TOTP failure lockout: 5 failures → 60 min               │
 │  ├─ Account verification brute-force protection              │
+│  ├─ Per-account scene auth callback: 2s                     │
 │  ├─ IngressGuard: per-connection, per-operation debounce    │
 │  └─ Async worker backpressure + bounded channels            │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+**A rate limit that refuses a client must also close the connection.** Every limiter above is
+applied to a connection that is either not yet authenticated (dropped outright) or mid-request
+(answered with `ServerBusy` / `RateLimited`). The one exception was the scene server's
+per-account auth-callback limit, which returned silently — and because that callback is the only
+thing that starts a character load, the refused connection stayed authenticated, in no map, and
+behind a client-side loading overlay indefinitely. Silence is not a safe default for a limiter
+sitting on the critical path of a state machine; it converts a throttle into a hang.
 
 ---
 
@@ -1197,9 +1333,19 @@ Application wants to quit
 | `sessionLeaseRefreshRate` | 20s (configurable) | `CharacterSystem.cs` |
 | `saveRate` | 30s (configurable) | `CharacterSystem.cs` |
 | `TransferDisconnectGrace` | 15s | `CharacterSystem.Connection.cs` |
-| `LoginServerCacheTtlSeconds` | 55s | `Client.cs` |
+| `CharacterResidencyTimeout` | 60s | `CharacterSystem.Loading.cs` |
+| `SceneLoadHandshakeTimeout` | 90s | `CharacterSystem.Loading.cs` |
+| `AuthCallbackCooldownSeconds` | 2s | `CharacterSystem.Loading.cs` |
+| `combatLogoutLingerSeconds` | 60s (configurable) | `CharacterSystem.cs` |
+| `WorldResidencyGraceSeconds` | 90s | `WorldSceneSystem.cs` |
+| `CombatLogoutRoutingGraceSeconds` | 150s | `WorldSceneSystem.cs` |
+| `waitingQueueTtlSeconds` | 45s (configurable) | `WorldSceneSystem.cs` |
+| `RecentAdmitTtlSeconds` | 15s | `LoginQueueSystem.cs` |
+| `authHandshakeTimeoutSeconds` | 15s (configurable) | `BaseServerAuthenticator.cs` |
 | `MaxReconnectAttempts` | 10 | `ClientConnectionManager.cs` |
 | `MaxReconnectDelay` | 60s | `ClientConnectionManager.cs` |
+| `SceneHandoffReconnectDelay` | 0.25s | `ClientConnectionManager.cs` |
+| `PendingReplyGuard.DefaultTimeoutSeconds` | 30s | `PendingReplyGuard.cs` |
 | `WT_MAX_STREAMS` | 4096 | `webtransport_internal.h` |
 | `WT_MAX_CLIENTS` | 4000 (configurable) | `.cfg` files |
 
@@ -1247,6 +1393,9 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 - **WebGL session opens but the handshake never lands (`WIRE SEND FAIL` in the browser console, `prefill=0` on the server):** The bridge refused the first reliable send. This is what happens when a send path is gated on `wt.readyState === 'connected'` instead of the `_isLive()` helper in `WebTransport.jslib` — some Chromium builds omit that property or still report `'connecting'` after `ready()` resolves. The bridge treats a session as live once `ready()` resolves and opens the outgoing bidirectional stream before signalling Started; see the "WebGL bridge" section of the [WebTransport plugin README](FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/README.md).
 - **WebGL build fails to link with `undefined symbol: _free`:** Managed code is importing Emscripten's allocator under the wrong name. IL2CPP resolves a `DllImport` entry point against the linked libc symbol, which modern Emscripten (Unity 6) emits as `free`. Free heap pointers through the `WTFree` jslib export (wrapped by `WebTransportJSLib.WASMFree`) rather than `EntryPoint = "_free"`.
 - **TLS handshake fails between client and game server:** Ensure the server's certificate is valid for the `game.fishmmo.com` hostname. If using a self-signed cert for development, the client must skip certificate validation (not supported in production builds due to TLS certificate pinning).
+- **Client sits on "Connecting..." then the login form just resets, with no message:** The login server closed the connection before authenticating it — an unverifiable or expired connection token, a protocol version outside the supported range, or a tripped handshake rate limit. The server deliberately says nothing (see [A drop before authentication has no notice to carry](#a-drop-before-authentication-has-no-notice-to-carry)); the client now reports it as *"the connection was closed before it answered"*. Check the login server log for the matching `connection-token verify FAILED` / `handshake rate-limited` / `rejected: no connection token and no known real IP` line.
+- **Queued clients are dropped the moment they are admitted:** The re-handshake cleared the credentials it still needed. `RetryHandshakeAsync` must call `ClientAuthenticatorCore.OnRehandshakeRequired()`, never `OnDisconnected()` — see [Phase 5a](#phase-5a-login-admission-queue).
+- **Client hangs on the loading screen after the world server routes it:** The scene server accepted the connection but never produced a character. Look for the residency watchdog's `authenticated but had no character after 60s` warning, and for `Auth callback rate-limited` immediately before it. A saturated main-thread queue on the scene server presents the same way — the load's own failure path is delivered through that queue.
 - **Database connection errors:** Verify PostgreSQL is running on `localhost:5432` and pgBouncer on `localhost:6432`. Check the `FISHMMO_DB_HOST`/`FISHMMO_DB_PASSWORD` environment variables or `/etc/fishmmo/db-secrets.env` file, and verify the database connection string in the server configuration.
 
 ---

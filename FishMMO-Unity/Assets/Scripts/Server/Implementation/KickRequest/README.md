@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Kick Request system enforces account disconnect requests issued through the database. It runs on any FishMMO server (Login, Scene, or World) as a `ServerBehaviour` and periodically polls for new kick requests using cursor-based pagination. Each request is validated against account last-login timestamps to filter stale entries (accounts that have already reconnected). Valid kick actions are marshalled to the Unity main thread through a dedicated `MainThreadQueueData` container, since FishNet's `NetworkConnection.Kick(...)` is not thread-safe.
+The Kick Request system enforces account disconnect requests issued through the database. It runs on any FishMMO server (Login, Scene, or World) as a `ServerBehaviour` and periodically polls for new kick requests using cursor-based pagination. Each request is validated against account last-login timestamps to filter stale entries (accounts that have already reconnected). Valid kick actions are marshalled to the Unity main thread through a dedicated `MainThreadQueueData` container, since FishNet connection operations are not thread-safe. The disconnect itself goes through `ServerBehaviour.DisconnectWithNotice(AdministrativeKick, terminal: true)` rather than `NetworkConnection.Kick(...)`.
 
 The system is split into a Core interface layer and an Implementation layer:
 
@@ -48,7 +48,8 @@ Database and polling work run asynchronously via `AsyncWorkerData`, while all Fi
 - **Stale request filtering** — For each kick request, the system fetches the account's last-login timestamp. If the last login occurred after the kick request was created, the request is considered stale (account already reconnected) and is skipped.
 - **Batched last-login checks** — Login timestamp queries are batched in groups of 10 using `Task.WhenAll` to avoid saturating the database connection pool while still running concurrently within each batch.
 - **Overlap protection** — `IKickRequestSystemQueueData.IsProcessing` is checked under a lock before each poll to prevent concurrent overlapping database fetches.
-- **Main-thread kick dispatch** — All `conn.Kick(KickReason.UnexpectedProblem)` calls are enqueued via `TryEnqueueMainThread<IKickRequestSystemMainThreadQueueData>` and drained on the main thread each frame, respecting `maxMainThreadActionsPerFrame` to avoid frame spikes.
+- **Main-thread kick dispatch** — All disconnects are enqueued via `TryEnqueueMainThread<IKickRequestSystemMainThreadQueueData>` and drained on the main thread each frame, respecting `maxMainThreadActionsPerFrame` to avoid frame spikes.
+- **The player is told they were kicked** — `DisconnectWithNotice(AdministrativeKick, terminal: true)`, never `NetworkConnection.Kick(...)`. FishNet does not carry a kick reason to the client, so a plain `Kick` landed the player on the login screen with no explanation *and* left the client's reconnect loop to spend all ten attempts dialling back into a server that would refuse them again. `Kick` would also have discarded the notice: it calls `Disconnect(true)`, which stops the transport immediately and throws away everything still queued for the tick. `Terminal = true` is what stops the retry loop, because an operator kick does not resolve by retrying.
 - **Disconnect cleanup** — When a remote connection stops, the system asynchronously deletes any pending kick request for that account from the database, preventing stale requests from re-triggering after legitimate disconnect/reconnect cycles.
 - **Configurable pump rate** — Poll interval (`updatePumpRate`) and fetch count (`updateFetchCount`) are exposed as serialized fields and runtime properties, tunable via the Unity Inspector or code.
 - **Periodic update integration** — Registers with `IPeriodicUpdateSystem` for fixed-rate polling cadence rather than relying on per-frame checks.
@@ -144,7 +145,7 @@ if (database.ServiceRegistry.TryGet<IKickRequestService>(out var kickService))
 // 1. Poll detects kick request for "targetAccount"
 // 2. Last-login check confirms account hasn't reconnected
 // 3. Main-thread queue receives kick action
-// 4. On next frame drain: conn.Kick(KickReason.UnexpectedProblem)
+// 4. On next frame drain: DisconnectWithNotice(conn, AdministrativeKick, terminal: true)
 // 5. OnRemoteConnectionStopped fires → kick request deleted from DB
 ```
 
@@ -226,7 +227,7 @@ flowchart LR
 │  │  AccountManager.GetConnectionByAccountName(name)     │   │
 │  │    │                                                 │   │
 │  │    ▼                                                 │   │
-│  │  conn.Kick(KickReason.UnexpectedProblem)             │   │
+│  │  DisconnectWithNotice(AdministrativeKick, terminal)  │   │
 │  └──────────────────────────────────────────────────────┘   │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐   │
@@ -300,7 +301,7 @@ RuntimeDataContainer
 |--------|------|
 | Main / periodic callback thread | Schedule polling, drain main-thread queue |
 | Async worker threads | DB fetch, cursor updates, stale-filter checks, kick request deletion |
-| Main thread (via queue) | FishNet `Kick(...)` operations |
+| Main thread (via queue) | FishNet broadcast + `Disconnect(false)` operations |
 
 ## License
 

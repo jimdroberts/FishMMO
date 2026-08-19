@@ -135,6 +135,104 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Deadline by which each authenticated connection must have a character somewhere this
+		/// server tracks it, keyed by ClientId.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="sceneLoadDeadlines"/> covers the scene handshake, but it is only armed
+		/// once <see cref="InstantiateAndLoadCharacter"/> has put the character into
+		/// <c>WaitingSceneLoadCharacters</c> — everything before that point was unwatched. The
+		/// load runs on an async worker and hands back through <c>TryEnqueueMainThread</c>,
+		/// which is bounded and returns false when saturated; the failure branches then try to
+		/// deliver their own disconnect through that same saturated queue. A connection lost
+		/// anywhere in that window is authenticated, in no map, and driven by nothing, so it
+		/// sits on the scene server behind a loading screen for as long as the transport stays
+		/// open.
+		/// <para>
+		/// This mirrors <c>WorldSceneSystem</c>'s residency watchdog and bounds every such path
+		/// at once rather than patching each delivery site: still being here with no character
+		/// means the load failed, whatever the cause. Disconnecting hands the client back to its
+		/// own reconnect loop, which returns through the world server and is routed again.
+		/// </para>
+		/// </remarks>
+		private readonly ConcurrentDictionary<int, DateTime> characterResidencyDeadlines =
+			new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// How long an authenticated connection may go without a character before it is treated
+		/// as a failed load.
+		/// </summary>
+		/// <remarks>
+		/// Must comfortably exceed a cold character load — a claim with up to five retries
+		/// followed by fourteen sub-entity fetches in one transaction — so a merely slow
+		/// database is never mistaken for a stuck one. It must also stay below
+		/// <see cref="SceneLoadHandshakeTimeout"/>'s scope so the two watchdogs cannot both
+		/// apply to the same connection: this one stops the moment the character is registered,
+		/// which is the same moment that one starts.
+		/// </remarks>
+		private static readonly TimeSpan CharacterResidencyTimeout = TimeSpan.FromSeconds(60);
+
+		/// <summary>Interval in seconds between character-residency sweeps.</summary>
+		private const float CharacterResidencySweepIntervalSeconds = 10f;
+
+		/// <summary>
+		/// Disconnects connections that authenticated but never ended up with a character on
+		/// this server. See <see cref="characterResidencyDeadlines"/>.
+		/// </summary>
+		private void OnPeriodicCharacterResidencySweep(float deltaTime)
+		{
+			if (Server == null || Server.ServerState != ConnectionState.Started || characterResidencyDeadlines.IsEmpty)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+
+			foreach (var kvp in characterResidencyDeadlines)
+			{
+				NetworkConnection conn = null;
+				if (ServerManager != null)
+				{
+					ServerManager.Clients.TryGetValue(kvp.Key, out conn);
+				}
+				if (conn == null || !conn.IsActive)
+				{
+					characterResidencyDeadlines.TryRemove(kvp.Key, out _);
+					continue;
+				}
+
+				// The load got somewhere: either the character is waiting on its scene handshake
+				// (which sceneLoadDeadlines now owns) or it is fully in the world. Either way
+				// this watchdog is done with the connection.
+				if (mappingData.WaitingSceneLoadCharacters.ContainsKey(conn) ||
+					mappingData.ConnectionCharacters.ContainsKey(conn))
+				{
+					characterResidencyDeadlines.TryRemove(kvp.Key, out _);
+					continue;
+				}
+
+				if (nowUtc < kvp.Value)
+				{
+					continue;
+				}
+
+				characterResidencyDeadlines.TryRemove(kvp.Key, out _);
+
+				Log.Warning("CharacterSystem",
+					$"Connection {kvp.Key} authenticated but had no character after {CharacterResidencyTimeout.TotalSeconds:F0}s; " +
+					"disconnecting so the client can retry through the world server.");
+				// Non-terminal: the client's reconnect loop returns through the world server,
+				// which re-routes it — the same recovery every other transient load failure gets.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
+			}
+		}
+
+		/// <summary>
 		/// Handles client authentication results, loads character data and initiates scene loading.
 		/// </summary>
 		/// <param name="conn">Network connection of the client.</param>
@@ -142,6 +240,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
 			DateTime nowUtc = DateTime.UtcNow;
+
+			// Arm the residency backstop before any branch below can return. Every early exit
+			// here is supposed to disconnect, but the ones that deliver that disconnect through
+			// the main-thread queue can be dropped when it is saturated — which is precisely
+			// when this watchdog has to be the thing that ends the connection.
+			if (conn != null && conn.IsActive)
+			{
+				characterResidencyDeadlines[conn.ClientId] = nowUtc + CharacterResidencyTimeout;
+			}
 
 			// Resolve account name first so the rate limit can be applied per-account.
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
@@ -168,7 +275,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				});
 			if (wasCoolingDown)
 			{
+				/* Returning quietly here stranded the client.
+				 *
+				 * This callback is the ONLY thing that starts a character load, and every
+				 * watchdog on this server is armed downstream of it: sceneLoadDeadlines is set
+				 * when the character reaches WaitingSceneLoadCharacters, and the transfer
+				 * watchdog only covers connections whose character was already handed off. A
+				 * connection refused here is therefore authenticated, in no map, and watched by
+				 * nothing — it sits on the scene server behind a loading screen until the player
+				 * kills the client.
+				 *
+				 * The limit is still enforced; it just says so. Non-terminal because retrying is
+				 * exactly the recovery: the cooldown entry is dropped by
+				 * OnRemoteConnectionStopped, so the client's next attempt starts clean. */
 				Log.Warning("CharacterSystem", $"Auth callback rate-limited for account {accountName}");
+				DisconnectWithNotice(conn, DisconnectNoticeReason.RateLimited);
 				return;
 			}
 

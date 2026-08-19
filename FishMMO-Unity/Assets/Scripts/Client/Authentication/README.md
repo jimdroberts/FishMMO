@@ -26,6 +26,7 @@ The Unity wrapper's job is purely routing:
 - Implements the abstract `Send*` callbacks on `ClientAuthenticatorCore` by emitting FishNet broadcasts via `Client.Broadcast(...)`.
 - Implements `Disconnect()` by calling `Client.ForceDisconnect()`.
 - Forwards FishNet `OnClientConnectionState` (`Started` / `Stopping` / `Stopped`) into `core.OnConnected()` / `core.OnDisconnected()`.
+- Implements `RetryHandshakeAsync()`, the login-queue admission path, as `core.OnRehandshakeRequired()` + `core.OnConnected(null)` on the still-open connection.
 - Forwards incoming `ServerHandshake`, `SrpVerifyResponseBroadcast`, `SrpSuccessBroadcast`, `ClientAuthResultBroadcast`, and `TwoFactorSetupBroadcast` broadcasts into the matching core handlers.
 - Surfaces `OnClientAuthenticationResult` and `OnTwoFactorSetupReceived` as Unity-facing events.
 - Disposes the core in `OnDestroy()`.
@@ -79,6 +80,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 - **Token failure handling** — `ClientAuthResultBroadcast` with `TokenInvalid`, `TokenExpired`, or `TokenRevoked` clears the stored token via `ClearAuthToken()` in the core, and `Client.OnAuthResult` additionally abandons the session and returns to the login screen. Clearing the token alone did not stop the reconnect loop, which then spent ten backoff attempts (minutes) that could not succeed with no token and no credentials.
 - **Mid-session token renewal** — World/Scene servers push a re-minted token on a timer (default: halfway through the token lifetime), not only at authentication. The client applies it via `TryApplyRenewedToken` after checking `RenewTokenResponseBroadcast.Result`. Without this, a session that stayed in one scene past the token lifetime hit `TokenExpired` on its next scene transfer, because a transfer re-authenticates through the World server.
 - **Credential clearing** — `username` and `password` are nulled immediately after `SrpData.GetProof()` (the last point of use) and again as a safety net in `ClearKeyMaterial()` on disconnect.
+- **Queue re-handshake preserves credentials** — `RetryHandshakeAsync` resets the per-connection crypto state with `OnRehandshakeRequired()`, **not** `OnDisconnected()`. The login queue defers the handshake before SRP begins, so at admission the credentials are still the only copy in existence; clearing them made the re-handshake fail its own pre-validation and disconnect with no auth result, so every queued client was dropped the instant it was admitted. A randomized 0–1s jitter precedes the retry so a drained queue does not hit the SRP verify channel in lockstep, and the connection is re-checked afterwards in case it dropped during the delay.
 - **Key material zeroing** — `clientToServerKey`, `serverToClientKey`, all decrypted plaintext buffers (salt, ephemeral, proof), and `GcmNonceContext` session prefixes are zeroed with `CryptographicOperations.ZeroMemory()` on disconnect or after use.
 - **Duplicate-message guards** — `srpVerifyProcessed`, `srpSuccessProcessed`, and `cookieEchoed` flags prevent reprocessing of critical protocol messages within a single connection.
 - **Pre-validation** — username length is checked client-side (3–32 characters) before consuming a sequence number, failing fast on payloads that the server would reject.
@@ -241,6 +243,8 @@ networkManager.ClientManager.StopConnection();
 | Duplicate verify ignored | Server sends second `SrpVerifyResponseBroadcast` | `srpVerifyProcessed` guard returns early |
 | Duplicate success ignored | Server sends second `SrpSuccessBroadcast` | `srpSuccessProcessed` guard returns early |
 | Pre-validation rejects bad username | Set username shorter than 3 or longer than 32 characters | Client logs warning and calls `ForceDisconnect()` before sending any SRP broadcast |
+| Queue admission completes the login | Saturate the login server's auth capacity so the next client is queued, then let it drain | Client shows queue positions, re-handshakes on the same connection at position 0, and completes SRP — **not** a silent disconnect |
+| Unexplained drop is reported | Close the connection during the handshake without sending an auth result | The login panel reports that the connection was closed before it answered, rather than silently resetting the form |
 
 ## Flow Diagram
 
@@ -414,6 +418,30 @@ LocalConnectionState.Stopping / Stopped
             
             NOTE: storedAuthToken is NOT cleared — it persists across connections.
             Call ClearAuthToken() explicitly on user logout.
+```
+
+### Re-handshake (login-queue admission)
+
+The connection is **not** stopping here — the server invited a second handshake on it.
+
+```
+LoginQueuePositionBroadcast { QueuePosition: 0 }
+    │
+    ├── jitter 0-1s (spreads a drained queue across the SRP verify channel)
+    ├── re-check the connection is still Started
+    │
+    ├── OnRehandshakeRequired()
+    │       ├── everything ClearKeyMaterial() does...
+    │       └── ...then restores username, password, email, register, age
+    │
+    └── OnConnected(connectionToken: null)
+            ├── new X25519 ephemeral keypair
+            ├── cookieEchoed / srpVerifyProcessed / srpSuccessProcessed = 0
+            └── ClientHandshake → Phase 1
+
+            NOTE: no connection token. IPFetch mints those one per request and
+            this client has already spent its; the server accepts a tokenless
+            handshake because it already has a real IP cached for this ClientId.
 ```
 
 ## Project Structure

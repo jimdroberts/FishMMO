@@ -34,6 +34,8 @@ namespace FishMMO.Shared
 		RateLimited = 8,
 		/// <summary>The connection sent something the server would not accept.</summary>
 		ProtocolViolation = 9,
+		/// <summary>An operator kicked this account.</summary>
+		AdministrativeKick = 10,
 	}
 
 	/// <summary>

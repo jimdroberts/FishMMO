@@ -291,7 +291,19 @@ namespace FishMMO.Server.Implementation
 					{
 						if (Server.AccountManager.GetConnectionByAccountName(accountName, out NetworkConnection conn))
 						{
-							conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+							/* DisconnectWithNotice, not Kick.
+							 *
+							 * FishNet carries no kick reason to the client, so this landed the
+							 * player back on the login screen with nothing to go on — and,
+							 * because an operator kick is not a transport fault, the client's
+							 * reconnect loop then spent its full ten attempts dialling back into
+							 * a server that was going to refuse them again.
+							 *
+							 * Terminal: an operator kick does not resolve by retrying, so the
+							 * client abandons the loop and shows the reason immediately. Kick
+							 * would also have discarded the notice with the rest of the
+							 * outgoing bundle — see DisconnectWithNotice. */
+							DisconnectWithNotice(conn, DisconnectNoticeReason.AdministrativeKick, terminal: true);
 						}
 					});
 				}

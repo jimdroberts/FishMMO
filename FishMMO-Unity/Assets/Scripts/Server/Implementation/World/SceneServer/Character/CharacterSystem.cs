@@ -211,6 +211,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(TransferDisconnectSweepIntervalSeconds, OnPeriodicTransferDisconnectSweep);
 				periodicSystem.RegisterPeriodicCallback(SceneLoadTimeoutSweepIntervalSeconds, OnPeriodicSceneLoadTimeoutSweep);
 				periodicSystem.RegisterPeriodicCallback(CombatLingerSweepIntervalSeconds, OnPeriodicCombatLingerSweep);
+				periodicSystem.RegisterPeriodicCallback(CharacterResidencySweepIntervalSeconds, OnPeriodicCharacterResidencySweep);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
@@ -272,7 +273,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicTransferDisconnectSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSceneLoadTimeoutSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCombatLingerSweep);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCharacterResidencySweep);
 			}
+
+			/* Drop every per-connection watchdog map.
+			 *
+			 * This behaviour is a ScriptableObject, so its fields survive a play-session
+			 * restart in the editor while FishNet starts handing out ClientIds from zero again.
+			 * A stale entry whose id is reissued to a fresh connection is then read as that
+			 * connection's state — and for a deadline map, one that expired long ago, so the
+			 * next sweep disconnects a client that has done nothing wrong. Clearing here is what
+			 * keeps these maps scoped to the run that populated them.
+			 */
+			characterResidencyDeadlines.Clear();
+			sceneLoadDeadlines.Clear();
+			pendingTransferDisconnects.Clear();
+			deliberateTransferClientIds.Clear();
+			authCallbackLastTimeByAccount.Clear();
+			sceneUnloadLastTimeByClientId.Clear();
+			validatedSceneLastTimeByClientId.Clear();
 
 			// Bring every lingering body back into the normal save/despawn/release path before
 			// the shutdown snapshot below runs, so its state is captured and its claim handed

@@ -349,7 +349,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				else
 				{
-					entry.Connection.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+					/* No spawned object is a race, not an exploit, so drop the message instead
+					 * of the player.
+					 *
+					 * The queue is drained a frame or more after the message arrives, and the
+					 * character despawns while its connection stays up on every scene transfer,
+					 * bind-point respawn and channel switch. A chat line sent moments before one
+					 * of those therefore dequeues with FirstObject already null — and kicking for
+					 * it disconnected a player mid-transfer, with no notice, for typing.
+					 * Anything genuinely trying to talk without a character is refused just as
+					 * effectively by discarding what it sends. */
+					Log.Debug("ChatSystem", $"Dropping chat from connection {entry.Connection.ClientId}: no spawned character.");
 				}
 			}
 		}

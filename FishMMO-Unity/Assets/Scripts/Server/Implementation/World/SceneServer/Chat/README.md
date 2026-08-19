@@ -29,6 +29,8 @@ The implementation uses a split execution model:
 Four architectural features keep the chat pipeline responsive under extreme load:
 
 1. **Lock-Free Incoming Chat Queue** — Network callbacks enqueue stamped messages into a `ConcurrentQueue`; the main-thread `OnUpdate` drains up to `maxIncomingChatsPerFrame` entries per frame. A hard cap (`maxIncomingQueueSize`, default 10,000) kicks the sender when the queue is flooded, preventing memory exhaustion from DoS attacks.
+
+   A dequeued message whose connection has no spawned character (`FirstObject == null`) is **dropped, not kicked**. The queue is drained a frame or more after the message arrives, and a character despawns while its connection stays up on every scene transfer, bind-point respawn and channel switch — so a line typed just before one of those dequeues with no character attached. Kicking for it disconnected a player mid-transfer, with no notice, for typing. Anything genuinely trying to talk without a character is refused just as effectively by discarding what it sends.
 2. **Token Bucket Anti-Spam** — Each player carries a refillable token bucket (`ChatTokens` (double), `ChatTokenLastRefillTicks`). Messages consume one token; when the bucket is empty the message is silently dropped. Float-precision tokens ensure fractional refill at sub-1-token/s rates accumulates correctly.
 3. **Batch DB Persistence** — All persist-eligible channels enqueue into a `ConcurrentQueue<PendingChatPersist>`. A periodic callback drains up to `maxPersistBatchSize` (default 2,000) entries and writes the batch via `PersistBatchAsync`, reducing DB round-trips from O(N) to ~O(N/batchSize).
 4. **Outbound Broadcast Batching** — World and Trade channel messages are buffered per-world in `OutboundWorldBroadcastBuffer`. A periodic callback flushes up to `maxOutboundBatchSize` messages per recipient per flush. A hard cap (`maxBufferedWorldMessages`, default 200) per world ID drops oldest messages if the buffer exceeds the limit.
@@ -47,7 +49,7 @@ Four architectural features keep the chat pipeline responsive under extreme load
 
 - Nine chat channels: World, Region, Say, Party, Guild, Tell, Trade, System, Discord
 - Lock-free incoming chat queue (`ConcurrentQueue`) decoupling network callbacks from main-thread processing with configurable per-frame drain budget
-- DoS protection via hard cap on incoming queue size; sender kicked when exceeded
+- DoS protection via hard cap on incoming queue size; sender kicked when exceeded. Messages from a connection with no spawned character are dropped rather than kicked — that state is a routine scene-transfer race, not an exploit
 - Token bucket anti-spam with configurable burst capacity (`chatTokenBucketCapacity`) and refill rate (`chatTokenRefillRate`)
 - Legacy per-message cooldown (`messageRateLimit`) as a secondary rate-limit gate
 - Repeat-message suppression (configurable via `allowRepeatMessages`)

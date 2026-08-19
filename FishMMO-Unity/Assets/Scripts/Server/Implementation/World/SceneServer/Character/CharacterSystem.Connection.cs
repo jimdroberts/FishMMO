@@ -39,6 +39,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// The scene handshake can no longer complete or time out for a dead connection.
 			sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
 
+			// Same for the residency backstop that covers the window before the handshake.
+			characterResidencyDeadlines.TryRemove(conn.ClientId, out _);
+
 			// Clean up per-account auth callback rate-limit tracking.
 			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
