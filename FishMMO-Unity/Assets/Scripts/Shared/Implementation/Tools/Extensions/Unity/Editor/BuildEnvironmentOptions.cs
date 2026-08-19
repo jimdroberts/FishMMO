@@ -281,8 +281,19 @@ namespace FishMMO.Shared
 				AssetDatabase.SaveAssets();
 				AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
-				// Force script recompilation (non-blocking)
-				ForceEditorScriptRecompile();
+				/* Force script recompilation (non-blocking).
+				 *
+				 * Skipped in batch mode. SwitchActiveBuildTarget above is synchronous and
+				 * already recompiles for the new target, and the ForceUpdate refresh settles
+				 * the define symbols this was added to refresh. Queueing a further compile on
+				 * top of that is actively harmful under -executeMethod: nothing runs the editor
+				 * loop until the method returns, so that compile stays pending, and the CLI
+				 * build that follows is rejected for running while scripts compile. That is
+				 * what made every batch-mode build following a target switch fail. */
+				if (!UnityEngine.Application.isBatchMode)
+				{
+					ForceEditorScriptRecompile();
+				}
 
 				UnityEngine.Debug.Log($"[BuildEnvironmentOptions] Build target switched to: {targetBuild}:{targetSubtarget}. Scripts will recompile automatically.");
 			}
