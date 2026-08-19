@@ -580,8 +580,8 @@ sequenceDiagram
     World->>World: ProcessOpenWorldQueueAsync, • no capacity / no instance / combat-logout hold, • connection stays in the waiting queue
 
     loop every queuePositionUpdateRateSeconds (2s)
-        World-->>Client: WorldSceneQueuePositionBroadcast {, QueuePosition: n, TotalQueued, , EstimatedWaitSeconds, Reason, }
-        Client->>Client: Wait dialog: position + reason, ("Close" leaves the queue → QuitToLogin)
+        World-->>Client: WorldSceneQueuePositionBroadcast {, QueuePosition: n, TotalQueued, EstimatedWaitSeconds, Reason, }
+        Client->>Client: Wait dialog: position + reason, Close leaves the queue → QuitToLogin
     end
 
     alt Capacity found

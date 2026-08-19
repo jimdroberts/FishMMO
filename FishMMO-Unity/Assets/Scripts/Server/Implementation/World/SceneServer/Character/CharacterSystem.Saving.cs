@@ -157,7 +157,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Immediately log out for now.. we could add a timeout later on..?
 			if (character.NetworkObject.IsSpawned)
 			{
-				OnDespawnCharacter?.Invoke(conn, character);
+				DispatchCharacterEvent(OnDespawnCharacter, conn, character, nameof(OnDespawnCharacter));
 
 				ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 			}
@@ -697,11 +697,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Keeps scene population and every social system in step, exactly as a normal
 			// disconnect would.
-			OnDisconnect?.Invoke(owner, character);
+			DispatchCharacterEvent(OnDisconnect, owner, character, nameof(OnDisconnect));
 
 			if (character.NetworkObject != null)
 			{
-				OnDespawnCharacter?.Invoke(owner, character);
+				DispatchCharacterEvent(OnDespawnCharacter, owner, character, nameof(OnDespawnCharacter));
 
 				if (character.NetworkObject.IsSpawned)
 				{

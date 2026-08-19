@@ -446,6 +446,12 @@ than one full routing cycle (`QueueFeedbackDelayCycles`, floored at
 `QueueFeedbackDelayMinSeconds`), so a client that crosses the threshold still sees its true
 position.
 
+Both routing paths go through `BroadcastSceneConnect`. The instance path used to hand-roll its
+own copy, which checked only the instance queue for the re-queue race, never sent the
+position-0 that dismisses the wait dialog, and never cleared the wait tracking. The shared
+helper checks both queues, because a connection can be put back on either and routing one that
+is waiting on the other sends it somewhere the later decision did not choose.
+
 Positions go out on the unreliable channel — they are re-sent every sweep, so a lost one is
 corrected by the next. `0` and `-1` are one-shot transitions with nothing behind them and go
 reliably; losing one strands the wait dialog on screen. For the same reason the TTL purge sends
@@ -483,6 +489,20 @@ that does not already have one, `RemoveFromQueue` deliberately leaves it alone, 
 (`BroadcastSceneConnect`), purged (`PurgeExpiredWaitingConnections`), and disconnected
 (`OnRemoteConnectionStopped`). `ResetQueueEntryTime` is the single documented exception, used
 only by the combat-logout hold.
+
+### Two clocks, because they answer different questions
+
+`WaitingQueueEnteredUtcByClientId` answers *should this wait be cut short*, and the
+combat-logout hold restarts it every cycle precisely so that it is not.
+`waitingSinceByClientId` answers *how long has this player been waiting*, and nothing resets
+it. Reporting and ranking both read the second.
+
+Using one clock for both is a trap worth naming, because it silently disables the feature for
+the case that needs it most: a combat-logout hold resets the clock on every routing cycle, so
+the reporting delay is never satisfied and a player waiting up to
+`CombatLogoutRoutingGraceSeconds` for their own body is told nothing at all. Ranking is wrong
+for the same reason — a held connection keeps sorting to the back of its own queue while
+clients that arrived after it move ahead.
 
 ## Routing safety nets
 

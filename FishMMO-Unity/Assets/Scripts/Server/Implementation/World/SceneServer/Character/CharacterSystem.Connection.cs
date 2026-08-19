@@ -88,7 +88,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				TryExtractAndReleaseSession(data, waitingSceneCharacter.ID);
 
-				OnDisconnect?.Invoke(conn, waitingSceneCharacter);
+				DispatchCharacterEvent(OnDisconnect, conn, waitingSceneCharacter, nameof(OnDisconnect));
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 			}
@@ -113,7 +113,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!skipOnDisconnect)
 			{
-				OnDisconnect?.Invoke(conn, character);
+				DispatchCharacterEvent(OnDisconnect, conn, character, nameof(OnDisconnect));
 			}
 
 			// Combat logout: keep the body in the world rather than despawning it. The session
@@ -199,7 +199,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				NetworkConnection owner = character.Owner;
 
 				// Invoke disconnect early when teleporting because we require the scene the character is in.
-				OnDisconnect?.Invoke(owner, character);
+				DispatchCharacterEvent(OnDisconnect, owner, character, nameof(OnDisconnect));
 
 				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
@@ -558,7 +558,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// — party, guild, and the scene server's own per-scene bookkeeping — was told
 					// the player left the scene they were respawning *into* rather than the one
 					// they died in.
-					OnDisconnect?.Invoke(conn, player);
+					DispatchCharacterEvent(OnDisconnect, conn, player, nameof(OnDisconnect));
 
 					player.SceneName = player.BindScene;
 					player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);

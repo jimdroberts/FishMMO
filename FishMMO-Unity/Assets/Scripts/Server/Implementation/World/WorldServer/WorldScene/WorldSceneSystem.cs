@@ -210,6 +210,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			combatLogoutRoutingDeferredSince.Clear();
 			queueReasonByClientId.Clear();
 			queueReasonByScene.Clear();
+			waitingSinceByClientId.Clear();
 			routedLastCycleByScene.Clear();
 
 			if (Server == null)
@@ -1098,25 +1099,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				if (sceneServerResult.IsSuccess)
 				{
 					var sceneServer = sceneServerResult.Data;
-					TryEnqueueMainThread(() =>
-					{
-						if (conn == null || !conn.IsActive)
-						{
-							return;
-						}
-
-						// Race guard: if connection was re-queued during async work, skip stale routing
-						if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var guardMd) &&
-							guardMd.InstanceConnectionScenes.ContainsKey(conn))
-						{
-							return;
-						}
-
-						Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
-						{
-							Port = (ushort)sceneServer.Port,
-						});
-					});
+					/* Same helper as the open-world path. The hand-rolled copy that used to
+					 * live here checked only the instance queue for the re-queue race, never
+					 * sent the queue-position 0 that dismisses the wait dialog, and never
+					 * cleared the wait tracking — so an instance client that had been shown a
+					 * position kept its entry until it disconnected. */
+					BroadcastSceneConnect(conn, (ushort)sceneServer.Port);
 				}
 				else
 				{
@@ -1789,10 +1777,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					continue;
 				}
-				DateTime enteredUtc = runtimeData.WaitingQueueEnteredUtcByClientId != null &&
-					runtimeData.WaitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt)
-						? queuedAt
-						: nowUtc;
+				// The reporting clock, not the expiry clock — see waitingSinceByClientId.
+				DateTime enteredUtc = waitingSinceByClientId.TryGetValue(conn.ClientId, out DateTime waitingSince)
+					? waitingSince
+					: nowUtc;
 				queuePositionScratch.Add((conn, enteredUtc));
 			}
 
@@ -1947,9 +1935,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 
-				// Race guard: if connection was re-queued during async work, skip stale routing
+				/* Race guard: if the connection was re-queued during async work, skip stale
+				 * routing. Both queues are checked — a connection can be put back on either,
+				 * and routing one that is waiting on the other sends it somewhere the later
+				 * decision did not choose. */
 				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var guardMd) &&
-					guardMd.OpenWorldConnectionScenes.ContainsKey(conn))
+					(guardMd.OpenWorldConnectionScenes.ContainsKey(conn) ||
+					 guardMd.InstanceConnectionScenes.ContainsKey(conn)))
 				{
 					return;
 				}
@@ -1996,7 +1988,30 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				runtimeData.WaitingQueueEnteredUtcByClientId[clientId] = DateTime.UtcNow;
 			}
+
+			// The reporting clock, which nothing may reset. See waitingSinceByClientId.
+			waitingSinceByClientId.TryAdd(clientId, DateTime.UtcNow);
 		}
+
+		/// <summary>
+		/// When each client first began waiting, for reporting rather than for expiry.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately a second clock. <c>WaitingQueueEnteredUtcByClientId</c> answers "should
+		/// this wait be cut short", and the combat-logout hold restarts it every cycle precisely
+		/// so that it is not — which makes it useless for saying how long the player has been
+		/// waiting, and worse than useless for ranking, since a held connection would keep
+		/// sorting to the back of its own queue.
+		/// <para>
+		/// Using it for both is what suppressed the one message that matters most: a
+		/// combat-logout hold resets the clock every routing cycle, so the reporting delay was
+		/// never satisfied and a player waiting up to
+		/// <see cref="CombatLogoutRoutingGraceSeconds"/> for their own body was told nothing at
+		/// all — the exact silent wait this feedback exists to end.
+		/// </para>
+		/// </remarks>
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> waitingSinceByClientId =
+			new System.Collections.Concurrent.ConcurrentDictionary<int, DateTime>();
 
 		/// <summary>
 		/// Restarts a client's queue-entry clock.
@@ -2035,6 +2050,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				runtimeData.WaitingQueueEnteredUtcByClientId?.Remove(clientId);
 			}
+			waitingSinceByClientId.TryRemove(clientId, out _);
 			queueReasonByClientId.TryRemove(clientId, out _);
 		}
 

@@ -192,6 +192,14 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `OnDespawnCharacter` | `Action<NetworkConnection, IPlayerCharacter>` | After character is despawned during save-and-despawn |
 | `OnPetKilled` | `Action<NetworkConnection, IPlayerCharacter>` | After a pet owned by a player character is killed |
 
+Every one of these events is raised through `DispatchCharacterEvent`, which invokes each
+subscriber independently and logs anything that throws. They all fire part-way through a
+teardown, with the save, the session release or the despawn still to come on the line after
+them — so a plain `?.Invoke` let one exception in a social system abandon both the rest of the
+invocation list and the caller, leaving a character removed from every mapping but never saved
+and never released, or its NetworkObject spawned in the world with no owner. Losing one
+subscriber's bookkeeping is recoverable; losing the teardown is not.
+
 It also exposes one command, `BeginDeliberateTransfer(conn)`. It marks the next disconnect on
 that connection as a hand-off to another scene server rather than a player leaving, which
 suppresses the combat-logout linger for it. Only callers that transfer a character *through*

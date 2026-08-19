@@ -200,6 +200,12 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			/* Any result is the server telling us it is still working this request —
+			 * the SRP exchange and the two-factor prompt both report progress before
+			 * they finish, and a client can sit in the login queue for minutes. Each
+			 * one buys the reply deadline again rather than counting against it. */
+			replyGuard.Refresh();
+
 			// Only process auth results when this panel owns the active flow.
 			// Without this guard, hidden panels would still react to auth results
 			// intended for the other panel (e.g., UITKRegister force-disconnecting
@@ -594,6 +600,25 @@ namespace FishMMO.Client
 			}
 		}
 
+
+		/// <summary>
+		/// Guards the control this panel disables while a server reply is outstanding.
+		/// </summary>
+		/// <remarks>See <see cref="PendingReplyGuard"/>.</remarks>
+		private readonly PendingReplyGuard replyGuard = new PendingReplyGuard();
+
+		/// <inheritdoc/>
+		protected override void OnTick()
+		{
+			base.OnTick();
+
+			if (replyGuard.HasExpired())
+			{
+				ReleaseControls(true);
+				if (statusMessage != null) statusMessage.text = "The server did not respond. Please try again.";
+			}
+		}
+
 		/// <summary>
 		/// Sets the locked state of all form controls (enables/disables interactivity).
 		/// Also manages the <see cref="isAuthFlowActive"/> flag: locking marks
@@ -602,37 +627,58 @@ namespace FishMMO.Client
 		/// <param name="locked">True to lock (disable) controls, false to unlock.</param>
 		public void SetFormLocked(bool locked)
 		{
+			// Locking means a request is outstanding; unlocking means it is not.
+			// See PendingReplyGuard for why the wait needs a deadline.
+			if (locked) { replyGuard.Begin(); } else { replyGuard.Clear(); }
+
 			// Track auth-flow ownership: locking = start of flow, unlocking = end.
 			if (locked) isAuthFlowActive = true;
 			else isAuthFlowActive = false;
 
+			ReleaseControls(!locked);
+		}
+
+		/// <summary>
+		/// Enables or disables this panel's controls without touching the auth-flow flag.
+		/// </summary>
+		/// <remarks>
+		/// Split out for the reply timeout. <c>SetFormLocked(false)</c> also clears
+		/// <c>isAuthFlowActive</c>, which is what gates this panel's auth-result handler —
+		/// so handing the controls back that way would make the panel ignore a reply that
+		/// arrives after the deadline, turning a merely slow login into a stuck one. The
+		/// timeout is deliberately non-destructive: it re-enables the controls and says so,
+		/// and a late reply is still handled normally.
+		/// </remarks>
+		/// <param name="interactable">True to enable the controls.</param>
+		private void ReleaseControls(bool interactable)
+		{
 			if (registerButton != null)
 			{
-				registerButton.SetEnabled(!locked);
+				registerButton.SetEnabled(interactable);
 			}
 			if (quitToLoginButton != null)
 			{
-				quitToLoginButton.SetEnabled(!locked);
+				quitToLoginButton.SetEnabled(interactable);
 			}
 			if (username != null)
 			{
-				username.SetEnabled(!locked);
+				username.SetEnabled(interactable);
 			}
 			if (email != null)
 			{
-				email.SetEnabled(!locked);
+				email.SetEnabled(interactable);
 			}
 			if (password != null)
 			{
-				password.SetEnabled(!locked);
+				password.SetEnabled(interactable);
 			}
 			if (key != null)
 			{
-				key.SetEnabled(!locked);
+				key.SetEnabled(interactable);
 			}
 			if (ageSelect != null)
 			{
-				ageSelect.SetEnabled(!locked);
+				ageSelect.SetEnabled(interactable);
 			}
 		}
 	}

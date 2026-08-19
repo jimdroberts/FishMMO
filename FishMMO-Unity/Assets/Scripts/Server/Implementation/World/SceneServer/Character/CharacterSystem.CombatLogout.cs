@@ -463,7 +463,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			OnDespawnCharacter?.Invoke(null, character);
+			DispatchCharacterEvent(OnDespawnCharacter, null, character, nameof(OnDespawnCharacter));
 
 			if (character.NetworkObject.IsSpawned)
 			{

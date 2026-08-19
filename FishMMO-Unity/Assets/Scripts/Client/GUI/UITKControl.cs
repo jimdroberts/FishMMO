@@ -134,6 +134,25 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Drives <see cref="OnTick"/> for every control in this hierarchy.
+		/// </summary>
+		/// <remarks>
+		/// Centralised so subclasses override a virtual hook instead of declaring their own
+		/// <c>Update</c>. Unity binds the most-derived <c>Update</c> only, so two of them in one
+		/// hierarchy means the base never runs — a silent failure that is hard to spot and easy
+		/// to reintroduce.
+		/// </remarks>
+		private void Update()
+		{
+			OnTick();
+		}
+
+		/// <summary>
+		/// Per-frame hook for controls that need one.
+		/// </summary>
+		protected virtual void OnTick() { }
+
+		/// <summary>
 		/// Called when the client quits to the login screen.
 		/// Override to perform cleanup such as stopping coroutines.
 		/// </summary>

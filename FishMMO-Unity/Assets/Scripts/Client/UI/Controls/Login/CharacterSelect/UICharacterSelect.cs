@@ -461,6 +461,27 @@ namespace FishMMO.Client
 		/// Sets locked state for connect button (enables/disables connect button).
 		/// </summary>
 		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
+
+		/// <summary>
+		/// Guards the control this panel disables while a server reply is outstanding.
+		/// </summary>
+		/// <remarks>See <see cref="PendingReplyGuard"/>.</remarks>
+		private readonly PendingReplyGuard replyGuard = new PendingReplyGuard();
+
+		/// <inheritdoc/>
+		protected override void OnTick()
+		{
+			base.OnTick();
+
+			if (replyGuard.HasExpired())
+			{
+				SetConnectButtonLocked(false);
+				SetDeleteButtonLocked(false);
+				Show();
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox)) dialogBox.Open("The server did not respond. Please try again.");
+			}
+		}
+
 		/// <summary>
 		/// Handles a refused character selection so the player is told why rather than being
 		/// left on a screen that appears to have ignored the click.
@@ -471,6 +492,10 @@ namespace FishMMO.Client
 		{
 			if (msg.Result == CharacterSelectResult.Success)
 			{
+				// The selection stands and the server list takes over from here, so the wait
+				// this panel was holding is finished. Leaving it armed would fire the reply
+				// timeout later and put this panel back on top of the server-select screen.
+				replyGuard.Clear();
 				return;
 			}
 
@@ -500,6 +525,10 @@ namespace FishMMO.Client
 
 		private void SetConnectButtonLocked(bool locked)
 		{
+			// Locking means a request is outstanding; unlocking means it is not.
+			// See PendingReplyGuard for why the wait needs a deadline.
+			if (locked) { replyGuard.Begin(); } else { replyGuard.Clear(); }
+
 			ConnectButton.interactable = !locked;
 		}
 

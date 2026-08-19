@@ -185,8 +185,11 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Unity Update callback. Decrements the refresh cooldown timer each frame.
 		/// </summary>
-		void Update()
+		protected override void OnTick()
 		{
+			base.OnTick();
+
+
 			if (nextRefresh > 0.0f)
 			{
 				nextRefresh -= Time.deltaTime;
@@ -450,6 +453,9 @@ namespace FishMMO.Client
 			StopAllCoroutines();
 			Client.Quit();
 		}
+
+
+
 
 		/// <summary>
 		/// Sets the locked state of the connect button.

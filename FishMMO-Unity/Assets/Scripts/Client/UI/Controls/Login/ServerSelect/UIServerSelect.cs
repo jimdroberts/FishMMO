@@ -98,10 +98,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Unity Update loop. Handles refresh timer countdown.
+		/// Per-frame tick. Handles refresh timer countdown.
 		/// </summary>
-		void Update()
+		/// <remarks>
+		/// Overrides the base hook rather than declaring <c>Update</c>. Declaring one here
+		/// replaced <see cref="UIControl"/>'s, which silently disabled tab navigation between
+		/// this panel's input fields.
+		/// </remarks>
+		protected override void OnTick()
 		{
+			base.OnTick();
+
+
 			if (nextRefresh > 0.0f)
 			{
 				nextRefresh -= Time.deltaTime;
@@ -368,6 +376,9 @@ namespace FishMMO.Client
 			StopAllCoroutines();
 			Client.Quit();
 		}
+
+
+
 
 		/// <summary>
 		/// Sets locked state for signing in (enables/disables connect button).

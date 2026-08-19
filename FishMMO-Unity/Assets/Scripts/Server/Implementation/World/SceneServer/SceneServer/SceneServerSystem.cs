@@ -676,17 +676,45 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
 				}
 
-				// Kick any connected characters assigned to this scene so they don't get stuck.
-				// Characters arriving after this point are handled by CharacterSystem.Loading
-				// which disconnects when TryGetSceneInstanceDetails returns false.
+				/* Kick any connected characters assigned to this scene so they don't get stuck.
+				 * Characters arriving after this point are handled by CharacterSystem.Loading,
+				 * which disconnects when TryGetSceneInstanceDetails returns false.
+				 *
+				 * Collected before disconnecting rather than disconnected in place. Today
+				 * Disconnect(false) is deferred, so mutating the map it is being read from does
+				 * not happen synchronously — but that is a property of FishNet's scheduling, not
+				 * of this loop, and if it ever stops holding the enumeration throws part-way and
+				 * every character after the first is left stuck in a scene that will never
+				 * exist. The snapshot costs one small list per failed scene load. */
 				if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMappingData))
 				{
+					List<NetworkConnection> stranded = null;
 					foreach (var kvp in charMappingData.ConnectionCharacters)
 					{
-						if (kvp.Value.SceneName == sceneData.SceneName)
+						IPlayerCharacter resident = kvp.Value;
+						if (resident == null)
 						{
-							Log.Warning("SceneServerSystem", $"Kicking character '{kvp.Value.CharacterName}' — scene '{sceneData.SceneName}' failed to load.");
-							kvp.Key.Disconnect(false);
+							continue;
+						}
+
+						// An instanced character lives in InstanceSceneName; matching only
+						// SceneName left it behind in a scene that failed to load.
+						string residentScene = resident.IsInInstance() && !string.IsNullOrEmpty(resident.InstanceSceneName)
+							? resident.InstanceSceneName
+							: resident.SceneName;
+
+						if (string.Equals(residentScene, sceneData.SceneName, StringComparison.Ordinal))
+						{
+							Log.Warning("SceneServerSystem", $"Kicking character '{resident.CharacterName}' — scene '{sceneData.SceneName}' failed to load.");
+							(stranded ??= new List<NetworkConnection>()).Add(kvp.Key);
+						}
+					}
+
+					if (stranded != null)
+					{
+						for (int i = 0; i < stranded.Count; ++i)
+						{
+							stranded[i]?.Disconnect(false);
 						}
 					}
 				}

@@ -425,7 +425,7 @@
 33. **API Request Signing** — HMAC-SHA256 with `X-FishMMO-Client` header (v1.{ts}.{nonce}.{sig} format), 30s skew window, per-process nonce LRU cache.
 
 ### UI Toolkit (UITK) Panels — Login Flow
-34. **Loading Screen** — Addressable-loaded transition images with progress bar.  
+34. **Loading Screen** — Addressable-loaded transition images with progress bar. Visibility is driven by three independent flags — background Addressable loading, FishNet scene load/unload, and an armed reconnect — and comes down only when all three are clear, so neither driver can pull the overlay out from under the other.  
 35. **Reconnect Display** — Reconnect attempt status during network interruptions.  
 36. **Login Panel** — Username/password, TOTP/2FA code, account verification code input.  
 37. **Register Panel** — Username, password, email, age fields.  
@@ -463,7 +463,9 @@
 65. Full UGUI equivalents of all login flow and world HUD panels above (loading screen, login, register, server select, character select/create, options with screen settings, chat, inventory, equipment, bank, merchant, abilities, hotkeys, achievements, buffs/debuffs, guild, party, friends, factions, dungeon finder, NPC dialogue, pet, minimap, inspect, chat channels, context menus, crosshair, tooltips).
 
 ### Shared UI Components
-66. **Dialog Box** — Modal informational dialog.  
+Every panel that disables a control while awaiting a server reply arms `PendingReplyGuard`, a shared watchdog armed and cleared by the same methods that disable and re-enable the control, and refreshed by any intermediate progress from the server. On expiry it re-enables the control and reports it without tearing anything down, so a late reply is still handled normally. Used by login, register, character create and character select; deliberately not by server select, whose lock spans a multi-hop journey with its own queue feedback.
+
+66. **Dialog Box** — Modal informational dialog. Also serves as the shared wait dialog for both connection queues (login admission and World → Scene routing), live-updating its text in place via `SetText` and offering a single Close action that leaves the queue. Resolved from either the UGUI or UI Toolkit control set, so the queue messages appear whichever UI the build ships.  
 67. **Input Dialog Box** — Modal dialog with text input field.  
 68. **Color Picker** — Color selection control.  
 69. **Custom Dropdown** — Dropdown control.  
@@ -509,7 +511,7 @@
 5. **Server Behaviour System** — ScriptableObject-derived modular server behaviours with unified InitializeOnce/Deinitialize lifecycle.  
 6. **Server Component Registry** — Multi-interface lookup registry for all server components.  
 7. **Runtime Data Containers** — Typed runtime data containers (`RuntimeDataContainer`) with `RuntimeDataContainerFactory` and `RuntimeDataContainerRegistry`; behaviours declare required containers via `[RequiresDataContainer]`. Per-system containers follow the `<System>SystemRuntimeData` / `I<System>SystemRuntimeData` naming convention — e.g. `PartySystemRuntimeData`/`IPartySystemRuntimeData`, `GuildSystemRuntimeData`, `CharacterSystemRuntimeData`, `ChatSystemRuntimeData`, `WorldSceneSystemRuntimeData`, `NamingSystemRuntimeData`. Shared infrastructure containers (`MainThreadQueueData`, `AsyncWorkerData`) are similarly split per system via marker interfaces such as `IGuildSystemMainThreadQueueData` so systems do not collide on one registry slot.  
-8. **Main Thread Queue** — Thread-safe main-thread action queue for marshalling async worker results to the Unity thread.  
+8. **Main Thread Queue** — Thread-safe main-thread action queue for marshalling async worker results to the Unity thread. Each queued action is invoked in isolation and the drain buffer is cleared in a `finally`, so one throwing action cannot discard the rest of a batch — for a request/response handler the queued action *is* the reply, and the actions in a batch belong to unrelated connections. Capacity rejection is counted and rate-limit warned; callers holding state across the hand-off check the return value.  
 9. **Async Worker Queue** — Centralized bounded async work queue with backpressure and entity-keyed ordering (FIFO per key via consistent hashing).  
 10. **IngressGuard** — Per-connection, per-operation debounce and in-flight guard to prevent duplicate/replay/DoS attacks (ConcurrentDictionary-backed, bounded, periodic sweep).  
 11. **FishNet Network Wrapper** — Clean abstraction over FishNet NetworkManager: broadcast registration, transport config (bind address/port/maxClients forwarded to each WebTransport child in Multipass), TLS certificate configuration, authenticator attachment, coroutine hosting.  
@@ -537,7 +539,7 @@
 ### WorldServer Features
 28. **World Server Registration** — DB registration, periodic heartbeat with character count.  
 29. **World Server Authenticator** — Token auth with per-account login debounce, server-lock check, combined admission gate (DB connection count + recently admitted usernames burst prevention), selected-character validation.  
-30. **World Scene System** — Open world and instanced scene routing, connection authentication, instance lookup with debounce and TTL caching, waiting queue management with TTL purge, DB updates.  
+30. **World Scene System** — Open world and instanced scene routing, connection authentication, instance lookup with debounce and TTL caching, waiting queue management with TTL purge, DB updates. Clients held in the routing queue receive `WorldSceneQueuePositionBroadcast` every `queuePositionUpdateRateSeconds`, carrying their 1-based position within their own scene or instance group, the group size, an estimated wait derived from how many connections the last routing pass actually placed, and a `WorldSceneQueueReason` (`Capacity`, `SceneLoading`, `CombatLogoutBody`). Position semantics and channel selection mirror `LoginQueuePositionBroadcast`: `>0` waiting (Unreliable, corrected by the next sweep), `0` routed and `-1` abandoned (both Reliable, as one-shot transitions). Each reason carries its own bound — `waitingQueueTtlSeconds` for capacity, `× SceneLoadWaitTtlMultiplier` while a scene instance is still loading, and `CombatLogoutRoutingGraceSeconds` for a character whose combat-logout body only one instance can hand back. Connections are ranked across the whole group but notified only after waiting longer than one full routing cycle, so a healthy login never sees the dialog. The wait-queue TTL measures the total wait: the arrival stamp survives re-queue cycles and is cleared only by a terminal outcome (routed, purged, disconnected).  
 31. **Kick Request System** — Periodic DB polling for admin-initiated kicks, player disconnection via main-thread marshalling.
 
 ### SceneServer Features

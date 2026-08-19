@@ -136,6 +136,41 @@ exactly why they need their own feedback channel. `Client` presents both through
 wait dialog so they cannot drift apart or fight over the same control, and the dialog's only
 action leaves the queue via `QuitToLogin`.
 
+## No panel waits on a reply forever
+
+Every login-flow panel disables its action control, sends a request, and re-enables it when the
+reply arrives. That is correct right up until the reply never arrives — at which point the panel
+is a dead end, and the only way out is to quit to login.
+
+The reply can go missing for reasons the client cannot see: the server's main-thread queue
+rejecting the action at capacity, a handler throwing before it sends, or the server never
+getting to it. `PendingReplyGuard` makes the panel stop waiting rather than enumerate those
+causes. It is armed by the same method that disables the control and cleared by the same method
+that re-enables it, so the two cannot drift apart.
+
+Three properties matter:
+
+- **Non-destructive.** The timeout re-enables the control and says so. Nothing is torn down and
+  no connection is dropped, so a late reply is still handled normally when it lands.
+- **It must not end the auth flow.** `UILogin` and `UIRegister` gate their auth-result handler on
+  `isAuthFlowActive`, which their *unlock* clears — so routing the timeout through the unlock
+  would make the panel ignore a reply that arrives after the deadline, turning a slow login into
+  a permanently stuck one. The timeout calls `ReleaseControls` instead, which touches only the
+  widgets. A genuine disconnect still goes through the unlock, because then the flow really is
+  over.
+- **Progress refreshes it.** Any auth result at all is proof the server is still working the
+  request — the SRP exchange and the two-factor prompt both report progress before they finish,
+  and a client can sit in the login queue for minutes. Each one buys the deadline again.
+
+Server-select is deliberately **not** guarded. Its lock spans a whole multi-hop journey — world
+login, scene routing, scene load — not one round trip, and that journey has its own queue
+feedback with a Close button. A 30-second deadline there would fire during a perfectly healthy
+scene load.
+
+Character-select clears its guard on a successful selection, because the server list takes over
+from there; leaving it armed would fire the timeout later and put the panel back on top of the
+server-select screen.
+
 ## Unhandled exceptions from the networking stack
 
 `Client.OnLogMessage` watches for exceptions raised inside the networking layer and tears the
