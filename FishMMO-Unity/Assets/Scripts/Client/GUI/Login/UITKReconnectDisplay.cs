@@ -60,12 +60,37 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Whether the reconnect currently running is a deliberate scene handoff rather than a
+		/// dropped connection.
+		/// </summary>
+		/// <remarks>
+		/// A zone change, a channel switch and a cross-scene bind-point respawn are all
+		/// implemented as a deliberate drop, so this panel was raised — and mouse mode forced
+		/// on, taking the camera out of the player's hands — on every routine teleport. The
+		/// counter and cancel button are hidden on a first attempt, so what appeared was a
+		/// bare panel over the loading overlay announcing a connection loss that had not
+		/// happened. The loading screen already makes exactly this distinction; see
+		/// <see cref="ClientConnectionManager.IsSceneHandoffReconnect"/>.
+		/// <para>
+		/// Only the first attempt is exempt: a handoff succeeds on its first retry, so anything
+		/// past that is a genuine failure the player should be told about.
+		/// </para>
+		/// </remarks>
+		private bool IsSceneHandoff() => Client?.Connection?.IsSceneHandoffReconnect ?? false;
+
+		/// <summary>
 		/// Updates the UI and shows/hides controls when the reconnect attempt count changes.
 		/// </summary>
 		/// <param name="attempts">The current attempt number.</param>
 		/// <param name="maxAttempts">The maximum number of allowed attempts.</param>
 		public void OnReconnectAttemptsChanged(int attempts, int maxAttempts)
 		{
+			// A deliberate scene handoff is not an outage — see IsSceneHandoff.
+			if (attempts <= 1 && IsSceneHandoff())
+			{
+				return;
+			}
+
 			if (attempts <= maxAttempts)
 			{
 				// Show attempt counter and cancel button only if more than one attempt.

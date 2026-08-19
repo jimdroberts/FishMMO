@@ -878,6 +878,21 @@ All projects share a single canonical `logging.json` at [`FishMMO-Setup/logging.
 
 **Runtime override:** Place a modified `logging.json` in the working directory — it takes precedence over the bundled copy. The log level can also be overridden via the `FISHMMO_LOG_LEVEL` environment variable (e.g. `Debug`, `Verbose`).
 
+**Level policy (why it is a data-handling decision, not just noise control):** `Warning` and
+above are the tiers that get shipped off-host, aggregated and retained longest. Two rules follow
+for server code, and both have been violated in this codebase before:
+
+- *A healthy path never logs above `Debug`.* Every Login→World and World→Scene hop mints a
+  connection token; logging the **successful** mint at `Warning` produced one line per hop on a
+  busy server and buried the failures the tier exists for.
+- *Per-player identifiers do not travel with success.* That same line named the client's
+  resolved real IP, putting one player-attributable record into a widely-retained tier on every
+  zone change, for no diagnostic gain — the failure branch already identifies the connection
+  that could not be served.
+
+Failures keep their `Warning`/`Error` level and their identifying detail. See
+[Security Properties](CONNECTION_PIPELINE.md#security-properties).
+
 ### Configuration Files — `FishMMO-Setup/`
 
 All project configuration lives in [`FishMMO-Setup/`](FishMMO-Setup/) as the single source of truth. **Non-sensitive defaults (host, port, database name) are stored in JSON. Database credentials are set via environment variables (`FISHMMO_DB_*`) or the platform secrets file (`/etc/fishmmo/db-secrets.env`). Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database and loaded by each server at startup — no env vars or secrets files are needed for them.** Each template includes a `_comment` field listing the env var names to set.

@@ -80,6 +80,34 @@ namespace FishMMO.Client
 		/// forceDisconnect — the transport reports state from worker callbacks.
 		/// </remarks>
 		private volatile bool stoppingForConnect;
+
+		/// <summary>
+		/// Set when <see cref="AbortConnectAttempt"/> has already reported a connect failure
+		/// that no <c>Stopped</c> transition was going to report, so the transition — if the
+		/// wedged transport ever produces one — does not report it a second time.
+		/// </summary>
+		/// <remarks>
+		/// The abort paths this covers are reached precisely because the teardown never
+		/// completed, which is why they have to speak for themselves. But "never completed" is
+		/// a timeout, not a guarantee: a transport that was merely very slow can still land its
+		/// Stopped afterwards, and that transition would otherwise arm a reconnect (or raise
+		/// <see cref="OnConnectionAttemptFailed"/> a second time) for an attempt the client has
+		/// already been told about and already left the world over — running the whole
+		/// quit-to-login teardown twice, which reloads the login scenes on top of themselves.
+		/// <para>
+		/// Deliberately separate from <see cref="forceDisconnect"/> and
+		/// <see cref="stoppingForConnect"/>. forceDisconnect is only cleared once the transport
+		/// reaches Stopped, so latching it against one that may never get there is the stranding
+		/// hazard <see cref="ForceDisconnect"/> documents; stoppingForConnect is cleared
+		/// unconditionally by <see cref="ResetReconnectState"/>, which the quit-to-login this
+		/// abort triggers calls immediately — so it would be gone before the late Stopped
+		/// arrived. This flag is cleared where it cannot strand anything: at the top of every
+		/// <see cref="ConnectToServer"/>, and on <c>Started</c>. Worst case it swallows exactly
+		/// one Stopped, which is the one it exists to swallow.
+		/// </para>
+		/// </remarks>
+		private volatile bool connectFailureReported;
+
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort;
 
@@ -273,6 +301,8 @@ namespace FishMMO.Client
 				// The guard is already 1; leave it acquired and continue as the new owner.
 			}
 			connectingGuardAcquiredAt = (double)Time.realtimeSinceStartup;
+			// A fresh attempt is never the one a previous abort already reported.
+			connectFailureReported = false;
 			if (isWorldServer) CurrentConnectionType = ServerConnectionType.ConnectingToWorld;
 			// Mark the teardown below as deliberate so OnClientConnectionState does not treat
 			// it as a drop. Covers every hop — Login→World, World→Scene and reconnects alike.
@@ -296,24 +326,33 @@ namespace FishMMO.Client
 		/// </summary>
 		public void TryReconnect()
 		{
-			if (ReconnectsAttempted < MaxReconnectAttempts)
+			/* Both conditions are checked together on purpose.
+			 *
+			 * The address test used to sit inside the attempt-count branch with no else, so a
+			 * retry armed with nothing to dial simply returned. Update has already counted
+			 * nextReconnect down past zero by the time this runs and only re-arms it from a
+			 * Stopped transition, so nothing was left to fire it again — the client sat behind
+			 * the overlay that OnReconnectPending raised, with no retry, no OnReconnectFailed,
+			 * and therefore no quit-to-login to take it back to a screen it could act on.
+			 * Falling through to the give-up branch turns that silent stall into the outcome
+			 * the retry loop was always heading for. */
+			if (ReconnectsAttempted < MaxReconnectAttempts &&
+				!string.IsNullOrEmpty(lastWorldAddress) &&
+				lastWorldPort != 0)
 			{
-				if (!string.IsNullOrEmpty(lastWorldAddress) && lastWorldPort != 0)
-				{
-					ReconnectsAttempted++;
-					OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
-					/* isWorldServer: true — lastWorldAddress/lastWorldPort are by definition the
-					 * world server, so the reconnect must be typed as one. Omitting it left
-					 * CurrentConnectionType at None (OnClientConnectionState clears it on the
-					 * drop that armed this retry), which made a failed attempt look like a
-					 * non-reconnectable failure: CanReconnect was false, so no further retry was
-					 * armed and OnConnectionAttemptFailed fired instead — wrongly invalidating
-					 * the cached login server list for what was a world-server outage. It also
-					 * made the establish-timeout message name the login server while actually
-					 * dialing the world server. See CanReconnect, which must accept
-					 * ConnectingToWorld for the retry loop to survive past the first attempt. */
-					ConnectToServer(lastWorldAddress, lastWorldPort, isWorldServer: true);
-				}
+				ReconnectsAttempted++;
+				OnReconnectAttempt?.Invoke(ReconnectsAttempted, MaxReconnectAttempts);
+				/* isWorldServer: true — lastWorldAddress/lastWorldPort are by definition the
+				 * world server, so the reconnect must be typed as one. Omitting it left
+				 * CurrentConnectionType at None (OnClientConnectionState clears it on the
+				 * drop that armed this retry), which made a failed attempt look like a
+				 * non-reconnectable failure: CanReconnect was false, so no further retry was
+				 * armed and OnConnectionAttemptFailed fired instead — wrongly invalidating
+				 * the cached login server list for what was a world-server outage. It also
+				 * made the establish-timeout message name the login server while actually
+				 * dialing the world server. See CanReconnect, which must accept
+				 * ConnectingToWorld for the retry loop to survive past the first attempt. */
+				ConnectToServer(lastWorldAddress, lastWorldPort, isWorldServer: true);
 			}
 			else
 			{
@@ -442,6 +481,17 @@ namespace FishMMO.Client
 			switch (ClientState)
 			{
 				case LocalConnectionState.Stopped:
+					/* A failure this transition was never going to report has already been
+					 * reported by the abort that gave up waiting for it. Consume the marker and
+					 * leave: arming a reconnect or raising OnConnectionAttemptFailed here would
+					 * be the second notification for one failed attempt, and the client has
+					 * already been taken back to the login screen over the first. */
+					if (connectFailureReported)
+					{
+						connectFailureReported = false;
+						CurrentConnectionType = ServerConnectionType.None;
+						break;
+					}
 					// A teardown that ConnectToServer started on purpose is a hop, not a loss.
 					// Consume the flag and leave every other piece of state alone: no reconnect
 					// timer, no OnConnectionAttemptFailed, and CurrentConnectionType is kept so
@@ -486,6 +536,7 @@ namespace FishMMO.Client
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();
 					ReconnectsAttempted = 0; nextReconnect = -1; forceDisconnect = false;
+					connectFailureReported = false;
 					IsSceneHandoffReconnect = false;
 					break;
 			}
@@ -502,7 +553,7 @@ namespace FishMMO.Client
 					if (--maxWaitIters <= 0)
 					{
 						Log.Error("ClientConnection", "Connection stop wait iteration limit exceeded.");
-						AbortConnectAttempt();
+						AbortConnectAttempt(reportFailure: true);
 						yield break;
 					}
 					yield return null;
@@ -521,7 +572,7 @@ namespace FishMMO.Client
 						if (--maxForcedIters <= 0)
 						{
 							Log.Error("ClientConnection", "Forced stop wait iteration limit exceeded.");
-							AbortConnectAttempt();
+							AbortConnectAttempt(reportFailure: true);
 							yield break;
 						}
 						yield return null;
@@ -530,7 +581,7 @@ namespace FishMMO.Client
 					{
 						Log.Error("ClientConnection", "Forced connection stop timed out; aborting connect.");
 						forceDisconnect = false;
-						AbortConnectAttempt();
+						AbortConnectAttempt(reportFailure: true);
 						yield break;
 					}
 				}
@@ -644,11 +695,44 @@ namespace FishMMO.Client
 		/// <see cref="OnConnectionAttemptFailed"/>, so the client sits disconnected with
 		/// nothing driving it back to the login screen.
 		/// </remarks>
-		private void AbortConnectAttempt()
+		/// <param name="reportFailure">
+		/// True for the aborts that happen while the transport is <em>not</em> Stopped, so no
+		/// Stopped transition will ever arrive to report them. See the remarks.
+		/// </param>
+		private void AbortConnectAttempt(bool reportFailure = false)
 		{
 			stoppingForConnect = false;
 			inFlightConnectionCoroutine = null;
 			System.Threading.Interlocked.Exchange(ref connectingGuard, 0);
+
+			if (!reportFailure)
+			{
+				return;
+			}
+
+			/* Nothing downstream will speak for this attempt.
+			 *
+			 * Every other failure here is announced by the Stopped transition that follows it,
+			 * which is what arms a reconnect or raises OnConnectionAttemptFailed. The teardown
+			 * timeouts are the exception: they are reached precisely because that transition
+			 * never came, and ConnectToServer has already cleared nextReconnect and latched
+			 * CurrentConnectionType to ConnectingToWorld. The client was therefore left behind
+			 * whatever overlay the hop had raised, with no retry armed, no event, and no route
+			 * back to a screen the player could act on.
+			 *
+			 * CurrentConnectionType is cleared first so the handler sees an honest state, and
+			 * OnConnectionAttemptFailed is the right event either way — for a world hop the
+			 * transport is in an unknown state that a blind retry cannot reason about, so
+			 * returning to the login screen is the only outcome we can actually guarantee. */
+			CurrentConnectionType = ServerConnectionType.None;
+			nextReconnect = -1;
+
+			/* Set before the event, not after. The handler runs synchronously and takes the
+			 * client all the way through QuitToLogin, which calls ResetReconnectState — so
+			 * anything written afterwards would be racing a teardown that has already
+			 * completed by the time control returns here. */
+			connectFailureReported = true;
+			OnConnectionAttemptFailed?.Invoke();
 		}
 	}
 }

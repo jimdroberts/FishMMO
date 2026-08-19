@@ -383,7 +383,7 @@
 
 ### Networking & Connectivity
 1. **Multi-Server Connection Management** — LoginServer → WorldServer → SceneServer transitions with state tracking via `ClientConnectionManager`.  
-2. **Reconnection with Exponential Backoff** — Automatic reconnect attempts with configurable backoff (base 5s × 2^attempt × jitter, max 60s, 10 attempts).  
+2. **Reconnection with Exponential Backoff** — Automatic reconnect attempts with configurable backoff (base 5s × 2^attempt × jitter, max 60s, 10 attempts). The loop is guaranteed to terminate: `TryReconnect` checks the attempt count and the stored world address together, so a retry with nothing to dial falls through to the give-up branch and raises `OnReconnectFailed` (→ `QuitToLogin`) instead of returning silently and leaving the client behind an overlay nothing would ever take down. The first retry after a deliberate `Scene` drop uses `SceneHandoffReconnectDelay` (0.25s, jittered) rather than the failure backoff, because a zone change, channel switch and cross-scene bind respawn are all implemented as handoffs.  
 3. **Login-Server Discovery** — Happy-Eyeballs multi-mirror probing via configurable API hosts with staggered probes (0.25s apart), 55s TTL cache, and one-time connection token relay.  
 4. **ServerConnectionType State** — Tracks connection state: None, Login, World, Scene.  
 5. **Broadcast Sending** — Centralized FishNet broadcast dispatch from the Client MonoBehaviour.  
@@ -425,8 +425,8 @@
 33. **API Request Signing** — HMAC-SHA256 with `X-FishMMO-Client` header (v1.{ts}.{nonce}.{sig} format), 30s skew window, per-process nonce LRU cache.
 
 ### UI Toolkit (UITK) Panels — Login Flow
-34. **Loading Screen** — Addressable-loaded transition images with progress bar. Visibility is driven by three independent flags — background Addressable loading, FishNet scene load/unload, and an armed reconnect — and comes down only when all three are clear, so neither driver can pull the overlay out from under the other.  
-35. **Reconnect Display** — Reconnect attempt status during network interruptions.  
+34. **Loading Screen** — Addressable-loaded transition images with progress bar. Visibility is driven by four independent flags — background Addressable loading, FishNet scene load/unload, an armed reconnect, and world entry — and comes down only when all four are clear, so no driver can pull the overlay out from under another. The world-entry flag is raised on `SceneLoginSuccess` (before the scene load is even requested) and cleared only by the overlay's own `Hide()`; it covers the two gaps the other flags leave — between the FishNet scene load ending and the Addressable world preload starting, and between that preload draining and the character actually spawning — where the overlay used to drop over a half-built world for a full round trip each time. `Client.DismissLoadingScreen` calls `Hide()` on the resolved control rather than `UIManager.Hide`, which is a no-op unless the panel is visible and therefore skipped the flag clearing.  
+35. **Reconnect Display** — Reconnect attempt status during network interruptions. Skips the first attempt of a deliberate scene handoff (`ClientConnectionManager.IsSceneHandoffReconnect`), so a routine teleport does not raise a "connection lost" panel over the loading overlay or force the mouse cursor back on; attempts past the first are a genuine failure and are shown.  
 36. **Login Panel** — Username/password, TOTP/2FA code, account verification code input.  
 37. **Register Panel** — Username, password, email, age fields.  
 38. **Server Select** — Available game server list.  
@@ -548,34 +548,35 @@ Both login panels additionally report a connection that stopped **without** the 
 32. **Scene Server Registration** — DB registration, periodic heartbeat pulses with scene character counts.  
 33. **Scene Loading/Unloading** — FishNet SceneManager orchestration, pending scene queue processing from DB, stale scene cleanup.  
 34. **Character System** — Full lifecycle: loading from DB, spawning, periodic saves (configurable interval), despawning, disconnect cleanup. Session ownership with claim/release and lease refresh. Teleportation, out-of-bounds checks, death/respawn. Three watchdogs bound the scene-entry path end to end so a stalled load cannot present as a hang: residency (`CharacterResidencyTimeout`, 60s — armed on the auth callback, cleared once the character reaches a mapping table), scene handshake (`SceneLoadHandshakeTimeout`, 90s — armed on `WaitingSceneLoadCharacters`, cleared by `ClientValidatedSceneBroadcast`), and transfer (`TransferDisconnectGrace`, 15s). The per-account auth-callback rate limit disconnects with `RateLimited` rather than returning silently, because that callback is the only entry point to a character load. Every per-connection watchdog map is cleared in `OnDeinitialize`, since the behaviour is a `ScriptableObject` whose fields outlive an editor play-session restart while FishNet reissues `ClientId`s from zero.  
-35. **Character Inventory System** — Item moves, swaps, splits across inventory, equipment, and bank containers. Persists changes to DB.  
-36. **Equipment System** — Equip/unequip with slot validation.  
-37. **Bank System** — Bank/storage slot management.  
-38. **Chat System** — Local (proximity), World, Party, Guild, and Private (whisper/tell) chat channels. Lock-free incoming queue with O(1) size counter. Batch DB persistence. Token-bucket rate limiting.  
-39. **Guild System** — Creation, membership, ranks, invitations (TTL-expiring), periodic update pump, character connect/disconnect tracking.  
-40. **Party System** — Creation, membership, invitations (TTL-expiring), character connect/disconnect tracking.  
-41. **Friend System** — Add/remove friends with validation, online status tracking, `MaxFriends` enforcement.  
-42. **Achievement System** — Progress tracking, completion events, reward delivery.  
-43. **Quest System** — Event handling, auto-progression, reward delivery, DB persistence.  
-44. **Pet System** — Summoning, following, staying, releasing, AI initialization, death handling.  
-45. **Hotkey System** — Player hotkey configuration for abilities/items with ingress debounce protection.  
-46. **Naming System** — Character/guild ID ↔ name resolution with bounded TTL caches and negative caching.  
-47. **Interactable System** — NPC interaction, merchant purchases (items/abilities), ability crafting, world containers, server-authoritative dialogues (ECA-driven), dungeon finder entrance, mailbox (send/receive/delete mail).  
-48. **Faction System** — Faction relationship management.  
-49. **Scene Channel System** — Open-world channel listing and same-server channel switching with per-connection cooldown enforcement.
+35. **Combat-Logout Linger** — A character whose owner disconnects mid-combat keeps its body in the world, targetable and killable, for up to `combatLogoutLingerSeconds` (60s) instead of being despawned — so closing the client is not a free escape from a losing fight. `TryBeginCombatLinger` removes ownership (taking the object out of `connection.Objects` before FishNet's disconnect cleanup despawns it), cancels any in-flight ability (a lingering body is still ticked, and `AbilityController.OnReplicate` would otherwise re-assert `IsHeld` and let a cast complete on behalf of a player who cannot aim or stop it), sets the persisted `IsCombatLogged` flag, and re-adds the body to its scene instance's population count so the scene is neither unloaded as empty nor advertised as having free capacity. The session claim is held for the whole linger, so no other server can load a second copy. The linger ends on combat ending, on death, or at a hard `ExpiresUtc` deadline — the last of which stops an attacker pinning a body indefinitely by chipping at it. `AnyOnlineAsync` skips `IsCombatLogged` characters so the owner can log back in and reclaim the body via `TryReattachLingeringCharacter`, which carries the existing token through rather than releasing and re-claiming. Bodies are included in the periodic save (`AppendLingeringCharacterSnapshots`), paired with the claim this server holds so the writes stay ownership-gated: without that they were persisted only at the two ends of the linger, and a scene server that died in between restored the character at full health, refunding the fight it had already lost.  
+36. **Character Inventory System** — Item moves, swaps, splits across inventory, equipment, and bank containers. Persists changes to DB.  
+37. **Equipment System** — Equip/unequip with slot validation.  
+38. **Bank System** — Bank/storage slot management.  
+39. **Chat System** — Local (proximity), World, Party, Guild, and Private (whisper/tell) chat channels. Lock-free incoming queue with O(1) size counter. Batch DB persistence. Token-bucket rate limiting.  
+40. **Guild System** — Creation, membership, ranks, invitations (TTL-expiring), periodic update pump, character connect/disconnect tracking.  
+41. **Party System** — Creation, membership, invitations (TTL-expiring), character connect/disconnect tracking.  
+42. **Friend System** — Add/remove friends with validation, online status tracking, `MaxFriends` enforcement.  
+43. **Achievement System** — Progress tracking, completion events, reward delivery.  
+44. **Quest System** — Event handling, auto-progression, reward delivery, DB persistence.  
+45. **Pet System** — Summoning, following, staying, releasing, AI initialization, death handling.  
+46. **Hotkey System** — Player hotkey configuration for abilities/items with ingress debounce protection.  
+47. **Naming System** — Character/guild ID ↔ name resolution with bounded TTL caches and negative caching.  
+48. **Interactable System** — NPC interaction, merchant purchases (items/abilities), ability crafting, world containers, server-authoritative dialogues (ECA-driven), dungeon finder entrance, mailbox (send/receive/delete mail).  
+49. **Faction System** — Faction relationship management.  
+50. **Scene Channel System** — Open-world channel listing and same-server channel switching with per-connection cooldown enforcement.
 
 ### Server Authority & Security
-50. **CharacterStateValidation** — Centralized static validation gate for all broadcast handlers. `CanAct()` rejects dead, teleporting, frozen, and unloaded characters. `CanActOrMove()` additionally rejects in-combat characters. `TryGetPlayerAndValidate(conn, out player)` canonical pattern resolves player from connection and validates in one call. Called at entry of every state-mutating broadcast handler.
-51. **Comprehensive CanAct Coverage** — All server-side broadcast handlers validated: CharacterInventory (6 ops), Bank (2 ops), Equipment (2 ops), Quest (3 ops), Guild (7 ops), Party (7 ops), Friend (2 ops), Pet (4 ops), Hotkey (2 ops), Chat, Interactable. Movement pipeline also gated server-side in KCCPlayer.OnReplicate.
-52. **Per-Account Rate Limiting** — Auth callback rate limit keyed by account name (not ClientId), preventing multi-connection bypass. Separate per-connection rate limit for scene unload broadcasts.
-53. **Respawn/Resurrect IngressGuard** — Per-operation IngressGuard (2s debounce) on respawn-at-bind-point and resurrect-accept handlers. Prevents spam and concurrent-operation races.
-54. **TCP/TLS Transport Encryption** — All network traffic encrypted at transport layer.
+51. **CharacterStateValidation** — Centralized static validation gate for all broadcast handlers. `CanAct()` rejects dead, teleporting, frozen, and unloaded characters. `CanActOrMove()` additionally rejects in-combat characters. `TryGetPlayerAndValidate(conn, out player)` canonical pattern resolves player from connection and validates in one call. Called at entry of every state-mutating broadcast handler.
+52. **Comprehensive CanAct Coverage** — All server-side broadcast handlers validated: CharacterInventory (6 ops), Bank (2 ops), Equipment (2 ops), Quest (3 ops), Guild (7 ops), Party (7 ops), Friend (2 ops), Pet (4 ops), Hotkey (2 ops), Chat, Interactable. Movement pipeline also gated server-side in KCCPlayer.OnReplicate.
+53. **Per-Account Rate Limiting** — Auth callback rate limit keyed by account name (not ClientId), preventing multi-connection bypass. Separate per-connection rate limit for scene unload broadcasts.
+54. **Respawn/Resurrect IngressGuard** — Per-operation IngressGuard (2s debounce) on respawn-at-bind-point and resurrect-accept handlers. Prevents spam and concurrent-operation races.
+55. **TCP/TLS Transport Encryption** — All network traffic encrypted at transport layer.
 
 ### Observer LOD System
-55. **HashGrid Spatial Partitioning** — FishNet `HashGrid` component on the SceneServer scene's NetworkManager (`_accuracy: 70`). O(1) hash-based proximity: objects in the same or adjacent grid cells are "nearby." **Note:** `_gridAxes` is currently serialized as `0` = `XY`, not `XZ` — for a horizontal-plane world this is very likely a misconfiguration and should be reviewed.
-56. **Global Observer Conditions** — The scene's `ObserverManager` `_defaultConditions` list holds exactly two assets: FishNet's stock `SceneCondition` (never observe cross-scene) and `GridCondition` (spatial hash pre-filter), applied to all `NetworkObject`s.
-57. **Tiered Distance Conditions (authored, not yet wired)** — Four `DistanceCondition` ScriptableObjects live in `Assets/Settings/ObserverConditions/`: `PlayerDistanceCondition` (100m, `_hideDistancePercent` 0.1), `MonsterDistanceCondition` (50m, 0.15), `InteractableDistanceCondition` (30m, 0.1), `WorldItemDistanceCondition` (15m, 0.2). They are plain assets — there is no "FishMMO → Create Observer Distance Conditions" editor menu — and as of this revision **no prefab or scene references any of their GUIDs**, so no `NetworkObserver` currently applies them. Wiring them onto the relevant prefabs is outstanding work.
-58. **Bandwidth Reduction (projected)** — With the full observer condition setup applied, per-client observer bandwidth is projected to drop from ~256 KB/s to ~43 KB/s (83% reduction), and server aggregate outbound from ~25.6 MB/s to ~4.3 MB/s for 100 players + 100 NPCs. These are design targets for the completed setup, not measurements of the current wiring (see 56).
+56. **HashGrid Spatial Partitioning** — FishNet `HashGrid` component on the SceneServer scene's NetworkManager (`_accuracy: 70`). O(1) hash-based proximity: objects in the same or adjacent grid cells are "nearby." **Note:** `_gridAxes` is currently serialized as `0` = `XY`, not `XZ` — for a horizontal-plane world this is very likely a misconfiguration and should be reviewed.
+57. **Global Observer Conditions** — The scene's `ObserverManager` `_defaultConditions` list holds exactly two assets: FishNet's stock `SceneCondition` (never observe cross-scene) and `GridCondition` (spatial hash pre-filter), applied to all `NetworkObject`s.
+58. **Tiered Distance Conditions (authored, not yet wired)** — Four `DistanceCondition` ScriptableObjects live in `Assets/Settings/ObserverConditions/`: `PlayerDistanceCondition` (100m, `_hideDistancePercent` 0.1), `MonsterDistanceCondition` (50m, 0.15), `InteractableDistanceCondition` (30m, 0.1), `WorldItemDistanceCondition` (15m, 0.2). They are plain assets — there is no "FishMMO → Create Observer Distance Conditions" editor menu — and as of this revision **no prefab or scene references any of their GUIDs**, so no `NetworkObserver` currently applies them. Wiring them onto the relevant prefabs is outstanding work.
+59. **Bandwidth Reduction (projected)** — With the full observer condition setup applied, per-client observer bandwidth is projected to drop from ~256 KB/s to ~43 KB/s (83% reduction), and server aggregate outbound from ~25.6 MB/s to ~4.3 MB/s for 100 players + 100 NPCs. These are design targets for the completed setup, not measurements of the current wiring (see 56).
 
 ---
 

@@ -555,6 +555,60 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Appends every lingering body to the periodic save snapshot.
+		/// </summary>
+		/// <remarks>
+		/// A lingering body is deliberately not in <c>CharactersByID</c> — it has no connection
+		/// — so the periodic save walked straight past it. The only writes it got were the one
+		/// taken when the linger began and the one taken when it ended, which left everything
+		/// that happened in between unpersisted: precisely the damage the body is left standing
+		/// there to receive. A scene server that died mid-linger therefore restored the
+		/// character at full health, refunding a fight it had already lost and handing the
+		/// player exactly the escape combat-logout protection exists to deny.
+		/// <para>
+		/// Each entry carries the claim this server still holds for it, so these writes are
+		/// ownership-gated like every other save and a body whose claim has lapsed is refused
+		/// rather than allowed to overwrite whichever server took the character.
+		/// </para>
+		/// </remarks>
+		/// <param name="mappingData">Mapping data holding the session claims.</param>
+		/// <param name="characterData">Destination for the character rows.</param>
+		/// <param name="buffs">Destination for buff rows.</param>
+		/// <param name="attributes">Destination for attribute rows.</param>
+		/// <param name="abilities">Destination for ability rows.</param>
+		private void AppendLingeringCharacterSnapshots(
+			ICharacterMappingData<NetworkConnection> mappingData,
+			List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterData,
+			List<CharacterBuffData> buffs,
+			List<CharacterAttributeData> attributes,
+			List<CharacterAbilityData> abilities)
+		{
+			if (lingeringCharacters.Count == 0)
+			{
+				return;
+			}
+
+			foreach (var kvp in lingeringCharacters)
+			{
+				IPlayerCharacter character = kvp.Value.Character;
+				if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+				{
+					// The sweep will drop the bookkeeping; nothing here to write.
+					continue;
+				}
+
+				CharacterSessionInfo? ownership = mappingData.SessionTokens.TryGetValue(kvp.Key, out CharacterSessionInfo held)
+					? held
+					: (CharacterSessionInfo?)null;
+
+				characterData.Add((BuildCharacterData(character), ownership));
+				AppendBuffData(character, buffs);
+				AppendAttributeData(character, attributes);
+				AppendAbilityData(character, abilities);
+			}
+		}
+
+		/// <summary>
 		/// Enqueues a save of the character's current state without releasing its session.
 		/// </summary>
 		private void PersistCharacterSnapshot(IPlayerCharacter character)

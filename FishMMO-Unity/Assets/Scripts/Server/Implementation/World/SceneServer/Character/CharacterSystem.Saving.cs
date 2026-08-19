@@ -40,7 +40,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (data.CharactersByID.Count == 0)
+			// Lingering bodies count: they are not in CharactersByID but they are still
+			// resident and still accumulating state worth writing. See
+			// AppendLingeringCharacterSnapshots.
+			if (data.CharactersByID.Count == 0 && LingeringCharacterCount == 0)
 			{
 				return;
 			}
@@ -72,6 +75,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AppendBuffData(character, buffDataList);
 				AppendAttributeData(character, attributeDataList);
 				AppendAbilityData(character, abilityDataList);
+			}
+
+			// Combat-logout bodies have no connection and so are absent from the map above.
+			AppendLingeringCharacterSnapshots(data, characterDataList, buffDataList, attributeDataList, abilityDataList);
+
+			if (characterDataList.Count == 0)
+			{
+				runtimeData.EndSave();
+				return;
 			}
 
 			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList)))

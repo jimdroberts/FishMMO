@@ -926,9 +926,19 @@ namespace FishMMO.Server.Implementation
 			}
 			else
 			{
-				_ = Log.Warning(LogPrefix,
+				/* Debug, not Warning, and without the address.
+				 *
+				 * This is the healthy path: every Login->World and World->Scene hop mints a
+				 * token, so at Warning level a busy server writes one line per hop and buries
+				 * the failures this log level exists for — the same mistake the handshake log
+				 * above was corrected for. Naming the client's real IP on every hop also puts
+				 * per-player addresses into a log tier that is routinely shipped and retained
+				 * more widely than debug output, for no diagnostic gain: a mint that succeeded
+				 * is not something an operator needs to correlate by address, and the failure
+				 * branch above still says which connection could not be served. */
+				_ = Log.Debug(LogPrefix,
 					$"Hop token minted for conn={conn.ClientId} len={token.Length} " +
-					$"ip={ResolveRateLimitKey(conn) ?? "?"} keys={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
+					$"keys={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
 			}
 
 			Server?.NetworkWrapper?.Broadcast(conn, new ConnectionTokenBroadcast()

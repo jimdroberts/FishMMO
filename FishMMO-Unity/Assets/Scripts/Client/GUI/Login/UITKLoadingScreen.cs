@@ -105,6 +105,7 @@ namespace FishMMO.Client
 			Client.OnReconnectPending += Client_OnReconnectPending;
 			Client.OnReconnectAttempt += Client_OnReconnectAttempt;
 			Client.OnReconnectFailed += Client_OnReconnectFailed;
+			Client.OnEnterGameWorld += Client_OnEnterGameWorld;
 		}
 
 		/// <summary>
@@ -121,6 +122,7 @@ namespace FishMMO.Client
 			Client.OnReconnectPending -= Client_OnReconnectPending;
 			Client.OnReconnectAttempt -= Client_OnReconnectAttempt;
 			Client.OnReconnectFailed -= Client_OnReconnectFailed;
+			Client.OnEnterGameWorld -= Client_OnEnterGameWorld;
 		}
 
 		/// <summary>
@@ -151,6 +153,30 @@ namespace FishMMO.Client
 		private bool reconnectPendingActive;
 
 		/// <summary>
+		/// True from the moment the scene server accepts this client until the player character
+		/// actually exists in the world.
+		/// </summary>
+		/// <remarks>
+		/// World entry is three separate waits with gaps between them, and the other drivers
+		/// only cover the waits. The FishNet scene load ends before the server has been told
+		/// the client is in it, and the Addressable world preload ends before the server has
+		/// spawned the character — so on each of those boundaries every driver was momentarily
+		/// clear and the overlay came down over a half-built world with no player in it, for a
+		/// full network round trip each time. The second gap is the worse of the two: the
+		/// progress bar reaches 100%, the screen vanishes, and the player looks at an empty
+		/// scene until the spawn lands.
+		/// <para>
+		/// <c>OnEnterGameWorld</c> is raised on SceneLoginSuccess, which precedes the scene
+		/// load request, so this driver spans the whole entry. It is cleared only by
+		/// <see cref="Hide"/> — reached from <c>Client.DismissLoadingScreen</c> once the local
+		/// character starts, from the quit-to-login teardown, and on reconnect failure. Every
+		/// way world entry can fail ends at one of those, and the servers bound the wait with
+		/// their own scene-handshake and residency watchdogs.
+		/// </para>
+		/// </remarks>
+		private bool worldEntryActive;
+
+		/// <summary>
 		/// Shows the overlay while any driver is active and hides it only once every driver
 		/// has finished.
 		/// </summary>
@@ -167,7 +193,7 @@ namespace FishMMO.Client
 		/// </param>
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
-			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive;
+			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive;
 
 			if (shouldShow && (forceRefresh || !Visible))
 			{
@@ -234,6 +260,7 @@ namespace FishMMO.Client
 			addressableLoadActive = false;
 			sceneTransitionActive = false;
 			reconnectPendingActive = false;
+			worldEntryActive = false;
 
 			// The status line explains one specific wait; it must not survive into the next
 			// one, which is usually an ordinary scene load with nothing to explain.
@@ -280,6 +307,17 @@ namespace FishMMO.Client
 			base.OnQuitToLogin();
 
 			RefreshVisibility(forceRefresh: true);
+		}
+
+		/// <summary>
+		/// Holds the overlay up for the whole of world entry.
+		/// </summary>
+		/// <remarks>See <see cref="worldEntryActive"/>.</remarks>
+		public void Client_OnEnterGameWorld()
+		{
+			SetLoadingImage(DefaultLoadingScreenSprite);
+			worldEntryActive = true;
+			RefreshVisibility();
 		}
 
 		/// <summary>

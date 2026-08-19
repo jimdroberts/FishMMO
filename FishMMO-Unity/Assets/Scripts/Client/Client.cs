@@ -1886,8 +1886,15 @@ namespace FishMMO.Client
 		public static void DismissLoadingScreen(bool suppress)
 		{
 			if (suppress) LoadingSuppressed = true;
-			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out _)) UIManager.Hide("UITKLoadingScreen");
-			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out _)) UIManager.Hide("UILoadingScreen");
+
+			/* Hide the control directly rather than through UIManager.Hide, which is a no-op
+			 * unless the panel happens to be visible at that instant. The overlay's Hide is
+			 * also what clears its driver flags, so routing through that gate meant a
+			 * dismissal that arrived while the panel was momentarily down left a driver
+			 * latched — and the next refresh popped the overlay back up over live gameplay
+			 * with nothing left to take it down again. */
+			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out UITKLoadingScreen tkLoadingScreen)) tkLoadingScreen.Hide();
+			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out UILoadingScreen loadingScreen)) loadingScreen.Hide();
 		}
 
 		/// <summary>
