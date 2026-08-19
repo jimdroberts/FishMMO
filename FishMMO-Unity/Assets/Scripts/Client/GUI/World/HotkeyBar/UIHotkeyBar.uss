@@ -4,9 +4,17 @@
     (slots reuse the .fish-slot look where useful; cooldown/label are bar-specific).
 */
 
+/*
+    Fills the panel and pushes the strip to the bottom edge. Without flex-grow the root
+    collapses to the height of its contents, and a zero-height element sits at the top of
+    the screen — which is where the bar was appearing. justify-content places it along the
+    vertical axis, so flex-end is what puts it at the bottom rather than centred.
+*/
 .hotkey-bar {
+    flex-grow: 1;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
+    padding-bottom: 24px;
     background-color: rgba(0, 0, 0, 0);
 }
 

@@ -300,7 +300,11 @@ namespace FishMMO.Client
 				equipmentController.OnSlotUpdated    -= OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
 
-				for (int i = 0; i < slotViews.Length; ++i)
+				// The array itself is null until OnStarting builds it, and OnStarting does not
+				// run until this panel's visual tree exists — which, for a panel that starts
+				// hidden, is after world entry has already handed it a character. The existing
+				// per-slot check guards the elements, not the array holding them.
+				for (int i = 0; slotViews != null && i < slotViews.Length; ++i)
 				{
 					if (slotViews[i].Root == null)
 					{

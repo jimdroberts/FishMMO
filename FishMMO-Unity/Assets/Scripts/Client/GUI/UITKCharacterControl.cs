@@ -63,6 +63,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Re-applies the character once the visual tree exists.
+		/// </summary>
+		/// <remarks>
+		/// World entry calls <see cref="UIManager.SetCharacter"/> for every control at once, and
+		/// a control that starts hidden has no visual tree until something shows it — so
+		/// <see cref="OnPostSetCharacter"/> can run before <c>OnStarting</c> has cached any
+		/// elements. Overrides that write into those elements would then dereference null, and
+		/// even a null-safe one would leave the panel showing nothing, because the only call
+		/// that had data already happened. Running it again here is what makes the two orders
+		/// equivalent.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			if (Character != null)
+			{
+				OnPostSetCharacter();
+			}
+		}
+
+		/// <summary>
 		/// Invoked before <see cref="Character"/> is cleared. Override to perform
 		/// any pre-unset cleanup.
 		/// </summary>
