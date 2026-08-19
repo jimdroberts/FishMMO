@@ -325,10 +325,42 @@ flowchart LR
 
 The `CharacterDamageController` handles:
 - **Damage**: Applies resistance modifiers, consumes health, fires `OnDamaged`, tracks achievements, triggers `Kill` if health reaches zero.
-- **Kill**: Adjusts faction, fires ECA kill triggers, cancels active ability, triggers death animation, fires `OnKilled`. Buff removal and pet despawning are handled by the server-side `OnKilled` subscriber.
-- **Revive**: Resurrects a dead character via `ResourceInstance.Gain()`, fires `OnResurrected`, resets death animation, fires ECA resurrect triggers.
+- **Kill**: Adjusts faction, fires ECA kill triggers, cancels active ability, triggers death animation, fires `OnKilled`. Buff removal and pet despawning are handled by the server-side `OnKilled` subscriber. Re-entry is guarded by `CharacterFlags.IsDead`, which `Kill` does not set itself — the server's `OnKilled` subscriber does, which is why that subscriber sets the flag *before* it runs anything else (buff removal invokes each buff's removal effects, i.e. game logic).
+  `OnKilled` is dispatched per-subscriber with failures caught. Its subscribers include one `AggressionState` per aggressive NPC, registered at runtime; a plain multicast invoke would abandon the rest of the list at the first exception, and the list includes the handler that flags the death and notifies the client. `OnDamaged`/`OnHealed` are deliberately *not* isolated — `GetInvocationList` allocates per call, which is fine for a death and not for something raised on every hit.
+- **Revive**: Resurrects a dead character via `ResourceInstance.Gain()`, fires `OnResurrected`, resets death animation, fires ECA resurrect triggers. **Clears `CharacterFlags.IsDead` itself**, before restoring health — see *The dead-state invariant* below.
 - **Heal**: Gains health, fires `OnHealed`, tracks achievements. No-op on dead characters.
 - **CompleteHeal**: Restores health to `FinalValue`. No-op on dead characters.
+
+### The dead-state invariant
+
+**A character has health above zero if and only if it is not dead.** Every path that could
+break that has been closed, because the two halves disagreeing is worse than either state
+alone: `Kill` early-returns on the flag, so a character that is flagged dead with health can
+never be killed again, while `Heal` only tests health, so it starts working on that same
+character.
+
+| Path | Rule |
+|---|---|
+| `Heal` / `CompleteHeal` | Refuse at `CurrentValue <= 0`. |
+| `Damage` | Refuses at `CurrentValue <= 0` — a corpse takes no further damage. |
+| `Revive` | The only sanctioned route from zero. Clears `IsDead` *and* restores health, so no caller can do one without the other. |
+| `Regenerate` | Skips entirely while health is depleted — health, mana and stamina alike. |
+| `AbilityController` | Refuses to *start* an activation while not alive. |
+
+> **Why these test health and not `CharacterFlags.IsDead`.** All of them run in the predicted
+> replicate path, and `Flags` travels only in the spawn payload — it is never re-synced. A
+> client's copy is therefore stale from its first death onward, so gating on it would make
+> client and server disagree about every later heal, regen pulse and cast. Resource state is
+> reconciled to the owner every tick, so both sides reach the same answer for the same tick.
+> Code that runs *once at spawn* — restoring the death pose, opening the death dialog — uses
+> the flag instead, because it is fresh at that moment and is the server's authoritative
+> marker.
+
+> **Regeneration previously resurrected corpses.** `Regenerate` had no death check at all, so
+> health ticked back up from zero on its own: the character became alive by the only measure
+> anything tests while `IsDead` stayed set, producing exactly the unkillable-but-healable
+> state above. The schedule is advanced *before* the death check so a revived character
+> resumes on the normal beat rather than firing an immediate catch-up pulse.
 - **Immortal**: Flag that prevents all damage and kill processing.
 
 ### Regeneration Flow

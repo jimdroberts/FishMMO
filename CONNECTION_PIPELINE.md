@@ -853,7 +853,7 @@ stateDiagram-v2
     [*] --> Connected: Initial connection
     Connected --> Disconnected: Connection lost
     Disconnected --> Reconnecting: CanReconnect? (World / Scene / ConnectingToWorld)
-    Disconnected --> LoginScreen: Cannot reconnect (Login)
+    Disconnected --> LoginScreen: Cannot reconnect (Login), (OnConnectionAttemptFailed -> QuitToLogin)
     Reconnecting --> Connected: Reconnect success
     Reconnecting --> Reconnecting: Attempt failed, (exponential backoff + jitter)
     Reconnecting --> LoginScreen: Max attempts (10) exhausted
@@ -865,6 +865,11 @@ stateDiagram-v2
         delay = base(5s) × 2^attempt × jitter(0.75-1.25)
         Max delay capped at 60s
         Max 10 attempts
+
+        Exception: first retry after a
+        Scene drop uses 0.25s (jittered),
+        because a scene transfer is a
+        deliberate handoff, not a failure
     end note
 ```
 
@@ -882,6 +887,23 @@ The same gate governs the initial Login→World hop, which carries the same type
 server that is down at server-select now enters this loop rather than failing on the first
 attempt, and exits it through the same `Max attempts exhausted → LoginScreen` edge —
 cancellable at any point from `UIReconnectDisplay`.
+
+**A scene transfer is a deliberate handoff, not a failure.** Phase 11 hands a client back by
+releasing its character and dropping the connection, expecting it to return through the world
+server. That arrives as an ordinary `Scene` drop, so it entered the failure backoff and cost
+roughly five seconds of dead time on every teleport and channel switch — during which the scene
+had already unloaded and the loading overlay had already been dismissed by the unload-end event,
+leaving the player looking at an empty world. The first retry from a `Scene` drop therefore uses
+`SceneHandoffReconnectDelay` (0.25 s, jittered); if it fails, normal exponential backoff resumes
+from attempt 1. `OnReconnectPending` fires when a retry is *armed* rather than when it starts, so
+both loading screens hold the overlay across the whole handoff instead of dropping it in the gap.
+
+**Losing the login server returns to the login screen.** `OnConnectionAttemptFailed` fires only
+for a connection that stopped without being reconnectable and without being torn down on
+purpose. It invalidates the cached login server list *and* runs `QuitToLogin`. Without the
+second half a client kicked or timed out on the login server was left with no visible panel at
+all — `UICharacterSelect` hides itself on any stop and `UILogin` never re-showed — recoverable
+only by restarting the client.
 
 **Token rejection short-circuits the retry loop.** A server that answers `TokenExpired`,
 `TokenInvalid` or `TokenRevoked` has refused the exact credential the client would present

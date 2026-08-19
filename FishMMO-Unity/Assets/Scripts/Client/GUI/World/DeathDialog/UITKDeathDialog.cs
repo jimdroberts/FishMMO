@@ -1,5 +1,7 @@
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace FishMMO.Client
@@ -15,8 +17,24 @@ namespace FishMMO.Client
 	/// merely dismissed it would leave the player a corpse with no route back, because the
 	/// server only re-sends <c>DeathBroadcast</c> on scene entry.
 	/// </para>
+	/// <para>
+	/// Two properties keep a character from getting stuck dead:
+	/// <list type="bullet">
+	/// <item><description><b>It opens from state, not just from a message.</b> A character that
+	/// arrives already dead — a login while dead, or a scene transfer while dead — surfaces the
+	/// dialog from <see cref="OnPostSetCharacter"/>, which reads the replicated
+	/// <see cref="CharacterFlags.IsDead"/> flag out of the spawn payload. That does not depend
+	/// on a <c>DeathBroadcast</c> arriving at the right moment relative to the world GUI scene
+	/// finishing its load.</description></item>
+	/// <item><description><b>It confirms rather than assumes.</b> Clicking an action used to
+	/// hide the dialog immediately, so a request the server declined — its respawn/resurrect
+	/// ingress guard debounces at two seconds — left the player dead with no UI and no way to
+	/// ask again. The dialog now stays up until the character is actually observed alive, and
+	/// re-arms itself if that never happens.</description></item>
+	/// </list>
+	/// </para>
 	/// </summary>
-	public class UITKDeathDialog : UITKControl
+	public class UITKDeathDialog : UITKCharacterControl
 	{
 		/// <summary>Name of the death message label.</summary>
 		private const string MESSAGE_LABEL_NAME = "death-message";
@@ -37,6 +55,35 @@ namespace FishMMO.Client
 
 		/// <summary>The ID of the player attempting to resurrect, or 0 if none.</summary>
 		private long currentResurrectorID;
+
+		/// <summary>True while waiting for the server to act on a respawn or resurrect request.</summary>
+		private bool awaitingRevive;
+		/// <summary>Unscaled time by which the request must have taken effect.</summary>
+		private float awaitingReviveUntil;
+		/// <summary>Unscaled time of the next liveness poll.</summary>
+		private float nextRevivePollTime;
+
+		/// <summary>
+		/// Seconds between liveness polls while a request is in flight.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not every frame. <c>ICharacterDamageController.IsAlive</c> reads
+		/// <c>ResourceInstance</c>, whose getter logs an error on every access when the health
+		/// attribute is missing — a per-frame poll would turn one broken character into hundreds
+		/// of log lines a second. Four times a second is imperceptible for a dialog dismissal
+		/// and bounds that to a handful.
+		/// </remarks>
+		private const float RevivePollIntervalSeconds = 0.25f;
+
+		/// <summary>
+		/// How long to wait for a request to take effect before handing the buttons back.
+		/// </summary>
+		/// <remarks>
+		/// Comfortably longer than the server's two-second respawn/resurrect debounce, so a
+		/// request merely queued behind that guard is not reported as a failure, and long enough
+		/// to cover a slow database round trip on the cross-scene respawn path.
+		/// </remarks>
+		private const float ReviveConfirmTimeoutSeconds = 8.0f;
 
 		/// <summary>Queries UXML elements and wires button click handlers.</summary>
 		public override void OnStarting()
@@ -105,6 +152,153 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Opens the dialog when the character this control was just handed is already dead.
+		/// </summary>
+		/// <remarks>
+		/// This is the login-while-dead and transfer-while-dead path. <c>Flags</c> travels in
+		/// the spawn payload, so by the time the local character is injected here the client
+		/// already knows it is dead — no broadcast required. The server does also re-send
+		/// <c>DeathBroadcast</c> on scene entry, and the two converge on the same idempotent
+		/// call; this one is the reliable half, because it cannot be missed by a message
+		/// arriving before the world GUI scene carrying this dialog has finished loading.
+		/// </remarks>
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character != null && Character.IsFlagged(CharacterFlags.IsDead))
+			{
+				ShowDeathDialog();
+				return;
+			}
+
+			/* A live character means whatever this dialog was showing is over. This is the
+			 * closing half of a cross-scene respawn: that path disconnects the client, so the
+			 * dialog is still up showing "Respawning..." while it reconnects and reloads into
+			 * the bind scene — and the world GUI scene carrying this dialog is not unloaded by
+			 * a server hop, only by a quit to login. Without this the player would arrive alive
+			 * with a death dialog still on screen. */
+			ClearAwaitingRevive();
+			Hide();
+		}
+
+		/// <summary>
+		/// Drops any in-flight request when the character goes away, so a new session cannot
+		/// inherit a pending confirmation.
+		/// </summary>
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			// The character is going away — despawn, transfer, or logout. Nothing here applies
+			// to whatever comes next, and leaving the panel up would float it over the loading
+			// screen of the transfer it just triggered.
+			ClearAwaitingRevive();
+			Hide();
+		}
+
+		/// <summary>
+		/// Watches for a requested respawn or resurrect actually taking effect.
+		/// </summary>
+		/// <remarks>
+		/// Runs regardless of whether the panel is showing: <see cref="UITKControl.Hide"/>
+		/// disables the <c>UIDocument</c>, not this component, so the confirmation is still
+		/// driven while the dialog is hidden.
+		/// <para>
+		/// Health is the signal rather than <see cref="CharacterFlags.IsDead"/>, because the
+		/// flag is only sent in the spawn payload and is never re-synced; the health resource
+		/// is replicated continuously, and the server's revive path restores it.
+		/// </para>
+		/// </remarks>
+		private void Update()
+		{
+			if (!awaitingRevive)
+			{
+				return;
+			}
+
+			// The character left (cross-scene respawn disconnects the client). The dialog goes
+			// with the scene, so there is nothing left to confirm.
+			if (Character == null)
+			{
+				ClearAwaitingRevive();
+				return;
+			}
+
+			float now = Time.unscaledTime;
+			if (now >= nextRevivePollTime)
+			{
+				nextRevivePollTime = now + RevivePollIntervalSeconds;
+
+				if (Character.TryGet(out ICharacterDamageController damageController) &&
+					damageController.IsAlive)
+				{
+					ClearAwaitingRevive();
+					Hide();
+					return;
+				}
+			}
+
+			if (now < awaitingReviveUntil)
+			{
+				return;
+			}
+
+			/* The request never took effect — most likely refused by the server's ingress
+			 * guard. Hand the buttons back rather than leaving the player staring at a dialog
+			 * that has stopped responding, which is the state that used to require a relog. */
+			ClearAwaitingRevive();
+
+			if (messageLabel != null)
+			{
+				messageLabel.text = "That request was not accepted.\nPlease try again.";
+			}
+
+			FishMMO.Logging.Log.Warning("UITKDeathDialog",
+				$"No revive was observed within {ReviveConfirmTimeoutSeconds:F0}s of the request; re-enabling the death dialog actions.");
+		}
+
+		/// <summary>Clears the pending-request state and re-enables the action buttons.</summary>
+		private void ClearAwaitingRevive()
+		{
+			awaitingRevive = false;
+			awaitingReviveUntil = 0f;
+			nextRevivePollTime = 0f;
+			SetActionsEnabled(true);
+		}
+
+		/// <summary>
+		/// Marks a request as sent and locks the actions until it is confirmed or times out.
+		/// </summary>
+		/// <param name="pendingMessage">Status text to show while waiting.</param>
+		private void BeginAwaitingRevive(string pendingMessage)
+		{
+			awaitingRevive = true;
+			awaitingReviveUntil = Time.unscaledTime + ReviveConfirmTimeoutSeconds;
+			nextRevivePollTime = Time.unscaledTime + RevivePollIntervalSeconds;
+			SetActionsEnabled(false);
+
+			if (messageLabel != null)
+			{
+				messageLabel.text = pendingMessage;
+			}
+		}
+
+		/// <summary>Enables or disables both action buttons.</summary>
+		/// <param name="enabled">True to allow input, false while a request is in flight.</param>
+		private void SetActionsEnabled(bool enabled)
+		{
+			if (respawnButton != null)
+			{
+				respawnButton.SetEnabled(enabled);
+			}
+			if (resurrectButton != null)
+			{
+				resurrectButton.SetEnabled(enabled);
+			}
+		}
+
+		/// <summary>
 		/// Called when the local player dies. Shows "You have died." and the Respawn button.
 		/// </summary>
 		public void ShowDeathDialog()
@@ -119,6 +313,7 @@ namespace FishMMO.Client
 			// broadcast needed it.
 			currentResurrectorID = 0;
 			SetResurrectVisible(false);
+			ClearAwaitingRevive();
 			Show();
 		}
 
@@ -148,11 +343,18 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClickRespawn()
 		{
-			if (Client != null)
+			if (Client == null)
 			{
-				Client.Broadcast(new RespawnAtBindPointBroadcast(), Channel.Reliable);
+				return;
 			}
-			Hide();
+
+			Client.Broadcast(new RespawnAtBindPointBroadcast(), Channel.Reliable);
+
+			/* Deliberately not Hide(). The server may decline this — its respawn/resurrect
+			 * ingress guard debounces per connection — and hiding on the click alone left the
+			 * player dead with no dialog and no way to ask again. Update() closes the dialog
+			 * once the character is actually alive. */
+			BeginAwaitingRevive("Respawning...");
 		}
 
 		/// <summary>
@@ -165,6 +367,7 @@ namespace FishMMO.Client
 
 			currentResurrectorID = 0;
 			SetResurrectVisible(false);
+			ClearAwaitingRevive();
 		}
 
 		/// <summary>
@@ -172,11 +375,15 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClickAcceptResurrect()
 		{
-			if (Client != null && currentResurrectorID != 0)
+			if (Client == null || currentResurrectorID == 0)
 			{
-				Client.Broadcast(new ResurrectAcceptBroadcast { ResurrectorID = currentResurrectorID }, Channel.Reliable);
+				return;
 			}
-			Hide();
+
+			Client.Broadcast(new ResurrectAcceptBroadcast { ResurrectorID = currentResurrectorID }, Channel.Reliable);
+
+			// Confirmed the same way as respawn — see OnClickRespawn.
+			BeginAwaitingRevive("Accepting resurrect...");
 		}
 
 		/// <summary>

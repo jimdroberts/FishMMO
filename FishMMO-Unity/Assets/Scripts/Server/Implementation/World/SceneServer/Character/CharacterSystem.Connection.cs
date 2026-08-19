@@ -1,4 +1,5 @@
 using FishNet.Connection;
+using FishNet.Object;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -393,20 +394,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
+
+			/* Flag the death before running anything else.
+			 *
+			 * CharacterDamageController.Kill guards re-entry with this exact flag, but sets
+			 * nothing itself — this handler is what makes that guard true, and it is invoked at
+			 * the very end of Kill. Anything side-effecting that runs before the flag is set is
+			 * therefore executing inside a window where a second Kill on the same character
+			 * would sail straight past the guard and recurse. Buff removal below is exactly
+			 * such a call: it invokes each buff's removal effects, which run game logic.
+			 *
+			 * Do NOT revive or teleport here — the player chooses Respawn or Resurrect. */
+			if (playerCharacter != null)
+			{
+				playerCharacter.EnableFlags(CharacterFlags.IsDead);
+			}
+
 			if (defender.TryGet(out IBuffController buffController))
 			{
 				buffController.RemoveAll(false);
 			}
 
 			// Handle Player deaths
-			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
 			if (playerCharacter != null)
 			{
 				//Log.Debug("CharacterSystem", $"PlayerCharacter: {playerCharacter.GameObject.name} Died");
-
-				// Mark the player as dead and show the death dialog.
-				// Do NOT revive or teleport here - the player chooses Respawn or Resurrect.
-				playerCharacter.EnableFlags(CharacterFlags.IsDead);
 
 				// A combat-logged body has no owner to notify — it was killed precisely because
 				// nobody was driving it. Skip the broadcast and end the linger now: the death is
@@ -417,6 +430,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (lingeringCharacters.ContainsKey(playerCharacter.ID))
 					{
 						FinalizeCombatLinger(playerCharacter.ID, "killed while logged out");
+					}
+					else
+					{
+						/* Ownerless and not lingering. There is no connection to notify and no
+						 * linger to finalise, so the character is flagged dead with nothing
+						 * driving it out of that state — the periodic save will persist the
+						 * flag and the player will meet the death dialog on their next login.
+						 * Not known to be reachable, but silence here would make it invisible
+						 * if it ever became so. */
+						Log.Warning("CharacterSystem",
+							$"Character {playerCharacter.ID} was killed with no active owner and no combat-logout linger; " +
+							"no death notification was sent. It will be flagged dead on its next load.");
 					}
 					return;
 				}
@@ -439,7 +464,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						IPlayerCharacter petOwner = pet.PetOwner as IPlayerCharacter;
 						if (petOwner != null)
 						{
-							OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
+							/* The owner's NetworkObject is checked rather than assumed. A pet is
+							 * despawned alongside its owner's character, but the two can land in
+							 * the same frame — an owner despawned first leaves PetOwner pointing
+							 * at a destroyed Unity object, and dereferencing it throws out of
+							 * this handler, skipping the despawn below and every remaining
+							 * OnKilled subscriber. */
+							NetworkObject ownerObject = petOwner.NetworkObject;
+							if (ownerObject != null)
+							{
+								OnPetKilled?.Invoke(ownerObject.Owner, petOwner);
+							}
 							pet.Despawn();
 						}
 					}
@@ -452,143 +487,274 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
-	/// <summary>
-	/// Handles a dead player requesting respawn at their bind point.
-	/// Revives the character at full health and teleports to bind.
-	/// Rate-limited per-connection to prevent spam.
-	/// </summary>
-	/// <param name="conn">The network connection of the dead player.</param>
-	/// <param name="msg">The respawn-at-bind-point broadcast message.</param>
-	/// <param name="channel">The channel on which the broadcast was received.</param>
-	private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
-	{
-		if (!TryBeginRespawnResurrectGuard(conn.ClientId, RespawnOperation, out long guardKey))
-			return;
-
-		try
+		/// <summary>
+		/// Handles a dead player requesting respawn at their bind point.
+		/// Revives the character at full health and teleports to bind.
+		/// Rate-limited per-connection to prevent spam.
+		/// </summary>
+		/// <param name="conn">The network connection of the dead player.</param>
+		/// <param name="msg">The respawn-at-bind-point broadcast message.</param>
+		/// <param name="channel">The channel on which the broadcast was received.</param>
+		private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
 		{
-			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
-				return;
-			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+			if (!TryBeginRespawnResurrectGuard(conn.ClientId, RespawnOperation, out long guardKey))
 				return;
 
-			// Only dead players can respawn at bind point.
+			try
+			{
+				if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+					return;
+				if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+					return;
+
+				// Only dead players can respawn at bind point.
+				if (!player.IsFlagged(CharacterFlags.IsDead))
+					return;
+
+				// Choosing the bind point declines any resurrect that was on the table.
+				pendingResurrectOffers.Remove(player.ID);
+
+				player.DisableFlags(CharacterFlags.IsDead);
+				if (player.TryGet(out ICharacterDamageController damageController))
+					damageController.Revive(null, 999999);
+
+				if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
+					(!player.IsInInstance() && player.SceneName != player.BindScene))
+				{
+					// Respawning at a bind point in another scene is a scene-server transfer, so it
+					// has to follow the same order as the teleporter path.
+					//
+					// Previously this only mutated the character and disconnected, leaving the
+					// save and session release to the connection-stopped handler. By then SceneName
+					// had already been overwritten with BindScene, so every OnDisconnect subscriber
+					// — party, guild, and the scene server's own per-scene bookkeeping — was told
+					// the player left the scene they were respawning *into* rather than the one
+					// they died in.
+					OnDisconnect?.Invoke(conn, player);
+
+					player.SceneName = player.BindScene;
+					player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
+					player.DisableFlags(CharacterFlags.IsInInstance);
+					player.DisableFlags(CharacterFlags.IsLoaded);
+
+					// Save and release the session before dropping the connection so the
+					// destination scene server can claim the character.
+					RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
+
+					conn.Disconnect(false);
+				}
+				else
+				{
+					player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, Quaternion.identity, Vector3.zero);
+				}
+			}
+			finally
+			{
+				EndRespawnResurrectGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Handles a dead player accepting a resurrect from another player.
+		/// Revives at the current position (corpse location), no teleport.
+		/// Rate-limited per-connection to prevent spam.
+		/// </summary>
+		/// <param name="conn">The network connection of the dead player.</param>
+		/// <param name="msg">The resurrect-accept broadcast message.</param>
+		/// <param name="channel">The channel on which the broadcast was received.</param>
+		private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			if (!TryBeginRespawnResurrectGuard(conn.ClientId, ResurrectOperation, out long guardKey))
+				return;
+
+			try
+			{
+				if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+					return;
+				if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+					return;
+
+				// Only dead players can accept a resurrect.
+				if (!player.IsFlagged(CharacterFlags.IsDead))
+					return;
+
+				/* The accept must answer an offer this server actually recorded. Checking only
+				 * that the named resurrector existed and shared the scene — as this did — let a
+				 * dead player revive themselves at full health whenever anyone else was nearby,
+				 * with no resurrect ever cast. */
+				if (!pendingResurrectOffers.TryGetValue(player.ID, out PendingResurrectOffer offer))
+				{
+					return;
+				}
+
+				if (DateTime.UtcNow >= offer.ExpiresUtc)
+				{
+					pendingResurrectOffers.Remove(player.ID);
+					return;
+				}
+
+				if (msg.ResurrectorID <= 0 || msg.ResurrectorID != offer.ResurrectorID)
+				{
+					return;
+				}
+
+				// The resurrector must still be present and in the same scene when it is accepted.
+				if (!data.CharactersByID.TryGetValue(offer.ResurrectorID, out IPlayerCharacter resurrector) ||
+					resurrector.SceneName != player.SceneName)
+				{
+					return;
+				}
+
+				pendingResurrectOffers.Remove(player.ID);
+
+				player.DisableFlags(CharacterFlags.IsDead);
+				if (player.TryGet(out ICharacterDamageController damageController))
+				{
+					// The offer's amount rather than a blanket full heal, credited to the
+					// resurrector so their ECA resurrect triggers fire.
+					damageController.Revive(resurrector, offer.Amount);
+				}
+			}
+			finally
+			{
+				EndRespawnResurrectGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// A resurrect that has been offered to a character and is awaiting their answer.
+		/// </summary>
+		private sealed class PendingResurrectOffer
+		{
+			/// <summary>Character that cast the resurrect.</summary>
+			public long ResurrectorID;
+			/// <summary>Health the offer restores, as configured on the ability that made it.</summary>
+			public int Amount;
+			/// <summary>When the offer lapses if it is not answered.</summary>
+			public DateTime ExpiresUtc;
+		}
+
+		/// <summary>
+		/// Outstanding resurrect offers, keyed by the character they were made to. Main-thread only.
+		/// </summary>
+		/// <remarks>
+		/// Accepting a resurrect used to be validated only by checking that the named resurrector
+		/// existed and stood in the same scene — never that they had offered anything. A dead player
+		/// could therefore revive themselves at full health at will, by naming any other character
+		/// in the scene, without a resurrect ever being cast. Recording the offer makes the accept
+		/// answerable to something real, and carries the ability's configured heal amount through to
+		/// the revive instead of substituting a blanket full heal.
+		/// </remarks>
+		private readonly Dictionary<long, PendingResurrectOffer> pendingResurrectOffers =
+			new Dictionary<long, PendingResurrectOffer>();
+
+		/// <summary>How long an unanswered resurrect offer stands.</summary>
+		private static readonly TimeSpan ResurrectOfferLifetime = TimeSpan.FromSeconds(30);
+
+		/// <summary>
+		/// Records a resurrect offer and tells the target's client, so its death dialog can present
+		/// the accept option.
+		/// </summary>
+		/// <param name="initiator">Character casting the resurrect.</param>
+		/// <param name="target">Character being offered the resurrect.</param>
+		/// <param name="amount">Health the offer would restore.</param>
+		private void CharacterDamageController_OnResurrectOffered(ICharacter initiator, ICharacter target, int amount)
+		{
+			if (initiator == null || amount <= 0)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = target as IPlayerCharacter;
+			if (player == null || player.Owner == null || !player.Owner.IsActive)
+			{
+				return;
+			}
+
+			// Only a dead character has anything to accept.
 			if (!player.IsFlagged(CharacterFlags.IsDead))
-				return;
-
-			player.DisableFlags(CharacterFlags.IsDead);
-			if (player.TryGet(out ICharacterDamageController damageController))
-				damageController.Revive(null, 999999);
-
-			if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
-				(!player.IsInInstance() && player.SceneName != player.BindScene))
-			{
-				// Respawning at a bind point in another scene is a scene-server transfer, so it
-				// has to follow the same order as the teleporter path.
-				//
-				// Previously this only mutated the character and disconnected, leaving the
-				// save and session release to the connection-stopped handler. By then SceneName
-				// had already been overwritten with BindScene, so every OnDisconnect subscriber
-				// — party, guild, and the scene server's own per-scene bookkeeping — was told
-				// the player left the scene they were respawning *into* rather than the one
-				// they died in.
-				OnDisconnect?.Invoke(conn, player);
-
-				player.SceneName = player.BindScene;
-				player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
-				player.DisableFlags(CharacterFlags.IsInInstance);
-				player.DisableFlags(CharacterFlags.IsLoaded);
-
-				// Save and release the session before dropping the connection so the
-				// destination scene server can claim the character.
-				RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
-
-				conn.Disconnect(false);
-			}
-			else
-			{
-				player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, Quaternion.identity, Vector3.zero);
-			}
-		}
-		finally
-		{
-			EndRespawnResurrectGuard(guardKey);
-		}
-	}
-
-	/// <summary>
-	/// Handles a dead player accepting a resurrect from another player.
-	/// Revives at the current position (corpse location), no teleport.
-	/// Rate-limited per-connection to prevent spam.
-	/// </summary>
-	/// <param name="conn">The network connection of the dead player.</param>
-	/// <param name="msg">The resurrect-accept broadcast message.</param>
-	/// <param name="channel">The channel on which the broadcast was received.</param>
-	private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
-	{
-		if (!TryBeginRespawnResurrectGuard(conn.ClientId, ResurrectOperation, out long guardKey))
-			return;
-
-		try
-		{
-			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
-				return;
-			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
-				return;
-
-			// Only dead players can accept a resurrect.
-			if (!player.IsFlagged(CharacterFlags.IsDead))
-				return;
-
-			// Validate the resurrector: must be online and in the same scene.
-			// Without this check, a dead player could self-revive by sending a
-			// fake ResurrectAcceptBroadcast with an arbitrary ResurrectorID.
-			if (msg.ResurrectorID <= 0 ||
-				!data.CharactersByID.TryGetValue(msg.ResurrectorID, out IPlayerCharacter resurrector) ||
-				resurrector.SceneName != player.SceneName)
 			{
 				return;
 			}
 
-			player.DisableFlags(CharacterFlags.IsDead);
-			if (player.TryGet(out ICharacterDamageController damageController))
-				damageController.Revive(null, 999999);
+			pendingResurrectOffers[player.ID] = new PendingResurrectOffer
+			{
+				ResurrectorID = initiator.ID,
+				Amount = amount,
+				ExpiresUtc = DateTime.UtcNow + ResurrectOfferLifetime,
+			};
+
+			Server.NetworkWrapper.Broadcast(player.Owner,
+				new ResurrectOfferBroadcast { ResurrectorID = initiator.ID }, true, FishNet.Transporting.Channel.Reliable);
 		}
-		finally
+
+		/// <summary>
+		/// Ingress guard for respawn and resurrect broadcasts to prevent rate-limit spam.
+		/// </summary>
+		private readonly IngressGuard respawnResurrectGuard = new IngressGuard();
+
+		private const byte RespawnOperation = 1;
+		private const byte ResurrectOperation = 2;
+		private const int RespawnResurrectDebounceMs = 2000;
+
+		private bool TryBeginRespawnResurrectGuard(int clientId, byte operation, out long guardKey)
 		{
-			EndRespawnResurrectGuard(guardKey);
+			return respawnResurrectGuard.TryBegin(clientId, operation, RespawnResurrectDebounceMs, out guardKey);
 		}
-	}
 
-	/// <summary>
-	/// Ingress guard for respawn and resurrect broadcasts to prevent rate-limit spam.
-	/// </summary>
-	private readonly IngressGuard respawnResurrectGuard = new IngressGuard();
+		private void EndRespawnResurrectGuard(long guardKey)
+		{
+			respawnResurrectGuard.End(guardKey);
+		}
 
-	private const byte RespawnOperation = 1;
-	private const byte ResurrectOperation = 2;
-	private const int RespawnResurrectDebounceMs = 2000;
+		/// <summary>
+		/// Periodic sweep to evict stale respawn/resurrect guard entries,
+		/// preventing unbounded dictionary growth from aborted or partial client sessions.
+		/// </summary>
+		private void OnPeriodicRespawnResurrectSweep(float deltaTime)
+		{
+			if (Server == null || Server.ServerState != ConnectionState.Started)
+				return;
 
-	private bool TryBeginRespawnResurrectGuard(int clientId, byte operation, out long guardKey)
-	{
-		return respawnResurrectGuard.TryBegin(clientId, operation, RespawnResurrectDebounceMs, out guardKey);
-	}
+			respawnResurrectGuard.Sweep(30f, 120f, 128);
 
-	private void EndRespawnResurrectGuard(long guardKey)
-	{
-		respawnResurrectGuard.End(guardKey);
-	}
+			SweepExpiredResurrectOffers();
+		}
 
-	/// <summary>
-	/// Periodic sweep to evict stale respawn/resurrect guard entries,
-	/// preventing unbounded dictionary growth from aborted or partial client sessions.
-	/// </summary>
-	private void OnPeriodicRespawnResurrectSweep(float deltaTime)
-	{
-		if (Server == null || Server.ServerState != ConnectionState.Started)
-			return;
+		/// <summary>
+		/// Drops resurrect offers that were never answered.
+		/// </summary>
+		/// <remarks>
+		/// The accept path rejects an expired offer on its own, so this is about not retaining one
+		/// entry per unanswered resurrect for the life of the process — a player who is offered a
+		/// resurrect and respawns instead, or simply logs out, leaves nothing behind to remove it.
+		/// </remarks>
+		private void SweepExpiredResurrectOffers()
+		{
+			if (pendingResurrectOffers.Count == 0)
+			{
+				return;
+			}
 
-		respawnResurrectGuard.Sweep(30f, 120f, 128);
-	}
+			DateTime nowUtc = DateTime.UtcNow;
+			List<long> expired = null;
+			foreach (var kvp in pendingResurrectOffers)
+			{
+				if (nowUtc >= kvp.Value.ExpiresUtc)
+				{
+					(expired ??= new List<long>()).Add(kvp.Key);
+				}
+			}
+
+			if (expired == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < expired.Count; ++i)
+			{
+				pendingResurrectOffers.Remove(expired[i]);
+			}
+		}
 	}
 }
