@@ -626,15 +626,37 @@ namespace FishMMO.Server.Implementation
 		protected string? ResolveRateLimitKey(NetworkConnection conn)
 		{
 			if (conn == null) return null;
-			// Look up the real IP recovered from the connection/auth token.
-			// Never fall back to conn.GetAddress() (which returns 127.0.0.1
-			// behind an L4 proxy) or conn.ClientId (which resets on reconnect).
-			//
-			// The authenticator-owned cache is checked first because it is the only one
-			// that exists on World and Scene servers; the account-creation container is
-			// consulted after it so a Login Server entry written by that system is still
-			// honoured. Both reads touch the entry, keeping a live connection resolvable
-			// however long it stays connected.
+
+			string? recoveredIp = ResolveRecoveredIpKey(conn);
+			if (!string.IsNullOrEmpty(recoveredIp))
+			{
+				return recoveredIp;
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Returns the real client IP recovered from a verified connection token, or null
+		/// if none has been recorded for this connection.
+		/// </summary>
+		/// <remarks>
+		/// Split out of <see cref="ResolveRateLimitKey"/> because this half consults only
+		/// process-local caches, never the transport. That makes it the only part safe to
+		/// call once a connection has stopped: Multipass drops its id mapping first, so
+		/// <c>conn.GetAddress()</c> would make FishNet log
+		/// "TransportIdData could not be found" for every disconnect.
+		/// <para>
+		/// The authenticator-owned cache is checked first because it is the only one that
+		/// exists on World and Scene servers; the account-creation container is consulted
+		/// after it so a Login Server entry written by that system is still honoured. Both
+		/// reads touch the entry, keeping a live connection resolvable however long it
+		/// stays connected.
+		/// </para>
+		/// </remarks>
+		private string? ResolveRecoveredIpKey(NetworkConnection conn)
+		{
+			if (conn == null) return null;
+
 			if (connectionRealIps.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ownIp))
 			{
 				return HandshakeService.NormalizeIp(ownIp);
@@ -646,6 +668,7 @@ namespace FishMMO.Server.Implementation
 			{
 				return HandshakeService.NormalizeIp(realIp);
 			}
+
 			return null;
 		}
 
@@ -810,14 +833,34 @@ namespace FishMMO.Server.Implementation
 		/// FishNet reuses ClientIds after disconnect — on sub-10ms links a fast
 		/// reconnect can otherwise trip the limiter with a perfectly clean connection.
 		/// </summary>
-		internal void ClearHandshakeRateLimit(NetworkConnection conn)
+		internal void ClearHandshakeRateLimit(NetworkConnection conn, bool connectionStopped = false)
 		{
 			if (conn == null) return;
-			handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
+
+			if (connectionStopped)
+			{
+				/* The transport has already dropped its id mapping by the time the stopped
+				 * event fires, so anything that reaches conn.GetAddress() makes FishNet log
+				 * an error. Only the recovered IP is resolvable here, and it is the only
+				 * address-derived key worth clearing on a disconnect: an IP-keyed window
+				 * SHOULD outlive the connection, or a reconnect flood from one address
+				 * would escape the limiter entirely. */
+				string? recoveredIp = ResolveRecoveredIpKey(conn);
+				if (!string.IsNullOrEmpty(recoveredIp))
+				{
+					handshakeRateLimiter.Remove(recoveredIp!);
+				}
+			}
+			else
+			{
+				handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
+			}
+
 			// The resolved key may differ from the key used at gate time: the real IP
 			// is only known after connection-token processing, so the initial handshake
 			// on a proxied connection (conn.GetAddress() == loopback) used the ClientId
-			// fallback. Remove that explicitly.
+			// fallback. Remove that explicitly. This is the key that actually matters on
+			// a disconnect, because FishNet recycles ClientIds.
 			handshakeRateLimiter.Remove($"conn:{conn.ClientId}");
 		}
 
@@ -1391,13 +1434,17 @@ namespace FishMMO.Server.Implementation
 				// gone regardless of whether it authenticated successfully.
 				connectionStartTimes.TryRemove(conn.ClientId, out _);
 				connectionNonces.TryRemove(conn.ClientId, out _);
-				// Drop the recovered IP so a recycled ClientId cannot inherit the previous
-				// occupant's identity (FishNet reuses ClientIds after disconnect).
-				connectionRealIps.Remove(conn.ClientId);
 				// Clear the handshake rate-limit window so a recycled ClientId
 				// (FishNet reuses IDs after disconnect) does not inherit a stale
 				// 100ms block on its first handshake.
-				ClearHandshakeRateLimit(conn);
+				//
+				// Must run BEFORE the recovered IP is dropped below: that IP is the key the
+				// gate rate-limited under, and once it is gone the key can no longer be
+				// resolved, so the clear would silently miss the entry it exists to remove.
+				ClearHandshakeRateLimit(conn, connectionStopped: true);
+				// Drop the recovered IP so a recycled ClientId cannot inherit the previous
+				// occupant's identity (FishNet reuses ClientIds after disconnect).
+				connectionRealIps.Remove(conn.ClientId);
 
 				// Let subclasses drop their own per-connection state before the core
 				// tears down the account/encryption entries they may depend on.
