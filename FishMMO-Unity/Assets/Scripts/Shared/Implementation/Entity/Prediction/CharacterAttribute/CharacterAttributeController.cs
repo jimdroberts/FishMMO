@@ -1166,11 +1166,54 @@ namespace FishMMO.Shared
 			// if a tick is skipped under high RTT or resimulation.
 			if ((int)(tick - nextRegenTick) >= 0)
 			{
+				// Advance the schedule before the death check so the cadence is unaffected by
+				// time spent dead — a revived character resumes on the normal beat instead of
+				// firing an immediate catch-up pulse.
 				nextRegenTick += regenTickInterval;
+
+				/* A dead character regenerates nothing.
+				 *
+				 * Without this, health ticked back up from zero on its own and quietly undid
+				 * death: the character became alive by the only measure anything actually
+				 * checks (CurrentValue > 0) while the server's CharacterFlags.IsDead stayed
+				 * set. That pairing is worse than either state alone —
+				 * CharacterDamageController.Kill early-returns on the flag, so the character
+				 * could never be killed again, and Heal starts working the moment the value
+				 * clears zero, so a corpse could be topped up by other players. Mana and
+				 * stamina are held back for the same reason: a corpse recovers nothing.
+				 *
+				 * Tested on the health value rather than the IsDead flag deliberately. Flags
+				 * ride the spawn payload only and are never re-synced, so a client's copy goes
+				 * stale the moment anything changes it — a flag test here would leave a revived
+				 * character's regen switched off on the client for the rest of the session
+				 * while the server kept regenerating. The health value is replicated every
+				 * reconcile, so both sides evaluate this identically on the same tick. */
+				if (IsHealthDepleted())
+				{
+					return;
+				}
+
 				RegenerateResource(HealthResourceTemplateID, cachedHealthRegen, 1);
 				RegenerateResource(ManaResourceTemplateID, cachedManaRegen, 1);
 				RegenerateResource(StaminaResourceTemplateID, cachedStaminaRegen, 1);
 			}
+		}
+
+		/// <summary>
+		/// Returns true when the health resource exists and has been reduced to zero.
+		/// </summary>
+		/// <remarks>
+		/// The shared definition of "dead" for prediction-path code: derived purely from
+		/// replicated resource state, so client and server reach the same answer on the same
+		/// tick. A character with no health resource configured is not treated as dead — it has
+		/// no health to lose.
+		/// </remarks>
+		private bool IsHealthDepleted()
+		{
+			return HealthResourceTemplateID != 0 &&
+				   resourceAttributes.TryGetValue(HealthResourceTemplateID, out CharacterResourceAttribute health) &&
+				   health != null &&
+				   health.CurrentValue <= 0.0f;
 		}
 
 		/// <summary>

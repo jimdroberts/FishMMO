@@ -25,6 +25,18 @@ namespace FishMMO.Shared.Core
 		static Action<ICharacter, ICharacter> OnResurrected;
 
 		/// <summary>
+		/// Event invoked when a resurrect is offered to a character but not yet applied.
+		/// Params: resurrector, target, health amount the offer would restore.
+		/// </summary>
+		/// <remarks>
+		/// Raised instead of reviving when the target is a player who can be asked. The server's
+		/// character system records the offer and notifies the client; the revive happens only
+		/// if the player accepts. Exists as an event because the action that offers lives in
+		/// shared code and must not reference server types.
+		/// </remarks>
+		static Action<ICharacter, ICharacter, int> OnResurrectOffered;
+
+		/// <summary>
 		/// Event invoked when a character is healed. Parameters: healer, healed, amount.
 		/// </summary>
 		static Action<ICharacter, ICharacter, int> OnHealed;

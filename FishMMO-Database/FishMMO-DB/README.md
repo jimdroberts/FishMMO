@@ -463,3 +463,31 @@ flowchart LR
 - Prefer `FISHMMO_ENVIRONMENT` for environment configuration.
 - Keep secrets out of source control; use environment variables or secret stores.
 - In production, set `enableLogging: false` to avoid sensitive data logging.
+
+## Character session ownership
+
+The claim taken by `TryClaimAsync` gates who may *load* a character. It is also enforced on
+*writes*:
+
+| Method | Purpose |
+|---|---|
+| `PersistOwnedAsync(data, ownership)` | Character-row write that additionally requires `session_state = Online` and a matching `session_owner_server_id` / `session_owner_token`, verified in the same statement as the write. Returns `Forbidden` when the claim is gone — checked before the version comparison, since a displaced writer usually looks version-stale too. |
+| `FetchUnownedSessionsAsync(leases)` | Returns which of the supplied ownership triples the database no longer attributes to that owner. A diagnostic read for the short-count path of `RefreshSessionLeasesAsync`, which reports only a row count. |
+
+Plain `PersistAsync` remains for legitimate non-owner writes — the world server clearing
+`IsInInstance` while the character is Offline between servers, and character creation.
+
+### Expired leases are not "online"
+
+`AnyOnlineAsync` and `FetchInWorldCharacterAsync` additionally require
+`session_lease_expires_utc > now`, matching the predicate `TryClaimAsync` already uses to steal
+an expired claim. Without it, a scene server that died holding characters locked those accounts
+out of login **permanently** with "already online", against a session that no longer existed and
+a character any server was free to claim.
+
+### Kick requests expire
+
+`HasPendingAsync` ignores requests older than `PendingKickRequestTtl` (3 minutes). A kick request
+is deleted by whichever game server acts on it, so the normal lifetime is seconds — but if that
+server dies before polling, nothing ever deletes the row and an unbounded check reported the
+account as "already online" at every future login, forever.

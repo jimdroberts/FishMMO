@@ -716,3 +716,25 @@ closed connection cannot be delivered to its replacement.
 ## License
 
 This module is part of the FishMMO project and is subject to the FishMMO project license.
+
+## Channel selection for terminal results
+
+Every `BroadcastAuthResult` call site sends **Reliable**. The two `ServerBusy` rejections in
+`OnHandshakeDeferred` previously sent Unreliable; that is the terminal answer to a handshake,
+with no retry behind it and nothing else ever sent on the connection, so dropping it left the
+client on "Connecting..." for the full 15 s handshake timeout and then disconnected it with no
+reason given.
+
+The same rule governs `LoginQueueSystem.SendPositionUpdate`: a positive queue position is a
+periodic progress report and is re-sent every sweep, so Unreliable is correct; position **0**
+(admitted — re-send your handshake) and **-1** (queue cancelled) are one-shot state transitions
+and are sent Reliable. An admitted client has already been popped off the queue, so a dropped
+admission stranded it until the handshake timeout.
+
+Queue purge and shutdown also use `conn.Disconnect(false)` rather than `true`: the immediate
+form stops the transport outright and discards anything still queued for send — including the
+cancellation notice sent on the line above.
+
+> Handshake receipt is logged at **Debug**, not Warning. It fires on every connection attempt
+> including every healthy one, and at Warning level a busy login server buries its real warnings
+> under one line per attempt.
