@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEditor;
 using UnityEditorInternal;
 using System.IO;
@@ -420,6 +420,21 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				BuildEnvironmentOptions.SetBuildType(buildType);
 				BuildEnvironmentOptions.SetOSTarget(osTarget);
 				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
+
+				/* SwitchToEnvironmentBuildTarget recompiles for the new target before it
+				 * returns, so scripts should be settled by the time we get here. If they are
+				 * not, the Addressables/player builds below reject the request for running
+				 * while scripts are compiling, and under -batchmode there is nothing this
+				 * thread can do about it: compilation is driven by the editor loop, which
+				 * does not turn over until this method returns. Waiting here cannot help and
+				 * sleeping actively prevents it, so fail immediately with a clear reason
+				 * rather than hand back an opaque build rejection. */
+				if (Application.isBatchMode && BuildEnvironmentOptions.IsCompiling())
+				{
+					UnityEngine.Debug.LogError("[CustomBuildTool] Scripts are still compiling after the build target switch; cannot start a CLI build.");
+					EditorApplication.Exit(1);
+					return;
+				}
 
 				if (includeAddressables)
 				{
