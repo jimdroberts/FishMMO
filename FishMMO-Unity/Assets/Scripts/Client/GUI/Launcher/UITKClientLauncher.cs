@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 using HtmlAgilityPack;
@@ -84,6 +85,15 @@ namespace FishMMO.Client
 
 		private bool elementsResolved;
 		private bool settingsOpen;
+		/// <summary>Frames spent waiting for the visual tree before giving up.</summary>
+		private int resolveAttempts;
+		/// <summary>Set once resolution has been abandoned, so the error is logged only once.</summary>
+		private bool resolveFailed;
+		/// <summary>
+		/// How many frames to wait for UIDocument to clone its tree. Generous — this only ever
+		/// needs one or two, and the cost of waiting is a null check per frame.
+		/// </summary>
+		private const int MaxResolveAttempts = 300;
 		private string pendingDiskSizeText = "Installation size: measuring...";
 
 		// Recorded state, applied whenever the visual tree becomes available.
@@ -114,6 +124,40 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Keeps retrying resolution until the visual tree exists, then stops.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not relying on OnEnable being late enough. UIDocument clones the tree in
+		/// its own OnEnable, and which component gets there first depends on their order on the
+		/// GameObject — an ordering the scene can change without anyone noticing. Polling for a
+		/// couple of frames costs nothing and removes the dependency entirely.
+		/// <para>
+		/// Gives up loudly rather than spinning forever, because a permanent failure here means
+		/// a blank launcher, and silence is what made this expensive to diagnose the first time.
+		/// </para>
+		/// </remarks>
+		private void Update()
+		{
+			if (this.elementsResolved || this.resolveFailed)
+			{
+				return;
+			}
+
+			if (TryResolveElements())
+			{
+				ApplyAll();
+				return;
+			}
+
+			this.resolveAttempts++;
+			if (this.resolveAttempts >= MaxResolveAttempts)
+			{
+				this.resolveFailed = true;
+				Log.Error("UITKClientLauncher", $"Gave up resolving the launcher UI after {MaxResolveAttempts} frames; it will not render. Check the UIDocument's Source Asset and Panel Settings.");
+			}
+		}
+
+		/// <summary>
 		/// Resolves and caches the elements this view drives, wiring the button callbacks once.
 		/// </summary>
 		/// <returns>True when the visual tree is available and elements are cached.</returns>
@@ -134,8 +178,31 @@ namespace FishMMO.Client
 			if (this.root == null)
 			{
 				// Normal before the document's own OnEnable has run. OnEnable retries.
+				Log.Debug("UITKClientLauncher", "rootVisualElement is null; will retry.");
 				return false;
 			}
+
+			/* An empty root is "not ready yet", not "nothing to find".
+			 *
+			 * UIDocument allocates rootVisualElement early but only clones the UXML into it in
+			 * its own OnEnable, which runs after every component's Awake. Awake therefore sees a
+			 * real, empty root. Treating that as resolved — which this did — meant every Q<>
+			 * returned null, the resolved flag latched, and the retry in OnEnable took the
+			 * early-out and never looked again. The launcher then ran its entire flow correctly
+			 * against a set of null fields and drew nothing. */
+			if (this.root.childCount == 0)
+			{
+				Log.Debug("UITKClientLauncher", "Visual tree not cloned yet; will retry.");
+				return false;
+			}
+
+			/* Logged unconditionally, not only on failure.
+			 *
+			 * A silent success and a silent failure looked identical from the outside: every
+			 * setter null-checks, so an unresolved tree makes the launcher run perfectly and
+			 * draw nothing, which is indistinguishable from a layout that renders blank. That
+			 * cost a whole build/test round trip to tell apart. */
+			Log.Info("UITKClientLauncher", $"Resolving UI. sourceAsset={(this.Document.visualTreeAsset != null ? this.Document.visualTreeAsset.name : "NULL")} rootChildren={this.root.childCount} panelSettings={(this.Document.panelSettings != null ? this.Document.panelSettings.name : "NULL")}");
 
 			this.titleLabel = this.root.Q<Label>(TITLE_NAME);
 			this.newsContainer = this.root.Q<VisualElement>(NEWS_NAME);
@@ -158,6 +225,33 @@ namespace FishMMO.Client
 			this.patchDirField = this.root.Q<TextField>(SETTING_PATCHDIR_NAME);
 			this.patchDirNote = this.root.Q<Label>(PATCHDIR_NOTE_NAME);
 			this.patchDirBrowseButton = this.root.Q<Button>(PATCHDIR_BROWSE_NAME);
+
+			// Names the elements that did not resolve, so a UXML/controller mismatch reports
+			// which one rather than silently drawing an incomplete screen.
+			string missing = string.Join(", ", new[]
+			{
+				this.titleLabel == null ? TITLE_NAME : null,
+				this.newsContainer == null ? NEWS_NAME : null,
+				this.newsScroll == null ? NEWS_SCROLL_NAME : null,
+				this.statusLabel == null ? STATUS_NAME : null,
+				this.progressGroup == null ? PROGRESS_NAME : null,
+				this.playButton == null ? PLAY_BUTTON_NAME : null,
+				this.quitButton == null ? QUIT_BUTTON_NAME : null,
+				this.settingsButton == null ? SETTINGS_BUTTON_NAME : null,
+				this.settingsPanel == null ? SETTINGS_PANEL_NAME : null,
+			}.Where(n => n != null));
+
+			if (!string.IsNullOrEmpty(missing))
+			{
+				/* Not latched. A partial resolve means the tree is still being built or the
+				 * UXML genuinely does not match this controller; either way, committing to it
+				 * would bind callbacks to whatever did resolve and permanently give up on the
+				 * rest. Retrying costs nothing and the caller reports if it never succeeds. */
+				Log.Warning("UITKClientLauncher", $"UXML elements not found (will retry): {missing}");
+				return false;
+			}
+
+			Log.Info("UITKClientLauncher", "All launcher UI elements resolved.");
 
 			BindSettings();
 

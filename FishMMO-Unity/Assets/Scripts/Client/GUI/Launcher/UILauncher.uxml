@@ -29,7 +29,7 @@
                     <ui:Button name="launcher-patchdir-browse" text="Browse..." class="fish-tab launcher-browse-btn" />
                 </ui:VisualElement>
                 <ui:Label name="launcher-patchdir-note" text="" class="launcher-settings-note" />
-            </ui:VisualElement>
+            </ui:ScrollView>
             <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
                 <ui:Label name="launcher-status" text="" class="launcher-status" />
                 <ui:VisualElement name="launcher-progress" class="launcher-progress fish-hidden">
