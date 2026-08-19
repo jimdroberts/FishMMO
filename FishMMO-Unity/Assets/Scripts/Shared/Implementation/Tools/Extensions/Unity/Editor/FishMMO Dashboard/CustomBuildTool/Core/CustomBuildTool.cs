@@ -427,26 +427,23 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				BuildEnvironmentOptions.SetOSTarget(osTarget);
 				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
 
-				// Switching build target (e.g. Client -> Server) can trigger an async
-				// script recompile. Addressables/player builds below reject requests
-				// made while scripts are compiling, and -batchmode has no UI to wait
-				// on, so block synchronously here until compilation settles.
-				if (Application.isBatchMode)
+				/* Switching build target (e.g. Client -> Server) triggers a script recompile,
+				 * and the Addressables/player builds below reject requests made while scripts
+				 * are compiling. SwitchToEnvironmentBuildTarget drives that compile to
+				 * completion synchronously when running in batch mode, so by this point it is
+				 * already done.
+				 *
+				 * This used to be a Thread.Sleep poll loop, which could never succeed: Unity
+				 * runs compilation on the main thread's editor tick, so sleeping that thread
+				 * is what stopped the very work it was waiting for. It burned its full 120s
+				 * budget and failed on every single target switch. Do not reintroduce a sleep
+				 * here — if compilation is genuinely still pending there is nothing this
+				 * thread can do to advance it, so fail immediately rather than hang. */
+				if (Application.isBatchMode && BuildEnvironmentOptions.IsCompiling())
 				{
-					int waitedMs = 0;
-					const int pollIntervalMs = 200;
-					const int maxWaitMs = 120000;
-					while (BuildEnvironmentOptions.IsCompiling() && waitedMs < maxWaitMs)
-					{
-						System.Threading.Thread.Sleep(pollIntervalMs);
-						waitedMs += pollIntervalMs;
-					}
-					if (BuildEnvironmentOptions.IsCompiling())
-					{
-						UnityEngine.Debug.LogError("[CustomBuildTool] Timed out waiting for script compilation before CLI build.");
-						EditorApplication.Exit(1);
-						return;
-					}
+					UnityEngine.Debug.LogError("[CustomBuildTool] Scripts are still compiling after the build target switch; cannot start a CLI build. This should not happen — SwitchToEnvironmentBuildTarget forces a synchronous import in batch mode.");
+					EditorApplication.Exit(1);
+					return;
 				}
 
 				if (includeAddressables)
