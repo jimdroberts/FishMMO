@@ -14,7 +14,7 @@
             <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
                 <ui:VisualElement name="launcher-news" class="launcher-news" />
             </ui:ScrollView>
-            <ui:VisualElement name="launcher-settings" class="launcher-settings fish-hidden">
+            <ui:ScrollView name="launcher-settings" class="fish-scroll launcher-settings fish-hidden">
                 <ui:Label text="DOWNLOAD" class="fish-attr-category launcher-settings-heading" />
                 <ui:Toggle name="launcher-setting-autoupdate" label="Download updates automatically" class="launcher-setting" />
                 <ui:SliderInt name="launcher-setting-timeout" label="Request timeout (s)" low-value="5" high-value="300" show-input-field="true" class="launcher-setting" />
@@ -24,9 +24,12 @@
                 <ui:Label text="STORAGE" class="fish-attr-category launcher-settings-heading launcher-settings-heading--spaced" />
                 <ui:Label name="launcher-install-path" text="" class="launcher-settings-note launcher-path" />
                 <ui:Label name="launcher-disk-size" text="Installation size: measuring..." class="launcher-settings-note" />
-                <ui:TextField name="launcher-setting-patchdir" label="Patch download folder" class="launcher-setting" />
+                <ui:VisualElement name="launcher-patchdir-row" class="launcher-patchdir-row">
+                    <ui:TextField name="launcher-setting-patchdir" label="Patch download folder" class="launcher-setting launcher-patchdir-field" />
+                    <ui:Button name="launcher-patchdir-browse" text="Browse..." class="fish-tab launcher-browse-btn" />
+                </ui:VisualElement>
                 <ui:Label name="launcher-patchdir-note" text="" class="launcher-settings-note" />
-            </ui:VisualElement>
+            </ui:ScrollView>
             <ui:VisualElement name="launcher-footer" class="fish-panel__footer launcher-footer">
                 <ui:Label name="launcher-status" text="" class="launcher-status" />
                 <ui:VisualElement name="launcher-progress" class="launcher-progress fish-hidden">
