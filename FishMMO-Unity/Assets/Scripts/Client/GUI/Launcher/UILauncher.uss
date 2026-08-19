@@ -16,6 +16,11 @@
     padding: 0;
 }
 
+/*
+    overflow: hidden so a band that cannot fit is clipped by the panel rather than spilling
+    over its neighbours. Without it an over-tall child renders on top of the footer, which is
+    how the settings list ended up appearing underneath the Play and Quit buttons.
+*/
 .launcher-panel {
     flex-grow: 1;
     flex-direction: column;
@@ -24,6 +29,7 @@
     border-top-width: 2px;
     min-width: 480px;
     min-height: 360px;
+    overflow: hidden;
 }
 
 /* ── Art hooks ──────────────────────────────────────────── */
@@ -96,19 +102,27 @@
     while the player is reading this.
 */
 /*
-    Allowed to shrink, unlike the rest of the chrome. At the smallest permitted window the
-    footer must stay reachable — losing the bottom of the settings list is recoverable,
-    losing the Play button is not.
+    A ScrollView, capped at a fraction of the window. It previously clipped instead of
+    scrolling, so once the list grew past its cap the bottom entries were simply cut off and
+    read as the footer overlapping them — the settings at the end of the list could not be
+    reached at all. Scrolling keeps every setting available at any window size while the
+    footer stays put.
+
+    flex-shrink: 0 with a max-height means this band never grows past its cap and never
+    squeezes the footer; the news pane above absorbs all remaining space.
 */
 .launcher-settings {
     flex-direction: column;
-    padding: 10px 16px;
     background-color: rgb(28, 31, 34);
     border-top-color: rgb(46, 51, 59);
     border-top-width: 1px;
-    flex-shrink: 1;
-    max-height: 45%;
-    overflow: hidden;
+    flex-shrink: 0;
+    max-height: 38%;
+    margin-bottom: 4px;
+}
+
+.launcher-settings > #unity-content-viewport > #unity-content-container {
+    padding: 10px 16px;
 }
 
 .launcher-settings-heading {
@@ -129,6 +143,24 @@
 
 .launcher-settings-heading--spaced {
     margin-top: 10px;
+}
+
+.launcher-patchdir-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Takes the slack so the Browse button keeps a fixed width at any panel size. */
+.launcher-patchdir-field {
+    flex-grow: 1;
+    margin-bottom: 0;
+}
+
+.launcher-browse-btn {
+    height: 20px;
+    min-width: 74px;
+    margin-left: 6px;
+    font-size: 10px;
 }
 
 .launcher-settings-note {
