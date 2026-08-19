@@ -118,6 +118,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
+			/* Stop whatever the character was in the middle of doing.
+			 *
+			 * A despawn would have done this for free — FishNet's ResetState cancels the
+			 * activation — but the whole point of a linger is that the body is NOT despawned,
+			 * so an in-flight cast simply carries on. The server keeps ticking
+			 * AbilityController.OnReplicate for an unowned object, and a tick with no input
+			 * re-asserts IsHeld from the replicated flags rather than clearing it, so a
+			 * channelled or charged ability holds indefinitely and a plain cast runs to
+			 * completion and fires — spawning projectiles and raising ECA events on behalf of a
+			 * player who is no longer connected and cannot aim, retarget or stop them.
+			 *
+			 * Cancel() is the same call ResetState makes: it clears the current activation,
+			 * drops the persistent IsHeld/IsConsumable/IsMount flags and unlocks any consumable
+			 * inventory slot the activation had reserved. Leaving that slot locked would follow
+			 * the character into its next session, because the linger's snapshot is what the
+			 * reattach reloads.
+			 *
+			 * Done before the flags and bookkeeping below so a throw here cannot leave a body
+			 * half-registered as lingering. */
+			try
+			{
+				if (character.TryGet(out IAbilityController abilityController) &&
+					abilityController.IsActivating)
+				{
+					abilityController.Cancel();
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("CharacterSystem", $"Failed to cancel the in-flight ability of lingering character {character.ID}: {ex}");
+			}
+
 			// Persisted, unlike IsInCombat: it is what tells the login path that this account's
 			// only "online" character is a body waiting to be reclaimed rather than a live
 			// session, so the player is not locked out of rejoining it.
@@ -420,7 +452,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// leaving the character owned by a server that has forgotten about it.
 				Log.Error("CharacterSystem", $"Failed to enqueue reattach for character {characterID}; releasing its session.");
 				QueuePendingFlush(characterID, charData, new CharacterSessionInfo(heldToken, heldServerID));
-				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 
 			return true;

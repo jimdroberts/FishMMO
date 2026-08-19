@@ -19,6 +19,10 @@ namespace FishMMO.Client
 		/// The name of the loading progress fill VisualElement in the UI.
 		/// </summary>
 		private const string LOADING_PROGRESS_FILL_NAME = "loading-progress-fill";
+		/// <summary>
+		/// The name of the optional status Label in the UI.
+		/// </summary>
+		private const string LOADING_STATUS_NAME = "loading-status";
 
 		/// <summary>
 		/// Cache containing details for world scenes, including transition images.
@@ -32,6 +36,11 @@ namespace FishMMO.Client
 
 		private VisualElement loadingImage;
 		private VisualElement loadingProgressFill;
+		/// <summary>
+		/// Optional status line, used to explain a wait the player cannot otherwise see a
+		/// reason for. Null when the document does not define one.
+		/// </summary>
+		private Label loadingStatus;
 		/// <summary>
 		/// The currently displayed loading screen sprite, or null if none is set.
 		/// </summary>
@@ -59,7 +68,10 @@ namespace FishMMO.Client
 			{
 				loadingImage = Root.Q<VisualElement>(LOADING_IMAGE_NAME);
 				loadingProgressFill = Root.Q<VisualElement>(LOADING_PROGRESS_FILL_NAME);
+				loadingStatus = Root.Q<Label>(LOADING_STATUS_NAME);
 			}
+
+			SetStatus(null);
 
 			AddressableLoadProcessor.OnProgressUpdate += OnProgressUpdate;
 
@@ -223,7 +235,31 @@ namespace FishMMO.Client
 			sceneTransitionActive = false;
 			reconnectPendingActive = false;
 
+			// The status line explains one specific wait; it must not survive into the next
+			// one, which is usually an ordinary scene load with nothing to explain.
+			SetStatus(null);
+
 			base.Hide();
+		}
+
+		/// <summary>
+		/// Writes the status line, hiding it entirely when there is nothing to say.
+		/// </summary>
+		/// <remarks>
+		/// Optional by design: the label is looked up by name and older documents that predate
+		/// it simply resolve to null. A missing label costs the explanation, not the overlay.
+		/// </remarks>
+		/// <param name="text">Message to display, or null/empty to hide the line.</param>
+		private void SetStatus(string text)
+		{
+			if (loadingStatus == null)
+			{
+				return;
+			}
+
+			bool hasText = !string.IsNullOrEmpty(text);
+			loadingStatus.text = hasText ? text : string.Empty;
+			loadingStatus.style.display = hasText ? DisplayStyle.Flex : DisplayStyle.None;
 		}
 
 		/// <summary>
@@ -255,7 +291,27 @@ namespace FishMMO.Client
 			SetLoadingImage(DefaultLoadingScreenSprite);
 			reconnectPendingActive = true;
 			RefreshVisibility();
+
+			/* Say what the overlay is waiting for. A lost connection holds this screen for the
+			 * whole backoff — up to several minutes across ten attempts — with a static image
+			 * and a progress bar that never moves, which is indistinguishable from a hang.
+			 *
+			 * A scene handoff arrives here too, because that is how a zone change, a channel
+			 * switch and a cross-scene respawn are implemented, and it is not an outage — it
+			 * retries within a quarter of a second. Labelling a routine teleport "connection
+			 * lost" would be worse than saying nothing, so those stay silent and keep the plain
+			 * loading overlay.
+			 *
+			 * The text is set after RefreshVisibility because Show() is what resets the panel. */
+			SetStatus(IsSceneHandoff() ? null : "Connection lost. Reconnecting...");
 		}
+
+		/// <summary>
+		/// Whether the reconnect currently running is a deliberate scene handoff rather than a
+		/// dropped connection.
+		/// </summary>
+		/// <remarks>See <see cref="ClientConnectionManager.IsSceneHandoffReconnect"/>.</remarks>
+		private bool IsSceneHandoff() => Client?.Connection?.IsSceneHandoffReconnect ?? false;
 
 		/// <summary>
 		/// Resets the loading image and shows the screen on a reconnect attempt.
@@ -268,6 +324,16 @@ namespace FishMMO.Client
 			reconnectPendingActive = true;
 			sceneTransitionActive = true;
 			RefreshVisibility();
+
+			// A scene handoff succeeds on its first attempt; anything past that is a genuine
+			// failure and worth naming even when the drop that started it was deliberate.
+			if (IsSceneHandoff() && attempts <= 1)
+			{
+				SetStatus(null);
+				return;
+			}
+
+			SetStatus($"Reconnecting... (attempt {attempts} of {maxAttempts})");
 		}
 
 		/// <summary>

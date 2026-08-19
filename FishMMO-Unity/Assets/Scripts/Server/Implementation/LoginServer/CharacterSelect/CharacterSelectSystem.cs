@@ -392,27 +392,34 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ProtocolViolation, terminal: true);
 				return;
 			}
 			if (conn.IsActive)
 			{
+				/* Answer even a refused request. The client disables its connect button and
+				 * arms a reply deadline the moment it sends, and the per-connection cooldown
+				 * here is two seconds — comfortably short enough for a player to hit after a
+				 * refusal ("that character is still in the world") and pick another one. A
+				 * silent return left that click unanswered, so the panel sat locked until the
+				 * deadline expired and then told the player the server had not responded. */
 				if (!TryBeginInFlightRequest(conn))
 				{
+					SendSelectFailure(conn);
 					return;
 				}
 
 				if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
 				{
 					EndInFlightRequest(conn);
-					SendEmptyServerList(conn);
+					SendSelectFailure(conn);
 					return;
 				}
 
 				if (!TryEnqueueAsyncWork(() => ProcessCharacterSelectAsync(conn, accountName, msg.CharacterName), conn.ClientId))
 				{
 					EndInFlightRequest(conn);
-					SendEmptyServerList(conn);
+					SendSelectFailure(conn);
 					Log.Warning("CharacterSelectSystem", $"Failed to enqueue character select request for account '{accountName}'.");
 				}
 			}
@@ -434,7 +441,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				!TryGetDbService(out IUnitOfWorkService unitOfWorkService))
 				{
 					await Log.Warning("CharacterSelectSystem", "DB services unavailable for character select.");
-					SendEmptyServerList(conn);
+					SendSelectFailure(conn);
 					return;
 				}
 
@@ -444,7 +451,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				if (!uowResult.IsSuccess)
 				{
 					await Log.Error("CharacterSelectSystem", $"Failed to begin unit of work for character select: [{uowResult.ErrorCode}] {uowResult.ErrorMessage}");
-					SendEmptyServerList(conn);
+					SendSelectFailure(conn);
 					return;
 				}
 
@@ -458,7 +465,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							if (conn != null && conn.IsActive)
 							{
-								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+								DisconnectWithNotice(conn, DisconnectNoticeReason.ProtocolViolation, terminal: true);
 							}
 						});
 						return;
@@ -471,7 +478,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							if (conn != null && conn.IsActive)
 							{
-								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+								DisconnectWithNotice(conn, DisconnectNoticeReason.ProtocolViolation, terminal: true);
 							}
 						});
 						return;
@@ -518,7 +525,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!setSelectedResult.IsSuccess)
 					{
 						await Log.Warning("CharacterSelectSystem", $"SetSelectedAsync failed for account '{accountName}': [{setSelectedResult.ErrorCode}] {setSelectedResult.ErrorMessage}");
-						SendEmptyServerList(conn);
+						SendSelectFailure(conn);
 						return;
 					}
 
@@ -529,7 +536,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						!string.Equals(selectedResult.Data.Value.Name, characterName, StringComparison.OrdinalIgnoreCase))
 					{
 						await Log.Warning("CharacterSelectSystem", $"Character select ownership verification failed for account '{accountName}' and character '{characterName}'.");
-						SendEmptyServerList(conn);
+						SendSelectFailure(conn);
 						return;
 					}
 
@@ -538,7 +545,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					if (!commitResult.IsSuccess)
 					{
 						await Log.Error("CharacterSelectSystem", $"Failed to commit character select: [{commitResult.ErrorCode}] {commitResult.ErrorMessage}");
-						SendEmptyServerList(conn);
+						SendSelectFailure(conn);
 						return;
 					}
 				}
@@ -567,6 +574,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 					{
 						if (conn != null && conn.IsActive)
 						{
+							/* Acknowledge the selection before the list it unlocks.
+							 *
+							 * The client arms a reply deadline when it sends the selection and
+							 * only this message ends it — the server list is handled by a
+							 * different panel entirely. Without the acknowledgement a perfectly
+							 * successful selection left that deadline running, and half a minute
+							 * later the character-select panel put itself back on screen over
+							 * the server list (or over world entry) announcing that the server
+							 * had not responded. */
+							Server.NetworkWrapper.Broadcast(conn, new CharacterSelectResultBroadcast()
+							{
+								Result = CharacterSelectResult.Success,
+								CharacterName = characterName,
+							}, true, Channel.Reliable);
+
 							Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
 							{
 								Servers = worldServerList,
@@ -577,7 +599,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				else
 				{
 					await Log.Warning("CharacterSelectSystem", $"Failed to fetch active world servers after character select: [{worldResult.ErrorCode}] {worldResult.ErrorMessage}");
-					SendEmptyServerList(conn);
+					SendSelectFailure(conn);
 				}
 			}
 			catch (Exception ex)
@@ -674,19 +696,28 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Sends an empty server list to the client when the character select flow fails.
-		/// Prevents the client from hanging indefinitely waiting for a response.
+		/// Tells the client its character selection did not go through, so it can hand the
+		/// controls back and say why.
 		/// </summary>
-		/// <param name="conn">Network connection to send the empty list to.</param>
-		private void SendEmptyServerList(NetworkConnection conn)
+		/// <remarks>
+		/// This used to send an empty <c>ServerListBroadcast</c> instead. That did unblock the
+		/// client, but it unblocked the wrong panel: the server-select screen opened on top of
+		/// the character list showing no servers, which reads as "there are no worlds" rather
+		/// than "your selection failed", and left the character-select panel's own reply
+		/// deadline armed underneath it. Answering on the channel the request was made on keeps
+		/// the player on the screen they can act from.
+		/// </remarks>
+		/// <param name="conn">Network connection to notify.</param>
+		private void SendSelectFailure(NetworkConnection conn)
 		{
 			TryEnqueueMainThread(() =>
 			{
 				if (conn != null && conn.IsActive)
 				{
-					Server.NetworkWrapper.Broadcast(conn, new ServerListBroadcast()
+					Server.NetworkWrapper.Broadcast(conn, new CharacterSelectResultBroadcast()
 					{
-						Servers = Array.Empty<WorldServerDetails>(),
+						Result = CharacterSelectResult.Failed,
+						CharacterName = string.Empty,
 					}, true, Channel.Reliable);
 				}
 			});

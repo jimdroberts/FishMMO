@@ -130,7 +130,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				Log.Warning("CharacterSystem",
 					$"Connection {kvp.Key} never acknowledged its scene load within {SceneLoadHandshakeTimeout.TotalSeconds:F0}s; disconnecting to release its character claim.");
-				conn.Disconnect(false);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneHandshakeTimedOut);
 			}
 		}
 
@@ -146,7 +146,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Resolve account name first so the rate limit can be applied per-account.
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ProtocolViolation, terminal: true);
 				return;
 			}
 
@@ -175,7 +175,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Is the character already loading?
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -186,14 +186,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!authenticated ||
 				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
 			if (Server?.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -207,7 +207,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (serverID <= 0)
 			{
 				Log.Error("CharacterSystem", "Authenticator_OnClientAuthenticationResult: Server ID is invalid, cannot claim session.");
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -222,7 +222,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService, serverID)))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 		}
 
@@ -286,10 +286,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			await Log.Error("CharacterSystem", $"TryClaimAsync failed for character {characterID}: {claimResult.ErrorCode} - {claimResult.ErrorMessage}");
 			TryEnqueueMainThread(() =>
 			{
-				if (conn != null && conn.IsActive)
-				{
-					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-				}
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable);
 			});
 			return Guid.Empty;
 		}
@@ -357,7 +354,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (conn != null && conn.IsActive)
 						{
 							Log.Debug("CharacterSystem", "Failed to resolve IUnitOfWorkService.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 						}
 					});
 					return;
@@ -394,7 +391,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (conn != null && conn.IsActive)
 						{
 							Log.Debug("CharacterSystem", "No selected character found for account.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 						}
 					});
 					return;
@@ -419,13 +416,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						await Log.Error("CharacterSystem",
 							$"Reclaimed session belongs to character {sessionCharacterID} but the account's selected character is {characterID}; abandoning load.");
 						await ReleaseHeldSessionAsync();
-						TryEnqueueMainThread(() =>
-						{
-							if (conn != null && conn.IsActive)
-							{
-								conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							}
-						});
+						TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true));
 						return;
 					}
 				}
@@ -454,13 +445,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// claim we hold is for a character this connection is no longer loading.
 					await Log.Warning("CharacterSystem", $"Selected character changed while claiming {characterID}; abandoning load.");
 					await ReleaseHeldSessionAsync();
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-						}
-					});
+					TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable));
 					return;
 				}
 				charData = ownedFetch.Data.Value;
@@ -473,7 +458,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (conn != null && conn.IsActive)
 						{
 							Log.Debug("CharacterSystem", "Failed to begin UnitOfWork for character load.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 						}
 					});
 					// The claim is committed at this point, so it has to be handed back
@@ -583,13 +568,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterSystem",
 						$"Main-thread queue rejected the character spawn for {charData.ID}; releasing its session.");
 					await ReleaseHeldSessionAsync();
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
-						}
-					});
+					TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError));
 				}
 			}
 			catch (Exception ex)
@@ -610,13 +589,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 
-				TryEnqueueMainThread(() =>
-				{
-					if (conn != null && conn.IsActive)
-					{
-						conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
-					}
-				});
+				TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError));
 			}
 		}
 
@@ -657,7 +630,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -665,14 +638,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", $"{charData.ID} is already loaded or loading.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				// Another session on this server already holds the character. Retrying is the
+				// right answer once that one finishes tearing down.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SessionSuperseded);
 				return;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -684,7 +659,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", "Failed to fetch character: invalid race template.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				// A bad race template will be just as bad on the next attempt.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 				return;
 			}
 
@@ -697,7 +673,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", "Failed to instantiate character prefab.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -707,7 +683,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
 				Log.Debug("CharacterSystem", "Failed to get IPlayerCharacter from instantiated prefab.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 				return;
 			}
 
@@ -993,7 +969,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
-				conn.Disconnect(false);
+				// The instance this character belongs to is not present on this server. The
+				// world server will route the retry to one that has it.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable);
 			}
 		}
 
@@ -1008,7 +986,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) ||
 				!mappingData.WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable);
 				return;
 			}
 
@@ -1036,7 +1014,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				TryExtractAndReleaseSession(mappingData, character.ID);
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable);
 				return;
 			}
 
@@ -1080,7 +1058,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (character == null)
 				{
-					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable);
 					return;
 				}
 
@@ -1131,7 +1109,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					TryExtractAndReleaseSession(mappingData, character.ID);
 
 					Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
-					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable);
 					return;
 				}
 

@@ -431,7 +431,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				Log.Warning("WorldSceneSystem",
 					$"Connection {kvp.Key} spent {WorldResidencyGraceSeconds:F0}s on the world server without being " +
 					"queued or routed to a scene server; disconnecting so the client can retry.");
-				conn.Disconnect(false);
+				// Non-terminal on purpose: retrying is the designed recovery here, and the
+				// notice only has to explain the wait if the retries also run out.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.RoutingTimedOut);
 			}
 		}
 
@@ -759,7 +761,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					{
 						if (conn != null && conn.IsActive)
 						{
-							Kick(conn, "Failed to get selected character");
+							Kick(conn, "Failed to get selected character", DisconnectNoticeReason.CharacterUnavailable);
 						}
 						if (conn != null)
 						{
@@ -1003,7 +1005,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				if (!IsValidConnection(conn, out string acct))
 				{
-					Kick(conn, "Failed to get account name");
+					Kick(conn, "Failed to get account name", DisconnectNoticeReason.ProtocolViolation, terminal: true);
 				}
 				else
 				{
@@ -1047,7 +1049,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var charResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!charResult.IsSuccess || !charResult.Data.HasValue)
 			{
-				TryEnqueueMainThread(() => Kick(conn, "invalid character ID"));
+				TryEnqueueMainThread(() => Kick(conn, "invalid character ID", DisconnectNoticeReason.CharacterUnavailable));
 				return;
 			}
 			var charData = charResult.Data.Value;
@@ -1237,19 +1239,19 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Get the scene for the selected character
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				Kick(conn, "Failed to get account name");
+				Kick(conn, "Failed to get account name", DisconnectNoticeReason.ProtocolViolation, terminal: true);
 				return;
 			}
 
 			if (Server?.Database?.ServiceRegistry == null)
 			{
-				Kick(conn, "Failed to access database or world server system");
+				Kick(conn, "Failed to access database or world server system", DisconnectNoticeReason.ServerError);
 				return;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 			{
-				Kick(conn, "Failed to get world scene mapping data");
+				Kick(conn, "Failed to get world scene mapping data", DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -1260,13 +1262,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Queue async instance connection processing
 			if (!TryBeginInstanceLookup(accountName))
 			{
-				Kick(conn, "Instance routing rate limited");
+				Kick(conn, "Instance routing rate limited", DisconnectNoticeReason.RateLimited);
 				return;
 			}
 
 			if (!TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn, skipDebounce: true), conn.ClientId))
 			{
-				Kick(conn, "Failed to enqueue instance connection processing");
+				Kick(conn, "Failed to enqueue instance connection processing", DisconnectNoticeReason.ServerError);
 			}
 		}
 
@@ -1285,7 +1287,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Defense-in-depth: cap total queue size to prevent unbounded memory growth.
 			if (reverseMap.Count >= MAX_WAITING_QUEUE_SIZE)
 			{
-				Kick(conn, "Waiting queue capacity exceeded");
+				Kick(conn, "Waiting queue capacity exceeded", DisconnectNoticeReason.RoutingFailed);
 				return;
 			}
 
@@ -1542,13 +1544,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
 			if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 			{
-				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
+				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene", DisconnectNoticeReason.CharacterUnavailable));
 				return;
 			}
 			var selectedChar = fetchResult.Data.Value;
 			if (selectedChar.ID <= 0 || string.IsNullOrEmpty(selectedChar.SceneName))
 			{
-				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene"));
+				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene", DisconnectNoticeReason.CharacterUnavailable));
 				return;
 			}
 			string sceneName = selectedChar.SceneName;
@@ -1576,14 +1578,26 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Kicks a connection from the server with a specified reason.
+		/// Closes a connection, logging the internal reason and telling the client a
+		/// player-facing one.
 		/// </summary>
+		/// <remarks>
+		/// This used to call <c>conn.Kick(KickReason.UnexpectedProblem)</c>, which FishNet does
+		/// not relay to the client at all — every routing failure here therefore put the player
+		/// back on the login screen with no explanation, and with no way to tell "try again in a
+		/// second" apart from "this character cannot be logged in". The <paramref name="reason"/>
+		/// string stays server-side for operators; the client is sent a
+		/// <see cref="DisconnectNoticeReason"/> it can word for itself.
+		/// </remarks>
 		/// <param name="conn">Network connection.</param>
-		/// <param name="reason">Reason for kicking.</param>
-		private void Kick(NetworkConnection conn, string reason)
+		/// <param name="reason">Internal reason, for the server log.</param>
+		/// <param name="notice">What to tell the client.</param>
+		/// <param name="terminal">True when reconnecting cannot help.</param>
+		private void Kick(NetworkConnection conn, string reason,
+			DisconnectNoticeReason notice = DisconnectNoticeReason.ServerError, bool terminal = false)
 		{
 			Log.Debug("WorldSceneSystem", $"World Scene System: {conn.ClientId} {reason}.");
-			conn.Kick(KickReason.UnexpectedProblem);
+			DisconnectWithNotice(conn, notice, terminal);
 		}
 
 		/// <summary>

@@ -300,6 +300,12 @@ namespace FishMMO.Client
 
 			Connection.OnReconnectFailed += this.onReconnectFailedQuitToLogin;
 
+			/* A disconnect notice describes one session. Reaching Started means whatever it
+			 * warned about has been recovered from — the reconnect worked, or the hop to the
+			 * next server succeeded — so holding it would surface a stale, contradictory
+			 * explanation the next time the player quits to login for an unrelated reason. */
+			Connection.OnConnectionSuccessful += () => this.pendingDisconnectNotice = null;
+
 			// When a non-reconnectable connection fails (e.g. login server unreachable),
 			// invalidate the cached login server list so the next attempt re-fetches from
 			// IPFetch instead of retrying the same potentially dead server/port.
@@ -445,6 +451,7 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneQueuePositionBroadcast>(OnWorldSceneQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
+			NetworkManager.ClientManager.RegisterBroadcast<DisconnectNoticeBroadcast>(OnDisconnectNotice);
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
 			NetworkManager.SceneManager.OnUnloadEnd += OnSceneUnloadEnd;
@@ -554,14 +561,98 @@ namespace FishMMO.Client
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
 			UnloadWorldScenes();
-			if (forceDisconnect) Connection?.ForceDisconnect();
+
+			/* Revoke first, disconnect second.
+			 *
+			 * The revocation is a broadcast, and FishNet does not put a broadcast on the wire
+			 * when it is written — it goes into the outgoing bundle and leaves on the next tick.
+			 * Tearing the transport down on the line above therefore discarded it every single
+			 * time, so an explicit logout never revoked anything and the session token stayed
+			 * valid for the rest of its lifetime. The local copy was still zeroed, which is why
+			 * this went unnoticed: nothing on this client could use the token afterwards, but
+			 * anyone who had captured it still could.
+			 *
+			 * The stop is deferred just long enough for that tick to happen. Everything else in
+			 * this teardown runs immediately, so the player sees the login screen at the same
+			 * moment they did before. */
 			this.loginAuthenticator?.RevokeAndClearAuthToken();
+			if (forceDisconnect) DisconnectAfterRevocationFlush();
 			Connection?.ResetReconnectState();
 			this.cachedConnectionToken = null;
 			OnQuitToLogin?.Invoke();
+
+			// After the panels are back, never before — see ShowPendingDisconnectNotice.
+			ShowPendingDisconnectNotice();
 #if UNITY_EDITOR
 			PlayerInputController.MouseMode = true;
 #endif
+		}
+
+		/// <summary>
+		/// Ticks to let elapse before the transport is stopped, so a revocation written on the
+		/// way out is actually sent.
+		/// </summary>
+		/// <remarks>
+		/// One tick would be enough in principle; two costs a few tens of milliseconds the
+		/// player spends looking at the login screen either way, and covers the case where the
+		/// broadcast is written immediately after a tick boundary.
+		/// </remarks>
+		private const uint RevocationFlushTicks = 2;
+
+		/// <summary>
+		/// Upper bound, in seconds, on how long the deferred disconnect will wait for those
+		/// ticks. A stalled or already-dead TimeManager must not leave the connection open.
+		/// </summary>
+		private const float RevocationFlushTimeoutSeconds = 0.5f;
+
+		/// <summary>
+		/// Stops the connection once the outgoing bundle carrying the token revocation has been
+		/// flushed. See the call site in <see cref="QuitToLogin"/>.
+		/// </summary>
+		/// <remarks>
+		/// Hosted on <see cref="CoroutineRunner"/> rather than on this component, because
+		/// <see cref="QuitToLogin"/> calls <c>StopAllCoroutines</c> on itself a few lines
+		/// earlier and would kill this before it ever ran.
+		/// </remarks>
+		private void DisconnectAfterRevocationFlush()
+		{
+			ClientConnectionManager connection = Connection;
+			if (connection == null)
+			{
+				return;
+			}
+
+			// Nothing to flush, and nothing to wait for.
+			if (connection.ClientState != LocalConnectionState.Started ||
+				NetworkManager?.TimeManager == null)
+			{
+				connection.ForceDisconnect();
+				return;
+			}
+
+			CoroutineRunner.Start(FlushThenDisconnectRoutine(connection));
+		}
+
+		private static IEnumerator FlushThenDisconnectRoutine(ClientConnectionManager connection)
+		{
+			var timeManager = NetworkManager != null ? NetworkManager.TimeManager : null;
+			if (timeManager != null)
+			{
+				uint target = timeManager.LocalTick + RevocationFlushTicks;
+				float deadline = Time.realtimeSinceStartup + RevocationFlushTimeoutSeconds;
+				while (timeManager != null &&
+					timeManager.LocalTick < target &&
+					Time.realtimeSinceStartup < deadline &&
+					connection.ClientState == LocalConnectionState.Started)
+				{
+					yield return null;
+				}
+			}
+
+			// Unconditional: the disconnect is the point of this routine, and every exit above
+			// (timeout, a TimeManager that went away, a connection that dropped on its own)
+			// still has to reach it. ForceDisconnect is safe on an already-stopped connection.
+			connection.ForceDisconnect();
 		}
 
 		/// <summary>
@@ -1199,6 +1290,111 @@ namespace FishMMO.Client
 					return "Waiting for space in the world.";
 			}
 		}
+
+		// ── Disconnect feedback ─────────────────────────────────────────
+
+		/// <summary>
+		/// The most recent reason a server gave for closing the connection, or null.
+		/// </summary>
+		/// <remarks>
+		/// Held rather than shown immediately, because the notice arrives while the world is
+		/// still up: showing a dialog there would put it behind the teardown that follows, and
+		/// for a non-terminal reason the reconnect may well succeed and make the message a lie.
+		/// It is surfaced at the end of <see cref="QuitToLogin"/> — the one place every route
+		/// back to the login screen passes through — and dropped the moment a connection
+		/// succeeds, so a notice can never outlive the session it describes.
+		/// </remarks>
+		private DisconnectNoticeReason? pendingDisconnectNotice;
+
+		/// <summary>
+		/// A server is closing this connection on purpose and has said why.
+		/// </summary>
+		/// <remarks>
+		/// Terminal reasons short-circuit the reconnect loop. Without that, a character that
+		/// cannot be claimed at all still cost the player ten attempts with exponential backoff
+		/// — several minutes of a "reconnecting" overlay — before landing on the login screen
+		/// with the same outcome the server already knew about. Non-terminal reasons leave the
+		/// loop alone, because retrying is the designed recovery for them; the message is kept
+		/// in case the retries run out too.
+		/// </remarks>
+		private void OnDisconnectNotice(DisconnectNoticeBroadcast msg, Channel ch)
+		{
+			try
+			{
+				this.pendingDisconnectNotice = msg.Reason;
+
+				Log.Info("Client", $"The server is closing this connection: {msg.Reason} (terminal={msg.Terminal}).");
+
+				if (msg.Terminal)
+				{
+					QuitToLogin();
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnDisconnectNotice: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Shows the last disconnect reason, if one is outstanding, and clears it.
+		/// </summary>
+		/// <remarks>
+		/// Called at the very end of <see cref="QuitToLogin"/>, after the panels have been
+		/// restored — a dialog opened before that is closed again by the panels'
+		/// quit-to-login handlers, which is how the login queue's timeout message used to
+		/// disappear.
+		/// </remarks>
+		private void ShowPendingDisconnectNotice()
+		{
+			if (this.pendingDisconnectNotice == null)
+			{
+				return;
+			}
+
+			DisconnectNoticeReason reason = this.pendingDisconnectNotice.Value;
+			this.pendingDisconnectNotice = null;
+
+			ShowInfoDialog(DescribeDisconnectReason(reason));
+		}
+
+		/// <summary>
+		/// Turns a <see cref="DisconnectNoticeReason"/> into something a player can act on.
+		/// </summary>
+		/// <remarks>
+		/// The server deliberately sends a code rather than its own log text: its wording is
+		/// written for an operator, and putting internal state on the wire would narrate the
+		/// server's behaviour to anyone watching. Each line here says what happened and what to
+		/// do about it, which is the part the player actually needs.
+		/// </remarks>
+		private static string DescribeDisconnectReason(DisconnectNoticeReason reason)
+		{
+			switch (reason)
+			{
+				case DisconnectNoticeReason.CharacterUnavailable:
+					return "Your character could not be loaded.\nPlease try again, or pick a different character.";
+				case DisconnectNoticeReason.SceneUnavailable:
+					return "The zone your character is in could not be prepared.\nPlease try again in a moment.";
+				case DisconnectNoticeReason.RoutingFailed:
+					return "The world server could not find a place for your character.\nPlease try again in a moment.";
+				case DisconnectNoticeReason.RoutingTimedOut:
+					return "The world server took too long to place your character.\nPlease try again.";
+				case DisconnectNoticeReason.SceneHandshakeTimedOut:
+					return "Your client did not finish loading the zone in time.\nPlease try again.";
+				case DisconnectNoticeReason.SessionSuperseded:
+					return "Your character was taken over by another session.\nPlease log in again.";
+				case DisconnectNoticeReason.RateLimited:
+					return "You are doing that too quickly.\nPlease wait a moment and try again.";
+				case DisconnectNoticeReason.ProtocolViolation:
+					return "The server rejected this connection.\nIf this keeps happening, please contact support.";
+				case DisconnectNoticeReason.ServerError:
+					return "The server ran into a problem handling your login.\nPlease try again in a moment.";
+				case DisconnectNoticeReason.Unspecified:
+				default:
+					return "You were disconnected by the server.\nPlease try again.";
+			}
+		}
+
 		/// <summary>
 		/// Handles a death broadcast by showing the death dialog UI.
 		/// </summary>

@@ -470,10 +470,30 @@ sequenceDiagram
     Login->>DB: Character CRUD operations, • Unit of Work transactions, • Ownership verification
 
     alt Character selected
-        Login-->>Client: WorldSceneConnectBroadcast { Port: 7780 }
+        Login-->>Client: CharacterSelectResultBroadcast { Success }
+        Login-->>Client: ServerListBroadcast { Servers: [...] }
         Note over Client: Triggers Phase 8
+    else Selection refused
+        Login-->>Client: CharacterSelectResultBroadcast {, OtherCharacterInWorld | Failed, }
+        Note over Client: Panel returns, message shown
     end
 ```
+
+**Every selection is answered, including the ones that succeed.** The client disables its
+connect button and arms a 30 s reply deadline the moment it sends `CharacterSelectBroadcast`,
+and `CharacterSelectResultBroadcast` is the only message that ends that wait — the server list
+is handled by a different panel and cannot clear it. A success that said nothing therefore left
+the deadline running, and half a minute later the character-select panel put itself back on
+screen, on top of the server list or of world entry, announcing that the server had not
+responded.
+
+Failures answer on the same channel rather than sending an empty `ServerListBroadcast`. An
+empty list unblocked the client, but it unblocked the *wrong* panel: the server-select screen
+opened showing no worlds, which reads as "there are no worlds" rather than "your selection
+failed", and left the character-select deadline armed underneath it. The refusal path
+(`TryBeginInFlightRequest`) is answered too — its cooldown is two seconds, comfortably short
+enough for a player to hit by picking a different character straight after an
+`OtherCharacterInWorld` refusal.
 
 ### Phase 8: World Server Connection
 
@@ -654,6 +674,7 @@ sequenceDiagram
         Note over Client,Login: TOKEN REVOCATION (logout)
         Client->>Client: RevokeAndClearAuthToken(), • TryConsumeStoredTokenForRevoke(),   - Defensive copy of raw token bytes,   - ZeroMemory original
         Client->>Login: RevokeTokenBroadcast { Token }, (3 retry attempts)
+        Note over Client: QuitToLogin defers the transport stop, by 2 ticks so the broadcast is flushed
         Login->>Login: TokenService.HashToken(tokenCopy)
         Login->>DB: RevokeByHashAsync(tokenHash)
         Login->>Login: ZeroMemory(tokenCopy)
@@ -692,6 +713,56 @@ player dropped to the login screen on their next scene transfer.
 `RenewTokenResponseBroadcast.Seq` is informational only; the client must not decrypt against
 it. A desynchronised counter has to surface as a decryption failure rather than as a
 successful decrypt at a peer-chosen sequence.
+
+#### Revocation only works if it is actually sent
+
+Two things used to make logout revocation a guaranteed no-op, and both are easy to
+reintroduce:
+
+1. **`RevokeTokenBroadcast` must be registered by every server type, not just the LoginServer.**
+   It is handled in `BaseServerAuthenticator`, so `TokenServerAuthenticator` (World and Scene)
+   accepts it as well. Registered with `requiresAuthentication: false`, because the client may
+   send it after its auth channel has been torn down; the handler still refuses connections
+   that never began a handshake, and is rate-limited per IP and globally. When only the
+   LoginServer handled it, quitting to login from inside the world sent the revocation to a
+   Scene server that silently discarded it.
+2. **The transport must not be stopped in the same frame the revocation is written.** FishNet
+   queues a broadcast into the outgoing bundle and sends it on the next tick, so
+   `Client.QuitToLogin` revokes first and then defers `ForceDisconnect` by
+   `RevocationFlushTicks` (2), bounded by `RevocationFlushTimeoutSeconds` (0.5 s). Everything
+   else in the teardown still runs immediately.
+
+The local token copy is zeroed either way, which is why this was invisible: nothing on the
+client could use the token afterwards, but anyone who had captured it still could, for the
+remainder of its lifetime.
+
+### Deliberate disconnects explain themselves
+
+FishNet does not deliver a kick reason to the client, so every server-initiated disconnect
+outside the two queue systems put the player back on the login screen with no explanation — and
+no way to tell a transient routing hiccup from a character that will never load.
+
+`DisconnectNoticeBroadcast { Reason, Terminal }` is sent immediately before any deliberate
+disconnect, via `ServerBehaviour.DisconnectWithNotice`. Two properties make it work:
+
+- **`Disconnect(false)`, never `Kick`.** `Kick` calls `Disconnect(true)`, which stops the
+  transport immediately and throws away everything still queued for the tick — including the
+  notice. `Disconnect(false)` flushes the tick, marks the connection invalid so nothing further
+  is sent or received on it, and closes ~100 ms later.
+- **An enum, not the server's own log text.** The server's wording is written for an operator
+  and naming internal state on the wire hands an observer a commentary on server behaviour.
+  The client maps each `DisconnectNoticeReason` to its own player-facing line.
+
+`Terminal` is the server's judgement about whether retrying can help, and only the server can
+make it. A world server that could not find a scene instance expects the client straight back;
+a character that cannot be claimed at all will fail identically on every attempt, and letting
+the reconnect loop run its full course costs the player minutes of a spinner to reach the same
+place. The client short-circuits to `QuitToLogin` on a terminal notice and otherwise keeps the
+message until the retries run out.
+
+The notice is shown at the end of `QuitToLogin`, after the login panels are restored — a dialog
+opened before that is closed again by the panels' own quit-to-login handlers. It is cleared on
+any successful connection, so it can never outlive the session it describes.
 
 ### Phase 11: Scene Transfer & Character Session Ownership
 

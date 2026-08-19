@@ -396,7 +396,7 @@ namespace FishMMO.Client
 				? $"'{msg.CharacterName}' is still in the world. Select that character to rejoin it, or wait for it to leave combat."
 				: "Character selection failed. Please try again.";
 
-			if (UIManager.TryGetTK("UITKDialogBox", out UITKDialogBox dialogBox))
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox))
 			{
 				dialogBox.Open(message);
 			}

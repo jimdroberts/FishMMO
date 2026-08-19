@@ -715,7 +715,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (owner != null && owner.IsActive)
 			{
-				owner.Disconnect(false);
+				// Non-terminal: the world server will route the reconnect to whichever scene
+				// server holds the claim now, which is exactly the recovery this eviction wants.
+				DisconnectWithNotice(owner, DisconnectNoticeReason.SessionSuperseded);
 			}
 		}
 

@@ -149,6 +149,24 @@ namespace FishMMO.Client
 		/// </remarks>
 		public event Action OnReconnectPending;
 
+		/// <summary>
+		/// True when the reconnect currently armed or in progress was caused by a scene
+		/// server deliberately handing the client back, rather than by a lost connection.
+		/// </summary>
+		/// <remarks>
+		/// A zone change, a channel switch and a cross-scene bind-point respawn are all
+		/// implemented as a deliberate drop, so from the outside they are the same event as an
+		/// outage: <see cref="OnReconnectPending"/> and <see cref="OnReconnectAttempt"/> fire
+		/// for both. Anything that explains the wait to the player needs to tell them apart —
+		/// labelling a routine teleport "connection lost" is worse than saying nothing at all.
+		/// <para>
+		/// Set alongside the shortened handoff backoff in <see cref="OnClientConnectionState"/>
+		/// and cleared once a connection is established, so it describes the wait that is
+		/// actually running.
+		/// </para>
+		/// </remarks>
+		public bool IsSceneHandoffReconnect { get; private set; }
+
 		/// <summary>Returns true if the current connection type supports reconnection
 		/// (World, Scene, or an in-flight world connect).</summary>
 		/// <remarks>
@@ -345,6 +363,7 @@ namespace FishMMO.Client
 			}
 			stoppingForConnect = false;
 			ReconnectsAttempted = 0; nextReconnect = -1;
+			IsSceneHandoffReconnect = false;
 			CurrentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = ""; lastWorldPort = 0;
 			// ── FIX #10: Stop in-flight coroutine BEFORE releasing guard ──
@@ -449,6 +468,7 @@ namespace FishMMO.Client
 						// server on purpose. Do not make the player wait out a failure backoff
 						// for it. Read before CurrentConnectionType is cleared below.
 						bool fromSceneHandoff = CurrentConnectionType == ServerConnectionType.Scene;
+						IsSceneHandoffReconnect = fromSceneHandoff;
 						nextReconnect = ComputeReconnectDelay(ReconnectsAttempted, fromSceneHandoff);
 						OnReconnectPending?.Invoke();
 						// OnReconnectAttempt is intentionally NOT fired here — it fires
@@ -466,6 +486,7 @@ namespace FishMMO.Client
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();
 					ReconnectsAttempted = 0; nextReconnect = -1; forceDisconnect = false;
+					IsSceneHandoffReconnect = false;
 					break;
 			}
 		}

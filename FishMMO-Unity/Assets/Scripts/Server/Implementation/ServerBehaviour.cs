@@ -197,6 +197,47 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Closes <paramref name="conn"/> after telling it why.
+		/// </summary>
+		/// <remarks>
+		/// Use this instead of <c>NetworkConnection.Kick</c> for any disconnect the server
+		/// decides on. FishNet does not deliver a kick reason to the client, so a plain kick
+		/// drops the player back at the login screen with nothing to go on — unable to tell a
+		/// transient routing hiccup from a character they will never be able to log in to.
+		/// <para>
+		/// <c>Disconnect(false)</c> rather than <c>Kick</c> is load-bearing: <c>Kick</c> stops
+		/// the transport immediately and throws away everything still queued for this tick,
+		/// including the notice written on the line above. <c>Disconnect(false)</c> flushes the
+		/// tick first, marks the connection invalid so nothing further is sent or received on
+		/// it, and closes roughly 100ms later — so the notice arrives and the connection is
+		/// still shut out of the server just as promptly.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">Connection to close.</param>
+		/// <param name="reason">What to tell the client.</param>
+		/// <param name="terminal">
+		/// True when reconnecting cannot help, so the client abandons its retry loop instead of
+		/// spending it on an outcome that cannot change. See
+		/// <see cref="DisconnectNoticeBroadcast.Terminal"/>.
+		/// </param>
+		protected void DisconnectWithNotice(NetworkConnection conn, DisconnectNoticeReason reason, bool terminal = false)
+		{
+			if (conn == null || !conn.IsActive)
+				return;
+
+			// requireAuthentication: false — a connection can be refused before it finishes
+			// authenticating, and those refusals are exactly the ones with nothing else to
+			// explain them.
+			Server?.NetworkWrapper?.Broadcast(conn, new DisconnectNoticeBroadcast
+			{
+				Reason = reason,
+				Terminal = terminal,
+			}, false, Channel.Reliable);
+
+			conn.Disconnect(false);
+		}
+
+		/// <summary>
 		/// Enqueue a unit of asynchronous work to the centralized AsyncWorker. Returns false when rejected.
 		/// Logs warnings using the concrete behaviour name for diagnostics.
 		/// </summary>

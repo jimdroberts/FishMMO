@@ -29,27 +29,6 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Lifetime of issued auth tokens, in minutes. Configurable via the Unity Inspector.</summary>
 		[SerializeField] private float tokenExpirationMinutes = 10f;
 
-		/// <summary>
-		/// Per-IP rate limiter for token revocation broadcasts. Prevents unauthenticated
-		/// clients from triggering DB queries at high frequency (DoS vector).
-		/// Limits to 1 revocation attempt per 5 seconds per IP.
-		/// </summary>
-		private readonly ExpiringKeyTracker<string> revokeRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
-
-		private static readonly TimeSpan RevokeRateLimitDuration = TimeSpan.FromSeconds(5);
-
-		/// <summary>
-		/// Global secondary rate limiter for revocation, keyed by the string "global".
-		/// Acts as a safety net when the per-IP limiter falls back to conn:{clientId}
-		/// (e.g. behind an L4 proxy where real IP lookup fails).  Without this global
-		/// cap, an attacker could open many connections and send one revoke per connection
-		/// per 5 seconds — bounded by total connection slots.  This global limiter caps
-		/// total revocations at 10/second regardless of connection count.
-		/// </summary>
-		private readonly ExpiringKeyTracker<string> revokeGlobalRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
-
-		private static readonly TimeSpan RevokeGlobalRateLimitDuration = TimeSpan.FromMilliseconds(100);
-
 		/// <summary>The SRP-specific core instance. Null until <see cref="InitializeCoreInstance"/> is called.</summary>
 		private ServerAuthenticatorCore core;
 
@@ -228,22 +207,14 @@ namespace FishMMO.Server.Implementation
 			networkManager.ServerManager.RegisterBroadcast<SrpVerifyRequestBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<TwoFactorVerifyBroadcast>(OnServerTwoFactorVerifyBroadcastReceived, false);
-			// RevokeTokenBroadcast must be accepted from unauthenticated connections (the
-			// client may invoke it after the auth channel has been torn down on logout).
-			networkManager.ServerManager.RegisterBroadcast<RevokeTokenBroadcast>(OnServerRevokeTokenBroadcastReceived, false);
+			// RevokeTokenBroadcast is registered by BaseServerAuthenticator, so that World and
+			// Scene servers honour a logout revocation as well as the LoginServer.
 		}
 
-		/// <summary>Calls <see cref="SrpAuthenticatorCore{TConnection}.TickRateLimits"/> every frame.
-		/// Also sweeps expired entries from <see cref="revokeRateLimiter"/> to prevent unbounded growth.</summary>
+		/// <summary>Calls <see cref="SrpAuthenticatorCore{TConnection}.TickRateLimits"/> every frame.</summary>
 		protected override void OnUpdate()
 		{
 			core?.TickRateLimits();
-			// Sweep expired entries from the per-IP revoke rate limiter to prevent
-			// unbounded memory growth under sustained token-revoke traffic.
-			revokeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
-			// Global revocation limiter has only one entry ("global") so sweeping
-			// is cheap — just remove expired entries.
-			revokeGlobalRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 1, maxRemove: 1);
 		}
 
 		#endregion
@@ -286,134 +257,6 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 			core?.OnTwoFactorVerifyReceived(conn, msg.Code, msg.Seq);
-		}
-
-		/// <summary>
-		/// Handles an incoming <see cref="RevokeTokenBroadcast"/> from a client that is explicitly
-		/// logging out. Hashes the raw token bytes and asks the DB to mark the row revoked. The
-		/// broadcast is best-effort and rate-limit-bounded by FishNet's connection lifecycle;
-		/// invalid or unknown tokens are silently ignored to avoid leaking validity oracles.
-		/// </summary>
-		internal void OnServerRevokeTokenBroadcastReceived(NetworkConnection conn, RevokeTokenBroadcast msg, Channel channel)
-		{
-			// Validate payload bounds up front on the network thread; defer DB work to a Task.
-			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > 4096)
-			{
-				return;
-			}
-
-			// Reject revocation requests from connections that have not started the
-			// authentication process.  This broadcast is registered with
-			// requiresAuthentication:false to allow authenticated clients to revoke
-			// tokens after the auth channel is torn down on logout, but completely
-			// unauthenticated connections (those that never sent a ClientHandshake)
-			// must not trigger DB queries.
-			//
-			// connectionStartTimes is populated on RemoteConnectionState.Started and
-			// removed on Stopped.  A connection that never started the auth process
-			// will not have an entry here.
-			if (!connectionStartTimes.ContainsKey(conn.ClientId))
-			{
-				return;
-			}
-
-			// Per-IP rate limiting: prevent unauthenticated clients from triggering DB
-			// queries at high frequency (DoS vector). Limit to 1 attempt per 5 seconds.
-			// Fallback: when IP is unavailable (connection-IP cache missed), use the
-			// connection's ClientId as the rate-limit key to prevent bypass attacks.
-			string ip = ResolveRateLimitKey(conn);
-			string rateLimitKey = !string.IsNullOrEmpty(ip) ? ip : $"conn:{conn.ClientId}";
-			if (!revokeRateLimiter.TryBegin(rateLimitKey, DateTime.UtcNow, RevokeRateLimitDuration))
-			{
-				_ = Log.Warning(LogPrefix, $"Revoke token rate limited for key {rateLimitKey}.");
-				return;
-			}
-
-			// Global secondary rate limit: even if the per-IP limiter uses a per-connection
-			// fallback key (conn:{clientId}), this global cap prevents an attacker from
-			// saturating the DB with revocation queries across many connections.
-			// Limits total revocations to 10/sec regardless of connection count.
-			if (!revokeGlobalRateLimiter.TryBegin("global", DateTime.UtcNow, RevokeGlobalRateLimitDuration))
-			{
-				_ = Log.Warning(LogPrefix, "Revoke token globally rate limited.");
-				return;
-			}
-
-			// Copy so the deserialized buffer is not mutated by FishNet after we hand off.
-			byte[] tokenCopy = new byte[msg.Token.Length];
-			Buffer.BlockCopy(msg.Token, 0, tokenCopy, 0, tokenCopy.Length);
-
-			_ = Task.Run(async () =>
-			{
-				try
-				{
-					// Check cancellation before any DB work.  If the server is shutting
-					// down, bail immediately rather than competing with teardown.
-					if (ShutdownToken.IsCancellationRequested)
-						return;
-
-					string tokenHash = null;
-					try
-					{
-						tokenHash = TokenService.HashToken(tokenCopy);
-					}
-					finally
-					{
-						CryptographicOperationsCompat.ZeroMemory(tokenCopy);
-					}
-
-					if (string.IsNullOrEmpty(tokenHash))
-					{
-						return;
-					}
-
-					// Re-check cancellation before accessing Server.Database, which
-					// may already be nulled by PerformShutdown during teardown.
-					if (ShutdownToken.IsCancellationRequested)
-						return;
-
-					if (Server?.Database?.ServiceRegistry == null ||
-						!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
-					{
-						return;
-					}
-
-					// One final cancellation check before the DB call.
-					if (ShutdownToken.IsCancellationRequested)
-						return;
-
-					try
-					{
-						var r = await svc.RevokeByHashAsync(tokenHash);
-						if (!r.IsSuccess)
-						{
-							/* LOGGING ORACLE NOTE: We log even "not found" results at Debug level
-							 * (not Warning) to avoid creating a side-channel oracle.  An attacker
-							 * who can observe the log output (e.g. via a shared logging service or
-							 * timing side-channel) could distinguish "token existed and was revoked"
-							 * from "token never existed" by the presence/absence of a higher-severity
-							 * log line.  Debug-level logging is disabled in production by default,
-							 * so the oracle is closed.  If Debug logging is enabled in production,
-							 * an observer could exploit this — keep Debug disabled in production. */
-							// Treat "not found" as a non-event: an attacker could otherwise probe
-							// for valid token hashes by observing log differences.
-							await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
-						}
-					}
-					catch (Exception ex)
-					{
-						await Log.Warning(LogPrefix, $"Exception during client-initiated token revoke: {ex.Message}");
-					}
-				}
-				catch (OperationCanceledException)
-				{
-					/* Server is shutting down — expected, no action needed. */
-				}
-				catch (Exception ex)
-				{
-					await Log.Error(LogPrefix, $"Unhandled exception in token revocation task: {ex.Message}");
-				}
-			}, ShutdownToken);
 		}
 
 		#endregion

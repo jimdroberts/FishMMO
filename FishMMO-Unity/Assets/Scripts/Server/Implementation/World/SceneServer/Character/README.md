@@ -210,6 +210,31 @@ that lingered would leave the body and its session claim on the source server wh
 arrived at the destination, which could then not claim the character and would kick it on every
 retry until the linger expired.
 
+### Combat-Logout Linger
+
+A character whose owner disconnects mid-combat keeps its body in the world instead of being
+despawned, so closing the client is not a way to win a losing fight. `TryBeginCombatLinger`
+removes ownership (which is what stops FishNet despawning the object with its connection),
+flags the row `IsCombatLogged`, puts the body back into the scene's population count, and
+persists a snapshot immediately — the body can be damaged and killed from here with nothing
+attached to it, so a crash mid-linger must not roll that back.
+
+**It also cancels any activation in progress.** A despawn would have done this for free —
+FishNet's `ResetState` calls `AbilityController.Cancel()` — but a lingering body is by
+definition not despawned, so an in-flight cast simply carried on: the server keeps ticking
+`OnReplicate` for an unowned object, and a tick with no input re-asserts `IsHeld` from the
+replicated flags rather than clearing it. A channelled or charged ability therefore held
+indefinitely and a plain cast ran to completion and fired, spawning projectiles and raising ECA
+events on behalf of a player who was no longer connected and could not aim, retarget or stop
+them. `Cancel()` also unlocks any consumable inventory slot the activation had reserved, which
+would otherwise follow the character into its next session — the linger's snapshot is what the
+reattach reloads.
+
+The linger ends on whichever comes first: the character leaving combat, dying, its owner
+reconnecting (`TryReattachLingeringCharacter`), or `combatLogoutLingerSeconds` elapsing. That
+last one is the guarantee that an attacker cannot pin a player in the world indefinitely by
+refusing to let their combat timer lapse.
+
 ### Character Load Pipeline
 
 **Step 1 — Authentication callback** (`Authenticator_OnClientAuthenticationResult`):
