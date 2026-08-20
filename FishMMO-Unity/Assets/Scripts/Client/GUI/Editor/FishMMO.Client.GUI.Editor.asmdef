@@ -1,0 +1,19 @@
+{
+    "name": "FishMMO.Client.GUI.Editor",
+    "rootNamespace": "FishMMO.Client",
+    "references": [
+        "FishMMO.Client",
+        "FishMMO.Shared"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
