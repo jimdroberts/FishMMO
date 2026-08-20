@@ -161,9 +161,6 @@ namespace FishMMO.Auth.Implementation
 				// TOKEN NO-RETRY: Token auth is one-shot by design. Client must reconnect.
 				RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
 			}
-			else
-			{
-			}
 		}
 
 		#endregion

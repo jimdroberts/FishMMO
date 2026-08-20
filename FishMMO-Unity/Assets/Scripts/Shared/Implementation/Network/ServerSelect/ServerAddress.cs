@@ -23,24 +23,15 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class ServerAddresses
 	{
-		/// <summary>
-		/// List of available server addresses (internal use).
-		/// Plain field, not an auto-property — JsonUtility.FromJson does not
-		/// reliably populate [field: SerializeField] auto-property backing
-		/// fields, silently leaving them at their default value.
-		/// </summary>
+		/// <summary>List of available server addresses (internal use).</summary>
 		public List<ServerAddress> Addresses = new List<ServerAddress>();
-		/// <summary>
-		/// List of available server ports (client use).
-		/// Plain field for the same JsonUtility reason as <see cref="Addresses"/>.
-		/// </summary>
+		/// <summary>List of available server ports (client use).</summary>
 		public List<ushort> Ports = new List<ushort>();
 		/// <summary>
 		/// One-time connection token issued by IPFetch. The client echoes this
 		/// in the first ClientHandshake so the Login Server can recover the
 		/// real client IP that was visible to the HTTP layer (X-Forwarded-For)
 		/// but is lost through the L4 UDP proxy.
-		/// Plain field for the same JsonUtility reason as <see cref="Addresses"/>.
 		/// </summary>
 		public string ConnectionToken;
 	}

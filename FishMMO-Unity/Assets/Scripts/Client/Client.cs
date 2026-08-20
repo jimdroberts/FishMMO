@@ -922,7 +922,6 @@ namespace FishMMO.Client
 								Log.Debug("Client", $"GetLoginServerList: JSON parse failed. Raw response (truncated): {(rawText != null && rawText.Length > 200 ? rawText.Substring(0, 200) + "..." : rawText)}");
 								continue; 
 							}
-							Log.Debug("Client", $"GetLoginServerList: fresh fetch, tokenIsNullOrEmpty={string.IsNullOrEmpty(parsed.ConnectionToken)}");
 							this.cachedConnectionToken = parsed.ConnectionToken;
 							winner = parsed.Ports;
 							break;

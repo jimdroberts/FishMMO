@@ -173,7 +173,6 @@ namespace FishMMO.Client
 		/// <param name="obj">Connection state arguments.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
-			Log.Debug("UILogin", $"[{GetInstanceID()}] ClientManager_OnClientConnectionState: state={obj.ConnectionState} isAuthFlowActive={isAuthFlowActive}");
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
 				HandshakeMSG.text = "";
@@ -236,9 +235,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private IEnumerator DeferredUnlockAfterDisconnect()
 		{
-			Log.Debug("UILogin", $"[{GetInstanceID()}] DeferredUnlockAfterDisconnect: started, isAuthFlowActive={isAuthFlowActive}");
 			yield return new WaitForSeconds(1.5f);
-			Log.Debug("UILogin", $"[{GetInstanceID()}] DeferredUnlockAfterDisconnect: resumed after wait, isAuthFlowActive={isAuthFlowActive}");
 
 			/* Judged here rather than at the Stopped event, and read before
 			 * SetSignInLocked clears isAuthFlowActive. A result that was already in
@@ -298,7 +295,6 @@ namespace FishMMO.Client
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
-			Log.Debug("UILogin", $"[{GetInstanceID()}] Authenticator_OnClientAuthenticationResult: result={result} isAuthFlowActive={isAuthFlowActive}");
 			/* Any result is the server telling us it is still working this request —
 			 * the SRP exchange and the two-factor prompt both report progress before
 			 * they finish, and a client can sit in the login queue for minutes. Each
@@ -494,7 +490,6 @@ namespace FishMMO.Client
 			private void OnLoginAuthenticationDialog(string errorMsg)
 		{
 			bool found = UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox);
-			Log.Debug("UILogin", $"OnLoginAuthenticationDialog: found={found} msg={errorMsg}");
 			if (found)
 			{
 				uiDialogBox.Open(errorMsg);
@@ -621,7 +616,6 @@ namespace FishMMO.Client
 			},
 			(servers, token) =>
 			{
-					Log.Debug("UILogin", $"GetLoginServerList onDone: tokenIsNullOrEmpty={string.IsNullOrEmpty(token)}");
 					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
 				Connect("Connecting...", identifier, password);
 			}));

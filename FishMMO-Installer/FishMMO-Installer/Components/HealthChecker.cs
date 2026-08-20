@@ -128,9 +128,8 @@ namespace FishMMO.Installer
                 await conn.OpenAsync();
                 return true;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"[DEBUG] Connection failed: {ex.GetType().Name}: {ex.Message}");
                 return false;
             }
         }

@@ -7,7 +7,6 @@ using FishNet.Serializing;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
-using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {

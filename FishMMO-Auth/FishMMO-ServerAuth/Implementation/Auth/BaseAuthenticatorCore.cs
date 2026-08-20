@@ -477,7 +477,7 @@ namespace FishMMO.Auth.Implementation
 				{
 					CryptoHelper.NegotiateProtocolVersion(minVersion, maxVersion);
 				}
-				catch (CryptographicException ex)
+				catch (CryptographicException)
 				{
 					DisconnectConnection(conn, graceful: true);
 					return;
