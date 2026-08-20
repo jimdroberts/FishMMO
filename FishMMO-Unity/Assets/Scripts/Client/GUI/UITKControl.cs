@@ -1,6 +1,7 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.UIElements;
+using FishMMO.Logging;
 using FishMMO.Shared;
 
 namespace FishMMO.Client
@@ -35,6 +36,23 @@ namespace FishMMO.Client
 		public bool CloseOnQuitToMenu = true;
 
 		/// <summary>
+		/// If true, showing this panel releases the mouse cursor so it can be clicked.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors what <see cref="UIControl"/> does for its own panels, where the same behaviour
+		/// is gated on <c>CloseOnEscape</c>: a window the player interacts with needs the cursor,
+		/// and a HUD element that is permanently on screen must not take it away. Defaulting this
+		/// to false keeps bars and hotkey strips from stealing the cursor the moment they appear.
+		/// <para>
+		/// Only ever set true here, never false, which matches the legacy panels — releasing the
+		/// cursor is a panel's business but recapturing it is not, since another panel may still
+		/// be open. <see cref="PlayerInputController"/> and <see cref="Client"/> own the reset.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Show() releases the mouse cursor. Enable for windows and dialogs, not for HUD elements.")]
+		public bool ReleasesCursor = false;
+
+		/// <summary>
 		/// GameObject name; used as the key in <see cref="UIManager"/>.
 		/// </summary>
 		public string Name => gameObject.name;
@@ -59,6 +77,23 @@ namespace FishMMO.Client
 		/// True once <see cref="OnStarting"/> has run against a populated visual tree.
 		/// </summary>
 		private bool hasStarted;
+
+		/// <summary>
+		/// The first child of the visual tree <see cref="OnStarting"/> last ran against, used to
+		/// notice when the tree has been replaced underneath us.
+		/// </summary>
+		/// <remarks>
+		/// Hiding a panel disables its <see cref="UIDocument"/>, and re-enabling it clones the
+		/// UXML afresh. Every element reference an override cached during <c>OnStarting</c> then
+		/// points into a tree that is no longer displayed: writes to it are silently lost and the
+		/// panel shows whatever the UXML declares. A label authored as a placeholder keeps
+		/// reading that placeholder, and a bar fill keeps whatever width the stylesheet gave it.
+		/// <para>
+		/// Comparing identity of the first child is enough to catch a re-clone, and costs one
+		/// reference comparison per Show.
+		/// </para>
+		/// </remarks>
+		private VisualElement startedTreeRoot;
 
 		/// <summary>
 		/// Registers this control with the <see cref="UIManager"/>, applies
@@ -133,6 +168,7 @@ namespace FishMMO.Client
 			}
 
 			this.hasStarted = true;
+			this.startedTreeRoot = root[0];
 			OnStarting();
 			OnAfterStarting();
 			return true;
@@ -261,6 +297,60 @@ namespace FishMMO.Client
 			}
 			Document.enabled = true;
 			Visible = true;
+
+			if (ReleasesCursor)
+			{
+				PlayerInputController.MouseMode = true;
+
+				/* Registered together with the cursor release, and not optional. The input
+				 * controller recaptures the cursor on every frame where nothing is registered as
+				 * closeable, so a panel that releases it without registering gets it taken back
+				 * before the player can click anything. Escape closing the panel falls out of the
+				 * same registration. */
+				UIManager.RegisterCloseOnEscapeTK(this);
+			}
+
+			ReinitializeIfTreeReplaced();
+		}
+
+		/// <summary>
+		/// Re-runs initialisation when the visual tree has been rebuilt since it last ran.
+		/// </summary>
+		/// <remarks>
+		/// See <see cref="startedTreeRoot"/> for why the tree can change identity. If it has not
+		/// changed this is a single reference comparison and does nothing, so it is safe to call
+		/// on every Show regardless of whether a given panel ever gets hidden.
+		/// </remarks>
+		private void ReinitializeIfTreeReplaced()
+		{
+			if (!this.hasStarted)
+			{
+				// Never initialised; the startup retry still owns this.
+				return;
+			}
+
+			VisualElement root = Root;
+			if (root == null || root.childCount == 0)
+			{
+				return;
+			}
+
+			if (ReferenceEquals(root[0], this.startedTreeRoot))
+			{
+				return;
+			}
+
+			Log.Debug("UITKControl", $"[{Name}] Visual tree was replaced; re-resolving elements.");
+
+			this.startedTreeRoot = root[0];
+
+			/* Both halves run. Re-resolving elements alone is not enough: panels that build their
+			 * contents from character state do it in OnPostSetCharacter, so a rebuilt tree would
+			 * come back correctly wired and completely empty — an inventory with no slots in it.
+			 * OnAfterStarting re-applies that state, and pairs Pre with Post so re-running it does
+			 * not stack up duplicate event subscriptions. */
+			OnStarting();
+			OnAfterStarting();
 		}
 
 		/// <summary>
@@ -283,6 +373,8 @@ namespace FishMMO.Client
 			}
 			Document.enabled = false;
 			Visible = false;
+
+			UIManager.UnregisterCloseOnEscapeTK(this);
 		}
 
 		/// <summary>

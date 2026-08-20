@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -202,6 +202,7 @@ namespace FishMMO.Client
 			// Player action callbacks
 			Controls.Player.Interact.performed += OnInteractPerformed;
 			Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
+			Controls.Player.ToggleMouseMode.performed += OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed += OnCancelPerformed;
 			Controls.Player.CloseLastUI.performed += OnCloseLastUIPerformed;
 			Controls.Player.Chat.performed += OnChatPerformed;
@@ -245,6 +246,7 @@ namespace FishMMO.Client
 			// Player action callbacks
 			Controls.Player.Interact.performed -= OnInteractPerformed;
 			Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
+			Controls.Player.ToggleMouseMode.performed -= OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed -= OnCancelPerformed;
 			Controls.Player.CloseLastUI.performed -= OnCloseLastUIPerformed;
 			Controls.Player.Chat.performed -= OnChatPerformed;
@@ -621,6 +623,21 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Callback for the mouse-mode input action. Releases or recaptures the cursor on demand.
+		/// </summary>
+		/// <remarks>
+		/// Releasing is forced so it survives <see cref="HandleAutoDismiss"/>, which recaptures the
+		/// cursor as soon as no panel is open. That is right when a panel released it and wrong when
+		/// the player asked for it — unforced, this key would release the cursor and have it taken
+		/// straight back. Pressing it again clears the flag and hands control back to the panels.
+		/// </remarks>
+		/// <param name="context">Input callback context.</param>
+		private void OnToggleMouseModePerformed(InputAction.CallbackContext context)
+		{
+			PlayerInputController.ToggleMouseMode(!PlayerInputController.MouseMode);
+		}
+
+		/// <summary>
 		/// Callback for closing the last UI element.
 		/// If no UI can be closed and mouse mode is active, toggles mouse mode off.
 		/// </summary>
@@ -704,6 +721,14 @@ namespace FishMMO.Client
 
 		private void OnMenuPerformed(InputAction.CallbackContext context)
 		{
+			/* Escape is bound to CloseLastUI as well as Menu, and CloseLastUI is handled first.
+			 * If it already closed a panel, this press is spent — toggling here would see the
+			 * menu closed and immediately reopen it, so Escape could never close the menu. */
+			if (UIManager.ClosedThisFrame)
+			{
+				return;
+			}
+
 			UIManager.ToggleVisibility("UIMenu");
 		}
 

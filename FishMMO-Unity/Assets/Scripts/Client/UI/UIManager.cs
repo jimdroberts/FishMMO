@@ -36,6 +36,34 @@ namespace FishMMO.Client
 		/// Maps GameObject names to their corresponding UITKControl instances.
 		/// </summary>
 		private static Dictionary<string, UITKControl> tkControls = new Dictionary<string, UITKControl>();
+
+		/// <summary>
+		/// Visible UI Toolkit panels that Escape should close, oldest first.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="closeOnEscapeControls"/> only because that one is a
+		/// <c>CircularBuffer&lt;UIControl&gt;</c> keyed on node bookkeeping the legacy class owns —
+		/// a <see cref="UITKControl"/> cannot join it without inheriting from a UGUI base. A plain
+		/// list is enough here: these are opened and closed by hand, never in bulk.
+		/// </remarks>
+		private static readonly List<UITKControl> tkCloseOnEscapeControls = new List<UITKControl>();
+
+		/// <summary>
+		/// Frame on which <see cref="CloseNext"/> last actually closed something.
+		/// </summary>
+		private static int lastCloseFrame = -1;
+
+		/// <summary>
+		/// True when a panel was closed earlier in this same frame.
+		/// </summary>
+		/// <remarks>
+		/// Escape is bound to four separate actions — Player/Cancel, Player/CloseLastUI,
+		/// Player/Menu and UI/Cancel — so one press runs several handlers in subscription order.
+		/// CloseLastUI closes the top panel, and Menu then toggles the menu, which sees it closed
+		/// and opens it straight back up: the menu becomes impossible to close with the key that
+		/// opened it. A handler that would re-open something checks this first so the close wins.
+		/// </remarks>
+		internal static bool ClosedThisFrame => lastCloseFrame == UnityEngine.Time.frameCount;
 		/// <summary>
 		/// Maps GameObject names to their corresponding UITKCharacterControl instances.
 		/// </summary>
@@ -308,7 +336,71 @@ namespace FishMMO.Client
 				}
 			}
 			control = null;
+
+			WarnIfMigrated(name, typeof(T));
+
 			return false;
+		}
+
+		/// <summary>
+		/// Reports a lookup that failed only because the panel has moved to UI Toolkit.
+		/// </summary>
+		/// <remarks>
+		/// A caller asking for a UGUI panel by name gets a plain false when that panel now exists
+		/// as a <see cref="UITKControl"/>, because the two live in separate registries and are
+		/// unrelated types. The call site is invariably an <c>if</c>, so the feature it guards
+		/// stops working with no exception, no log, and nothing on screen — the keybind simply
+		/// does nothing. Migrating a panel silently breaks every name lookup still pointing at it,
+		/// and this is the only place that can notice.
+		/// <para>
+		/// Only the mismatched case is reported. A name absent from both registries is an ordinary
+		/// miss — plenty of callers ask about panels that are not in the current scene — and
+		/// logging those would bury the real signal.
+		/// </para>
+		/// </remarks>
+		/// <param name="name">The name that was looked up.</param>
+		/// <param name="requestedType">The type the caller asked for.</param>
+		private static void WarnIfMigrated(string name, Type requestedType)
+		{
+			if (!tkControls.TryGetValue(name, out UITKControl migrated))
+			{
+				return;
+			}
+
+			Log.Error("UIManager",
+				$"'{name}' was requested as {requestedType.Name} (UGUI) but is registered as " +
+				$"{migrated.GetType().Name} (UI Toolkit). This lookup returns false and whatever " +
+				$"it guards will silently do nothing. Use TryGetTK<{migrated.GetType().Name}>(\"{name}\", ...) instead.");
+		}
+
+		/// <summary>
+		/// Marks a UI Toolkit panel as open, so Escape closes it and the cursor stays released.
+		/// </summary>
+		/// <param name="control">The panel that just became visible.</param>
+		internal static void RegisterCloseOnEscapeTK(UITKControl control)
+		{
+			if (control == null)
+			{
+				return;
+			}
+
+			// Re-registering moves it to the top, so the newest panel closes first.
+			tkCloseOnEscapeControls.Remove(control);
+			tkCloseOnEscapeControls.Add(control);
+		}
+
+		/// <summary>
+		/// Marks a UI Toolkit panel as closed.
+		/// </summary>
+		/// <param name="control">The panel that is no longer visible.</param>
+		internal static void UnregisterCloseOnEscapeTK(UITKControl control)
+		{
+			if (control == null)
+			{
+				return;
+			}
+
+			tkCloseOnEscapeControls.Remove(control);
 		}
 
 		/// <summary>
@@ -474,6 +566,34 @@ namespace FishMMO.Client
 		/// <returns>True if a control was closed or peeked, false otherwise.</returns>
 		public static bool CloseNext(bool peakOnly = false)
 		{
+			/* UI Toolkit panels are checked first, so the most recently opened panel wins while
+			 * the migration has both kinds on screen at once.
+			 *
+			 * They must be checked at all: PlayerInputController recaptures the mouse cursor on
+			 * every frame where this returns false, so a panel missing from here releases the
+			 * cursor in Show() and has it taken back before the player can click anything. That
+			 * was the whole symptom of "the menu opens but nothing is clickable". */
+			for (int i = tkCloseOnEscapeControls.Count - 1; i >= 0; --i)
+			{
+				UITKControl tkControl = tkCloseOnEscapeControls[i];
+				if (tkControl == null || !tkControl.Visible)
+				{
+					// Destroyed, or hidden by something other than Escape.
+					tkCloseOnEscapeControls.RemoveAt(i);
+					continue;
+				}
+
+				if (peakOnly)
+				{
+					return true;
+				}
+
+				tkCloseOnEscapeControls.RemoveAt(i);
+				tkControl.Hide();
+				lastCloseFrame = UnityEngine.Time.frameCount;
+				return true;
+			}
+
 			if (closeOnEscapeControls != null)
 			{
 				if (peakOnly)
@@ -487,6 +607,7 @@ namespace FishMMO.Client
 					if (control != null)
 					{
 						control.Hide();
+						lastCloseFrame = UnityEngine.Time.frameCount;
 						return true;
 					}
 				}

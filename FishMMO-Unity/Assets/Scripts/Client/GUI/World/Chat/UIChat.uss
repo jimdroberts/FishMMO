@@ -3,7 +3,15 @@
     Layout for the chat panel. Colours come from FishMMO-Theme.uss.
 */
 
+/*
+    Anchored bottom-right. Each panel is its own UIDocument whose root fills the screen, so a
+    panel with a size but no position resolves to the top-left corner rather than anywhere
+    meaningful — which is where this sat.
+*/
 .chat-panel {
+    position: absolute;
+    left: 24px;
+    bottom: 40px;
     width: 420px;
     height: 280px;
 }
