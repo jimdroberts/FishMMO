@@ -120,6 +120,50 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private const int MaxClientsPerInstance = 500;
 
 		/// <summary>
+		/// How long an instance scene row may sit in a non-ready state before a character bound
+		/// to it is released and routed to the open world instead.
+		/// </summary>
+		/// <remarks>
+		/// Measured from the row's creation, so the decision survives the client's reconnect
+		/// cycle. See the use site in <see cref="ProcessInstanceConnectionAsync"/> for why a
+		/// per-connection timeout cannot do this job.
+		/// <para>
+		/// Comfortably above the scene server's own pending-scene timeout (60s) plus a cold
+		/// scene load, so a merely slow load is never mistaken for a dead one.
+		/// </para>
+		/// </remarks>
+		private const double InstanceReadyGraceSeconds = 180.0;
+
+		/// <summary>
+		/// Age at which a scene row that never reached Ready is deleted outright.
+		/// </summary>
+		/// <remarks>
+		/// Strictly greater than <see cref="InstanceReadyGraceSeconds"/> so the routing path
+		/// gets the chance to release characters itself, with a specific log line, before the
+		/// sweep removes the evidence. Both outcomes are correct — a deleted row makes the
+		/// instance fetch fail, which routes to the same fallback — but the ordering makes
+		/// operational diagnosis possible.
+		/// </remarks>
+		private const double StaleSceneRowGraceSeconds = 300.0;
+
+		/// <summary>Seconds between stale scene-row sweeps.</summary>
+		private const float StaleSceneRowSweepIntervalSeconds = 60.0f;
+
+		/// <summary>Maximum stale scene rows deleted per sweep.</summary>
+		private const int StaleSceneRowMaxPerSweep = 256;
+
+		/// <summary>
+		/// How long a scene server may go without pulsing before its scene rows are reaped.
+		/// </summary>
+		/// <remarks>
+		/// An order of magnitude above the default 5s scene-server pulse rate, so a slow pulse or
+		/// a brief database stall never deletes the scenes of a healthy server, and under the
+		/// two-minute session lease so a dead server's characters are freed rather than left
+		/// pointing at scenes that no longer exist.
+		/// </remarks>
+		private const double SceneServerPulseStaleSeconds = 60.0;
+
+		/// <summary>
 		/// Maximum connections allowed per waiting queue type (open-world or instance).
 		/// Defense-in-depth cap to prevent unbounded memory growth.
 		/// Effective global limit is 2 × this value (one cap per queue type).
@@ -474,6 +518,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				SweepSceneCaches(runtimeData);
 			}
 
+			nextStaleSceneRowSweep -= deltaTime;
+			if (nextStaleSceneRowSweep <= 0f)
+			{
+				nextStaleSceneRowSweep = StaleSceneRowSweepIntervalSeconds;
+				QueueStaleSceneRowSweep();
+			}
+
 			runtimeData.NextWaitQueueUpdate -= deltaTime;
 			if (runtimeData.NextWaitQueueUpdate <= 0f)
 			{
@@ -581,11 +632,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			// Resolve all scene server addresses upfront and build a capacity tracker.
-			// instanceHandles preserves insertion order for deterministic fallback assignment.
-			var instanceHandles = new List<int>(availableScenes.Count);
-			var serverInfoByHandle = new Dictionary<int, ushort>(availableScenes.Count);
-			var capacityByHandle = new Dictionary<int, int>(availableScenes.Count);
+			/* Resolve all scene server addresses upfront and build a capacity tracker.
+			 *
+			 * Keyed by scene row ID, not by the hosting process's local scene handle. Handles are
+			 * only unique within the process that allocated them, so two scene servers hosting
+			 * the same scene routinely produce the same one — and these maps then silently
+			 * collapsed their two instances into a single entry, sending everyone to whichever
+			 * one happened to be written last and double-counting its capacity.
+			 *
+			 * instanceIDs preserves insertion order for deterministic fallback assignment. */
+			var instanceIDs = new List<long>(availableScenes.Count);
+			var serverInfoByHandle = new Dictionary<long, ushort>(availableScenes.Count);
+			var capacityByHandle = new Dictionary<long, int>(availableScenes.Count);
 
 			// Resolve scene server addresses: check cache first, batch-fetch any misses.
 			TimeSpan serverTtl = TimeSpan.FromSeconds(sceneServerCacheTtlSeconds);
@@ -594,16 +652,31 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			foreach (var sceneData in availableScenes)
 			{
+				/* Open-world routing may only ever place a player in an OpenWorld instance.
+				 *
+				 * FetchAvailableAsync selects on (world, scene name, capacity, Ready) and says
+				 * nothing about SceneType, so a Group row for a scene that is also reachable as
+				 * an ordinary destination — a dungeon named as a teleporter's ToScene, or as a
+				 * character's BindScene — came back here as a routing candidate. Routing to it
+				 * drops a player into somebody else's private instance, with that instance's
+				 * character_id still naming its owner. SceneChannelSystem already applies this
+				 * filter when it builds a channel list; this is the same rule on the path that
+				 * actually places people. */
+				if ((SceneType)sceneData.SceneType != SceneType.OpenWorld)
+				{
+					continue;
+				}
+
 				long serverId = sceneData.SceneServerID;
 
 				// Try cache first
 				if (serverTtl > TimeSpan.Zero &&
 					runtimeData.SceneServerAddressCache.TryGet(serverId, serverTtl, out var cachedAddr))
 				{
-					int handle = sceneData.SceneHandle;
-					instanceHandles.Add(handle);
-					serverInfoByHandle[handle] = cachedAddr;
-					capacityByHandle[handle] = maxClientsPerInstance - sceneData.CharacterCount;
+					long instanceID = sceneData.ID;
+					instanceIDs.Add(instanceID);
+					serverInfoByHandle[instanceID] = cachedAddr;
+					capacityByHandle[instanceID] = maxClientsPerInstance - sceneData.CharacterCount;
 					continue;
 				}
 
@@ -624,6 +697,21 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					foreach (var serverData in batchResult.Data)
 					{
+						/* Skip scene servers that have stopped pulsing.
+						 *
+						 * A crashed scene server leaves both its own registration and its scene
+						 * rows behind, so without this check its scenes stay in the routing pool
+						 * and players are sent to an address that no longer serves them — or, once
+						 * a replacement reuses the port, to a server that does not have the scene
+						 * and returns them here to be routed at the same rows again.
+						 * SweepStaleSceneRowsAsync deletes those rows, but only on its own timer;
+						 * this keeps the window between the crash and the sweep from routing
+						 * anyone into it. */
+						if (!IsSceneServerLive(serverData))
+						{
+							continue;
+						}
+
 						ushort serverPort = (ushort)serverData.Port;
 						if (serverTtl > TimeSpan.Zero)
 						{
@@ -634,10 +722,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						{
 							foreach (var sd in scenes)
 							{
-								int handle = sd.SceneHandle;
-								instanceHandles.Add(handle);
-								serverInfoByHandle[handle] = serverPort;
-								capacityByHandle[handle] = maxClientsPerInstance - sd.CharacterCount;
+								long instanceID = sd.ID;
+								instanceIDs.Add(instanceID);
+								serverInfoByHandle[instanceID] = serverPort;
+								capacityByHandle[instanceID] = maxClientsPerInstance - sd.CharacterCount;
 							}
 						}
 					}
@@ -650,9 +738,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						runtimeData.SceneServerAddressCache?.Invalidate(serverId);
 					}
 				}
+
+				// Any server that was requested but did not produce a handle above — missing from
+				// the result, or skipped as not pulsing — must not keep a cached address either.
+				foreach (long serverId in uncachedServerIds)
+				{
+					if (!scenesByServerId.TryGetValue(serverId, out var requestedScenes))
+					{
+						continue;
+					}
+					bool resolved = requestedScenes.Count > 0 && serverInfoByHandle.ContainsKey(requestedScenes[0].ID);
+					if (!resolved)
+					{
+						runtimeData.SceneServerAddressCache?.Invalidate(serverId);
+					}
+				}
 			}
 
-			if (instanceHandles.Count < 1)
+			if (instanceIDs.Count < 1)
 			{
 				// Scene rows exist but none resolved to a reachable scene server, so a fresh
 				// instance is what these clients are waiting for.
@@ -728,6 +831,28 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						}
 					}
 				}
+				else
+				{
+					/* The whole query failed, which says nothing about any individual character.
+					 *
+					 * The routing loop below reads a missing entry as "this account has no
+					 * selected character" and kicks — so one database hiccup emptied the entire
+					 * queue, kicking every player waiting on this scene back to the login screen
+					 * at once, right when the database is already struggling. Put them back on
+					 * the queue instead: the next cycle re-reads, and a transient failure costs a
+					 * few seconds of waiting rather than everyone's session. */
+					await Log.Warning("WorldSceneSystem",
+						$"Batch character fetch failed for {accountNames.Count} connection(s) waiting on '{sceneName}': " +
+						$"{batchResult.ErrorCode} - {batchResult.ErrorMessage}. Re-queuing them for the next routing cycle.");
+
+					for (int i = 0; i < waitingConnections.Count; ++i)
+					{
+						RequeueOpenWorldConnection(waitingConnections[i].conn, sceneName, WorldSceneQueueReason.Capacity);
+					}
+
+					routedLastCycleByScene[sceneName] = 0;
+					return;
+				}
 			}
 
 			// --- Routing phase: two-pass assignment ---
@@ -771,7 +896,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					continue;
 				}
 
-				int preferredHandle = charData.SceneHandle;
+				long preferredHandle = charData.SceneHandle;
 				bool preferredAvailable = preferredHandle != 0 &&
 					capacityByHandle.TryGetValue(preferredHandle, out int prefCheck) &&
 					prefCheck > 0 &&
@@ -865,10 +990,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Build the heap from remaining capacity after preferred assignments.
 			if (unassigned.Count > 0)
 			{
-				var capacityHeap = new InstanceCapacityHeap(instanceHandles.Count);
-				for (int i = 0; i < instanceHandles.Count; ++i)
+				var capacityHeap = new InstanceCapacityHeap(instanceIDs.Count);
+				for (int i = 0; i < instanceIDs.Count; ++i)
 				{
-					int h = instanceHandles[i];
+					long h = instanceIDs[i];
 					if (capacityByHandle.TryGetValue(h, out int cap) && cap > 0)
 					{
 						capacityHeap.Push(h, cap);
@@ -879,7 +1004,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					var (conn, accountName, charData) = unassigned[i];
 
-					if (!capacityHeap.TryAssignFromTop(out int assignedHandle) ||
+					if (!capacityHeap.TryAssignFromTop(out long assignedHandle) ||
 						!serverInfoByHandle.TryGetValue(assignedHandle, out var serverPort))
 					{
 						// No capacity anywhere — re-queue for the next processing cycle. Routed
@@ -1078,6 +1203,21 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			/* IsCombatLogged is deliberately NOT diverted here, unlike on the open-world path.
+			 *
+			 * That check exists because an open-world character's body can be left on a scene
+			 * instance other than the one the router would otherwise pick, and only the server
+			 * holding the body can hand it back. An instanced character has no such ambiguity:
+			 * its body is in its instance, on the scene server that hosts it, which is exactly
+			 * where the routing below sends it — and TryReattachLingeringCharacter reclaims the
+			 * body on arrival. Diverting to the open-world queue would send the client to a
+			 * server that does not hold the body, which then loses the claim race and kicks it
+			 * on every retry until the linger expires.
+			 *
+			 * If the instance is gone (its scene server died, taking the row with it) the fetch
+			 * below fails and the fallback clears the flag, which is the correct outcome: the
+			 * body went with the server. */
+
 			long instanceID = charData.InstanceID;
 			if (instanceID <= 0)
 			{
@@ -1088,6 +1228,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			var sceneResult = await sceneService.FetchAsync(instanceID);
 			if (!sceneResult.IsSuccess)
 			{
+				// Includes the row having been reaped by SweepStaleSceneRowsAsync, which is the
+				// ordinary end state for an instance that never became ready.
 				await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
 				return;
 			}
@@ -1096,9 +1238,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			FishMMO.Shared.SceneStatus sceneStatus = (FishMMO.Shared.SceneStatus)sceneData.SceneStatus;
 			if (sceneStatus == FishMMO.Shared.SceneStatus.Ready)
 			{
-				// Ensure the Scene Server is running
+				// Ensure the Scene Server is running. "Registered" is not the same as "running":
+				// a crashed scene server's registration outlives it, so the pulse is what says.
 				var sceneServerResult = await sceneServerService.FetchAsync(sceneData.SceneServerID);
-				if (sceneServerResult.IsSuccess)
+				if (sceneServerResult.IsSuccess && IsSceneServerLive(sceneServerResult.Data))
 				{
 					var sceneServer = sceneServerResult.Data;
 					/* Same helper as the open-world path. The hand-rolled copy that used to
@@ -1111,10 +1254,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				else
 				{
 					// Scene server unreachable — delete stale scene entry and fall back
-					DatabaseResult deleteResult = await sceneService.DeleteByHandleAsync(sceneData.SceneServerID, sceneData.SceneHandle);
+					DatabaseResult deleteResult = await sceneService.DeleteAsync(sceneData.ID);
 					if (!deleteResult.IsSuccess)
 					{
-						await Log.Warning("WorldSceneSystem", $"ProcessInstanceConnectionAsync scene delete failed (SceneServerID={sceneData.SceneServerID}, Handle={sceneData.SceneHandle}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+						await Log.Warning("WorldSceneSystem", $"ProcessInstanceConnectionAsync scene delete failed (SceneID={sceneData.ID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
 					}
 					await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
 				}
@@ -1122,6 +1265,28 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			else if (sceneStatus == FishMMO.Shared.SceneStatus.Pending ||
 					 sceneStatus == FishMMO.Shared.SceneStatus.Loading)
 			{
+				/* Bounded by the row's own age, not by the connection's wait.
+				 *
+				 * The queue TTL only ends one visit: the client is kicked, reconnects, still has
+				 * the instance flag, is queued again, and is kicked again — forever, because
+				 * nothing in that cycle ever looks at how long the instance itself has been
+				 * stuck. And it does get stuck: a row that no scene server ever dequeues stays
+				 * Pending indefinitely, and one whose scene server died between dequeue and load
+				 * stays Loading with scene_server_id still 0, so that server's own startup
+				 * cleanup does not match it either.
+				 *
+				 * Measuring the row instead makes the give-up decision survive the reconnect, so
+				 * a character can never be trapped by an instance that is not coming. */
+				double instanceAgeSeconds = (DateTime.UtcNow - sceneData.TimeCreated).TotalSeconds;
+				if (instanceAgeSeconds >= InstanceReadyGraceSeconds)
+				{
+					await Log.Warning("WorldSceneSystem",
+						$"Instance scene {sceneData.ID} ({sceneData.SceneName}) has been {sceneStatus} for {instanceAgeSeconds:F0}s; " +
+						$"releasing character {charData.ID} from it and routing to the open world.");
+					await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
+					return;
+				}
+
 				// Re-add to instance queue — scene is still loading
 				TryEnqueueMainThread(() =>
 				{
@@ -2136,7 +2301,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			var result = await sceneServerService.FetchAsync(sceneServerID);
-			if (!result.IsSuccess)
+			if (!result.IsSuccess || !IsSceneServerLive(result.Data))
 			{
 				// Invalidate any stale cached entry so subsequent calls re-fetch immediately
 				runtimeData.SceneServerAddressCache?.Invalidate(sceneServerID);
@@ -2180,6 +2345,122 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// safe to forget. A returning player simply starts a fresh deferral.
 		/// </para>
 		/// </remarks>
+		/// <summary>Countdown to the next stale scene-row sweep.</summary>
+		private float nextStaleSceneRowSweep = StaleSceneRowSweepIntervalSeconds;
+
+		/// <summary>
+		/// Whether a scene server is still pulsing, and so is a legitimate routing destination.
+		/// </summary>
+		/// <remarks>
+		/// A scene server deletes its registration only on a graceful shutdown, so the row's
+		/// existence proves nothing after a crash. See <see cref="SceneServerPulseStaleSeconds"/>.
+		/// </remarks>
+		private static bool IsSceneServerLive(SceneServerData serverData)
+		{
+			return (DateTime.UtcNow - serverData.LastPulse).TotalSeconds < SceneServerPulseStaleSeconds;
+		}
+
+		/// <summary>
+		/// Kicks off a bounded deletion of this world server's scene rows that never became
+		/// ready.
+		/// </summary>
+		/// <remarks>
+		/// Nothing else removes a Pending, Loading or Failed row, and each one is a trap rather
+		/// than merely clutter: the row keeps the <c>character_id</c> it was created for, so
+		/// <c>ISceneService.FetchCharacterInstanceAsync</c> keeps handing it back and the
+		/// character it belongs to keeps being routed at an instance that will never exist.
+		/// <list type="bullet">
+		/// <item><description>A Failed row made its dungeon permanently unenterable for that character — every attempt cost a full disconnect and put them back where they started.</description></item>
+		/// <item><description>A Loading row orphaned by a scene server that died between dequeue and load still has <c>scene_server_id = 0</c>, so that server's restart cleanup (which matches on its own id) never removes it.</description></item>
+		/// <item><description>A Pending row that no scene server ever dequeues — every scene server down, or at its per-pulse load cap — has no owner at all.</description></item>
+		/// </list>
+		/// The world server owns this because it is the only party that outlives any particular
+		/// scene server and still knows which rows are its own.
+		/// </remarks>
+		private void QueueStaleSceneRowSweep()
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ||
+				worldData.ID <= 0)
+			{
+				return;
+			}
+
+			long worldServerID = worldData.ID;
+			if (!TryEnqueueAsyncWork(() => SweepStaleSceneRowsAsync(worldServerID), worldServerID))
+			{
+				Log.Warning("WorldSceneSystem", "Failed to enqueue the stale scene-row sweep.");
+			}
+		}
+
+		/// <summary>
+		/// Deletes this world server's non-ready scene rows older than
+		/// <see cref="StaleSceneRowGraceSeconds"/>. See <see cref="QueueStaleSceneRowSweep"/>.
+		/// </summary>
+		private async Task SweepStaleSceneRowsAsync(long worldServerID)
+		{
+			try
+			{
+				if (!TryGetDbService(out ISceneService sceneService))
+				{
+					return;
+				}
+
+				DateTime olderThanUtc = DateTime.UtcNow.AddSeconds(-StaleSceneRowGraceSeconds);
+				DatabaseResult<int> result = await sceneService.DeleteStaleUnreadyAsync(
+					worldServerID, olderThanUtc, StaleSceneRowMaxPerSweep);
+
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("WorldSceneSystem",
+						$"Stale scene-row sweep failed (WorldServerID={worldServerID}): {result.ErrorCode} - {result.ErrorMessage}");
+					return;
+				}
+
+				if (result.Data > 0)
+				{
+					await Log.Info("WorldSceneSystem",
+						$"Reaped {result.Data} scene row(s) that never became ready (WorldServerID={worldServerID}).");
+				}
+
+				/* Ready rows whose scene server has gone are the other half of the problem, and
+				 * the more damaging half: this system routes players at them. A crashed scene
+				 * server deletes nothing on its way out, so every scene it hosted stays
+				 * advertised as available, and clients sent there are refused — or, once a
+				 * replacement claims the same port, are accepted by a server that does not have
+				 * the scene and bounces them straight back here to be routed at the same row
+				 * again. Nothing in that cycle ages out, so it has to be broken from this end. */
+				DateTime pulseOlderThanUtc = DateTime.UtcNow.AddSeconds(-SceneServerPulseStaleSeconds);
+				DatabaseResult<int> orphanResult = await sceneService.DeleteByStaleSceneServersAsync(
+					worldServerID, pulseOlderThanUtc, StaleSceneRowMaxPerSweep);
+
+				if (!orphanResult.IsSuccess)
+				{
+					await Log.Warning("WorldSceneSystem",
+						$"Orphaned scene-row sweep failed (WorldServerID={worldServerID}): {orphanResult.ErrorCode} - {orphanResult.ErrorMessage}");
+					return;
+				}
+
+				if (orphanResult.Data > 0)
+				{
+					await Log.Warning("WorldSceneSystem",
+						$"Reaped {orphanResult.Data} scene row(s) belonging to scene servers that stopped pulsing (WorldServerID={worldServerID}).");
+
+					// Those rows are in the routing caches too, and a cache hit would keep
+					// sending players to them for the rest of the TTL.
+					if (Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+					{
+						runtimeData.AvailableSceneCache?.Clear();
+						runtimeData.SceneServerAddressCache?.Clear();
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("WorldSceneSystem", $"Error sweeping stale scene rows: {ex}");
+			}
+		}
+
 		private void SweepCombatLogoutRoutingDeferrals(DateTime nowUtc)
 		{
 			if (combatLogoutRoutingDeferredSince.IsEmpty)

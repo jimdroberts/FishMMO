@@ -31,7 +31,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>Current scene name the character is in.</summary>
 		public string SceneName { get; set; }
 		/// <summary>Current scene handle the character is in.</summary>
-		public int SceneHandle { get; set; }
+		public long SceneHandle { get; set; }
 		/// <summary>Bind point scene name.</summary>
 		public string BindScene { get; set; }
 		/// <summary>
@@ -109,6 +109,20 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// A server should extend this periodically while it still owns the character.
 		/// </summary>
 		public DateTime SessionLeaseExpiresUtc { get; set; }
+
+		/// <summary>
+		/// When this character last switched open-world channel (UTC), or
+		/// <see cref="DateTime.MinValue"/> if it never has.
+		/// </summary>
+		/// <remarks>
+		/// Persisted rather than held in memory because a channel switch is implemented as a
+		/// disconnect: the character is released here and re-routed by the world server, quite
+		/// possibly to a different scene server. Any cooldown kept per connection — or even per
+		/// process — is therefore reset by the very act it is meant to limit, and only ever
+		/// throttles switches that <em>failed</em>. This is the only place the limit can live
+		/// and still mean anything.
+		/// </remarks>
+		public DateTime LastChannelSwitchUtc { get; set; }
 
 		/// <summary>Character flags bitmask (e.g. for status effects or customization flags).</summary>
 		public int Flags { get; set; }

@@ -472,6 +472,7 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneQueuePositionBroadcast>(OnWorldSceneQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
 			NetworkManager.ClientManager.RegisterBroadcast<DisconnectNoticeBroadcast>(OnDisconnectNotice);
+			NetworkManager.ClientManager.RegisterBroadcast<SceneTransferRefusedBroadcast>(OnSceneTransferRefused);
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
 			NetworkManager.SceneManager.OnUnloadEnd += OnSceneUnloadEnd;
@@ -1081,6 +1082,49 @@ namespace FishMMO.Client
 		/// <param name="msg">The server busy message.</param>
 		/// <param name="ch">The network channel.</param>
 		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGet("UIDialogBox", out UIDialogBox d)) d.Open("Server is busy. Please try again."); }
+
+		/// <summary>
+		/// Handles a <see cref="SceneTransferRefusedBroadcast"/> — the server declined a channel
+		/// switch or a dungeon entry — and tells the player why.
+		/// </summary>
+		/// <remarks>
+		/// Both of those actions close their own UI the moment they are sent, because the normal
+		/// outcome is that the client is disconnected and re-routed. A refusal therefore has to
+		/// be spoken: with nothing on screen and nothing happening, a player has no way to tell a
+		/// declined request from a frozen game, and the natural response — clicking again — is
+		/// exactly what the server-side cooldown rejects.
+		/// </remarks>
+		private void OnSceneTransferRefused(SceneTransferRefusedBroadcast msg, Channel ch)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d))
+			{
+				d.Open(DescribeTransferRefusal(msg.Reason));
+			}
+		}
+
+		/// <summary>
+		/// Turns a <see cref="SceneTransferRefusalReason"/> into something a player can act on.
+		/// </summary>
+		private static string DescribeTransferRefusal(SceneTransferRefusalReason reason)
+		{
+			switch (reason)
+			{
+				case SceneTransferRefusalReason.DestinationUnavailable:
+					return "That destination is no longer available. Refresh and try again.";
+				case SceneTransferRefusalReason.DestinationFull:
+					return "That destination is full. Try a different one.";
+				case SceneTransferRefusalReason.CharacterStateChanged:
+					return "You cannot travel right now — leave combat and try again.";
+				case SceneTransferRefusalReason.OnCooldown:
+					return "You are travelling too often. Wait a moment and try again.";
+				case SceneTransferRefusalReason.PartyInstanceExists:
+					return "A party member already has this instance open.";
+				case SceneTransferRefusalReason.ServerError:
+					return "The server could not complete that request. Please try again.";
+				default:
+					return "That request was declined.";
+			}
+		}
 
 		// ── Queue feedback ──────────────────────────────────────────────
 

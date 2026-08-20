@@ -647,6 +647,30 @@ sequenceDiagram
     Note over Client,Scene: 🎮 Gameplay active, • Prediction pipeline running, • Observer LOD system active, • All scene systems operational
 ```
 
+#### The scene handshake does not depend on which half arrives first
+
+`ClientValidatedSceneBroadcast` — the message that tells the client to begin its world preload,
+and so the only thing that leads to a character being spawned — is sent by
+`CharacterSystem.ValidateSceneAndAcknowledge`. Reaching it needs two independent things to have
+happened, and they arrive in an order the server does not control:
+
+| Half | Arrives when |
+|---|---|
+| Start-scene acknowledgement (`SceneManager.OnClientLoadedStartScenes`) | One round trip after authentication. `ServerManager.ClientAuthenticated` solicits it *before* the authenticator's result event even starts the character load, and with no global scenes configured the client answers immediately. FishNet raises the event **once per connection** and never again. |
+| Character registered in `WaitingSceneLoadCharacters` | After `LoadCharacterAsync` — a session claim with up to five retries, fourteen sub-entity fetches in one transaction, and a main-thread queue drain. |
+
+The acknowledgement normally wins, and it cannot be replayed. Driving the handshake off it
+alone therefore made world entry a race with two losing outcomes: an acknowledgement that
+arrived before the character was registered found nothing waiting and **disconnected a healthy
+login** with `CharacterUnavailable`, while a load that finished afterwards had no event left to
+drive it and sat in `WaitingSceneLoadCharacters` holding its session claim until the 90 s
+handshake timeout. Under any database latency the first is the common case.
+
+`startScenesAckedClientIds` records the acknowledgement instead of acting on it. Whichever half
+lands second calls `ValidateSceneAndAcknowledge`, and exactly one of them does, because both run
+on the main thread. A bare acknowledgement with no character is no longer an error — the
+residency watchdog below is what bounds a load that genuinely never arrives.
+
 **Nothing in Phase 9 may fail quietly.** The client is behind a loading overlay from the moment
 it leaves the world server until its character actually spawns, so a scene server that stops
 making progress without closing the connection is indistinguishable from a hang. Three watchdogs
@@ -749,6 +773,14 @@ because they are one-shot transitions and losing one strands the dialog on scree
 | `Capacity` | Every instance of the target scene is full | `waitingQueueTtlSeconds` (45 s) |
 | `SceneLoading` | An instance was requested and is still loading | `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier` (180 s) — a large world scene can take longer to load than the capacity TTL allows |
 | `CombatLogoutBody` | Only the instance holding the character's body can hand it back | `CombatLogoutRoutingGraceSeconds` (150 s), which exceeds the 2-minute session lease so giving up is safe |
+
+**Open-world routing places players only in `OpenWorld` instances.** `ISceneService.FetchAvailableAsync`
+selects on world, scene name, capacity and `Ready` — it says nothing about `SceneType` — so a
+`Group` row for a scene that is *also* reachable as an ordinary destination (a dungeon named as
+a teleporter's `ToScene`, or as a character's `BindScene`) came back as a routing candidate and
+would drop the player into somebody else's private instance, `character_id` and all.
+`ProcessOpenWorldQueueAsync` filters the type, as `SceneChannelSystem` already did when building
+a channel list.
 
 **A healthy login never sees the dialog.** Every routed client passes through this queue, so a
 sweep landing between enqueue and the next routing cycle would flash a position at someone who

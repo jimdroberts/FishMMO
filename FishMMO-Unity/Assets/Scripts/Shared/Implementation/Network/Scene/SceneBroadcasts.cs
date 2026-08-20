@@ -97,6 +97,71 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Why the server declined to move a character to another scene instance.
+	/// </summary>
+	/// <remarks>
+	/// Both voluntary scene-instance transfers — a channel switch and a dungeon entrance —
+	/// finish their validation asynchronously, against the database, after the client has
+	/// already committed to the action and closed its own UI. Every one of those checks could
+	/// previously fail by simply returning, so a refused request was indistinguishable from a
+	/// lost one: the player saw nothing at all and had no way to tell "the channel filled up"
+	/// from "the game stopped responding". Naming the refusal is what makes the action
+	/// answerable.
+	/// </remarks>
+	public enum SceneTransferRefusalReason : byte
+	{
+		/// <summary>No specific reason available.</summary>
+		Unspecified = 0,
+
+		/// <summary>The destination no longer exists, or never did.</summary>
+		DestinationUnavailable = 1,
+
+		/// <summary>The destination is full.</summary>
+		DestinationFull = 2,
+
+		/// <summary>The character's state changed and no longer permits the transfer (combat, death, mid-teleport).</summary>
+		CharacterStateChanged = 3,
+
+		/// <summary>The transfer is still on cooldown for this character.</summary>
+		OnCooldown = 4,
+
+		/// <summary>A party member already holds an instance of this content; join theirs instead.</summary>
+		PartyInstanceExists = 5,
+
+		/// <summary>The server could not complete the request and the client should try again.</summary>
+		ServerError = 6,
+	}
+
+	/// <summary>
+	/// Broadcast sent when the server declines a voluntary scene-instance transfer, so the
+	/// client can restore its UI and tell the player why rather than appearing to hang.
+	/// </summary>
+	public struct SceneTransferRefusedBroadcast : IBroadcast
+	{
+		/// <summary>Why the transfer was refused.</summary>
+		public SceneTransferRefusalReason Reason;
+	}
+
+	/// <summary>
+	/// Broadcast asking the server to remove the character from its current instance and return
+	/// it to the open world.
+	/// </summary>
+	/// <remarks>
+	/// The unconditional way out of instanced content. A dungeon normally provides its own exit
+	/// teleporter, but that is scene-authoring data: a dungeon shipped without one, or with one
+	/// a player cannot reach, would otherwise leave that player permanently inside — a character
+	/// bound to an instance is routed straight back to it on every login, so quitting does not
+	/// help either. This makes leaving a property of the system rather than of the content.
+	/// <para>
+	/// Server-gated like any other voluntary transfer: it is refused in combat, so it is not an
+	/// escape, and refusal is reported through <see cref="SceneTransferRefusedBroadcast"/>.
+	/// </para>
+	/// </remarks>
+	public struct RequestLeaveInstanceBroadcast : IBroadcast
+	{
+	}
+
+	/// <summary>
 	/// Broadcast sent by the server when it cannot process a gameplay request because the
 	/// async work queue is full. The client should display a transient "Server Busy" notification.
 	/// </summary>

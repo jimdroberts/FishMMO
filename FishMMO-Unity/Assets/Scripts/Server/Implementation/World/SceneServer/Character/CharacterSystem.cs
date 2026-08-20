@@ -185,6 +185,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<RequestLeaveInstanceBroadcast>(OnClientRequestLeaveInstanceBroadcastReceived, true);
+
+			// Chat commands. See OnLeaveInstanceCommand for why this exists alongside the
+			// RequestLeaveInstanceBroadcast handler.
+			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
+			{
+				{ "/leaveinstance", OnLeaveInstanceCommand },
+				{ "/exitinstance", OnLeaveInstanceCommand },
+			});
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
@@ -250,6 +259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<RequestLeaveInstanceBroadcast>(OnClientRequestLeaveInstanceBroadcastReceived);
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
@@ -287,6 +297,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 */
 			characterResidencyDeadlines.Clear();
 			sceneLoadDeadlines.Clear();
+			startScenesAckedClientIds.Clear();
 			pendingTransferDisconnects.Clear();
 			deliberateTransferClientIds.Clear();
 			authCallbackLastTimeByAccount.Clear();

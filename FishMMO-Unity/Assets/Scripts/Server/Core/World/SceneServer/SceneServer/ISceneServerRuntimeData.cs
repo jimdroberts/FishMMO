@@ -39,17 +39,17 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Reusable buffer for scene pulse payload data (Handle, CharacterCount).
 		/// Only used from the main thread. Snapshotted before passing to async.
 		/// </summary>
-		List<(int Handle, int CharacterCount)> ScenePulseDataBuffer { get; }
+		List<(long SceneID, int CharacterCount)> ScenePulseDataBuffer { get; }
 
 		/// <summary>
 		/// Reusable buffer for scene handles queued for unloading. Only used from the main thread.
 		/// </summary>
-		List<int> ScenesToUnloadBuffer { get; }
+		List<long> ScenesToUnloadBuffer { get; }
 
 		/// <summary>
 		/// Reusable buffer for iterating scene group value collections. Only used from the main thread.
 		/// </summary>
-		List<Dictionary<int, ISceneInstanceDetails>> SceneGroupValuesBuffer { get; }
+		List<Dictionary<long, ISceneInstanceDetails>> SceneGroupValuesBuffer { get; }
 
 		/// <summary>
 		/// Reusable buffer for iterating scene instance details. Only used from the main thread.

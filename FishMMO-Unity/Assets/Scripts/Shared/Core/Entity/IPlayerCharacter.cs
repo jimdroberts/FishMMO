@@ -106,9 +106,18 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		string SceneName { get; set; }
 		/// <summary>
-		/// The handle of the current scene.
+		/// Identity of the scene instance the character belongs to: the <c>scenes.id</c> of the
+		/// row describing it.
 		/// </summary>
-		int SceneHandle { get; set; }
+		/// <remarks>
+		/// This used to hold the hosting scene server's local scene-manager handle, which is
+		/// only meaningful inside that one process. Two scene servers running the same build
+		/// routinely allocate identical handles, so the value could not tell one server's
+		/// instance from another's: the world server's routing map collided between them, and a
+		/// scene server accepted a character routed to a different server's instance whenever
+		/// the handle and scene name happened to match. The row ID is unique by construction.
+		/// </remarks>
+		long SceneHandle { get; set; }
 		/// <summary>
 		/// Unique identifier for the instance the character is in.
 		/// </summary>
@@ -118,9 +127,10 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		string InstanceSceneName { get; set; }
 		/// <summary>
-		/// The handle of the instance scene.
+		/// Identity of the instance scene the character is inside — the <c>scenes.id</c> of its
+		/// row. See <see cref="SceneHandle"/>.
 		/// </summary>
-		int InstanceSceneHandle { get; set; }
+		long InstanceSceneHandle { get; set; }
 		/// <summary>
 		/// The position in the instance scene.
 		/// </summary>
@@ -129,6 +139,24 @@ namespace FishMMO.Shared.Core
 		/// The rotation in the instance scene.
 		/// </summary>
 		Quaternion InstanceRotation { get; set; }
+		/// <summary>
+		/// Where the character stood in the open world before entering an instance, and where it
+		/// is put back when it leaves one.
+		/// </summary>
+		/// <remarks>
+		/// The character row carries two positions — the open-world one and the instance one —
+		/// but a spawned character has only one transform, so while it is inside an instance the
+		/// transform describes the instance and something has to remember the other. Without
+		/// this, every save taken inside a dungeon overwrote the open-world position with dungeon
+		/// coordinates, and a character released from a dead instance was placed at those
+		/// coordinates in the open world: through terrain, or outside the playable bounds
+		/// entirely, until the out-of-bounds sweep noticed and relocated them.
+		/// </remarks>
+		Vector3 LastWorldPosition { get; set; }
+		/// <summary>
+		/// Rotation to restore alongside <see cref="LastWorldPosition"/>.
+		/// </summary>
+		Quaternion LastWorldRotation { get; set; }
 		/// <summary>
 		/// Returns true if the character is currently inside an instance.
 		/// </summary>

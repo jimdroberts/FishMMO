@@ -185,6 +185,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Vector3 pos = character.Transform.position;
 			Quaternion rot = character.Motor != null ? character.Motor.Transform.rotation : character.Transform.rotation;
 
+			/* The transform describes wherever the character currently is, and that is not always
+			 * the open world.
+			 *
+			 * Inside an instance the live transform belongs in the instance columns, and the
+			 * open-world columns must keep the position the character will be put back at when
+			 * it leaves. Writing the transform to both — which is what happened before — meant
+			 * one save inside a dungeon replaced the character's world position with dungeon
+			 * coordinates, so anything that returned them to the open world without an explicit
+			 * destination (an instance reaped as stale, a cleared instance flag) placed them at
+			 * a point that has no relationship to the world scene at all.
+			 *
+			 * Writing the live transform into the instance columns is also what makes progress
+			 * inside a dungeon survive a relog: the entry point was previously re-saved on every
+			 * pass, so reconnecting always returned the player to the dungeon's front door. */
+			bool inInstance = character.IsInInstance();
+
+			Vector3 worldPos = inInstance ? character.LastWorldPosition : pos;
+			Quaternion worldRot = inInstance ? character.LastWorldRotation : rot;
+			Vector3 instancePos = inInstance ? pos : character.InstancePosition;
+			Quaternion instanceRot = inInstance ? rot : character.InstanceRotation;
+
 			return new CharacterData(
 				id: character.ID,
 				name: character.CharacterName,
@@ -199,22 +220,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				bindY: character.BindPosition.y,
 				bindZ: character.BindPosition.z,
 				instanceID: character.InstanceID,
-				instanceX: character.InstancePosition.x,
-				instanceY: character.InstancePosition.y,
-				instanceZ: character.InstancePosition.z,
-				instanceRotX: character.InstanceRotation.x,
-				instanceRotY: character.InstanceRotation.y,
-				instanceRotZ: character.InstanceRotation.z,
-				instanceRotW: character.InstanceRotation.w,
+				instanceX: instancePos.x,
+				instanceY: instancePos.y,
+				instanceZ: instancePos.z,
+				instanceRotX: instanceRot.x,
+				instanceRotY: instanceRot.y,
+				instanceRotZ: instanceRot.z,
+				instanceRotW: instanceRot.w,
 				raceID: character.RaceID,
 				modelIndex: character.ModelIndex,
-				x: pos.x,
-				y: pos.y,
-				z: pos.z,
-				rotX: rot.x,
-				rotY: rot.y,
-				rotZ: rot.z,
-				rotW: rot.w,
+				x: worldPos.x,
+				y: worldPos.y,
+				z: worldPos.z,
+				rotX: worldRot.x,
+				rotY: worldRot.y,
+				rotZ: worldRot.z,
+				rotW: worldRot.w,
 				accessLevel: (byte)(int)character.AccessLevel,
 				online: true,
 				flags: character.Flags & ~(1 << (int)CharacterFlags.IsInCombat),

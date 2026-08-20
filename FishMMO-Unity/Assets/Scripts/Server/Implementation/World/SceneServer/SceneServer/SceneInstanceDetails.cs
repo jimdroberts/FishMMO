@@ -22,9 +22,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// The name of the scene instance.
 		/// </summary>
 		public string Name { get; set; }
-		/// <summary>
-		/// The handle (unique identifier) for this scene instance.
-		/// </summary>
+		/// <inheritdoc />
+		public long SceneID { get; set; }
+		/// <inheritdoc />
 		public int Handle { get; set; }
 		/// <summary>
 		/// The type of scene (OpenWorld, Group, PvP, etc.).

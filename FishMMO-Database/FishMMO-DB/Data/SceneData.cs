@@ -16,6 +16,11 @@ namespace FishMMO.Database.Data
 		/// <summary>Scene name.</summary>
 		public readonly string SceneName;
 		/// <summary>Scene handle identifier.</summary>
+		/// <summary>
+		/// The hosting scene server's own scene-manager handle for this instance. Diagnostic
+		/// only — see <c>SceneEntity.SceneHandle</c>. Use <see cref="ID"/> to identify a scene
+		/// instance across processes.
+		/// </summary>
 		public readonly int SceneHandle;
 		/// <summary>Scene status flag.</summary>
 		public readonly int SceneStatus;

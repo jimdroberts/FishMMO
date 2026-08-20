@@ -27,6 +27,33 @@ namespace FishMMO.Client
 		private float nextRefresh;
 
 		/// <summary>
+		/// Whether the next channel list to arrive was asked for by the player.
+		/// </summary>
+		/// <remarks>
+		/// The server pushes a channel list unprompted when a character finishes loading, and
+		/// this control used to <c>Show()</c> on any list it received — so the channel picker
+		/// opened itself over the world on every single login. Only a list the player asked for
+		/// opens the window; an unsolicited one just fills it in, ready for whenever they do.
+		/// </remarks>
+		private bool listRequested;
+
+		/// <summary>
+		/// Seconds a player-initiated request stays eligible to open the window.
+		/// </summary>
+		/// <remarks>
+		/// The server answers a channel-list request only when it has something to send: an
+		/// unavailable database, or a scene with no other instances, produces no reply at all. A
+		/// latch with no deadline therefore stayed armed indefinitely after such a request, and
+		/// the next list the server pushed on its own — one arrives whenever a character finishes
+		/// loading — opened the picker over the world, which is the behaviour the latch exists to
+		/// prevent.
+		/// </remarks>
+		private const float RequestedListTimeout = 15.0f;
+
+		/// <summary>Time left on <see cref="listRequested"/>.</summary>
+		private float requestedListExpiry;
+
+		/// <summary>
 		/// Registers the channel list broadcast handler when the client is set.
 		/// </summary>
 		public override void OnClientSet()
@@ -55,6 +82,15 @@ namespace FishMMO.Client
 			if (nextRefresh > 0f)
 			{
 				nextRefresh -= Time.deltaTime;
+			}
+
+			if (listRequested)
+			{
+				requestedListExpiry -= Time.deltaTime;
+				if (requestedListExpiry <= 0f)
+				{
+					listRequested = false;
+				}
 			}
 		}
 
@@ -85,12 +121,14 @@ namespace FishMMO.Client
 		{
 			if (Character == null)
 			{
+				listRequested = false;
 				Hide();
 				return;
 			}
 
 			if (msg.Addresses == null || msg.Addresses.Length == 0)
 			{
+				listRequested = false;
 				Hide();
 				return;
 			}
@@ -98,7 +136,7 @@ namespace FishMMO.Client
 			DestroyChannelButtons();
 			channelButtons = new List<ChannelDetailsButton>(msg.Addresses.Length);
 
-			int currentHandle = Character.SceneHandle;
+			long currentHandle = Character.SceneHandle;
 
 			for (int i = 0; i < msg.Addresses.Length; ++i)
 			{
@@ -114,7 +152,12 @@ namespace FishMMO.Client
 				}
 			}
 
-			Show();
+			// Only a list the player asked for opens the window; see listRequested.
+			if (listRequested)
+			{
+				listRequested = false;
+				Show();
+			}
 		}
 
 		/// <summary>
@@ -159,8 +202,25 @@ namespace FishMMO.Client
 			if (nextRefresh <= 0f)
 			{
 				nextRefresh = RefreshRate;
+				listRequested = true;
+				requestedListExpiry = RequestedListTimeout;
 				Client.Broadcast(new RequestSceneChannelListBroadcast(), Channel.Reliable);
 			}
+		}
+
+		/// <summary>
+		/// Opens the channel picker and asks the server for a current list.
+		/// </summary>
+		/// <remarks>
+		/// The entry point for whatever opens this control — a menu button, a hotkey — so the
+		/// player sees live channel populations rather than whatever was cached at login.
+		/// </remarks>
+		public void OnClick_Open()
+		{
+			listRequested = true;
+			requestedListExpiry = RequestedListTimeout;
+			Show();
+			OnClick_Refresh();
 		}
 
 		/// <summary>
@@ -168,6 +228,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Close()
 		{
+			listRequested = false;
 			Hide();
 		}
 

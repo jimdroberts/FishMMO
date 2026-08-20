@@ -11,8 +11,12 @@ namespace FishMMO.Shared
 	{
 		/// <summary>Port number for the scene server hosting this channel.</summary>
 		public ushort Port;
-		/// <summary>Handle identifying the specific scene instance for this channel.</summary>
-		public int SceneHandle;
+		/// <summary>
+		/// Identity of the scene instance this channel is: the <c>scenes.id</c> of its row.
+		/// Process-local scene handles are not unique between scene servers and cannot be used
+		/// here — see <see cref="FishMMO.Shared.IPlayerCharacter.SceneHandle"/>.
+		/// </summary>
+		public long SceneHandle;
 		/// <summary>Name of the scene this channel belongs to.</summary>
 		public string SceneName;
 		/// <summary>Current number of characters in this channel.</summary>

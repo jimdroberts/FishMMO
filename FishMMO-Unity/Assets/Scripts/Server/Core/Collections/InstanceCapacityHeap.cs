@@ -1,7 +1,7 @@
 namespace FishMMO.Server.Core.Collections
 {
 	/// <summary>
-	/// A max-heap of scene instance handles ordered by remaining capacity.
+	/// A max-heap of scene instances, keyed by scene row ID, ordered by remaining capacity.
 	/// Used for O(log N) fallback instance selection in open-world routing.
 	/// <para>
 	/// The root always holds the instance with the most remaining capacity.
@@ -12,7 +12,7 @@ namespace FishMMO.Server.Core.Collections
 	/// </summary>
 	public struct InstanceCapacityHeap
 	{
-		private (int handle, int capacity)[] heap;
+		private (long handle, int capacity)[] heap;
 		private int count;
 
 		/// <summary>Number of entries currently in the heap.</summary>
@@ -24,14 +24,14 @@ namespace FishMMO.Server.Core.Collections
 		/// <param name="capacity">Initial backing array size (avoids resizing when known).</param>
 		public InstanceCapacityHeap(int capacity)
 		{
-			heap = new (int, int)[capacity > 0 ? capacity : 4];
+			heap = new (long, int)[capacity > 0 ? capacity : 4];
 			count = 0;
 		}
 
 		/// <summary>
-		/// Pushes an instance handle with its remaining capacity onto the heap. O(log N).
+		/// Pushes an instance (identified by its scene row ID) with its remaining capacity onto the heap. O(log N).
 		/// </summary>
-		public void Push(int handle, int remainingCapacity)
+		public void Push(long handle, int remainingCapacity)
 		{
 			if (remainingCapacity <= 0)
 			{
@@ -49,9 +49,9 @@ namespace FishMMO.Server.Core.Collections
 		/// Decrements that instance's capacity and re-heapifies. If the instance
 		/// reaches zero capacity it is removed from the heap.
 		/// </summary>
-		/// <param name="handle">The assigned scene handle, or 0 if the heap is empty.</param>
+		/// <param name="handle">The assigned scene row ID, or 0 if the heap is empty.</param>
 		/// <returns><c>true</c> if an instance was available; <c>false</c> if the heap is empty.</returns>
-		public bool TryAssignFromTop(out int handle)
+		public bool TryAssignFromTop(out long handle)
 		{
 			if (count == 0)
 			{
@@ -139,7 +139,7 @@ namespace FishMMO.Server.Core.Collections
 			{
 				newLen = required;
 			}
-			var newArr = new (int, int)[newLen];
+			var newArr = new (long, int)[newLen];
 			if (heap != null && count > 0)
 			{
 				System.Array.Copy(heap, newArr, count);

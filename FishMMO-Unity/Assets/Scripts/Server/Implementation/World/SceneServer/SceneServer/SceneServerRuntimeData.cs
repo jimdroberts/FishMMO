@@ -40,13 +40,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public DateTime NextPendingSceneSweepUtc { get; set; }
 
 		/// <inheritdoc/>
-		public List<(int Handle, int CharacterCount)> ScenePulseDataBuffer { get; private set; }
+		public List<(long SceneID, int CharacterCount)> ScenePulseDataBuffer { get; private set; }
 
 		/// <inheritdoc/>
-		public List<int> ScenesToUnloadBuffer { get; private set; }
+		public List<long> ScenesToUnloadBuffer { get; private set; }
 
 		/// <inheritdoc/>
-		public List<Dictionary<int, ISceneInstanceDetails>> SceneGroupValuesBuffer { get; private set; }
+		public List<Dictionary<long, ISceneInstanceDetails>> SceneGroupValuesBuffer { get; private set; }
 
 		/// <inheritdoc/>
 		public List<ISceneInstanceDetails> SceneDetailsValuesBuffer { get; private set; }
@@ -63,9 +63,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			NextPendingSceneSweepUtc = DateTime.UtcNow;
-			ScenePulseDataBuffer = new List<(int, int)>();
-			ScenesToUnloadBuffer = new List<int>();
-			SceneGroupValuesBuffer = new List<Dictionary<int, ISceneInstanceDetails>>();
+			ScenePulseDataBuffer = new List<(long, int)>();
+			ScenesToUnloadBuffer = new List<long>();
+			SceneGroupValuesBuffer = new List<Dictionary<long, ISceneInstanceDetails>>();
 			SceneDetailsValuesBuffer = new List<ISceneInstanceDetails>();
 			ExpiredSceneIdsBuffer = new List<long>();
 			UnloadedHandlesBuffer = new List<int>();

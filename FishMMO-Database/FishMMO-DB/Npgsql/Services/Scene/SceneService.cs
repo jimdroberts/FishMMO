@@ -198,33 +198,42 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SetReadyAsync(
+			long sceneId,
 			long sceneServerId,
 			long worldServerId,
 			string sceneName,
 			int sceneHandle,
 			CancellationToken cancellationToken = default)
 		{
-			if (sceneServerId <= 0 || worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
+			if (sceneId <= 0 || sceneServerId <= 0 || worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
-				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: scene server ID, world server ID, and scene name are required.");
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: scene ID, scene server ID, world server ID, and scene name are required.");
 			}
 
 			// Still performs a best-effort "already ready" check to be robust to in-call retries.
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-var claimSql = $@"WITH claimable_scene AS (
+				/* Addressed by ID: this is the row the caller dequeued and loaded, and only that
+				 * row may be told where the resulting scene instance lives. Selecting "the oldest
+				 * loading row with this name" instead meant two concurrent loads of the same
+				 * scene could each stamp their server and handle onto the other's row — which,
+				 * for an instanced scene, hands a character the instance created for somebody
+				 * else, because character_id stays with the row.
+				 *
+				 * scene_name is still matched as a consistency check so a caller that passes a
+				 * mismatched ID fails rather than silently rewriting an unrelated row. */
+				var claimSql = $@"WITH claimable_scene AS (
 						SELECT id FROM {TableName}
-						WHERE world_server_id = {{0}}
-							AND scene_name = {{1}}
-							AND scene_status = {{2}}
-						ORDER BY time_created, id
-						FOR UPDATE SKIP LOCKED
-						LIMIT 1
+						WHERE id = {{0}}
+							AND world_server_id = {{1}}
+							AND scene_name = {{2}}
+							AND scene_status = {{3}}
+						FOR UPDATE
 					)
 					UPDATE {TableName}
-					SET scene_status = {{3}},
-						scene_server_id = {{4}},
-						scene_handle = {{5}}
+					SET scene_status = {{4}},
+						scene_server_id = {{5}},
+						scene_handle = {{6}}
 					FROM claimable_scene
 					WHERE {TableName}.id = claimable_scene.id
 					RETURNING {TableName}.id";
@@ -232,7 +241,7 @@ var claimSql = $@"WITH claimable_scene AS (
 				var claimedId = await ExecuteReturningOrDefaultAsync(
 					dbContext,
 					claimSql,
-					new object[] { worldServerId, sceneName, (int)SceneStatus.Loading, (int)SceneStatus.Ready, sceneServerId, sceneHandle },
+					new object[] { sceneId, worldServerId, sceneName, (int)SceneStatus.Loading, (int)SceneStatus.Ready, sceneServerId, sceneHandle },
 					reader => reader.GetInt64(0),
 					cancellationToken).ConfigureAwait(false);
 
@@ -245,13 +254,12 @@ var claimSql = $@"WITH claimable_scene AS (
 				var alreadyReadyId = await dbContext.Scenes
 					.AsNoTracking()
 					.Where(s =>
-						s.WorldServerID == worldServerId
+						s.ID == sceneId
+						&& s.WorldServerID == worldServerId
 						&& s.SceneName == sceneName
 						&& s.SceneStatus == (int)SceneStatus.Ready
 						&& s.SceneServerID == sceneServerId
 						&& s.SceneHandle == sceneHandle)
-					.OrderBy(s => s.TimeCreated)
-					.ThenBy(s => s.ID)
 					.Select(s => (long?)s.ID)
 					.FirstOrDefaultAsync(cancellationToken)
 					.ConfigureAwait(false);
@@ -260,30 +268,56 @@ var claimSql = $@"WITH claimable_scene AS (
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? (result.Data.HasValue ? DatabaseResult.Success() : DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "No matching loading scene could be claimed."))
+				? (result.Data.HasValue ? DatabaseResult.Success() : DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"Scene {sceneId} could not be claimed as ready."))
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PulseAsync(int sceneHandle, int characterCount, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> PulseAsync(long sceneId, int characterCount, CancellationToken cancellationToken = default)
 		{
+			if (sceneId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene ID.");
+			}
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				// Addressed by row id: a scene handle is process-local. See ISceneService.PulseAsync.
 				var sql = $@"UPDATE {TableName}
 					SET character_count = {{0}}
-					WHERE scene_handle = {{1}}";
+					WHERE id = {{1}}";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { characterCount, sceneHandle },
+					new object[] { characterCount, sceneId },
 					cancellationToken).ConfigureAwait(false);
 
 				if (rowsAffected <= 0)
 				{
-					throw new DatabaseEntityNotFoundException("Scene", $"handle {sceneHandle}");
+					throw new DatabaseEntityNotFoundException("Scene", sceneId.ToString());
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> DeleteAsync(long sceneId, CancellationToken cancellationToken = default)
+		{
+			if (sceneId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene ID.");
+			}
+
+			// Deliberately not throwing on zero rows: both callers are deleting a scene they have
+			// already stopped serving, and a row someone else reaped first is the same outcome.
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
+				await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { sceneId },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -437,7 +471,7 @@ var claimSql = $@"WITH claimable_scene AS (
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> PulseBatchAsync(
-			List<(int sceneHandle, int characterCount)> pulses,
+			List<(long sceneId, int characterCount)> pulses,
 			int maxBatchSize = 1000,
 			CancellationToken cancellationToken = default)
 		{
@@ -456,26 +490,27 @@ var claimSql = $@"WITH claimable_scene AS (
 				var batchCount = Math.Min(maxBatchSize, pulses.Count - offset);
 
 				// Build parallel arrays for PostgreSQL unnest.
-				var handles = new int[batchCount];
+				var sceneIds = new long[batchCount];
 				var counts = new int[batchCount];
 				for (int i = 0; i < batchCount; i++)
 				{
-					var (handle, count) = pulses[offset + i];
-					handles[i] = handle;
+					var (sceneId, count) = pulses[offset + i];
+					sceneIds[i] = sceneId;
 					counts[i] = count;
 				}
 
 				var result = await ExecuteWriteAsync(async dbContext =>
 				{
 					// Use unnest to efficiently join an array of values into an UPDATE.
+					// Addressed by row id: a scene handle is process-local.
 					var sql = $@"UPDATE {TableName} AS t
 						SET character_count = batch.new_count
-						FROM unnest({{0}}::int[], {{1}}::int[]) AS batch(handle, new_count)
-						WHERE t.scene_handle = batch.handle";
+						FROM unnest({{0}}::bigint[], {{1}}::int[]) AS batch(scene_id, new_count)
+						WHERE t.id = batch.scene_id";
 
 					return await dbContext.Database.ExecuteSqlRawAsync(
 						sql,
-						new object[] { handles, counts },
+						new object[] { sceneIds, counts },
 						cancellationToken).ConfigureAwait(false);
 				}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -488,6 +523,103 @@ var claimSql = $@"WITH claimable_scene AS (
 			}
 
 			return DatabaseResult<int>.Success(totalRowsAffected);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> DeleteStaleUnreadyAsync(
+			long worldServerId,
+			DateTime olderThanUtc,
+			int maxRows = 256,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
+			}
+
+			if (maxRows < 1)
+			{
+				maxRows = 1;
+			}
+			else if (maxRows > 4096)
+			{
+				maxRows = 4096;
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				// SKIP LOCKED so a row a scene server is concurrently dequeuing is left to it
+				// rather than deleted out from under an in-flight load.
+				var sql = $@"WITH stale AS (
+						SELECT id FROM {TableName}
+						WHERE world_server_id = {{0}}
+							AND scene_status <> {{1}}
+							AND time_created < {{2}}
+						ORDER BY time_created, id
+						FOR UPDATE SKIP LOCKED
+						LIMIT {{3}}
+					)
+					DELETE FROM {TableName}
+					USING stale
+					WHERE {TableName}.id = stale.id";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { worldServerId, (int)SceneStatus.Ready, olderThanUtc, maxRows },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> DeleteByStaleSceneServersAsync(
+			long worldServerId,
+			DateTime pulseOlderThanUtc,
+			int maxRows = 256,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
+			}
+
+			if (maxRows < 1)
+			{
+				maxRows = 1;
+			}
+			else if (maxRows > 4096)
+			{
+				maxRows = 4096;
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				/* NOT EXISTS covers both halves of "the host is gone": a scene server that
+				 * deregistered (no row) and one that crashed (row present, pulse stopped). A
+				 * plain join against scene_servers would silently keep the first case. */
+				var sql = $@"WITH orphaned AS (
+						SELECT s.id FROM {TableName} AS s
+						WHERE s.world_server_id = {{0}}
+							AND s.scene_server_id <> 0
+							AND NOT EXISTS (
+								SELECT 1 FROM scene_servers AS ss
+								WHERE ss.id = s.scene_server_id
+									AND ss.last_pulse >= {{1}}
+							)
+						ORDER BY s.id
+						FOR UPDATE SKIP LOCKED
+						LIMIT {{2}}
+					)
+					DELETE FROM {TableName}
+					USING orphaned
+					WHERE {TableName}.id = orphaned.id";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { worldServerId, pulseOlderThanUtc, maxRows },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return result;
 		}
 
 		/// <summary>

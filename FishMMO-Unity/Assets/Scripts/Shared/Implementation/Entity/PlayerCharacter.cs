@@ -128,10 +128,8 @@ namespace FishMMO.Shared
 		/// The name of the current scene.
 		/// </summary>
 		public string SceneName { get; set; }
-		/// <summary>
-		/// The handle of the current scene.
-		/// </summary>
-		public int SceneHandle { get; set; }
+		/// <inheritdoc />
+		public long SceneHandle { get; set; }
 		/// <summary>
 		/// The instance ID for instanced content.
 		/// </summary>
@@ -140,10 +138,8 @@ namespace FishMMO.Shared
 		/// The name of the instance scene.
 		/// </summary>
 		public string InstanceSceneName { get; set; }
-		/// <summary>
-		/// The handle of the instance scene.
-		/// </summary>
-		public int InstanceSceneHandle { get; set; }
+		/// <inheritdoc />
+		public long InstanceSceneHandle { get; set; }
 		/// <summary>
 		/// The position in the instance scene.
 		/// </summary>
@@ -152,6 +148,10 @@ namespace FishMMO.Shared
 		/// The rotation in the instance scene.
 		/// </summary>
 		public Quaternion InstanceRotation { get; set; }
+		/// <inheritdoc />
+		public Vector3 LastWorldPosition { get; set; }
+		/// <inheritdoc />
+		public Quaternion LastWorldRotation { get; set; } = Quaternion.identity;
 		/// <summary>
 		/// Returns true if the character is in an instance and the instance scene name is set.
 		/// </summary>
@@ -361,6 +361,8 @@ namespace FishMMO.Shared
 			InstanceSceneHandle = 0;
 			InstancePosition = Vector3.zero;
 			InstanceRotation = Quaternion.identity;
+			LastWorldPosition = Vector3.zero;
+			LastWorldRotation = Quaternion.identity;
 
 			ResetHotkeys();
 		}
