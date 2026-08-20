@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace FishMMO.Database.Npgsql.Entities
@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.LastLogin)
 				.IsRequired()
-				.HasDefaultValueSql("CURRENT_TIMESTAMP");
+				.HasDefaultValueSql("timezone('UTC', CURRENT_TIMESTAMP)");
 
 			// Indexes
 			builder.HasIndex(e => e.AccessLevel);

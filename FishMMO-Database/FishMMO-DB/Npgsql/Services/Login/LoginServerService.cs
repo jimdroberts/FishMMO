@@ -59,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Services
 					DO UPDATE SET
 						address = EXCLUDED.address,
 						port = EXCLUDED.port,
-						last_pulse = CURRENT_TIMESTAMP
+						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
 					RETURNING id, name, time_created, last_pulse, address, port";
 
 				return await ExecuteReturningAsync(

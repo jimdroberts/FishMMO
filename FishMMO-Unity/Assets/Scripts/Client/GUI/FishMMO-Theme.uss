@@ -1,4 +1,4 @@
-/*
+﻿/*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     FishMMO-Theme.uss
     Obsidian / Ember Orange  —  Shared Visual Theme
@@ -65,6 +65,39 @@
     border-top-width: 2px;
     border-radius: 10px;
     overflow: hidden;
+}
+
+/* Buttons.
+   Referenced by eight panels but never defined, so every one of them fell back to the
+   engine default: a flat grey box that reads as a disabled control. */
+.fish-button {
+    background-color: rgb(38, 42, 48);          /* ob600 */
+    border-color: rgb(60, 66, 80);              /* ob400 */
+    border-width: 1px;
+    border-radius: 6px;
+    color: rgb(232, 234, 238);
+    -unity-font-style: bold;
+    font-size: 13px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 14px;
+    padding-right: 14px;
+    transition-property: background-color, border-color;
+    transition-duration: 0.12s;
+}
+
+.fish-button:hover {
+    background-color: rgb(52, 58, 66);
+    border-color: rgb(255, 107, 26);            /* em500 */
+}
+
+.fish-button:active {
+    background-color: rgb(28, 31, 34);
+}
+
+/* Genuinely disabled, as opposed to merely unstyled. */
+.fish-button:disabled {
+    opacity: 0.45;
 }
 
 .fish-panel__header {

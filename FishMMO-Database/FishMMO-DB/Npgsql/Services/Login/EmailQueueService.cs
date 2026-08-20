@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 					LIMIT 1
 					FOR UPDATE SKIP LOCKED
 				)
-				UPDATE {TableName} SET claimed_by = {{0}}, claimed_at = CURRENT_TIMESTAMP
+				UPDATE {TableName} SET claimed_by = {{0}}, claimed_at = timezone('UTC', CURRENT_TIMESTAMP)
 				FROM next WHERE {TableName}.id = next.id
 				RETURNING {TableName}.id, {TableName}.recipient_email, {TableName}.recipient_username,
 				          {TableName}.subject, {TableName}.body, {TableName}.created_at,
@@ -138,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
-					SET sent_at = CURRENT_TIMESTAMP
+					SET sent_at = timezone('UTC', CURRENT_TIMESTAMP)
 					WHERE id = {{0}}";
 
 				var affected = await dbContext.Database.ExecuteSqlRawAsync(

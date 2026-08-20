@@ -141,7 +141,7 @@ namespace FishMMO.Database.Npgsql.Services
 					),
 					upserted AS (
 						INSERT INTO {TableName} (character_id, party_id, rank, health_pct, version, time_created)
-						SELECT {{0}}, {{1}}, {{3}}, {{4}}, {{5}}, CURRENT_TIMESTAMP
+						SELECT {{0}}, {{1}}, {{3}}, {{4}}, {{5}}, timezone('UTC', CURRENT_TIMESTAMP)
 						FROM active_character, capacity_ok
 						WHERE capacity_ok.ok = TRUE
 						ON CONFLICT (character_id)
