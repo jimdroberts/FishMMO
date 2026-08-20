@@ -223,15 +223,20 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 `OnServerDungeonFinderBroadcastReceived(conn, msg, channel)`:
 
-1. Validates connection, character, and ingress guard.
-2. Validates scene object is `IDungeonEntrance` in range.
-3. Validates dungeon scene exists in `WorldSceneDetailsCache` with respawn positions.
-4. Captures main-thread state (character ID, world server ID, party ID, dungeon name, respawn details).
-5. Increments dungeon entrance achievement.
-6. Enqueues `ProcessDungeonFinderAsync` (async owns guard):
-   - Checks existing character instance via `ISceneService.FetchCharacterInstanceAsync`.
-   - If no instance: checks party member instances via `CheckCharacterPartyInstanceAsync`, enqueues new scene via `ISceneService.EnqueueAsync`.
-   - Marshals to main thread: sets `InstanceID`, `InstancePosition`, `InstanceRotation`, enables `CharacterFlags.IsInInstance`, disconnects connection.
+1. Validates connection and character, then gates on `CharacterStateValidation.CanActOrMove` — **not** `CanAct`. Entering a dungeon is a voluntary move to another scene instance implemented as a disconnect, so in combat it would be both a cleaner escape than any teleporter and actively corrupting: the drop would be read as a combat logout, stranding the body and its session claim on this server while the character row says it is in an instance.
+2. Refuses if the character is already inside an instance — the entrance is not a way to hop between them.
+3. Acquires the ingress guard.
+4. Validates scene object is `IDungeonEntrance` in range.
+5. Validates dungeon scene exists in `WorldSceneDetailsCache` with respawn positions, and reads its `MaxClients` cap.
+6. Captures main-thread state (character ID, world server ID, party ID, dungeon name, cap, respawn details).
+7. Increments dungeon entrance achievement.
+8. Enqueues `ProcessDungeonFinderAsync` (async owns guard):
+   - Looks for this character's own instance **of this dungeon** via `ISceneService.FetchCharacterInstanceAsync`, which is scoped by world server and scene name. A character accumulates one instance row per dungeon it has opened, so matching on character and scene type alone returned an arbitrary one — asked for dungeon A while holding a row for dungeon B, the caller saw "no instance", created a second, and left A's still-running instance stranded.
+   - Rows that are `Failed`, or of an unrecognised status, are treated as absent; `Pending` and `Loading` count as usable, because the world server holds the client in its instance queue until the scene is ready.
+   - A **full** instance is refused (`DestinationFull`), never worked around. Asking for a new one instead would silently hand a party member a second, empty copy of the dungeon and separate them from the group they were trying to join.
+   - Otherwise joins a party member's instance, or enqueues a new scene via `ISceneService.EnqueueAsync`.
+   - Marshals to main thread (`EnterInstance`): re-checks `CanActOrMove` — the database work above gives combat or death time to intervene — then sets `InstanceID`, `InstancePosition`, `InstanceRotation`, enables `CharacterFlags.IsInInstance`, announces the hand-off via `ICharacterSystem.SuppressCombatLingerOnDisconnect`, and disconnects.
+   - Every refusal answers with a `SceneTransferRefusedBroadcast` naming the reason. The client closes its panel the moment it sends, so a silent return read as the button having stopped working — and the natural response, clicking again, was then swallowed by the ingress guard.
 
 ### Mailbox Operations
 

@@ -1119,6 +1119,8 @@ namespace FishMMO.Client
 					return "You are travelling too often. Wait a moment and try again.";
 				case SceneTransferRefusalReason.PartyInstanceExists:
 					return "A party member already has this instance open.";
+				case SceneTransferRefusalReason.AlreadyAtDestination:
+					return "You are already on that channel.";
 				case SceneTransferRefusalReason.ServerError:
 					return "The server could not complete that request. Please try again.";
 				default:
@@ -1453,6 +1455,8 @@ namespace FishMMO.Client
 					return "The server rejected this connection.\nIf this keeps happening, please contact support.";
 				case DisconnectNoticeReason.AdministrativeKick:
 					return "You have been disconnected by a game administrator.";
+				case DisconnectNoticeReason.ServerMaintenance:
+					return "The server has gone down for maintenance.\nPlease try again shortly.";
 				case DisconnectNoticeReason.ServerError:
 					return "The server ran into a problem handling your login.\nPlease try again in a moment.";
 				case DisconnectNoticeReason.Unspecified:

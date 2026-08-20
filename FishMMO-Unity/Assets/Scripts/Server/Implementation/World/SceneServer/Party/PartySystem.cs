@@ -186,12 +186,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Chat commands
-			Dictionary<string, ChatCommand> partyChatCommands = new Dictionary<string, ChatCommand>()
+			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
 			{
 				{ "/pi", OnPartyInvite },
 				{ "/invite", OnPartyInvite },
-			};
-			ChatHelper.AddCommands(partyChatCommands);
+			});
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);
@@ -239,6 +238,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
+			// Static registry: a command left behind outlives this ScriptableObject and would
+			// run against a destroyed instance. See ChatHelper.RemoveCommands.
+			ChatHelper.RemoveCommands(new[] { "/pi", "/invite" });
+
 			if (Server == null)
 			{
 				Log.Error("PartySystem", "OnDeinitialize: Server is null");

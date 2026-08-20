@@ -798,6 +798,7 @@ MaximumClients=4000
 Address=127.0.0.1
 Port=7790
 StaleSceneTimeout=5
+StaleInstanceSceneTimeout=2
 CertificatePath=/etc/fishmmo/certs/fullchain.pem
 PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 ```
@@ -808,7 +809,8 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | `MaximumClients` | Maximum concurrent connections | 4000 |
 | `Address` | Bind address — `127.0.0.1` when behind NGINX (default); set to the server's network IP only if NGINX runs on a different machine | `127.0.0.1` |
 | `Port` | Listen port (Login=7770, World=7780, Scene=7790+) | varies |
-| `StaleSceneTimeout` | **Minutes** an empty scene instance stays loaded before it is unloaded and its scene row deleted. SceneServer only. The templates ship `5`; the code's fallback when the key is missing is `60` | 5 |
+| `StaleSceneTimeout` | **Minutes** an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. SceneServer only. The templates ship `5`; the code's fallback when the key is missing is `60` | 5 |
+| `StaleInstanceSceneTimeout` | **Minutes** an empty **Group/PvP (instanced)** scene stays loaded. Deliberately shorter than `StaleSceneTimeout`: a dungeon instance belongs to one character or party, so once it empties it is unlikely to be wanted again, while each one holds a full physics scene. Long enough to survive a wipe-and-run-back or a relog. SceneServer only; the code's fallback is `5` | 2 |
 | `CertificatePath` | PEM certificate for QUIC/TLS (game servers terminate their own TLS) | platform-dependent |
 | `PrivateKeyPath` | PEM private key for QUIC/TLS | platform-dependent |
 | `ConnectionTokenHmacKeyBase64` | **Leave empty.** Loaded at runtime from the `connection_token_keys` database table | empty |
@@ -1481,7 +1483,51 @@ Launch each with `./GameServer SCENE` from its own working directory (or pass a 
 
 **Multiple instances of one open-world scene are channels.** When every instance of a scene is at its authored `MaxClients`, the WorldServer enqueues another and holds arriving clients in its routing queue (they see a position and a reason) until it is ready. Players move between instances of their current scene through the channel picker; the switch is refused in combat and rate-limited per character via `characters.last_channel_switch_utc`, so it survives the disconnect the switch performs.
 
-An empty instance is unloaded once it has been stale for `StaleSceneTimeout` minutes (the templates ship `5`), which also deletes its scene row.
+An empty instance is unloaded once it has been stale for `StaleInstanceSceneTimeout` minutes (the templates ship `2`), which also deletes its scene row. Open-world scenes use the separate, longer `StaleSceneTimeout`.
+
+
+### Locking a server and scheduling maintenance
+
+Both `world_servers.locked` / `world_servers.shutdown_at_utc` and the matching `scene_servers`
+columns are the **authority** for a server's lifecycle state. Servers never write them on their
+own: each one reads its own row back on every pulse (~5s) and adopts what it finds. Anything that
+can write those rows therefore controls the servers — the in-game commands below, a CMS, or plain
+`psql` — exactly as `kick_requests` already works for accounts.
+
+**Locking drains, it does not evict.** A locked server keeps the players it has and stops
+receiving new ones: a locked world refuses logins, and a locked scene server is skipped by the
+world server's open-world routing and stops taking scene-load requests. Instance routing
+deliberately ignores the lock, because a character bound to a dungeon can only go to the one
+server hosting it — refusing there would evict them from their instance rather than drain them.
+
+**A locked world still admits accounts above `AccessLevel.Player`**, so locking a world for
+maintenance does not lock out the people doing the maintenance. A world with a *shutdown*
+scheduled admits nobody.
+
+In-game commands, all requiring `AccessLevel.Admin` (3):
+
+| Command | Effect |
+|---|---|
+| `/admin status` | Reports this scene server's state and that of the worlds it hosts scenes for |
+| `/admin lockserver` | Locks the character's world server — no new logins except elevated accounts |
+| `/admin unlockserver` | Reopens the world |
+| `/admin shutdown <seconds>` | Locks the world and schedules its shutdown. Players are warned as the countdown passes 15m / 10m / 5m / 2m / 1m / 30s / 10s, then disconnected with a maintenance notice |
+| `/admin stopshutdown` | Cancels the scheduled world shutdown. **Leaves the world locked** — reopening is a separate decision |
+| `/admin lockscene` | Locks the scene server the admin is standing on |
+| `/admin unlockscene` | Reopens that scene server |
+| `/admin shutdownscene <seconds>` | Locks and shuts down that one scene server; its players are warned, disconnected, and can rejoin on another |
+| `/admin stopshutdownscene` | Cancels it, leaving the scene server locked |
+
+`lockworld` / `unlockworld` are accepted as aliases of `lockserver` / `unlockserver`.
+
+Commands are refused silently to anyone below `AccessLevel.Admin` — the server gives no
+indication the command exists, so an unprivileged player cannot probe for command names — but
+every refused attempt is logged at warning level with the character and account that tried it.
+
+> **Note on automatic restarts.** The AppHealthMonitor restarts server processes. A world server
+> deregisters itself on a graceful shutdown, so it comes back clean; a scene server clears its own
+> consumed shutdown (and the lock that came with it) as it exits, for the same reason. Either way
+> a scheduled shutdown will be followed by a restart unless you stop the monitor first.
 
 ---
 

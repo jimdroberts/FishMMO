@@ -1696,7 +1696,8 @@ All FishMMO servers read configuration from `.cfg` files in the working director
 | `MaximumClients` | int | `4000` | All | Maximum concurrent client connections. Overrides the FishNet transport default of 100. |
 | `Address` | string | `"127.0.0.1"` | All | Bind address. `127.0.0.1` = loopback, the default and the expected deployment — the server accepts datagrams only from an NGINX on the same host. Set `0.0.0.0` **only** when NGINX runs on a different machine, and firewall the port to that proxy host; binding all interfaces otherwise puts the game server directly on the internet. |
 | `Port` | ushort | `7777` | All | Network port. Defaults: Login=7770, World=7780, Scene=7781 (code default) / 7790 (file default). |
-| `StaleSceneTimeout` | int | `5` | All | Minutes before an unresponsive scene is considered stale and eligible for cleanup. |
+| `StaleSceneTimeout` | int | `5` | All | Minutes an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. Read by the SceneServer. |
+| `StaleInstanceSceneTimeout` | int | `2` | All | Minutes an empty **Group/PvP (instanced)** scene stays loaded. Shorter than `StaleSceneTimeout` because a dungeon instance belongs to one character or party and is unlikely to be wanted again once empty. Code fallback `5`. |
 | `CertificatePath` | string | platform-specific | All | PEM certificate path for QUIC/TLS termination. Platform defaults: Linux=`/etc/fishmmo/certs/fullchain.pem`, Windows=`C:\ProgramData\FishMMO\certs\fullchain.pem`, macOS=`/usr/local/share/fishmmo/certs/fullchain.pem`. |
 | `PrivateKeyPath` | string | platform-specific | All | PEM private key path for QUIC/TLS termination. Same platform-specific pattern as `CertificatePath` with `privkey.pem`. |
 

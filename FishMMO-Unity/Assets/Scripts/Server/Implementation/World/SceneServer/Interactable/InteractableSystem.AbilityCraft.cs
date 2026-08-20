@@ -60,11 +60,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// validate scene
+				// Validate the scene the character is actually in — see CurrentSceneName.
+				string currentScene = character.CurrentSceneName();
 				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+					!worldSceneDetailsCache.Scenes.TryGetValue(currentScene, out _))
 				{
-					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
+					Log.Debug("InteractableSystem", "Missing Scene:" + currentScene);
 					return;
 				}
 

@@ -19,11 +19,19 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Compiled query for retrieving character instance scene (hot path for scene loading).
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<SceneEntity?>> getCharacterInstanceQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int sceneType, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, int, long, string, CancellationToken, Task<SceneEntity?>> getCharacterInstanceQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int sceneType, long worldServerId, string sceneName, CancellationToken ct) =>
 				context.Scenes
 					.AsNoTracking()
-					.FirstOrDefault(s => s.CharacterID == characterId && s.SceneType == sceneType));
+					.Where(s => s.CharacterID == characterId &&
+								s.SceneType == sceneType &&
+								s.WorldServerID == worldServerId &&
+								s.SceneName == sceneName)
+					// Newest first: duplicate rows for the same (character, scene) can already
+					// exist from before this query filtered on the scene, and an unordered
+					// FirstOrDefault made which one came back a property of physical row order.
+					.OrderByDescending(s => s.ID)
+					.FirstOrDefault());
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -108,6 +116,64 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return DatabaseResult<long>.Success(result.Data.ID);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<long>> EnqueueIfUnderOutstandingLimitAsync(
+			long worldServerId,
+			string sceneName,
+			SceneType sceneType,
+			int maxOutstanding = 1,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
+			{
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
+			}
+
+			if (maxOutstanding < 1)
+			{
+				maxOutstanding = 1;
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				/* One statement, so the "how many are already coming?" count and the insert
+				 * cannot be interleaved by a second caller. scene_server_id and scene_handle are
+				 * written as 0 because no scene server owns the row yet — DequeueAsync hands it
+				 * to one, and SetReadyAsync stamps both. */
+				var sql = $@"INSERT INTO {TableName}
+						(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created)
+					SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, 0, 0, {{4}}
+					WHERE (
+						SELECT COUNT(*) FROM {TableName}
+						WHERE world_server_id = {{0}}
+							AND scene_name = {{1}}
+							AND scene_type = {{3}}
+							AND scene_status IN ({{2}}, {{5}})
+					) < {{6}}
+					RETURNING id";
+
+				return await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[]
+					{
+						worldServerId,
+						sceneName,
+						(int)SceneStatus.Pending,
+						(int)sceneType,
+						DateTime.UtcNow,
+						(int)SceneStatus.Loading,
+						maxOutstanding,
+					},
+					reader => reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			// Zero means the insert was skipped because enough loads are already outstanding,
+			// which is the whole point of this method and is reported as success.
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -359,32 +425,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteByHandleAsync(long sceneServerId, int sceneHandle, CancellationToken cancellationToken = default)
-		{
-			if (sceneServerId <= 0)
-			{
-				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene server ID.");
-			}
-
-			return await ExecuteWriteAsync(async dbContext =>
-			{
-				var sql = $@"DELETE FROM {TableName} WHERE scene_server_id = {{0}} AND scene_handle = {{1}}";
-				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
-					sql,
-					new object[] { sceneServerId, sceneHandle },
-					cancellationToken).ConfigureAwait(false);
-
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Scene", $"SceneServerId={sceneServerId}, Handle={sceneHandle}");
-				}
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-		}
-
-		/// <inheritdoc/>
 		public async Task<DatabaseResult<SceneData>> FetchCharacterInstanceAsync(
 			long characterId,
 			SceneType sceneType,
+			long worldServerId,
+			string sceneName,
 			CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
@@ -392,14 +437,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneData>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
+			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
+			{
+				return DatabaseResult<SceneData>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
+			}
+
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var type = (int)sceneType;
-				var scene = await getCharacterInstanceQuery(dbContext, characterId, type, cancellationToken).ConfigureAwait(false);
+				var scene = await getCharacterInstanceQuery(dbContext, characterId, type, worldServerId, sceneName, cancellationToken).ConfigureAwait(false);
 
 				if (scene == null)
 				{
-					throw new DatabaseEntityNotFoundException("Scene", $"character {characterId}, type {sceneType}");
+					throw new DatabaseEntityNotFoundException("Scene", $"character {characterId}, type {sceneType}, world {worldServerId}, scene {sceneName}");
 				}
 
 				return MapEntityToDto(scene);

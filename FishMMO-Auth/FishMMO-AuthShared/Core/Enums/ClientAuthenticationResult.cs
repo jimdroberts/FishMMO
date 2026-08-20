@@ -93,5 +93,16 @@ namespace FishMMO.Auth.Core
 		/// The client must update (or downgrade) to match the server's version.
 		/// </summary>
 		VersionMismatch = 20,
+		/// <summary>
+		/// The server is locked for maintenance and is not accepting this account.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="ServerFull"/>, which it used to be reported as. "Full" tells
+		/// the player to try again shortly, which is exactly wrong for a lock: capacity clears on
+		/// its own, a maintenance lock does not. A locked world still admits accounts above
+		/// <c>AccessLevel.Player</c>, so receiving this also means the account is an ordinary
+		/// player one.
+		/// </remarks>
+		ServerLocked = 21,
 	}
 }

@@ -297,6 +297,9 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.ServerFull:
 					OnLoginAuthenticationDialog("Server is currently full please wait a while and try again.");
 					break;
+				case ClientAuthenticationResult.ServerLocked:
+					OnLoginAuthenticationDialog("This world is closed for maintenance. Please try again later.");
+					break;
 				case ClientAuthenticationResult.ServerBusy:
 					OnLoginAuthenticationDialog("Server is busy. Please try again.");
 					break;

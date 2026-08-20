@@ -187,9 +187,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// Validate scene
+				// Validate the scene the character is actually in — see CurrentSceneName.
 				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.CurrentSceneName(), out _))
 				{
 					EndDialogueSessionWithBroadcast(character);
 					return;

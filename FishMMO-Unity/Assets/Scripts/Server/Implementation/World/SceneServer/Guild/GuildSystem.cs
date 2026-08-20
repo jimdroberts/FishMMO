@@ -188,12 +188,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Chat commands
-			Dictionary<string, ChatCommand> guildChatCommands = new Dictionary<string, ChatCommand>()
+			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
 			{
 				{ "/gi", OnGuildInvite },
 				{ "/ginvite", OnGuildInvite },
-			};
-			ChatHelper.AddCommands(guildChatCommands);
+			});
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);
@@ -241,6 +240,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
+			// Static registry: a command left behind outlives this ScriptableObject and would
+			// run against a destroyed instance. See ChatHelper.RemoveCommands.
+			ChatHelper.RemoveCommands(new[] { "/gi", "/ginvite" });
+
 			if (Server == null)
 			{
 				Log.Error("GuildSystem", "OnDeinitialize: Server is null");

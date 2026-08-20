@@ -258,11 +258,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				{
 					return;
 				}
-				DatabaseResult result = await worldServerService.PulseAsync(serverId, characterCount);
+				DatabaseResult<ServerControlState> result = await worldServerService.PulseAsync(serverId, characterCount);
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("WorldServerSystem", $"PulseAsync DB error (ServerID={serverId}): {result.ErrorCode} - {result.ErrorMessage}");
+					return;
 				}
+
+				/* Publish for the main thread to adopt.
+				 *
+				 * Applying it here would mean touching Unity APIs from an async worker —
+				 * Server.Quit() is one — and writing a DateTime? that the main thread reads,
+				 * which is not a single atomic store. Boxing into a volatile reference makes
+				 * publication atomic; OnPeriodicPulse picks it up on the next tick, so a control
+				 * change takes effect within two pulses rather than one. That is well inside the
+				 * granularity of any shutdown an operator would schedule. */
+				System.Threading.Volatile.Write(ref pendingControlState, result.Data);
 			}
 			catch (Exception ex)
 			{
@@ -271,6 +282,64 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
+		/// Most recent control state read back by a pulse, awaiting main-thread adoption.
+		/// </summary>
+		/// <remarks>
+		/// Boxed so publication is a single reference store, which is atomic; the struct it
+		/// holds contains a <see cref="DateTime"/>? that would not be. Written by the async
+		/// pulse worker, taken by <see cref="OnPeriodicPulse"/> on the main thread.
+		/// </remarks>
+		private object pendingControlState;
+
+		/// <summary>
+		/// Adopts the lock and shutdown state read back from this server's database row.
+		/// </summary>
+		/// <remarks>
+		/// Main thread only. Logs each transition rather than the steady state, so the operator
+		/// log shows when a lock or a shutdown took effect without a line every pulse.
+		/// </remarks>
+		/// <param name="state">Control state as the database currently holds it.</param>
+		private void ApplyControlState(ServerControlState state)
+		{
+			if (!Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
+			{
+				return;
+			}
+
+			if (data.IsLocked != state.Locked)
+			{
+				data.IsLocked = state.Locked;
+				Log.Warning("WorldServerSystem", state.Locked
+					? "This world server is now LOCKED. New logins are refused; accounts above Player are still admitted."
+					: "This world server is now UNLOCKED and accepting logins again.");
+			}
+
+			if (data.ShutdownAtUtc != state.ShutdownAtUtc)
+			{
+				data.ShutdownAtUtc = state.ShutdownAtUtc;
+				Log.Warning("WorldServerSystem", state.ShutdownAtUtc.HasValue
+					? $"Shutdown scheduled for {state.ShutdownAtUtc.Value:u} ({state.SecondsUntilShutdown(DateTime.UtcNow):F0}s)."
+					: "Scheduled shutdown cancelled.");
+			}
+
+			if (state.HasShutdown && DateTime.UtcNow >= state.ShutdownAtUtc.Value)
+			{
+				/* The deadline has arrived. Quitting runs Server.PerformShutdown, which is the
+				 * ordinary graceful teardown — it saves, releases session claims and removes
+				 * this world's scene rows. Nothing here disconnects clients first: the world
+				 * server holds only clients in transit between login and a scene server, and
+				 * they recover through their own reconnect loop. */
+				Log.Warning("WorldServerSystem", "Scheduled shutdown deadline reached; stopping the world server.");
+
+				// Fully qualified: ServerBehaviour exposes a `Server` property that shadows the
+				// type name, and Quit is a static on the type.
+				FishMMO.Server.Implementation.Server.Quit();
+			}
+		}
+
+		/// <summary>
+		/// Periodic callback that sends a heartbeat pulse to the database.
+		/// </summary>		/// <summary>
 		/// Periodic callback that sends a heartbeat pulse to the database.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
@@ -279,6 +348,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
 			{
 				return;
+			}
+
+			// Adopt whatever the last pulse read back before issuing the next one.
+			object published = System.Threading.Volatile.Read(ref pendingControlState);
+			if (published != null)
+			{
+				System.Threading.Volatile.Write(ref pendingControlState, null);
+				ApplyControlState((ServerControlState)published);
 			}
 
 			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem _))

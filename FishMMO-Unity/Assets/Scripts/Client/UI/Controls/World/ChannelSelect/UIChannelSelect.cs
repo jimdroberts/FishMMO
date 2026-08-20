@@ -128,15 +128,32 @@ namespace FishMMO.Client
 
 			if (msg.Addresses == null || msg.Addresses.Length == 0)
 			{
+				/* The server always answers a list request now, including with nothing. If the
+				 * player asked, say so — closing a window they just opened, with no explanation,
+				 * is the same dead end as never replying at all. An unsolicited empty list (sent
+				 * on character load) just closes. */
+				bool playerAsked = listRequested;
 				listRequested = false;
+				DestroyChannelButtons();
 				Hide();
+
+				if (playerAsked && UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+				{
+					dialogBox.Open("There are no other channels available for this scene.");
+				}
 				return;
 			}
 
 			DestroyChannelButtons();
 			channelButtons = new List<ChannelDetailsButton>(msg.Addresses.Length);
 
-			long currentHandle = Character.SceneHandle;
+			/* The server tells us which channel we are on; the character cannot.
+			 *
+			 * IPlayerCharacter.SceneHandle is server-side state and is never replicated, so the
+			 * client's copy is always zero — this comparison could not match any real channel,
+			 * and the player was shown a list of interchangeable-looking channels with no
+			 * indication of where they already were. */
+			long currentHandle = msg.CurrentSceneHandle;
 
 			for (int i = 0; i < msg.Addresses.Length; ++i)
 			{
@@ -146,7 +163,7 @@ namespace FishMMO.Client
 				channelButtons.Add(button);
 
 				// Highlight the channel the player is currently on
-				if (msg.Addresses[i].SceneHandle == currentHandle)
+				if (currentHandle != 0 && msg.Addresses[i].SceneHandle == currentHandle)
 				{
 					button.SetLabelColors(Color.yellow);
 				}

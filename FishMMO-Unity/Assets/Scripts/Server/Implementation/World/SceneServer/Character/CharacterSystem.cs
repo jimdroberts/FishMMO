@@ -272,6 +272,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
 			ICharacterDamageController.OnResurrectOffered -= CharacterDamageController_OnResurrectOffered;
 
+			// Static registry: a command left behind outlives this ScriptableObject and would
+			// run against a destroyed instance. See ChatHelper.RemoveCommands.
+			ChatHelper.RemoveCommands(new[] { "/leaveinstance", "/exitinstance" });
+
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
@@ -299,7 +303,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			sceneLoadDeadlines.Clear();
 			startScenesAckedClientIds.Clear();
 			pendingTransferDisconnects.Clear();
-			deliberateTransferClientIds.Clear();
+			suppressCombatLingerClientIds.Clear();
 			authCallbackLastTimeByAccount.Clear();
 			sceneUnloadLastTimeByClientId.Clear();
 			validatedSceneLastTimeByClientId.Clear();

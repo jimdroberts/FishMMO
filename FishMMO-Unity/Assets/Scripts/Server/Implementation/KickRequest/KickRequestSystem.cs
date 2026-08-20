@@ -6,6 +6,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using UnityEngine;
@@ -291,6 +292,25 @@ namespace FishMMO.Server.Implementation
 					{
 						if (Server.AccountManager.GetConnectionByAccountName(accountName, out NetworkConnection conn))
 						{
+							/* An operator kick is not a player quitting mid-fight.
+							 *
+							 * This system runs on the scene server too, where the ordinary disconnect
+							 * path starts a combat-logout linger for any character that was in combat.
+							 * Applied to a kick that is backwards: there is no escape to deny, because
+							 * the player did not choose to leave — and the linger keeps the kicked
+							 * character's body in the world, still targetable, while holding its session
+							 * claim for as long as it lasts. Kicking is the standard remedy for a
+							 * character that is stuck, so making that character harder to load for the
+							 * next minute is the opposite of what the operator asked for.
+							 *
+							 * TryGet fails harmlessly on the login and world servers, which run this
+							 * system but have no character system. */
+							if (Server.BehaviourRegistry != null &&
+								Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem))
+							{
+								characterSystem.SuppressCombatLingerOnDisconnect(conn);
+							}
+
 							/* DisconnectWithNotice, not Kick.
 							 *
 							 * FishNet carries no kick reason to the client, so this landed the
