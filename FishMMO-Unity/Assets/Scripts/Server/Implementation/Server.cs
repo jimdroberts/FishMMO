@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -11,6 +12,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using KinematicCharacterController;
 using FishMMO.Database;
+using FishMMO.Database.Npgsql;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishMMO.Shared;
@@ -290,6 +292,8 @@ namespace FishMMO.Server.Implementation
 			Log.Debug("Server", $"Initializing Database with Environment: {DatabaseConfigurationHelper.ResolveEnvironmentName()}");
 			Database = new Database.Database(dbConfig);
 
+			VerifyDatabaseSchema();
+
 			AddressProvider = new ServerAddressProvider(
 				NetworkWrapper.NetworkManager.TransportManager.Transport,
 				AddressOverride,
@@ -348,6 +352,57 @@ namespace FishMMO.Server.Implementation
 			RegisterAllBehaviours();
 
 			behaviourInitCoroutine = StartCoroutine(InitializeBehavioursThenStartServer());
+		}
+
+		/// <summary>
+		/// Checks the database schema against the entity model and reports any mismatch.
+		/// </summary>
+		/// <remarks>
+		/// Migrations are generated per developer and applied locally rather than shared through
+		/// source control, so pulling someone else's entity change does not bring a migration with
+		/// it and nothing applies one on your behalf. The database stays where it was, and the
+		/// mismatch only surfaces later as a query failing on a column that does not exist —
+		/// which typically reaches a player as missing data rather than as a schema problem.
+		/// <para>
+		/// Deliberately neither awaited nor fatal. This is a diagnostic: a server whose schema is
+		/// stale still serves everything that does not touch the changed tables, and refusing to
+		/// start would be a worse outcome than a loud log line. It costs one query and reports
+		/// within a second or so of startup.
+		/// </para>
+		/// </remarks>
+		private void VerifyDatabaseSchema()
+		{
+			INpgsqlDbContextFactory factory = Database?.DbContextFactory;
+			if (factory == null)
+			{
+				return;
+			}
+
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					SchemaValidationResult result = await factory.ValidateSchemaAsync();
+					string problem = result.DescribeProblem();
+					if (problem == null)
+					{
+						Log.Debug("Server", "Database schema matches the entity model.");
+					}
+					else if (result.UnavailableReason != null)
+					{
+						Log.Warning("Server", problem);
+					}
+					else
+					{
+						Log.Error("Server", problem);
+					}
+				}
+				catch (Exception ex)
+				{
+					// A diagnostic must never be the thing that takes a server down.
+					Log.Warning("Server", $"Database schema check threw and was skipped: {ex.Message}");
+				}
+			});
 		}
 
 		/// <summary>
