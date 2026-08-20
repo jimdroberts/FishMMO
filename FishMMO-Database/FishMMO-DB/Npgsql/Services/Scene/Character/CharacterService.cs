@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -540,7 +540,7 @@ namespace FishMMO.Database.Npgsql.Services
 					$@"UPDATE {tableName}
 						SET name = (COALESCE(name, '') || {{1}}),
 							deleted = TRUE,
-							time_deleted = CURRENT_TIMESTAMP,
+							time_deleted = timezone('UTC', CURRENT_TIMESTAMP),
 							version = {{2}}
 						WHERE id = {{0}} AND deleted = FALSE AND version < {{2}}",
 					new object[] { characterId, suffix, incomingVersion },

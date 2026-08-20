@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -124,14 +124,14 @@ namespace FishMMO.Database.Npgsql.Services
 					// They remain in the table for the verification overlap window so in-flight tokens
 					// signed with the old key can still be validated until DeleteAsync prunes them.
 					var deactivateSql = $@"UPDATE {TableName}
-						SET is_active = false, rotated_at_utc = CURRENT_TIMESTAMP
+						SET is_active = false, rotated_at_utc = timezone('UTC', CURRENT_TIMESTAMP)
 						WHERE login_server_id = {{0}} AND is_active = true";
 					await dbContext.Database
 						.ExecuteSqlRawAsync(deactivateSql, new object[] { loginServerId }, cancellationToken)
 						.ConfigureAwait(false);
 
 					var sql = $@"INSERT INTO {TableName} (login_server_id, hmac_key, is_active, activated_at_utc)
-						VALUES ({{0}}, {{1}}, true, CURRENT_TIMESTAMP)
+						VALUES ({{0}}, {{1}}, true, timezone('UTC', CURRENT_TIMESTAMP))
 						RETURNING id, login_server_id, hmac_key, time_created";
 
 					var entity = await ExecuteReturningAsync(
@@ -229,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 					overlapDays = 0;
 				}
 				await dbContext.Database.ExecuteSqlRawAsync(
-					$"DELETE FROM {TableName} WHERE login_server_id = {{0}} AND is_active = false AND rotated_at_utc IS NOT NULL AND rotated_at_utc < (CURRENT_TIMESTAMP - ({{1}} * INTERVAL '1 day'))",
+					$"DELETE FROM {TableName} WHERE login_server_id = {{0}} AND is_active = false AND rotated_at_utc IS NOT NULL AND rotated_at_utc < (timezone('UTC', CURRENT_TIMESTAMP) - ({{1}} * INTERVAL '1 day'))",
 					new object[] { loginServerId, overlapDays },
 					cancellationToken)
 					.ConfigureAwait(false);

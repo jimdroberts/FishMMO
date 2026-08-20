@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -84,10 +84,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// Use INSERT ... ON CONFLICT to atomically insert or update
 				var sql = $@"INSERT INTO {TableName} (key, value, time_created, time_updated)
-					VALUES ({{0}}, {{1}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+					VALUES ({{0}}, {{1}}, timezone('UTC', CURRENT_TIMESTAMP), timezone('UTC', CURRENT_TIMESTAMP))
 					ON CONFLICT (key) DO UPDATE SET
 						value = EXCLUDED.value,
-						time_updated = CURRENT_TIMESTAMP";
+						time_updated = timezone('UTC', CURRENT_TIMESTAMP)";
 
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { key, value }, cancellationToken)
 					.ConfigureAwait(false);

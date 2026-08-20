@@ -50,7 +50,7 @@ namespace FishMMO.Database.Npgsql.Services
 						port = EXCLUDED.port,
 						character_count = EXCLUDED.character_count,
 						locked = EXCLUDED.locked,
-						last_pulse = CURRENT_TIMESTAMP
+						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
 					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked";
 
 				return await ExecuteReturningAsync(
@@ -102,7 +102,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
-					SET last_pulse = CURRENT_TIMESTAMP,
+					SET last_pulse = timezone('UTC', CURRENT_TIMESTAMP),
 						character_count = {{0}},
 						locked = {{1}}
 					WHERE id = {{2}}";

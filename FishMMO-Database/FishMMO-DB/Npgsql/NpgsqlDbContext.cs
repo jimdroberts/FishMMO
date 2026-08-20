@@ -228,7 +228,7 @@ namespace FishMMO.Database.Npgsql
 					.Property<DateTime>("TimeCreated")
 					.IsRequired()
 					.ValueGeneratedOnAdd()
-					.HasDefaultValueSql("CURRENT_TIMESTAMP");
+					.HasDefaultValueSql("timezone('UTC', CURRENT_TIMESTAMP)");
 			}
 		}
 	}
