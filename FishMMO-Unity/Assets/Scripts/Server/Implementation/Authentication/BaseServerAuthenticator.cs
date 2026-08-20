@@ -1081,11 +1081,6 @@ namespace FishMMO.Server.Implementation
 		/// while this async method is suspended at an await point.</summary>
 		internal async Task OnServerClientHandshakeReceivedAsync(int clientId, ClientHandshake msg, Channel channel)
 		{
-			await Log.Info(LogPrefix, $"DEBUG ClientHandshake received: clientId={clientId} channel={channel} " +
-				$"PublicKey.Length={msg.PublicKey?.Length.ToString() ?? "null"} " +
-				$"Cookie.Length={msg.Cookie?.Length.ToString() ?? "null"} " +
-				$"ConnectionToken='{msg.ConnectionToken ?? "null"}' " +
-				$"MinVersion={msg.MinVersion} MaxVersion={msg.MaxVersion} GameVersion='{msg.GameVersion ?? "null"}'");
 
 			// Resolve the connection at entry.  If it's already gone, bail.
 			if (!TryResolveConnection(clientId, out var conn))

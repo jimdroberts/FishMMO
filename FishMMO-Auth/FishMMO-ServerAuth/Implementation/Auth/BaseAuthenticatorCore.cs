@@ -438,29 +438,23 @@ namespace FishMMO.Auth.Implementation
 				publicKey == null ||
 				publicKey.Length != CryptoHelper.X25519PublicKeyLength)
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: " +
-					$"IsAuthenticated={IsConnectionAuthenticated(conn)} PublicKeyNull={publicKey == null} " +
-					$"PublicKeyLength={publicKey?.Length.ToString() ?? "null"} (expected {CryptoHelper.X25519PublicKeyLength})");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
 
 			if (AccountManager.GetConnectionEncryptionData(conn, out _))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: GetConnectionEncryptionData already present.");
 				return;
 			}
 
 			if (AccountManager.IsAuthInProgress(conn))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: IsAuthInProgress=true.");
 				return;
 			}
 
 			byte[]? hmacKeySnapshot = cookieHmacKey;
 			if (hmacKeySnapshot == null)
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: cookieHmacKey is null.");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -471,7 +465,6 @@ namespace FishMMO.Auth.Implementation
 			// private key, breaking ECDH forward secrecy entirely.
 			if (!CryptoHelper.IsValidX25519PublicKey(publicKey))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: IsValidX25519PublicKey=false. Key(hex)={BitConverter.ToString(publicKey).Replace("-", "")}");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -486,7 +479,6 @@ namespace FishMMO.Auth.Implementation
 				}
 				catch (CryptographicException ex)
 				{
-					_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: NegotiateProtocolVersion threw: {ex.Message}");
 					DisconnectConnection(conn, graceful: true);
 					return;
 				}
@@ -513,7 +505,6 @@ namespace FishMMO.Auth.Implementation
 				// captured cookie cannot be replayed by another connection from the
 				// same IP (e.g. shared NAT / proxy).
 				byte[] challengeCookie = HandshakeService.ComputeHandshakeCookie(challengeIp, publicKey, HandshakeService.GetTimeBucket(), hmacKeySnapshot, GetConnectionClientId(conn));
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-SUCCESS conn={GetConnectionClientId(conn)}: broadcasting cookie challenge, ip={challengeIp}.");
 				BroadcastCookieChallenge(conn, challengeCookie);
 				return;
 			}
@@ -522,7 +513,6 @@ namespace FishMMO.Auth.Implementation
 			string remoteIp = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
 			if (!HandshakeService.VerifyHandshakeCookieWithRollover(cookie, remoteIp, publicKey, hmacKeySnapshot, GetConnectionClientId(conn)))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: VerifyHandshakeCookieWithRollover failed. remoteIp={remoteIp} cookieLen={cookie?.Length.ToString() ?? "null"}");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -535,7 +525,6 @@ namespace FishMMO.Auth.Implementation
 			string rateLimitKey = ResolveRateLimitKey(conn);
 			if (string.IsNullOrEmpty(rateLimitKey))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: ResolveRateLimitKey returned null/empty.");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -583,7 +572,6 @@ namespace FishMMO.Auth.Implementation
 				});
 			if (rateLimited)
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: per-IP rate limited. key={rateLimitKey}");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -591,7 +579,6 @@ namespace FishMMO.Auth.Implementation
 			// ── Global rate limit ─────────────────────────────────────────
 			if (!TryIncrementGlobalHandshakeCount())
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: TryIncrementGlobalHandshakeCount failed (global cap reached).");
 				return;
 			}
 
@@ -601,7 +588,6 @@ namespace FishMMO.Auth.Implementation
 				// Give the hosting environment a chance to defer (queue) the handshake
 				// rather than dropping it outright.  LoginQueueSystem overrides this.
 				bool deferred = OnHandshakeDeferred(conn);
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: TrackAuthStart failed (pending auth cap). deferred={deferred}");
 				if (!deferred)
 				{
 					DateTime capNow = DateTime.UtcNow;
@@ -619,7 +605,6 @@ namespace FishMMO.Auth.Implementation
 			var kaResult = HandshakeService.ServerPerformKeyAgreement(publicKey, minVersion, maxVersion);
 			if (!kaResult.Success)
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: ServerPerformKeyAgreement failed.");
 				DecrementGlobalHandshakeCount();
 				DisconnectConnection(conn, graceful: true);
 				return;
@@ -627,7 +612,6 @@ namespace FishMMO.Auth.Implementation
 
 			if (!AccountManager.TryAddConnectionEncryptionData(conn, publicKey))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: TryAddConnectionEncryptionData failed (already present).");
 				// Do NOT call ClearTransientAuthState here — a concurrent handshake
 				// packet may have succeeded at TryAddConnectionEncryptionData and
 				// relies on the TTL tracking that TrackAuthStart established.
@@ -636,8 +620,6 @@ namespace FishMMO.Auth.Implementation
 				DecrementGlobalHandshakeCount();
 				return;
 			}
-
-			_ = Log.Warning(LogPrefix, $"DEBUG OnHandshakeReceived DEBUG-SUCCESS conn={GetConnectionClientId(conn)}: Phase 2 complete, broadcasting ServerHandshake.");
 
 			if (AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{

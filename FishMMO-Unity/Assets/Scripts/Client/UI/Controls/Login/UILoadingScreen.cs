@@ -176,8 +176,6 @@ namespace FishMMO.Client
 		{
 			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive;
 
-			Log.Debug("UILoadingScreen", $"DEBUG RefreshVisibility: addressable={addressableLoadActive} sceneTransition={sceneTransitionActive} shouldShow={shouldShow} Visible={Visible} force={forceRefresh} suppressed={Client.LoadingSuppressed}");
-
 			if (shouldShow && (forceRefresh || !Visible))
 			{
 				Show();
@@ -352,8 +350,6 @@ namespace FishMMO.Client
 
 			SceneLookupData[] lookupData = startEvent.QueueData.SceneLoadData.SceneLookupDatas;
 
-			Log.Debug("UILoadingScreen", $"DEBUG OnSceneStartLoad: scenes=[{(lookupData == null ? "null" : string.Join(", ", System.Array.ConvertAll(lookupData, d => d == null ? "null" : $"{d.Name}|{d.Handle}")))}]");
-
 			if (lookupData == null ||
 				lookupData.Length < 1)
 			{
@@ -393,7 +389,6 @@ namespace FishMMO.Client
 		/// <param name="endEvent">The event arguments for scene load end.</param>
 		private void OnSceneEndLoad(SceneLoadEndEventArgs endEvent)
 		{
-			Log.Debug("UILoadingScreen", $"DEBUG OnSceneEndLoad: loaded=[{(endEvent.LoadedScenes == null ? "null" : string.Join(", ", System.Array.ConvertAll(endEvent.LoadedScenes, s => s.name)))}] skipped=[{(endEvent.SkippedSceneNames == null ? "null" : string.Join(", ", endEvent.SkippedSceneNames))}]");
 			sceneTransitionActive = false;
 			RefreshVisibility();
 		}

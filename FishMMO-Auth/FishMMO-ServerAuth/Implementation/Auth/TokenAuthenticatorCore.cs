@@ -131,7 +131,6 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (IsConnectionAuthenticated(conn))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnTokenAuthReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: already authenticated.");
 				DisconnectConnection(conn, graceful: true);
 				return;
 			}
@@ -139,13 +138,11 @@ namespace FishMMO.Auth.Implementation
 			// Atomically advance Handshake → TokenPending to prevent duplicate token processing.
 			if (!AccountManager.TryAdvanceAuthState(conn, AuthState.Handshake, AuthState.TokenPending))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnTokenAuthReceived DEBUG-NOOP conn={GetConnectionClientId(conn)}: TryAdvanceAuthState(Handshake->TokenPending) failed.");
 				return;
 			}
 
 			if (!AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnTokenAuthReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: GetConnectionEncryptionData failed.");
 				PurgeConnectionAuthState(conn, disconnect: false);
 				DisconnectConnection(conn, graceful: true);
 				return;
@@ -153,7 +150,6 @@ namespace FishMMO.Auth.Implementation
 
 			if (encryptedToken == null || encryptedToken.Length == 0 || encryptedToken.Length > MaxTokenPayloadBytes)
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnTokenAuthReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: bad token length={encryptedToken?.Length.ToString() ?? "null"}.");
 				PurgeConnectionAuthState(conn, disconnect: true);
 				return;
 			}
@@ -162,13 +158,11 @@ namespace FishMMO.Auth.Implementation
 
 			if (tokenChannel == null || !tokenChannel.Writer.TryWrite(request))
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnTokenAuthReceived DEBUG-REJECT conn={GetConnectionClientId(conn)}: tokenChannel null or write failed.");
 				// TOKEN NO-RETRY: Token auth is one-shot by design. Client must reconnect.
 				RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
 			}
 			else
 			{
-				_ = Log.Warning(LogPrefix, $"DEBUG OnTokenAuthReceived DEBUG-SUCCESS conn={GetConnectionClientId(conn)}: request queued.");
 			}
 		}
 
@@ -319,8 +313,6 @@ namespace FishMMO.Auth.Implementation
 				bool authenticated = result == ClientAuthenticationResult.LoginSuccess ||
 									 result == ClientAuthenticationResult.WorldLoginSuccess ||
 									 result == ClientAuthenticationResult.SceneLoginSuccess;
-
-				await Log.Warning(LogPrefix, $"DEBUG ProcessTokenAuthAsync conn={GetConnectionClientId(conn)} account='{verifyResult.AccountName}': TryLoginAsync result={result} authenticated={authenticated}");
 
 				EnqueueMainThread(conn, () =>
 				{
