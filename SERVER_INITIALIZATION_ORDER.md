@@ -703,9 +703,14 @@ Application.Quit()
 > per-connection map left populated is therefore read as the *next* session's state, and for a
 > deadline map every surviving entry is already expired, so the first sweep of the new run
 > disconnects clients that have done nothing wrong. `CharacterSystem.OnDeinitialize` clears its
-> watchdog and rate-limit maps for exactly this reason; `WorldSceneSystem.OnDeinitialize` does
-> the same before its early-return guards, since that state has no dependencies to check first.
-> Data containers are separate — the registry calls `Clear()` on each one for you.
+> watchdog and rate-limit maps for exactly this reason — `characterResidencyDeadlines`,
+> `sceneLoadDeadlines`, `startScenesAckedClientIds`, `pendingTransferDisconnects`,
+> `deliberateTransferClientIds` and the three rate-limit maps; `WorldSceneSystem.OnDeinitialize`
+> does the same before its early-return guards, since that state has no dependencies to check
+> first. The consequence is not always a spurious disconnect: `startScenesAckedClientIds` records
+> that a connection has *completed* a handshake step, so a stale entry makes the next session on
+> that id skip a step it never performed. Data containers are separate — the registry calls
+> `Clear()` on each one for you.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

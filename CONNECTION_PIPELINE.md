@@ -795,6 +795,29 @@ queued, so nothing bounded the wait at all. The arrival stamp now survives re-qu
 is cleared only by a terminal outcome — routed, purged, or disconnected — with the
 combat-logout hold as the single documented exception.
 
+#### A scene instance is identified by its row, never by a scene handle
+
+Routing decisions, population counts and the character's own `SceneHandle` all name a scene
+instance by its `scenes.id`. A scene-manager handle is drawn from a per-process counter, so two
+scene servers running the same build and loading the same scenes in the same order routinely
+allocate identical values — and as a cross-process identity that made two different instances
+indistinguishable:
+
+- the world server's routing maps collapsed them into one entry and double-counted its capacity;
+- a scene server accepted a character routed to a *different* server's instance whenever the
+  handle and scene name both matched;
+- `PulseAsync` had two servers overwriting each other's population — the number routing and
+  load-balancing decide on.
+
+The local handle survives only where it is genuinely local: `SceneInstanceByHandle`, because
+FishNet's unload callbacks report handles, and the scene manager itself. `scenes.scene_handle`
+is retained for diagnostics only.
+
+**A scene server hosts scenes for every world server.** `ISceneService.DequeueAsync` serves one
+global pending queue, so world-scoped state — instance registries, availability caches,
+failed-load kicks — is keyed by world server ID as well as scene name. A cache keyed on scene
+name alone served one world's channel list to another world's players.
+
 ### Phase 10: Token Renewal & Revocation
 
 Renewal runs on a timer, not just once at authentication. A scene transfer is a
@@ -956,12 +979,12 @@ message is both more specific and more accurate.
 
 ### Phase 11: Scene Transfer & Character Session Ownership
 
-Walking into a `SceneTeleporter`, or respawning at a bind point in a different scene, moves
-a player between scene servers. There is no server-to-server handover: the source server
-saves and releases the character, the client goes back through the World server, and the
-destination server claims the character fresh. The client therefore re-authenticates
-mid-transfer, which is why Phase 10's periodic renewal is a prerequisite for transfers to
-work at all.
+Walking into a `SceneTeleporter`, respawning at a bind point in a different scene, switching
+open-world channel, entering a dungeon, or leaving one all move a player between scene servers.
+There is no server-to-server handover: the source server saves and releases the character, the
+client goes back through the World server, and the destination server claims the character
+fresh. The client therefore re-authenticates mid-transfer, which is why Phase 10's periodic
+renewal is a prerequisite for transfers to work at all.
 
 ```mermaid
 sequenceDiagram
@@ -1024,6 +1047,55 @@ Online in the database, so the destination server cannot claim it and kicks the 
 repeatedly, until the lease expires. Every abandoned-load path therefore routes through
 `ReleaseSessionSafely`, and anything that fails lands on a retry queue that is also drained
 on shutdown.
+
+#### Every voluntary transfer follows the same ordering contract
+
+Five paths move a character to another scene instance, and each one performs the same five steps
+in the same order. The order is the contract, not an implementation detail.
+
+| Transfer | Entry point | Announced as a transfer by |
+|---|---|---|
+| Teleporter | `IPlayerCharacter_OnTeleport` | Releasing before the client reports its scene unload; `ArmTransferDisconnect` covers a client that never reports |
+| Bind-point respawn (different scene) | `OnClientRespawnAtBindPointBroadcastReceived` | Releasing before `conn.Disconnect` |
+| Channel switch | `SceneChannelSystem` → `ICharacterSystem.BeginChannelTransfer` | `BeginDeliberateTransfer` |
+| Dungeon entry | `InteractableSystem` → `EnterInstance` | `BeginDeliberateTransfer` |
+| Leave instance | `RequestLeaveInstanceBroadcast` / `/leaveinstance` → `TryLeaveInstance` | `BeginDeliberateTransfer` |
+
+1. **Gate on `CanActOrMove`** — refused while dead, teleporting, frozen, mid-load or in combat.
+   Combat matters most: every one of these is instant and lands the player where their attacker
+   is not, making it a cleaner escape than any teleporter.
+2. **Re-check on the authoritative side.** All of them validate asynchronously against the
+   database, and a character can be pulled into combat or killed while that runs — so the state
+   is checked again on the main thread, immediately before the transfer commits.
+3. **Announce the departure *before* rewriting where the character is going.** `OnDisconnect` is
+   what debits the scene instance's population, and party, guild and chat all reason about the
+   scene being left. Rewriting `SceneHandle` first debited the *destination* — an instance this
+   server frequently does not even host — while the source kept a resident it no longer had.
+   Neither error self-corrects: the source's phantom population stops it ever being seen as
+   empty, so it is never unloaded, understates its free capacity, and eventually reads as full,
+   at which point players queue for a scene instance that is in fact deserted.
+4. **Save and fully release before the connection drops.** The destination's `TryClaimAsync`
+   requires `session_state = Offline` or an expired lease, so a transfer that lingers cannot be
+   claimed on arrival.
+5. **Mark the disconnect as deliberate.** Combat-logout linger exists to punish a dropped
+   connection, and a transfer *is* a dropped connection. A transfer that lingered would leave
+   the body — and its claim — on the source server while the row says the character belongs to
+   the destination, which then loses the claim race and kicks the arriving client on every
+   retry until the linger expires. The marker is consumed by the disconnect it describes, so it
+   cannot leak onto a later session on a recycled connection id.
+
+**Leaving instanced content is a system guarantee, not content data.** A dungeon is expected to
+provide an exit teleporter, but a character bound to an instance is routed straight back into it
+on every login, so quitting is not an escape — a dungeon shipped without a reachable exit would
+strand its occupants permanently. `RequestLeaveInstanceBroadcast` and the `/leaveinstance` chat
+command both reach `TryLeaveInstance`; the command exists so the escape hatch does not depend on
+a client UI having been authored.
+
+**Instance bookkeeping is cleared on every path out.** `InstanceID`, `InstanceSceneName` and
+`InstanceSceneHandle` are what the world server reads to decide a character belongs in an
+instance. A stale value left behind is a standing invitation to route a later session back into
+a dungeon the player already walked out of, so the teleporter, bind-point and leave-instance
+paths all clear them and restore `LastWorldPosition` as the open-world position.
 
 #### Combat-logout bodies
 
@@ -1494,6 +1566,12 @@ Application wants to quit
 | `WorldResidencyGraceSeconds` | 90s | `WorldSceneSystem.cs` |
 | `CombatLogoutRoutingGraceSeconds` | 150s | `WorldSceneSystem.cs` |
 | `waitingQueueTtlSeconds` | 45s (configurable) | `WorldSceneSystem.cs` |
+| `SceneLoadWaitTtlMultiplier` | 4× `waitingQueueTtlSeconds` | `WorldSceneSystem.cs` |
+| `InstanceReadyGraceSeconds` | 180s | `WorldSceneSystem.cs` |
+| `StaleSceneRowGraceSeconds` | 300s | `WorldSceneSystem.cs` |
+| `SceneServerPulseStaleSeconds` | 60s | `WorldSceneSystem.cs` |
+| `channelSwitchCooldownSeconds` | 10s (configurable) | `SceneChannelSystem.cs` |
+| `InFlightStaleAfter` | 5 min | `IngressGuard.cs` |
 | `RecentAdmitTtlSeconds` | 15s | `LoginQueueSystem.cs` |
 | `authHandshakeTimeoutSeconds` | 15s (configurable) | `BaseServerAuthenticator.cs` |
 | `MaxReconnectAttempts` | 10 | `ClientConnectionManager.cs` |
@@ -1505,7 +1583,7 @@ Application wants to quit
 | `WT_MAX_STREAMS` | 4096 | `webtransport_internal.h` |
 | `WT_MAX_CLIENTS` | 4000 (configurable) | `.cfg` files |
 
-Two of these are load-bearing against each other and should be changed together:
+Several of these are load-bearing against each other and should be changed together:
 
 - **`saveRate` (30 s) against `combatLogoutLingerSeconds` (60 s).** The linger is persisted at
   both ends and on every periodic save in between, so at the defaults an unattended body has its
@@ -1518,6 +1596,20 @@ Two of these are load-bearing against each other and should be changed together:
   server's claim must already have lapsed, or the destination will kick the player for
   contention instead of taking the character. It should also exceed
   `combatLogoutLingerSeconds`, so a live scene server always finishes the linger first.
+- **`InstanceReadyGraceSeconds` (180 s) against `StaleSceneRowGraceSeconds` (300 s).** The
+  routing path gives up on a non-ready instance first, releasing the character to the open world
+  with a specific log line; only later does the sweep delete the row. Both outcomes are correct
+  — a deleted row makes the instance fetch fail, which routes to the same fallback — but the
+  ordering is what makes the failure diagnosable. `InstanceReadyGraceSeconds` must also exceed
+  the scene server's `pendingSceneTimeoutSeconds` (60 s) plus a cold scene load, so a merely
+  slow load is never mistaken for a dead one.
+- **`SceneServerPulseStaleSeconds` (60 s) against `DefaultSessionLeaseDuration` (2 min).** A
+  scene server is presumed dead an order of magnitude above its 5 s pulse rate, so a slow pulse
+  or a brief database stall never evicts a healthy host — and well under the lease, so a
+  conclusion drawn about liveness cannot outlive the claim it reasons about.
+- **`CharacterResidencyTimeout` (60 s) against `SceneLoadHandshakeTimeout` (90 s).** The two
+  watchdogs must not overlap: residency stops the moment the character is registered, which is
+  the same moment the handshake watchdog starts.
 
 ---
 
@@ -1551,9 +1643,18 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 
 - **Create a new SceneServer.cfg** based on the Production template, assigning a unique port in the 7790-7999 range.
 - **Deploy the SceneServer binary** with the new config to the target host or container.
-- **Register the scene** in the database via `world_scenes` table: set the scene's `WorldServerID`, `Handle`, `Name`, `Address`, and `Port`. The WorldServer discovers scene servers through this table.
 - **Add an NGINX stream block** for the new UDP port if not already open, then reload NGINX.
-- **Restart the WorldServer** so it picks up the new scene registration (or wait for the next heartbeat cycle if runtime discovery is implemented).
+- **Start it.** No manual database registration is required and none should be performed. On startup the scene server registers itself through `ISceneServerService.PersistAsync` (name, address, port, load, lock state), deletes any scene rows left over from a previous run under its own id, and begins pulsing every `PulseRate` seconds. World servers discover it from that registration and treat it as a candidate only while `last_pulse` is recent.
+- **No restart of the WorldServer is needed.** Discovery is continuous: the World server re-reads available scenes each routing cycle (behind a short TTL cache) and enqueues new scene instances on demand.
+
+> Scene servers are **not** bound to a world server. Each pulls from one global pending-scene
+> queue via `ISceneService.DequeueAsync`, so a given scene server may host scenes for several
+> world servers at once. Adding capacity is therefore a matter of starting another process; you
+> do not partition scenes between them by hand.
+
+To retire one, stop it gracefully — that deletes its registration and its scene rows. If it
+crashes instead, both survive, and the world server's `DeleteByStaleSceneServersAsync` sweep
+reaps its scene rows once `last_pulse` is older than `SceneServerPulseStaleSeconds` (60 s).
 
 ### Common Troubleshooting
 
@@ -1571,6 +1672,14 @@ Common operational procedures for FishMMO game servers. These procedures assume 
 - **"Reconnecting" panel flashes on every teleport or channel switch, and the mouse cursor is released:** A scene transfer is a deliberate handoff, and the reconnect panels must skip the first attempt when `ClientConnectionManager.IsSceneHandoffReconnect` is set. See [Reconnection Flow](#reconnection-flow).
 - **Client stuck behind the loading overlay with no reconnect and no login screen:** The retry loop exited without reaching a terminal state. Both give-up conditions in `TryReconnect` must be checked together, and the teardown timeouts in `OnAwaitingConnectionReady` must abort with `reportFailure: true`; look for `Connection stop wait iteration limit exceeded` or `Forced connection stop timed out` in the client log. See [Reconnection Flow](#reconnection-flow).
 - **A combat-logout body's damage is refunded after a scene server restart:** The linger was persisted only at its two endpoints. `OnPeriodicSave` must call `AppendLingeringCharacterSnapshots`, and `saveRate` must be shorter than `combatLogoutLingerSeconds` for it to land at all. See [Phase 11](#phase-11-scene-transfer--character-session-ownership).
+- **Client is disconnected with "character unavailable" seconds after authenticating to a scene server, worse under database load:** The scene handshake was driven by the start-scene acknowledgement alone. That event fires once per connection, one round trip after authentication — before the character load has finished — so it must be *recorded* (`startScenesAckedClientIds`) rather than acted on, with `ValidateSceneAndAcknowledge` called by whichever half lands second. See [Phase 9](#phase-9-scene-server-connection).
+- **A scene instance reports itself full while standing empty, and is never unloaded:** Its population was credited by `OnAfterLoadCharacter` and never debited, because a teardown path removed the character without raising `OnDisconnect`. Both scene-validation failure branches must raise it; `RemoveCharacterConnectionMapping` returns immediately once the connection is in neither mapping table, so it cannot cover for them. Symptom order is diagnostic: the instance stops being unloaded first, then starts refusing arrivals.
+- **The channel picker lists channels the player cannot switch to, or shows the wrong populations:** The availability cache was keyed by scene name alone. A scene server hosts scenes for every world server, so the key must include the world server ID — see [Phase 9a](#phase-9a-scene-routing-queue).
+- **Players are routed into another player's dungeon instance:** Open-world routing accepted a `Group` scene row. `FetchAvailableAsync` does not filter `SceneType`, so `ProcessOpenWorldQueueAsync` must; the case is reachable whenever a dungeon scene name is also a teleporter's `ToScene` or a character's `BindScene`.
+- **Clicking a dungeon entrance appears to do nothing:** Every refusal is reported through `SceneTransferRefusedBroadcast` — check the client is registered for it, and the log for the matching reason. A second click while the first request is in flight is rejected by the ingress guard as a duplicate, which is why the dungeon-finder panel closes on send.
+- **A party member entering a dungeon lands in an empty copy instead of joining the group:** The party's instance was full and the request fell through to "create a new instance". A full instance must refuse with `DestinationFull`; see [Phase 11](#phase-11-scene-transfer--character-session-ownership).
+- **A player is repeatedly kicked while trying to enter a scene, with no bound on the retries:** Its instance row names a scene server that is registered but no longer pulsing. `IsSceneServerLiveAsync`/`IsSceneServerLive` is what distinguishes "routed to the wrong server, will be corrected" from "routed at a corpse"; without a liveness check the client is redirected forever, since a `Ready` row's age says nothing.
+- **A character can never re-enter a dungeon, and every attempt costs a full disconnect:** A `Failed` scene row is still returned by `FetchCharacterInstanceAsync`, which matches on `character_id` alone. `IsUsableInstance` must treat anything that is not `Ready`/`Pending`/`Loading` as absent, and `DeleteStaleUnreadyAsync` reaps the row.
 - **Database connection errors:** Verify PostgreSQL is running on `localhost:5432` and pgBouncer on `localhost:6432`. Check the `FISHMMO_DB_HOST`/`FISHMMO_DB_PASSWORD` environment variables or `/etc/fishmmo/db-secrets.env` file, and verify the database connection string in the server configuration.
 
 ---
