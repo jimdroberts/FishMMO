@@ -78,6 +78,11 @@ namespace FishMMO.Client
 		{
 			if (Character != null)
 			{
+				/* Pre before Post, exactly as SetCharacter does it. This runs again whenever the
+				 * visual tree is rebuilt, and OnPostSetCharacter subscribes to character events —
+				 * without the matching unsubscribe first, every rebuild would add another
+				 * subscription and the handlers would run once more each time. */
+				OnPreSetCharacter();
 				OnPostSetCharacter();
 			}
 		}
