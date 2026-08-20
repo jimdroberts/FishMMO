@@ -22,8 +22,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return false;
 			}
-			// get the senders observed scene
-			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
+			/* The scene the sender is actually in, taken from the spawned object.
+			 *
+			 * This used to resolve the scene by name from IPlayerCharacter.SceneName, which is
+			 * wrong twice over. Scene stacking means several instances of one scene are loaded
+			 * at once under the same name, and GetSceneByName returns whichever was loaded
+			 * first — so every channel's region chat was delivered to the occupants of channel
+			 * one, and players on the other channels neither saw their own messages nor were
+			 * spared anyone else's. And inside an instance SceneName names the open-world scene
+			 * the character will return to, not the dungeon it is standing in, so region chat
+			 * from inside a dungeon was broadcast to whoever was in that open-world scene — or,
+			 * if this server does not host it, to nobody.
+			 *
+			 * The spawned object's scene is the one the character was placed in, and it is what
+			 * SceneConnections is keyed by. */
+			UnityEngine.SceneManagement.Scene scene = sender.GameObject != null
+				? sender.GameObject.scene
+				: default;
+
 			if (scene.IsValid() &&
 				Server.NetworkWrapper.NetworkManager != null &&
 				Server.NetworkWrapper.NetworkManager.SceneManager != null)

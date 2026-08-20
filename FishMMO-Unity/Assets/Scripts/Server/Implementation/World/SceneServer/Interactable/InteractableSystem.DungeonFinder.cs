@@ -191,15 +191,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				/* Reuse this character's own instance when it is still usable.
+				/* Reuse this character's own instance of THIS dungeon when it is still usable.
 				 *
-				 * FetchCharacterInstanceAsync matches on character_id alone, so it returns the
-				 * row whatever state it is in — including Failed. Routing to a Failed row sent
-				 * the player through a full disconnect only for the world server to clear the
-				 * instance flag and drop them back where they started, and because nothing ever
-				 * deleted that row it happened on every single attempt: the dungeon became
-				 * permanently unenterable for that character. Anything not usable is treated as
-				 * absent, and a fresh instance is requested instead. */
+				 * The query is scoped to the world and scene being asked for. It used to match on
+				 * character_id and scene type alone, and a character accumulates one row per
+				 * dungeon it has opened — so asking for dungeon A while holding a row for dungeon
+				 * B returned B's row, which IsUsableInstance then rejected on the name. The
+				 * caller read that as "no instance", created a second one, and left A's
+				 * still-running instance stranded and unreachable; alternating between two
+				 * dungeons added a row every time.
+				 *
+				 * FetchCharacterInstanceAsync still returns the row whatever state it is in —
+				 * including Failed. Routing to a Failed row sent the player through a full
+				 * disconnect only for the world server to clear the instance flag and drop them
+				 * back where they started, and because nothing ever deleted that row it happened
+				 * on every single attempt: the dungeon became permanently unenterable for that
+				 * character. Anything not usable is treated as absent, and a fresh instance is
+				 * requested instead. */
 				long instanceID = 0;
 
 				/* A full instance is refused, never worked around.
@@ -213,7 +221,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				bool destinationFull = false;
 
 				var ownInstance = await sceneService.FetchCharacterInstanceAsync(
-					characterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group);
+					characterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group,
+					worldServerID, dungeonName);
 				if (ownInstance.IsSuccess && IsUsableInstance(ownInstance.Data, worldServerID, dungeonName))
 				{
 					if (HasInstanceCapacity(ownInstance.Data, maxInstanceClients))
@@ -325,7 +334,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * contention on every retry until the linger expired. */
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
-				characterSystem.BeginDeliberateTransfer(conn);
+				characterSystem.SuppressCombatLingerOnDisconnect(conn);
 			}
 
 			conn.Disconnect(false);
@@ -440,7 +449,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				var instanceResult = await sceneService.FetchCharacterInstanceAsync(
-					member.CharacterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group);
+					member.CharacterID, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group,
+					worldServerID, dungeonName);
 
 				if (!instanceResult.IsSuccess || !IsUsableInstance(instanceResult.Data, worldServerID, dungeonName))
 				{

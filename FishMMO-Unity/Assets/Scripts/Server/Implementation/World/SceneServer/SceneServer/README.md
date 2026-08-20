@@ -58,6 +58,12 @@ The subsystem uses a split execution model:
 - **Scene handle reuse safety** — all handle→details mappings are removed on unload; documented at both Add and Remove sites to prevent stale resolution after handle reuse
 - **PendingSceneInfo struct** — merges `SceneData` + `EnqueuedUtc` into a single map entry, eliminating dual-map sync risk
 - **Enumerate-then-remove safety** — `SweepExpiredPendingScenes` collects IDs into a buffer before removal; pattern documented inline
+- **Per-type stale timeouts** — open-world scenes and instanced (Group/PvP) scenes are aged out on separate, independently configurable clocks; see `StaleInstanceSceneTimeout`
+- **Operator control state** — the `scene_servers` row is the authority for this server's `locked` and `shutdown_at_utc`; the pulse *reads them back* (`UPDATE ... RETURNING`) rather than writing them, so anything that can write the row controls the server
+- **Drain on lock** — a locked scene server stops dequeuing scene-load requests and is skipped by the world server's open-world routing, while the players already on it keep playing
+- **Scheduled shutdown** — players are warned as the countdown crosses 15m/10m/5m/2m/1m/30s/10s, then disconnected with a maintenance notice one tick before the process stops, so the notice reaches them
+- **World-shutdown awareness** — the pulse also reads the control state of every world this server hosts scenes for, so a world-wide shutdown clears that world's characters from this server without taking down scenes belonging to other worlds
+- **In-game `/admin` commands** — `SceneServerSystem.AdminCommands` registers a single `/admin` command at `AccessLevel.Admin`; see the root README for the full command table
 - **Database registration and cleanup** — registers this scene server node in the database during initialization and deletes stale scene rows from previous runs; performs blocking cleanup on deinitialization
 
 ## Prerequisites
@@ -118,7 +124,8 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `StaleSceneTimeout` | `int` | Minutes before a stale (empty) scene is unloaded; checked via `Server.Configuration.TryGetInt` |
+| `StaleSceneTimeout` | `int` | Minutes before a stale (empty) **open-world** scene is unloaded; checked via `Server.Configuration.TryGetInt`. Code fallback `60` |
+| `StaleInstanceSceneTimeout` | `int` | Minutes before a stale (empty) **Group/PvP (instanced)** scene is unloaded. Deliberately shorter — a dungeon instance belongs to one character or party, so once it empties it is unlikely to be wanted again, while each one holds a full physics scene. Code fallback `5`; the templates ship `2` |
 
 ## Usage Examples
 
@@ -164,7 +171,7 @@ sceneServerSystem.UnloadScene(sceneHandle);
 | Scene server registered | Query `SceneServer` table in database after startup | Row with matching address, port, and server ID |
 | Heartbeat pulses active | Monitor database `SceneServer` pulse timestamp | Updates every `pulseRate` seconds |
 | Scene loaded successfully | Check logs for `"Saved {sceneType} scene"` message | Scene appears in `WorldScenes` and `SceneInstanceByHandle` mappings |
-| Stale scene unloaded | Empty scene exceeds `StaleSceneTimeout` minutes | Scene unloaded and removed from database and local mappings |
+| Stale scene unloaded | Empty scene exceeds the timeout for its `SceneType` (`StaleSceneTimeout` for open world, `StaleInstanceSceneTimeout` for Group/PvP) | Scene unloaded and removed from database and local mappings |
 | Pending scene timeout | Load request exceeds `pendingSceneTimeoutSeconds` | Scene status set to Failed in database; entry removed from `PendingScenes` |
 | Duplicate load rejected | Same scene ID queued twice before first load completes | Second request logged as warning and ignored; `TryAdd` returns false |
 | Character count tracking | Connect/disconnect characters to a scene | `SceneInstanceDetails.CharacterCount` matches expected count |
@@ -252,7 +259,7 @@ flowchart LR
 │              Scene Unload Flow                               │
 │                                                              │
 │  UnloadScene(handle) [explicit]                              │
-│    │ 1. TryEnqueueAsyncWork → DeleteSceneByHandleAsync       │
+│    │ 1. TryEnqueueAsyncWork → DeleteSceneAsync           │
 │    │ 2. FishNet UnloadConnectionScenes                       │
 │    ▼                                                         │
 │  SceneManager_OnUnloadEnd(args)                              │

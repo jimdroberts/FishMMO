@@ -110,12 +110,6 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.ServerBusy;
 			}
 
-			if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) && worldData.IsLocked)
-			{
-				loginAttemptByAccount.Remove(username);
-				return ClientAuthenticationResult.ServerFull;
-			}
-
 			// Atomic admission check: combine the DB-derived ConnectionCount with the number
 			// of *recently admitted* usernames whose impact may not have reached the DB yet.
 			// Without this, N concurrent token-auth workers can each observe the same
@@ -150,6 +144,37 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (fetchResult.Data.HasValue)
 			{
+				/* The lock check happens here, after the character is known, because a lock is
+				 * not absolute: it closes the world to players while leaving it open to the
+				 * people who have to go in and work on it. Locking a world for maintenance and
+				 * thereby locking out every administrator would make the feature unusable for
+				 * its only purpose.
+				 *
+				 * The access level comes from the character row this server just read, never
+				 * from the client. A scheduled shutdown admits nobody at all, elevated or not —
+				 * the world is about to stop, and letting anyone in to be disconnected moments
+				 * later helps no one.
+				 *
+				 * ServerLocked rather than ServerFull: a locked world is not a busy one, and
+				 * telling the player it is full sends them away to retry against a condition
+				 * that will not clear on its own. */
+				if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
+				{
+					AccessLevel accessLevel = (AccessLevel)(int)fetchResult.Data.Value.AccessLevel;
+
+					if (worldData.ShutdownAtUtc.HasValue)
+					{
+						loginAttemptByAccount.Remove(username);
+						return ClientAuthenticationResult.ServerLocked;
+					}
+
+					if (worldData.IsLocked && accessLevel <= AccessLevel.Player)
+					{
+						loginAttemptByAccount.Remove(username);
+						return ClientAuthenticationResult.ServerLocked;
+					}
+				}
+
 				// Reserve a slot for the brief window before UpdateConnectionCountAsync
 				// notices this admission. Repeated admissions for the same username (e.g.
 				// fast reconnect) overwrite the timestamp rather than double-counting.

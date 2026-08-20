@@ -35,6 +35,7 @@ namespace FishMMO.Server.Core
 				config.Set("Address", "127.0.0.1");
 				config.Set("Port", GetDefaultPort(serverTypeName));
 				config.Set("StaleSceneTimeout", 5);
+				config.Set("StaleInstanceSceneTimeout", 2);
 				config.Set("ServerType", serverType);
 				config.Save();
 			}

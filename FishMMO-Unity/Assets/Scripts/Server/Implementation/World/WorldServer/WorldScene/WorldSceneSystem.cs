@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Managing.Server;
 using System;
 using System.Collections.Generic;
@@ -118,6 +118,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
 		private const int MaxClientsPerInstance = 500;
+
+		/// <summary>
+		/// Ceiling on how many instances of one open-world scene may be loading at the same time.
+		/// </summary>
+		/// <remarks>
+		/// The routing pass derives the number it wants from the waiting population, and that
+		/// population is not always a real demand signal — a scene that fails to load keeps its
+		/// queue, and the queue keeps growing while it does. This bounds what a pathological
+		/// queue can ask a scene server pool to do in one go.
+		/// </remarks>
+		private const int MaxOutstandingSceneLoads = 8;
+
+		/// <summary>
+		/// How many instance-queue connections one routing cycle processes concurrently.
+		/// </summary>
+		/// <remarks>
+		/// Each one costs a main-thread dispatch and, when it is not debounced, several database
+		/// round trips. The queue can legitimately hold thousands, so this is what keeps a busy
+		/// cycle from monopolising the database connection pool.
+		/// </remarks>
+		private const int InstanceRoutingBatchSize = 32;
 
 		/// <summary>
 		/// How long an instance scene row may sit in a non-ready state before a character bound
@@ -566,16 +587,32 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 
-				var tasks = new List<Task>(openWorldSceneNames.Count + instanceConns.Count);
+				/* Open-world work is one task per distinct scene name, which is bounded by the
+				 * world's zone count and small. */
+				var sceneTasks = new List<Task>(openWorldSceneNames.Count);
 				foreach (string sceneName in openWorldSceneNames)
 				{
-					tasks.Add(ProcessOpenWorldQueueAsync(sceneName));
+					sceneTasks.Add(ProcessOpenWorldQueueAsync(sceneName));
 				}
-				foreach (NetworkConnection conn in instanceConns)
+				await Task.WhenAll(sceneTasks);
+
+				/* Instance work is one task per waiting connection, and that is bounded only by
+				 * MAX_WAITING_QUEUE_SIZE (2500). Starting all of them at once puts up to that
+				 * many concurrent database round trips and main-thread dispatches in flight from
+				 * a single routing cycle, which saturates the connection pool for every other
+				 * system on this server at exactly the moment the queue says it is already
+				 * struggling. Batched for the same reason KickRequestSystem batches its
+				 * last-login lookups. */
+				for (int start = 0; start < instanceConns.Count; start += InstanceRoutingBatchSize)
 				{
-					tasks.Add(ProcessInstanceConnectionAsync(conn));
+					int end = Math.Min(start + InstanceRoutingBatchSize, instanceConns.Count);
+					var batch = new Task[end - start];
+					for (int i = start; i < end; ++i)
+					{
+						batch[i - start] = ProcessInstanceConnectionAsync(instanceConns[i]);
+					}
+					await Task.WhenAll(batch);
 				}
-				await Task.WhenAll(tasks);
 
 				await UpdateConnectionCountAsync();
 			}
@@ -707,7 +744,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						 * SweepStaleSceneRowsAsync deletes those rows, but only on its own timer;
 						 * this keeps the window between the crash and the sweep from routing
 						 * anyone into it. */
-						if (!IsSceneServerLive(serverData))
+						if (!IsSceneServerRoutable(serverData))
 						{
 							continue;
 						}
@@ -1048,6 +1085,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private async Task CleanupAndEnqueueNewSceneIfNeededAsync(string sceneName, long worldServerID, ISceneService sceneService)
 		{
 			bool needsNewScene = false;
+			int waitingCount = 0;
 			if (!await RunOnMainThreadAsync(() =>
 			{
 				if (!Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
@@ -1063,6 +1101,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				else
 				{
 					needsNewScene = true;
+					waitingCount = connections.Count;
 				}
 			}))
 			{
@@ -1071,20 +1110,48 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			if (needsNewScene)
 			{
-				DatabaseResult<long> enqueueResult = await sceneService.EnqueueAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld);
+				/* Ask only if one is not already on its way.
+				 *
+				 * This runs on every routing cycle for as long as anyone is still waiting on this
+				 * scene, and an unconditional enqueue therefore requested a fresh instance every
+				 * WaitQueueRateSeconds (2s) throughout the load it was waiting for. A cold
+				 * open-world zone that takes twenty seconds to come up collected ten requests;
+				 * scene servers dequeued and loaded all of them, so one zone became ten stacked
+				 * copies, each with its own physics scene, nine of them empty. An empty scene is
+				 * not eligible for stale unload until StaleSceneTimeout (an hour by default), so
+				 * they stayed.
+				 *
+				 * EnqueueIfUnderOutstandingLimitAsync counts and inserts in a single statement,
+				 * bounded by how many instances the waiting population could fill. One player
+				 * waiting produces one load; a surge that genuinely needs several gets them in
+				 * parallel; nobody gets a tenth empty copy of a zone because the first one was
+				 * slow to boot. Capped so a queue inflated by a stuck scene cannot ask for an
+				 * unbounded number of loads at once. */
+				int perInstance = Math.Max(1, GetMaxClients(sceneName));
+				int maxOutstanding = Mathf.Clamp((waitingCount + perInstance - 1) / perInstance, 1, MaxOutstandingSceneLoads);
+
+				DatabaseResult<long> enqueueResult = await sceneService.EnqueueIfUnderOutstandingLimitAsync(worldServerID, sceneName, (FishMMO.Database.Data.Enums.SceneType)(int)SceneType.OpenWorld, maxOutstanding);
 				if (!enqueueResult.IsSuccess)
 				{
 					await Log.Warning("WorldSceneSystem", $"CleanupAndEnqueueNewSceneIfNeededAsync DB error (Scene={sceneName}): {enqueueResult.ErrorCode} - {enqueueResult.ErrorMessage}");
 				}
-				else
+				else if (enqueueResult.Data > 0)
 				{
+					await Log.Info("WorldSceneSystem", $"Requested a new instance of '{sceneName}' (SceneID={enqueueResult.Data}) for waiting connections.");
 				}
 			}
 		}
 
 		/// <summary>
-		/// Clears the IsInInstance flag on the character, persists the updated record, and falls back to the world scene.
+		/// Releases a character from an instance that cannot be entered, persists the change, and
+		/// routes it to the open world instead.
 		/// </summary>
+		/// <remarks>
+		/// Every caller has established that the instance is gone or will never arrive: the row
+		/// was reaped, its scene server stopped pulsing, or it sat un-ready past
+		/// <see cref="InstanceReadyGraceSeconds"/>. That conclusion covers the character's
+		/// combat-logout body too, which is why the flag is cleared here as well — see below.
+		/// </remarks>
 		private async Task ClearInstanceFlagAndFallbackAsync(
 			ICharacterService charService,
 			CharacterData charData,
@@ -1093,6 +1160,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			string accountName)
 		{
 			characterFlags.DisableBit(CharacterFlags.IsInInstance);
+
+			/* The body went with the instance, so the flag that says one is waiting must go too.
+			 *
+			 * A character that combat-logged inside an instance left its body there, and the
+			 * body is only ever in the instance — AdjustLingeringSceneCount books it against the
+			 * instance scene precisely because that is where it stands. Reaching this method
+			 * means that instance is not coming back, so the body is gone with it.
+			 *
+			 * Left set, the flag follows the character onto the open-world path, where the
+			 * routing pass reads it as "this character's body is on one specific instance" and
+			 * holds the connection for up to CombatLogoutRoutingGraceSeconds (150s) waiting for
+			 * a scene instance that no longer exists — behind a loading screen — before giving
+			 * up and clearing the flag itself. Clearing it here skips a wait whose answer is
+			 * already known. */
+			characterFlags.DisableBit(CharacterFlags.IsCombatLogged);
+			combatLogoutRoutingDeferredSince.TryRemove(charData.ID, out _);
 			var updatedChar = charData.WithFlagsVersionAndTimestamp(
 				characterFlags,
 				charData.Version + 1,
@@ -1244,6 +1327,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Ensure the Scene Server is running. "Registered" is not the same as "running":
 				// a crashed scene server's registration outlives it, so the pulse is what says.
 				var sceneServerResult = await sceneServerService.FetchAsync(sceneData.SceneServerID);
+
+				// Live, not routable: a locked scene server still hands back the instances it is
+				// hosting. See IsSceneServerRoutable for why a lock must not evict from a dungeon.
 				if (sceneServerResult.IsSuccess && IsSceneServerLive(sceneServerResult.Data))
 				{
 					var sceneServer = sceneServerResult.Data;
@@ -1725,11 +1811,33 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			TryEnqueueMainThread(() =>
 			{
+				if (conn == null || !conn.IsActive)
+				{
+					return;
+				}
+
 				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 				{
 					RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
 					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
 				}
+
+				/* A different queue, waiting on a different thing: start the expiry clock again.
+				 *
+				 * The clock deliberately survives a re-queue, because a routing cycle that puts
+				 * a connection straight back is the same wait continuing. This is not that. The
+				 * ordinary way to arrive here is having waited out InstanceReadyGraceSeconds
+				 * (180s) for an instance that never became ready — which already exceeds the
+				 * open-world TTL (45s), so the very next purge sweep kicked the character the
+				 * system had just gone to the trouble of rescuing, with "the world server could
+				 * not find room for your character". The instance wait is bounded by the scene
+				 * row's own age; the open-world wait it hands over to must be measured from
+				 * here.
+				 *
+				 * The stale per-connection reason goes too: whatever this client was previously
+				 * told it was waiting for, it is now waiting for open-world capacity. */
+				ResetQueueEntryTime(conn.ClientId);
+				queueReasonByClientId.TryRemove(conn.ClientId, out _);
 			});
 		}
 
@@ -2304,7 +2412,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			var result = await sceneServerService.FetchAsync(sceneServerID);
-			if (!result.IsSuccess || !IsSceneServerLive(result.Data))
+			if (!result.IsSuccess || !IsSceneServerRoutable(result.Data))
 			{
 				// Invalidate any stale cached entry so subsequent calls re-fetch immediately
 				runtimeData.SceneServerAddressCache?.Invalidate(sceneServerID);
@@ -2361,6 +2469,26 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private static bool IsSceneServerLive(SceneServerData serverData)
 		{
 			return (DateTime.UtcNow - serverData.LastPulse).TotalSeconds < SceneServerPulseStaleSeconds;
+		}
+
+		/// <summary>
+		/// Whether a scene server may be given new open-world arrivals.
+		/// </summary>
+		/// <remarks>
+		/// Live and not locked. A locked scene server is being drained for maintenance: it keeps
+		/// the players it has and stops receiving more, which only works if the thing that hands
+		/// out players honours it.
+		/// <para>
+		/// Deliberately not applied to instance routing. A character bound to an instance can go
+		/// to exactly one scene server — the one hosting it — so refusing on a lock would not
+		/// drain that character, it would evict them from their dungeon and drop them in the open
+		/// world with the instance abandoned. Draining new arrivals is what a lock is for;
+		/// clearing people out is what a scheduled shutdown is for, and that one warns them first.
+		/// </para>
+		/// </remarks>
+		private static bool IsSceneServerRoutable(SceneServerData serverData)
+		{
+			return IsSceneServerLive(serverData) && !serverData.Locked;
 		}
 
 		/// <summary>

@@ -24,5 +24,14 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int CharacterCount { get; set; }
 		/// <summary>Whether the world server is locked to new connections.</summary>
 		public bool Locked { get; set; }
+		/// <summary>
+		/// When this world stops for maintenance, or <c>null</c> when no shutdown is scheduled.
+		/// </summary>
+		/// <remarks>
+		/// Read by the world server and by every scene server hosting scenes for this world, so
+		/// they can warn their players and clear them out on the same deadline. Absolute UTC —
+		/// see <see cref="FishMMO.Database.Data.ServerControlState.ShutdownAtUtc"/>.
+		/// </remarks>
+		public DateTime? ShutdownAtUtc { get; set; }
 	}
 }

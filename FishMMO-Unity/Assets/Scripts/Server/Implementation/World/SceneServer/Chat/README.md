@@ -52,9 +52,11 @@ Four architectural features keep the chat pipeline responsive under extreme load
 - DoS protection via hard cap on incoming queue size; sender kicked when exceeded. Messages from a connection with no spawned character are dropped rather than kicked — that state is a routine scene-transfer race, not an exploit
 - Token bucket anti-spam with configurable burst capacity (`chatTokenBucketCapacity`) and refill rate (`chatTokenRefillRate`)
 - Legacy per-message cooldown (`messageRateLimit`) as a secondary rate-limit gate
-- Repeat-message suppression (configurable via `allowRepeatMessages`)
+- Repeat-message suppression (configurable via `allowRepeatMessages`), applied to chat only — a repeated **slash command** is never suppressed, because repeating one is the normal response to a command that was refused for a reason that has since cleared
 - Rich text tag sanitization (skipped when message contains no `<` for zero-allocation fast path)
-- Command extraction and routing via `ChatHelper` command registry
+- Command extraction and routing via `ChatHelper` command registry, keyed **including** the leading slash and matched case-insensitively
+- **Per-command access levels** — commands are registered with a minimum `AccessLevel`, enforced in `ChatHelper.TryParseCommand` against the character's own level as loaded from its database row. A command the sender may not run is *consumed*, not rejected: it is neither executed nor echoed to a channel, and the response is indistinguishable from an unknown command, so command names cannot be probed. Every refusal is reported through `ChatHelper.OnCommandRefused` and logged with the character and account that tried it
+- **Authoritative sender resolution** — the sender is taken from `ICharacterMappingData.ConnectionCharacters` (populated by the character load pipeline from the database) rather than from `conn.FirstObject`, so a command's authorisation can never be decided from a network-deserialised payload
 - Post-prepend length enforcement capped at `maxMessageLength + MaxChannelIdPrefixLength` (22 chars)
 - Synchronous immediate channels: Region (scene-scoped broadcast), Say (observer-scoped broadcast)
 - Synchronous outbound-batched channels: World and Trade (buffered per-world, flushed periodically)
@@ -94,6 +96,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 3. On initialize, `ChatSystem` builds the channel → handler command map, initializes `ChatHelper`, registers the `ChatBroadcast` network handler, and registers three periodic callbacks (message pump, persist flush, outbound broadcast flush).
 4. On deinitialize, it flushes remaining outbound buffers, signals shutdown, flushes the persist queue synchronously, drains the incoming chat queue and main-thread queue, unregisters the broadcast handler, and unregisters all periodic callbacks.
 5. Clients send a `ChatBroadcast` with text prefixed by a channel command (e.g., `/s`, `/w`, `/p`, `/g`, `/t`, `/tr`). The server validates, rate-limits, parses the command, routes to the channel handler, and broadcasts results.
+6. Text beginning with a registered **slash command** (`/leaveinstance`, `/gi`, `/pi`, `/admin`, …) is dispatched to that command instead and never reaches a channel. `ChatHelper.GetCommandAndTrim` returns the command *with* its leading slash, which is how every registration is keyed.
 
 ## Configuration
 
@@ -137,7 +140,7 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 
 | Thread | Work |
 |---|---|
-| Main thread | Incoming queue drain, validation, token bucket, rate limit, repeat filter, sanitization, command parse, channel routing, broadcast dispatch, outbound flush, main-thread queue drain |
+| Main thread | Incoming queue drain, sender resolution from `ConnectionCharacters`, validation, token bucket, rate limit, repeat filter, sanitization, command parse and access-level check, channel routing, broadcast dispatch, outbound flush, main-thread queue drain |
 | Async worker | Party/Guild member fetch (`OnPartyChatAsync`, `OnGuildChatAsync`), Tell target resolve (`OnTellChatAsync`), message pump (`FetchAndProcessChatMessagesAsync`), batch persistence (`FlushPersistQueueAsync`) |
 
 ## Usage Examples

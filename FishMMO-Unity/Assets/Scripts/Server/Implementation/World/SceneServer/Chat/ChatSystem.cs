@@ -11,6 +11,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
 using FishMMO.Shared;
+using FishMMO.Auth.Core;
 using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -204,6 +205,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Chat helper commands
 			ChatHelper.InitializeOnce(GetChannelCommand);
 
+			// A refused privileged command is a security event; ChatHelper is engine-agnostic
+			// shared code with no server to log against, so it reports and this records.
+			ChatHelper.OnCommandRefused += ChatHelper_OnCommandRefused;
+
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived, true);
 
@@ -261,6 +266,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
+
+			ChatHelper.OnCommandRefused -= ChatHelper_OnCommandRefused;
+
+			/* Drop the static channel registration so the next run rebuilds it.
+			 *
+			 * ChatHelper's maps are static and hold delegates bound to this ScriptableObject.
+			 * They outlive a play-session restart in the editor while this object does not, and
+			 * InitializeOnce's latch meant the second session kept the first session's handlers.
+			 * Individual slash commands are removed by the systems that registered them. */
+			ChatHelper.ResetChannelCommands();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -342,24 +357,45 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				if (entry.Connection.FirstObject != null)
+				/* Resolve the sender from the server's own connection map, not from
+				 * conn.FirstObject.
+				 *
+				 * ConnectionCharacters is populated by the character load pipeline from the
+				 * database row, so the character it yields — and in particular its AccessLevel —
+				 * is server-authoritative by construction. FirstObject is whatever NetworkObject
+				 * happens to be first on the connection, and IPlayerCharacter.ReadPayload
+				 * deserializes AccessLevel straight off the wire. That payload is only ever read
+				 * server-side on FishNet's predicted-spawn path, which this project disables
+				 * globally (_allowPredictedSpawning is false on all three server scenes) and
+				 * which additionally requires a PredictedSpawn component no prefab here has — so
+				 * it is unreachable today. It is one project setting away from not being, and
+				 * this path now decides whether /admin commands run.
+				 *
+				 * The map is populated at the same moment the object is spawned, so nothing is
+				 * lost by preferring it. */
+				IPlayerCharacter sender = null;
+				if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var chatCharMapping))
 				{
-					IPlayerCharacter sender = entry.Connection.FirstObject.GetComponent<IPlayerCharacter>();
+					chatCharMapping.ConnectionCharacters.TryGetValue(entry.Connection, out sender);
+				}
+
+				if (sender != null)
+				{
 					ProcessNewChatMessage(entry.Connection, sender, entry.Message);
 				}
 				else
 				{
-					/* No spawned object is a race, not an exploit, so drop the message instead
-					 * of the player.
+					/* No resident character is a race, not an exploit, so drop the message
+					 * instead of the player.
 					 *
 					 * The queue is drained a frame or more after the message arrives, and the
-					 * character despawns while its connection stays up on every scene transfer,
-					 * bind-point respawn and channel switch. A chat line sent moments before one
-					 * of those therefore dequeues with FirstObject already null — and kicking for
-					 * it disconnected a player mid-transfer, with no notice, for typing.
-					 * Anything genuinely trying to talk without a character is refused just as
-					 * effectively by discarding what it sends. */
-					Log.Debug("ChatSystem", $"Dropping chat from connection {entry.Connection.ClientId}: no spawned character.");
+					 * character is removed from the connection map while its connection stays up
+					 * on every scene transfer, bind-point respawn and channel switch. A chat line
+					 * sent moments before one of those therefore dequeues with nothing left to
+					 * attribute it to — and kicking for it disconnected a player mid-transfer,
+					 * with no notice, for typing. Anything genuinely trying to talk without a
+					 * character is refused just as effectively by discarding what it sends. */
+					Log.Debug("ChatSystem", $"Dropping chat from connection {entry.Connection.ClientId}: no resident character.");
 				}
 			}
 		}
@@ -564,6 +600,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Records a character attempting a slash command above its access level.
+		/// </summary>
+		/// <remarks>
+		/// Logged at warning rather than debug. The command layer deliberately gives the sender
+		/// no feedback — an unprivileged player must not be able to discover which command names
+		/// exist by watching how the server responds — so this log line is the only trace that
+		/// somebody is probing the admin commands.
+		/// </remarks>
+		/// <param name="sender">Character that ran the command.</param>
+		/// <param name="command">Command it tried to run, including the leading slash.</param>
+		/// <param name="required">Access level the command requires.</param>
+		private void ChatHelper_OnCommandRefused(IPlayerCharacter sender, string command, AccessLevel required)
+		{
+			if (sender == null)
+			{
+				return;
+			}
+
+			Log.Warning("ChatSystem",
+				$"Character '{sender.CharacterName}' ({sender.ID}, account '{sender.Account}') attempted '{command}' " +
+				$"which requires {required}; the character has {sender.AccessLevel}. The command was ignored.");
+		}
+
+		/// <summary>
 		/// Parses and processes a new chat message received from a connection, including validation, rate limiting, spam filtering, and command handling.
 		/// </summary>
 		/// <param name="conn">Network connection of the sender.</param>
@@ -628,8 +688,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				sender.NextChatMessageTicks = receivedTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
 			}
-			// we spam limit client chat, the message is ignored
-			if (!AllowRepeatMessages)
+			/* The duplicate filter is for chat, not for commands.
+			 *
+			 * It ran before the command was parsed, so repeating any slash command was silently
+			 * dropped — and repeating one is the normal thing to do, because the first attempt is
+			 * often refused for a reason that then goes away. "/leaveinstance" while still in
+			 * combat, then again once combat ends, was swallowed; so was a second
+			 * "/admin stopshutdown" after the first went unacknowledged. A command that appears
+			 * to do nothing invites exactly the repeat this filter then ate.
+			 *
+			 * Applied below instead, on the paths that reach actual chat. */
+			bool startsWithSlash = msg.Text.Length > 0 && msg.Text[0] == '/';
+
+			if (!AllowRepeatMessages && !startsWithSlash)
 			{
 				if (!string.IsNullOrWhiteSpace(sender.LastChatMessage) &&
 					sender.LastChatMessage.Equals(msg.Text))
@@ -651,6 +722,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (ChatHelper.TryParseCommand(cmd, sender, msg))
 			{
 				return;
+			}
+
+			/* Not a registered command after all, so the duplicate filter still applies. A
+			 * channel prefix such as "/w" arrives here with the prefix already stripped, so the
+			 * comparison is against the message body — which is what a player repeating
+			 * themselves actually repeats. */
+			if (!AllowRepeatMessages && startsWithSlash)
+			{
+				if (!string.IsNullOrWhiteSpace(sender.LastChatMessage) &&
+					sender.LastChatMessage.Equals(msg.Text))
+				{
+					return;
+				}
+				sender.LastChatMessage = msg.Text;
 			}
 
 			// the text is empty

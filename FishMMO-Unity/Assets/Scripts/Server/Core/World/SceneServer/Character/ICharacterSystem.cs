@@ -30,25 +30,34 @@ namespace FishMMO.Server.Core.World.SceneServer
 		int LingeringCharacterCount { get; }
 
 		/// <summary>
-		/// Declares that the next disconnect on <paramref name="connection"/> is a deliberate
-		/// hand-off to another scene server, not a player leaving.
+		/// Declares that the next disconnect on <paramref name="connection"/> is something the
+		/// server is doing on purpose, not a player walking out of a fight.
 		/// </summary>
 		/// <remarks>
-		/// Combat-logout linger exists to stop a player escaping a fight by closing the client,
-		/// so it applies to dropped connections — and a transfer is implemented as a dropped
-		/// connection. A transfer that lingered would leave the body (and its session claim) on
-		/// the source server while the client arrives at the destination, which then cannot
-		/// claim the character and kicks it, repeatedly, until the linger expires.
-		/// <para>
+		/// Combat-logout linger exists to stop a player escaping a losing fight by closing the
+		/// client, so it triggers on a dropped connection — and the server itself drops
+		/// connections for reasons that have nothing to do with the player quitting.
+		/// <list type="bullet">
+		/// <item><description>
+		/// A hand-off to another scene server is implemented as a dropped connection. One that
+		/// lingered would leave the body — and its session claim — on the source server while
+		/// the client arrives at the destination, which then cannot claim the character and
+		/// kicks it, repeatedly, until the linger expires.
+		/// </description></item>
+		/// <item><description>
+		/// An administrative kick is the operator removing the player, so there is no escape to
+		/// deny. Lingering there keeps the kicked player's body in the world and holds their
+		/// character claim for the length of the linger — which makes a kick the opposite of a
+		/// remedy for a character that is stuck.
+		/// </description></item>
+		/// </list>
 		/// The teleport and bind-point-respawn paths avoid this by releasing the character
 		/// themselves before disconnecting. Callers that instead rely on the ordinary disconnect
-		/// pipeline — a channel switch does — must announce the intent here first. The marker is
-		/// consumed by that disconnect, so it cannot leak onto a later session on a recycled
-		/// connection id.
-		/// </para>
+		/// pipeline must announce the intent here first. The marker is consumed by that
+		/// disconnect, so it cannot leak onto a later session on a recycled connection id.
 		/// </remarks>
-		/// <param name="connection">Connection about to be disconnected for a transfer.</param>
-		void BeginDeliberateTransfer(TConnection connection);
+		/// <param name="connection">Connection the server is about to disconnect on purpose.</param>
+		void SuppressCombatLingerOnDisconnect(TConnection connection);
 
 		/// <summary>
 		/// Moves a character to another channel (another instance of the same scene) by

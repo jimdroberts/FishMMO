@@ -1,3 +1,4 @@
+using System;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
 
@@ -19,6 +20,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public bool IsLocked { get; set; }
 
+		/// <inheritdoc />
+		public DateTime? ShutdownAtUtc { get; set; }
+
 		/// <summary>
 		/// Initializes the world server runtime data container.
 		/// </summary>
@@ -26,6 +30,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			ID = 0;
 			IsLocked = false;
+			ShutdownAtUtc = null;
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -36,6 +41,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			ID = 0;
 			IsLocked = false;
+			ShutdownAtUtc = null;
 		}
 
 		/// <summary>

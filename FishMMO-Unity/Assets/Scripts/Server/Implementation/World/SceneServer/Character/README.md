@@ -206,10 +206,13 @@ invocation list and the caller, leaving a character removed from every mapping b
 and never released, or its NetworkObject spawned in the world with no owner. Losing one
 subscriber's bookkeeping is recoverable; losing the teardown is not.
 
-It also exposes one command, `BeginDeliberateTransfer(conn)`. It marks the next disconnect on
-that connection as a hand-off to another scene server rather than a player leaving, which
-suppresses the combat-logout linger for it. Only callers that transfer a character *through*
-the ordinary disconnect pipeline need it — `SceneChannelSystem` is the one that does.
+It also exposes one command, `SuppressCombatLingerOnDisconnect(conn)`. It marks the next
+disconnect on that connection as something the server is doing on purpose rather than a player
+walking out of a fight, which suppresses the combat-logout linger for it. Callers that transfer a
+character *through* the ordinary disconnect pipeline need it — `SceneChannelSystem` and the
+dungeon finder both do — and so does `KickRequestSystem`: an operator kick is a removal, not a
+departure, and lingering there keeps the kicked character's body in the world holding its session
+claim, which makes a kick the opposite of a remedy for a character that is stuck.
 `IPlayerCharacter_OnTeleport` and the cross-scene bind-point respawn instead release the
 character themselves before disconnecting, so they never reach the linger check. A transfer
 that lingered would leave the body and its session claim on the source server while the client
@@ -424,8 +427,8 @@ respawning *into* rather than the one they died in.
 
 1. Removes the transfer watchdog entry, the residency and scene-handshake deadlines, and scene-unload and validated-scene rate-limit tracking for the connection.
 2. Removes auth callback rate-limit tracking for the account.
-3. Consumes any `BeginDeliberateTransfer` marker for the connection.
-4. Calls `RemoveCharacterConnectionMapping(conn, allowCombatLinger: <not a deliberate transfer>)`.
+3. Consumes any `SuppressCombatLingerOnDisconnect` marker for the connection.
+4. Calls `RemoveCharacterConnectionMapping(conn, allowCombatLinger: <not a server-initiated disconnect>)`.
 
 `RemoveCharacterConnectionMapping(conn, skipOnDisconnect)`:
 

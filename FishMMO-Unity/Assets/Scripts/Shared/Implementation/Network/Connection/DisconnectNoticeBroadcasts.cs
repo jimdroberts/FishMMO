@@ -36,6 +36,13 @@ namespace FishMMO.Shared
 		ProtocolViolation = 9,
 		/// <summary>An operator kicked this account.</summary>
 		AdministrativeKick = 10,
+		/// <summary>The server is stopping for scheduled maintenance.</summary>
+		/// <remarks>
+		/// Terminal: the server the client was on is going away, so its reconnect loop would
+		/// spend every attempt on a socket that is closing. The player is returned to the login
+		/// screen with the reason, and comes back when the world does.
+		/// </remarks>
+		ServerMaintenance = 11,
 	}
 
 	/// <summary>

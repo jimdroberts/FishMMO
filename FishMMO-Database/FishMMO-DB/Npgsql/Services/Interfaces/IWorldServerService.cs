@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,7 +55,46 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlRawAsync doesn't auto-retry).</para>
 		/// <para><b>Returns:</b> Failure if serverId <= 0; DatabaseEntityNotFoundException if no rows affected; Success if updated.</para>
 		/// </remarks>
-		Task<DatabaseResult> PulseAsync(long serverId, int characterCount, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<ServerControlState>> PulseAsync(long serverId, int characterCount, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Opens or closes this world server to new connections.
+		/// </summary>
+		/// <param name="serverId">World server row to update.</param>
+		/// <param name="locked">True to close it to new arrivals.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or NotFound when the row is gone.</returns>
+		/// <remarks>
+		/// The row is the authority; the server adopts it on its next pulse. Locking drains
+		/// rather than evicts — see <see cref="ServerControlState.Locked"/>.
+		/// </remarks>
+		Task<DatabaseResult> SetLockedAsync(long serverId, bool locked, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Schedules or cancels this world server's shutdown.
+		/// </summary>
+		/// <param name="serverId">World server row to update.</param>
+		/// <param name="shutdownAtUtc">Absolute UTC stop time, or <c>null</c> to cancel.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or NotFound when the row is gone.</returns>
+		/// <remarks>
+		/// Scheduling also locks the server, in the same statement. Cancelling does not unlock
+		/// it: halting a shutdown and reopening to players are separate decisions.
+		/// </remarks>
+		Task<DatabaseResult> SetShutdownAsync(long serverId, DateTime? shutdownAtUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Reads a world server's lock and shutdown state without writing a pulse.
+		/// </summary>
+		/// <param name="serverId">World server row to read.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The control state, or NotFound when the row is gone.</returns>
+		/// <remarks>
+		/// For scene servers, which host scenes on behalf of a world but do not pulse its row.
+		/// A world-wide shutdown has to reach them so they can warn their players and clear the
+		/// world's characters out on the same deadline.
+		/// </remarks>
+		Task<DatabaseResult<ServerControlState>> FetchControlStateAsync(long serverId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a world server registration from the database.

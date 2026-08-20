@@ -3,13 +3,42 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
+using FishMMO.Auth.Core;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Delegate for chat commands. Returns true if the chat message should be written to the database.
+	/// Delegate for chat commands.
 	/// </summary>
+	/// <remarks>
+	/// The return value is currently ignored by <see cref="ChatHelper.TryParseCommand"/>: a
+	/// slash command is consumed and never written to the chat log, whatever it returns. It was
+	/// documented as "true if the chat message should be written to the database", which was
+	/// never honoured — persisting a command would need a channel and a sanitized body it does
+	/// not have. Kept in the signature so every existing command compiles unchanged.
+	/// </remarks>
 	public delegate bool ChatCommand(IPlayerCharacter character, ChatBroadcast msg);
+
+	/// <summary>
+	/// A registered slash command and the minimum access level allowed to run it.
+	/// </summary>
+	public struct ChatCommandRegistration
+	{
+		/// <summary>Handler invoked when an authorised character runs the command.</summary>
+		public ChatCommand Func;
+
+		/// <summary>
+		/// Lowest <see cref="AccessLevel"/> permitted to run this command.
+		/// </summary>
+		/// <remarks>
+		/// Enforced server-side in <see cref="ChatHelper.TryParseCommand"/> against the
+		/// character's own <see cref="IPlayerCharacter.AccessLevel"/>, which is loaded from the
+		/// character row — never from anything the client sends. The client does receive its own
+		/// access level in the spawn payload, but only so a UI can hide what it cannot use;
+		/// nothing on the client is trusted here.
+		/// </remarks>
+		public AccessLevel MinimumAccessLevel;
+	}
 
 	/// <summary>
 	/// Struct containing details for a chat command, including the channel and the command function.
@@ -91,9 +120,14 @@ namespace FishMMO.Shared
 		private static bool initialized = false;
 
 		/// <summary>
-		/// Dictionary mapping command strings to their corresponding ChatCommand delegates.
+		/// Registered slash commands, keyed by command word without the leading slash.
 		/// </summary>
-		public static Dictionary<string, ChatCommand> Commands { get; private set; }
+		/// <remarks>
+		/// Case-insensitive. Players type commands by hand and <c>/LeaveInstance</c> is the same
+		/// intent as <c>/leaveinstance</c>; an ordinal comparer silently treated the first as
+		/// ordinary chat and broadcast it to the channel.
+		/// </remarks>
+		public static Dictionary<string, ChatCommandRegistration> Commands { get; private set; }
 
 		/// <summary>
 		/// Dictionary mapping chat channels to their command details.
@@ -103,7 +137,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Dictionary mapping command strings to chat command details.
 		/// </summary>
-		public static Dictionary<string, ChatCommandDetails> CommandChannelMap { get; } = new Dictionary<string, ChatCommandDetails>();
+		public static Dictionary<string, ChatCommandDetails> CommandChannelMap { get; } =
+			new Dictionary<string, ChatCommandDetails>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Dictionary mapping chat channels to their supported command strings.
@@ -124,9 +159,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		static ChatHelper()
 		{
-			Commands = new Dictionary<string, ChatCommand>();
+			Commands = new Dictionary<string, ChatCommandRegistration>(StringComparer.OrdinalIgnoreCase);
 			ChatChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
 		}
+
+		/// <summary>
+		/// Raised when a character runs a command it does not have the access level for.
+		/// </summary>
+		/// <remarks>
+		/// A refused privileged command is a security event, and this class is engine-agnostic
+		/// shared code with no server context to log it against. The server subscribes and
+		/// records who tried what.
+		/// </remarks>
+		public static event Action<IPlayerCharacter, string, AccessLevel> OnCommandRefused;
 
 		/// <summary>
 		/// Initializes chat channel commands once, mapping each channel to its command function.
@@ -148,18 +193,59 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Adds new chat commands to the Commands dictionary.
+		/// Registers slash commands runnable by any player.
 		/// </summary>
 		/// <param name="commands">Dictionary of command strings and their delegates.</param>
 		public static void AddCommands(Dictionary<string, ChatCommand> commands)
+		{
+			AddCommands(commands, AccessLevel.Player);
+		}
+
+		/// <summary>
+		/// Registers slash commands that require at least <paramref name="minimumAccessLevel"/>.
+		/// </summary>
+		/// <remarks>
+		/// The level is attached at registration rather than checked inside each handler, so a
+		/// command cannot be added without one being considered. <see cref="TryParseCommand"/>
+		/// is the single place the check happens.
+		/// </remarks>
+		/// <param name="commands">Dictionary of command strings and their delegates.</param>
+		/// <param name="minimumAccessLevel">Lowest access level permitted to run them.</param>
+		public static void AddCommands(Dictionary<string, ChatCommand> commands, AccessLevel minimumAccessLevel)
 		{
 			if (commands == null)
 				return;
 
 			foreach (KeyValuePair<string, ChatCommand> pair in commands)
 			{
-				Log.Debug("ChatHelper", $"Added Command[" + pair.Key + "]");
-				Commands[pair.Key] = pair.Value;
+				Log.Debug("ChatHelper", $"Added Command[{pair.Key}] (min access {minimumAccessLevel})");
+				Commands[pair.Key] = new ChatCommandRegistration()
+				{
+					Func = pair.Value,
+					MinimumAccessLevel = minimumAccessLevel,
+				};
+			}
+		}
+
+		/// <summary>
+		/// Unregisters slash commands.
+		/// </summary>
+		/// <remarks>
+		/// Every system that registers must remove on teardown. <see cref="Commands"/> is static
+		/// and holds delegates bound to <c>ScriptableObject</c> server behaviours, which survive
+		/// a play-session restart in the editor while the objects they point at do not — so a
+		/// command left behind either runs against a destroyed instance or, worse, against the
+		/// previous session's state.
+		/// </remarks>
+		/// <param name="commands">Command strings to remove.</param>
+		public static void RemoveCommands(IEnumerable<string> commands)
+		{
+			if (commands == null)
+				return;
+
+			foreach (string command in commands)
+			{
+				Commands.Remove(command);
 			}
 		}
 
@@ -174,8 +260,27 @@ namespace FishMMO.Shared
 			{
 				Log.Debug("ChatHelper", $"Added Chat Command[" + command + "]");
 				ChatChannelCommands[details.Channel] = details;
-				CommandChannelMap.Add(command, details);
+				// Assignment rather than Add: Add throws on a duplicate key, which turns a
+				// double registration into a startup crash instead of a harmless overwrite.
+				CommandChannelMap[command] = details;
 			}
+		}
+
+		/// <summary>
+		/// Clears the channel-command registration so <see cref="InitializeOnce"/> will run again.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="initialized"/> is static and was never reset, which is only invisible while
+		/// the process is also the lifetime of the registration. In the editor with domain reload
+		/// disabled it is not: the second play session skipped InitializeOnce entirely and kept
+		/// the first session's delegates, which are bound to <c>ScriptableObject</c> instances
+		/// that no longer belong to the running server. Called from the chat system's teardown.
+		/// </remarks>
+		public static void ResetChannelCommands()
+		{
+			initialized = false;
+			ChatChannelCommands.Clear();
+			CommandChannelMap.Clear();
 		}
 
 		/// <summary>
@@ -194,21 +299,54 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Attempts to parse and execute a chat command by its string.
+		/// Attempts to run a registered slash command.
 		/// </summary>
-		/// <param name="cmd">Command string to parse.</param>
-		/// <param name="sender">Sender character.</param>
+		/// <remarks>
+		/// A command the sender is not allowed to run is <em>consumed</em> rather than rejected
+		/// back into the chat pipeline. Two reasons, both mattering:
+		/// <list type="bullet">
+		/// <item><description>
+		/// Falling through would broadcast the refused text to whatever channel the player is
+		/// on. "<c>/admin shutdown 60</c>" appearing in world chat is worse than the command
+		/// running.
+		/// </description></item>
+		/// <item><description>
+		/// Returning false for a command that exists but is not permitted, and false for one
+		/// that does not exist, are indistinguishable to the caller — which is the point. An
+		/// unprivileged player probing for command names learns nothing from the response.
+		/// </description></item>
+		/// </list>
+		/// The attempt is reported through <see cref="OnCommandRefused"/> so the server can log
+		/// it; privileged commands being tried by unprivileged accounts is worth seeing.
+		/// </remarks>
+		/// <param name="cmd">Command string to parse, without the leading slash.</param>
+		/// <param name="sender">Sender character. Its access level is authoritative.</param>
 		/// <param name="msg">Chat message broadcast.</param>
-		/// <returns>True if the command was found and executed, otherwise false.</returns>
+		/// <returns>True when the command was recognised, whether or not it was permitted.</returns>
 		public static bool TryParseCommand(string cmd, IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			// try to find the command
-			if (ChatHelper.Commands.TryGetValue(cmd, out ChatCommand command))
+			if (string.IsNullOrEmpty(cmd) ||
+				!ChatHelper.Commands.TryGetValue(cmd, out ChatCommandRegistration registration))
 			{
-				command?.Invoke(sender, msg);
+				return false;
+			}
+
+			if (sender == null)
+			{
 				return true;
 			}
-			return false;
+
+			/* Banned is zero, so a plain >= against a Player-level command would let a banned
+			 * character run everything a player can. Nothing may be run from Banned. */
+			if (sender.AccessLevel <= AccessLevel.Banned ||
+				sender.AccessLevel < registration.MinimumAccessLevel)
+			{
+				OnCommandRefused?.Invoke(sender, cmd, registration.MinimumAccessLevel);
+				return true;
+			}
+
+			registration.Func?.Invoke(sender, msg);
+			return true;
 		}
 
 		/// <summary>
@@ -230,11 +368,27 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Attempts to get the command from the text. If no commands are found it returns an empty string.
-		/// Modifies the input text to remove the command.
+		/// Extracts the leading slash command from <paramref name="text"/>, removing it from the
+		/// text and returning it <em>including</em> its leading slash.
 		/// </summary>
-		/// <param name="text">Reference to the input text.</param>
-		/// <returns>Command string if found, otherwise empty string.</returns>
+		/// <remarks>
+		/// The leading slash is part of the command, because it is part of every key the command
+		/// is looked up under. <see cref="Commands"/> is registered with literals like
+		/// <c>"/leaveinstance"</c> and <see cref="ChannelCommandMap"/> with <c>"/w"</c>,
+		/// <c>"/guild"</c> and so on — these are the spellings players type and the spellings the
+		/// registrations use.
+		/// <para>
+		/// This used to strip it, and the result matched nothing in either dictionary. The whole
+		/// slash-command layer was therefore dead: no registered command ever ran, and every
+		/// channel prefix fell through <see cref="TryParseChatCommand"/>'s <c>/say</c> fallback,
+		/// so <c>/w hello</c> was said locally instead of going to world chat and
+		/// <c>/leaveinstance</c> did nothing at all. Nothing surfaced it because both failures
+		/// are silent by construction — the fallback is a legitimate branch, and a command with
+		/// no arguments leaves empty text that the caller discards.
+		/// </para>
+		/// </remarks>
+		/// <param name="text">Reference to the input text. The command is removed from it.</param>
+		/// <returns>The command including its leading slash, or an empty string when there is none.</returns>
 		public static string GetCommandAndTrim(ref string text)
 		{
 			if (string.IsNullOrEmpty(text) || !text.StartsWith("/"))
@@ -244,13 +398,13 @@ namespace FishMMO.Shared
 			int firstSpace = text.IndexOf(' ');
 			if (firstSpace < 0)
 			{
-				// Slash command with no arguments (e.g. "/help").
-				// Return the command name and clear the remainder.
-				string soloCmd = text.Substring(1);
+				// Slash command with no arguments (e.g. "/leaveinstance").
+				// Return the whole command and clear the remainder.
+				string soloCmd = text;
 				text = "";
 				return soloCmd;
 			}
-			string cmd = text.Substring(1, firstSpace - 1);
+			string cmd = text.Substring(0, firstSpace);
 			text = text.Substring(firstSpace + 1).Trim();
 			return cmd;
 		}

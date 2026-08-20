@@ -57,6 +57,50 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Enqueues a scene load only while fewer than <paramref name="maxOutstanding"/> loads of
+		/// the same scene are already in flight for this world server.
+		/// </summary>
+		/// <param name="worldServerId">World server requesting the scene.</param>
+		/// <param name="sceneName">Scene to load.</param>
+		/// <param name="sceneType">Scene type to record on the row.</param>
+		/// <param name="maxOutstanding">
+		/// How many Pending or Loading rows for this (world, scene, type) may exist at once. The
+		/// caller derives this from how many connections are actually waiting, so a single
+		/// waiting player produces one load while a login surge that genuinely needs several
+		/// instances gets them in parallel. Values below 1 are treated as 1.
+		/// </param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// The new row's ID, or <c>0</c> when <paramref name="maxOutstanding"/> loads of the same
+		/// (world, scene, type) are already outstanding and no row was created. Failure results
+		/// carry the database error.
+		/// </returns>
+		/// <remarks>
+		/// For the world server's open-world routing, which asks for a scene on every routing
+		/// cycle for as long as anyone is still waiting on it. <see cref="EnqueueAsync"/> inserts
+		/// unconditionally, so a zone that takes twenty seconds to load — an entirely ordinary
+		/// cold start — collected a fresh request every two seconds while it did. Scene servers
+		/// dequeue those and load them: ten stacked copies of one open-world zone, each with its
+		/// own physics scene, each sitting empty and therefore not eligible for stale unload
+		/// until <c>StaleSceneTimeout</c> (an hour by default) elapsed.
+		/// <para>
+		/// Deliberately not used by the dungeon finder. Concurrent Pending rows for one dungeon
+		/// name are correct there — they belong to different parties — and that path already
+		/// dedupes per character and per party.
+		/// </para>
+		/// <para>
+		/// The count and the insert are one statement, so a second caller cannot slip between
+		/// them.
+		/// </para>
+		/// </remarks>
+		Task<DatabaseResult<long>> EnqueueIfUnderOutstandingLimitAsync(
+			long worldServerId,
+			string sceneName,
+			SceneType sceneType,
+			int maxOutstanding = 1,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Dequeues the next pending scene load request and marks it as loading.
 		/// </summary>
 		/// <param name="cancellationToken">Cancellation token.</param>
@@ -161,52 +205,54 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<int>> DeleteByWorldServerAsync(long worldServerId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Deletes a specific scene by server and handle.
-		/// </summary>
-		/// <param name="sceneServerId">Scene server ID.</param>
-		/// <param name="sceneHandle">The owning process's scene-manager handle.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>
-		/// DatabaseResult indicating success or error information on failure.
-		/// </returns>
-		/// <remarks>
-		/// Retained for administrative use. Prefer <see cref="DeleteAsync"/>: a scene handle only
-		/// identifies a row in combination with the scene server that allocated it, whereas the row
-		/// id identifies it anywhere.
-		/// </remarks>
-		Task<DatabaseResult> DeleteByHandleAsync(long sceneServerId, int sceneHandle, CancellationToken cancellationToken = default);
-
-		/// <summary>
 		/// Deletes a single scene row by its database ID.
 		/// </summary>
 		/// <param name="sceneId">Scene row to delete.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult indicating success, or NotFound when the row is already gone.</returns>
 		/// <remarks>
-		/// Preferred over <see cref="DeleteByHandleAsync"/>: the row id is the only identifier for
-		/// a scene instance that means the same thing in every process. Idempotent — deleting a
-		/// row that is already gone succeeds, because both callers are removing something they
-		/// have already stopped using.
+		/// The row id is the only identifier for a scene instance that means the same thing in
+		/// every process, so it is the only way to address one. A <c>DeleteByHandleAsync</c>
+		/// keyed on <c>(scene_server_id, scene_handle)</c> used to sit alongside this: it had no
+		/// callers left after scene identity moved to the row id, and leaving it in the interface
+		/// only invited a caller to reintroduce a process-local handle as a cross-process key.
+		/// <para>
+		/// Idempotent — deleting a row that is already gone succeeds, because every caller is
+		/// removing something it has already stopped using.
+		/// </para>
 		/// </remarks>
 		Task<DatabaseResult> DeleteAsync(long sceneId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Gets a character's instance by character ID and scene type.
+		/// Gets the instance a character opened for one particular scene.
 		/// </summary>
 		/// <param name="characterId">Character ID.</param>
 		/// <param name="sceneType">Scene type.</param>
+		/// <param name="worldServerId">World server the instance must belong to.</param>
+		/// <param name="sceneName">Scene the instance must be of.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult containing scene data if found, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ (FirstOrDefaultAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Returns entity not found exception if scene doesn't exist.
+		/// The world and scene are part of the query, not a check the caller applies afterwards.
+		/// A character accumulates one instance row per dungeon it has opened — nothing deletes a
+		/// Ready row until its scene goes stale — so matching on character and type alone returned
+		/// an arbitrary one of them. Asked for dungeon A while holding a row for dungeon B, the
+		/// caller saw "no instance", created a second row, and left A's still-running instance
+		/// stranded and unreachable; the character then accumulated another row on every
+		/// alternation between the two.
+		/// <para>
+		/// Ordered newest-first so the answer is deterministic even where duplicate rows already
+		/// exist from before this filter, and so the most recently opened instance wins.
+		/// </para>
+		/// Returns entity not found exception if no matching instance exists.
 		/// </remarks>
 		Task<DatabaseResult<SceneData>> FetchCharacterInstanceAsync(
 			long characterId,
 			SceneType sceneType,
+			long worldServerId,
+			string sceneName,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

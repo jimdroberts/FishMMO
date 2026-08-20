@@ -353,7 +353,14 @@ namespace FishMMO.Client
 						}
 						Character.NextChatMessageTicks = nowTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
 					}
-					if (!AllowRepeatMessages)
+					/* Never suppress a repeated slash command.
+					 *
+					 * The duplicate filter is for chat. Repeating a command is the normal
+					 * response to one that appears to have done nothing — and commands often
+					 * are refused the first time for a reason that then clears, such as
+					 * /leaveinstance while still in combat. Dropped here, the second attempt
+					 * never even reaches the server. The server applies the same exemption. */
+					if (!AllowRepeatMessages && !input.StartsWith("/"))
 					{
 						if (!string.IsNullOrWhiteSpace(Character.LastChatMessage) &&
 							Character.LastChatMessage.Equals(input))
@@ -894,10 +901,15 @@ namespace FishMMO.Client
 		/// <returns>True if handled successfully.</returns>
 		public bool OnSystemChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
-			{
-				InstantiateChatMessage(msg.Channel, s, msg.Text);
-			});
+			/* A system message has no sender to resolve.
+			 *
+			 * This used to ask the naming system for the name of character SenderID, which for a
+			 * server-authored message is 0 — no such character. The callback only fires when the
+			 * server answers with a name, so the message was held indefinitely and never
+			 * displayed: the achievement "your bags are full" notice, the maintenance countdown,
+			 * every /admin acknowledgement. Rendering directly is also simply correct — the
+			 * sender column is meaningless here. */
+			InstantiateChatMessage(msg.Channel, string.Empty, msg.Text);
 			return true;
 		}
 	}

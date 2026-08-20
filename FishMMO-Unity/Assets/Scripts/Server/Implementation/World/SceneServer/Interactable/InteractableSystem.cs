@@ -378,7 +378,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Log.Debug("InteractableSystem", "No first object");
 				return;
 			}
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null)
 			{
 				Log.Debug("InteractableSystem", "No character");
 				return;
@@ -394,11 +395,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			try
 			{
 
-				// validate scene
+				/* Validate the scene the character is standing in, which is not always SceneName —
+				 * see CurrentSceneName. Checking SceneName asked about the wrong scene for every
+				 * interaction inside a dungeon, and happened to pass because the open-world scene
+				 * is always in the cache, so the check proved nothing about the scene it was
+				 * supposed to be validating. */
+				string currentScene = character.CurrentSceneName();
+
 				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
+					!worldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails _))
 				{
-					Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
+					Log.Debug("InteractableSystem", "Missing Scene:" + currentScene);
 					return;
 				}
 

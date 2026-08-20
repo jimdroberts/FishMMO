@@ -501,8 +501,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
+				// Validate the scene the character is actually in — see CurrentSceneName.
 				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.CurrentSceneName(), out _))
 				{
 					return;
 				}
@@ -587,8 +588,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			try
 			{
+				// Validate the scene the character is actually in — see CurrentSceneName.
 				if (worldSceneDetailsCache == null ||
-					!worldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out _))
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.CurrentSceneName(), out _))
 				{
 					return;
 				}

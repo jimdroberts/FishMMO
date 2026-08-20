@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,7 +75,31 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Updates timestamp to current UTC time along with character count and lock state.
 		/// </remarks>
-		Task<DatabaseResult> PulseAsync(long serverId, int characterCount, bool locked, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<ServerControlState>> PulseAsync(long serverId, int characterCount, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Opens or closes this scene server to new arrivals.
+		/// </summary>
+		/// <param name="serverId">Scene server row to update.</param>
+		/// <param name="locked">True to close it.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or NotFound when the row is gone.</returns>
+		/// <remarks>
+		/// A locked scene server is skipped by the world server's routing and stops dequeuing
+		/// scene-load requests, so it drains as its players leave. Players already on it keep
+		/// playing. The row is the authority; the server adopts it on its next pulse.
+		/// </remarks>
+		Task<DatabaseResult> SetLockedAsync(long serverId, bool locked, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Schedules or cancels this scene server's shutdown.
+		/// </summary>
+		/// <param name="serverId">Scene server row to update.</param>
+		/// <param name="shutdownAtUtc">Absolute UTC stop time, or <c>null</c> to cancel.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Success, or NotFound when the row is gone.</returns>
+		/// <remarks>Scheduling also locks the server; cancelling does not unlock it.</remarks>
+		Task<DatabaseResult> SetShutdownAsync(long serverId, DateTime? shutdownAtUtc, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a scene server registration.

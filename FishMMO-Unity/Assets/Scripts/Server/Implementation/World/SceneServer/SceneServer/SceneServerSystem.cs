@@ -32,7 +32,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	[RequiresDataContainer(typeof(SceneServerRuntimeData))]
 	[RequiresDataContainer(typeof(SceneServerSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
-	public class SceneServerSystem : ServerBehaviour, ISceneServerSystem<NetworkConnection>
+	public partial class SceneServerSystem : ServerBehaviour, ISceneServerSystem<NetworkConnection>
 	{
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -230,6 +230,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				_ = Log.Warning("SceneServerSystem", $"Failed to clean up stale scenes for server {id}: [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
 			}
 
+			// In-game operator commands. See SceneServerSystem.AdminCommands.
+			RegisterAdminCommands();
+
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
@@ -288,6 +291,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 			}
+
+			UnregisterAdminCommands();
+
+			// A shutdown that has been carried out must not still be pending in the database, or
+			// an automatic restart stops again immediately. See ClearConsumedShutdownOnTeardown.
+			ClearConsumedShutdownOnTeardown();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -427,6 +436,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* Adopt whatever the last pulse read back, and act on any shutdown that is now due.
+			 * Ahead of the pulse below so a server past its deadline stops rather than issuing
+			 * another heartbeat and another round of scene work. */
+			if (!ProcessControlState())
+			{
+				return;
+			}
+
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
 				!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ||
 				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
@@ -483,15 +500,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
 
-								// Resolve the stale scene timeout from config with a safe default.
-								// When the config key is missing, TryGetInt returns false and
-								// leaves result at 0 — without a default, ALL stale scenes would
-								// be unloaded immediately (every scene is stale > 0 minutes).
-								if (!Server.Configuration.TryGetInt("StaleSceneTimeout", out int staleSceneTimeoutMinutes))
-								{
-									staleSceneTimeoutMinutes = 60;
-									Log.Warning("SceneServerSystem", "Configuration key 'StaleSceneTimeout' not found. Using default of 60 minutes.");
-								}
+								int staleSceneTimeoutMinutes = ResolveStaleTimeoutMinutes(sceneDetails.SceneType);
 
 								if (timeSinceLastExit < staleSceneTimeoutMinutes)
 								{
@@ -523,11 +532,79 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// where a future refactor could clear the reusable buffer while async is still reading it.
 			var pulseSnapshot = new List<(long SceneID, int CharacterCount)>(runtimeData.ScenePulseDataBuffer);
 
-			if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, runtimeData.IsLocked, pulseSnapshot, maxScenesLoadedPerPulse), runtimeData.ID))
+			/* The worlds this server currently hosts scenes for.
+			 *
+			 * A scene server is not owned by one world — DequeueAsync hands out whichever pending
+			 * row is oldest, whatever world it belongs to — so a world-wide shutdown has to be
+			 * looked up per world, and only for the worlds actually represented here. Collected
+			 * on the main thread alongside everything else the pulse needs. */
+			var hostedWorldIDs = new List<long>(mappingData.WorldScenes != null ? mappingData.WorldScenes.Count : 0);
+			if (mappingData.WorldScenes != null)
+			{
+				foreach (long hostedWorldID in mappingData.WorldScenes.Keys)
+				{
+					hostedWorldIDs.Add(hostedWorldID);
+				}
+			}
+
+			if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, pulseSnapshot, maxScenesLoadedPerPulse, hostedWorldIDs), runtimeData.ID))
 			{
 				runtimeData.EndPulse();
 			}
 		}
+
+		/// <summary>
+		/// How long an empty scene of this type may sit before it is unloaded.
+		/// </summary>
+		/// <remarks>
+		/// Instanced content is not open world and must not be measured as if it were. An
+		/// open-world zone is shared, expensive to spin up, and likely to be wanted again within
+		/// the hour, so holding an empty one is a reasonable trade. A dungeon instance belongs to
+		/// one character or party: once it empties, the odds of that exact group returning fall
+		/// away quickly, and every abandoned one holds a full physics scene and a scene row for
+		/// the same hour. On a busy shard that is the dominant source of idle scene load.
+		/// <para>
+		/// The instance timeout is still generous enough to be a grace period rather than a
+		/// reclaim: a party that wipes and runs back, or a player who relogs, keeps the instance
+		/// and its progress. It only has to outlast a disconnect-and-return, not a coffee break.
+		/// </para>
+		/// <para>
+		/// Both values come from configuration, and both fall back to a safe default rather than
+		/// to zero — <c>TryGetInt</c> leaves its out parameter at 0 when the key is missing, and
+		/// a zero timeout unloads every empty scene on the next pulse.
+		/// </para>
+		/// </remarks>
+		/// <param name="sceneType">Type of the scene being considered for unload.</param>
+		/// <returns>Timeout in minutes.</returns>
+		private int ResolveStaleTimeoutMinutes(SceneType sceneType)
+		{
+			const int DefaultOpenWorldStaleMinutes = 60;
+			const int DefaultInstanceStaleMinutes = 5;
+
+			bool instanced = sceneType != SceneType.OpenWorld;
+
+			string key = instanced ? "StaleInstanceSceneTimeout" : "StaleSceneTimeout";
+			int fallback = instanced ? DefaultInstanceStaleMinutes : DefaultOpenWorldStaleMinutes;
+
+			if (!Server.Configuration.TryGetInt(key, out int minutes) || minutes < 1)
+			{
+				if (!loggedMissingStaleTimeoutKeys.Contains(key))
+				{
+					loggedMissingStaleTimeoutKeys.Add(key);
+					Log.Warning("SceneServerSystem",
+						$"Configuration key '{key}' is missing or not a positive number. Using the default of {fallback} minutes.");
+				}
+				return fallback;
+			}
+
+			return minutes;
+		}
+
+		/// <summary>
+		/// Config keys already reported as missing, so the warning is logged once rather than on
+		/// every stale scene on every pulse.
+		/// </summary>
+		private readonly HashSet<string> loggedMissingStaleTimeoutKeys = new HashSet<string>(StringComparer.Ordinal);
 
 		/// <summary>
 		/// Performs a bounded TTL sweep of expired pending scene load requests.
@@ -592,12 +669,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="serverID">Scene server identifier.</param>
 		/// <param name="characterCount">Current connected character count.</param>
-		/// <param name="isLocked">Whether the server is currently locked.</param>
 		/// <param name="scenePulseData">Collected pulse payload for tracked scenes.</param>
+		/// <param name="hostedWorldServerIDs">World servers this scene server currently hosts scenes for.</param>
 		/// <returns>Asynchronous pulse processing task.</returns>
-		private async Task PeriodicPulseAsync(long serverID, int characterCount, bool isLocked,
+		private async Task PeriodicPulseAsync(long serverID, int characterCount,
 			List<(long SceneID, int CharacterCount)> pulseSnapshot,
-			int maxScenesPerPulse)
+			int maxScenesPerPulse,
+			List<long> hostedWorldServerIDs)
 		{
 			try
 			{
@@ -612,11 +690,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Send server heartbeat pulse
-				DatabaseResult pulseResult = await sceneServerService.PulseAsync(serverID, characterCount, isLocked);
+				/* Send the server heartbeat, and read this server's control state back from the
+				 * same statement. The pulse no longer writes `locked` from memory: the row is
+				 * the authority for it, so that write was erasing whatever an operator set. */
+				DatabaseResult<ServerControlState> pulseResult = await sceneServerService.PulseAsync(serverID, characterCount);
 				if (!pulseResult.IsSuccess)
 				{
 					await Log.Warning("SceneServerSystem", $"PulseAsync DB error (ServerID={serverID}): {pulseResult.ErrorCode} - {pulseResult.ErrorMessage}");
+				}
+				else
+				{
+					PublishControlState(pulseResult.Data);
 				}
 
 				// Send scene heartbeat pulses (batched) — snapshot already in DB-ready format
@@ -627,6 +711,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						await Log.Warning("SceneServerSystem", $"PulseBatchAsync DB error ({pulseSnapshot.Count} scenes): {batchResult.ErrorCode} - {batchResult.ErrorMessage}");
 					}
+				}
+
+				// What the worlds this server hosts scenes for have been told to do.
+				await FetchWorldControlStatesAsync(hostedWorldServerIDs);
+
+				/* A locked scene server takes no new scene-load requests.
+				 *
+				 * Locking is a drain: the world server stops routing players here, so a scene
+				 * loaded now would be stranded — nobody would be sent to it and it would sit
+				 * until the stale sweep removed it. Leaving the row in the queue lets a scene
+				 * server that is still accepting work take it instead. */
+				if (IsLockedNow())
+				{
+					return;
 				}
 
 				// Process pending scenes — bounded to maxScenesPerPulse to prevent DB flood
@@ -708,10 +806,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 
 						// An instanced character lives in InstanceSceneName; matching only
-						// SceneName left it behind in a scene that failed to load.
-						string residentScene = resident.IsInInstance() && !string.IsNullOrEmpty(resident.InstanceSceneName)
-							? resident.InstanceSceneName
-							: resident.SceneName;
+						// SceneName left it behind in a scene that failed to load. See
+						// CurrentSceneName.
+						string residentScene = resident.CurrentSceneName();
 
 						if (string.Equals(residentScene, sceneData.SceneName, StringComparison.Ordinal))
 						{
@@ -977,7 +1074,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				scenes.Add(scene.name, instances = new Dictionary<long, ISceneInstanceDetails>());
 			}
-			if (!instances.ContainsKey(sceneID))
+			if (!instances.TryGetValue(sceneID, out ISceneInstanceDetails existing))
 			{
 				// Ensure the scene has a physics ticker
 				GameObject gob = new GameObject("PhysicsTicker");
@@ -1010,7 +1107,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			else
 			{
-				Log.Error("SceneServerSystem", $"Duplicate scene load detected: {worldServerID}:{scene.name} SceneID={sceneID}. Ignoring duplicate.");
+				/* Two loads landed on one scene row. The row can only describe one of them, and
+				 * the first is the one already wired up — physics ticker, instance registry,
+				 * handle maps — so this second Unity scene is unreachable: nothing can route a
+				 * character to it and nothing will ever mark it stale, because stale-pulse
+				 * detection walks the instance registry it was never added to. Ignoring it
+				 * leaked a fully simulated scene for the life of the process. Unload it.
+				 *
+				 * Deliberately not routed through UnloadScene: that resolves the row ID to the
+				 * registered instance and would unload the scene that is actually in service,
+				 * and it deletes the database row as well. Only this orphan goes. */
+				Log.Error("SceneServerSystem", $"Duplicate scene load detected: {worldServerID}:{scene.name} SceneID={sceneID} (local handle {scene.handle}). Unloading the duplicate.");
+
+				if (existing.Handle != scene.handle && scene.IsValid())
+				{
+					Server.NetworkWrapper.NetworkManager.SceneManager.UnloadConnectionScenes(new SceneUnloadData()
+					{
+						SceneLookupDatas = new SceneLookupData[]
+						{
+							new SceneLookupData(scene.handle),
+						},
+					});
+				}
 			}
 		}
 

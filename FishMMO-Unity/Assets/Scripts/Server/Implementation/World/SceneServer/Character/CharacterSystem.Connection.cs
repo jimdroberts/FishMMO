@@ -26,9 +26,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// The connection is gone, so the transfer watchdog has nothing left to enforce.
 			pendingTransferDisconnects.TryRemove(conn.ClientId, out _);
 
-			// Consume any deliberate-transfer marker for this connection. Read here, before
-			// RemoveCharacterConnectionMapping decides whether the body may linger.
-			bool deliberateTransfer = deliberateTransferClientIds.TryRemove(conn.ClientId, out _);
+			// Consume any server-initiated-disconnect marker for this connection. Read here,
+			// before RemoveCharacterConnectionMapping decides whether the body may linger.
+			bool serverInitiated = suppressCombatLingerClientIds.TryRemove(conn.ClientId, out _);
 
 			// Clean up per-connection scene-unload rate-limit tracking.
 			sceneUnloadLastTimeByClientId.TryRemove(conn.ClientId, out _);
@@ -60,13 +60,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// RemoveCharacterConnectionMapping, but those are deliberate transfers whose
 				// character must be released promptly for the destination server to claim it.
 				//
-				// A channel switch is the same kind of transfer and yet reaches the character
-				// system only through this handler, so it announces itself in advance — see
-				// BeginDeliberateTransfer. Without that, a character pulled into combat between
-				// the switch's last state check and the disconnect landing left a body behind in
-				// the scene it was leaving, and the destination kicked the arriving client for
-				// contention on every retry until the linger ran out.
-				RemoveCharacterConnectionMapping(conn, allowCombatLinger: !deliberateTransfer);
+				// A channel switch is the same kind of transfer, and an administrative kick is a
+				// removal rather than a departure; both reach the character system only through
+				// this handler, so they announce themselves in advance — see
+				// SuppressCombatLingerOnDisconnect. Without that, a character pulled into
+				// combat between the switch's last state check and the disconnect landing left
+				// a body behind in the scene it was leaving, and the destination kicked the
+				// arriving client for contention on every retry until the linger ran out.
+				RemoveCharacterConnectionMapping(conn, allowCombatLinger: !serverInitiated);
 			}
 		}
 
@@ -186,7 +187,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * placed in a dungeon could ever fire, and with no other way out a player who entered
 			 * one had no exit at all. */
 			bool leavingInstance = character.IsInInstance();
-			string currentScene = leavingInstance ? character.InstanceSceneName : character.SceneName;
+			string currentScene = character.CurrentSceneName();
 
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
 				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails details))
@@ -289,20 +290,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Connections whose imminent disconnect is a deliberate transfer rather than a player
-		/// leaving. See <see cref="BeginDeliberateTransfer"/>.
+		/// Connections whose imminent disconnect the server initiated, rather than a player
+		/// leaving. See <see cref="SuppressCombatLingerOnDisconnect"/>.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, byte> deliberateTransferClientIds =
+		private readonly ConcurrentDictionary<int, byte> suppressCombatLingerClientIds =
 			new ConcurrentDictionary<int, byte>();
 
 		/// <inheritdoc/>
-		public void BeginDeliberateTransfer(NetworkConnection connection)
+		public void SuppressCombatLingerOnDisconnect(NetworkConnection connection)
 		{
 			if (connection == null)
 			{
 				return;
 			}
-			deliberateTransferClientIds[connection.ClientId] = 0;
+			suppressCombatLingerClientIds[connection.ClientId] = 0;
 		}
 
 		/// <inheritdoc/>
@@ -352,7 +353,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Belt and braces: if anything below re-enters the ordinary disconnect path, it must
 			// still be treated as a transfer rather than as a player walking out mid-fight.
-			BeginDeliberateTransfer(connection);
+			SuppressCombatLingerOnDisconnect(connection);
 
 			connection.Disconnect(false);
 			return true;
@@ -467,9 +468,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				var sceneName = string.IsNullOrWhiteSpace(character.InstanceSceneName)
-							? character.SceneName
-							: character.InstanceSceneName;
+				// The scene the character is physically in — see CurrentSceneName. Reading
+				// InstanceSceneName without also checking the instance flag was near enough,
+				// but it trusted a field that is only meaningful while that flag is set.
+				string sceneName = character.CurrentSceneName();
 
 				if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
 				{
@@ -793,7 +795,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
 
 			// The disconnect below must not be read as a combat logout.
-			BeginDeliberateTransfer(conn);
+			SuppressCombatLingerOnDisconnect(conn);
 
 			Log.Debug("CharacterSystem", $"{player.CharacterName} left its instance; returning to {player.SceneName}.");
 			conn.Disconnect(false);
@@ -863,9 +865,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// The resurrector must still be present and in the same scene when it is accepted.
+				/* The resurrector must still be present and in the same scene instance when the
+				 * offer is accepted.
+				 *
+				 * Compared by scene handle, not by name. CharactersByID holds every character on
+				 * this scene server, across every scene instance it hosts — and scene stacking
+				 * means two channels of one open-world scene, or two copies of one dungeon, share
+				 * a name. Inside an instance it is worse: SceneName keeps naming the open-world
+				 * scene the character will return to, so every character who entered a dungeon
+				 * from the same zone compares equal regardless of which instance they are in.
+				 * The handle is unambiguous within this process, which is the only place this
+				 * check runs. Same rule as BindstoneAction. */
 				if (!data.CharactersByID.TryGetValue(offer.ResurrectorID, out IPlayerCharacter resurrector) ||
-					resurrector.SceneName != player.SceneName)
+					resurrector.GameObject == null ||
+					player.GameObject == null ||
+					resurrector.GameObject.scene.handle != player.GameObject.scene.handle)
 				{
 					return;
 				}

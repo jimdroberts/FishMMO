@@ -65,6 +65,10 @@ A runtime-data processing gate (`Interlocked.CompareExchange`) prevents overlapp
 - `RunOnMainThreadAsync` returning `Task<bool>` with immediate false completion on enqueue failure, preventing async callers from hanging on unfulfilled `TaskCompletionSource`
 - Graceful shutdown: drains pending main-thread actions, clears all caches and trackers, unsubscribes events, and deletes world-scene DB rows for this world server with a 5-second timeout
 - Async worker backpressure via `TryEnqueueAsyncWork` (rejects when queue unavailable/full, releases processing gate on failure)
+- **De-duplicated scene requests** — a new instance is asked for through `ISceneService.EnqueueIfUnderOutstandingLimitAsync`, which counts outstanding Pending/Loading rows and inserts in a single statement. The routing pass runs every cycle for as long as anyone is waiting, so an unconditional enqueue produced one request every `WaitQueueRateSeconds` throughout a zone's load — ten stacked copies of one zone for a twenty-second cold start. The limit is derived from how many instances the waiting population could actually fill, capped at `MaxOutstandingSceneLoads`, so a genuine surge still gets parallel loads
+- **Bounded instance-queue fan-out** — instance-queue connections are processed in batches of `InstanceRoutingBatchSize` rather than all at once, so one routing cycle cannot put thousands of concurrent database round trips in flight
+- **Lock-aware routing** — scene servers whose `locked` flag is set are skipped by open-world routing (`IsSceneServerRoutable`). Instance routing deliberately ignores the lock: a character bound to a dungeon can only go to the one server hosting it, so refusing there would evict them from their instance rather than drain them
+- **Wait-clock hand-over** — a connection released from the instance queue to the open-world queue restarts its expiry clock, because the instance wait is bounded by the scene row's age (`InstanceReadyGraceSeconds`, 180s) and already exceeds the open-world TTL (45s)
 
 ## Prerequisites
 

@@ -69,6 +69,20 @@ namespace FishMMO.Shared
 	{
 		/// <summary>List of available channel addresses for scene selection.</summary>
 		public ChannelAddress[] Addresses;
+
+		/// <summary>
+		/// The channel the character is on right now, as a <c>scenes.id</c>, so the picker can
+		/// mark it.
+		/// </summary>
+		/// <remarks>
+		/// The client cannot work this out for itself. <see cref="IPlayerCharacter.SceneHandle"/>
+		/// is server-side state — a plain property, never replicated — so on the client it is
+		/// always zero, and the picker's "which one am I on" comparison could never match. The
+		/// player was shown a list of identical-looking channels with no indication of where
+		/// they already were, and picking their current one produced no visible result at all.
+		/// Sending it is the only way the client can know.
+		/// </remarks>
+		public long CurrentSceneHandle;
 	}
 
 	/// <summary>
@@ -130,6 +144,16 @@ namespace FishMMO.Shared
 
 		/// <summary>The server could not complete the request and the client should try again.</summary>
 		ServerError = 6,
+
+		/// <summary>The character is already where it asked to go.</summary>
+		/// <remarks>
+		/// Reachable in ordinary play rather than only through a modified client: the channel
+		/// picker's list is a snapshot, and a character can be moved between instances by the
+		/// world server's routing between the list being drawn and the player clicking. This
+		/// refusal used to be a bare <c>return</c>, which — because the picker closes itself on
+		/// send — the player experienced as the button doing nothing at all.
+		/// </remarks>
+		AlreadyAtDestination = 7,
 	}
 
 	/// <summary>

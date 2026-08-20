@@ -401,6 +401,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string sceneName = character.SceneName;
 			long worldServerID = character.WorldServerID;
 			long characterID = character.ID;
+			long currentSceneHandle = character.SceneHandle;
 
 			if (string.IsNullOrEmpty(sceneName))
 			{
@@ -411,7 +412,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int maxClients = GetMaxClients(sceneName);
 
 			if (!TryEnqueueIngressWork(
-				() => FetchAndSendChannelListAsync(conn, sceneName, worldServerID, maxClients),
+				() => FetchAndSendChannelListAsync(conn, sceneName, worldServerID, maxClients, currentSceneHandle),
 				guardKey, characterID))
 			{
 				EndIngressGuard(guardKey);
@@ -439,19 +440,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* Instanced content has no channels, and the answer to that is an empty list rather
+			 * than silence. The picker opens itself on the player's click and only closes again
+			 * when a list arrives, so a request that is never answered leaves an empty window
+			 * over the game with nothing to explain it. */
 			if (character.IsInInstance())
 			{
+				SendChannelList(conn, Array.Empty<ChannelAddress>(), character.InstanceSceneHandle);
 				return;
 			}
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.RequestList, out long guardKey))
 			{
+				// Debounced, or a list request is already in flight — that one will answer.
 				return;
 			}
 
 			string sceneName = character.SceneName;
 			long worldServerID = character.WorldServerID;
 			long characterID = character.ID;
+			long currentSceneHandle = character.SceneHandle;
 
 			if (string.IsNullOrEmpty(sceneName))
 			{
@@ -462,12 +470,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int maxClients = GetMaxClients(sceneName);
 
 			if (!TryEnqueueIngressWork(
-				() => FetchAndSendChannelListAsync(conn, sceneName, worldServerID, maxClients),
+				() => FetchAndSendChannelListAsync(conn, sceneName, worldServerID, maxClients, currentSceneHandle),
 				guardKey, characterID))
 			{
 				EndIngressGuard(guardKey);
 				SendServerBusy(conn);
 			}
+		}
+
+		/// <summary>
+		/// Sends a channel list to a client. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Every request gets one of these, including the ones with nothing to offer. The picker
+		/// is opened by the player's click and closes on the list arriving, so an unanswered
+		/// request left an empty window sitting over the game — the same silent-failure shape
+		/// the refusal broadcast exists to eliminate on the switch itself.
+		/// </remarks>
+		/// <param name="conn">Connection to answer.</param>
+		/// <param name="addresses">Channels available, possibly none.</param>
+		/// <param name="currentSceneHandle">Scene row the character is on now.</param>
+		private void SendChannelList(NetworkConnection conn, ChannelAddress[] addresses, long currentSceneHandle)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			Server?.NetworkWrapper?.Broadcast(conn, new SceneChannelListBroadcast
+			{
+				Addresses = addresses ?? Array.Empty<ChannelAddress>(),
+				CurrentSceneHandle = currentSceneHandle,
+			}, true, FishNet.Transporting.Channel.Reliable);
 		}
 
 		/// <summary>
@@ -479,8 +513,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sceneName">The scene name to fetch channels for.</param>
 		/// <param name="worldServerID">The world server ID.</param>
 		/// <param name="maxClients">Maximum clients per instance (for the FetchAvailableAsync query).</param>
-		private async Task FetchAndSendChannelListAsync(NetworkConnection conn, string sceneName, long worldServerID, int maxClients)
+		/// <param name="currentSceneHandle">
+		/// Scene row the character is on now, echoed back so the client's picker can mark it.
+		/// See <see cref="SceneChannelListBroadcast.CurrentSceneHandle"/>.
+		/// </param>
+		private async Task FetchAndSendChannelListAsync(NetworkConnection conn, string sceneName, long worldServerID, int maxClients, long currentSceneHandle)
 		{
+			/* Answer exactly once, whatever happens.
+			 *
+			 * Every failure below used to be a bare return, so a scene with no other instances —
+			 * or a database that was briefly unavailable — produced no reply at all. The picker
+			 * opens on the player's click and only fills in or closes when a list arrives, so
+			 * those cases left an empty window over the game with nothing to say why. An empty
+			 * list is a real answer: the client can present "no other channels" and close. */
+			List<ChannelAddress> addresses = new List<ChannelAddress>();
+
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null)
@@ -506,7 +553,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				List<ChannelAddress> addresses = new List<ChannelAddress>(availableScenes.Count);
+				addresses.Capacity = availableScenes.Count;
 
 				foreach (SceneData sceneData in availableScenes)
 				{
@@ -533,29 +580,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						CharacterCount = sceneData.CharacterCount,
 					});
 				}
-
-				if (addresses.Count < 1)
-				{
-					return;
-				}
-
-				// Marshal the broadcast back to the main thread
-				TryEnqueueMainThread(() =>
-				{
-					if (conn == null || !conn.IsActive)
-					{
-						return;
-					}
-
-					Server.NetworkWrapper.Broadcast(conn, new SceneChannelListBroadcast
-					{
-						Addresses = addresses.ToArray(),
-					});
-				});
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("SceneChannelSystem", $"Error fetching channel list (Scene={sceneName}, World={worldServerID}): {ex}");
+				addresses.Clear();
+			}
+			finally
+			{
+				// Marshal the broadcast back to the main thread. Runs on every exit above,
+				// including the failures — see the note at the top of this method.
+				ChannelAddress[] payload = addresses.ToArray();
+				TryEnqueueMainThread(() => SendChannelList(conn, payload, currentSceneHandle));
 			}
 		}
 
@@ -622,9 +658,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long currentHandle = character.SceneHandle;
 			long targetHandle = msg.Channel.SceneHandle;
 
-			// Already on the target channel
+			/* Already on the target channel.
+			 *
+			 * Answered rather than ignored. The picker closes itself the moment it sends, so a
+			 * silent return here is indistinguishable from the request being dropped — and the
+			 * player's natural response, clicking again, is then swallowed by the cooldown
+			 * below. It is reachable without a modified client too: the list the player clicked
+			 * is a snapshot, and the world server can move a character between instances of the
+			 * same scene while the picker is open. */
 			if (currentHandle == targetHandle)
 			{
+				SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyAtDestination);
 				return;
 			}
 
