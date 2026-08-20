@@ -57,9 +57,9 @@ namespace FishMMO.Database.Npgsql.Services
 				// Keep atomic UPSERT semantics to prevent duplicate kick requests under concurrency.
 				var sql = $@"INSERT INTO {TableName}
 					(account_name, time_created)
-					VALUES ({{0}}, CURRENT_TIMESTAMP)
+					VALUES ({{0}}, timezone('UTC', CURRENT_TIMESTAMP))
 					ON CONFLICT (account_name)
-					DO UPDATE SET time_created = CURRENT_TIMESTAMP";
+					DO UPDATE SET time_created = timezone('UTC', CURRENT_TIMESTAMP)";
 
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
 					.ConfigureAwait(false);

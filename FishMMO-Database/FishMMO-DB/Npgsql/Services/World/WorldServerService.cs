@@ -52,7 +52,7 @@ namespace FishMMO.Database.Npgsql.Services
 						port = EXCLUDED.port,
 						character_count = EXCLUDED.character_count,
 						locked = EXCLUDED.locked,
-						last_pulse = CURRENT_TIMESTAMP
+						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
 					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked";
 
 				return await ExecuteReturningAsync(
@@ -89,7 +89,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
-					SET last_pulse = CURRENT_TIMESTAMP, character_count = {{0}}
+					SET last_pulse = timezone('UTC', CURRENT_TIMESTAMP), character_count = {{0}}
 					WHERE id = {{1}}";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
@@ -157,7 +157,7 @@ namespace FishMMO.Database.Npgsql.Services
 				// Use database server time to avoid clock skew issues between application and database servers.
 				// Use numeric * interval to keep the timeout value parameterized.
 				var sql = $@"SELECT * FROM {TableName}
-					WHERE last_pulse >= (CURRENT_TIMESTAMP - ({{0}} * INTERVAL '1 second'))";
+					WHERE last_pulse >= (timezone('UTC', CURRENT_TIMESTAMP) - ({{0}} * INTERVAL '1 second'))";
 
 				var servers = await dbContext.WorldServers
 					.FromSqlRaw(sql, idleTimeoutSeconds)

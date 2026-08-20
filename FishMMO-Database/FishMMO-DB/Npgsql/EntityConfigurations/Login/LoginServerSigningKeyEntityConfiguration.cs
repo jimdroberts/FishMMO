@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace FishMMO.Database.Npgsql.Entities
@@ -49,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.ActivatedAtUtc)
 				.IsRequired()
-				.HasDefaultValueSql("CURRENT_TIMESTAMP");
+				.HasDefaultValueSql("timezone('UTC', CURRENT_TIMESTAMP)");
 
 			builder.Property(e => e.RotatedAtUtc);
 
