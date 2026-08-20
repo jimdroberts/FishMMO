@@ -19,6 +19,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the value label inside the resource-bar UXML.</summary>
 		private const string LABEL_NAME = "bar-label";
 
+		/// <summary>Name of the bar's own root element inside the resource-bar UXML.</summary>
+		private const string BAR_ROOT_NAME = "bar-root";
+
 		/// <summary>
 		/// The attribute template ID used to identify which resource this bar represents.
 		/// </summary>
@@ -43,6 +46,18 @@ namespace FishMMO.Client
 		/// (e.g. "fish-bar__fill--hp"). Supplied by the concrete subclass.
 		/// </summary>
 		protected abstract string FillModifierClass { get; }
+
+		/// <summary>
+		/// USS modifier class applied to the bar root to place it on screen
+		/// (e.g. "res-bar--hp"). Supplied by the concrete subclass.
+		/// </summary>
+		/// <remarks>
+		/// Each bar owns a separate <see cref="UIDocument"/>, so the three of them cannot be
+		/// laid out relative to one another by a shared container — every panel root fills the
+		/// screen independently. Without a per-bar anchor they all resolve to the same strip
+		/// and draw on top of each other, leaving only whichever panel sorts last visible.
+		/// </remarks>
+		protected abstract string RootModifierClass { get; }
 
 		/// <summary>Cached reference to the bar fill element.</summary>
 		private VisualElement fill;
@@ -72,6 +87,14 @@ namespace FishMMO.Client
 			if (fill != null && !string.IsNullOrEmpty(FillModifierClass))
 			{
 				fill.AddToClassList(FillModifierClass);
+			}
+
+			// Applied to the bar root itself rather than the panel root, which belongs to the
+			// UIDocument and is shared with nothing.
+			VisualElement barRoot = root.Q(BAR_ROOT_NAME);
+			if (barRoot != null && !string.IsNullOrEmpty(RootModifierClass))
+			{
+				barRoot.AddToClassList(RootModifierClass);
 			}
 		}
 

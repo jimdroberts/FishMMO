@@ -1,4 +1,4 @@
-namespace FishMMO.Client
+﻿namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit health bar. Inherits resource bar logic from <see cref="UITKResourceBar"/>.
@@ -7,5 +7,8 @@ namespace FishMMO.Client
 	{
 		/// <inheritdoc />
 		protected override string FillModifierClass => "fish-bar__fill--hp";
+
+		/// <inheritdoc/>
+		protected override string RootModifierClass => "res-bar--hp";
 	}
 }
