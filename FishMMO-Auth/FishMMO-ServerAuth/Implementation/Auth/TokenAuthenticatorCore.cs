@@ -137,7 +137,9 @@ namespace FishMMO.Auth.Implementation
 
 			// Atomically advance Handshake → TokenPending to prevent duplicate token processing.
 			if (!AccountManager.TryAdvanceAuthState(conn, AuthState.Handshake, AuthState.TokenPending))
+			{
 				return;
+			}
 
 			if (!AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
 			{
@@ -275,11 +277,15 @@ namespace FishMMO.Auth.Implementation
 
 				try
 				{
-					// Require a verified real IP from the auth token (v4+).
-					// World/Scene servers behind an L4 proxy see 127.0.0.1 from
-					// conn.GetAddress(). If the IP is missing or unverified,
-					// disconnect immediately — no fallback to proxy IP or ClientId.
-					if (string.IsNullOrEmpty(verifyResult.RealIp))
+					// Require a verified real IP from the auth token (v4+) only when this
+					// deployment actually needs it — i.e. when RequiresRealIp is true because
+					// this server sits behind an L4 proxy and conn.GetAddress() would return
+					// the proxy's loopback for every client. When not behind a proxy (the
+					// default for World/Scene, which are connected to directly), the token is
+					// not required to carry a RealIp — see RequiresRealIp and
+					// BaseServerAuthenticator.RequiresConnectionToken, which encode the same
+					// "is this authenticator behind a proxy" fact for the outer handshake gate.
+					if (RequiresRealIp && string.IsNullOrEmpty(verifyResult.RealIp))
 					{
 						await Log.Warning(LogPrefix, $"Token for '{verifyResult.AccountName}' missing real IP — rejecting.");
 						RejectAndPurge(conn, ClientAuthenticationResult.TokenInvalid);
@@ -287,7 +293,10 @@ namespace FishMMO.Auth.Implementation
 					}
 
 					tokenAccountManager.AddConnectionAccount(conn, verifyResult.AccountName!, verifyResult.AccessLevel);
-					EnqueueMainThread(conn, () => StoreClientRealIp(conn, verifyResult.RealIp!));
+					if (!string.IsNullOrEmpty(verifyResult.RealIp))
+					{
+						EnqueueMainThread(conn, () => StoreClientRealIp(conn, verifyResult.RealIp!));
+					}
 				}
 				catch (InvalidOperationException addEx)
 				{
@@ -485,6 +494,15 @@ namespace FishMMO.Auth.Implementation
 		/// Override in server-specific subclasses to write to ConnectionIpCache.
 		/// </summary>
 		protected virtual void StoreClientRealIp(TConnection conn, string realIp) { }
+
+		/// <summary>
+		/// Whether this authenticator requires the auth token to carry a verified
+		/// real IP. True by default (behind an L4 proxy, conn.GetAddress() returns
+		/// the proxy's loopback for every client, so the token-embedded IP is the
+		/// only trustworthy source). Override to false for deployments where this
+		/// authenticator is connected to directly rather than through a proxy.
+		/// </summary>
+		protected virtual bool RequiresRealIp => true;
 
 		#endregion
 	}

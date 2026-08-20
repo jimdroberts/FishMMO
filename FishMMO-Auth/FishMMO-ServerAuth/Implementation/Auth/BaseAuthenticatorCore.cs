@@ -443,10 +443,14 @@ namespace FishMMO.Auth.Implementation
 			}
 
 			if (AccountManager.GetConnectionEncryptionData(conn, out _))
+			{
 				return;
+			}
 
 			if (AccountManager.IsAuthInProgress(conn))
+			{
 				return;
+			}
 
 			byte[]? hmacKeySnapshot = cookieHmacKey;
 			if (hmacKeySnapshot == null)
@@ -574,14 +578,17 @@ namespace FishMMO.Auth.Implementation
 
 			// ── Global rate limit ─────────────────────────────────────────
 			if (!TryIncrementGlobalHandshakeCount())
+			{
 				return;
+			}
 
 			// Begin TTL tracking after all rate-limit gates have passed.
 			if (!TrackAuthStart(conn))
 			{
 				// Give the hosting environment a chance to defer (queue) the handshake
 				// rather than dropping it outright.  LoginQueueSystem overrides this.
-				if (!OnHandshakeDeferred(conn))
+				bool deferred = OnHandshakeDeferred(conn);
+				if (!deferred)
 				{
 					DateTime capNow = DateTime.UtcNow;
 					if (capNow >= nextPendingAuthCapWarningUtc)
