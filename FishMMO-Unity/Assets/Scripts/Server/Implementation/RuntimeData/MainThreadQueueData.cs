@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Server.Core;
+using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation
 {
@@ -99,13 +100,42 @@ namespace FishMMO.Server.Implementation
 				}
 			}
 
-			for (int i = 0; i < drainBuffer.Count; i++)
+			int drained = drainBuffer.Count;
+
+			try
 			{
-				drainBuffer[i].Invoke();
+				/* Each action runs in isolation.
+				 *
+				 * These actions are how every async worker gets back to the main thread, and
+				 * for a request/response handler the action *is* the reply to a waiting client.
+				 * A single `Invoke` loop abandoned the whole remainder of the batch on the first
+				 * exception — and because the actions had already been dequeued, they were gone:
+				 * every client whose reply happened to sit behind the throwing one waited for a
+				 * message that no longer existed, with its UI locked, until it disconnected.
+				 *
+				 * One handler's bug must cost only that handler. Nothing here can assume the
+				 * actions are related; they belong to unrelated connections.
+				 */
+				for (int i = 0; i < drainBuffer.Count; i++)
+				{
+					try
+					{
+						drainBuffer[i].Invoke();
+					}
+					catch (Exception ex)
+					{
+						Log.Error("MainThreadQueue", $"A queued main-thread action threw; the rest of the batch is unaffected. {ex}");
+					}
+				}
+			}
+			finally
+			{
+				// Cleared here rather than after the loop: an exception escaping the loop used
+				// to leave the buffer populated, and the next Drain cleared it on entry —
+				// silently discarding actions that had been dequeued but never run.
+				drainBuffer.Clear();
 			}
 
-			int drained = drainBuffer.Count;
-			drainBuffer.Clear();
 			return drained;
 		}
 	}

@@ -22,7 +22,7 @@ namespace FishMMO.Database.Data
 		/// <summary>Current scene name.</summary>
 		public readonly string SceneName;
 		/// <summary>Current scene handle.</summary>
-		public readonly int SceneHandle;
+		public readonly long SceneHandle;
 		/// <summary>Bind point scene name.</summary>
 		public readonly string BindScene;
 		/// <summary>Bind point position X.</summary>
@@ -83,7 +83,7 @@ namespace FishMMO.Database.Data
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterData"/> struct.
 		/// </summary>
-		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, int sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, long version, DateTime timeCreated, DateTime lastSaved)
+		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, long sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, long version, DateTime timeCreated, DateTime lastSaved)
 		{
 			ID = id;
 			Name = name;

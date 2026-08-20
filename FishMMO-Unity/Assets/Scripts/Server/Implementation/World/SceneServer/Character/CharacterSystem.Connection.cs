@@ -26,6 +26,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// The connection is gone, so the transfer watchdog has nothing left to enforce.
 			pendingTransferDisconnects.TryRemove(conn.ClientId, out _);
 
+			// Consume any deliberate-transfer marker for this connection. Read here, before
+			// RemoveCharacterConnectionMapping decides whether the body may linger.
+			bool deliberateTransfer = deliberateTransferClientIds.TryRemove(conn.ClientId, out _);
+
 			// Clean up per-connection scene-unload rate-limit tracking.
 			sceneUnloadLastTimeByClientId.TryRemove(conn.ClientId, out _);
 
@@ -34,6 +38,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// The scene handshake can no longer complete or time out for a dead connection.
 			sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
+
+			// FishNet reuses ClientIds, and this marker says "this connection has already
+			// acknowledged its start scenes". Left behind, the next session on the same id would
+			// be treated as having completed a handshake it never performed.
+			startScenesAckedClientIds.TryRemove(conn.ClientId, out _);
+
+			// Same for the residency backstop that covers the window before the handshake.
+			characterResidencyDeadlines.TryRemove(conn.ClientId, out _);
 
 			// Clean up per-account auth callback rate-limit tracking.
 			if (Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
@@ -47,7 +59,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// connection. Teleport and bind-point respawn also route through
 				// RemoveCharacterConnectionMapping, but those are deliberate transfers whose
 				// character must be released promptly for the destination server to claim it.
-				RemoveCharacterConnectionMapping(conn, allowCombatLinger: true);
+				//
+				// A channel switch is the same kind of transfer and yet reaches the character
+				// system only through this handler, so it announces itself in advance — see
+				// BeginDeliberateTransfer. Without that, a character pulled into combat between
+				// the switch's last state check and the disconnect landing left a body behind in
+				// the scene it was leaving, and the destination kicked the arriving client for
+				// contention on every retry until the linger ran out.
+				RemoveCharacterConnectionMapping(conn, allowCombatLinger: !deliberateTransfer);
 			}
 		}
 
@@ -77,7 +96,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				TryExtractAndReleaseSession(data, waitingSceneCharacter.ID);
 
-				OnDisconnect?.Invoke(conn, waitingSceneCharacter);
+				DispatchCharacterEvent(OnDisconnect, conn, waitingSceneCharacter, nameof(OnDisconnect));
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 			}
@@ -102,7 +121,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!skipOnDisconnect)
 			{
-				OnDisconnect?.Invoke(conn, character);
+				DispatchCharacterEvent(OnDisconnect, conn, character, nameof(OnDisconnect));
 			}
 
 			// Combat logout: keep the body in the world rather than despawning it. The session
@@ -158,8 +177,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Cache the current scene name
-			string currentScene = character.SceneName;
+			/* The scene the character is standing in, which is not always SceneName.
+			 *
+			 * Inside an instance, SceneName still names the open-world scene the character will
+			 * return to — that is what makes the return trip possible — while the character is
+			 * physically in InstanceSceneName. Looking teleporters up under SceneName therefore
+			 * consulted the wrong scene's teleporter list from inside a dungeon, so no teleporter
+			 * placed in a dungeon could ever fire, and with no other way out a player who entered
+			 * one had no exit at all. */
+			bool leavingInstance = character.IsInInstance();
+			string currentScene = leavingInstance ? character.InstanceSceneName : character.SceneName;
 
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
 				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails details))
@@ -175,8 +202,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				//Log.Debug("CharacterSystem", $"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
 
-				// Tell the connection to unload their current world scene.
-				sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
+				// Tell the connection to unload the scene it is actually in, which for an
+				// instanced character is the instance rather than SceneName.
+				sceneServerSystem.UnloadSceneForConnection(character.Owner, currentScene);
 
 				// Character becomes immortal when teleporting
 				if (character.TryGet(out ICharacterDamageController damageController))
@@ -188,7 +216,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				NetworkConnection owner = character.Owner;
 
 				// Invoke disconnect early when teleporting because we require the scene the character is in.
-				OnDisconnect?.Invoke(owner, character);
+				DispatchCharacterEvent(OnDisconnect, owner, character, nameof(OnDisconnect));
 
 				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
@@ -196,6 +224,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Remove the character from an instance if it was in one.
 				character.DisableFlags(CharacterFlags.IsInInstance);
 				character.DisableFlags(CharacterFlags.IsLoaded);
+
+				if (leavingInstance)
+				{
+					/* The character is in the open world again, so the transform is once more
+					 * the open-world position and the instance bookkeeping must not outlive the
+					 * trip. Clearing the id matters: it is what the world server reads to decide
+					 * a character belongs in an instance, and a stale one left behind is a
+					 * standing invitation to route a subsequent session back into a dungeon the
+					 * player already walked out of.
+					 *
+					 * BuildCharacterData reads IsInInstance() — already false by this point — so
+					 * the save below correctly writes the destination as the world position. */
+					character.InstanceID = 0;
+					character.InstanceSceneName = null;
+					character.InstanceSceneHandle = 0;
+					character.LastWorldPosition = teleporter.ToPosition;
+					character.LastWorldRotation = teleporter.ToRotation;
+				}
 
 				// Save the character and fully release the session so the destination scene server can claim it
 				RemoveCharacterConnectionMapping(owner, skipOnDisconnect: true);
@@ -240,6 +286,76 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			Log.Debug("CharacterSystem", $"Teleport cancelled for {character.CharacterName}: {reason}.");
 			character.TeleporterName = string.Empty;
+		}
+
+		/// <summary>
+		/// Connections whose imminent disconnect is a deliberate transfer rather than a player
+		/// leaving. See <see cref="BeginDeliberateTransfer"/>.
+		/// </summary>
+		private readonly ConcurrentDictionary<int, byte> deliberateTransferClientIds =
+			new ConcurrentDictionary<int, byte>();
+
+		/// <inheritdoc/>
+		public void BeginDeliberateTransfer(NetworkConnection connection)
+		{
+			if (connection == null)
+			{
+				return;
+			}
+			deliberateTransferClientIds[connection.ClientId] = 0;
+		}
+
+		/// <inheritdoc/>
+		public bool BeginChannelTransfer(NetworkConnection connection, long targetSceneHandle)
+		{
+			if (connection == null || !connection.IsActive)
+			{
+				return false;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data) ||
+				!data.ConnectionCharacters.TryGetValue(connection, out IPlayerCharacter character))
+			{
+				return false;
+			}
+
+			if (character.SceneHandle == targetSceneHandle)
+			{
+				return false;
+			}
+
+			/* Announce the departure while SceneHandle still names the instance being left.
+			 *
+			 * This event is what debits the scene's population, and every other subscriber
+			 * (party, guild, chat) also reasons about the scene the character is leaving. Doing
+			 * it after the rewrite told all of them the wrong scene, and left the source
+			 * instance permanently over-populated. Same ordering, and the same reason, as the
+			 * bind-point respawn path above. */
+			DispatchCharacterEvent(OnDisconnect, connection, character, nameof(OnDisconnect));
+
+			// Now bind the character to the destination channel. BuildCharacterData captures
+			// this during the release below, so the world server routes the reconnect here.
+			character.SceneHandle = targetSceneHandle;
+
+			// Prevent gameplay actions during the transition.
+			character.DisableFlags(CharacterFlags.IsLoaded);
+
+			/* Save and fully release before the connection drops, so the destination scene
+			 * server can claim the character the moment the client arrives. Passing
+			 * skipOnDisconnect avoids raising the event a second time, and going through this
+			 * path rather than the connection-stopped handler means a character pulled into
+			 * combat between the caller's checks and here cannot start a combat-logout linger:
+			 * a linger would hold the body and its claim on this server while the row says the
+			 * character belongs to the destination, and the arriving client would be kicked for
+			 * contention on every retry until the linger expired. */
+			RemoveCharacterConnectionMapping(connection, skipOnDisconnect: true);
+
+			// Belt and braces: if anything below re-enters the ordinary disconnect path, it must
+			// still be treated as a transfer rather than as a player walking out mid-fight.
+			BeginDeliberateTransfer(connection);
+
+			connection.Disconnect(false);
+			return true;
 		}
 
 		/// <summary>
@@ -530,12 +646,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// — party, guild, and the scene server's own per-scene bookkeeping — was told
 					// the player left the scene they were respawning *into* rather than the one
 					// they died in.
-					OnDisconnect?.Invoke(conn, player);
+					bool leavingInstance = player.IsInInstance();
+
+					DispatchCharacterEvent(OnDisconnect, conn, player, nameof(OnDisconnect));
 
 					player.SceneName = player.BindScene;
 					player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
 					player.DisableFlags(CharacterFlags.IsInInstance);
 					player.DisableFlags(CharacterFlags.IsLoaded);
+
+					if (leavingInstance)
+					{
+						/* Clear the instance bookkeeping, exactly as the teleport and
+						 * leave-instance paths do. Dropping only the flag left InstanceID on the
+						 * character, and BuildCharacterData persists it unconditionally — so a
+						 * player who died in a dungeon and respawned at their bind point kept a
+						 * row pointing at that dungeon's scene instance. Nothing reads it while
+						 * the flag is clear, which is exactly what makes it dangerous: it is a
+						 * live instance reference sitting on a character that is demonstrably not
+						 * in one, waiting for anything that sets the flag without also setting
+						 * the id.
+						 *
+						 * The transform is the bind point now, so the open-world position the save
+						 * writes must be that too. */
+						player.InstanceID = 0;
+						player.InstanceSceneName = null;
+						player.InstanceSceneHandle = 0;
+						player.LastWorldPosition = player.BindPosition;
+						player.LastWorldRotation = player.Motor.Transform.rotation;
+					}
 
 					// Save and release the session before dropping the connection so the
 					// destination scene server can claim the character.
@@ -552,6 +691,132 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				EndRespawnResurrectGuard(guardKey);
 			}
+		}
+
+		/// <summary>
+		/// Handles a client asking to leave the instance it is in and return to the open world.
+		/// </summary>
+		/// <remarks>
+		/// This is the system-level guarantee that instanced content cannot trap a player. A
+		/// dungeon is expected to provide an exit teleporter, but that is content data and this
+		/// does not depend on it. A character bound to an instance is routed back into it on
+		/// every login, so "log out and back in" is not an escape — without this, a dungeon
+		/// authored without a reachable exit would strand its occupants permanently.
+		/// <para>
+		/// Gated by <c>CanActOrMove</c>, so it is not a combat escape, and it performs the same
+		/// ordered release as the bind-point respawn: announce the departure while the character
+		/// still belongs to the instance, then rebind, save, release, and drop the connection so
+		/// the world server routes the reconnect to the open world.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The requesting connection.</param>
+		/// <param name="msg">The leave-instance broadcast (empty payload).</param>
+		/// <param name="channel">The channel on which the broadcast was received.</param>
+		private void OnClientRequestLeaveInstanceBroadcastReceived(NetworkConnection conn, RequestLeaveInstanceBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			if (!TryBeginRespawnResurrectGuard(conn.ClientId, LeaveInstanceOperation, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
+				if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data) ||
+					!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+				{
+					return;
+				}
+
+				TryLeaveInstance(player);
+			}
+			finally
+			{
+				EndRespawnResurrectGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Removes <paramref name="player"/> from its instance and returns it to the open world.
+		/// </summary>
+		/// <remarks>
+		/// Shared by the leave-instance broadcast and the <c>/leaveinstance</c> chat command, so
+		/// the escape hatch is reachable whether or not the client's UI offers a button for it.
+		/// </remarks>
+		/// <param name="player">Character to release from its instance.</param>
+		/// <returns><c>true</c> when the transfer was started.</returns>
+		private bool TryLeaveInstance(IPlayerCharacter player)
+		{
+			if (player == null || !player.IsInInstance())
+			{
+				return false;
+			}
+
+			NetworkConnection conn = player.Owner;
+			if (conn == null || !conn.IsActive)
+			{
+				return false;
+			}
+
+			/* A dead character keeps the death dialog's own routes — respawn at bind, or accept a
+			 * resurrect — so it does not need this one, and allowing it would let a corpse walk
+			 * itself out of the dungeon it died in. Combat is refused for the same reason every
+			 * other voluntary transfer is. */
+			if (!CharacterStateValidation.CanActOrMove(player))
+			{
+				Server.NetworkWrapper.Broadcast(conn,
+					new SceneTransferRefusedBroadcast { Reason = SceneTransferRefusalReason.CharacterStateChanged },
+					true, FishNet.Transporting.Channel.Reliable);
+				return false;
+			}
+
+			// Announce the departure while the character still belongs to the instance, so the
+			// instance's population is the one debited. Same ordering as the bind-point respawn
+			// and the channel transfer, and for the same reason.
+			DispatchCharacterEvent(OnDisconnect, conn, player, nameof(OnDisconnect));
+
+			// Put the character back where it entered from. SceneName already names the open
+			// world scene it came from; LastWorldPosition is the position within it.
+			player.Motor.SetPositionAndRotationAndVelocity(player.LastWorldPosition, player.LastWorldRotation, Vector3.zero);
+			player.InstanceID = 0;
+			player.InstanceSceneName = null;
+			player.InstanceSceneHandle = 0;
+			player.DisableFlags(CharacterFlags.IsInInstance);
+			player.DisableFlags(CharacterFlags.IsLoaded);
+
+			// Save and fully release before dropping the connection so the destination scene
+			// server can claim the character.
+			RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
+
+			// The disconnect below must not be read as a combat logout.
+			BeginDeliberateTransfer(conn);
+
+			Log.Debug("CharacterSystem", $"{player.CharacterName} left its instance; returning to {player.SceneName}.");
+			conn.Disconnect(false);
+			return true;
+		}
+
+		/// <summary>
+		/// <c>/leaveinstance</c> chat command. Same effect as
+		/// <see cref="OnClientRequestLeaveInstanceBroadcastReceived"/>.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately available as a command as well as a broadcast. The broadcast needs a
+		/// client UI to send it, and a UI that has not been authored yet is not an escape hatch
+		/// — the whole point of this path is that leaving instanced content must not depend on
+		/// content or UI having been set up correctly.
+		/// </remarks>
+		/// <param name="character">Character issuing the command.</param>
+		/// <param name="msg">The chat message that carried the command.</param>
+		/// <returns>Always <c>true</c>: the command is consumed either way, never echoed to chat.</returns>
+		private bool OnLeaveInstanceCommand(IPlayerCharacter character, ChatBroadcast msg)
+		{
+			TryLeaveInstance(character);
+			return true;
 		}
 
 		/// <summary>
@@ -695,6 +960,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		private const byte RespawnOperation = 1;
 		private const byte ResurrectOperation = 2;
+		private const byte LeaveInstanceOperation = 3;
 		private const int RespawnResurrectDebounceMs = 2000;
 
 		private bool TryBeginRespawnResurrectGuard(int clientId, byte operation, out long guardKey)

@@ -30,6 +30,52 @@ namespace FishMMO.Server.Core.World.SceneServer
 		int LingeringCharacterCount { get; }
 
 		/// <summary>
+		/// Declares that the next disconnect on <paramref name="connection"/> is a deliberate
+		/// hand-off to another scene server, not a player leaving.
+		/// </summary>
+		/// <remarks>
+		/// Combat-logout linger exists to stop a player escaping a fight by closing the client,
+		/// so it applies to dropped connections — and a transfer is implemented as a dropped
+		/// connection. A transfer that lingered would leave the body (and its session claim) on
+		/// the source server while the client arrives at the destination, which then cannot
+		/// claim the character and kicks it, repeatedly, until the linger expires.
+		/// <para>
+		/// The teleport and bind-point-respawn paths avoid this by releasing the character
+		/// themselves before disconnecting. Callers that instead rely on the ordinary disconnect
+		/// pipeline — a channel switch does — must announce the intent here first. The marker is
+		/// consumed by that disconnect, so it cannot leak onto a later session on a recycled
+		/// connection id.
+		/// </para>
+		/// </remarks>
+		/// <param name="connection">Connection about to be disconnected for a transfer.</param>
+		void BeginDeliberateTransfer(TConnection connection);
+
+		/// <summary>
+		/// Moves a character to another channel (another instance of the same scene) by
+		/// releasing it here, bound to <paramref name="targetSceneHandle"/>, and dropping the
+		/// connection so the client re-routes through the world server.
+		/// </summary>
+		/// <remarks>
+		/// The ordering this performs is the whole point of the method, and it is why callers
+		/// must not simply rewrite <c>SceneHandle</c> and disconnect. Scene population is
+		/// credited and debited by handle, and the disconnect pipeline debits the handle the
+		/// character carries at that moment — so a handle rewritten first debits the
+		/// <em>destination</em> instance, which this server may not even host, while the source
+		/// instance keeps a resident it no longer has. Neither error self-corrects: the source's
+		/// phantom population makes it advertise capacity it does not have, keeps it from ever
+		/// being recognised as empty and unloaded, and eventually makes it look full, at which
+		/// point players queue for a scene instance that is in fact deserted.
+		/// <para>
+		/// The character is released promptly (no combat-logout linger) because the destination
+		/// scene server has to be able to claim it, exactly as for a teleport.
+		/// </para>
+		/// </remarks>
+		/// <param name="connection">Connection whose character is switching channel.</param>
+		/// <param name="targetSceneHandle">Scene row ID of the destination channel.</param>
+		/// <returns><c>true</c> when the transfer was started; <c>false</c> if the connection has no character.</returns>
+		bool BeginChannelTransfer(TConnection connection, long targetSceneHandle);
+
+		/// <summary>
 		/// Raised immediately before a character load is initiated for the given
 		/// connection. The long parameter is the persistent character id requested
 		/// by the client.

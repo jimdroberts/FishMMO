@@ -19,6 +19,10 @@ This document describes the project layout, the supported platforms, and — at 
 - [Securing appsettings.json](#securing-appsettingsjson)
 - [Flow Diagram](#flow-diagram)
 - [Notes](#notes)
+- [Character session ownership](#character-session-ownership)
+- [Scene instance identity](#scene-instance-identity)
+- [Scene rows are reaped, not just written](#scene-rows-are-reaped-not-just-written)
+- [The channel-switch cooldown lives on the character](#the-channel-switch-cooldown-lives-on-the-character)
 
 ## Supported Platforms
 
@@ -484,6 +488,67 @@ Plain `PersistAsync` remains for legitimate non-owner writes — the world serve
 an expired claim. Without it, a scene server that died holding characters locked those accounts
 out of login **permanently** with "already online", against a session that no longer existed and
 a character any server was free to claim.
+
+### Scene instance identity
+
+`characters.scene_handle` and `scenes.scene_handle` look like the same thing and are not.
+
+| Column | Meaning |
+|---|---|
+| `scenes.id` | **The** identity of a scene instance. Unique by construction, and the only value that means the same thing in every process. |
+| `characters.scene_handle` (`bigint`) | The `scenes.id` of the instance the character belongs to. `0` means "no preference" — the world server assigns any instance with capacity. |
+| `scenes.scene_handle` (`integer`) | Diagnostic only: the hosting scene server's own scene-manager handle for the loaded scene. |
+
+A scene-manager handle is drawn from a per-process counter, so two scene servers running the
+same build and loading the same scenes in the same order routinely allocate identical values.
+Used as a cross-process identity that made two different instances indistinguishable: the world
+server's routing map collapsed them into a single entry and double-counted its capacity, a scene
+server accepted a character routed to a *different* server's instance whenever handle and scene
+name both matched, and `PulseAsync` had two servers overwriting each other's population — the
+very number routing and load-balancing decide on. Every cross-process API (`SetReadyAsync`,
+`PulseAsync`, `PulseBatchAsync`, `DeleteAsync`, `UpdateSceneAsync`) is addressed by row ID;
+`DeleteByHandleAsync` survives for administrative use only.
+
+`SetReadyAsync` names the row explicitly rather than claiming "the oldest loading row with this
+name". Ordering was ambiguous whenever two loads of one scene overlapped, so each could stamp its
+server and handle onto the other's row — and because an instanced row keeps the `character_id`
+it was created for, that handed a character the dungeon created for somebody else.
+
+### Scene rows are reaped, not just written
+
+Scene rows are ephemeral runtime registrations, and two sweeps own the cases nothing else covers:
+
+| Method | Removes |
+|---|---|
+| `DeleteStaleUnreadyAsync(worldServerId, olderThanUtc, maxRows)` | Rows that never reached `Ready` and are older than the grace period. A `Loading` row orphaned by a scene server that died between dequeue and load still has `scene_server_id = 0`, so that server's own restart cleanup (`DeleteBySceneServerAsync`, which matches on its id) never removes it. Left alone, the row keeps its `character_id` and the character it belongs to is routed at an instance that will never exist. |
+| `DeleteByStaleSceneServersAsync(worldServerId, pulseOlderThanUtc, maxRows)` | `Ready` rows whose host has stopped pulsing or deregistered. A crashed scene server deletes nothing on its way out, so every scene it hosted stays advertised as available and clients are routed to an address that refuses them — or, once a replacement reuses the port, to a server that does not have the scene and bounces them straight back. |
+
+Both use `FOR UPDATE SKIP LOCKED` so a row a scene server is concurrently dequeuing is left to
+it rather than deleted out from under an in-flight load. `Ready` rows with a live host are never
+touched here — they belong to the scene server that owns them.
+
+### The channel-switch cooldown lives on the character
+
+`characters.last_channel_switch_utc` is claimed by `TryBeginChannelSwitchAsync`, which checks and
+stamps in **one** statement:
+
+```sql
+UPDATE characters
+SET last_channel_switch_utc = @now
+WHERE id = @id AND deleted = false AND last_channel_switch_utc <= @eligibleBefore
+```
+
+Zero rows affected means the switch is still on cooldown. Reading the timestamp and writing it
+back separately would let two scene servers each observe an elapsed cooldown and each allow a
+switch — which is precisely the case that matters, because consecutive switches land on
+different servers by design.
+
+It is persisted rather than held in memory because a channel switch **is** a disconnect: the
+scene server releases the character and drops the connection, and the client returns through the
+world server on a fresh connection id. A cooldown kept per connection is erased by the action it
+exists to limit, so it only ever delayed retries after a switch that had already been refused.
+The write is deliberately not version-gated — this is a rate limit, not gameplay state, and it
+must neither lose to a concurrent save nor bump the version a save is guarding on.
 
 ### Kick requests expire
 

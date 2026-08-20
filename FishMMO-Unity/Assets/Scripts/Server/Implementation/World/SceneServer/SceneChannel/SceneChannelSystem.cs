@@ -385,7 +385,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">The loaded player character.</param>
 		private void OnCharacterLoaded(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character == null || character.IsInInstance())
+			// A lingering combat-logout body is reattached through the ordinary load path, and
+			// every event on that path is also raised for bodies that have no connection at all.
+			// There is nobody to send a channel list to in that case.
+			if (conn == null || !conn.IsActive || character == null || character.IsInInstance())
 			{
 				return;
 			}
@@ -523,7 +526,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					addresses.Add(new ChannelAddress
 					{
 						Port = serverPort.Value,
-						SceneHandle = sceneData.SceneHandle,
+						// The channel's identity is its scene row, not the hosting process's
+						// local handle for it — see ChannelAddress.SceneHandle.
+						SceneHandle = sceneData.ID,
 						SceneName = sceneData.SceneName,
 						CharacterCount = sceneData.CharacterCount,
 					});
@@ -610,11 +615,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!CharacterStateValidation.CanActOrMove(character))
 			{
 				Log.Debug("SceneChannelSystem", $"Channel switch refused for {character.CharacterName}: not in an actionable state.");
+				SendTransferRefused(conn, SceneTransferRefusalReason.CharacterStateChanged);
 				return;
 			}
 
-			int currentHandle = character.SceneHandle;
-			int targetHandle = msg.Channel.SceneHandle;
+			long currentHandle = character.SceneHandle;
+			long targetHandle = msg.Channel.SceneHandle;
 
 			// Already on the target channel
 			if (currentHandle == targetHandle)
@@ -629,13 +635,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			var cooldowns = runtimeData.ChannelSwitchCooldownByClientId;
 
-			// Enforce per-connection cooldown (bounded dictionary)
+			/* Cheap first line only. This dictionary is keyed by connection id, and a successful
+			 * switch ends the connection — so on its own it never limited switching at all, only
+			 * repeated *attempts* within one session. The limit that actually holds is claimed
+			 * against the character row in ValidateAndSwitchChannelAsync; this exists to keep a
+			 * spamming client from reaching the database in the first place. */
 			DateTime now = DateTime.UtcNow;
 			if (cooldowns != null)
 			{
 				if (cooldowns.TryGetValue(conn.ClientId, out DateTime lastSwitch) &&
 					(now - lastSwitch).TotalSeconds < channelSwitchCooldownSeconds)
 				{
+					SendTransferRefused(conn, SceneTransferRefusalReason.OnCooldown);
 					return;
 				}
 
@@ -643,12 +654,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!cooldowns.ContainsKey(conn.ClientId) &&
 					cooldowns.Count >= maxCooldownEntries)
 				{
+					SendTransferRefused(conn, SceneTransferRefusalReason.ServerError);
 					return;
 				}
 			}
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SelectChannel, out long guardKey))
 			{
+				// Debounced or already in flight. The client's own UI is now closed, so say so
+				// rather than leaving the player looking at a switch that never happens.
+				SendTransferRefused(conn, SceneTransferRefusalReason.OnCooldown);
 				return;
 			}
 
@@ -667,7 +682,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// This ensures the channel switch goes through the proper character
 			// save/load pipeline and world server load balancing.
 			if (!TryEnqueueIngressWork(
-				() => ValidateAndSwitchChannelAsync(conn, sceneName, worldServerID, targetHandle, maxClients),
+				() => ValidateAndSwitchChannelAsync(conn, characterID, sceneName, worldServerID, targetHandle, maxClients),
 				guardKey, characterID))
 			{
 				EndIngressGuard(guardKey);
@@ -689,15 +704,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </para>
 		/// </summary>
 		/// <param name="conn">The client's network connection.</param>
+		/// <param name="characterID">Character performing the switch, for the persisted cooldown claim.</param>
 		/// <param name="sceneName">The scene name to validate the target channel against.</param>
 		/// <param name="worldServerID">The world server ID.</param>
-		/// <param name="targetHandle">The target scene handle (channel) requested by the client.</param>
+		/// <param name="targetHandle">The target channel, identified by its scene row ID.</param>
 		/// <param name="maxClients">Maximum clients per instance for the availability query.</param>
 		private async Task ValidateAndSwitchChannelAsync(
 			NetworkConnection conn,
+			long characterID,
 			string sceneName,
 			long worldServerID,
-			int targetHandle,
+			long targetHandle,
 			int maxClients)
 		{
 			try
@@ -709,11 +726,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
 				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
 					return;
 				}
 
 				if (!Server.DataContainerRegistry.TryGet<SceneChannelSystemRuntimeData>(out var runtimeData))
 				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
 					return;
 				}
 
@@ -721,30 +740,77 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				var availableScenes = await FetchAvailableScenesAsync(sceneService, runtimeData, worldServerID, sceneName, maxClients);
 				if (availableScenes == null)
 				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.DestinationUnavailable));
 					return;
 				}
 
+				/* Distinguish "gone" from "full" so the client can say which. Both used to be a
+				 * bare return, which the player experienced as the switch silently doing
+				 * nothing — the one outcome a channel picker must never produce, because the
+				 * obvious response is to click again, and the cooldown then swallows that too. */
+				bool targetExists = false;
 				bool targetValid = false;
 				foreach (SceneData sd in availableScenes)
 				{
-					if (sd.CharacterCount >= maxClients)
+					if (sd.ID != targetHandle || (SceneType)sd.SceneType != SceneType.OpenWorld)
 					{
 						continue;
 					}
-					if (sd.SceneHandle == targetHandle && (SceneType)sd.SceneType == SceneType.OpenWorld)
+					targetExists = true;
+					if (sd.CharacterCount < maxClients)
 					{
 						targetValid = true;
-						break;
 					}
+					break;
 				}
 
 				if (!targetValid)
 				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn,
+						targetExists ? SceneTransferRefusalReason.DestinationFull : SceneTransferRefusalReason.DestinationUnavailable));
+					return;
+				}
+
+				/* Claim the cooldown against the character row — the only cooldown that survives
+				 * the switch.
+				 *
+				 * A switch releases the character and drops the connection, so the client returns
+				 * through the world server on a fresh connection id, quite possibly to a
+				 * different scene server. The per-connection dictionary in OnChannelSelect is
+				 * therefore wiped by the very action it is supposed to rate-limit: channel
+				 * hopping was completely uncapped, and the only thing the cooldown ever delayed
+				 * was a retry after a *failed* switch.
+				 *
+				 * Claimed here, after the destination has been validated, so a player is not put
+				 * on cooldown for asking about a channel that turned out to be full or gone. It
+				 * is the last thing that can refuse the request; everything after this is the
+				 * transfer itself. */
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
+					return;
+				}
+
+				var cooldownClaim = await characterService.TryBeginChannelSwitchAsync(
+					characterID, TimeSpan.FromSeconds(channelSwitchCooldownSeconds));
+
+				if (!cooldownClaim.IsSuccess)
+				{
+					await Log.Warning("SceneChannelSystem",
+						$"Could not claim the channel-switch cooldown for character {characterID}: " +
+						$"{cooldownClaim.ErrorCode} - {cooldownClaim.ErrorMessage}. Refusing the switch.");
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
+					return;
+				}
+
+				if (!cooldownClaim.Data)
+				{
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.OnCooldown));
 					return;
 				}
 
 				// Marshal back to the main thread to update character state and disconnect
-				TryEnqueueMainThread(() =>
+				if (!TryEnqueueMainThread(() =>
 				{
 					if (conn == null || !conn.IsActive)
 					{
@@ -765,37 +831,78 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (!CharacterStateValidation.CanActOrMove(character))
 					{
 						Log.Debug("SceneChannelSystem", $"Channel switch aborted for {character.CharacterName}: state changed during validation.");
+						SendTransferRefused(conn, SceneTransferRefusalReason.CharacterStateChanged);
 						return;
 					}
 
-					// Update SceneHandle to the target channel BEFORE disconnect.
-					// BuildCharacterData (called during the disconnect pipeline) captures
-					// this value so the character is persisted with the correct channel.
-					character.SceneHandle = targetHandle;
-
-					// Prevent gameplay actions during the transition
-					character.DisableFlags(CharacterFlags.IsLoaded);
-
-					// Disconnect the client. This triggers:
-					//   CharacterSystem.OnRemoteConnectionStopped
-					//     → RemoveCharacterConnectionMapping
-					//       → SaveAndDespawnCharacter (saves with updated SceneHandle, releases session)
-					// The client then auto-reconnects to the world server, which re-routes
-					// through load balancing to the scene server hosting the target channel.
-					conn.Disconnect(false);
+					/* Hand the whole transfer to the character system.
+					 *
+					 * This used to rewrite SceneHandle here and then drop the connection, letting
+					 * the connection-stopped handler do the teardown. That inverted the ordering
+					 * the teardown depends on: scene population is debited by the handle the
+					 * character is carrying when OnDisconnect fires, so rewriting first debited
+					 * the DESTINATION instance — one this server frequently does not even host —
+					 * while the instance actually being left kept the resident forever. The
+					 * source's phantom population then stopped it ever being seen as empty (so it
+					 * was never unloaded), understated its free capacity, and eventually made it
+					 * read as full, at which point players queued for a scene instance that was
+					 * in fact deserted.
+					 *
+					 * BeginChannelTransfer performs the release in the right order and releases
+					 * the character promptly rather than through the combat-logout path, closing
+					 * the window in which a character pulled into combat between the check above
+					 * and the disconnect would leave its body — and its session claim — behind. */
+					if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem) ||
+						!characterSystem.BeginChannelTransfer(conn, targetHandle))
+					{
+						Log.Warning("SceneChannelSystem", $"Channel switch could not be started for client {conn.ClientId} → handle {targetHandle}.");
+						SendTransferRefused(conn, SceneTransferRefusalReason.ServerError);
+						return;
+					}
 
 					Log.Debug("SceneChannelSystem", $"Channel switch: Client {conn.ClientId} → target handle {targetHandle} in {sceneName} (disconnecting for world server re-route)");
-				});
+				}))
+				{
+					// The switch cannot be applied off the main thread, and the client's picker
+					// is already closed. Refusing explicitly is the only thing that gets the
+					// player back to a state they can act from.
+					await Log.Warning("SceneChannelSystem",
+						$"Main-thread queue rejected the channel switch to handle {targetHandle}; refusing the request.");
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("SceneChannelSystem", $"Error validating channel switch (Scene={sceneName}, Handle={targetHandle}): {ex}");
+				TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
 			}
 		}
 
 		#endregion
 
 		#region Helpers
+
+		/// <summary>
+		/// Tells a client its scene transfer was declined, and why.
+		/// </summary>
+		/// <remarks>
+		/// Reliable: this is a one-shot state transition that unblocks the client's UI. Losing it
+		/// leaves the player exactly where the silent-return behaviour did.
+		/// </remarks>
+		/// <param name="conn">Connection to notify. Main thread only.</param>
+		/// <param name="reason">Why the transfer was refused.</param>
+		private void SendTransferRefused(NetworkConnection conn, SceneTransferRefusalReason reason)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			Server?.NetworkWrapper?.Broadcast(conn,
+				new SceneTransferRefusedBroadcast { Reason = reason },
+				true,
+				FishNet.Transporting.Channel.Reliable);
+		}
 
 		/// <summary>
 		/// Gets the maximum number of clients allowed for a given scene, using the scene server system's cache.
@@ -832,9 +939,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string sceneName,
 			int maxClients)
 		{
+			string cacheKey = BuildAvailableSceneCacheKey(worldServerID, sceneName);
+
 			TimeSpan ttl = TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds);
 			if (ttl > TimeSpan.Zero &&
-				runtimeData.AvailableSceneCache.TryGet(sceneName, ttl, out var cached))
+				runtimeData.AvailableSceneCache.TryGet(cacheKey, ttl, out var cached))
 			{
 				return cached;
 			}
@@ -847,9 +956,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (ttl > TimeSpan.Zero)
 			{
-				runtimeData.AvailableSceneCache.Set(sceneName, result.Data);
+				runtimeData.AvailableSceneCache.Set(cacheKey, result.Data);
 			}
 			return result.Data;
+		}
+
+		/// <summary>
+		/// Builds the cache key for a <c>FetchAvailableAsync</c> result.
+		/// </summary>
+		/// <remarks>
+		/// The world server is part of the key, not just the scene name. A scene server is not
+		/// owned by a world server — <c>ISceneService.DequeueAsync</c> hands out whichever pending
+		/// scene row is oldest, whatever world it belongs to, which is why the instance registry
+		/// is keyed by world id at all. Caching this query under the bare scene name therefore
+		/// served one world's channel list to a character on another: wrong populations, other
+		/// worlds' instances offered as destinations, and a switch validated against rows the
+		/// player's own world server knows nothing about — so it disconnected them and then
+		/// silently routed them somewhere else.
+		/// </remarks>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static string BuildAvailableSceneCacheKey(long worldServerID, string sceneName)
+		{
+			return worldServerID.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + sceneName;
 		}
 
 		/// <summary>

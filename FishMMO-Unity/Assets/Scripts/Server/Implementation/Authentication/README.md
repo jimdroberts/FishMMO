@@ -471,6 +471,32 @@ On failure at any step, workers call `RejectAndPurge(conn, result)` which atomic
 2. Disconnects the client after the broadcast is sent.
 3. Purges all transient auth state via `PurgeConnectionAuthState`.
 
+#### Pre-authentication rejections say nothing, deliberately
+
+`RejectAndPurge` covers failures the server is willing to describe — a bad password, a banned
+account, a full server. The rejections in `OnServerClientHandshakeReceivedAsync` are a different
+class and are answered with a bare `conn.Disconnect(true)` and no broadcast at all:
+
+| Rejection | Why it stays silent |
+|---|---|
+| Oversized `PublicKey` / `Cookie` / `ConnectionToken` / `GameVersion` | Confirming which field tripped maps the size limits |
+| `MinVersion == 0`, `MaxVersion == 0`, or `MinVersion > MaxVersion` | Confirming the accepted range hands over the negotiation window |
+| Handshake rate limit tripped (initial cookieless handshake only) | An answer turns the limiter into a timing oracle for its own window and key derivation |
+| Connection-token HMAC verification failed | A distinguishable response is an oracle against the token signing key |
+| No connection token **and** no cached real IP | Same — it reveals whether an IP is already known to the server |
+| `conn.IsAuthenticated` already true | A duplicate handshake on an authenticated connection is not a client this server owes an answer |
+
+This is a deliberate trade, and it has a cost: the client sees only a closed transport. The
+client is therefore responsible for reporting it — the login panels track whether *any*
+`ClientAuthenticationResult` arrived before the connection stopped, and if none did they say the
+connection was closed before it answered rather than silently resetting the form. See
+[Deliberate disconnects explain themselves](../../../../../../CONNECTION_PIPELINE.md#deliberate-disconnects-explain-themselves)
+in the connection pipeline.
+
+Note the one rejection that is **not** silent: reaching authentication capacity defers to
+`LoginQueueSystem` via `OnHandshakeDeferred`, and only answers `ServerBusy` when the queue is
+also full. A deferred client keeps its connection and is told its position.
+
 ## Project Structure
 
 ### Directory Tree
@@ -734,6 +760,10 @@ admission stranded it until the handshake timeout.
 Queue purge and shutdown also use `conn.Disconnect(false)` rather than `true`: the immediate
 form stops the transport outright and discards anything still queued for send — including the
 cancellation notice sent on the line above.
+
+`WorldSceneSystem` applies the same three rules to `WorldSceneQueuePositionBroadcast`, which
+gives the World → Scene hop the feedback this queue gives the login hop. See
+[World Scene System → Scene-routing queue feedback](../World/WorldServer/WorldScene/README.md#scene-routing-queue-feedback).
 
 > Handshake receipt is logged at **Debug**, not Warning. It fires on every connection attempt
 > including every healthy one, and at Warning level a busy login server buries its real warnings

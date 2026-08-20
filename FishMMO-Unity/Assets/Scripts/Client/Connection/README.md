@@ -22,6 +22,13 @@ running `QuitToLogin`. Without the second half, a client kicked or timed out on 
 server was left with no visible panel at all: `UICharacterSelect` hides itself on any stop and
 `UILogin` never re-showed, so the only recovery was restarting the client.
 
+That teardown also stages an `Unspecified` disconnect notice when the client is holding a
+session token, so the player is told *something* — a login server that restarts or times a
+connection out sends nothing, and `QuitToLogin` only surfaces a reason the server supplied. The
+token check is what keeps it from firing on a first connect attempt that never reached a server,
+where the login panel's own message ("the connection was closed before it answered") is both
+more specific and more accurate.
+
 - Maximum attempts: 10 (configurable)
 - Base delay: 5 seconds (configurable)
 - Maximum delay: 60 seconds (configurable)
@@ -105,6 +112,94 @@ stays acquired and every later connect is refused for the life of the process �
 as a login button that silently stops working. `ConnectToServer` therefore checks the age of
 the acquisition when the CAS fails, and reclaims a guard held longer than any legitimate
 acquisition could last (stop wait × 2 + establish timeout + 30 s).
+
+## Abort paths clear `stoppingForConnect`
+
+`ConnectToServer` sets `stoppingForConnect` and expects the Stopped transition it asked for to
+consume it. Every abort inside `OnAwaitingConnectionReady` is reached in exactly the cases
+where that does not happen — the teardown timed out, or the connection was already stopped so
+no transition was ever raised. `AbortConnectAttempt` therefore clears the flag along with the
+guard; leaving it latched handed it to the *next* Stopped, which is a real drop, and a drop
+marked deliberate arms no reconnect and raises no `OnConnectionAttemptFailed`, so the client
+sat disconnected with nothing driving it anywhere.
+
+## Loop guards are sized from the timeout, not a frame count
+
+The waits inside `OnAwaitingConnectionReady` are bounded by `Time.realtimeSinceStartup`
+deadlines. Their iteration counters are only a backstop against a clock that stops advancing,
+so they are derived from the timeout (`IterationCapForSeconds`). Fixed frame counts made the
+counter the *tighter* bound on any client rendering faster than count ÷ timeout — routine,
+since FishNet's `ClientManager.FrameRate` defaults to 500 and the login screen renders almost
+nothing. The 20 s establish wait aborted after roughly five seconds and reported an internal
+"iteration limit exceeded" instead of a connection failure.
+
+## Waiting is not disconnecting
+
+Two of the pipeline's queues hold a client on a live, authenticated connection while it waits:
+the LoginServer's admission queue, and the WorldServer's scene-routing queue (see
+[World Scene System → Scene-routing queue feedback](../../Server/Implementation/World/WorldServer/WorldScene/README.md#scene-routing-queue-feedback)).
+Neither involves this class — no connection state changes, so nothing here fires — which is
+exactly why they need their own feedback channel. `Client` presents both through one shared
+wait dialog so they cannot drift apart or fight over the same control, and the dialog's only
+action leaves the queue via `QuitToLogin`.
+
+## No panel waits on a reply forever
+
+Every login-flow panel disables its action control, sends a request, and re-enables it when the
+reply arrives. That is correct right up until the reply never arrives — at which point the panel
+is a dead end, and the only way out is to quit to login.
+
+The reply can go missing for reasons the client cannot see: the server's main-thread queue
+rejecting the action at capacity, a handler throwing before it sends, or the server never
+getting to it. `PendingReplyGuard` makes the panel stop waiting rather than enumerate those
+causes. It is armed by the same method that disables the control and cleared by the same method
+that re-enables it, so the two cannot drift apart.
+
+Three properties matter:
+
+- **Non-destructive.** The timeout re-enables the control and says so. Nothing is torn down and
+  no connection is dropped, so a late reply is still handled normally when it lands.
+- **It must not end the auth flow.** `UILogin` and `UIRegister` gate their auth-result handler on
+  `isAuthFlowActive`, which their *unlock* clears — so routing the timeout through the unlock
+  would make the panel ignore a reply that arrives after the deadline, turning a slow login into
+  a permanently stuck one. The timeout calls `ReleaseControls` instead, which touches only the
+  widgets. A genuine disconnect still goes through the unlock, because then the flow really is
+  over.
+- **Progress refreshes it.** Any auth result at all is proof the server is still working the
+  request — the SRP exchange and the two-factor prompt both report progress before they finish,
+  and a client can sit in the login queue for minutes. Each one buys the deadline again.
+- **So does a queue position.** The login queue is the one place a login legitimately outlasts
+  the deadline, and its `LoginQueuePositionBroadcast` is handled by `Client`, not by the panels.
+  Both login panels therefore register for it themselves and refresh the guard on any position
+  ≥ 0. Without that the panel announced "the server did not respond" *beside* a live queue
+  dialog, with sign-in re-enabled — and clicking it only produced "connection already in
+  progress".
+
+Server-select is deliberately **not** guarded. Its lock spans a whole multi-hop journey — world
+login, scene routing, scene load — not one round trip, and that journey has its own queue
+feedback with a Close button. A 30-second deadline there would fire during a perfectly healthy
+scene load.
+
+Character-select clears its guard on a successful selection, because the server list takes over
+from there; leaving it armed would fire the timeout later and put the panel back on top of the
+server-select screen.
+
+## Unhandled exceptions from the networking stack
+
+`Client.OnLogMessage` watches for exceptions raised inside the networking layer and tears the
+session down, because a connection whose reader or transport has thrown cannot be trusted. Two
+rules keep that from doing more harm than the fault it responds to:
+
+- **Only the throwing frame counts.** Matching the whole stack caught `FishNet.Managing.` for
+  every exception raised inside *any* broadcast or RPC handler, since that is the code that
+  dispatches them — so a null reference in a HUD panel was indistinguishable from a corrupted
+  transport stream, and both cost the player their session. `IsNetworkStack` now reads only the
+  first line of the stack trace, which is the throw site.
+- **It ends somewhere.** The teardown used to be `RevokeAndClearAuthToken` plus
+  `ForceDisconnect`, and `ForceDisconnect` deliberately suppresses both the reconnect timer and
+  `OnConnectionAttemptFailed` — so nothing ran afterwards. World scenes stayed loaded, no login
+  panel appeared, and the token was already revoked, so waiting could not recover it. It routes
+  through `QuitToLogin` instead.
 
 ## Thread Safety
 

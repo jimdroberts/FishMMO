@@ -85,6 +85,7 @@ namespace FishMMO.Client
 			Client.OnReconnectPending += Client_OnReconnectPending;
 			Client.OnReconnectAttempt += Client_OnReconnectAttempt;
 			Client.OnReconnectFailed += Client_OnReconnectFailed;
+			Client.OnEnterGameWorld += Client_OnEnterGameWorld;
 		}
 
 		/// <summary>
@@ -101,6 +102,7 @@ namespace FishMMO.Client
 			Client.OnReconnectPending -= Client_OnReconnectPending;
 			Client.OnReconnectAttempt -= Client_OnReconnectAttempt;
 			Client.OnReconnectFailed -= Client_OnReconnectFailed;
+			Client.OnEnterGameWorld -= Client_OnEnterGameWorld;
 		}
 
 		/// <summary>
@@ -131,6 +133,30 @@ namespace FishMMO.Client
 		private bool reconnectPendingActive;
 
 		/// <summary>
+		/// True from the moment the scene server accepts this client until the player character
+		/// actually exists in the world.
+		/// </summary>
+		/// <remarks>
+		/// World entry is three separate waits with gaps between them, and the other drivers
+		/// only cover the waits. The FishNet scene load ends before the server has been told
+		/// the client is in it, and the Addressable world preload ends before the server has
+		/// spawned the character — so on each of those boundaries every driver was momentarily
+		/// clear and the overlay came down over a half-built world with no player in it, for a
+		/// full network round trip each time. The second gap is the worse of the two: the
+		/// progress bar reaches 100%, the screen vanishes, and the player looks at an empty
+		/// scene until the spawn lands.
+		/// <para>
+		/// <c>OnEnterGameWorld</c> is raised on SceneLoginSuccess, which precedes the scene
+		/// load request, so this driver spans the whole entry. It is cleared only by
+		/// <see cref="Hide"/> — reached from <c>Client.DismissLoadingScreen</c> once the local
+		/// character starts, from the quit-to-login teardown, and on reconnect failure. Every
+		/// way world entry can fail ends at one of those, and the servers bound the wait with
+		/// their own scene-handshake and residency watchdogs.
+		/// </para>
+		/// </remarks>
+		private bool worldEntryActive;
+
+		/// <summary>
 		/// Shows the overlay while any driver is active and hides it only once every driver
 		/// has finished.
 		/// </summary>
@@ -148,7 +174,7 @@ namespace FishMMO.Client
 		/// </param>
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
-			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive;
+			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive;
 
 			Log.Debug("UILoadingScreen", $"DEBUG RefreshVisibility: addressable={addressableLoadActive} sceneTransition={sceneTransitionActive} shouldShow={shouldShow} Visible={Visible} force={forceRefresh} suppressed={Client.LoadingSuppressed}");
 
@@ -246,8 +272,40 @@ namespace FishMMO.Client
 			addressableLoadActive = false;
 			sceneTransitionActive = false;
 			reconnectPendingActive = false;
+			worldEntryActive = false;
 
 			base.Hide();
+		}
+
+		/// <summary>
+		/// Re-asserts the overlay's own state after the quit-to-login teardown.
+		/// </summary>
+		/// <remarks>
+		/// The base handler forces visibility straight from <c>CloseOnQuitToMenu</c>, and it does
+		/// so through a path that bypasses this control's <see cref="Show"/>/<see cref="Hide"/>
+		/// overrides — so the driver flags are left exactly as they were while the panel is
+		/// switched underneath them. Either half of that mismatch is a visible fault: flags left
+		/// set behind a hidden panel pop the overlay back up on the next progress tick, and a
+		/// panel forced visible with no driver set has nothing that will ever take it down.
+		/// Re-running the normal decision leaves the two in agreement whichever way the flag is
+		/// configured.
+		/// </remarks>
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			RefreshVisibility(forceRefresh: true);
+		}
+
+		/// <summary>
+		/// Holds the overlay up for the whole of world entry.
+		/// </summary>
+		/// <remarks>See <see cref="worldEntryActive"/>.</remarks>
+		public void Client_OnEnterGameWorld()
+		{
+			SetLoadingImage(DefaultLoadingScreenSprite);
+			worldEntryActive = true;
+			RefreshVisibility();
 		}
 
 		/// <summary>
@@ -309,6 +367,7 @@ namespace FishMMO.Client
 			}
 
 			if (Details != null &&
+				Details.Scenes != null &&
 				Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&
 				details.SceneTransitionImage != null)
 			{

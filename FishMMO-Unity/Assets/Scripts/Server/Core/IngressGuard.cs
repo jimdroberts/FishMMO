@@ -13,7 +13,31 @@ namespace FishMMO.Server.Core
 		private const int MaxTrackerEntries = 10000;
 
 		private readonly ConcurrentDictionary<long, DateTime> nextAllowedUtcByKey = new ConcurrentDictionary<long, DateTime>();
-		private readonly ConcurrentDictionary<long, byte> inFlightByKey = new ConcurrentDictionary<long, byte>();
+
+		/// <summary>
+		/// Keys with an operation currently in progress, mapped to when it was acquired.
+		/// </summary>
+		/// <remarks>
+		/// The timestamp exists only so a marker whose <see cref="End"/> was somehow never
+		/// reached can eventually be reclaimed. It is deliberately not the debounce timestamp:
+		/// the sweep used to drop the in-flight marker together with the debounce entry, which
+		/// meant any operation still running once its debounce entry aged out — a database stall
+		/// is enough — silently lost its lock, letting a duplicate start while the first was
+		/// still going, after which the first one's <see cref="End"/> released the second's
+		/// marker instead of its own.
+		/// </remarks>
+		private readonly ConcurrentDictionary<long, DateTime> inFlightSinceUtcByKey = new ConcurrentDictionary<long, DateTime>();
+
+		/// <summary>
+		/// Age at which an in-flight marker is presumed leaked rather than merely slow.
+		/// </summary>
+		/// <remarks>
+		/// Every caller releases in a <c>finally</c>, so this should never fire; it exists so a
+		/// bug on one path cannot lock an operation out for the life of the process. Far beyond
+		/// any legitimate request, so a slow one is never mistaken for a leaked one.
+		/// </remarks>
+		private static readonly TimeSpan InFlightStaleAfter = TimeSpan.FromMinutes(5);
+
 		private DateTime nextSweepUtc;
 
 		/// <summary>
@@ -65,7 +89,7 @@ namespace FishMMO.Server.Core
 			}
 
 			// In-flight lock — only update timestamps after successful acquisition
-			if (!inFlightByKey.TryAdd(guardKey, 0))
+			if (!inFlightSinceUtcByKey.TryAdd(guardKey, nowUtc))
 			{
 				return false;
 			}
@@ -86,7 +110,7 @@ namespace FishMMO.Server.Core
 		/// </summary>
 		public void End(long guardKey)
 		{
-			inFlightByKey.TryRemove(guardKey, out _);
+			inFlightSinceUtcByKey.TryRemove(guardKey, out _);
 		}
 
 		/// <summary>
@@ -114,10 +138,33 @@ namespace FishMMO.Server.Core
 					break;
 				}
 
-				if (kvp.Value <= staleBefore && nextAllowedUtcByKey.TryRemove(kvp.Key, out _))
+				if (kvp.Value > staleBefore)
 				{
-					inFlightByKey.TryRemove(kvp.Key, out _);
+					continue;
+				}
+
+				// An operation that is still running keeps its debounce entry. Dropping it would
+				// let the next request past the debounce check while the first is unfinished,
+				// and the entry is reclaimed on the following pass once End() has run anyway.
+				if (inFlightSinceUtcByKey.ContainsKey(kvp.Key))
+				{
+					continue;
+				}
+
+				if (nextAllowedUtcByKey.TryRemove(kvp.Key, out _))
+				{
 					removed++;
+				}
+			}
+
+			// Reclaim markers that were never released. See InFlightStaleAfter — this is a
+			// backstop against a missing End(), not a timeout on legitimate work.
+			DateTime inFlightStaleBefore = nowUtc - InFlightStaleAfter;
+			foreach (var kvp in inFlightSinceUtcByKey)
+			{
+				if (kvp.Value <= inFlightStaleBefore)
+				{
+					inFlightSinceUtcByKey.TryRemove(kvp.Key, out _);
 				}
 			}
 		}
@@ -128,7 +175,7 @@ namespace FishMMO.Server.Core
 		public void Clear()
 		{
 			nextAllowedUtcByKey.Clear();
-			inFlightByKey.Clear();
+			inFlightSinceUtcByKey.Clear();
 			nextSweepUtc = DateTime.UtcNow;
 		}
 	}

@@ -193,6 +193,49 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
+		/// Resets the per-connection cryptographic state so a fresh <c>ClientHandshake</c> can
+		/// be sent on the <em>same</em> transport connection, while keeping the credentials the
+		/// pending login still needs.
+		/// </summary>
+		/// <remarks>
+		/// The login queue defers the handshake before SRP begins and later invites the client
+		/// to handshake again on the connection it has been holding open. That retry has to
+		/// throw away the ephemeral keypair, the derived session keys and the nonce contexts —
+		/// the server generates a new set for the new handshake — but it must NOT throw away the
+		/// username and password, because SRP has not run yet and nothing will ever supply them
+		/// again.
+		/// <para>
+		/// Reusing <see cref="OnDisconnected"/> for this did exactly that: it calls
+		/// <see cref="ClearKeyMaterial"/>, which nulls the credentials along with the keys, so
+		/// the re-handshake reached the credential pre-validation in
+		/// <see cref="OnServerHandshakeReceived"/> with an empty username and disconnected
+		/// itself. Every client that was queued was therefore dropped the instant it reached the
+		/// front of the queue, with no message — the queue could never admit anybody.
+		/// </para>
+		/// <para>
+		/// <see cref="OnConnected"/> is what the caller invokes next; it regenerates the keypair
+		/// and resets the duplicate-message guards, which a second handshake on one connection
+		/// also depends on.
+		/// </para>
+		/// </remarks>
+		public void OnRehandshakeRequired()
+		{
+			string? keepUsername = username;
+			string? keepPassword = password;
+			string? keepEmail = email;
+			bool keepRegister = register;
+			int keepAge = age;
+
+			ClearKeyMaterial();
+
+			username = keepUsername;
+			password = keepPassword;
+			email = keepEmail;
+			register = keepRegister;
+			age = keepAge;
+		}
+
+		/// <summary>
 		/// Disposes the ephemeral keypair. Call from the host object's destroy/dispose method.
 		/// </summary>
 		public void Dispose()

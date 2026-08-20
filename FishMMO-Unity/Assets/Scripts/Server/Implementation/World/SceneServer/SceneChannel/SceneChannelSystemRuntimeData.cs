@@ -23,9 +23,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public float NextCooldownCleanup { get; set; }
 
 		/// <summary>
-		/// Cache of <c>FetchAvailableAsync</c> results keyed by scene name.
+		/// Cache of <c>FetchAvailableAsync</c> results, keyed by world server ID and scene name.
 		/// Entries expire after a configurable TTL to reduce database polling.
 		/// </summary>
+		/// <remarks>
+		/// The world server must be part of the key: a scene server hosts scenes for every world
+		/// server, so a key of scene name alone collides between them. See
+		/// <c>SceneChannelSystem.BuildAvailableSceneCacheKey</c>.
+		/// </remarks>
 		public TimedCache<string, IReadOnlyList<SceneData>> AvailableSceneCache { get; set; }
 
 		/// <summary>

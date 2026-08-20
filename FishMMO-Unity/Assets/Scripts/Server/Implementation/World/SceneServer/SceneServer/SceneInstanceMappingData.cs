@@ -10,21 +10,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	public class SceneInstanceMappingData : RuntimeDataContainer, ISceneInstanceMappingData
 	{
-		/// <summary>
-		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
-		/// </summary>
-		public Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>> WorldScenes { get; private set; }
+		/// <inheritdoc />
+		public Dictionary<long, Dictionary<string, Dictionary<long, ISceneInstanceDetails>>> WorldScenes { get; private set; }
 
 		/// <summary>
 		/// Maps scene handles to scene names for quick lookup.
 		/// </summary>
 		public Dictionary<int, string> SceneNameByHandle { get; private set; }
 
-		/// <summary>
-		/// Flat O(1) lookup from scene handle to instance details.
-		/// Kept in sync with the nested WorldScenes dictionary.
-		/// </summary>
+		/// <inheritdoc />
 		public Dictionary<int, ISceneInstanceDetails> SceneInstanceByHandle { get; private set; }
+
+		/// <inheritdoc />
+		public Dictionary<long, ISceneInstanceDetails> SceneInstanceByID { get; private set; }
 
 		/// <summary>
 		/// Tracks pending scene load requests by scene ID.
@@ -37,9 +35,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>>();
+			WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<long, ISceneInstanceDetails>>>();
 			SceneNameByHandle = new Dictionary<int, string>();
 			SceneInstanceByHandle = new Dictionary<int, ISceneInstanceDetails>();
+			SceneInstanceByID = new Dictionary<long, ISceneInstanceDetails>();
 			PendingScenes = new Dictionary<long, PendingSceneInfo>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -52,6 +51,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			WorldScenes?.Clear();
 			SceneNameByHandle?.Clear();
 			SceneInstanceByHandle?.Clear();
+			SceneInstanceByID?.Clear();
 			PendingScenes?.Clear();
 		}
 

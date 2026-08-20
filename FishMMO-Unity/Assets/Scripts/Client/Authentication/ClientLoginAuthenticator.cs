@@ -274,7 +274,15 @@ namespace FishMMO.Client
 		if (Client == null || Client.Connection == null ||
 			Client.Connection.ClientState == LocalConnectionState.Stopped)
 			return;
-		core.OnDisconnected();
+		/* OnRehandshakeRequired, not OnDisconnected.
+		 *
+		 * OnDisconnected clears the credentials along with the key material, and SRP has not
+		 * run at this point — the queue deferred the handshake before it started, so the
+		 * username and password set by the login panel are still the only copy in existence.
+		 * Wiping them here meant the re-handshake this method sends reached the client's own
+		 * credential pre-validation with an empty username and disconnected itself, so every
+		 * queued client was silently dropped the moment it was admitted. */
+		core.OnRehandshakeRequired();
 		core.OnConnected(connectionToken: null);
 	}
 

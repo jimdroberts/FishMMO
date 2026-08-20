@@ -42,6 +42,13 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(DateTime.UnixEpoch);
 
+			// Epoch rather than DateTime.MinValue so an existing character is immediately
+			// eligible for its first channel switch, and so the column matches the
+			// "timestamp without time zone" mapping the other UTC columns already use.
+			builder.Property(e => e.LastChannelSwitchUtc)
+				.IsRequired()
+				.HasDefaultValue(DateTime.UnixEpoch);
+
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(name)", stored: true);
 

@@ -424,12 +424,35 @@ namespace FishMMO.Client
 			Client.Quit();
 		}
 
+
+		/// <summary>
+		/// Guards the control this panel disables while a server reply is outstanding.
+		/// </summary>
+		/// <remarks>See <see cref="PendingReplyGuard"/>.</remarks>
+		private readonly PendingReplyGuard replyGuard = new PendingReplyGuard();
+
+		/// <inheritdoc/>
+		protected override void OnTick()
+		{
+			base.OnTick();
+
+			if (replyGuard.HasExpired())
+			{
+				SetCreateButtonLocked(false);
+				if (resultLabel != null) resultLabel.text = "The server did not respond. Please try again.";
+			}
+		}
+
 		/// <summary>
 		/// Sets the locked state of the create button.
 		/// </summary>
 		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
 		private void SetCreateButtonLocked(bool locked)
 		{
+			// Locking means a request is outstanding; unlocking means it is not.
+			// See PendingReplyGuard for why the wait needs a deadline.
+			if (locked) { replyGuard.Begin(); } else { replyGuard.Clear(); }
+
 			if (createButton != null)
 			{
 				createButton.SetEnabled(!locked);

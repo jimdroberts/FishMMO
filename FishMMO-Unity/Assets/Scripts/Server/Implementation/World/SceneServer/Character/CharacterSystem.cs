@@ -185,6 +185,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<RequestLeaveInstanceBroadcast>(OnClientRequestLeaveInstanceBroadcastReceived, true);
+
+			// Chat commands. See OnLeaveInstanceCommand for why this exists alongside the
+			// RequestLeaveInstanceBroadcast handler.
+			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
+			{
+				{ "/leaveinstance", OnLeaveInstanceCommand },
+				{ "/exitinstance", OnLeaveInstanceCommand },
+			});
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
@@ -211,6 +220,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(TransferDisconnectSweepIntervalSeconds, OnPeriodicTransferDisconnectSweep);
 				periodicSystem.RegisterPeriodicCallback(SceneLoadTimeoutSweepIntervalSeconds, OnPeriodicSceneLoadTimeoutSweep);
 				periodicSystem.RegisterPeriodicCallback(CombatLingerSweepIntervalSeconds, OnPeriodicCombatLingerSweep);
+				periodicSystem.RegisterPeriodicCallback(CharacterResidencySweepIntervalSeconds, OnPeriodicCharacterResidencySweep);
 			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
@@ -249,6 +259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<RequestLeaveInstanceBroadcast>(OnClientRequestLeaveInstanceBroadcastReceived);
 
 			// Scene manager events
 			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
@@ -272,7 +283,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicTransferDisconnectSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSceneLoadTimeoutSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCombatLingerSweep);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCharacterResidencySweep);
 			}
+
+			/* Drop every per-connection watchdog map.
+			 *
+			 * This behaviour is a ScriptableObject, so its fields survive a play-session
+			 * restart in the editor while FishNet starts handing out ClientIds from zero again.
+			 * A stale entry whose id is reissued to a fresh connection is then read as that
+			 * connection's state — and for a deadline map, one that expired long ago, so the
+			 * next sweep disconnects a client that has done nothing wrong. Clearing here is what
+			 * keeps these maps scoped to the run that populated them.
+			 */
+			characterResidencyDeadlines.Clear();
+			sceneLoadDeadlines.Clear();
+			startScenesAckedClientIds.Clear();
+			pendingTransferDisconnects.Clear();
+			deliberateTransferClientIds.Clear();
+			authCallbackLastTimeByAccount.Clear();
+			sceneUnloadLastTimeByClientId.Clear();
+			validatedSceneLastTimeByClientId.Clear();
 
 			// Bring every lingering body back into the normal save/despawn/release path before
 			// the shutdown snapshot below runs, so its state is captured and its claim handed
@@ -398,6 +428,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		#region Async Helpers
+
+		/// <summary>
+		/// Raises a character lifecycle event, invoking each subscriber independently.
+		/// </summary>
+		/// <remarks>
+		/// Every one of these events is raised part-way through a teardown, with the save, the
+		/// session release or the despawn still to come on the line after it. A plain
+		/// <c>?.Invoke</c> walks the invocation list until one subscriber throws and then
+		/// abandons both the rest of the list and the caller — so one exception in a social
+		/// system left a character removed from every mapping but never saved and never
+		/// released, which is the stranded-claim failure the rest of this system works hardest
+		/// to avoid, or left its NetworkObject spawned in the world with no owner.
+		/// <para>
+		/// Losing one subscriber's bookkeeping is recoverable. Losing the teardown is not, so
+		/// the exception is logged and the teardown continues. <c>AddressableLoadBatch</c>
+		/// dispatches its own events this way for the same reason.
+		/// </para>
+		/// </remarks>
+		/// <param name="handler">The event's backing delegate, or null when nothing subscribes.</param>
+		/// <param name="conn">Connection to report, which is null for an unattended body.</param>
+		/// <param name="character">Character the event concerns.</param>
+		/// <param name="eventName">Event name, for diagnostics.</param>
+		private static void DispatchCharacterEvent(
+			Action<NetworkConnection, IPlayerCharacter> handler,
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			string eventName)
+		{
+			if (handler == null)
+			{
+				return;
+			}
+
+			Delegate[] subscribers = handler.GetInvocationList();
+			for (int i = 0; i < subscribers.Length; ++i)
+			{
+				try
+				{
+					((Action<NetworkConnection, IPlayerCharacter>)subscribers[i]).Invoke(conn, character);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("CharacterSystem", $"{eventName} handler threw; continuing teardown. {ex}");
+				}
+			}
+		}
 
 		/// <summary>
 		/// Drains the main-thread queue each frame.

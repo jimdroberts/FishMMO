@@ -210,8 +210,10 @@ namespace FishMMO.Client
 		/// is replicated continuously, and the server's revive path restores it.
 		/// </para>
 		/// </remarks>
-		private void Update()
+		protected override void OnTick()
 		{
+			base.OnTick();
+
 			if (!awaitingRevive)
 			{
 				return;

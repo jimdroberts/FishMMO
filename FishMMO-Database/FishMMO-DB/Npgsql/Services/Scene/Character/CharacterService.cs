@@ -1129,7 +1129,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <para>If this behavior needs to change, add <c>AND version &lt; {version_param}</c> to the WHERE clause
 		/// and pass the incoming version as a parameter.</para>
 		/// </remarks>
-		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, long sceneHandle, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -1239,6 +1239,49 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE id = {{0}} AND deleted = false",
 					characterId).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			if (cooldown < TimeSpan.Zero)
+			{
+				cooldown = TimeSpan.Zero;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			DateTime eligibleBeforeUtc = nowUtc - cooldown;
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				/* Check and stamp in one statement.
+				 *
+				 * Reading the timestamp and writing it back separately would let two scene
+				 * servers each read an elapsed cooldown and each allow a switch — which is
+				 * precisely the case that matters, because the whole point of persisting this is
+				 * that consecutive switches land on different servers. The row is not
+				 * version-gated: this is a rate limit, not gameplay state, and it must neither
+				 * lose to a concurrent save nor bump the version a save is guarding on. */
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET last_channel_switch_utc = {{0}}
+					WHERE id = {{1}}
+						AND deleted = false
+						AND last_channel_switch_utc <= {{2}}",
+					new object[] { nowUtc, characterId, eligibleBeforeUtc },
+					cancellationToken).ConfigureAwait(false);
+
+				return rowsAffected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
 		}
 
 		/// <inheritdoc/>

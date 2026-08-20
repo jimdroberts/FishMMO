@@ -112,11 +112,37 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Replaces the message without reopening the dialog.
+		/// </summary>
+		/// <remarks>
+		/// For content that updates while the box stays on screen — a queue position counting
+		/// down, say. Going through <see cref="Open"/> for that would re-evaluate the buttons
+		/// and re-Show on every tick. Mirrors the UGUI <c>UIDialogBox.SetText</c>.
+		/// </remarks>
+		/// <param name="text">The new message.</param>
+		public void SetText(string text)
+		{
+			if (dialogLabel != null)
+			{
+				dialogLabel.text = text;
+			}
+		}
+
+		/// <summary>
 		/// Handles accept button clicks, invoking the accept callback and closing the dialog.
 		/// </summary>
 		private void OnClick_Accept()
 		{
-			onAcceptCallback?.Invoke();
+			Action callback = onAcceptCallback;
+
+			/* Cleared before invoking, not after. These outlive the dialog otherwise: Hide()
+			 * only switches the panel off, so anything that shows it again without going
+			 * through Open — and these callbacks do things like quit to login — would fire the
+			 * previous dialog's answer. The UGUI UIDialogBox clears for the same reason. */
+			onAcceptCallback = null;
+			onCancelCallback = null;
+
+			callback?.Invoke();
 			Hide();
 		}
 
@@ -125,7 +151,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClick_Cancel()
 		{
-			onCancelCallback?.Invoke();
+			Action callback = onCancelCallback;
+
+			onAcceptCallback = null;
+			onCancelCallback = null;
+
+			callback?.Invoke();
 			Hide();
 		}
 

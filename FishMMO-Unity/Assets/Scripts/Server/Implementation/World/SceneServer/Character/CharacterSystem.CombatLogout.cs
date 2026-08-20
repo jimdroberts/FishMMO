@@ -118,6 +118,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
+			/* Stop whatever the character was in the middle of doing.
+			 *
+			 * A despawn would have done this for free — FishNet's ResetState cancels the
+			 * activation — but the whole point of a linger is that the body is NOT despawned,
+			 * so an in-flight cast simply carries on. The server keeps ticking
+			 * AbilityController.OnReplicate for an unowned object, and a tick with no input
+			 * re-asserts IsHeld from the replicated flags rather than clearing it, so a
+			 * channelled or charged ability holds indefinitely and a plain cast runs to
+			 * completion and fires — spawning projectiles and raising ECA events on behalf of a
+			 * player who is no longer connected and cannot aim, retarget or stop them.
+			 *
+			 * Cancel() is the same call ResetState makes: it clears the current activation,
+			 * drops the persistent IsHeld/IsConsumable/IsMount flags and unlocks any consumable
+			 * inventory slot the activation had reserved. Leaving that slot locked would follow
+			 * the character into its next session, because the linger's snapshot is what the
+			 * reattach reloads.
+			 *
+			 * Done before the flags and bookkeeping below so a throw here cannot leave a body
+			 * half-registered as lingering. */
+			try
+			{
+				if (character.TryGet(out IAbilityController abilityController) &&
+					abilityController.IsActivating)
+				{
+					abilityController.Cancel();
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("CharacterSystem", $"Failed to cancel the in-flight ability of lingering character {character.ID}: {ex}");
+			}
+
 			// Persisted, unlike IsInCombat: it is what tells the login path that this account's
 			// only "online" character is a body waiting to be reclaimed rather than a live
 			// session, so the player is not locked out of rejoining it.
@@ -420,7 +452,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// leaving the character owned by a server that has forgotten about it.
 				Log.Error("CharacterSystem", $"Failed to enqueue reattach for character {characterID}; releasing its session.");
 				QueuePendingFlush(characterID, charData, new CharacterSessionInfo(heldToken, heldServerID));
-				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 
 			return true;
@@ -463,7 +495,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			OnDespawnCharacter?.Invoke(null, character);
+			DispatchCharacterEvent(OnDespawnCharacter, null, character, nameof(OnDespawnCharacter));
 
 			if (character.NetworkObject.IsSpawned)
 			{
@@ -516,7 +548,64 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await SaveAbilitiesAsync(abilities);
 			}
 
-			await LoadCharacterAsync(conn, accountName, characterService, serverID, heldToken);
+			// The character ID travels with the token: LoadCharacterAsync has to be able to hand
+			// this claim back on any path that abandons the load, including the ones that fail
+			// before a character row has been read.
+			await LoadCharacterAsync(conn, accountName, characterService, serverID, heldToken, charData.ID);
+		}
+
+		/// <summary>
+		/// Appends every lingering body to the periodic save snapshot.
+		/// </summary>
+		/// <remarks>
+		/// A lingering body is deliberately not in <c>CharactersByID</c> — it has no connection
+		/// — so the periodic save walked straight past it. The only writes it got were the one
+		/// taken when the linger began and the one taken when it ended, which left everything
+		/// that happened in between unpersisted: precisely the damage the body is left standing
+		/// there to receive. A scene server that died mid-linger therefore restored the
+		/// character at full health, refunding a fight it had already lost and handing the
+		/// player exactly the escape combat-logout protection exists to deny.
+		/// <para>
+		/// Each entry carries the claim this server still holds for it, so these writes are
+		/// ownership-gated like every other save and a body whose claim has lapsed is refused
+		/// rather than allowed to overwrite whichever server took the character.
+		/// </para>
+		/// </remarks>
+		/// <param name="mappingData">Mapping data holding the session claims.</param>
+		/// <param name="characterData">Destination for the character rows.</param>
+		/// <param name="buffs">Destination for buff rows.</param>
+		/// <param name="attributes">Destination for attribute rows.</param>
+		/// <param name="abilities">Destination for ability rows.</param>
+		private void AppendLingeringCharacterSnapshots(
+			ICharacterMappingData<NetworkConnection> mappingData,
+			List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterData,
+			List<CharacterBuffData> buffs,
+			List<CharacterAttributeData> attributes,
+			List<CharacterAbilityData> abilities)
+		{
+			if (lingeringCharacters.Count == 0)
+			{
+				return;
+			}
+
+			foreach (var kvp in lingeringCharacters)
+			{
+				IPlayerCharacter character = kvp.Value.Character;
+				if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+				{
+					// The sweep will drop the bookkeeping; nothing here to write.
+					continue;
+				}
+
+				CharacterSessionInfo? ownership = mappingData.SessionTokens.TryGetValue(kvp.Key, out CharacterSessionInfo held)
+					? held
+					: (CharacterSessionInfo?)null;
+
+				characterData.Add((BuildCharacterData(character), ownership));
+				AppendBuffData(character, buffs);
+				AppendAttributeData(character, attributes);
+				AppendAbilityData(character, abilities);
+			}
 		}
 
 		/// <summary>

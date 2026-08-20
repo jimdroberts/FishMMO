@@ -52,15 +52,28 @@ namespace FishMMO.Shared
 		/// running out a combat-logout timer — so the account cannot switch to another one yet.
 		/// </summary>
 		OtherCharacterInWorld = 1,
+		/// <summary>
+		/// The selection could not be completed for a reason the player cannot act on — a
+		/// database failure, a saturated worker pool, or a request refused by the server's
+		/// per-connection cooldown. Retrying is the only useful advice.
+		/// </summary>
+		Failed = 2,
 	}
 
 	/// <summary>
-	/// Broadcast sent when a character selection is refused, so the client can explain why
-	/// instead of appearing to hang on an unanswered request.
+	/// Broadcast sent for every character selection — accepted or refused — so the client
+	/// always has a terminal answer instead of appearing to hang on an unanswered request.
 	/// </summary>
+	/// <remarks>
+	/// The success case matters as much as the refusals. The client disables its connect
+	/// button and arms a reply deadline when the request goes out, and only this message ends
+	/// that wait: a selection that succeeded but said nothing left the deadline armed, so the
+	/// character-select panel reappeared over the server list (or over world entry) half a
+	/// minute later claiming the server had not responded.
+	/// </remarks>
 	public struct CharacterSelectResultBroadcast : IBroadcast
 	{
-		/// <summary>Reason the selection was refused.</summary>
+		/// <summary>Outcome of the selection.</summary>
 		public CharacterSelectResult Result;
 		/// <summary>Name of the character responsible for the refusal, when applicable.</summary>
 		public string CharacterName;

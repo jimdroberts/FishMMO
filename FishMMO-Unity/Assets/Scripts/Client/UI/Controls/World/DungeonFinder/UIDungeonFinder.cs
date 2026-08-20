@@ -130,7 +130,15 @@ namespace FishMMO.Client
 			Client.Broadcast(new DungeonFinderBroadcast()
 			{
 				InteractableID = currentInteractableID,
-			});
+			}, Channel.Reliable);
+
+			/* Close on send. The request is one-shot: on success the server drops this
+			 * connection and the client re-routes, and on refusal it answers with
+			 * SceneTransferRefusedBroadcast, which surfaces its own dialog. Leaving the panel up
+			 * invites the player to click again while the first request is still in flight, and
+			 * the server's ingress guard rejects that as a duplicate — which reads as the button
+			 * having stopped working. */
+			Hide();
 		}
 	}
 }

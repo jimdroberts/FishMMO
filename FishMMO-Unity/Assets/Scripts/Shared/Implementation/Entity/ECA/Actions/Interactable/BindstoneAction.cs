@@ -26,9 +26,33 @@ namespace FishMMO.Shared
 
 			IBindstone bindstone = data.Interactable as IBindstone;
 
-			// Validate same scene — the bindstone and the player must share a scene to avoid
-			// cross-scene bind exploits.
-			if (player.SceneName != data.Interactable.GameObject.scene.name)
+			/* A bind point is an open-world location, so it cannot be taken inside an instance.
+			 *
+			 * BindScene and BindPosition are consumed by the respawn-at-bind-point path, which
+			 * assigns BindScene to SceneName and hands the character to the world server's
+			 * open-world routing. A BindScene naming a dungeon would send that routing looking
+			 * for open-world instances of a dungeon scene, find none, and request one be
+			 * created — a trap the character carries until it binds somewhere else.
+			 *
+			 * This was previously refused only by accident: SceneName keeps naming the open
+			 * world while the character is inside an instance, so it never matched the
+			 * instance's own scene and the check below rejected it for the wrong reason. In the
+			 * one case where the two names DO coincide it would have passed, recording instance
+			 * coordinates against an open-world scene — which is how a player ends up respawning
+			 * inside terrain. */
+			if (player.IsInInstance())
+			{
+				Log.Debug("BindstoneAction", "Character cannot bind while inside an instance.");
+				return;
+			}
+
+			/* Compare the scene the character is physically standing in, by handle.
+			 *
+			 * Scene stacking means several instances of one scene are loaded at once and share a
+			 * name, so a name comparison cannot tell a bindstone in this character's instance
+			 * from one in a different channel of the same scene. The handle is unambiguous
+			 * within the process, which is the only place this check runs. */
+			if (player.GameObject.scene.handle != data.Interactable.GameObject.scene.handle)
 			{
 				Log.Debug("BindstoneAction", "Character is not in the same scene as the bindstone.");
 				return;

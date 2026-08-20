@@ -130,7 +130,105 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				Log.Warning("CharacterSystem",
 					$"Connection {kvp.Key} never acknowledged its scene load within {SceneLoadHandshakeTimeout.TotalSeconds:F0}s; disconnecting to release its character claim.");
-				conn.Disconnect(false);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneHandshakeTimedOut);
+			}
+		}
+
+		/// <summary>
+		/// Deadline by which each authenticated connection must have a character somewhere this
+		/// server tracks it, keyed by ClientId.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="sceneLoadDeadlines"/> covers the scene handshake, but it is only armed
+		/// once <see cref="InstantiateAndLoadCharacter"/> has put the character into
+		/// <c>WaitingSceneLoadCharacters</c> — everything before that point was unwatched. The
+		/// load runs on an async worker and hands back through <c>TryEnqueueMainThread</c>,
+		/// which is bounded and returns false when saturated; the failure branches then try to
+		/// deliver their own disconnect through that same saturated queue. A connection lost
+		/// anywhere in that window is authenticated, in no map, and driven by nothing, so it
+		/// sits on the scene server behind a loading screen for as long as the transport stays
+		/// open.
+		/// <para>
+		/// This mirrors <c>WorldSceneSystem</c>'s residency watchdog and bounds every such path
+		/// at once rather than patching each delivery site: still being here with no character
+		/// means the load failed, whatever the cause. Disconnecting hands the client back to its
+		/// own reconnect loop, which returns through the world server and is routed again.
+		/// </para>
+		/// </remarks>
+		private readonly ConcurrentDictionary<int, DateTime> characterResidencyDeadlines =
+			new ConcurrentDictionary<int, DateTime>();
+
+		/// <summary>
+		/// How long an authenticated connection may go without a character before it is treated
+		/// as a failed load.
+		/// </summary>
+		/// <remarks>
+		/// Must comfortably exceed a cold character load — a claim with up to five retries
+		/// followed by fourteen sub-entity fetches in one transaction — so a merely slow
+		/// database is never mistaken for a stuck one. It must also stay below
+		/// <see cref="SceneLoadHandshakeTimeout"/>'s scope so the two watchdogs cannot both
+		/// apply to the same connection: this one stops the moment the character is registered,
+		/// which is the same moment that one starts.
+		/// </remarks>
+		private static readonly TimeSpan CharacterResidencyTimeout = TimeSpan.FromSeconds(60);
+
+		/// <summary>Interval in seconds between character-residency sweeps.</summary>
+		private const float CharacterResidencySweepIntervalSeconds = 10f;
+
+		/// <summary>
+		/// Disconnects connections that authenticated but never ended up with a character on
+		/// this server. See <see cref="characterResidencyDeadlines"/>.
+		/// </summary>
+		private void OnPeriodicCharacterResidencySweep(float deltaTime)
+		{
+			if (Server == null || Server.ServerState != ConnectionState.Started || characterResidencyDeadlines.IsEmpty)
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+
+			foreach (var kvp in characterResidencyDeadlines)
+			{
+				NetworkConnection conn = null;
+				if (ServerManager != null)
+				{
+					ServerManager.Clients.TryGetValue(kvp.Key, out conn);
+				}
+				if (conn == null || !conn.IsActive)
+				{
+					characterResidencyDeadlines.TryRemove(kvp.Key, out _);
+					continue;
+				}
+
+				// The load got somewhere: either the character is waiting on its scene handshake
+				// (which sceneLoadDeadlines now owns) or it is fully in the world. Either way
+				// this watchdog is done with the connection.
+				if (mappingData.WaitingSceneLoadCharacters.ContainsKey(conn) ||
+					mappingData.ConnectionCharacters.ContainsKey(conn))
+				{
+					characterResidencyDeadlines.TryRemove(kvp.Key, out _);
+					continue;
+				}
+
+				if (nowUtc < kvp.Value)
+				{
+					continue;
+				}
+
+				characterResidencyDeadlines.TryRemove(kvp.Key, out _);
+
+				Log.Warning("CharacterSystem",
+					$"Connection {kvp.Key} authenticated but had no character after {CharacterResidencyTimeout.TotalSeconds:F0}s; " +
+					"disconnecting so the client can retry through the world server.");
+				// Non-terminal: the client's reconnect loop returns through the world server,
+				// which re-routes it — the same recovery every other transient load failure gets.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 		}
 
@@ -143,10 +241,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			DateTime nowUtc = DateTime.UtcNow;
 
+			// Arm the residency backstop before any branch below can return. Every early exit
+			// here is supposed to disconnect, but the ones that deliver that disconnect through
+			// the main-thread queue can be dropped when it is saturated — which is precisely
+			// when this watchdog has to be the thing that ends the connection.
+			if (conn != null && conn.IsActive)
+			{
+				characterResidencyDeadlines[conn.ClientId] = nowUtc + CharacterResidencyTimeout;
+			}
+
 			// Resolve account name first so the rate limit can be applied per-account.
 			if (!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ProtocolViolation, terminal: true);
 				return;
 			}
 
@@ -168,14 +275,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				});
 			if (wasCoolingDown)
 			{
+				/* Returning quietly here stranded the client.
+				 *
+				 * This callback is the ONLY thing that starts a character load, and every
+				 * watchdog on this server is armed downstream of it: sceneLoadDeadlines is set
+				 * when the character reaches WaitingSceneLoadCharacters, and the transfer
+				 * watchdog only covers connections whose character was already handed off. A
+				 * connection refused here is therefore authenticated, in no map, and watched by
+				 * nothing — it sits on the scene server behind a loading screen until the player
+				 * kills the client.
+				 *
+				 * The limit is still enforced; it just says so. Non-terminal because retrying is
+				 * exactly the recovery: the cooldown entry is dropped by
+				 * OnRemoteConnectionStopped, so the client's next attempt starts clean. */
 				Log.Warning("CharacterSystem", $"Auth callback rate-limited for account {accountName}");
+				DisconnectWithNotice(conn, DisconnectNoticeReason.RateLimited);
 				return;
 			}
 
 			// Is the character already loading?
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -186,14 +307,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!authenticated ||
 				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
 			if (Server?.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -207,7 +328,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (serverID <= 0)
 			{
 				Log.Error("CharacterSystem", "Authenticator_OnClientAuthenticationResult: Server ID is invalid, cannot claim session.");
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -222,7 +343,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!EnqueueAsyncWork(() => LoadCharacterAsync(conn, accountName, characterService, serverID)))
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 		}
 
@@ -286,10 +407,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			await Log.Error("CharacterSystem", $"TryClaimAsync failed for character {characterID}: {claimResult.ErrorCode} - {claimResult.ErrorMessage}");
 			TryEnqueueMainThread(() =>
 			{
-				if (conn != null && conn.IsActive)
-				{
-					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-				}
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable);
 			});
 			return Guid.Empty;
 		}
@@ -308,10 +426,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// reclaiming a combat-logout body. When set the claim step is skipped entirely — the
 		/// character is already ours, and claiming again would contend with our own session.
 		/// </param>
-		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID, Guid preClaimedSessionToken = default)
+		/// <param name="preClaimedCharacterID">
+		/// Character the <paramref name="preClaimedSessionToken"/> belongs to.
+		/// </param>
+		/// <remarks>
+		/// A pre-claimed token has to be released on every path that abandons the load, exactly
+		/// like one claimed here. It is handed over by
+		/// <see cref="TryReattachLingeringCharacter"/>, which has already removed it from
+		/// <c>SessionTokens</c> — so if this method returns without either installing it or
+		/// giving it back, nothing in the process holds it any more and the character stays
+		/// Online in the database until its lease expires, kicking the player from every scene
+		/// server in the meantime. That is why the token is tracked from the first line rather
+		/// than from the point the claim step would otherwise assign it, and why
+		/// <paramref name="preClaimedCharacterID"/> exists: the early failures happen before
+		/// any character row has been read, so there would otherwise be no ID to release under.
+		/// </remarks>
+		private async Task LoadCharacterAsync(NetworkConnection conn, string accountName, ICharacterService characterService, long serverID, Guid preClaimedSessionToken = default, long preClaimedCharacterID = 0)
 		{
 			CharacterData charData = default;
-			Guid sessionToken = Guid.Empty;
+			// Tracked from here, not from the claim step, so an abandoned load always has
+			// something to hand back. See the remarks above.
+			Guid sessionToken = preClaimedSessionToken;
+			long sessionCharacterID = preClaimedSessionToken != Guid.Empty ? preClaimedCharacterID : 0;
+
+			// Releases whatever claim is currently held, if any, so the caller can return.
+			async Task ReleaseHeldSessionAsync()
+			{
+				if (sessionToken == Guid.Empty || sessionCharacterID <= 0)
+				{
+					return;
+				}
+				Guid releasing = sessionToken;
+				long releasingID = sessionCharacterID;
+				sessionToken = Guid.Empty;
+				sessionCharacterID = 0;
+				await ReleaseCharacterSessionAsync(releasingID, serverID, releasing);
+			}
 
 			try
 			{
@@ -319,12 +469,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!serviceRegistry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 				{
+					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
 							Log.Debug("CharacterSystem", "Failed to resolve IUnitOfWorkService.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 						}
 					});
 					return;
@@ -355,12 +506,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
 				if (!fetchResult.IsSuccess || !fetchResult.Data.HasValue)
 				{
+					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
 							Log.Debug("CharacterSystem", "No selected character found for account.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 						}
 					});
 					return;
@@ -369,10 +521,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				charData = fetchResult.Data.Value;
 				long characterID = charData.ID;
 
-				if (preClaimedSessionToken != Guid.Empty)
+				if (sessionToken != Guid.Empty)
 				{
-					// Reclaiming our own combat-logout body: the claim never left this server.
-					sessionToken = preClaimedSessionToken;
+					/* Reclaiming our own combat-logout body: the claim never left this server.
+					 *
+					 * The claim is for one specific character, so it can only be reused if the
+					 * account's selected character is still that one. CharacterSelectSystem
+					 * refuses to move the selection while a character is in the world, which is
+					 * what normally guarantees it — but relying on that silently would mean a
+					 * mismatch installs the lingering body's token under a different character's
+					 * ID, leaving the new character unclaimed (free for a second scene server to
+					 * take) and the body's claim unreleasable. Fail the load instead. */
+					if (sessionCharacterID != characterID)
+					{
+						await Log.Error("CharacterSystem",
+							$"Reclaimed session belongs to character {sessionCharacterID} but the account's selected character is {characterID}; abandoning load.");
+						await ReleaseHeldSessionAsync();
+						TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true));
+						return;
+					}
 				}
 				else
 				{
@@ -382,6 +549,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// ClaimCharacterSessionAsync has already logged and kicked.
 						return;
 					}
+					sessionCharacterID = characterID;
 				}
 
 				// Re-read the character now that we hold the claim. The row above was read
@@ -397,18 +565,96 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// The account's selected character changed between the two reads, so the
 					// claim we hold is for a character this connection is no longer loading.
 					await Log.Warning("CharacterSystem", $"Selected character changed while claiming {characterID}; abandoning load.");
-					await ReleaseCharacterSessionAsync(characterID, serverID, sessionToken);
-					sessionToken = Guid.Empty;
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-						}
-					});
+					await ReleaseHeldSessionAsync();
+					TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable));
 					return;
 				}
 				charData = ownedFetch.Data.Value;
+
+				/* Resolve where an instanced character actually lives.
+				 *
+				 * The character row records only the instance's database ID; the scene name and
+				 * runtime handle it resolves to live on the scene row. Nothing used to perform
+				 * that lookup, so InstanceSceneName was never assigned and IPlayerCharacter.
+				 * IsInInstance() — which requires it — was permanently false. The load below
+				 * then targeted the character's OPEN WORLD scene and handle, which do not exist
+				 * on the scene server hosting the instance, so the connection was dropped with
+				 * SceneUnavailable, the world server saw IsInInstance in the row and routed the
+				 * reconnect straight back, and the character could never enter the world again.
+				 *
+				 * A resolution that does not name a ready instance on THIS server is not a
+				 * transient condition worth retrying — it is what strands the character — so the
+				 * flag is cleared here, under the claim we already hold, and the character is
+				 * loaded into the open world instead. */
+				string instanceSceneName = null;
+				long instanceSceneHandle = 0;
+
+				if (charData.Flags.IsFlagged(CharacterFlags.IsInInstance))
+				{
+					InstanceResolution resolution = await ResolveInstanceSceneAsync(charData, serverID);
+
+					switch (resolution.Outcome)
+					{
+						case InstanceResolutionOutcome.Resolved:
+							instanceSceneName = resolution.SceneName;
+							instanceSceneHandle = resolution.SceneHandle;
+							break;
+
+						case InstanceResolutionOutcome.HostedElsewhere:
+							/* The instance is alive, just not here. Clearing the flag would evict
+							 * a player from a dungeon that is still running, so hand the client
+							 * back to the world server, which routes from the same scene row and
+							 * will send it to the right scene server. Bounded by the client's own
+							 * reconnect budget rather than by anything here. */
+							await Log.Warning("CharacterSystem",
+								$"Character {charData.ID} is in instance {charData.InstanceID}, hosted by scene server {resolution.HostSceneServerID} rather than {serverID}; returning it to the world server to be re-routed.");
+							await ReleaseHeldSessionAsync();
+							TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable));
+							return;
+
+						default:
+							await Log.Warning("CharacterSystem",
+								$"Character {charData.ID} could not be placed in instance {charData.InstanceID} ({resolution.Reason}); clearing its instance flag and loading it into the open world.");
+
+							int clearedFlags = charData.Flags;
+							clearedFlags.DisableBit(CharacterFlags.IsInInstance);
+
+							/* Adopted locally whether or not the write below lands. The character
+							 * IS being loaded into the open world, so the in-memory state has to
+							 * say so — otherwise the flag survives on a character that is not in
+							 * any instance, and the world server routes it straight back here on
+							 * its next login. A failed write is recovered by the ordinary save
+							 * path, whose version guard accepts the higher counter. */
+							charData = charData.WithFlagsVersionAndTimestamp(
+								clearedFlags, charData.Version + 1, DateTime.UtcNow);
+
+							// Ownership-gated, like every other write this server makes while it
+							// holds a claim, so a lapsed lease cannot overwrite the new owner.
+							DatabaseResult clearResult = await characterService.PersistOwnedAsync(
+								charData,
+								new CharacterSessionLeaseData(charData.ID, serverID, sessionToken));
+
+							if (!clearResult.IsSuccess)
+							{
+								if (clearResult.ErrorCode == DatabaseErrorCodes.Forbidden)
+								{
+									// The claim we acquired moments ago is already gone, so this
+									// load has no authority over the character at all. Abandon it
+									// rather than spawning a second copy of somebody else's.
+									await Log.Error("CharacterSystem",
+										$"Lost the session claim for character {charData.ID} while releasing it from instance {charData.InstanceID}; abandoning the load.");
+									await ReleaseHeldSessionAsync();
+									TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable));
+									return;
+								}
+
+								await Log.Warning("CharacterSystem",
+									$"Failed to persist the cleared instance flag for character {charData.ID}: {clearResult.ErrorCode} - {clearResult.ErrorMessage}. " +
+									"The character loads into the open world regardless; the next save carries the change.");
+							}
+							break;
+					}
+				}
 
 				DatabaseResult<IUnitOfWork> uowResult = await unitOfWorkService.BeginAsync();
 				if (!uowResult.IsSuccess)
@@ -418,13 +664,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						if (conn != null && conn.IsActive)
 						{
 							Log.Debug("CharacterSystem", "Failed to begin UnitOfWork for character load.");
-							conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+							DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 						}
 					});
 					// The claim is committed at this point, so it has to be handed back
 					// explicitly rather than relying on a transaction rollback.
-					await ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken);
-					sessionToken = Guid.Empty;
+					await ReleaseHeldSessionAsync();
 					return;
 				}
 
@@ -513,39 +758,342 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Marshal back to main thread for Unity object instantiation
 				var loadContext = new CharacterLoadContext(
 					conn, charData, sessionToken, serverID,
+					instanceSceneName, instanceSceneHandle,
 					inventoryData, bankData, equipmentData,
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
 					guildData, partyData,
 					hotkeyData, buffData, factionData, questData);
-				TryEnqueueMainThread(() => InstantiateAndLoadCharacter(loadContext));
+				/* The main-thread queue is bounded and drops work when it is saturated, and this
+				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
+				 * item therefore left the character Online with nothing left holding its token —
+				 * the exact stranded-claim state every other path here goes out of its way to
+				 * avoid — so the destination scene server kicked the player on every retry until
+				 * the lease expired. */
+				if (!TryEnqueueMainThread(() => InstantiateAndLoadCharacter(loadContext)))
+				{
+					await Log.Error("CharacterSystem",
+						$"Main-thread queue rejected the character spawn for {charData.ID}; releasing its session.");
+					await ReleaseHeldSessionAsync();
+					TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError));
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"LoadCharacterAsync failed: {ex}");
 
-				// If we successfully claimed the session before the failure, release it
-				if (sessionToken != Guid.Empty && charData.ID > 0)
+				// If a session is held — claimed here, or handed over by a combat-logout
+				// reattach — it has to go back before this load is abandoned.
+				if (sessionToken != Guid.Empty && sessionCharacterID > 0)
 				{
 					try
 					{
-						await ReleaseCharacterSessionAsync(charData.ID, serverID, sessionToken);
+						await ReleaseHeldSessionAsync();
 					}
 					catch (Exception releaseEx)
 					{
-						await Log.Error("CharacterSystem", $"LoadCharacterAsync: Failed to release session after error for character {charData.ID}: {releaseEx.Message}");
+						await Log.Error("CharacterSystem", $"LoadCharacterAsync: Failed to release session after error for character {sessionCharacterID}: {releaseEx.Message}");
 					}
 				}
 
-				TryEnqueueMainThread(() =>
-				{
-					if (conn != null && conn.IsActive)
-					{
-						conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
-					}
-				});
+				TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError));
 			}
 		}
+
+		/// <summary>
+		/// Resolves the Unity scene a character belongs to.
+		/// </summary>
+		/// <remarks>
+		/// The character names its scene instance by row ID, which is the only identifier that
+		/// means the same thing on every scene server; the scene manager understands only this
+		/// process's own handle. This is where the two meet, and going through the scene server's
+		/// instance registry to do it also verifies the instance is one this server actually
+		/// hosts — asking the scene manager directly would silently accept whatever local scene
+		/// happened to share the number.
+		/// </remarks>
+		/// <param name="character">Character whose scene to resolve.</param>
+		/// <param name="scene">The resolved scene, or default when it is not hosted here.</param>
+		/// <returns><c>true</c> when the character's scene instance is loaded on this server.</returns>
+		private bool TryGetCharacterScene(IPlayerCharacter character, out Scene scene)
+		{
+			scene = default;
+
+			if (character == null ||
+				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+			{
+				return false;
+			}
+
+			bool inInstance = character.IsInInstance();
+			string sceneName = inInstance ? character.InstanceSceneName : character.SceneName;
+			long sceneID = inInstance ? character.InstanceSceneHandle : character.SceneHandle;
+
+			if (!sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneID, out ISceneInstanceDetails details))
+			{
+				return false;
+			}
+
+			scene = SceneManager.GetScene(details.Handle);
+			return true;
+		}
+
+		/// <summary>
+		/// Replaces an unusable stored rotation with identity.
+		/// </summary>
+		/// <remarks>
+		/// A zero quaternion is not a rotation. Unity treats it as invalid and it propagates NaN
+		/// through the motor, which then reports a position of NaN and fails every bounds test
+		/// forever. Character rows written before a given rotation column existed hold exactly
+		/// that value, so it has to be normalised on the way in rather than trusted.
+		/// </remarks>
+		private static Quaternion NormalizeRotation(Quaternion rotation)
+		{
+			float sqrMagnitude = (rotation.x * rotation.x) + (rotation.y * rotation.y) +
+								 (rotation.z * rotation.z) + (rotation.w * rotation.w);
+
+			// Also rejects NaN: every comparison against NaN is false, so this test fails and
+			// identity is returned.
+			return sqrMagnitude > 1e-6f ? rotation : Quaternion.identity;
+		}
+
+		#region Instance Scene Resolution
+
+		/// <summary>How an instance lookup for a character turned out.</summary>
+		private enum InstanceResolutionOutcome : byte
+		{
+			/// <summary>The instance is ready and hosted by this scene server.</summary>
+			Resolved = 0,
+			/// <summary>The instance is ready, but another scene server hosts it.</summary>
+			HostedElsewhere = 1,
+			/// <summary>The instance cannot be entered and the character must be released from it.</summary>
+			Unavailable = 2,
+		}
+
+		/// <summary>Result of resolving a character's <c>InstanceID</c> to a live scene instance.</summary>
+		private readonly struct InstanceResolution
+		{
+			/// <summary>What the lookup concluded.</summary>
+			public readonly InstanceResolutionOutcome Outcome;
+			/// <summary>Scene name of the instance, when <see cref="Outcome"/> is <see cref="InstanceResolutionOutcome.Resolved"/>.</summary>
+			public readonly string SceneName;
+			/// <summary>Scene row ID of the instance, when resolved.</summary>
+			public readonly long SceneHandle;
+			/// <summary>Scene server that hosts the instance, when it is hosted elsewhere.</summary>
+			public readonly long HostSceneServerID;
+			/// <summary>Why the instance is unavailable, for diagnostics.</summary>
+			public readonly string Reason;
+
+			private InstanceResolution(InstanceResolutionOutcome outcome, string sceneName, long sceneHandle, long hostSceneServerID, string reason)
+			{
+				Outcome = outcome;
+				SceneName = sceneName;
+				SceneHandle = sceneHandle;
+				HostSceneServerID = hostSceneServerID;
+				Reason = reason;
+			}
+
+			/// <summary>The instance is ready here.</summary>
+			public static InstanceResolution Resolved(string sceneName, long sceneHandle)
+				=> new InstanceResolution(InstanceResolutionOutcome.Resolved, sceneName, sceneHandle, 0, null);
+
+			/// <summary>The instance is ready on another scene server.</summary>
+			public static InstanceResolution HostedElsewhere(long hostSceneServerID)
+				=> new InstanceResolution(InstanceResolutionOutcome.HostedElsewhere, null, 0, hostSceneServerID, null);
+
+			/// <summary>The instance cannot be entered.</summary>
+			public static InstanceResolution Unavailable(string reason)
+				=> new InstanceResolution(InstanceResolutionOutcome.Unavailable, null, 0, 0, reason);
+		}
+
+		/// <summary>
+		/// Resolves a character's <c>InstanceID</c> to the scene name and runtime handle of the
+		/// instance it should be loaded into.
+		/// </summary>
+		/// <remarks>
+		/// Every condition that is not "a ready instance of this world, hosted by this server,
+		/// whose scene is actually loaded here" resolves to
+		/// <see cref="InstanceResolutionOutcome.Unavailable"/>. That is deliberate: the caller
+		/// responds by releasing the character from the instance, and a wrong answer in the
+		/// other direction is what makes a character permanently unloadable. The scene row is
+		/// checked against the locally loaded scene as well as against the database, because the
+		/// row can outlive the scene it describes if a scene server unloads a scene and the
+		/// delete has not landed yet.
+		/// </remarks>
+		/// <param name="charData">The character being loaded.</param>
+		/// <param name="serverID">This scene server's database ID.</param>
+		private async Task<InstanceResolution> ResolveInstanceSceneAsync(CharacterData charData, long serverID)
+		{
+			if (charData.InstanceID <= 0)
+			{
+				return InstanceResolution.Unavailable("the character carries the instance flag but no instance ID");
+			}
+
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
+			{
+				return InstanceResolution.Unavailable("the scene service is unavailable");
+			}
+
+			DatabaseResult<SceneData> sceneResult = await sceneService.FetchAsync(charData.InstanceID);
+			if (!sceneResult.IsSuccess)
+			{
+				// Includes the row having been reaped by the world server's stale-scene sweep,
+				// which is the ordinary end state for an instance that never became ready.
+				return InstanceResolution.Unavailable($"instance scene row {charData.InstanceID} could not be read: {sceneResult.ErrorCode}");
+			}
+
+			SceneData sceneData = sceneResult.Data;
+
+			if ((SceneStatus)sceneData.SceneStatus != SceneStatus.Ready)
+			{
+				return InstanceResolution.Unavailable($"instance scene {charData.InstanceID} is {(SceneStatus)sceneData.SceneStatus}, not Ready");
+			}
+
+			if (sceneData.WorldServerID != charData.WorldServerID)
+			{
+				return InstanceResolution.Unavailable(
+					$"instance scene {charData.InstanceID} belongs to world server {sceneData.WorldServerID}, not {charData.WorldServerID}");
+			}
+
+			if (sceneData.SceneServerID != serverID)
+			{
+				/* Being sent to the wrong scene server is normally transient — the world server
+				 * routes off this same row and will get it right — but it is only transient if
+				 * the server the row names is actually alive. When it is not, the world server
+				 * keeps resolving its stale registration to an address that now answers as
+				 * somebody else (a restarted scene server reusing the port is the ordinary way
+				 * this happens), the client is sent here again, and refusing again produces an
+				 * unbounded redirect loop with no clock on it: the row is Ready and its age says
+				 * nothing, so none of the other bounds apply.
+				 *
+				 * Liveness is the thing that distinguishes the two cases, so ask. A host that has
+				 * stopped pulsing is gone, and with it the instance, whatever the row still says.
+				 */
+				if (await IsSceneServerLiveAsync(sceneData.SceneServerID))
+				{
+					return InstanceResolution.HostedElsewhere(sceneData.SceneServerID);
+				}
+
+				return InstanceResolution.Unavailable(
+					$"instance scene {charData.InstanceID} is registered to scene server {sceneData.SceneServerID}, which is no longer pulsing");
+			}
+
+			// The row says this server hosts it; confirm the scene is genuinely loaded here
+			// before committing the character to it. Main-thread state, so read it there.
+			bool present = false;
+			string sceneName = sceneData.SceneName;
+			long instanceSceneID = sceneData.ID;
+
+			if (!await RunOnMainThreadAsync(() =>
+			{
+				present = Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem) &&
+					sceneServerSystem.TryGetSceneInstanceDetails(sceneData.WorldServerID, sceneName, instanceSceneID, out _);
+			}))
+			{
+				return InstanceResolution.Unavailable("the main-thread queue could not confirm the instance scene is loaded");
+			}
+
+			if (!present)
+			{
+				return InstanceResolution.Unavailable(
+					$"instance scene {sceneName} (SceneID={instanceSceneID}) is recorded against this server but is not loaded here");
+			}
+
+			return InstanceResolution.Resolved(sceneName, instanceSceneID);
+		}
+
+		/// <summary>
+		/// How long a scene server may go without pulsing before it is presumed dead.
+		/// </summary>
+		/// <remarks>
+		/// An order of magnitude above the default 5s pulse rate, so a slow pulse or a brief
+		/// database stall is never mistaken for a dead server, and well under the two-minute
+		/// session lease so a conclusion drawn here cannot outlive the claim it reasons about.
+		/// </remarks>
+		private static readonly TimeSpan SceneServerPulseStaleAfter = TimeSpan.FromSeconds(60);
+
+		/// <summary>
+		/// Whether the named scene server is still registered and pulsing.
+		/// </summary>
+		/// <remarks>
+		/// A crashed scene server leaves its registration behind — the row is only deleted on a
+		/// graceful shutdown — so existence alone proves nothing and the pulse timestamp is what
+		/// has to be read.
+		/// </remarks>
+		/// <param name="sceneServerID">Scene server to check.</param>
+		private async Task<bool> IsSceneServerLiveAsync(long sceneServerID)
+		{
+			if (sceneServerID <= 0 ||
+				Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ISceneServerService>(out var sceneServerService))
+			{
+				// Cannot tell. Treat as live so a lookup failure never evicts a character from a
+				// dungeon that is running perfectly well; the caller's other bounds still apply.
+				return true;
+			}
+
+			DatabaseResult<SceneServerData> result = await sceneServerService.FetchAsync(sceneServerID);
+			if (!result.IsSuccess)
+			{
+				// The registration is gone, so the server shut down cleanly and took its scenes.
+				return false;
+			}
+
+			return (DateTime.UtcNow - result.Data.LastPulse) < SceneServerPulseStaleAfter;
+		}
+
+		/// <summary>
+		/// Runs <paramref name="action"/> on the main thread and waits for it to finish.
+		/// </summary>
+		/// <remarks>
+		/// Bounded rather than open-ended: a queued action only runs while this behaviour is
+		/// being updated, so anything enqueued after deinitialization would never run and an
+		/// awaiting worker would hold an async-worker slot for the life of the process. Reaching
+		/// the timeout means the main-thread queue is not draining at all, and the caller's own
+		/// failure path is the correct response. Mirrors
+		/// <c>WorldSceneSystem.RunOnMainThreadAsync</c>.
+		/// </remarks>
+		/// <returns><c>false</c> when the action could not be queued or was never drained.</returns>
+		private async Task<bool> RunOnMainThreadAsync(Action action)
+		{
+			const int MainThreadDispatchTimeoutMs = 30_000;
+
+			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			if (!TryEnqueueMainThread(() =>
+			{
+				try
+				{
+					action();
+					tcs.TrySetResult(true);
+				}
+				catch (Exception ex)
+				{
+					tcs.TrySetException(ex);
+				}
+			}))
+			{
+				return false;
+			}
+
+			using (var timeoutCts = new System.Threading.CancellationTokenSource())
+			{
+				Task timeoutTask = Task.Delay(MainThreadDispatchTimeoutMs, timeoutCts.Token);
+				Task completed = await Task.WhenAny(tcs.Task, timeoutTask);
+				if (!ReferenceEquals(completed, tcs.Task))
+				{
+					await Log.Error("CharacterSystem",
+						$"Main-thread dispatch was not drained within {MainThreadDispatchTimeoutMs}ms; abandoning the operation.");
+					return false;
+				}
+				timeoutCts.Cancel();
+			}
+
+			// Awaited rather than returned so an exception thrown by the action surfaces to the
+			// caller's try/catch.
+			return await tcs.Task;
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Instantiates the player character from CharacterData, populates all controllers
@@ -584,7 +1132,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
 			{
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -592,14 +1140,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", $"{charData.ID} is already loaded or loading.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				// Another session on this server already holds the character. Retrying is the
+				// right answer once that one finishes tearing down.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SessionSuperseded);
 				return;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -611,12 +1161,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", "Failed to fetch character: invalid race template.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				// A bad race template will be just as bad on the next attempt.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 				return;
 			}
 
-			Vector3 position = new Vector3(charData.X, charData.Y, charData.Z);
-			Quaternion rotation = new Quaternion(charData.RotX, charData.RotY, charData.RotZ, charData.RotW);
+			/* An instanced character does not spawn at its open-world coordinates.
+			 *
+			 * X/Y/Z is where the character stands in the world scene it will return to; the
+			 * dungeon's own entry point is InstanceX/Y/Z, written by the dungeon finder from the
+			 * destination scene's respawn points. Using the world position dropped players at
+			 * whatever coordinates they happened to be standing on outside, which inside a
+			 * dungeon geometry is arbitrary — through the floor as often as not. */
+			bool enteringInstance = !string.IsNullOrWhiteSpace(ctx.InstanceSceneName);
+
+			Vector3 worldPosition = new Vector3(charData.X, charData.Y, charData.Z);
+			Quaternion worldRotation = NormalizeRotation(
+				new Quaternion(charData.RotX, charData.RotY, charData.RotZ, charData.RotW));
+
+			Vector3 position = enteringInstance
+				? new Vector3(charData.InstanceX, charData.InstanceY, charData.InstanceZ)
+				: worldPosition;
+			Quaternion rotation = enteringInstance
+				? NormalizeRotation(new Quaternion(charData.InstanceRotX, charData.InstanceRotY, charData.InstanceRotZ, charData.InstanceRotW))
+				: worldRotation;
 
 			NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(
 				raceTemplate.Prefab, position, rotation, true);
@@ -624,7 +1192,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Debug("CharacterSystem", "Failed to instantiate character prefab.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				return;
 			}
 
@@ -634,7 +1202,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
 				Log.Debug("CharacterSystem", "Failed to get IPlayerCharacter from instantiated prefab.");
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 				return;
 			}
 
@@ -661,6 +1229,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			character.InstanceID = charData.InstanceID;
 			character.Flags = charData.Flags;
 
+			/* The instance's scene name and handle, resolved from the scene row during the load.
+			 * IPlayerCharacter.IsInInstance() is false without the name, so every instance-aware
+			 * decision below — which scene to load, which scene population to credit, which
+			 * scene's teleporters apply — depends on this assignment. */
+			character.InstanceSceneName = ctx.InstanceSceneName;
+			character.InstanceSceneHandle = ctx.InstanceSceneHandle;
+
+			/* Where the character goes when it leaves an instance, carried in memory because the
+			 * transform can only describe one of the two places at a time. See
+			 * BuildCharacterData. Populated unconditionally so it is already correct for a
+			 * character that enters an instance later in this session. */
+			character.LastWorldPosition = worldPosition;
+			character.LastWorldRotation = worldRotation;
+
 			// Combat is transient state — never persist or restore across sessions.
 			// The save path also strips this flag, but sanitize on load for defense-in-depth.
 			character.DisableFlags(CharacterFlags.IsInCombat);
@@ -673,10 +1255,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// that to the crash itself rather than to every session afterwards.
 			character.DisableFlags(CharacterFlags.IsCombatLogged);
 
-			if (character.IsInInstance())
+			if (enteringInstance)
 			{
-				character.InstancePosition = new Vector3(charData.InstanceX, charData.InstanceY, charData.InstanceZ);
-				character.InstanceRotation = new Quaternion(charData.InstanceRotX, charData.InstanceRotY, charData.InstanceRotZ, charData.InstanceRotW);
+				// Kept in sync with the transform the character was actually placed at, so the
+				// save path round-trips the entry point rather than the stored-but-unused value.
+				character.InstancePosition = position;
+				character.InstanceRotation = rotation;
 			}
 
 			// --- Populate all controllers from pre-fetched DB data ---
@@ -890,18 +1474,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string sceneName = character.SceneName;
-			int sceneHandle = character.SceneHandle;
+			long sceneID = character.SceneHandle;
 
 			// Check if the character is in an instance or not.
 			if (character.IsInInstance())
 			{
 				// Have the player enter the instance.
 				sceneName = character.InstanceSceneName;
-				sceneHandle = character.InstanceSceneHandle;
+				sceneID = character.InstanceSceneHandle;
 			}
 
 			// Check if the scene is valid, loaded, and cached properly
-			if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out ISceneInstanceDetails instance) &&
+			if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneID, out ISceneInstanceDetails instance) &&
 				sceneServerSystem.TryLoadSceneForConnection(conn, instance))
 			{
 				OnAfterLoadCharacter?.Invoke(conn, character);
@@ -912,6 +1496,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
 				mappingData.WaitingSceneLoadCharacters.Add(conn, character);
 				sceneLoadDeadlines[conn.ClientId] = DateTime.UtcNow + SceneLoadHandshakeTimeout;
+
+				// The client has usually acknowledged its start scenes long before this load
+				// finished — that acknowledgement is never repeated, so this is the point at
+				// which the handshake has to proceed. See startScenesAckedClientIds.
+				if (startScenesAckedClientIds.ContainsKey(conn.ClientId))
+				{
+					ValidateSceneAndAcknowledge(mappingData, conn, character);
+				}
 			}
 			else
 			{
@@ -920,38 +1512,93 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ReleaseSessionSafely(charData.ID, serverID, sessionToken);
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
-				conn.Disconnect(false);
+				// The instance this character belongs to is not present on this server. The
+				// world server will route the retry to one that has it.
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable);
 			}
 		}
 
 		/// <summary>
-		/// Called when a client loads world scenes after connecting. Validates character and scene, then notifies client.
+		/// Connections that have acknowledged their start scenes, keyed by ClientId.
+		/// </summary>
+		/// <remarks>
+		/// FishNet raises <c>OnClientLoadedStartScenes</c> exactly once per connection, and it
+		/// raises it early: the server solicits that acknowledgement from inside
+		/// <c>ServerManager.ClientAuthenticated</c>, which runs immediately <em>before</em> the
+		/// authenticator's own result event starts the character load. With no global scenes
+		/// configured the acknowledgement is one round trip away, while the load is several
+		/// database round trips plus a main-thread queue drain — so the acknowledgement normally
+		/// arrives first, and it never comes again.
+		/// <para>
+		/// Keying the whole scene handshake off that single event therefore made world entry a
+		/// race with two losing outcomes: an acknowledgement that arrived before the character
+		/// was registered found nothing waiting and disconnected a perfectly healthy login, and
+		/// a load that finished afterwards had no event left to drive it, so the client sat in
+		/// <c>WaitingSceneLoadCharacters</c> holding its session claim until the 90s handshake
+		/// timeout. Recording the acknowledgement makes the order irrelevant: whichever of the
+		/// two lands second runs <see cref="ValidateSceneAndAcknowledge"/>, and exactly one of
+		/// them does, because both run on the main thread.
+		/// </para>
+		/// <para>
+		/// Cleared when the connection stops. A ClientId is reused, and a stale entry would make
+		/// the next session on that id believe a handshake it never performed had completed.
+		/// </para>
+		/// </remarks>
+		private readonly ConcurrentDictionary<int, byte> startScenesAckedClientIds =
+			new ConcurrentDictionary<int, byte>();
+
+		/// <summary>
+		/// Called when a client acknowledges the start scenes it was sent on authentication.
 		/// </summary>
 		/// <param name="conn">Network connection of the client.</param>
 		/// <param name="asServer">True if loaded as server.</param>
 		private void SceneManager_OnClientLoadedStartScenes(NetworkConnection conn, bool asServer)
 		{
-			// Validate the connection has a character ready to play.
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) ||
-				!mappingData.WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
+			if (conn == null)
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				return;
 			}
 
-			// Get the characters scene
-			Scene scene;
-			if (character.IsInInstance())
+			startScenesAckedClientIds[conn.ClientId] = 0;
+
+			/* No character yet is the ordinary case, not an error.
+			 *
+			 * This used to disconnect, which meant the server kicked a client for completing the
+			 * very first step of world entry on schedule. The character load is still in flight;
+			 * it will call ValidateSceneAndAcknowledge itself when it registers, having seen the
+			 * marker set above. A load that never arrives is already covered by the residency
+			 * watchdog, which is what bounds this window. */
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) ||
+				!mappingData.WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
-				scene = SceneManager.GetScene(character.InstanceSceneHandle);
-			}
-			else
-			{
-				scene = SceneManager.GetScene(character.SceneHandle);
+				return;
 			}
 
+			ValidateSceneAndAcknowledge(mappingData, conn, character);
+		}
+
+		/// <summary>
+		/// Confirms the character's scene is genuinely loaded on this server and tells the client
+		/// it may begin its own world preload.
+		/// </summary>
+		/// <remarks>
+		/// Runs exactly once per connection, driven by whichever of the start-scene
+		/// acknowledgement and the character registration happens second. Both are main-thread
+		/// only, so the two cannot interleave and the acknowledgement cannot be sent twice.
+		/// </remarks>
+		/// <param name="mappingData">Character mapping data.</param>
+		/// <param name="conn">Connection whose scene is being validated.</param>
+		/// <param name="character">The character waiting to be spawned.</param>
+		private void ValidateSceneAndAcknowledge(
+			ICharacterMappingData<NetworkConnection> mappingData,
+			NetworkConnection conn,
+			IPlayerCharacter character)
+		{
+			// Get the characters scene
+			bool resolvedScene = TryGetCharacterScene(character, out Scene scene);
+
 			// Validate the characters scene.
-			if (scene == null ||
+			if (!resolvedScene ||
 				!scene.IsValid() ||
 				!scene.isLoaded)
 			{
@@ -960,10 +1607,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				mappingData.WaitingSceneLoadCharacters.Remove(conn);
 				sceneLoadDeadlines.TryRemove(conn.ClientId, out _);
 
+				/* Announce the departure, exactly as the ordinary teardown does.
+				 *
+				 * OnAfterLoadCharacter has already credited this character to its scene
+				 * instance's population, and every path that removes a character debits it again
+				 * by raising OnDisconnect. This branch raised nothing: taking the character out
+				 * of WaitingSceneLoadCharacters first means the disconnect below reaches
+				 * RemoveCharacterConnectionMapping with the connection in neither map, so that
+				 * returns immediately. The instance was left permanently over-populated — never
+				 * stale, therefore never unloaded, advertising less capacity than it has, and
+				 * eventually reading as full while standing empty. */
+				DispatchCharacterEvent(OnDisconnect, conn, character, nameof(OnDisconnect));
+
 				TryExtractAndReleaseSession(mappingData, character.ID);
 
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
-				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable);
 				return;
 			}
 
@@ -1007,7 +1666,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (character == null)
 				{
-					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable);
 					return;
 				}
 
@@ -1028,18 +1687,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characters[character.ID] = character;
 
 				// Get the characters scene
-				Scene scene;
-				if (character.IsInInstance())
-				{
-					scene = SceneManager.GetScene(character.InstanceSceneHandle);
-				}
-				else
-				{
-					scene = SceneManager.GetScene(character.SceneHandle);
-				}
+				bool resolvedScene = TryGetCharacterScene(character, out Scene scene);
 
 				// Validate the scene
-				if (scene == null ||
+				if (!resolvedScene ||
 					!scene.IsValid() ||
 					!scene.isLoaded)
 				{
@@ -1054,11 +1705,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						worldChars.Remove(character.ID);
 					}
 
+					/* Same reason as the invalid-scene branch in
+					 * SceneManager_OnClientLoadedStartScenes: the character was credited to the
+					 * scene instance by OnAfterLoadCharacter, the mappings have just been undone
+					 * by hand, and the disconnect below therefore finds nothing left to tear
+					 * down. Without this the instance keeps a resident it does not have. */
+					DispatchCharacterEvent(OnDisconnect, conn, character, nameof(OnDisconnect));
+
 					// Release the session for this character
 					TryExtractAndReleaseSession(mappingData, character.ID);
 
 					Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
-					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					DisconnectWithNotice(conn, DisconnectNoticeReason.SceneUnavailable);
 					return;
 				}
 
@@ -1147,8 +1805,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// connected to a scene server that had already released their character, with
 			// nothing left to move them on. Teleporters placed near a spawn point hit this
 			// every time.
+			//
+			// WaitingSceneLoadCharacters counts as "still has a character". A connection in
+			// that map is mid-handshake: its character is claimed and instantiated but not yet
+			// spawned, and the client is actively swapping scenes to get there — so the unload
+			// report it sends on the way in is the most ordinary thing it can do. Treating it
+			// as "nothing left here" disconnected the client during its own world entry, which
+			// released the claim and sent it back around the login loop.
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.ConnectionCharacters.ContainsKey(conn))
+				(mappingData.ConnectionCharacters.ContainsKey(conn) ||
+				 mappingData.WaitingSceneLoadCharacters.ContainsKey(conn)))
 			{
 				return;
 			}
@@ -1201,6 +1867,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly Guid SessionToken;
 			/// <summary>ID of the server claiming this character session.</summary>
 			public readonly long ServerID;
+			/// <summary>
+			/// Scene name of the instance this character enters, or <c>null</c> when it is not
+			/// entering one. Resolved from the character's <c>InstanceID</c> during the load.
+			/// </summary>
+			public readonly string InstanceSceneName;
+			/// <summary>Scene row ID of the instance, or 0 when not entering one.</summary>
+			public readonly long InstanceSceneHandle;
 			/// <summary>Pre-fetched inventory item data.</summary>
 			public readonly IReadOnlyList<CharacterInventoryData> InventoryData;
 			/// <summary>Pre-fetched bank item data.</summary>
@@ -1237,6 +1910,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="characterData">Core character data.</param>
 			/// <param name="sessionToken">Session ownership token.</param>
 			/// <param name="serverID">Server ID that claimed the session.</param>
+			/// <param name="instanceSceneName">Resolved instance scene name, or null.</param>
+			/// <param name="instanceSceneHandle">Resolved instance scene handle, or 0.</param>
 			/// <param name="inventoryData">Pre-fetched inventory items.</param>
 			/// <param name="bankData">Pre-fetched bank items.</param>
 			/// <param name="equipmentData">Pre-fetched equipment items.</param>
@@ -1254,6 +1929,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
 				Guid sessionToken, long serverID,
+				string instanceSceneName, long instanceSceneHandle,
 				IReadOnlyList<CharacterInventoryData> inventoryData,
 				IReadOnlyList<CharacterBankData> bankData,
 				IReadOnlyList<CharacterEquipmentData> equipmentData,
@@ -1273,6 +1949,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				CharacterData = characterData;
 				SessionToken = sessionToken;
 				ServerID = serverID;
+				InstanceSceneName = instanceSceneName;
+				InstanceSceneHandle = instanceSceneHandle;
 				InventoryData = inventoryData;
 				BankData = bankData;
 				EquipmentData = equipmentData;

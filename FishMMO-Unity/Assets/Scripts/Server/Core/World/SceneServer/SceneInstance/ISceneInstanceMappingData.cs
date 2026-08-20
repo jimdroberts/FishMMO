@@ -9,20 +9,30 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface ISceneInstanceMappingData : IRuntimeDataContainer
 	{
 		/// <summary>
-		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
+		/// Maps world server IDs to scene names to scene row IDs, tracking all loaded scene instances.
 		/// </summary>
-		Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>> WorldScenes { get; }
+		Dictionary<long, Dictionary<string, Dictionary<long, ISceneInstanceDetails>>> WorldScenes { get; }
 
 		/// <summary>
-		/// Maps scene handles to scene names for quick lookup.
+		/// Maps local scene handles to scene names for quick lookup.
 		/// </summary>
 		Dictionary<int, string> SceneNameByHandle { get; }
 
 		/// <summary>
-		/// Flat O(1) lookup from scene handle to instance details.
-		/// Kept in sync with the nested WorldScenes dictionary.
+		/// Flat O(1) lookup from the local scene manager handle to instance details.
 		/// </summary>
+		/// <remarks>
+		/// Keyed by the process-local handle because that is what scene-unload callbacks report.
+		/// Everything that identifies an instance across processes uses
+		/// <see cref="SceneInstanceByID"/> instead — see <see cref="ISceneInstanceDetails.SceneID"/>.
+		/// </remarks>
 		Dictionary<int, ISceneInstanceDetails> SceneInstanceByHandle { get; }
+
+		/// <summary>
+		/// Flat O(1) lookup from scene row ID to instance details.
+		/// Kept in sync with the nested WorldScenes dictionary and with <see cref="SceneInstanceByHandle"/>.
+		/// </summary>
+		Dictionary<long, ISceneInstanceDetails> SceneInstanceByID { get; }
 
 		/// <summary>
 		/// Tracks pending scene load requests by scene ID.

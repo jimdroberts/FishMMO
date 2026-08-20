@@ -19,6 +19,10 @@ namespace FishMMO.Client
 		/// The name of the loading progress fill VisualElement in the UI.
 		/// </summary>
 		private const string LOADING_PROGRESS_FILL_NAME = "loading-progress-fill";
+		/// <summary>
+		/// The name of the optional status Label in the UI.
+		/// </summary>
+		private const string LOADING_STATUS_NAME = "loading-status";
 
 		/// <summary>
 		/// Cache containing details for world scenes, including transition images.
@@ -32,6 +36,11 @@ namespace FishMMO.Client
 
 		private VisualElement loadingImage;
 		private VisualElement loadingProgressFill;
+		/// <summary>
+		/// Optional status line, used to explain a wait the player cannot otherwise see a
+		/// reason for. Null when the document does not define one.
+		/// </summary>
+		private Label loadingStatus;
 		/// <summary>
 		/// The currently displayed loading screen sprite, or null if none is set.
 		/// </summary>
@@ -59,7 +68,10 @@ namespace FishMMO.Client
 			{
 				loadingImage = Root.Q<VisualElement>(LOADING_IMAGE_NAME);
 				loadingProgressFill = Root.Q<VisualElement>(LOADING_PROGRESS_FILL_NAME);
+				loadingStatus = Root.Q<Label>(LOADING_STATUS_NAME);
 			}
+
+			SetStatus(null);
 
 			AddressableLoadProcessor.OnProgressUpdate += OnProgressUpdate;
 
@@ -93,6 +105,7 @@ namespace FishMMO.Client
 			Client.OnReconnectPending += Client_OnReconnectPending;
 			Client.OnReconnectAttempt += Client_OnReconnectAttempt;
 			Client.OnReconnectFailed += Client_OnReconnectFailed;
+			Client.OnEnterGameWorld += Client_OnEnterGameWorld;
 		}
 
 		/// <summary>
@@ -109,6 +122,7 @@ namespace FishMMO.Client
 			Client.OnReconnectPending -= Client_OnReconnectPending;
 			Client.OnReconnectAttempt -= Client_OnReconnectAttempt;
 			Client.OnReconnectFailed -= Client_OnReconnectFailed;
+			Client.OnEnterGameWorld -= Client_OnEnterGameWorld;
 		}
 
 		/// <summary>
@@ -139,6 +153,30 @@ namespace FishMMO.Client
 		private bool reconnectPendingActive;
 
 		/// <summary>
+		/// True from the moment the scene server accepts this client until the player character
+		/// actually exists in the world.
+		/// </summary>
+		/// <remarks>
+		/// World entry is three separate waits with gaps between them, and the other drivers
+		/// only cover the waits. The FishNet scene load ends before the server has been told
+		/// the client is in it, and the Addressable world preload ends before the server has
+		/// spawned the character — so on each of those boundaries every driver was momentarily
+		/// clear and the overlay came down over a half-built world with no player in it, for a
+		/// full network round trip each time. The second gap is the worse of the two: the
+		/// progress bar reaches 100%, the screen vanishes, and the player looks at an empty
+		/// scene until the spawn lands.
+		/// <para>
+		/// <c>OnEnterGameWorld</c> is raised on SceneLoginSuccess, which precedes the scene
+		/// load request, so this driver spans the whole entry. It is cleared only by
+		/// <see cref="Hide"/> — reached from <c>Client.DismissLoadingScreen</c> once the local
+		/// character starts, from the quit-to-login teardown, and on reconnect failure. Every
+		/// way world entry can fail ends at one of those, and the servers bound the wait with
+		/// their own scene-handshake and residency watchdogs.
+		/// </para>
+		/// </remarks>
+		private bool worldEntryActive;
+
+		/// <summary>
 		/// Shows the overlay while any driver is active and hides it only once every driver
 		/// has finished.
 		/// </summary>
@@ -155,7 +193,7 @@ namespace FishMMO.Client
 		/// </param>
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
-			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive;
+			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive;
 
 			if (shouldShow && (forceRefresh || !Visible))
 			{
@@ -222,8 +260,64 @@ namespace FishMMO.Client
 			addressableLoadActive = false;
 			sceneTransitionActive = false;
 			reconnectPendingActive = false;
+			worldEntryActive = false;
+
+			// The status line explains one specific wait; it must not survive into the next
+			// one, which is usually an ordinary scene load with nothing to explain.
+			SetStatus(null);
 
 			base.Hide();
+		}
+
+		/// <summary>
+		/// Writes the status line, hiding it entirely when there is nothing to say.
+		/// </summary>
+		/// <remarks>
+		/// Optional by design: the label is looked up by name and older documents that predate
+		/// it simply resolve to null. A missing label costs the explanation, not the overlay.
+		/// </remarks>
+		/// <param name="text">Message to display, or null/empty to hide the line.</param>
+		private void SetStatus(string text)
+		{
+			if (loadingStatus == null)
+			{
+				return;
+			}
+
+			bool hasText = !string.IsNullOrEmpty(text);
+			loadingStatus.text = hasText ? text : string.Empty;
+			loadingStatus.style.display = hasText ? DisplayStyle.Flex : DisplayStyle.None;
+		}
+
+		/// <summary>
+		/// Re-asserts the overlay's own state after the quit-to-login teardown.
+		/// </summary>
+		/// <remarks>
+		/// The base handler forces visibility straight from <c>CloseOnQuitToMenu</c>, and it does
+		/// so through a path that bypasses this control's <see cref="Show"/>/<see cref="Hide"/>
+		/// overrides — so the driver flags are left exactly as they were while the panel is
+		/// switched underneath them. Either half of that mismatch is a visible fault: flags left
+		/// set behind a hidden panel pop the overlay back up on the next progress tick, and a
+		/// panel forced visible with no driver set has nothing that will ever take it down.
+		/// Re-running the normal decision leaves the two in agreement whichever way the flag is
+		/// configured.
+		/// </remarks>
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			RefreshVisibility(forceRefresh: true);
+		}
+
+		/// <summary>
+		/// Holds the overlay up for the whole of world entry.
+		/// </summary>
+		/// <remarks>See <see cref="worldEntryActive"/>.</remarks>
+		public void Client_OnEnterGameWorld()
+		{
+			SetLoadingImage(DefaultLoadingScreenSprite);
+			worldEntryActive = true;
+			RefreshVisibility();
 		}
 
 		/// <summary>
@@ -235,7 +329,27 @@ namespace FishMMO.Client
 			SetLoadingImage(DefaultLoadingScreenSprite);
 			reconnectPendingActive = true;
 			RefreshVisibility();
+
+			/* Say what the overlay is waiting for. A lost connection holds this screen for the
+			 * whole backoff — up to several minutes across ten attempts — with a static image
+			 * and a progress bar that never moves, which is indistinguishable from a hang.
+			 *
+			 * A scene handoff arrives here too, because that is how a zone change, a channel
+			 * switch and a cross-scene respawn are implemented, and it is not an outage — it
+			 * retries within a quarter of a second. Labelling a routine teleport "connection
+			 * lost" would be worse than saying nothing, so those stay silent and keep the plain
+			 * loading overlay.
+			 *
+			 * The text is set after RefreshVisibility because Show() is what resets the panel. */
+			SetStatus(IsSceneHandoff() ? null : "Connection lost. Reconnecting...");
 		}
+
+		/// <summary>
+		/// Whether the reconnect currently running is a deliberate scene handoff rather than a
+		/// dropped connection.
+		/// </summary>
+		/// <remarks>See <see cref="ClientConnectionManager.IsSceneHandoffReconnect"/>.</remarks>
+		private bool IsSceneHandoff() => Client?.Connection?.IsSceneHandoffReconnect ?? false;
 
 		/// <summary>
 		/// Resets the loading image and shows the screen on a reconnect attempt.
@@ -248,6 +362,16 @@ namespace FishMMO.Client
 			reconnectPendingActive = true;
 			sceneTransitionActive = true;
 			RefreshVisibility();
+
+			// A scene handoff succeeds on its first attempt; anything past that is a genuine
+			// failure and worth naming even when the drop that started it was deliberate.
+			if (IsSceneHandoff() && attempts <= 1)
+			{
+				SetStatus(null);
+				return;
+			}
+
+			SetStatus($"Reconnecting... (attempt {attempts} of {maxAttempts})");
 		}
 
 		/// <summary>
@@ -308,7 +432,13 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&
+			// Details is an Inspector reference and the overlay must survive it being unset:
+			// an NRE here escapes into FishNet's SceneManager event invocation, which aborts
+			// the remaining OnLoadStart subscribers mid-transition. The uGUI UILoadingScreen
+			// already guards the same lookup.
+			if (Details != null &&
+				Details.Scenes != null &&
+				Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&
 				details.SceneTransitionImage != null)
 			{
 				SetLoadingImage(details.SceneTransitionImage);

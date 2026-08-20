@@ -48,6 +48,27 @@ namespace FishMMO.Server.Implementation
 		private static readonly TimeSpan HandshakeRateLimitInterval = TimeSpan.FromMilliseconds(100);
 
 		/// <summary>
+		/// Per-IP rate limiter for token revocation broadcasts. Prevents unauthenticated
+		/// clients from triggering DB queries at high frequency (DoS vector).
+		/// Limits to 1 revocation attempt per 5 seconds per IP.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> revokeRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		private static readonly TimeSpan RevokeRateLimitDuration = TimeSpan.FromSeconds(5);
+
+		/// <summary>
+		/// Global secondary rate limiter for revocation, keyed by the string "global".
+		/// Acts as a safety net when the per-IP limiter falls back to conn:{clientId}
+		/// (e.g. behind an L4 proxy where real IP lookup fails).  Without this global
+		/// cap, an attacker could open many connections and send one revoke per connection
+		/// per 5 seconds — bounded by total connection slots.  This global limiter caps
+		/// total revocations at 10/second regardless of connection count.
+		/// </summary>
+		private readonly ExpiringKeyTracker<string> revokeGlobalRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
+
+		private static readonly TimeSpan RevokeGlobalRateLimitDuration = TimeSpan.FromMilliseconds(100);
+
+		/// <summary>
 		/// Maximum time a newly-connected client has to send a valid <see cref="ClientHandshake"/>
 		/// before being disconnected. Prevents slot exhaustion from silent connections
 		/// (clients that open a QUIC connection but never authenticate). Default 15 seconds.
@@ -216,6 +237,18 @@ namespace FishMMO.Server.Implementation
 			// so the real IP embedded in the token is one this server verified for a client
 			// that has already proven who it is.
 			networkManager.ServerManager.RegisterBroadcast<RequestConnectionTokenBroadcast>(OnServerRequestConnectionTokenReceived, true);
+			/* Logout revocation is registered here rather than per-protocol, because it has to
+			 * be accepted by whichever server the client happens to be talking to when it logs
+			 * out. Only the LoginServer used to handle it, so a player who quit to login from
+			 * inside the world sent the revocation to a Scene server that had no handler for
+			 * it: the message was silently discarded and the session token stayed valid for the
+			 * remainder of its lifetime, on every logout that did not happen on the login
+			 * screen.
+			 *
+			 * requiresAuthentication is false on purpose — the client may send this after its
+			 * auth channel has already been torn down. OnServerRevokeTokenBroadcastReceived
+			 * still refuses connections that never began the handshake. */
+			networkManager.ServerManager.RegisterBroadcast<RevokeTokenBroadcast>(OnServerRevokeTokenBroadcastReceived, false);
 			RegisterProtocolHandlers(networkManager);
 		}
 
@@ -338,6 +371,10 @@ namespace FishMMO.Server.Implementation
 			// Sweep expired entries from the handshake rate limiter to prevent
 			// unbounded memory growth under sustained handshake traffic.
 			handshakeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+			// Same for the revocation limiters. The global one holds a single key, so its
+			// sweep is sized accordingly.
+			revokeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+			revokeGlobalRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 1, maxRemove: 1);
 			// Backstop for real-IP entries whose disconnect event never arrived. Entries are
 			// touched on every read, so this only reaches genuinely abandoned ones — an
 			// active connection, including one sitting in the login queue, is never evicted.
@@ -562,6 +599,135 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		protected virtual void OnAuthSweep() { }
 
+
+		/// <summary>
+		/// Handles an incoming <see cref="RevokeTokenBroadcast"/> from a client that is explicitly
+		/// logging out. Hashes the raw token bytes and asks the DB to mark the row revoked. The
+		/// broadcast is best-effort and rate-limit-bounded by FishNet's connection lifecycle;
+		/// invalid or unknown tokens are silently ignored to avoid leaking validity oracles.
+		/// </summary>
+		internal void OnServerRevokeTokenBroadcastReceived(NetworkConnection conn, RevokeTokenBroadcast msg, Channel channel)
+		{
+			// Validate payload bounds up front on the network thread; defer DB work to a Task.
+			if (msg.Token == null || msg.Token.Length == 0 || msg.Token.Length > 4096)
+			{
+				return;
+			}
+
+			// Reject revocation requests from connections that have not started the
+			// authentication process.  This broadcast is registered with
+			// requiresAuthentication:false to allow authenticated clients to revoke
+			// tokens after the auth channel is torn down on logout, but completely
+			// unauthenticated connections (those that never sent a ClientHandshake)
+			// must not trigger DB queries.
+			//
+			// connectionStartTimes is populated on RemoteConnectionState.Started and
+			// removed on Stopped.  A connection that never started the auth process
+			// will not have an entry here.
+			if (!connectionStartTimes.ContainsKey(conn.ClientId))
+			{
+				return;
+			}
+
+			// Per-IP rate limiting: prevent unauthenticated clients from triggering DB
+			// queries at high frequency (DoS vector). Limit to 1 attempt per 5 seconds.
+			// Fallback: when IP is unavailable (connection-IP cache missed), use the
+			// connection's ClientId as the rate-limit key to prevent bypass attacks.
+			string ip = ResolveRateLimitKey(conn);
+			string rateLimitKey = !string.IsNullOrEmpty(ip) ? ip : $"conn:{conn.ClientId}";
+			if (!revokeRateLimiter.TryBegin(rateLimitKey, DateTime.UtcNow, RevokeRateLimitDuration))
+			{
+				_ = Log.Warning(LogPrefix, $"Revoke token rate limited for key {rateLimitKey}.");
+				return;
+			}
+
+			// Global secondary rate limit: even if the per-IP limiter uses a per-connection
+			// fallback key (conn:{clientId}), this global cap prevents an attacker from
+			// saturating the DB with revocation queries across many connections.
+			// Limits total revocations to 10/sec regardless of connection count.
+			if (!revokeGlobalRateLimiter.TryBegin("global", DateTime.UtcNow, RevokeGlobalRateLimitDuration))
+			{
+				_ = Log.Warning(LogPrefix, "Revoke token globally rate limited.");
+				return;
+			}
+
+			// Copy so the deserialized buffer is not mutated by FishNet after we hand off.
+			byte[] tokenCopy = new byte[msg.Token.Length];
+			Buffer.BlockCopy(msg.Token, 0, tokenCopy, 0, tokenCopy.Length);
+
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					// Check cancellation before any DB work.  If the server is shutting
+					// down, bail immediately rather than competing with teardown.
+					if (ShutdownToken.IsCancellationRequested)
+						return;
+
+					string tokenHash = null;
+					try
+					{
+						tokenHash = TokenService.HashToken(tokenCopy);
+					}
+					finally
+					{
+						CryptographicOperationsCompat.ZeroMemory(tokenCopy);
+					}
+
+					if (string.IsNullOrEmpty(tokenHash))
+					{
+						return;
+					}
+
+					// Re-check cancellation before accessing Server.Database, which
+					// may already be nulled by PerformShutdown during teardown.
+					if (ShutdownToken.IsCancellationRequested)
+						return;
+
+					if (Server?.Database?.ServiceRegistry == null ||
+						!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var svc))
+					{
+						return;
+					}
+
+					// One final cancellation check before the DB call.
+					if (ShutdownToken.IsCancellationRequested)
+						return;
+
+					try
+					{
+						var r = await svc.RevokeByHashAsync(tokenHash);
+						if (!r.IsSuccess)
+						{
+							/* LOGGING ORACLE NOTE: We log even "not found" results at Debug level
+							 * (not Warning) to avoid creating a side-channel oracle.  An attacker
+							 * who can observe the log output (e.g. via a shared logging service or
+							 * timing side-channel) could distinguish "token existed and was revoked"
+							 * from "token never existed" by the presence/absence of a higher-severity
+							 * log line.  Debug-level logging is disabled in production by default,
+							 * so the oracle is closed.  If Debug logging is enabled in production,
+							 * an observer could exploit this — keep Debug disabled in production. */
+							// Treat "not found" as a non-event: an attacker could otherwise probe
+							// for valid token hashes by observing log differences.
+							await Log.Debug(LogPrefix, $"RevokeByHashAsync returned {r.ErrorCode} for client-initiated revoke.");
+						}
+					}
+					catch (Exception ex)
+					{
+						await Log.Warning(LogPrefix, $"Exception during client-initiated token revoke: {ex.Message}");
+					}
+				}
+				catch (OperationCanceledException)
+				{
+					/* Server is shutting down — expected, no action needed. */
+				}
+				catch (Exception ex)
+				{
+					await Log.Error(LogPrefix, $"Unhandled exception in token revocation task: {ex.Message}");
+				}
+			}, ShutdownToken);
+		}
+
 		#endregion
 
 		#region Main Thread Queue
@@ -615,6 +781,7 @@ namespace FishMMO.Server.Implementation
 
 			NetworkManager.ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
 			NetworkManager.ServerManager.UnregisterBroadcast<ClientHandshake>(this.clientHandshakeHandler);
+			NetworkManager.ServerManager.UnregisterBroadcast<RevokeTokenBroadcast>(OnServerRevokeTokenBroadcastReceived);
 			UnregisterProtocolHandlers(NetworkManager);
 		}
 
@@ -811,9 +978,19 @@ namespace FishMMO.Server.Implementation
 			}
 			else
 			{
-				_ = Log.Warning(LogPrefix,
+				/* Debug, not Warning, and without the address.
+				 *
+				 * This is the healthy path: every Login->World and World->Scene hop mints a
+				 * token, so at Warning level a busy server writes one line per hop and buries
+				 * the failures this log level exists for — the same mistake the handshake log
+				 * above was corrected for. Naming the client's real IP on every hop also puts
+				 * per-player addresses into a log tier that is routinely shipped and retained
+				 * more widely than debug output, for no diagnostic gain: a mint that succeeded
+				 * is not something an operator needs to correlate by address, and the failure
+				 * branch above still says which connection could not be served. */
+				_ = Log.Debug(LogPrefix,
 					$"Hop token minted for conn={conn.ClientId} len={token.Length} " +
-					$"ip={ResolveRateLimitKey(conn) ?? "?"} keys={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
+					$"keys={s_dbConnectionTokenKeyMap?.Count ?? 0}.");
 			}
 
 			Server?.NetworkWrapper?.Broadcast(conn, new ConnectionTokenBroadcast()

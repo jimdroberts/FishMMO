@@ -300,6 +300,12 @@ namespace FishMMO.Client
 
 			Connection.OnReconnectFailed += this.onReconnectFailedQuitToLogin;
 
+			/* A disconnect notice describes one session. Reaching Started means whatever it
+			 * warned about has been recovered from — the reconnect worked, or the hop to the
+			 * next server succeeded — so holding it would surface a stale, contradictory
+			 * explanation the next time the player quits to login for an unrelated reason. */
+			Connection.OnConnectionSuccessful += () => this.pendingDisconnectNotice = null;
+
 			// When a non-reconnectable connection fails (e.g. login server unreachable),
 			// invalidate the cached login server list so the next attempt re-fetches from
 			// IPFetch instead of retrying the same potentially dead server/port.
@@ -332,6 +338,26 @@ namespace FishMMO.Client
 				 * panel a second recovery route. Deliberate teardowns (server hops,
 				 * ForceDisconnect from an auth-error dialog) never raise this event, so it
 				 * cannot interrupt a healthy Login -> World transition. */
+
+				/* Give the teardown something to say, if nothing already has.
+				 *
+				 * QuitToLogin only shows a notice the server sent, and a login server that
+				 * restarts, times the connection out, or is killed sends nothing at all — so a
+				 * player sitting on character select was returned to the login screen with no
+				 * indication that anything had gone wrong, which reads as the client having
+				 * dropped them for no reason.
+				 *
+				 * Gated on holding a session token, which is only true once login has actually
+				 * succeeded. Without that gate this would also fire when the very first connect
+				 * attempt fails, where "you were disconnected" is untrue and the login panel
+				 * already reports the failure in terms that fit ("the server closed the
+				 * connection before it answered"). ?? rather than =: a reason the server did
+				 * send is always more specific than this one. */
+				if (this.loginAuthenticator != null && this.loginAuthenticator.HasAuthToken)
+				{
+					this.pendingDisconnectNotice ??= DisconnectNoticeReason.Unspecified;
+				}
+
 				QuitToLogin(forceDisconnect: false);
 			};
 
@@ -361,11 +387,9 @@ namespace FishMMO.Client
 			
 			if (pendingErrorStackTrace != null)
 			{
-				string st = pendingErrorStackTrace;
+				string stackTrace = pendingErrorStackTrace;
 				pendingErrorStackTrace = null;
-				if (Connection?.ClientState == LocalConnectionState.Stopped) return;
-				try { loginAuthenticator?.RevokeAndClearAuthToken(); } catch { }
-				Connection?.ForceDisconnect();
+				HandleNetworkStackException(stackTrace);
 			}
 		}
 
@@ -445,7 +469,10 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnValidatedScene);
 			NetworkManager.ClientManager.RegisterBroadcast<ServerBusyBroadcast>(OnServerBusy);
 			NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
+			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneQueuePositionBroadcast>(OnWorldSceneQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
+			NetworkManager.ClientManager.RegisterBroadcast<DisconnectNoticeBroadcast>(OnDisconnectNotice);
+			NetworkManager.ClientManager.RegisterBroadcast<SceneTransferRefusedBroadcast>(OnSceneTransferRefused);
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
 			NetworkManager.SceneManager.OnUnloadEnd += OnSceneUnloadEnd;
@@ -521,6 +548,22 @@ namespace FishMMO.Client
 			// latched off, so the next login/world-entry cycle shows loading progress again.
 			RestoreLoadingScreen();
 
+			/* Take the overlay down as well, not just re-arm it.
+			 *
+			 * Both loading screens keep a set of independent "drivers", and one of them —
+			 * reconnectPendingActive — is cleared only by Hide(). Every route into this method
+			 * that comes from a lost connection has that driver latched: the drop armed a
+			 * reconnect, the retry reached the server, and the server rejected the stale token,
+			 * landing here. Nothing else clears it, so the login scene reloaded *behind* an
+			 * overlay that could never come down, and the player was left staring at a loading
+			 * bar at 100% with no way forward. The same applies to sceneTransitionActive when
+			 * the connection dies part-way through a scene load and OnLoadEnd never arrives.
+			 *
+			 * Dismissing without suppression is safe here because the world is being torn down:
+			 * the login scenes ClientPostbootSystem reloads raise the overlay again through the
+			 * ordinary Addressable progress path and drop it when they finish. */
+			DismissLoadingScreen(suppress: false);
+
 			this.fogManager?.Stop();
 
 			/* Abandon any world-scene preload this session started. The flag is what stops a
@@ -539,14 +582,98 @@ namespace FishMMO.Client
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
 			UnloadWorldScenes();
-			if (forceDisconnect) Connection?.ForceDisconnect();
+
+			/* Revoke first, disconnect second.
+			 *
+			 * The revocation is a broadcast, and FishNet does not put a broadcast on the wire
+			 * when it is written — it goes into the outgoing bundle and leaves on the next tick.
+			 * Tearing the transport down on the line above therefore discarded it every single
+			 * time, so an explicit logout never revoked anything and the session token stayed
+			 * valid for the rest of its lifetime. The local copy was still zeroed, which is why
+			 * this went unnoticed: nothing on this client could use the token afterwards, but
+			 * anyone who had captured it still could.
+			 *
+			 * The stop is deferred just long enough for that tick to happen. Everything else in
+			 * this teardown runs immediately, so the player sees the login screen at the same
+			 * moment they did before. */
 			this.loginAuthenticator?.RevokeAndClearAuthToken();
+			if (forceDisconnect) DisconnectAfterRevocationFlush();
 			Connection?.ResetReconnectState();
 			this.cachedConnectionToken = null;
 			OnQuitToLogin?.Invoke();
+
+			// After the panels are back, never before — see ShowPendingDisconnectNotice.
+			ShowPendingDisconnectNotice();
 #if UNITY_EDITOR
 			PlayerInputController.MouseMode = true;
 #endif
+		}
+
+		/// <summary>
+		/// Ticks to let elapse before the transport is stopped, so a revocation written on the
+		/// way out is actually sent.
+		/// </summary>
+		/// <remarks>
+		/// One tick would be enough in principle; two costs a few tens of milliseconds the
+		/// player spends looking at the login screen either way, and covers the case where the
+		/// broadcast is written immediately after a tick boundary.
+		/// </remarks>
+		private const uint RevocationFlushTicks = 2;
+
+		/// <summary>
+		/// Upper bound, in seconds, on how long the deferred disconnect will wait for those
+		/// ticks. A stalled or already-dead TimeManager must not leave the connection open.
+		/// </summary>
+		private const float RevocationFlushTimeoutSeconds = 0.5f;
+
+		/// <summary>
+		/// Stops the connection once the outgoing bundle carrying the token revocation has been
+		/// flushed. See the call site in <see cref="QuitToLogin"/>.
+		/// </summary>
+		/// <remarks>
+		/// Hosted on <see cref="CoroutineRunner"/> rather than on this component, because
+		/// <see cref="QuitToLogin"/> calls <c>StopAllCoroutines</c> on itself a few lines
+		/// earlier and would kill this before it ever ran.
+		/// </remarks>
+		private void DisconnectAfterRevocationFlush()
+		{
+			ClientConnectionManager connection = Connection;
+			if (connection == null)
+			{
+				return;
+			}
+
+			// Nothing to flush, and nothing to wait for.
+			if (connection.ClientState != LocalConnectionState.Started ||
+				NetworkManager?.TimeManager == null)
+			{
+				connection.ForceDisconnect();
+				return;
+			}
+
+			CoroutineRunner.Start(FlushThenDisconnectRoutine(connection));
+		}
+
+		private static IEnumerator FlushThenDisconnectRoutine(ClientConnectionManager connection)
+		{
+			var timeManager = NetworkManager != null ? NetworkManager.TimeManager : null;
+			if (timeManager != null)
+			{
+				uint target = timeManager.LocalTick + RevocationFlushTicks;
+				float deadline = Time.realtimeSinceStartup + RevocationFlushTimeoutSeconds;
+				while (timeManager != null &&
+					timeManager.LocalTick < target &&
+					Time.realtimeSinceStartup < deadline &&
+					connection.ClientState == LocalConnectionState.Started)
+				{
+					yield return null;
+				}
+			}
+
+			// Unconditional: the disconnect is the point of this routine, and every exit above
+			// (timeout, a TimeManager that went away, a connection that dropped on its own)
+			// still has to reach it. ForceDisconnect is safe on an already-stopped connection.
+			connection.ForceDisconnect();
 		}
 
 		/// <summary>
@@ -867,7 +994,26 @@ namespace FishMMO.Client
 		/// the World Server first: the Scene Server is behind the same proxy and needs the
 		/// real IP, and the World Server is the only party still holding it.
 		/// </summary>
-		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch) { try { if (IsConnectionReady()) RequestHopTokenThenConnect(msg.Port, false); } catch (Exception ex) { Log.Error("Client", $"OnWorldSceneConnect: {ex}"); } }
+		private void OnWorldSceneConnect(WorldSceneConnectBroadcast msg, Channel ch)
+		{
+			try
+			{
+				/* Close the wait dialog here as well as on the queue's own position 0.
+				 * That message is the tidy signal, but it is one message: this is the event
+				 * that actually ends the wait, and leaving the dialog up over the scene
+				 * transition would block the world behind a stale "queue position" box. */
+				HideQueueDialog();
+
+				if (IsConnectionReady())
+				{
+					RequestHopTokenThenConnect(msg.Port, false);
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnWorldSceneConnect: {ex}");
+			}
+		}
 		/// <summary>
 		/// Handles a validated scene broadcast by beginning the world scene preload queue.
 		/// </summary>
@@ -938,66 +1084,384 @@ namespace FishMMO.Client
 		/// <param name="ch">The network channel.</param>
 		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGet("UIDialogBox", out UIDialogBox d)) d.Open("Server is busy. Please try again."); }
 
-	/// <summary>
-	/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer,
-	/// displaying the current queue position to the user.  Position &gt; 0 shows
-	/// a waiting dialog; position 0 means the client has been admitted and should
-	/// retry the handshake; position -1 means the queue entry was cancelled.
-	/// </summary>
-	private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel ch)
-	{
-		if (msg.QueuePosition > 0)
+		/// <summary>
+		/// Handles a <see cref="SceneTransferRefusedBroadcast"/> — the server declined a channel
+		/// switch or a dungeon entry — and tells the player why.
+		/// </summary>
+		/// <remarks>
+		/// Both of those actions close their own UI the moment they are sent, because the normal
+		/// outcome is that the client is disconnected and re-routed. A refusal therefore has to
+		/// be spoken: with nothing on screen and nothing happening, a player has no way to tell a
+		/// declined request from a frozen game, and the natural response — clicking again — is
+		/// exactly what the server-side cooldown rejects.
+		/// </remarks>
+		private void OnSceneTransferRefused(SceneTransferRefusedBroadcast msg, Channel ch)
 		{
-			string text = msg.EstimatedWaitSeconds > 0
-				? $"Queue position: {msg.QueuePosition} of {msg.TotalQueued}\nEstimated wait: ~{msg.EstimatedWaitSeconds}s"
-				: $"Queue position: {msg.QueuePosition} of {msg.TotalQueued}\nPlease wait...";
-
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d))
 			{
-				if (d.Visible)
-					d.SetText(text);
-				else
-					d.Open(text, onAccept: null, onCancel: () =>
-					{
-						// User chose to leave the queue — disconnect and return to login.
-						ForceDisconnect();
-						QuitToLogin();
-					});
+				d.Open(DescribeTransferRefusal(msg.Reason));
 			}
 		}
-		else if (msg.QueuePosition == 0)
-		{
-			// Admitted from queue — retry the handshake on the existing connection.
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
-				d.Hide();
 
-			/* async void local function captures Unity's SynchronizationContext
-			 * so the continuation after await runs on the main thread.
-			 * ContinueWith would run on the ThreadPool, making Log.Error
-			 * and any future Unity API calls unsafe. */
-			async void RetryWithFaultHandling()
+		/// <summary>
+		/// Turns a <see cref="SceneTransferRefusalReason"/> into something a player can act on.
+		/// </summary>
+		private static string DescribeTransferRefusal(SceneTransferRefusalReason reason)
+		{
+			switch (reason)
 			{
-				try
+				case SceneTransferRefusalReason.DestinationUnavailable:
+					return "That destination is no longer available. Refresh and try again.";
+				case SceneTransferRefusalReason.DestinationFull:
+					return "That destination is full. Try a different one.";
+				case SceneTransferRefusalReason.CharacterStateChanged:
+					return "You cannot travel right now — leave combat and try again.";
+				case SceneTransferRefusalReason.OnCooldown:
+					return "You are travelling too often. Wait a moment and try again.";
+				case SceneTransferRefusalReason.PartyInstanceExists:
+					return "A party member already has this instance open.";
+				case SceneTransferRefusalReason.ServerError:
+					return "The server could not complete that request. Please try again.";
+				default:
+					return "That request was declined.";
+			}
+		}
+
+		// ── Queue feedback ──────────────────────────────────────────────
+
+		/// <summary>
+		/// Shows, or live-updates, the shared queue-wait dialog.
+		/// </summary>
+		/// <remarks>
+		/// Both queues in the connection pipeline — the LoginServer's admission queue and the
+		/// WorldServer's scene-routing queue — present through this one control so they cannot
+		/// drift apart, and so a client cannot end up showing two competing wait dialogs.
+		/// <see cref="UIDialogBox.Open"/> is a no-op while the box is already visible, which is
+		/// why an update has to go through <see cref="UIDialogBox.SetText"/> instead.
+		/// <para>
+		/// Opened with no accept handler, which makes the remaining button read "Close" — the
+		/// only action a waiting player has is to give up, and that is what
+		/// <paramref name="onLeave"/> does.
+		/// </para>
+		/// </remarks>
+		/// <param name="text">Body text to display.</param>
+		/// <param name="onLeave">Invoked if the player abandons the wait.</param>
+		private static void ShowQueueDialog(string text, Action onLeave)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+			{
+				if (dialogBox.Visible)
 				{
-					if (loginAuthenticator != null)
-						await loginAuthenticator.RetryHandshakeAsync();
+					dialogBox.SetText(text);
 				}
-				catch (Exception ex)
+				else
 				{
-					Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
+					dialogBox.Open(text, onAccept: null, onCancel: onLeave);
+				}
+				return;
+			}
+
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox))
+			{
+				if (tkDialogBox.Visible)
+				{
+					tkDialogBox.SetText(text);
+				}
+				else
+				{
+					tkDialogBox.Open(text, onAccept: null, onCancel: onLeave);
 				}
 			}
-			RetryWithFaultHandling();
 		}
-		else // position -1 = cancelled (timeout / shutdown)
-		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d) && d.Visible)
-				d.Hide();
 
-			ForceDisconnect();
-			QuitToLogin();
+		/// <summary>
+		/// Dismisses the shared queue-wait dialog if it is showing.
+		/// </summary>
+		private static void HideQueueDialog()
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox) && dialogBox.Visible)
+			{
+				dialogBox.Hide();
+				return;
+			}
+
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox) && tkDialogBox.Visible)
+			{
+				tkDialogBox.Hide();
+			}
 		}
-	}
+
+		/// <summary>
+		/// Opens a one-off informational dialog through whichever dialog control this build
+		/// registers.
+		/// </summary>
+		/// <remarks>
+		/// The UGUI and UI Toolkit control sets live in separate registries, and a build ships
+		/// one or the other. Resolving both here is what keeps the queue messages from silently
+		/// doing nothing on a UI Toolkit build — which is how the login queue's own dialogs
+		/// behaved, because they only ever asked for the UGUI control.
+		/// </remarks>
+		/// <param name="text">Message to display.</param>
+		private static void ShowInfoDialog(string text)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+			{
+				dialogBox.Open(text);
+				return;
+			}
+
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox))
+			{
+				tkDialogBox.Open(text);
+			}
+		}
+
+		/// <summary>
+		/// Builds the body text for a queue-wait dialog.
+		/// </summary>
+		/// <remarks>
+		/// An estimate of zero means the server could not derive one — most often because the
+		/// queue is not draining at all — so it is rendered as "Please wait...". Printing
+		/// "~0s" over a queue that is going nowhere would be worse than saying nothing.
+		/// </remarks>
+		/// <param name="heading">One line explaining what is being waited for.</param>
+		/// <param name="position">1-based position in the queue.</param>
+		/// <param name="total">Total number of clients waiting.</param>
+		/// <param name="estimatedWaitSeconds">Server estimate in seconds, or 0 when unknown.</param>
+		private static string FormatQueueText(string heading, int position, int total, int estimatedWaitSeconds)
+		{
+			string tail = estimatedWaitSeconds > 0
+				? $"Estimated wait: ~{estimatedWaitSeconds}s"
+				: "Please wait...";
+
+			return $"{heading}\nQueue position: {position} of {total}\n{tail}";
+		}
+
+		/// <summary>
+		/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer,
+		/// displaying the current queue position to the user.  Position &gt; 0 shows
+		/// a waiting dialog; position 0 means the client has been admitted and should
+		/// retry the handshake; position -1 means the queue entry was cancelled.
+		/// </summary>
+		private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel ch)
+		{
+			if (msg.QueuePosition > 0)
+			{
+				ShowQueueDialog(
+					FormatQueueText("Waiting to log in.", msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
+					// The player chose to leave the queue.
+					onLeave: () => QuitToLogin());
+				return;
+			}
+
+			HideQueueDialog();
+
+			if (msg.QueuePosition == 0)
+			{
+				// Admitted from queue — retry the handshake on the existing connection.
+
+				/* async void local function captures Unity's SynchronizationContext
+				 * so the continuation after await runs on the main thread.
+				 * ContinueWith would run on the ThreadPool, making Log.Error
+				 * and any future Unity API calls unsafe. */
+				async void RetryWithFaultHandling()
+				{
+					try
+					{
+						if (loginAuthenticator != null)
+							await loginAuthenticator.RetryHandshakeAsync();
+					}
+					catch (Exception ex)
+					{
+						Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
+					}
+				}
+				RetryWithFaultHandling();
+				return;
+			}
+
+			// position -1 = cancelled (timeout / shutdown)
+			QuitToLogin();
+
+			/* Explain it, and only after the teardown. QuitToLogin drives every panel through
+			 * its quit-to-login handler, which closes the dialog box along with everything else
+			 * — so a message opened before it is swallowed and the player is returned to the
+			 * login screen with no idea why their wait ended. */
+			ShowInfoDialog("The login queue timed out. Please try again.");
+		}
+
+		/// <summary>
+		/// Handles a <see cref="WorldSceneQueuePositionBroadcast"/> from the WorldServer while it
+		/// is waiting for somewhere to put this client.
+		/// </summary>
+		/// <remarks>
+		/// The World → Scene hop is the only leg of the connection pipeline that could stall for
+		/// a long time with nothing on screen but a loading overlay: no capacity in any instance
+		/// of the target scene, an instance still loading on a scene server, or a combat-logout
+		/// body that only one specific instance can hand back. All three are legitimate waits
+		/// and all three were completely silent, which is indistinguishable from a hang. This is
+		/// the same feedback the login queue gives, one hop later.
+		/// <para>
+		/// Position 0 arrives immediately before <c>WorldSceneConnectBroadcast</c> and just
+		/// closes the dialog; -1 means the server gave up, and is terminal — the connection is
+		/// already closing, so retrying in place would only re-enter the same queue.
+		/// </para>
+		/// </remarks>
+		private void OnWorldSceneQueuePosition(WorldSceneQueuePositionBroadcast msg, Channel ch)
+		{
+			if (msg.QueuePosition > 0)
+			{
+				ShowQueueDialog(
+					FormatQueueText(DescribeWorldSceneQueueReason(msg.Reason), msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
+					// The player chose not to keep waiting for a world slot.
+					onLeave: () => QuitToLogin());
+				return;
+			}
+
+			HideQueueDialog();
+
+			if (msg.QueuePosition == 0)
+			{
+				// Routed. The scene connect broadcast is right behind this one.
+				return;
+			}
+
+			// position -1 = the world server abandoned the wait and is closing the connection.
+			QuitToLogin();
+
+			ShowInfoDialog("The world server could not find room for your character. Please try again.");
+		}
+
+		/// <summary>
+		/// Turns a <see cref="WorldSceneQueueReason"/> into a line the player can act on.
+		/// </summary>
+		/// <remarks>
+		/// The three waits look identical from the outside but mean very different things — one
+		/// is the world being full, one is a zone starting up, and one is the player's own body
+		/// still standing in a fight they disconnected from. Only the last of those is
+		/// self-inflicted, and a player who is not told about it has no way to understand why
+		/// they are waiting when the world is visibly not busy.
+		/// </remarks>
+		private static string DescribeWorldSceneQueueReason(WorldSceneQueueReason reason)
+		{
+			switch (reason)
+			{
+				case WorldSceneQueueReason.SceneLoading:
+					return "Preparing your zone.";
+				case WorldSceneQueueReason.CombatLogoutBody:
+					return "Your character is still in combat where you left it.\nWaiting for it to become available.";
+				case WorldSceneQueueReason.Capacity:
+				default:
+					return "Waiting for space in the world.";
+			}
+		}
+
+		// ── Disconnect feedback ─────────────────────────────────────────
+
+		/// <summary>
+		/// The most recent reason a server gave for closing the connection, or null.
+		/// </summary>
+		/// <remarks>
+		/// Held rather than shown immediately, because the notice arrives while the world is
+		/// still up: showing a dialog there would put it behind the teardown that follows, and
+		/// for a non-terminal reason the reconnect may well succeed and make the message a lie.
+		/// It is surfaced at the end of <see cref="QuitToLogin"/> — the one place every route
+		/// back to the login screen passes through — and dropped the moment a connection
+		/// succeeds, so a notice can never outlive the session it describes.
+		/// </remarks>
+		private DisconnectNoticeReason? pendingDisconnectNotice;
+
+		/// <summary>
+		/// A server is closing this connection on purpose and has said why.
+		/// </summary>
+		/// <remarks>
+		/// Terminal reasons short-circuit the reconnect loop. Without that, a character that
+		/// cannot be claimed at all still cost the player ten attempts with exponential backoff
+		/// — several minutes of a "reconnecting" overlay — before landing on the login screen
+		/// with the same outcome the server already knew about. Non-terminal reasons leave the
+		/// loop alone, because retrying is the designed recovery for them; the message is kept
+		/// in case the retries run out too.
+		/// </remarks>
+		private void OnDisconnectNotice(DisconnectNoticeBroadcast msg, Channel ch)
+		{
+			try
+			{
+				this.pendingDisconnectNotice = msg.Reason;
+
+				Log.Info("Client", $"The server is closing this connection: {msg.Reason} (terminal={msg.Terminal}).");
+
+				if (msg.Terminal)
+				{
+					QuitToLogin();
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Client", $"OnDisconnectNotice: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Shows the last disconnect reason, if one is outstanding, and clears it.
+		/// </summary>
+		/// <remarks>
+		/// Called at the very end of <see cref="QuitToLogin"/>, after the panels have been
+		/// restored — a dialog opened before that is closed again by the panels'
+		/// quit-to-login handlers, which is how the login queue's timeout message used to
+		/// disappear.
+		/// </remarks>
+		private void ShowPendingDisconnectNotice()
+		{
+			if (this.pendingDisconnectNotice == null)
+			{
+				return;
+			}
+
+			DisconnectNoticeReason reason = this.pendingDisconnectNotice.Value;
+			this.pendingDisconnectNotice = null;
+
+			ShowInfoDialog(DescribeDisconnectReason(reason));
+		}
+
+		/// <summary>
+		/// Turns a <see cref="DisconnectNoticeReason"/> into something a player can act on.
+		/// </summary>
+		/// <remarks>
+		/// The server deliberately sends a code rather than its own log text: its wording is
+		/// written for an operator, and putting internal state on the wire would narrate the
+		/// server's behaviour to anyone watching. Each line here says what happened and what to
+		/// do about it, which is the part the player actually needs.
+		/// </remarks>
+		private static string DescribeDisconnectReason(DisconnectNoticeReason reason)
+		{
+			switch (reason)
+			{
+				case DisconnectNoticeReason.CharacterUnavailable:
+					return "Your character could not be loaded.\nPlease try again, or pick a different character.";
+				case DisconnectNoticeReason.SceneUnavailable:
+					return "The zone your character is in could not be prepared.\nPlease try again in a moment.";
+				case DisconnectNoticeReason.RoutingFailed:
+					return "The world server could not find a place for your character.\nPlease try again in a moment.";
+				case DisconnectNoticeReason.RoutingTimedOut:
+					return "The world server took too long to place your character.\nPlease try again.";
+				case DisconnectNoticeReason.SceneHandshakeTimedOut:
+					return "Your client did not finish loading the zone in time.\nPlease try again.";
+				case DisconnectNoticeReason.SessionSuperseded:
+					return "Your character was taken over by another session.\nPlease log in again.";
+				case DisconnectNoticeReason.RateLimited:
+					return "You are doing that too quickly.\nPlease wait a moment and try again.";
+				case DisconnectNoticeReason.ProtocolViolation:
+					return "The server rejected this connection.\nIf this keeps happening, please contact support.";
+				case DisconnectNoticeReason.AdministrativeKick:
+					return "You have been disconnected by a game administrator.";
+				case DisconnectNoticeReason.ServerError:
+					return "The server ran into a problem handling your login.\nPlease try again in a moment.";
+				case DisconnectNoticeReason.Unspecified:
+				default:
+					return "You were disconnected by the server.\nPlease try again.";
+			}
+		}
+
 		/// <summary>
 		/// Handles a death broadcast by showing the death dialog UI.
 		/// </summary>
@@ -1305,16 +1769,84 @@ namespace FishMMO.Client
 		private void OnLogMessage(string condition, string stackTrace, LogType type)
 		{
 			if (type != LogType.Exception) return;
-			Log.Error("Client", stackTrace);
+			Log.Error("Client", string.IsNullOrEmpty(condition) ? stackTrace : $"{condition}\n{stackTrace}");
 			if (string.IsNullOrEmpty(stackTrace) || !IsNetworkStack(stackTrace)) return;
 			pendingErrorStackTrace = stackTrace;
 		}
 		/// <summary>
-		/// Determines whether a stack trace originates from the networking layer.
+		/// Tears the session down after an unhandled exception escaped the networking stack.
 		/// </summary>
+		/// <remarks>
+		/// This used to revoke the token and call <see cref="ClientConnectionManager.ForceDisconnect"/>
+		/// and stop there. ForceDisconnect deliberately suppresses both the reconnect timer and
+		/// <c>OnConnectionAttemptFailed</c> for the stop it causes, so nothing downstream ran:
+		/// the world scenes stayed loaded, the HUD stayed on screen, no login panel was shown,
+		/// and — because the token had just been revoked — no amount of waiting could recover
+		/// it. The player was left standing in a frozen world with no way back short of
+		/// restarting the client.
+		/// <para>
+		/// <see cref="QuitToLogin"/> does the same disconnect and revocation as part of a
+		/// teardown that actually lands somewhere: world scenes unloaded, login scenes
+		/// reloaded, panels restored. It is the only honest destination once the token is gone.
+		/// </para>
+		/// </remarks>
+		/// <param name="stackTrace">Stack trace of the exception that triggered this, for diagnostics.</param>
+		private void HandleNetworkStackException(string stackTrace)
+		{
+			// Nothing to tear down. Returning to login from here would put the login screen up
+			// over whatever the player is already looking at — which, with no connection, is
+			// the login screen.
+			if (Connection == null || Connection.ClientState == LocalConnectionState.Stopped)
+			{
+				return;
+			}
+
+			Log.Error("Client",
+				"An unhandled exception escaped the networking stack; the connection can no longer be trusted. " +
+				$"Returning to the login screen.\n{stackTrace}");
+
+			// QuitToLogin revokes the token itself; doing it here as well would try to send the
+			// revocation twice and clear the local copy before the teardown could use it.
+			QuitToLogin();
+		}
+
+		/// <summary>
+		/// Determines whether an exception was thrown <i>by</i> the networking layer, as opposed
+		/// to merely having passed through it.
+		/// </summary>
+		/// <remarks>
+		/// Only the throwing frame counts, and getting this wrong is expensive. Testing the
+		/// whole stack — which this used to do — matched <c>FishNet.Managing.</c> for every
+		/// exception raised inside <i>any</i> broadcast or RPC handler, because that is the code
+		/// that dispatches them. A null reference in a HUD panel reacting to a chat message was
+		/// therefore indistinguishable from a corrupted transport stream, and the response to
+		/// both is to revoke the session token and return to the login screen. Losing a session
+		/// over a cosmetic UI bug is far worse than the bug.
+		/// <para>
+		/// The first line of a Unity stack trace is the throw site; its callers follow beneath
+		/// it. Matching only that line keeps the teardown for faults raised inside the reader,
+		/// the transport or the authenticator — those genuinely mean the connection can no
+		/// longer be trusted — while a handler's own bug is logged and otherwise left alone.
+		/// </para>
+		/// </remarks>
 		/// <param name="st">The stack trace to inspect.</param>
-		/// <returns>True if the stack trace matches known networking namespaces; otherwise, false.</returns>
-		private static bool IsNetworkStack(string st) => st.IndexOf("FishNet.Managing.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishNet.Serializing.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishMMO.Shared.Network.", StringComparison.Ordinal) >= 0 || st.IndexOf("FishMMO.Client.Authentication", StringComparison.Ordinal) >= 0 || st.IndexOf("LoginAuthenticator", StringComparison.Ordinal) >= 0 || st.IndexOf("SrpAuthenticator", StringComparison.Ordinal) >= 0 || st.IndexOf("ClientAuthenticator", StringComparison.Ordinal) >= 0;
+		/// <returns>True when the throwing frame belongs to the networking layer.</returns>
+		private static bool IsNetworkStack(string st)
+		{
+			// First line = the frame that threw. Callers, including the broadcast dispatcher
+			// that would match every handler in the game, are deliberately not considered.
+			int lineEnd = st.IndexOf('\n');
+			string throwSite = lineEnd >= 0 ? st.Substring(0, lineEnd) : st;
+
+			return throwSite.IndexOf("FishNet.Managing.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishNet.Transporting.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishNet.Serializing.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishMMO.Shared.Network.", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("FishMMO.Client.Authentication", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("LoginAuthenticator", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("SrpAuthenticator", StringComparison.Ordinal) >= 0 ||
+				throwSite.IndexOf("ClientAuthenticator", StringComparison.Ordinal) >= 0;
+		}
 
 		// ── App lifecycle ───────────────────────────────────────────────
 
@@ -1399,8 +1931,15 @@ namespace FishMMO.Client
 		public static void DismissLoadingScreen(bool suppress)
 		{
 			if (suppress) LoadingSuppressed = true;
-			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out _)) UIManager.Hide("UITKLoadingScreen");
-			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out _)) UIManager.Hide("UILoadingScreen");
+
+			/* Hide the control directly rather than through UIManager.Hide, which is a no-op
+			 * unless the panel happens to be visible at that instant. The overlay's Hide is
+			 * also what clears its driver flags, so routing through that gate meant a
+			 * dismissal that arrived while the panel was momentarily down left a driver
+			 * latched — and the next refresh popped the overlay back up over live gameplay
+			 * with nothing left to take it down again. */
+			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out UITKLoadingScreen tkLoadingScreen)) tkLoadingScreen.Hide();
+			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out UILoadingScreen loadingScreen)) loadingScreen.Hide();
 		}
 
 		/// <summary>

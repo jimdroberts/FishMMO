@@ -186,6 +186,31 @@ public class MyNetworkSystem : ServerBehaviour
 }
 ```
 
+## A dropped main-thread action is a stuck client
+
+For a request/response handler the queued action *is* the reply. The client sent a request,
+disabled its control, and is waiting — so an action that never runs is a player looking at a
+screen whose only button does nothing, with no error and no explanation. Two rules keep that
+from happening.
+
+**One action's failure costs only that action.** `Drain` invokes each action inside its own
+try/catch. A single `Invoke` loop abandoned the whole remainder of the batch on the first
+exception, and because the actions had already been dequeued they were simply gone — every
+client whose reply happened to sit behind the throwing one waited for a message that no longer
+existed. The actions in a batch belong to unrelated connections and nothing may assume
+otherwise.
+
+**The drain buffer is cleared in a `finally`.** It used to be cleared after the loop, so an
+exception escaping the loop left it populated and the *next* `Drain` cleared it on entry —
+silently discarding actions that had been dequeued but never run.
+
+Capacity rejection (`MaxQueueCapacity`, 10,000 per system) is the other way an action is lost.
+`MainThreadQueueHelper` counts and rate-limits a warning for those, and callers that hold state
+across the hand-off must check the return value — `CharacterSystem.LoadCharacterAsync` releases
+its session claim when the spawn hand-off is rejected, rather than stranding it. Beyond that the
+client is the backstop: no login-flow panel waits on a reply without a deadline. See
+[Client Connection Manager](../../../Client/Connection/README.md#no-panel-waits-on-a-reply-forever).
+
 ## Configuration
 
 | Parameter | Location | Default | Description |

@@ -135,6 +135,31 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> ClearCombatLoggedAsync(long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Atomically claims a character's channel-switch cooldown window: succeeds and stamps
+		/// the character only if it has not switched within <paramref name="cooldown"/>.
+		/// </summary>
+		/// <remarks>
+		/// A channel switch releases the character and drops the connection, so the client comes
+		/// back through the world server on a fresh connection id — very possibly to a different
+		/// scene server. Any cooldown held in memory is therefore erased by the switch itself,
+		/// which left the limit applying only to switches that were refused. The character row
+		/// is the only state that survives the hop.
+		/// <para>
+		/// Check and stamp are one statement so two scene servers cannot both conclude the
+		/// cooldown has elapsed. Deliberately not version-gated: this is a rate limit, not
+		/// gameplay state, and it must not lose to — or interfere with — a concurrent save.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterId">Character attempting the switch.</param>
+		/// <param name="cooldown">Minimum interval between switches.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// <c>true</c> when the switch may proceed and the character has been stamped;
+		/// <c>false</c> when it is still on cooldown.
+		/// </returns>
+		Task<DatabaseResult<bool>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Attempts to claim ownership of a character session (Offline → Online).
 		/// </summary>
 		/// <remarks>
@@ -265,7 +290,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Updates last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, long sceneHandle, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves the selected character for each of the specified accounts in batches.

@@ -33,10 +33,10 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </summary>
 		/// <param name="worldServerID">The id of the world server that owns the scene.</param>
 		/// <param name="sceneName">The canonical name of the scene.</param>
-		/// <param name="sceneHandle">The integer handle for the scene instance.</param>
+		/// <param name="sceneID">The scene row ID identifying the instance. See <see cref="ISceneInstanceDetails.SceneID"/>.</param>
 		/// <param name="instanceDetails">When this method returns <c>true</c>, contains the instance details.</param>
 		/// <returns><c>true</c> if the instance was found; otherwise <c>false</c>.</returns>
-		bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out ISceneInstanceDetails instanceDetails);
+		bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, long sceneID, out ISceneInstanceDetails instanceDetails);
 
 		/// <summary>
 		/// Ensures the specified scene instance is loaded and associates the
@@ -61,8 +61,8 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// resources and notifying world servers as appropriate. If the handle is
 		/// unknown this method should be a no-op.
 		/// </summary>
-		/// <param name="handle">The handle of the scene instance to unload.</param>
-		void UnloadScene(int handle);
+		/// <param name="sceneID">The scene row ID of the instance to unload.</param>
+		void UnloadScene(long sceneID);
 
 		/// <summary>
 		/// Adjusts the tracked character count for a scene instance.
@@ -76,8 +76,8 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </remarks>
 		/// <param name="worldServerID">World server that owns the scene instance.</param>
 		/// <param name="sceneName">Scene name.</param>
-		/// <param name="sceneHandle">Scene handle.</param>
+		/// <param name="sceneID">Scene row ID identifying the instance.</param>
 		/// <param name="amount">Amount to adjust by.</param>
-		void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount);
+		void AdjustSceneCharacterCount(long worldServerID, string sceneName, long sceneID, int amount);
 	}
 }

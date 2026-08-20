@@ -525,9 +525,30 @@ When your data model changes, create a new migration via the Installer (Database
 
 ```bash
 cd FishMMO-Database/FishMMO-DB
-dotnet ef migrations add YourMigrationName
+dotnet ef migrations add YourMigrationName \
+  --startup-project ../FishMMO-DB-Migrator \
+  --output-dir ../../Migrations
+
+# The scaffolder writes the model snapshot to the project default rather than
+# --output-dir, where the SDK glob also compiles it — move it and remove the folder.
+mv Migrations/NpgsqlDbContextModelSnapshot.cs ../../Migrations/
+rmdir Migrations
+
 cd ../FishMMO-DB-Migrator
 dotnet run
+```
+
+Three things about this are not obvious:
+
+- **`--startup-project` is mandatory.** `FishMMO-DB` targets `netstandard2.1`, which has no runtime, so the EF tooling refuses to run against it alone. `FishMMO-DB-Migrator` is the only executable project that references it.
+- **Migrations live at the monorepo root**, in `Migrations/`, which is `.gitignore`d and compiled into `FishMMO-DB` via `<Compile Include="..\..\Migrations\*.cs" />`. Hence `--output-dir ../../Migrations` and the snapshot move above.
+- **Review the scaffold before running it.** The model currently carries two pre-existing drifts (`character_pet.abilities` and `character_abilities.ability_events` are `text` in the database but `List<int>` in the model) that every new migration re-scaffolds as a destructive `ALTER … TYPE integer[]`. Strip those from `Up` and `Down` unless you are deliberately converting them.
+
+To review the generated SQL without touching a database — `dotnet ef database update` ignores `FISHMMO_CONNECTION_STRING` and resolves the design-time factory, which points at your **live** local database:
+
+```bash
+dotnet ef migrations script PreviousMigration YourMigrationName \
+  --startup-project ../FishMMO-DB-Migrator --idempotent
 ```
 
 ### Database Configuration
@@ -787,7 +808,7 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | `MaximumClients` | Maximum concurrent connections | 4000 |
 | `Address` | Bind address — `127.0.0.1` when behind NGINX (default); set to the server's network IP only if NGINX runs on a different machine | `127.0.0.1` |
 | `Port` | Listen port (Login=7770, World=7780, Scene=7790+) | varies |
-| `StaleSceneTimeout` | Seconds before idle scenes are unloaded | 5 |
+| `StaleSceneTimeout` | **Minutes** an empty scene instance stays loaded before it is unloaded and its scene row deleted. SceneServer only. The templates ship `5`; the code's fallback when the key is missing is `60` | 5 |
 | `CertificatePath` | PEM certificate for QUIC/TLS (game servers terminate their own TLS) | platform-dependent |
 | `PrivateKeyPath` | PEM private key for QUIC/TLS | platform-dependent |
 | `ConnectionTokenHmacKeyBase64` | **Leave empty.** Loaded at runtime from the `connection_token_keys` database table | empty |
@@ -877,6 +898,21 @@ All projects share a single canonical `logging.json` at [`FishMMO-Setup/logging.
 > **Security:** Keep SMTP credentials out of source control. Load them via environment variables (e.g., `FISHMMO_SMTP_PASSWORD`). Application secrets (gate secret, KEK, connection token HMAC key) are stored in the database — see [FishMMO-Auth — Signing Keys & KEK](#fishmmo-auth--signing-keys--kek). See [FishMMO-Logger README](FishMMO-Logger/README.md) for full configuration details.
 
 **Runtime override:** Place a modified `logging.json` in the working directory — it takes precedence over the bundled copy. The log level can also be overridden via the `FISHMMO_LOG_LEVEL` environment variable (e.g. `Debug`, `Verbose`).
+
+**Level policy (why it is a data-handling decision, not just noise control):** `Warning` and
+above are the tiers that get shipped off-host, aggregated and retained longest. Two rules follow
+for server code, and both have been violated in this codebase before:
+
+- *A healthy path never logs above `Debug`.* Every Login→World and World→Scene hop mints a
+  connection token; logging the **successful** mint at `Warning` produced one line per hop on a
+  busy server and buried the failures the tier exists for.
+- *Per-player identifiers do not travel with success.* That same line named the client's
+  resolved real IP, putting one player-attributable record into a widely-retained tier on every
+  zone change, for no diagnostic gain — the failure branch already identifies the connection
+  that could not be served.
+
+Failures keep their `Warning`/`Error` level and their identifying detail. See
+[Security Properties](CONNECTION_PIPELINE.md#security-properties).
 
 ### Configuration Files — `FishMMO-Setup/`
 
@@ -1441,6 +1477,12 @@ Port=7791
 
 Launch each with `./GameServer SCENE` from its own working directory (or pass a custom config path). The WorldServer will distribute characters across all registered scene servers.
 
+**Scene servers are not bound to a world server.** Each one pulls from a single global pending-scene queue, so any scene server may end up hosting scenes for any world server. This is what lets you scale zone capacity independently of world instances, and it is why scene rows, population counts and routing caches are all keyed by world server ID as well as scene name.
+
+**Multiple instances of one open-world scene are channels.** When every instance of a scene is at its authored `MaxClients`, the WorldServer enqueues another and holds arriving clients in its routing queue (they see a position and a reason) until it is ready. Players move between instances of their current scene through the channel picker; the switch is refused in combat and rate-limited per character via `characters.last_channel_switch_utc`, so it survives the disconnect the switch performs.
+
+An empty instance is unloaded once it has been stale for `StaleSceneTimeout` minutes (the templates ship `5`), which also deletes its scene row.
+
 ---
 
 ## FishMMO-AppHealthMonitor
@@ -1935,7 +1977,8 @@ The full end-to-end connection flow is documented in [CONNECTION_PIPELINE.md](CO
 | 6. TOTP 2FA | 6-digit code or recovery code, failure lockout |
 | 7. Token & Character | Token hash persisted, character CRUD, server list |
 | 8. World Server | Token auth with HMAC verification, renewal token |
-| 9. Scene Server | Same token auth flow, gameplay begins |
+| 9. Scene Server | Same token auth flow, order-independent scene handshake, gameplay begins |
+| 9a. Scene-Routing Queue | When there is nowhere to route yet — capacity, a scene still loading, or a combat-logout body only one instance can return — the client waits on the World server and is told its position and the reason |
 | 10. Token Lifecycle | Auto-renewal after each auth, revocation on logout/pause/quit |
 
 ### Server Initialization Order

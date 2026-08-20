@@ -333,7 +333,20 @@ namespace FishMMO.Client
 					CycleInputFields();
 				}
 			}
+
+			OnTick();
 		}
+
+		/// <summary>
+		/// Per-frame hook for controls that need one.
+		/// </summary>
+		/// <remarks>
+		/// Override this rather than declaring <c>Update</c> in a subclass. Unity binds the
+		/// most-derived <c>Update</c> only, so a subclass that declares its own silently
+		/// replaces the one above and loses tab navigation between input fields — which is
+		/// exactly what had happened to the panels that needed a timer.
+		/// </remarks>
+		protected virtual void OnTick() { }
 
 		/// <summary>
 		/// Cycles focus to the next input field in the array, allowing tab navigation between fields.

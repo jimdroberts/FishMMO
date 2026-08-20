@@ -33,9 +33,24 @@ namespace FishMMO.Server.Core.World.SceneServer
 		string Name { get; set; }
 
 		/// <summary>
-		/// Runtime handle or identifier assigned to the loaded scene instance by the
-		/// scene manager. This value is typically unique on the scene server and is
-		/// used when loading/unloading or routing connections to the instance.
+		/// Database ID of the <c>scenes</c> row this instance was loaded for. The identity of
+		/// the instance everywhere outside the hosting process.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Handle"/> cannot serve this purpose. It is the scene manager's own
+		/// identifier for a loaded scene, assigned from a per-process counter, so two scene
+		/// servers running the same build and loading the same scenes in the same order
+		/// routinely allocate identical handles. Using it as a cross-process identity meant the
+		/// world server's handle-to-server map collided between scene servers, and a scene server
+		/// happily accepted a character routed to a different server's instance because the
+		/// handle and scene name both matched. The row id is unique by construction.
+		/// </remarks>
+		long SceneID { get; set; }
+
+		/// <summary>
+		/// Runtime handle assigned to the loaded scene by this process's scene manager. Valid
+		/// only inside the scene server that loaded it, and never to be persisted or sent to
+		/// another process as an identifier — see <see cref="SceneID"/>.
 		/// </summary>
 		int Handle { get; set; }
 
