@@ -497,12 +497,20 @@ namespace FishMMO.Auth.Implementation
 		protected virtual void StoreClientRealIp(TConnection conn, string realIp) { }
 
 		/// <summary>
-		/// Whether this authenticator requires the auth token to carry a verified
-		/// real IP. True by default (behind an L4 proxy, conn.GetAddress() returns
-		/// the proxy's loopback for every client, so the token-embedded IP is the
-		/// only trustworthy source). Override to false for deployments where this
-		/// authenticator is connected to directly rather than through a proxy.
+		/// Whether this authenticator requires the auth token to carry a verified real IP.
 		/// </summary>
+		/// <remarks>
+		/// True by default, because that is the setting that cannot be wrong by accident:
+		/// behind an L4 proxy <c>GetConnectionAddress</c> returns the proxy's loopback for
+		/// every client, so the token-embedded IP is the only trustworthy one and the handshake
+		/// rate limiter has nothing else to key off.
+		/// <para>
+		/// Override to false only where clients reach this authenticator directly. The IP is
+		/// put into the token by whoever issued it, and an issuer that never saw a real IP
+		/// cannot supply one — so in a deployment without the proxy this requirement rejects
+		/// tokens that are otherwise entirely valid, and no player can enter the world.
+		/// </para>
+		/// </remarks>
 		protected virtual bool RequiresRealIp => true;
 
 		#endregion

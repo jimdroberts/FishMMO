@@ -49,6 +49,33 @@ namespace FishMMO.Server.Implementation
 		/// </remarks>
 		[SerializeField][Range(0.1f, 0.9f)] private float renewalRefreshFraction = 0.5f;
 
+		/// <summary>
+		/// Whether an auth token presented to this server must carry a verified real client IP.
+		/// </summary>
+		/// <remarks>
+		/// Leave enabled for any deployment that sits behind the L4 UDP proxy. There
+		/// <see cref="FishNet.Connection.NetworkConnection.GetAddress"/> returns the proxy's
+		/// loopback for every client, so the IP embedded in the token by the Login Server is
+		/// the only trustworthy one — and it is what the handshake rate limiter keys off. With
+		/// this disabled in a proxied deployment every pre-authentication client would share
+		/// one rate-limit bucket, which a single attacker can saturate.
+		/// <para>
+		/// Disable it only when clients reach this server directly. The Login Server recovers a
+		/// real IP solely from an IPFetch-issued connection token, and that token is optional at
+		/// the handshake — so a deployment without the proxy issues perfectly valid auth tokens
+		/// that carry no IP at all, and world entry fails with "missing real IP" for every
+		/// player. Connecting directly is a supported local-testing configuration (see the
+		/// IConnectionTokenKeyService warning in BaseServerAuthenticator), and there
+		/// <c>GetAddress()</c> is already the client's own address, so the limiter keys off it
+		/// correctly with nothing lost.
+		/// </para>
+		/// <para>
+		/// Defaults to true so the secure configuration is the one nobody has to know about.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Require auth tokens to carry a verified real client IP. Keep enabled behind the L4 proxy; disable only when clients connect to this server directly.")]
+		[SerializeField] private bool requireTokenRealIp = true;
+
 		/// <summary>Seconds between passes of the periodic token-renewal sweep.</summary>
 		private const float RenewalSweepIntervalSeconds = 5f;
 
@@ -764,6 +791,9 @@ namespace FishMMO.Server.Implementation
 			protected override int GetConnectionClientId(NetworkConnection conn) => conn.ClientId;
 			/// <inheritdoc/>
 			protected override string ResolveRateLimitKey(NetworkConnection conn) => outer.ResolveRateLimitKey(conn);
+
+			/// <inheritdoc/>
+			protected override bool RequiresRealIp => outer.requireTokenRealIp;
 
 			/// <inheritdoc/>
 			protected override void BroadcastCookieChallenge(NetworkConnection conn, byte[] cookie) =>

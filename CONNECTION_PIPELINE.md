@@ -884,9 +884,21 @@ player dropped to the login screen on their next scene transfer.
    that is not exactly the next sequence, so an inverted pair breaks both messages and every
    one after them. An in-flight guard per connection serialises them.
 3. **Never mint a token without a verified real IP.** Scene `TokenAuth` requires `RealIp`
-   (v4+), so a token minted without one is guaranteed to be rejected at the next hop.
-   Aborting the renewal leaves the client holding its current, still-valid token — strictly
-   better than replacing it with one that cannot work.
+   (v4+) wherever `requireTokenRealIp` is left enabled, so a token minted without one is
+   guaranteed to be rejected at the next hop. Aborting the renewal leaves the client holding
+   its current, still-valid token — strictly better than replacing it with one that cannot
+   work.
+
+   `requireTokenRealIp` is a serialized field on `TokenServerAuthenticator`, default **on**,
+   and should stay on for any deployment behind the L4 proxy: there `conn.GetAddress()` is the
+   proxy's loopback for every client, so the token-embedded IP is the only one the handshake
+   limiter can key off, and disabling it would put every pre-authentication client in a single
+   bucket that one attacker can saturate. Turn it off only where clients reach the server
+   directly. The Login Server recovers a real IP solely from an IPFetch-issued connection
+   token, and that token is *optional* at the handshake — so a stack running without the proxy
+   issues entirely valid auth tokens that carry no IP, and with the requirement on, every
+   player is refused at world entry with `missing real IP`. Connecting directly is a supported
+   local-testing configuration.
 
 `RenewTokenResponseBroadcast.Seq` is informational only; the client must not decrypt against
 it. A desynchronised counter has to surface as a decryption failure rather than as a
@@ -941,6 +953,17 @@ message until the retries run out.
 The notice is shown at the end of `QuitToLogin`, after the login panels are restored — a dialog
 opened before that is closed again by the panels' own quit-to-login handlers. It is cleared on
 any successful connection, so it can never outlive the session it describes.
+
+**A failed character-list fetch is a disconnect, not an empty list.** The character-list
+request used to answer a database failure by sending an empty `CharacterListBroadcast`, which is
+byte-identical to what an account with no characters receives — so an unreachable database, or a
+schema missing a column the entity model expects, reached the player as *their characters having
+been deleted*, with nothing logged client-side because from the client's point of view the
+request succeeded. Both failure paths now send a `DisconnectNoticeReason.ServerError` notice,
+which prevents the client hanging just as effectively and says something true. It is
+deliberately **non-terminal** — a fetch can fail for reasons that clear on their own, such as a
+database restart — so the client stays free to retry. The genuinely-empty account is untouched
+and still receives its empty list.
 
 **Administrative kicks go through the same path.** `KickRequestSystem` used `conn.Kick(...)`,
 which carries nothing to the client, so an operator kick landed the player on the login screen
@@ -1290,6 +1313,18 @@ Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has
 │  └─ Async worker backpressure + bounded channels            │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+**A disconnect clears the connection's own window, and only that.** `ClearHandshakeRateLimit`
+is called on the connection-stopped path so a recycled `ClientId` — FishNet reuses them — does
+not inherit the previous occupant's 100 ms block on its first handshake. It clears the
+`conn:{ClientId}` key alone. The IP-keyed window deliberately **survives the disconnect**: it is
+a property of the address, not of the connection, and clearing it there would let any client
+reset its own per-IP handshake budget simply by reconnecting, which is exactly the flood the
+limiter exists to stop. The stopped path also never resolves an address-derived key, because the
+transport has already dropped its id mapping by then and the lookup would make FishNet log
+`TransportIdData could not be found` on every disconnect. The one place the window is cleared
+wholesale is login-queue admission, where the server is inviting a re-handshake on a connection
+that is still live.
 
 **A rate limit that refuses a client must also close the connection.** Every limiter above is
 applied to a connection that is either not yet authenticated (dropped outright) or mid-request
