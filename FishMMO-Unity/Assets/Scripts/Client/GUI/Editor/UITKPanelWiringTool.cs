@@ -144,6 +144,9 @@ namespace FishMMO.Client.Editor
 					 * answer to "is this a window the player clicks, or a HUD element?" — which is
 					 * exactly what ReleasesCursor decides. Different name, same question. */
 					control.ReleasesCursor = legacy.CloseOnEscape;
+
+					// Same question again: is this a window the player moves, or fixed HUD?
+					control.CanDrag = legacy.CanDrag;
 				}
 
 				if (plan.LegacyObject.activeSelf)

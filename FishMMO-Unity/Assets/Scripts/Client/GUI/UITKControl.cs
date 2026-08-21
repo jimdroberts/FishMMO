@@ -53,6 +53,27 @@ namespace FishMMO.Client
 		public bool ReleasesCursor = false;
 
 		/// <summary>
+		/// If true, the panel can be dragged around the screen by its header.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors <see cref="UIControl.CanDrag"/>. The panel is found by its
+		/// <c>fish-panel</c> class and dragged by its <c>fish-panel__header</c> strip, falling
+		/// back to the panel itself when it has no header — the same convention the UXML files
+		/// already follow, so no per-panel wiring is needed.
+		/// </remarks>
+		[Tooltip("Panel can be dragged by its header. Enable for windows, not for HUD elements.")]
+		public bool CanDrag = false;
+
+		/// <summary>The element actually moved by a drag: the panel, not the full-screen root.</summary>
+		private VisualElement dragTarget;
+
+		/// <summary>Pointer offset within the panel when the drag began.</summary>
+		private Vector2 dragOffset;
+
+		/// <summary>True while a drag is in progress.</summary>
+		private bool isDragging;
+
+		/// <summary>
 		/// GameObject name; used as the key in <see cref="UIManager"/>.
 		/// </summary>
 		public string Name => gameObject.name;
@@ -170,8 +191,118 @@ namespace FishMMO.Client
 			this.hasStarted = true;
 			this.startedTreeRoot = root[0];
 			OnStarting();
+			SetupDragging();
 			OnAfterStarting();
 			return true;
+		}
+
+		/// <summary>
+		/// Wires header dragging, if this panel allows it.
+		/// </summary>
+		/// <remarks>
+		/// Called after every initialisation, including the re-run that follows a visual tree
+		/// rebuild. That is safe and necessary: a rebuilt tree contains different element
+		/// instances, so the previous registrations went with the discarded tree rather than
+		/// accumulating on the new one.
+		/// </remarks>
+		private void SetupDragging()
+		{
+			this.dragTarget = null;
+			this.isDragging = false;
+
+			if (!CanDrag)
+			{
+				return;
+			}
+
+			VisualElement root = Root;
+			if (root == null)
+			{
+				return;
+			}
+
+			// The panel, not the panel's root: the root fills the screen, so moving it would
+			// move nothing visible.
+			this.dragTarget = root.Q(className: "fish-panel");
+			if (this.dragTarget == null)
+			{
+				return;
+			}
+
+			VisualElement handle = this.dragTarget.Q(className: "fish-panel__header") ?? this.dragTarget;
+			handle.RegisterCallback<PointerDownEvent>(OnDragPointerDown);
+			handle.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
+			handle.RegisterCallback<PointerUpEvent>(OnDragPointerUp);
+		}
+
+		/// <summary>
+		/// Begins a drag, unless the pointer went down on something interactive.
+		/// </summary>
+		private void OnDragPointerDown(PointerDownEvent evt)
+		{
+			// A header usually carries a close button, and dragging from it would both move the
+			// panel and swallow the click.
+			if (evt.target is Button)
+			{
+				return;
+			}
+
+			VisualElement handle = (VisualElement)evt.currentTarget;
+
+			/* Pinned to its current on-screen position before the first move. Panels are laid
+			 * out by flex — centred, or anchored to an edge — and writing left/top to a
+			 * flex-positioned element does nothing. Reading the resolved rect first means the
+			 * panel does not jump when the drag starts. */
+			Rect panel = this.dragTarget.worldBound;
+			this.dragTarget.style.position = Position.Absolute;
+			this.dragTarget.style.left = panel.x;
+			this.dragTarget.style.top = panel.y;
+			this.dragTarget.style.right = StyleKeyword.Auto;
+			this.dragTarget.style.bottom = StyleKeyword.Auto;
+
+			this.dragOffset = new Vector2(evt.position.x - panel.x, evt.position.y - panel.y);
+			this.isDragging = true;
+			handle.CapturePointer(evt.pointerId);
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Moves the panel with the pointer, kept within the screen.
+		/// </summary>
+		private void OnDragPointerMove(PointerMoveEvent evt)
+		{
+			if (!this.isDragging || this.dragTarget == null)
+			{
+				return;
+			}
+
+			Rect screen = Root.worldBound;
+			Rect panel = this.dragTarget.worldBound;
+
+			// Clamped so a panel can never be dragged fully off screen and become unreachable.
+			float x = Mathf.Clamp(evt.position.x - this.dragOffset.x, 0.0f, Mathf.Max(0.0f, screen.width - panel.width));
+			float y = Mathf.Clamp(evt.position.y - this.dragOffset.y, 0.0f, Mathf.Max(0.0f, screen.height - panel.height));
+
+			this.dragTarget.style.left = x;
+			this.dragTarget.style.top = y;
+		}
+
+		/// <summary>
+		/// Ends a drag.
+		/// </summary>
+		private void OnDragPointerUp(PointerUpEvent evt)
+		{
+			if (!this.isDragging)
+			{
+				return;
+			}
+
+			this.isDragging = false;
+			VisualElement handle = (VisualElement)evt.currentTarget;
+			if (handle.HasPointerCapture(evt.pointerId))
+			{
+				handle.ReleasePointer(evt.pointerId);
+			}
 		}
 
 		/// <summary>
@@ -369,6 +500,7 @@ namespace FishMMO.Client
 			 * OnAfterStarting re-applies that state, and pairs Pre with Post so re-running it does
 			 * not stack up duplicate event subscriptions. */
 			OnStarting();
+			SetupDragging();
 			OnAfterStarting();
 		}
 
