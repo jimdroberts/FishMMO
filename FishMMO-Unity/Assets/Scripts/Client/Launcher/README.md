@@ -32,6 +32,17 @@ Everything it does over the network goes through an injected service so the flow
 | News HTML | `IHtmlContentFetcher` | `UnityHtmlContentFetcher` |
 | Version + patch download | `IPatchServerService` | `HttpPatchServerService` |
 | Updater process | `IUpdaterLauncher` | `SystemUpdaterLauncher` |
+| Presentation | `ILauncherView` | `UGUILauncherView` |
+
+Rendering is behind `ILauncherView` so the state machine, version check, and patch flow exist
+once regardless of which UI technology draws them. `ClientLauncher` falls back to
+`UGUILauncherView` — built from the element references already serialized on it — whenever no
+view component is assigned, so existing scenes keep working untouched.
+
+The interface deliberately expresses intent (*show this status*) rather than widget
+manipulation (*set this label, activate that group*). The uGUI view has no dedicated status
+element and has to borrow the progress label and reveal its parent group to be seen at all;
+encoding that quirk in the interface would export one view's limitation to every other.
 
 ## Supported Platforms
 
@@ -73,6 +84,34 @@ Everything it does over the network goes through an injected service so the flow
 
 > **Why `htmlViewURL` defaults to empty.** A non-empty default gets baked into the scene the first time it is saved, and the serialized copy then silently wins over the build-time configured value for every subsequent build — which is exactly how a stale hard-coded URL once shipped. Resolution happens at read time instead: `HtmlViewURL` falls back to `Constants.Configuration.LauncherHtmlUrl` whenever the override is blank.
 
+### Player settings
+
+Persisted in the shared `Configuration.GlobalSettings` file, the same store the in-game Options
+panel uses. The launcher loads it itself — only the Options panels did previously, and those
+live in the world scene, so nothing had read a settings file this early.
+
+| Key | Default | Effect |
+|---|---|---|
+| `Launcher.AutoUpdate` | `true` | Off stops at `UpdateAvailable` with the download size instead of patching straight away |
+| `Launcher.RequestTimeout` | inspector value | Per-request timeout, clamped 5–300s |
+| `Launcher.MaxRetries` | inspector value | Retries after a failure, clamped 0–10. Patch downloads only — the news fetcher stays at 0 |
+| `Launcher.RetryDelay` | inspector value | Seconds between retries, clamped 0–30 |
+| `Launcher.PatchDirectory` | empty | Where patch archives are stored. Empty uses the install's own `Patches` folder |
+| `Launcher.WindowWidth` / `Height` | unset | Last windowed size, restored on next launch |
+
+The transfer tunables take the component's serialized value as their fallback, so an install
+where nothing has been changed behaves exactly as it did before these existed.
+
+`Launcher.PatchDirectory` is **not** a "move the game" setting and cannot be one — the Updater
+patches files relative to its own location and ships beside the client binaries, so the install
+root is fixed by construction. It exists to keep large, transient archives off a small system
+drive. It must be an absolute path; anything unusable falls back to the default, and both the
+launcher and the Updater apply that same rule so they fall back together.
+
+Unity exposes no receive-buffer setting for `DownloadHandlerFile`, and on desktop
+`UnityWebRequest` defers to the platform HTTP stack — timeout, retry count and retry delay are
+the only real throughput controls available, which is why nothing else is offered.
+
 ### UI text
 
 All player-facing strings are constants on the nested `UIText` class — status labels (`StatusPatchUnavailable`, `StatusServerRejectedVersion`, …), long-form explanations (`DetailPatchUnavailable`, `DetailApplyingPatch`, …), and log format strings. Change copy there, not at the call sites.
@@ -111,7 +150,7 @@ All player-facing strings are constants on the nested `UIText` class — status 
 
 `PlayButtonUpdate()` then:
 
-1. Computes the destination as `Constants.GetPatchesDirectory()` + `Constants.GetPatchFileName(currentVersion, latestVersion)` — i.e. `<install root>/Patches/<from>-<to>.zip`. **This path is a contract.** The Updater resolves the same location from its own base directory and looks nowhere else; if the archive is not exactly there it reports "patch file not found", relaunches the client unchanged, and the launcher detects the same mismatch on the next run. See the [Updater README](../../../../../FishMMO-Patcher/Updater/README.md).
+1. Computes the destination as `LauncherSettings.ResolvePatchDirectory(Constants.GetPatchesDirectory())` + `Constants.GetPatchFileName(currentVersion, latestVersion)` — by default `<install root>/Patches/<from>-<to>.zip`. **This path is a contract**, and it is now passed to the Updater as `-patches=<dir>` rather than derived independently on both sides. A disagreement fails silently: the Updater reports "patch file not found", relaunches the client unchanged, and the launcher detects the same mismatch on the next run, forever. See the [Updater README](../../../../../FishMMO-Patcher/Updater/README.md).
 2. Downloads from the pinned host, verifying the SHA-256 when the server supplied one.
 3. If the server answers **204 No Content** mid-flight — the version we checked against was superseded, or we raced a deployment — no archive is written and the launcher goes straight to `ReadyToPlay` instead of invoking the Updater on a file that does not exist.
 4. Otherwise enters `ApplyingPatch` and starts the Updater. The archive is deliberately **not** deleted here: the Updater is about to read it, and removes it itself once applied.
@@ -200,14 +239,19 @@ flowchart TD
 
 ```
 Client/Launcher/
-├── ClientLauncher.cs            # MonoBehaviour: UI, state machine, orchestration
+├── ClientLauncher.cs            # MonoBehaviour: state machine, orchestration
 ├── LauncherState.cs             # The 15 UI/process states
 ├── PatchInfo.cs                 # Server patch metadata: UpToDate, PatchAvailable, Sha256, Size
 ├── VersionFetch.cs              # Version response parsing
 │
+├── ILauncherView.cs             # Contract: the presentation surface the state machine drives
+├── UGUILauncherView.cs          #   → legacy uGUI/TextMeshPro implementation
+├── HtmlToTmpTextConverter.cs    # News node tree → TextMeshPro rich text (uGUI view only)
+├── LauncherLinkPolicy.cs        # Scheme allowlist for opening news links (shared by all views)
+│
 ├── IPatchServerService.cs       # Contract: GetLatestVersion, DownloadPatch
 ├── HttpPatchServerService.cs    #   → HTTP implementation with SHA-256 verification
-├── IHtmlContentFetcher.cs       # Contract: fetch a page, extract a div's text
+├── IHtmlContentFetcher.cs       # Contract: fetch a page, extract a div as a parsed node
 ├── UnityHtmlContentFetcher.cs   #   → UnityWebRequest implementation
 ├── IUpdaterLauncher.cs          # Contract: start the external updater and hand off
 ├── SystemUpdaterLauncher.cs     #   → Process.Start implementation
