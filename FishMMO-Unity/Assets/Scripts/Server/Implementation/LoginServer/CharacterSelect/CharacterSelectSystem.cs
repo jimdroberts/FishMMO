@@ -155,8 +155,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				if (!TryGetDbService(out ICharacterService characterService))
 				{
-					await Log.Warning("CharacterSelectSystem", "CharacterService unavailable for character list request.");
-					SendEmptyCharacterList(conn);
+					await Log.Error("CharacterSelectSystem", "CharacterService unavailable for character list request.");
+					FailCharacterListRequest(conn);
 					return;
 				}
 
@@ -164,8 +164,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
-					await Log.Warning("CharacterSelectSystem", $"Failed to fetch character list for account '{accountName}': [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
-					SendEmptyCharacterList(conn);
+					await Log.Error("CharacterSelectSystem", $"Failed to fetch character list for account '{accountName}': [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
+					FailCharacterListRequest(conn);
 					return;
 				}
 
@@ -724,20 +724,31 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Sends an empty character list to the client when the fetch operation fails.
-		/// Prevents the client from hanging indefinitely waiting for a response.
+		/// Ends a character-list request that could not be answered, telling the client why.
 		/// </summary>
-		/// <param name="conn">Network connection to send the empty list to.</param>
-		private void SendEmptyCharacterList(NetworkConnection conn)
+		/// <remarks>
+		/// This previously sent an empty <see cref="CharacterListBroadcast"/>. That did stop the
+		/// client hanging, but an empty list is indistinguishable from "this account has no
+		/// characters" — so a database that was unreachable, or a schema that had drifted from
+		/// the entity model, reached the player as their characters having been deleted. The
+		/// account with the missing characters is the one place the truth is least visible:
+		/// nothing is logged client-side, because from the client's point of view the request
+		/// succeeded.
+		/// <para>
+		/// Reporting a server error prevents the hang just as effectively and says something
+		/// true. It is deliberately not terminal — a fetch can fail for reasons that clear on
+		/// their own, such as a database restart or a transient connection fault, so the client
+		/// is left free to retry.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">Network connection whose request could not be answered.</param>
+		private void FailCharacterListRequest(NetworkConnection conn)
 		{
 			TryEnqueueMainThread(() =>
 			{
 				if (conn != null && conn.IsActive)
 				{
-					Server.NetworkWrapper.Broadcast(conn, new CharacterListBroadcast()
-					{
-						Characters = System.Array.Empty<CharacterDetails>(),
-					}, true, Channel.Reliable);
+					DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 				}
 			});
 		}

@@ -399,6 +399,105 @@ namespace FishMMO.Database.Npgsql
 		}
 
 		/// <summary>
+		/// Reports whether the database schema still matches the entity model.
+		/// </summary>
+		/// <remarks>
+		/// Migrations are generated per developer and applied locally rather than shared through
+		/// source control, so pulling a change to an entity does not bring a migration with it and
+		/// nothing applies one on your behalf. The database simply stays where it was, and the
+		/// first symptom is a query failing at runtime for a column that does not exist — which
+		/// surfaces far from the cause, as missing data rather than as a schema problem.
+		/// <para>
+		/// Two distinct states are worth catching, and they need different fixes:
+		/// </para>
+		/// <list type="bullet">
+		/// <item><description><b>Pending migrations</b> — migrations exist that the database has
+		/// not run. Fix with <c>dotnet ef database update</c>.</description></item>
+		/// <item><description><b>Model drift</b> — the entity model has changed since the last
+		/// migration was created, so no migration for it exists yet. This is the case a pending
+		/// check alone misses, and the one that occurs after pulling someone else's entity change.
+		/// Fix with <c>dotnet ef migrations add &lt;name&gt;</c> followed by
+		/// <c>database update</c>.</description></item>
+		/// </list>
+		/// <para>
+		/// Drift detection reads EF's own model differ. That is a less stable API surface than the
+		/// rest of this class, so a failure to evaluate it is reported as
+		/// <see cref="SchemaValidationResult.DriftCheckFailed"/> rather than thrown: a diagnostic
+		/// that cannot run must not stop a server that would otherwise be fine.
+		/// </para>
+		/// </remarks>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>What was found. Never throws.</returns>
+		public async Task<SchemaValidationResult> ValidateSchemaAsync(CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				using var context = CreateDbContext();
+
+				string[] pending;
+				try
+				{
+					var pendingMigrations = await context.Database
+						.GetPendingMigrationsAsync(cancellationToken).ConfigureAwait(false);
+					pending = System.Linq.Enumerable.ToArray(pendingMigrations);
+				}
+				catch (Exception ex)
+				{
+					return SchemaValidationResult.Unavailable($"could not read migration history: {ex.Message}");
+				}
+
+				bool driftCheckFailed = false;
+				bool modelChanged = false;
+				try
+				{
+					modelChanged = HasModelDrift(context);
+				}
+				catch
+				{
+					// EF internals moved, or the snapshot could not be finalized. Report the
+					// pending-migration result we do have rather than failing the caller.
+					driftCheckFailed = true;
+				}
+
+				return new SchemaValidationResult(pending, modelChanged, driftCheckFailed, null);
+			}
+			catch (Exception ex)
+			{
+				return SchemaValidationResult.Unavailable(ex.Message);
+			}
+		}
+
+		/// <summary>
+		/// Returns true when the entity model differs from the most recent migration's snapshot.
+		/// </summary>
+		private static bool HasModelDrift(NpgsqlDbContext context)
+		{
+			var migrationsAssembly = Microsoft.EntityFrameworkCore.Infrastructure
+				.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrationsAssembly>(context);
+
+			var snapshot = migrationsAssembly.ModelSnapshot;
+			if (snapshot == null)
+			{
+				// No migrations have ever been created. There is nothing to compare against, so
+				// this is not drift — CanConnect and the pending list already cover that case.
+				return false;
+			}
+
+			var differ = Microsoft.EntityFrameworkCore.Infrastructure
+				.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrationsModelDiffer>(context);
+
+			var snapshotModel = snapshot.Model;
+			if (snapshotModel is Microsoft.EntityFrameworkCore.Metadata.IMutableModel mutableSnapshot)
+			{
+				snapshotModel = mutableSnapshot.FinalizeModel();
+			}
+
+			return differ.HasDifferences(
+				snapshotModel.GetRelationalModel(),
+				context.Model.GetRelationalModel());
+		}
+
+		/// <summary>
 		/// Asynchronously disposes the factory and releases all resources.
 		/// Calls Shutdown() to reject new context creation, waits briefly for active contexts to complete,
 		/// then disposes monitoring resources.

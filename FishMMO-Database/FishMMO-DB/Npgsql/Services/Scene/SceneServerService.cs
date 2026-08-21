@@ -53,7 +53,7 @@ namespace FishMMO.Database.Npgsql.Services
 						address = EXCLUDED.address,
 						port = EXCLUDED.port,
 						character_count = EXCLUDED.character_count,
-						last_pulse = CURRENT_TIMESTAMP
+						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
 					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked";
 
 				return await ExecuteReturningAsync(
@@ -112,7 +112,7 @@ namespace FishMMO.Database.Npgsql.Services
 				 * in the process ever set that flag either, so the whole feature was inert in
 				 * both directions. */
 				var sql = $@"UPDATE {TableName}
-					SET last_pulse = CURRENT_TIMESTAMP,
+					SET last_pulse = timezone('UTC', CURRENT_TIMESTAMP),
 						character_count = {{0}}
 					WHERE id = {{1}}
 					RETURNING locked, shutdown_at_utc";

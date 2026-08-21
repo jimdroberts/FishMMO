@@ -621,7 +621,7 @@ namespace FishMMO.Database.Npgsql.Services
 						AND verify_code = {{1}}
 						AND verify_code <> 0
 						AND verified = false
-						AND (verify_code_expires_utc IS NULL OR verify_code_expires_utc > CURRENT_TIMESTAMP)";
+						AND (verify_code_expires_utc IS NULL OR verify_code_expires_utc > timezone('UTC', CURRENT_TIMESTAMP))";
 				var rowsAffected = await dbContext.Database
 					.ExecuteSqlRawAsync(sql, new object[] { normalized, verifyCode }, cancellationToken)
 					.ConfigureAwait(false);
@@ -702,7 +702,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Account name must be 3-32 characters.");
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $"UPDATE {TableName} SET verification_email_sent_at = CURRENT_TIMESTAMP WHERE name_lowercase = {{0}}";
+				var sql = $"UPDATE {TableName} SET verification_email_sent_at = timezone('UTC', CURRENT_TIMESTAMP) WHERE name_lowercase = {{0}}";
 				var affected = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant() }, cancellationToken).ConfigureAwait(false);
 				if (affected == 0)
 					throw new DatabaseEntityNotFoundException("Account", accountName);

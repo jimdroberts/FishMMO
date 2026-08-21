@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -102,7 +102,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				// Use INSERT ... ON CONFLICT to atomically insert or update.
 				var sql = $@"INSERT INTO {TableName} (key_id, hmac_key_base64, is_active, time_created)
-					VALUES ({{0}}, {{1}}, true, CURRENT_TIMESTAMP)
+					VALUES ({{0}}, {{1}}, true, timezone('UTC', CURRENT_TIMESTAMP))
 					ON CONFLICT (key_id) DO UPDATE SET
 						hmac_key_base64 = EXCLUDED.hmac_key_base64,
 						is_active = true,
