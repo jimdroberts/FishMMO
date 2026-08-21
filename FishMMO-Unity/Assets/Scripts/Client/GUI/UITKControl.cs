@@ -53,6 +53,30 @@ namespace FishMMO.Client
 		public bool ReleasesCursor = false;
 
 		/// <summary>
+		/// If true, the player can drag this panel around the screen.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors <see cref="UIControl.CanDrag"/>, including its default of false, so the two
+		/// kinds of panel present the same choice in the Inspector and a migrated panel can
+		/// carry its answer straight across.
+		/// </remarks>
+		[Header("Drag")]
+		[Tooltip("Allow the player to drag this panel. Enable for windows, not for HUD elements.")]
+		public bool CanDrag = false;
+
+		/// <summary>
+		/// If true, a dragged panel is kept fully inside the screen.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors <see cref="UIControl.ClampToScreen"/>. Without it a window can be dragged
+		/// far enough off-screen that the header used to drag it back is no longer reachable,
+		/// which for a panel with no other way to move it is unrecoverable short of resetting
+		/// the layout.
+		/// </remarks>
+		[Tooltip("Keep a dragged panel fully on screen.")]
+		public bool ClampToScreen = true;
+
+		/// <summary>
 		/// GameObject name; used as the key in <see cref="UIManager"/>.
 		/// </summary>
 		public string Name => gameObject.name;
@@ -171,6 +195,7 @@ namespace FishMMO.Client
 			this.startedTreeRoot = root[0];
 			OnStarting();
 			OnAfterStarting();
+			AttachDragHandlers();
 			return true;
 		}
 
@@ -370,7 +395,230 @@ namespace FishMMO.Client
 			 * not stack up duplicate event subscriptions. */
 			OnStarting();
 			OnAfterStarting();
+
+			/* The handle lives in the tree that was just replaced, so the callbacks registered
+			 * on the old one went with it. Re-registering is not optional: a panel that has
+			 * been hidden and re-shown would otherwise silently stop being draggable. */
+			AttachDragHandlers();
 		}
+
+		#region Drag
+
+		/// <summary>Name of the header element panels use as a drag handle, when they have one.</summary>
+		private const string DragHandleName = "panel-header";
+
+		/// <summary>USS class marking a header element, used when the name lookup misses.</summary>
+		private const string DragHandleClass = "fish-panel__header";
+
+		/// <summary>The element the pointer grabs, or null when this panel is not draggable.</summary>
+		private VisualElement dragHandle;
+
+		/// <summary>The element actually moved — the panel content root, not the handle.</summary>
+		private VisualElement dragTarget;
+
+		/// <summary>Pointer position when the drag began, in panel coordinates.</summary>
+		private Vector2 dragStartPointer;
+
+		/// <summary>Target's left/top when the drag began.</summary>
+		private Vector2 dragStartPosition;
+
+		/// <summary>Id of the pointer that owns the in-flight drag, or -1 when idle.</summary>
+		private int dragPointerId = -1;
+
+		/// <summary>
+		/// Wires pointer handling for dragging, replacing any handlers on a previous tree.
+		/// </summary>
+		/// <remarks>
+		/// Called after every initialisation, including the re-initialisation that follows a
+		/// visual tree being rebuilt — the handlers belong to elements, so they are discarded
+		/// with the tree that owned them.
+		/// </remarks>
+		private void AttachDragHandlers()
+		{
+			DetachDragHandlers();
+
+			if (!CanDrag)
+			{
+				return;
+			}
+
+			VisualElement root = Root;
+			if (root == null || root.childCount == 0)
+			{
+				return;
+			}
+
+			// The panel root belongs to the UIDocument and fills the screen; moving it would
+			// move nothing visible. What the player drags is the content root the UXML declares.
+			this.dragTarget = root[0];
+
+			/* Prefer a header. Dragging from anywhere on the panel — which is what UIControl
+			 * does, because a uGUI drag handler sits on the whole panel — means a press that
+			 * begins on a button and moves a few pixels drags the window instead of pressing
+			 * it. UI Toolkit events bubble to the root, so the panel would receive the press
+			 * either way. A panel with no header still drags from anywhere, matching the
+			 * legacy behaviour rather than becoming immovable. */
+			this.dragHandle = this.dragTarget.Q(DragHandleName)
+				?? this.dragTarget.Q(className: DragHandleClass)
+				?? this.dragTarget;
+
+			this.dragHandle.RegisterCallback<PointerDownEvent>(OnDragPointerDown);
+			this.dragHandle.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
+			this.dragHandle.RegisterCallback<PointerUpEvent>(OnDragPointerUp);
+			this.dragHandle.RegisterCallback<PointerCaptureOutEvent>(OnDragPointerCaptureOut);
+		}
+
+		/// <summary>
+		/// Removes pointer handling for dragging.
+		/// </summary>
+		private void DetachDragHandlers()
+		{
+			if (this.dragHandle != null)
+			{
+				this.dragHandle.UnregisterCallback<PointerDownEvent>(OnDragPointerDown);
+				this.dragHandle.UnregisterCallback<PointerMoveEvent>(OnDragPointerMove);
+				this.dragHandle.UnregisterCallback<PointerUpEvent>(OnDragPointerUp);
+				this.dragHandle.UnregisterCallback<PointerCaptureOutEvent>(OnDragPointerCaptureOut);
+			}
+
+			this.dragHandle = null;
+			this.dragTarget = null;
+			this.dragPointerId = -1;
+		}
+
+		/// <summary>
+		/// Begins a drag and captures the pointer.
+		/// </summary>
+		/// <remarks>
+		/// Capturing is what makes the drag survive the pointer leaving the handle — without
+		/// it a quick movement outruns the panel, the handle stops receiving moves, and the
+		/// window is left stuck mid-drag until the next press.
+		/// </remarks>
+		private void OnDragPointerDown(PointerDownEvent evt)
+		{
+			if (!CanDrag || this.dragTarget == null || evt.button != 0)
+			{
+				return;
+			}
+
+			// Resolved once here rather than read per move: style.left is a StyleLength that
+			// reads back as the value last written, which is NaN until something writes one.
+			this.dragStartPosition = new Vector2(this.dragTarget.layout.x, this.dragTarget.layout.y);
+			this.dragStartPointer = (Vector2)evt.position;
+			this.dragPointerId = evt.pointerId;
+
+			this.dragHandle.CapturePointer(evt.pointerId);
+
+			/* Stopped so the press does not also reach whatever is under it. Not prevented
+			 * from bubbling further up, because the panel above still wants to know it was
+			 * touched — focus ordering is decided there, not here. */
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Moves the panel with the pointer.
+		/// </summary>
+		private void OnDragPointerMove(PointerMoveEvent evt)
+		{
+			if (this.dragPointerId != evt.pointerId || this.dragTarget == null)
+			{
+				return;
+			}
+
+			Vector2 delta = (Vector2)evt.position - this.dragStartPointer;
+			SetDragPosition(this.dragStartPosition + delta);
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Ends a drag and releases the pointer.
+		/// </summary>
+		private void OnDragPointerUp(PointerUpEvent evt)
+		{
+			if (this.dragPointerId != evt.pointerId)
+			{
+				return;
+			}
+
+			this.dragHandle.ReleasePointer(evt.pointerId);
+			this.dragPointerId = -1;
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Clears drag state when the capture is lost to something other than a pointer-up.
+		/// </summary>
+		/// <remarks>
+		/// A capture can be taken away — the panel being hidden mid-drag is the ordinary case.
+		/// Without this the control still believes a drag is in flight, and the next move from
+		/// that pointer id teleports the panel by the distance travelled in between.
+		/// </remarks>
+		private void OnDragPointerCaptureOut(PointerCaptureOutEvent evt)
+		{
+			this.dragPointerId = -1;
+		}
+
+		/// <summary>
+		/// Writes an absolute position to the panel, clamped to the screen when asked.
+		/// </summary>
+		/// <param name="position">Desired top-left of the panel, in panel coordinates.</param>
+		private void SetDragPosition(Vector2 position)
+		{
+			VisualElement root = Root;
+			if (this.dragTarget == null || root == null)
+			{
+				return;
+			}
+
+			if (ClampToScreen)
+			{
+				/* Clamped by the panel's own resolved size, so the whole window stays on
+				 * screen rather than only its top-left corner. contentRect is the panel root's
+				 * size in UI Toolkit's coordinate space, which is what a panel-space position
+				 * is measured against — Screen.width/height would be wrong under any
+				 * PanelSettings scale mode that is not one-to-one with the display. */
+				float maxX = Mathf.Max(0.0f, root.contentRect.width - this.dragTarget.layout.width);
+				float maxY = Mathf.Max(0.0f, root.contentRect.height - this.dragTarget.layout.height);
+
+				position.x = Mathf.Clamp(position.x, 0.0f, maxX);
+				position.y = Mathf.Clamp(position.y, 0.0f, maxY);
+			}
+
+			/* Absolute, so left/top mean what is written here. A panel laid out by its parent
+			 * flexbox would otherwise have these quietly ignored, which reads as a drag that
+			 * does nothing at all. */
+			this.dragTarget.style.position = Position.Absolute;
+			this.dragTarget.style.left = position.x;
+			this.dragTarget.style.top = position.y;
+		}
+
+		/// <summary>
+		/// Returns the panel to the position its stylesheet gives it and ends any drag.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors <see cref="UIControl.ResetPosition"/>. Clearing the inline styles rather
+		/// than writing a remembered position hands the panel back to the USS that placed it,
+		/// so it lands where an untouched install would put it on this screen size.
+		/// </remarks>
+		public void ResetPosition()
+		{
+			if (this.dragPointerId != -1 && this.dragHandle != null)
+			{
+				this.dragHandle.ReleasePointer(this.dragPointerId);
+				this.dragPointerId = -1;
+			}
+
+			if (this.dragTarget == null)
+			{
+				return;
+			}
+
+			this.dragTarget.style.position = StyleKeyword.Null;
+			this.dragTarget.style.left = StyleKeyword.Null;
+			this.dragTarget.style.top = StyleKeyword.Null;
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Hides the panel unless <see cref="IsAlwaysOpen"/> is true.
