@@ -183,7 +183,11 @@ namespace FishMMO.Database.Npgsql.Services
 				var versionArray = activeItems.Select(i => i.Version).ToArray();
 				var templateIdArray = activeItems.Select(i => i.TemplateID).ToArray();
 				var seedArray = activeItems.Select(i => i.Seed).ToArray();
-				var amountArray = activeItems.Select(i => i.Amount).ToArray();
+				/* Amount is uint, and Npgsql has no array mapping for uint[] — Postgres has no
+				 * unsigned integer type. A single-row insert passes it as a scalar and works,
+				 * so this only surfaces on the bulk UNNEST path. Widening to long is lossless
+				 * and matches the bigint column. */
+				var amountArray = activeItems.Select(i => (long)i.Amount).ToArray();
 
 				var sql = GetUpsertSql();
 
@@ -218,7 +222,7 @@ namespace FishMMO.Database.Npgsql.Services
 					{{2}}::bigint[],
 					{{3}}::integer[],
 					{{4}}::integer[],
-					{{5}}::integer[]
+					{{5}}::bigint[]
 				) AS u(character_id, slot, version, template_id, seed, amount)
 				ON CONFLICT (character_id, slot)
 				DO UPDATE SET
