@@ -134,7 +134,14 @@ namespace FishMMO.Client
 				case "br": sb.AppendLine(); return sb.ToString();
 				case "hr": sb.AppendLine("----------------------------------------"); sb.AppendLine(); return sb.ToString();
 				case "a":
-					string href = node.GetAttributeValue("href", "");
+					/* The href is remote content being pasted into a rich-text tag, so it is
+					 * escaped rather than trusted: a quote or an angle bracket in it would
+					 * otherwise close the link tag early and let the news document inject
+					 * arbitrary TMP markup — enough to restyle the pane or make one link's
+					 * visible text sit inside a different link's clickable span. The scheme
+					 * is still checked at click time by LauncherLinkPolicy; this only keeps
+					 * the markup well-formed. */
+					string href = EscapeRichTextAttribute(node.GetAttributeValue("href", ""));
 					if (!string.IsNullOrEmpty(href))
 					{
 						openTags.Add("<color=#00FF00>");
@@ -193,5 +200,26 @@ namespace FishMMO.Client
 
 			return sb.ToString();
 		}
+
+		/// <summary>
+		/// Strips the characters that would let an attribute value escape the rich-text tag
+		/// it is being written into.
+		/// </summary>
+		/// <remarks>
+		/// TextMeshPro has no escaping syntax inside a tag, so there is nothing to encode to —
+		/// the only safe transformation is removal. A URL that legitimately contains one of
+		/// these carries it percent-encoded, which survives untouched.
+		/// </remarks>
+		/// <param name="value">The raw attribute value from the news document.</param>
+		/// <returns>The value with tag-breaking characters removed.</returns>
+		private static string EscapeRichTextAttribute(string value)
+		{
+			if (string.IsNullOrEmpty(value))
+			{
+				return value;
+			}
+			return value.Replace("\"", string.Empty).Replace("<", string.Empty).Replace(">", string.Empty);
+		}
+
 	}
 }

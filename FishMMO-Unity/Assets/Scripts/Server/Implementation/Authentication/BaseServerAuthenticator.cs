@@ -1014,24 +1014,23 @@ namespace FishMMO.Server.Implementation
 		{
 			if (conn == null) return;
 
-			if (connectionStopped)
+			if (!connectionStopped)
 			{
-				/* The transport has already dropped its id mapping by the time the stopped
-				 * event fires, so anything that reaches conn.GetAddress() makes FishNet log
-				 * an error. Only the recovered IP is resolvable here, and it is the only
-				 * address-derived key worth clearing on a disconnect: an IP-keyed window
-				 * SHOULD outlive the connection, or a reconnect flood from one address
-				 * would escape the limiter entirely. */
-				string? recoveredIp = ResolveRecoveredIpKey(conn);
-				if (!string.IsNullOrEmpty(recoveredIp))
-				{
-					handshakeRateLimiter.Remove(recoveredIp!);
-				}
-			}
-			else
-			{
+				/* Live connection: the server is inviting a re-handshake (login-queue
+				 * admission), so the window it would be gated by is cleared whatever key it
+				 * resolves to. Safe here because the transport still holds its id mapping. */
 				handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
 			}
+			/* On the stopped path only the ClientId key below is cleared.
+			 *
+			 * Two reasons, and they point the same way. The transport has already dropped its
+			 * id mapping by the time this event fires, so anything reaching conn.GetAddress()
+			 * makes FishNet log "TransportIdData could not be found" for every disconnect —
+			 * which is what ResolveHandshakeRateLimitKey would do here. And an IP-keyed window
+			 * MUST outlive the connection it was opened by: clearing it on disconnect would
+			 * let a client reset its own per-IP handshake budget at will by disconnecting, so
+			 * a reconnect flood from one address would walk straight past the limiter. Only
+			 * the ClientId key is the connection's own, and only it is recycled. */
 
 			// The resolved key may differ from the key used at gate time: the real IP
 			// is only known after connection-token processing, so the initial handshake
@@ -1615,9 +1614,11 @@ namespace FishMMO.Server.Implementation
 				// (FishNet reuses IDs after disconnect) does not inherit a stale
 				// 100ms block on its first handshake.
 				//
-				// Must run BEFORE the recovered IP is dropped below: that IP is the key the
-				// gate rate-limited under, and once it is gone the key can no longer be
-				// resolved, so the clear would silently miss the entry it exists to remove.
+				// connectionStopped keeps this off the transport: Multipass has already
+				// dropped its id mapping, so resolving an address-derived key here would make
+				// FishNet log an error for every disconnect. It also confines the clear to
+				// the ClientId key, which is the only one this connection owns — see
+				// ClearHandshakeRateLimit for why an IP-keyed window has to survive.
 				ClearHandshakeRateLimit(conn, connectionStopped: true);
 				// Drop the recovered IP so a recycled ClientId cannot inherit the previous
 				// occupant's identity (FishNet reuses ClientIds after disconnect).

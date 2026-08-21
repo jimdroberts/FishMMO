@@ -280,11 +280,12 @@ namespace FishMMO.Auth.Implementation
 					// Require a verified real IP from the auth token (v4+) only when this
 					// deployment actually needs it — i.e. when RequiresRealIp is true because
 					// this server sits behind an L4 proxy and conn.GetAddress() would return
-					// the proxy's loopback for every client. When not behind a proxy (the
-					// default for World/Scene, which are connected to directly), the token is
-					// not required to carry a RealIp — see RequiresRealIp and
-					// BaseServerAuthenticator.RequiresConnectionToken, which encode the same
-					// "is this authenticator behind a proxy" fact for the outer handshake gate.
+					// the proxy's loopback for every client, making the token-embedded IP the
+					// only trustworthy source. It defaults to true and no authenticator
+					// currently overrides it, so every deployment still demands one; a
+					// deployment that is connected to directly can opt out by overriding
+					// RequiresRealIp, because there conn.GetAddress() is already the client's
+					// own address and the rate limiter keys off it correctly.
 					if (RequiresRealIp && string.IsNullOrEmpty(verifyResult.RealIp))
 					{
 						await Log.Warning(LogPrefix, $"Token for '{verifyResult.AccountName}' missing real IP — rejecting.");

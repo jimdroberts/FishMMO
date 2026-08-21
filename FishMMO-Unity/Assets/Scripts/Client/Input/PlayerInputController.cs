@@ -658,6 +658,15 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{
+			/* UI Toolkit first, then the legacy panel. The two live in separate registries and
+			 * are unrelated types, so a name lookup only ever finds one of them — and once a
+			 * panel is migrated and its UGUI twin deactivated, a UGUI-only lookup silently
+			 * returns false and the keybind does nothing at all. */
+			if (UIManager.TryGetTK("UIChat", out UITKChat tkChat))
+			{
+				tkChat.EnableChatInput();
+				return;
+			}
 			if (UIManager.TryGet("UIChat", out UIChat uiChat))
 			{
 				uiChat.EnableChatInput();
@@ -670,6 +679,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
+			// See OnChatPerformed for why both registries are consulted.
+			if (UIManager.TryGetTK("UIEquipment", out UITKEquipment tkEquipment))
+			{
+				tkEquipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
+				tkEquipment.ToggleVisibility();
+				return;
+			}
 			if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
 			{
 				uiEquipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
