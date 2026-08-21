@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -175,16 +175,29 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
-				// Read before SetSignInLocked below, which clears isAuthFlowActive.
-				bool droppedWithoutExplanation = isAuthFlowActive && !authResultSeen;
-
 				HandshakeMSG.text = "";
-				SetSignInLocked(false);
 				pendingVerifyUsername = null;
-
-				if (droppedWithoutExplanation)
+				// Deferred by a frame: the server may send a final auth result (e.g.
+				// InvalidUsernameOrPassword) and then close the connection in the same
+				// tick. That result is delivered via a queued main-thread callback that
+				// can arrive after this Stopped event. Unlocking synchronously here would
+				// clear isAuthFlowActive before Authenticator_OnClientAuthenticationResult
+				// processes that already-in-flight result, silently swallowing it.
+				// The "dropped without explanation" verdict is deferred with it, for the
+				// same reason: judged here it would be true for every such result, and we
+				// would tell the player the server never answered a frame before showing
+				// them its answer.
+				// Coroutines can't start on an inactive GameObject - this handler fires
+				// for both UILogin and UIRegister regardless of which panel is shown, so
+				// fall back to an immediate unlock when hidden (isAuthFlowActive is
+				// already false there, since a hidden panel never initiated the flow).
+				if (gameObject.activeInHierarchy)
 				{
-					ShowUnexplainedDisconnect();
+					StartCoroutine(DeferredUnlockAfterDisconnect());
+				}
+				else
+				{
+					SetSignInLocked(false);
 				}
 			}
 		}
@@ -208,6 +221,35 @@ namespace FishMMO.Client
 			else
 			{
 				Log.Warning("UILogin", message);
+			}
+		}
+
+		/// <summary>
+		/// Unlocks sign-in controls shortly after disconnect, giving an already-in-flight
+		/// auth result callback a chance to run first. A single frame is not enough — the
+		/// result is produced by server-side SRP verification and marshaled back to the
+		/// main thread, which can take longer than one Update tick. If the proper result
+		/// handler (e.g. <see cref="OnLoginAuthenticationDialog"/>) already ran and cleared
+		/// isAuthFlowActive by the time this check runs, this is a harmless no-op.
+		/// See <see cref="ClientManager_OnClientConnectionState"/>.
+		/// </summary>
+		private IEnumerator DeferredUnlockAfterDisconnect()
+		{
+			yield return new WaitForSeconds(1.5f);
+
+			/* Judged here rather than at the Stopped event, and read before
+			 * SetSignInLocked clears isAuthFlowActive. A result that was already in
+			 * flight when the connection dropped has had the wait above to arrive and
+			 * set authResultSeen; asking at Stopped time would call every one of those
+			 * unexplained and show the "server never answered" dialog immediately
+			 * before the server's actual answer. */
+			bool droppedWithoutExplanation = isAuthFlowActive && !authResultSeen;
+
+			SetSignInLocked(false);
+
+			if (droppedWithoutExplanation)
+			{
+				ShowUnexplainedDisconnect();
 			}
 		}
 
@@ -450,7 +492,8 @@ namespace FishMMO.Client
 			/// <param name="errorMsg">The error message to display.</param>
 			private void OnLoginAuthenticationDialog(string errorMsg)
 		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			bool found = UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox);
+			if (found)
 			{
 				uiDialogBox.Open(errorMsg);
 			}
