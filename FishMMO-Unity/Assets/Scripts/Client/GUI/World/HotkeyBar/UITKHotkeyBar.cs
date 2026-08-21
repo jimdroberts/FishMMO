@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -10,15 +10,17 @@ using FishNet.Transporting;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit hotkey bar. Replaces the legacy UGUI <see cref="UIHotkeyBar"/> /
-	/// <see cref="UIHotkeyButton"/> / <see cref="UIHotkeyGroup"/> trio with dynamically
-	/// generated VisualElement slots. Preserves all network behaviour:
+	/// UI Toolkit hotkey bar. Renders the character's hotkey slots as dynamically generated
+	/// VisualElements and owns their network behaviour:
 	/// <see cref="HotkeySetBroadcast"/> / <see cref="HotkeySetMultipleBroadcast"/> assignment,
 	/// cooldown sweeps via <see cref="ICooldownController"/>, drag-assign / drag-clear via the
-	/// shared UGUI <c>UIDragObject</c> overlay, and Input System activation.
+	/// shared <see cref="UITKDragObject"/> overlay, and Input System activation.
 	/// </summary>
 	public class UITKHotkeyBar : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>Name of the container element that holds the generated hotkey slots.</summary>
 		private const string LIST_NAME = "hotkey-list";
 
@@ -58,7 +60,7 @@ namespace FishMMO.Client
 			/// <summary>The reference type currently assigned to the slot.</summary>
 			public ReferenceButtonType Type = ReferenceButtonType.None;
 			/// <summary>The reference ID currently assigned to the slot.</summary>
-			public long ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+			public long ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
 		}
 
 		/// <summary>All created hotkey slots in index order.</summary>
@@ -150,7 +152,7 @@ namespace FishMMO.Client
 			cooldown.style.height = Length.Percent(0.0f);
 			slotRoot.Add(cooldown);
 
-			string keyMap = UIHotkeyBar.GetHotkeyIndexKeyMap(index)
+			string keyMap = HotkeyKeyMap.Get(index)
 				.Replace("Hotkey ", string.Empty)
 				.Replace("Left Mouse", "LMB")
 				.Replace("Right Mouse", "RMB");
@@ -363,7 +365,7 @@ namespace FishMMO.Client
 		/// <param name="slot">The slot that was right-clicked.</param>
 		private void HandleSlotRightClick(HotkeySlot slot)
 		{
-			if (slot.ReferenceID == UIReferenceButton.NULL_REFERENCE_ID)
+			if (slot.ReferenceID == ReferenceButton.NULL_REFERENCE_ID)
 			{
 				return;
 			}
@@ -381,7 +383,7 @@ namespace FishMMO.Client
 					{
 						Type = 0,
 						Slot = slot.Index,
-						ReferenceID = UIReferenceButton.NULL_REFERENCE_ID,
+						ReferenceID = ReferenceButton.NULL_REFERENCE_ID,
 					}
 				}, Channel.Reliable);
 			}
@@ -553,7 +555,7 @@ namespace FishMMO.Client
 		private void ClearSlot(HotkeySlot slot)
 		{
 			slot.Type = ReferenceButtonType.None;
-			slot.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+			slot.ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
 			SetSlotIconSprite(slot, null);
 			slot.Cooldown.style.height = Length.Percent(0.0f);
 		}

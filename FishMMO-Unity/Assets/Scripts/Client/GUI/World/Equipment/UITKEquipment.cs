@@ -9,8 +9,8 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit implementation of the equipment panel.
-	/// Binds to <c>UIEquipment.uxml</c> / <c>UIEquipment.uss</c> and replicates all
-	/// behaviour of the legacy UGUI <see cref="UIEquipment"/> class without modifying it.
+	/// Binds to <c>UIEquipment.uxml</c> / <c>UIEquipment.uss</c> and renders the character's
+	/// equipped items alongside the attributes they contribute to.
 	/// </summary>
 	public class UITKEquipment : UITKCharacterControl
 	{

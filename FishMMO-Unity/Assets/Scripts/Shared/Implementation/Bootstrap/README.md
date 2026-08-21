@@ -133,7 +133,7 @@ Neither value survives past configuration load, and neither overrides a player's
 | Client connects | FishNet's `NetworkManager.UpdateFramerate` raises `targetFrameRate` from `ClientManager.FrameRate` |
 
 A player who wants vSync still gets it — the options UI reapplies the saved preference when
-`UIOptions.OnStarting()` runs, which is after bootstrap.
+`UITKOptions.OnStarting()` runs, which is after bootstrap.
 
 ### BootstrapSystem Inspector Properties
 

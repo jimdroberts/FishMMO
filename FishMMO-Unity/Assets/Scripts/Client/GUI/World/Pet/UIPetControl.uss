@@ -1,24 +1,66 @@
 /*
     UIPetControl.uss
     Layout for the pet control panel. Colours come from FishMMO-Theme.uss.
+
+    A nameplate with a health bar and four commands. Release is destructive
+    and sits last, away from Follow and Stay, which are the two a player hits
+    mid-fight without looking.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner. Lower-left, matching where the uGUI pet frame sat.
+*/
 .pet-panel {
-    width: 200px;
-    padding: 8px;
+    position: absolute;
+    left: 2%;
+    bottom: 16%;
+    width: 210px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.pet-header {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 9px;
+    padding-right: 7px;
+    flex-shrink: 0;
+}
+
+.pet-header__icon {
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    flex-shrink: 0;
 }
 
 .pet-name {
-    font-size: 13px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-left;
-    color: rgb(200, 205, 214);
-    margin-bottom: 6px;
+    flex-grow: 1;
+    font-size: 11px;
+    letter-spacing: 1px;
+    overflow: hidden;
 }
 
+.pet-status {
+    height: 14px;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-shrink: 0;
+}
+
+.pet-body {
+    flex-direction: column;
+    padding: 8px;
+}
+
+/* Health track. The fill and the numeric overlay both sit inside it. */
 .pet-health {
-    height: 12px;
-    margin-bottom: 8px;
+    height: 14px;
+    position: relative;
+    flex-shrink: 0;
 }
 
 .pet-health-fill {
@@ -27,17 +69,33 @@
     top: 0;
     bottom: 0;
     width: 100%;
-    border-radius: 3px;
 }
 
+.pet-health-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    font-size: 9px;
+}
+
+/*
+    Two by two rather than a single row: four buttons across 210px leaves each
+    one too narrow for its label, and a wrapped grid keeps the hit targets big
+    enough to use without aiming.
+*/
 .pet-commands {
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: space-between;
+    margin-top: 8px;
 }
 
 .pet-cmd {
-    flex-grow: 1;
+    width: 46%;
     height: 22px;
-    margin-right: 3px;
-    font-size: 10px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+    flex-shrink: 0;
 }

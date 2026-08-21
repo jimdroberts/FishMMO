@@ -20,9 +20,18 @@
    PANEL ROOT
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
+    root with a size but no position resolves to the top-left corner — with the uGUI layer
+    gone, every one of these panels stacked there on top of each other. The values restore
+    where the panel sat in the uGUI scene, expressed as percentages so they hold at any
+    aspect ratio. Dragging overwrites left/top, which is why position is absolute here.
+*/
 .bank-panel {
-    width: 380px;
-    height: 420px;
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 330px;
+    height: 360px;
     flex-direction: column;
     flex-shrink: 0;
 }
@@ -36,7 +45,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    height: 40px;
+    height: 44px;
     padding-left: 12px;
     padding-right: 12px;
     flex-shrink: 0;
@@ -88,9 +97,10 @@
    BANK SLOT
    ═══════════════════════════════════════════════════════════ */
 
+/* Matches .inv-slot — the bank and inventory grids are read side by side. */
 .bank-slot {
-    width: 52px;
-    height: 52px;
+    width: 44px;
+    height: 44px;
     flex-shrink: 0;
     position: relative;
     margin: 3px;
@@ -129,4 +139,89 @@
 
 .bank-hidden {
     display: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER TITLES
+   ═══════════════════════════════════════════════════════════ */
+
+.bank-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Shown in place of the grid when nothing is carried. A grid of empty slots
+    already reads as "no items", but only once the player counts them — a
+    sentence says it immediately, and distinguishes empty from not-yet-loaded.
+*/
+.bank-empty {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER : capacity readout
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Used / free either side of a fill bar. The bar is the glanceable form of
+    the same two numbers — a player who is nearly full sees it before reading
+    either figure, which is the whole point of putting it between them.
+*/
+.bank-footer {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.bank-footer__stat {
+    width: 56px;
+    flex-shrink: 0;
+}
+
+.bank-footer__stat--right {
+    -unity-text-align: middle-right;
+}
+
+.bank-capacity {
+    flex-grow: 1;
+    height: 6px;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+.bank-capacity__fill {
+    height: 100%;
+    width: 0;
+}
+
+/* Slot-usage line under the title. */
+.bank-header__subtitle {
+    flex-shrink: 0;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.bank-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.bank-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

@@ -3,7 +3,6 @@ using UnityEngine;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Managing.Predicting;
-using TMPro;
 
 namespace FishMMO.Shared.Core
 {
@@ -81,11 +80,11 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// The label displaying the character's name above their model.
 		/// </summary>
-		TextMeshPro CharacterNameLabel { get; set; }
+		WorldLabel CharacterNameLabel { get; set; }
 		/// <summary>
 		/// The label displaying the character's guild above their model.
 		/// </summary>
-		TextMeshPro CharacterGuildLabel { get; set; }
+		WorldLabel CharacterGuildLabel { get; set; }
 
 		/// <summary>
 		/// The root transform for the character's mesh/model hierarchy.

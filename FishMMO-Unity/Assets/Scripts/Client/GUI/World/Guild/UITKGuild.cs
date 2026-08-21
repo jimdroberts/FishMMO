@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
@@ -8,10 +8,10 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit guild panel. Replaces the legacy UGUI <see cref="UIGuild"/> / <see cref="UIGuildMember"/>:
-	/// renders guild members as dynamic rows with name/rank context dropdowns, and handles
-	/// create/leave/invite actions. All guild broadcasts are preserved verbatim and the shared UGUI
-	/// dialog/dropdown overlays are reused via the UIManager.
+	/// UI Toolkit guild panel. Renders guild members as dynamic rows with name/rank context
+	/// dropdowns, and handles create/leave/invite actions. The shared dialog and dropdown
+	/// overlays are resolved by name through the <see cref="UIManager"/> rather than referenced
+	/// directly.
 	/// </summary>
 	public class UITKGuild : UITKCharacterControl
 	{
@@ -41,6 +41,14 @@ namespace FishMMO.Client
 
 		/// <summary>USS class applied to a member row's location label.</summary>
 		private const string ROW_LOCATION_CLASS = "guild-member__location";
+		/// <summary>Name of the header label describing guild state.</summary>
+		private const string SUBTITLE_NAME = "guild-subtitle";
+		/// <summary>Name of the header badge showing member count.</summary>
+		private const string COUNT_NAME = "guild-count";
+		/// <summary>Name of the label shown when the player has no guild.</summary>
+		private const string EMPTY_NAME = "guild-empty";
+		/// <summary>Name of the column caption strip.</summary>
+		private const string COLUMNS_NAME = "guild-columns";
 
 		/// <summary>
 		/// Visual elements and state backing a single guild member row.
@@ -65,6 +73,14 @@ namespace FishMMO.Client
 		private Label guildLabel;
 		/// <summary>The container element that holds the generated member rows.</summary>
 		private VisualElement memberList;
+		/// <summary>Header label describing guild state.</summary>
+		private Label subtitleLabel;
+		/// <summary>Header badge showing member count.</summary>
+		private Label countLabel;
+		/// <summary>Label shown in place of the roster when there is no guild.</summary>
+		private Label emptyLabel;
+		/// <summary>Column caption strip, hidden while the roster is empty.</summary>
+		private VisualElement columns;
 
 		/// <summary>
 		/// Queries elements and wires up the action buttons.
@@ -79,6 +95,11 @@ namespace FishMMO.Client
 
 			guildLabel = root.Q<Label>(GUILD_LABEL_NAME);
 			memberList = root.Q(MEMBER_LIST_NAME);
+			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
+			countLabel = root.Q<Label>(COUNT_NAME);
+			emptyLabel = root.Q<Label>(EMPTY_NAME);
+			columns = root.Q(COLUMNS_NAME);
+			RefreshHeader();
 
 			Button create = root.Q<Button>(CREATE_BUTTON_NAME);
 			if (create != null)
@@ -216,6 +237,7 @@ namespace FishMMO.Client
 				row.Root?.RemoveFromHierarchy();
 			}
 			members.Clear();
+			RefreshHeader();
 		}
 
 		/// <summary>
@@ -252,6 +274,7 @@ namespace FishMMO.Client
 			{
 				row.Root?.RemoveFromHierarchy();
 				members.Remove(characterID);
+				RefreshHeader();
 			}
 		}
 
@@ -386,6 +409,39 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Updates the header count, state line and empty placeholder from the roster.
+		/// </summary>
+		private void RefreshHeader()
+		{
+			int count = members.Count;
+			bool inGuild = count > 0;
+
+			if (countLabel != null)
+			{
+				countLabel.text = count.ToString();
+				countLabel.EnableInClassList("fish-badge--accent", inGuild);
+			}
+
+			if (subtitleLabel != null)
+			{
+				subtitleLabel.text = inGuild
+					? (count == 1 ? "1 member" : $"{count} members")
+					: "Not in a guild";
+			}
+
+			if (emptyLabel != null)
+			{
+				emptyLabel.style.display = inGuild ? DisplayStyle.None : DisplayStyle.Flex;
+			}
+
+			if (columns != null)
+			{
+				// Column captions over an empty list name fields that are not there.
+				columns.style.display = inGuild ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+		}
+
+		/// <summary>
 		/// Returns the existing member row for the given character, or creates and registers a new one.
 		/// </summary>
 		/// <param name="characterID">The member's character ID.</param>
@@ -398,17 +454,23 @@ namespace FishMMO.Client
 			}
 
 			VisualElement rowRoot = new VisualElement();
+			/* The theme class supplies the hover state and leading accent rail shared by every
+			 * roster; the panel class only carries geometry. */
+			rowRoot.AddToClassList("fish-row");
 			rowRoot.AddToClassList(ROW_CLASS);
 
 			Label name = new Label();
+			name.AddToClassList("fish-row__name");
 			name.AddToClassList(ROW_NAME_CLASS);
 			rowRoot.Add(name);
 
 			Label rank = new Label();
+			rank.AddToClassList("fish-row__meta");
 			rank.AddToClassList(ROW_RANK_CLASS);
 			rowRoot.Add(rank);
 
 			Label location = new Label();
+			location.AddToClassList("fish-row__meta");
 			location.AddToClassList(ROW_LOCATION_CLASS);
 			rowRoot.Add(location);
 
@@ -426,6 +488,7 @@ namespace FishMMO.Client
 
 			memberList.Add(rowRoot);
 			members.Add(characterID, row);
+			RefreshHeader();
 			return row;
 		}
 

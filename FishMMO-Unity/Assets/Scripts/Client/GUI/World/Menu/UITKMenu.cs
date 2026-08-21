@@ -1,4 +1,4 @@
-using UnityEngine.UIElements;
+﻿using UnityEngine.UIElements;
 
 namespace FishMMO.Client
 {
@@ -8,6 +8,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKMenu : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Menu;
+
 		/// <summary>Name of the options button element in the UXML.</summary>
 		private const string OPTIONS_BUTTON_NAME = "menu-options-btn";
 		/// <summary>Name of the quit-to-login button element in the UXML.</summary>

@@ -10,12 +10,12 @@
                 <ui:VisualElement name="server-list" class="server-list" />
             </ui:ScrollView>
             <ui:VisualElement name="server-buttons" class="server-buttons">
-                <ui:Button name="server-connect-btn" text="Connect" class="fish-tab server-btn server-btn--primary" />
-                <ui:Button name="server-refresh-btn" text="Refresh" class="fish-tab server-btn" />
+                <ui:Button name="server-connect-btn" text="Connect" class="fish-button server-btn fish-button--primary" />
+                <ui:Button name="server-refresh-btn" text="Refresh" class="fish-button server-btn" />
             </ui:VisualElement>
             <ui:VisualElement name="server-buttons-secondary" class="server-buttons">
-                <ui:Button name="server-quit-login-btn" text="Back" class="fish-tab server-btn" />
-                <ui:Button name="server-quit-btn" text="Quit" class="fish-tab server-btn" />
+                <ui:Button name="server-quit-login-btn" text="Back" class="fish-button server-btn" />
+                <ui:Button name="server-quit-btn" text="Quit" class="fish-button server-btn" />
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

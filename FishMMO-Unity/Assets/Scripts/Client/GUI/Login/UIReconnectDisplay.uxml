@@ -3,8 +3,8 @@
     <Style src="UIReconnectDisplay.uss" />
     <ui:VisualElement name="reconnect-root" class="reconnect-screen">
         <ui:VisualElement name="reconnect-panel" class="fish-panel reconnect-panel">
-            <ui:Label name="reconnect-attempt-counter" text="" class="reconnect-attempt-counter" />
-            <ui:Button name="reconnect-cancel-btn" text="Cancel" class="fish-tab reconnect-cancel-btn" />
+            <ui:Label name="reconnect-attempt-counter" text="" class="fish-label fish-label--muted reconnect-attempt-counter" />
+            <ui:Button name="reconnect-cancel-btn" text="Cancel" class="fish-button reconnect-cancel-btn" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
@@ -8,10 +8,10 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit merchant panel. Replaces the legacy UGUI <see cref="UIMerchant"/>:
-	/// receives the merchant template via a server broadcast and renders its items, abilities, and
-	/// ability events as tabbed entry slots. Hovering shows the entry tooltip; Ctrl+Left click sends a
-	/// purchase request. The <see cref="MerchantPurchaseBroadcast"/> is preserved verbatim.
+	/// UI Toolkit merchant panel.
+	/// Receives the merchant template via a server broadcast and renders its items, abilities, and
+	/// ability events as tabbed entry slots. Hovering shows the entry tooltip; Ctrl+Left click
+	/// sends a <see cref="MerchantPurchaseBroadcast"/>, which the server validates.
 	/// </summary>
 	public class UITKMerchant : UITKCharacterControl
 	{
@@ -45,7 +45,7 @@ namespace FishMMO.Client
 		/// <summary>Tooltip hint appended to entry tooltips.</summary>
 		private const string PURCHASE_HINT = "\r\n\r\nCtrl+Left Mouse Button to purchase.";
 
-		/// <summary>Name of the shared UGUI tooltip overlay.</summary>
+		/// <summary>Name of the shared tooltip overlay panel.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
 
 		/// <summary>The items tab button.</summary>
@@ -298,6 +298,19 @@ namespace FishMMO.Client
 			SetTabActive(itemsTab, tab == MerchantTabType.Item);
 			SetTabActive(abilitiesTab, tab == MerchantTabType.Ability);
 			SetTabActive(eventsTab, tab == MerchantTabType.AbilityEvent);
+
+			/* The header count describes the visible tab, so it is re-pointed here rather than
+			 * bound once to the item list at startup. */
+			VisualElement active =
+				tab == MerchantTabType.Item ? itemsList :
+				tab == MerchantTabType.Ability ? abilitiesList : eventsList;
+			BindListChrome(
+				active,
+				Root?.Q<Label>("merchant-count"),
+				Root?.Q<Label>("merchant-subtitle"),
+				Root?.Q<Label>("merchant-empty"),
+				"offer",
+				"offers");
 		}
 
 		/// <summary>

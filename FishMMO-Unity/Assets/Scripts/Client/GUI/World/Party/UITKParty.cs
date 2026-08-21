@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -9,10 +9,10 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit party panel. Replaces the legacy UGUI <see cref="UIParty"/> / <see cref="UIPartyMember"/>:
-	/// renders party members as dynamic rows, handles create/leave/invite actions, and shows a per-member
-	/// context dropdown (message / add friend / promote / kick). All party broadcasts are preserved verbatim,
-	/// and the shared UGUI dialog/dropdown overlays are reused via the UIManager.
+	/// UI Toolkit party panel. Renders party members as dynamic rows, handles create/leave/invite
+	/// actions, and shows a per-member context dropdown (message / add friend / promote / kick).
+	/// The shared dialog and dropdown overlays are resolved by name through the
+	/// <see cref="UIManager"/> rather than referenced directly.
 	/// </summary>
 	public class UITKParty : UITKCharacterControl
 	{
@@ -42,6 +42,22 @@ namespace FishMMO.Client
 
 		/// <summary>USS class applied to a member row's health fill.</summary>
 		private const string ROW_HEALTH_FILL_CLASS = "party-member__health-fill";
+		/// <summary>Name of the label showing party state in the header.</summary>
+		private const string SUBTITLE_NAME = "party-subtitle";
+		/// <summary>Name of the badge showing member count.</summary>
+		private const string COUNT_NAME = "party-count";
+		/// <summary>Name of the label shown when the player is not in a party.</summary>
+		private const string EMPTY_NAME = "party-empty";
+		/// <summary>Name of the column caption strip.</summary>
+		private const string COLUMNS_NAME = "party-columns";
+		/// <summary>
+		/// Party size shown in the header badge.
+		/// </summary>
+		/// <remarks>
+		/// Display only. The server owns the real cap; this is the denominator a player reads,
+		/// and showing a count with no ceiling tells them nothing about how full the party is.
+		/// </remarks>
+		private const int MAX_PARTY_DISPLAY = 6;
 
 		/// <summary>
 		/// Visual elements and state backing a single party member row.
@@ -66,6 +82,14 @@ namespace FishMMO.Client
 		private readonly Dictionary<long, MemberRow> members = new Dictionary<long, MemberRow>();
 		/// <summary>The container element that holds the generated member rows.</summary>
 		private VisualElement memberList;
+		/// <summary>Header label describing the current party state.</summary>
+		private Label subtitleLabel;
+		/// <summary>Header badge showing the member count.</summary>
+		private Label countLabel;
+		/// <summary>Label shown in place of the roster when there is no party.</summary>
+		private Label emptyLabel;
+		/// <summary>Column caption strip, hidden while the roster is empty.</summary>
+		private VisualElement columns;
 
 		/// <summary>
 		/// Queries the member list and wires up the action buttons.
@@ -79,6 +103,12 @@ namespace FishMMO.Client
 			}
 
 			memberList = root.Q(MEMBER_LIST_NAME);
+			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
+			countLabel = root.Q<Label>(COUNT_NAME);
+			emptyLabel = root.Q<Label>(EMPTY_NAME);
+			columns = root.Q(COLUMNS_NAME);
+
+			RefreshHeader();
 
 			Button create = root.Q<Button>(CREATE_BUTTON_NAME);
 			if (create != null)
@@ -244,6 +274,7 @@ namespace FishMMO.Client
 			{
 				row.Root?.RemoveFromHierarchy();
 				members.Remove(characterID);
+				RefreshHeader();
 			}
 		}
 
@@ -350,13 +381,18 @@ namespace FishMMO.Client
 			}
 
 			VisualElement rowRoot = new VisualElement();
+			/* The theme class supplies the hover state and the leading accent rail every
+			 * roster in the game shares; the panel class only carries geometry. */
+			rowRoot.AddToClassList("fish-row");
 			rowRoot.AddToClassList(ROW_CLASS);
 
 			Label name = new Label();
+			name.AddToClassList("fish-row__name");
 			name.AddToClassList(ROW_NAME_CLASS);
 			rowRoot.Add(name);
 
 			Label rank = new Label();
+			rank.AddToClassList("fish-row__meta");
 			rank.AddToClassList(ROW_RANK_CLASS);
 			rowRoot.Add(rank);
 
@@ -364,6 +400,7 @@ namespace FishMMO.Client
 			health.AddToClassList("fish-bar");
 			health.AddToClassList(ROW_HEALTH_CLASS);
 			VisualElement healthFill = new VisualElement();
+			healthFill.AddToClassList("fish-bar__fill");
 			healthFill.AddToClassList("fish-bar__fill--hp");
 			healthFill.AddToClassList(ROW_HEALTH_FILL_CLASS);
 			health.Add(healthFill);
@@ -382,7 +419,46 @@ namespace FishMMO.Client
 
 			memberList.Add(rowRoot);
 			members.Add(characterID, row);
+			RefreshHeader();
 			return row;
+		}
+
+		/// <summary>
+		/// Updates the header count, state line and empty placeholder from the roster.
+		/// </summary>
+		/// <remarks>
+		/// Called after every add, remove and clear rather than on a timer: the roster is the
+		/// only thing these three read, and a header that disagrees with the list under it is
+		/// worse than no header at all.
+		/// </remarks>
+		private void RefreshHeader()
+		{
+			int count = members.Count;
+			bool inParty = count > 0;
+
+			if (countLabel != null)
+			{
+				countLabel.text = $"{count}/{MAX_PARTY_DISPLAY}";
+				countLabel.EnableInClassList("fish-badge--accent", inParty);
+			}
+
+			if (subtitleLabel != null)
+			{
+				subtitleLabel.text = inParty
+					? (count == 1 ? "1 member" : $"{count} members")
+					: "Not in a party";
+			}
+
+			if (emptyLabel != null)
+			{
+				emptyLabel.style.display = inParty ? DisplayStyle.None : DisplayStyle.Flex;
+			}
+
+			if (columns != null)
+			{
+				// Column captions over an empty list name fields that are not there.
+				columns.style.display = inParty ? DisplayStyle.Flex : DisplayStyle.None;
+			}
 		}
 
 		/// <summary>
@@ -489,6 +565,7 @@ namespace FishMMO.Client
 				row.Root?.RemoveFromHierarchy();
 			}
 			members.Clear();
+			RefreshHeader();
 		}
 	}
 }

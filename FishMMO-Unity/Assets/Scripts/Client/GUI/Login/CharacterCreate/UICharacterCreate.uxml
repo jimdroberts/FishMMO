@@ -7,19 +7,19 @@
                 <ui:Label text="CREATE A CHARACTER" class="fish-panel__title" />
             </ui:VisualElement>
             <ui:VisualElement name="create-body" class="create-body">
-                <ui:Label text="Character Name" class="create-field-label" />
-                <ui:TextField name="create-name" class="create-input" />
-                <ui:Label text="Race" class="create-field-label" />
-                <ui:DropdownField name="create-race" class="create-dropdown" />
-                <ui:Label text="Model" class="create-field-label" />
-                <ui:DropdownField name="create-model" class="create-dropdown" />
-                <ui:Label text="Starting Location" class="create-field-label" />
-                <ui:DropdownField name="create-location" class="create-dropdown" />
-                <ui:Label name="create-result" text="" class="create-result" />
+                <ui:Label text="Character Name" class="fish-label fish-label--caption create-field-label" />
+                <ui:TextField name="create-name" class="fish-input create-input" />
+                <ui:Label text="Race" class="fish-label fish-label--caption create-field-label" />
+                <ui:DropdownField name="create-race" class="fish-dropdown create-dropdown" />
+                <ui:Label text="Model" class="fish-label fish-label--caption create-field-label" />
+                <ui:DropdownField name="create-model" class="fish-dropdown create-dropdown" />
+                <ui:Label text="Starting Location" class="fish-label fish-label--caption create-field-label" />
+                <ui:DropdownField name="create-location" class="fish-dropdown create-dropdown" />
+                <ui:Label name="create-result" text="" class="fish-label fish-label--muted create-result" />
                 <ui:VisualElement name="create-buttons" class="create-buttons">
-                    <ui:Button name="create-submit-btn" text="Create" class="fish-tab create-btn create-btn--primary" />
-                    <ui:Button name="create-quit-login-btn" text="Back" class="fish-tab create-btn" />
-                    <ui:Button name="create-quit-btn" text="Quit" class="fish-tab create-btn" />
+                    <ui:Button name="create-submit-btn" text="Create" class="fish-button create-btn fish-button--primary" />
+                    <ui:Button name="create-quit-login-btn" text="Back" class="fish-button create-btn" />
+                    <ui:Button name="create-quit-btn" text="Quit" class="fish-button create-btn" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using System;
@@ -9,12 +9,15 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit implementation of the in-world chat window. Mirrors the behaviour of the
-	/// legacy UGUI <c>UIChat</c> control: channel-coloured messages, tab-based channel filtering,
-	/// rate limiting, sanitisation and the full set of per-channel message handlers.
+	/// UI Toolkit implementation of the in-world chat window: channel-coloured messages,
+	/// tab-based channel filtering, rate limiting, sanitisation and the full set of per-channel
+	/// message handlers.
 	/// </summary>
 	public class UITKChat : UITKCharacterControl, IChatHelper
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Window;
+
 		/// <summary>
 		/// The maximum allowed length for chat messages.
 		/// </summary>
@@ -41,10 +44,18 @@ namespace FishMMO.Client
 		/// <summary>Name of the chat input field.</summary>
 		private const string CHAT_INPUT_NAME = "chat-input";
 
-		/// <summary>USS class applied to each chat tab button.</summary>
+		/// <summary>Theme class giving a chat tab its shared tab appearance.</summary>
+		/// <remarks>
+		/// Chat tabs are built in code rather than declared in the UXML, so they have to opt into
+		/// the theme explicitly. Without this they carried only <c>.chat-tab</c>, which is layout
+		/// only — the tabs rendered with Unity's default button chrome while every other tab bar
+		/// in the game used the themed style.
+		/// </remarks>
+		private const string TAB_THEME_CLASS = "fish-tab";
+		/// <summary>USS class applied to each chat tab button for layout.</summary>
 		private const string TAB_CLASS = "chat-tab";
-		/// <summary>USS class applied to the active chat tab button.</summary>
-		private const string TAB_ACTIVE_CLASS = "chat-tab--active";
+		/// <summary>Theme class marking the active chat tab.</summary>
+		private const string TAB_ACTIVE_CLASS = "fish-tab--active";
 		/// <summary>USS class applied to each chat message row.</summary>
 		private const string MESSAGE_ROW_CLASS = "chat-message";
 		/// <summary>USS class applied to a message row's sender name label.</summary>
@@ -406,6 +417,7 @@ namespace FishMMO.Client
 			{
 				text = finalName,
 			};
+			button.AddToClassList(TAB_THEME_CLASS);
 			button.AddToClassList(TAB_CLASS);
 			button.RegisterCallback<PointerDownEvent>((evt) => OnTabPointerDown(evt, tab));
 			tab.Button = button;

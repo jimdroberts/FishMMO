@@ -1,4 +1,4 @@
-using FishNet.Managing.Scened;
+﻿using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -11,6 +11,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKLoadingScreen : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.System;
+
 		/// <summary>
 		/// The name of the loading image VisualElement in the UI.
 		/// </summary>
@@ -19,6 +22,10 @@ namespace FishMMO.Client
 		/// The name of the loading progress fill VisualElement in the UI.
 		/// </summary>
 		private const string LOADING_PROGRESS_FILL_NAME = "loading-progress-fill";
+		/// <summary>Name of the percentage label drawn on the progress bar.</summary>
+		private const string LOADING_PROGRESS_TEXT_NAME = "loading-progress-text";
+		/// <summary>Name of the hint line under the progress bar.</summary>
+		private const string LOADING_HINT_NAME = "loading-hint";
 		/// <summary>
 		/// The name of the optional status Label in the UI.
 		/// </summary>
@@ -36,6 +43,10 @@ namespace FishMMO.Client
 
 		private VisualElement loadingImage;
 		private VisualElement loadingProgressFill;
+		/// <summary>Percentage label drawn on the progress bar.</summary>
+		private Label loadingProgressText;
+		/// <summary>Hint line under the progress bar.</summary>
+		private Label loadingHint;
 		/// <summary>
 		/// Optional status line, used to explain a wait the player cannot otherwise see a
 		/// reason for. Null when the document does not define one.
@@ -68,6 +79,8 @@ namespace FishMMO.Client
 			{
 				loadingImage = Root.Q<VisualElement>(LOADING_IMAGE_NAME);
 				loadingProgressFill = Root.Q<VisualElement>(LOADING_PROGRESS_FILL_NAME);
+				loadingProgressText = Root.Q<Label>(LOADING_PROGRESS_TEXT_NAME);
+				loadingHint = Root.Q<Label>(LOADING_HINT_NAME);
 				loadingStatus = Root.Q<Label>(LOADING_STATUS_NAME);
 			}
 
@@ -240,6 +253,7 @@ namespace FishMMO.Client
 			base.Show();
 
 			SetProgress(0.0f);
+			SetHint(null);
 			if (loadingImage != null)
 			{
 				loadingImage.style.display = currentSprite != null ? DisplayStyle.Flex : DisplayStyle.None;
@@ -397,14 +411,42 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Sets the hint line under the progress bar, hiding it when there is nothing to say.
+		/// </summary>
+		/// <param name="text">The hint, or null to hide the line.</param>
+		/// <remarks>
+		/// Collapsed rather than left blank so the block above it stays vertically centred on
+		/// itself — an empty label still occupies a line and shifts everything off-centre.
+		/// </remarks>
+		private void SetHint(string text)
+		{
+			if (loadingHint == null)
+			{
+				return;
+			}
+			loadingHint.text = text ?? string.Empty;
+			loadingHint.style.display = string.IsNullOrWhiteSpace(text) ? DisplayStyle.None : DisplayStyle.Flex;
+		}
+
+		/// <summary>
 		/// Sets the progress bar fill width to the supplied normalised progress.
 		/// </summary>
 		/// <param name="progress">The progress in the range 0-1.</param>
 		private void SetProgress(float progress)
 		{
+			float clamped = Mathf.Clamp01(progress);
+
 			if (loadingProgressFill != null)
 			{
-				loadingProgressFill.style.width = Length.Percent(Mathf.Clamp01(progress) * 100.0f);
+				loadingProgressFill.style.width = Length.Percent(clamped * 100.0f);
+			}
+
+			if (loadingProgressText != null)
+			{
+				/* Rounded down, not to nearest. Showing "100%" while the bar is still moving is
+				 * the one reading a loading screen must never give — a player who sees it and
+				 * then waits assumes the client has hung. */
+				loadingProgressText.text = $"{Mathf.FloorToInt(clamped * 100.0f)}%";
 			}
 		}
 
@@ -432,10 +474,14 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Naming the destination turns an anonymous wait into a legible one. The player
+			 * already knows they clicked something; the useful fact is where they are going,
+			 * and it costs nothing since the lookup data is in hand. */
+			SetHint(string.IsNullOrWhiteSpace(sld.Name) ? null : $"Entering {sld.Name}");
+
 			// Details is an Inspector reference and the overlay must survive it being unset:
 			// an NRE here escapes into FishNet's SceneManager event invocation, which aborts
-			// the remaining OnLoadStart subscribers mid-transition. The uGUI UILoadingScreen
-			// already guards the same lookup.
+			// the remaining OnLoadStart subscribers mid-transition.
 			if (Details != null &&
 				Details.Scenes != null &&
 				Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&

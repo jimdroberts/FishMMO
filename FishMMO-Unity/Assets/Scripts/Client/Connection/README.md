@@ -19,8 +19,8 @@ connection type — `World`, `Scene`, or `ConnectingToWorld`. A `Login` connecti
 is not reconnectable and raises `OnConnectionAttemptFailed` instead. `Client` responds to that
 by invalidating the cached login server list (so the next attempt re-probes IPFetch) **and**
 running `QuitToLogin`. Without the second half, a client kicked or timed out on the login
-server was left with no visible panel at all: `UICharacterSelect` hides itself on any stop and
-`UILogin` never re-showed, so the only recovery was restarting the client.
+server was left with no visible panel at all: `UITKCharacterSelect` hides itself on any stop and
+`UITKLogin` never re-showed, so the only recovery was restarting the client.
 
 That teardown also stages an `Unspecified` disconnect notice when the client is holding a
 session token, so the player is told *something* — a login server that restarts or times a
@@ -69,7 +69,7 @@ cached login server list over what was a world server outage.
 
 The same gate covers the initial Login→World hop, which is also typed `ConnectingToWorld`.
 A world server that is down at server-select now retries with backoff behind the cancellable
-`UIReconnectDisplay` and ends in quit-to-login, rather than failing silently on the first try.
+`UITKReconnectDisplay` and ends in quit-to-login, rather than failing silently on the first try.
 
 ## Connection Type Transitions
 
@@ -159,12 +159,12 @@ Three properties matter:
 
 - **Non-destructive.** The timeout re-enables the control and says so. Nothing is torn down and
   no connection is dropped, so a late reply is still handled normally when it lands.
-- **It must not end the auth flow.** `UILogin` and `UIRegister` gate their auth-result handler on
-  `isAuthFlowActive`, which their *unlock* clears — so routing the timeout through the unlock
-  would make the panel ignore a reply that arrives after the deadline, turning a slow login into
-  a permanently stuck one. The timeout calls `ReleaseControls` instead, which touches only the
-  widgets. A genuine disconnect still goes through the unlock, because then the flow really is
-  over.
+- **It must not end the auth flow.** `UITKLogin` and `UITKRegister` gate their auth-result
+  handler on `isAuthFlowActive`, which their *unlock* clears — so routing the timeout through
+  the unlock would make the panel ignore a reply that arrives after the deadline, turning a
+  slow login into a permanently stuck one. The timeout calls `ReleaseControls` instead, which
+  only flips `SetEnabled` on the panel's own controls. A genuine disconnect still goes through
+  the unlock, because then the flow really is over.
 - **Progress refreshes it.** Any auth result at all is proof the server is still working the
   request — the SRP exchange and the two-factor prompt both report progress before they finish,
   and a client can sit in the login queue for minutes. Each one buys the deadline again.

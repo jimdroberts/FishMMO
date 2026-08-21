@@ -188,7 +188,7 @@ NPCs use a different faction path than players:
 - **Guild System** — `GetAllianceLevel` checks guild membership for Ally override.
 - **NPC System** — NPCs use `RaceTemplate.InitialFaction` for static faction identity.
 - **Database Layer** — Factions are persisted and restored via `CharacterFactionData` DTO.
-- **UI** — `UIFactions` panel subscribes to `OnUpdateFaction` for real-time standing display.
+- **UI** — `UITKFactions` panel subscribes to `OnUpdateFaction` for real-time standing display.
 - **Target Frames** — `GetAllianceLevelColor` provides nameplate/frame coloring.
 
 ## Operational Checks
@@ -205,7 +205,7 @@ NPCs use a different faction path than players:
 | NPC immunity | Trigger `SetFaction`/`Add` on an NPC | Early return; no faction change applied |
 | Alliance resolution | Call `GetAllianceLevel` between two characters | Correct level returned per priority chain (party → guild → aggression → standings) |
 | Network sync | Modify a faction on the server | `FactionUpdateBroadcast` received by owner client; observer broadcasts reach nearby clients |
-| UI update | Change a faction standing at runtime | `UIFactions` panel reflects the new value via `OnUpdateFaction` event |
+| UI update | Change a faction standing at runtime | `UITKFactions` panel reflects the new value via `OnUpdateFaction` event |
 
 ## Flow Diagram
 
@@ -290,7 +290,7 @@ Shared/Implementation/Network/Character/FactionBroadcasts.cs            # FishNe
 Server/Implementation/World/SceneServer/Faction/FactionSystem.cs         # Server-side faction update handling + DB persistence
 Shared/Implementation/Entity/CharacterAttribute/CharacterDamageController.cs  # Calls AdjustFaction() on kill events
 Shared/Implementation/Entity/BaseCharacter.cs                            # Client-side character cache used for observer routing
-Client/UI/Controls/World/Faction/UIFactions.cs                           # Faction UI panel
+Client/GUI/World/Faction/UITKFactions.cs                                 # Faction UI Toolkit panel
 ```
 
 ### Inheritance Hierarchies

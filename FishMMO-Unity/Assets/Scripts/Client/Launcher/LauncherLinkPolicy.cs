@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Logging;
 
@@ -16,10 +16,10 @@ namespace FishMMO.Client
 	/// handler for schemes like <c>javascript:</c>, <c>file:</c>, or an arbitrary
 	/// application-registered scheme.
 	/// <para>
-	/// It lives here as a single shared implementation because both launcher views render the
-	/// same news content through different mechanisms (TextMeshPro's link handler for UGUI,
-	/// click callbacks on VisualElements for UI Toolkit). Two copies of an allowlist drift, and
-	/// a drifted allowlist is a vulnerability — so neither view is permitted its own.
+	/// It is deliberately separate from the view that renders the news rather than inlined into
+	/// it. Screening a URL is a security decision, not a presentation one, and keeping it apart
+	/// means a second renderer — or a rewritten one — cannot quietly acquire its own copy. Two
+	/// copies of an allowlist drift, and a drifted allowlist is a vulnerability.
 	/// </para>
 	/// </remarks>
 	public static class LauncherLinkPolicy

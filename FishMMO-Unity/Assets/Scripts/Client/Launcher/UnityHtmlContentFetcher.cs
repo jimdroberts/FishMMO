@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -77,7 +77,7 @@ namespace FishMMO.Client
 		/// Approximate conversion factor from HTML pixels to TextMeshPro font size.
 		/// </summary>
 		/// <remarks>
-		/// Consumed by <see cref="HtmlToTmpTextConverter"/> via the TextMeshPro view. It stays
+		/// Was consumed by the TextMeshPro launcher view, which the UI Toolkit conversion removed. It stays
 		/// serialized on this component so the existing scene keeps its configured value; the
 		/// launcher passes it to the view rather than the view reaching for it.
 		/// </remarks>

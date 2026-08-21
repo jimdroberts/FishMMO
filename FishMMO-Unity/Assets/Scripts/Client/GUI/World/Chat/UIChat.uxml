@@ -10,7 +10,7 @@
             <ui:VisualElement name="chat-messages" class="chat-messages" />
         </ui:ScrollView>
         <ui:VisualElement name="chat-input-row" class="chat-input-row">
-            <ui:TextField name="chat-input" class="chat-input" />
+            <ui:TextField name="chat-input" class="fish-input chat-input" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

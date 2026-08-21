@@ -1,14 +1,30 @@
 /*
     UILoadingScreen.uss
     Layout for the full-screen loading overlay. Colours come from FishMMO-Theme.uss.
+
+    The bar used to be a 10px strip pinned to the very bottom edge of the screen, full width and
+    with no track behind it — at 1080p that is under 1% of the screen height, in the corner of
+    the player's vision, against whatever the artwork happened to be. It was easy to miss and
+    impossible to read a value from.
+
+    It is now a centred block low on the screen: status line, a bar with a real track and a
+    percentage on it, and a hint line. Nothing else — the artwork is the point of a loading
+    screen and anything laid over it competes with it. An earlier revision added a brand banner
+    and a scrim across the lower half; both were removed. The banner duplicated the launcher's
+    and read as clutter, and the scrim put a hard horizontal seam across the middle of the art
+    that looked like a rendering fault rather than a design.
+
+    Legibility comes from the elements themselves instead: the bar has its own dark track, and
+    the text over it carries a shadow. That works on any artwork without touching the artwork.
 */
 
 .loading-screen {
     flex-grow: 1;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
 }
 
+/* Full-bleed artwork, assigned from C#. */
 .loading-image {
     position: absolute;
     left: 0;
@@ -18,34 +34,69 @@
     -unity-background-scale-mode: scale-and-crop;
 }
 
-.loading-progress {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 10px;
-    flex-direction: row;
-}
+/* ── The loading block ──────────────────────────────────── */
 
-.loading-progress__fill {
-    width: 0;
-    height: 100%;
+.loading-panel {
+    width: 46%;
+    min-width: 380px;
+    max-width: 720px;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 8%;
+    flex-shrink: 0;
 }
 
 /*
     Status line for waits the player cannot see the reason for — currently the reconnect
-    backoff, which can hold the overlay for minutes while nothing visibly happens.
-    Hidden (display: none) whenever the text is empty, so an ordinary scene load still
-    shows only the image and the bar.
+    backoff, which can hold the overlay for minutes while nothing visibly happens. Hidden
+    (display: none) from C# whenever the text is empty, so an ordinary scene load shows only
+    the bar.
 */
 .loading-status {
+    -unity-text-align: middle-center;
+    white-space: normal;
+    font-size: 15px;
+    color: var(--text-bright);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+/*
+    A real track, tall enough to read a fill against, and dark enough to carry the percentage
+    without needing anything behind it.
+*/
+.loading-progress {
+    width: 100%;
+    height: 18px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.loading-progress__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+}
+
+/* Percentage centred on the bar, so the number and the fill are read together. */
+.loading-progress__text {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 28px;
+    top: 0;
+    bottom: 0;
+    font-size: 11px;
+}
+
+/* Destination scene name. Shadowed for the same reason the status line is. */
+.loading-hint {
+    margin-top: 10px;
     -unity-text-align: middle-center;
     white-space: normal;
-    font-size: 18px;
-    color: rgb(235, 235, 235);
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.85);
+    color: var(--abyss-100);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+    flex-shrink: 0;
 }

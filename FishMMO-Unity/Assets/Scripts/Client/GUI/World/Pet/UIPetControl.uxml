@@ -2,15 +2,26 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIPetControl.uss" />
     <ui:VisualElement name="pet-root" class="fish-panel pet-panel">
-        <ui:Label name="pet-name" text="Pet" class="pet-name" />
-        <ui:VisualElement name="pet-health" class="fish-bar pet-health">
-            <ui:VisualElement name="pet-health-fill" class="fish-bar__fill--hp pet-health-fill" />
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header pet-header">
+            <ui:VisualElement class="fish-panel__icon pet-header__icon" />
+            <ui:Label name="pet-name" text="Pet" class="fish-panel__title pet-name" />
+            <ui:Label name="pet-status" text="" class="fish-badge pet-status" />
         </ui:VisualElement>
-        <ui:VisualElement name="pet-commands" class="pet-commands">
-            <ui:Button name="pet-follow" text="Follow" class="fish-close-btn pet-cmd" />
-            <ui:Button name="pet-stay" text="Stay" class="fish-close-btn pet-cmd" />
-            <ui:Button name="pet-summon" text="Summon" class="fish-close-btn pet-cmd" />
-            <ui:Button name="pet-release" text="Release" class="fish-close-btn pet-cmd" />
+
+        <ui:VisualElement name="pet-body" class="pet-body">
+            <ui:VisualElement name="pet-health" class="fish-bar pet-health">
+                <ui:VisualElement name="pet-health-fill" class="fish-bar__fill fish-bar__fill--hp pet-health-fill" />
+                <ui:Label name="pet-health-text" text="" class="fish-bar__label pet-health-text" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="pet-commands" class="pet-commands">
+                <ui:Button name="pet-follow" text="Follow" class="fish-button pet-cmd" />
+                <ui:Button name="pet-stay" text="Stay" class="fish-button pet-cmd" />
+                <ui:Button name="pet-summon" text="Summon" class="fish-button pet-cmd" />
+                <ui:Button name="pet-release" text="Release" class="fish-button fish-button--danger pet-cmd" />
+            </ui:VisualElement>
         </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

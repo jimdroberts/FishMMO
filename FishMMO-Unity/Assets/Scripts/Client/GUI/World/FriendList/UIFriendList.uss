@@ -1,73 +1,157 @@
 /*
     UIFriendList.uss
-    Layout for the friend list panel. Colours come from FishMMO-Theme.uss.
+    Layout for the friend list. Colours come from FishMMO-Theme.uss.
+
+    Each row is a presence dot, a name, a status word and a remove button. The
+    dot carries the state a player actually scans for; the word beside it is
+    there for anyone who cannot separate the dot colours.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner. Right-centre, matching the uGUI friend list.
+*/
 .friend-panel {
-    width: 240px;
-    height: 320px;
+    position: absolute;
+    right: 2%;
+    top: 50%;
+    translate: 0 -50%;
+    width: 250px;
+    height: 340px;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
+/* ── Header ─────────────────────────────────────────────── */
+
 .friend-header {
-    height: 28px;
-    padding-left: 8px;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
+
+.friend-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.friend-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.friend-online-count {
+    min-width: 24px;
+    height: 16px;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+/* ── Body ───────────────────────────────────────────────── */
 
 .friend-scroll {
     flex-grow: 1;
-    padding: 4px;
 }
 
 .friend-list {
     flex-direction: column;
 }
 
+/* One friend row; .fish-row supplies hover and the leading accent rail. */
 .friend-row {
     flex-direction: row;
     align-items: center;
-    height: 24px;
-    padding-left: 4px;
-    padding-right: 4px;
-    border-radius: 4px;
+    height: 26px;
+    padding-left: 10px;
+    padding-right: 6px;
+    flex-shrink: 0;
 }
 
-.friend-row:hover {
-    background-color: rgb(28, 31, 34);
+.friend-row__dot {
+    width: 7px;
+    height: 7px;
+    margin-right: 8px;
+    flex-shrink: 0;
 }
 
 .friend-row__name {
     flex-grow: 1;
-    font-size: 11px;
-    -unity-text-align: middle-left;
-    color: rgb(200, 205, 214);
+    overflow: hidden;
 }
 
 .friend-row__status {
     width: 56px;
-    font-size: 10px;
-    -unity-text-align: middle-left;
-    color: rgb(138, 147, 162);
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+    margin-right: 6px;
 }
 
-.friend-row__status--online {
-    color: rgb(46, 204, 113);
-}
-
+/*
+    The remove button only appears on hover, so a long list stays quiet — a
+    column of X buttons reads as a list of things to delete rather than a
+    list of friends.
+*/
 .friend-row__remove {
-    width: 18px;
-    height: 18px;
-    font-size: 10px;
-    padding: 0;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.1s ease;
 }
+
+.friend-row:hover .friend-row__remove {
+    opacity: 1;
+}
+
+.friend-empty {
+    margin-top: 24px;
+    margin-bottom: 24px;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
 
 .friend-footer {
     flex-direction: row;
-    height: 30px;
-    padding: 4px;
+    align-items: center;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
 
 .friend-action {
     flex-grow: 1;
-    font-size: 10px;
+    height: 24px;
+}
+
+/*
+    An online friend's status word takes the same green as the presence dot, so
+    the colour reads once whichever of the two the eye lands on first.
+*/
+.friend-row__status--online {
+    color: var(--stam);
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.friend-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.friend-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

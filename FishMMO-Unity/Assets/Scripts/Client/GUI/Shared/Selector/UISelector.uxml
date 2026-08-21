@@ -2,14 +2,25 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UISelector.uss" />
     <ui:VisualElement name="selector-root" class="selector-root">
-        <ui:VisualElement name="selector-panel" class="fish-panel selector-panel">
-            <ui:ScrollView name="selector-scroll" class="selector-scroll">
+        <ui:VisualElement name="selector-panel" class="fish-panel fish-panel--alert selector-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header selector-header">
+                <ui:VisualElement class="fish-panel__icon selector-header__icon" />
+                <ui:Label name="selector-title" text="SELECT" class="fish-panel__title" />
+                <ui:Label name="selector-count" text="0" class="fish-badge selector-count" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="selector-scroll" class="fish-scroll selector-scroll">
                 <ui:VisualElement name="selector-list" class="selector-list" />
+                <ui:Label name="selector-empty" text="Nothing to choose from."
+                          class="fish-empty selector-empty" />
             </ui:ScrollView>
-            <ui:VisualElement name="selector-buttons" class="selector-buttons">
-                <ui:Button name="selector-accept-btn" text="Accept" class="fish-button selector-action" />
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer selector-buttons">
+                <ui:Button name="selector-accept-btn" text="Accept" class="fish-button fish-button--primary selector-action" />
                 <ui:Button name="selector-cancel-btn" text="Cancel" class="fish-button selector-action" />
             </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

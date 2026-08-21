@@ -15,7 +15,7 @@
     align-items: center;
     justify-content: flex-end;
     padding-bottom: 24px;
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--clear);
 }
 
 /* Horizontal strip of hotkey slots. */
@@ -31,14 +31,14 @@
     height: 48px;
     margin-right: 3px;
     border-width: 1px;
-    border-color: rgb(46, 51, 59);
+    border-color: var(--abyss-500);
     border-radius: 6px;
-    background-color: rgb(28, 31, 34);
+    background-color: var(--abyss-700);
     overflow: hidden;
 }
 
 .hotkey-slot:hover {
-    border-color: rgb(255, 107, 26);
+    border-color: var(--brand-500);
 }
 
 /* Assigned item / ability icon. */
@@ -59,7 +59,7 @@
     right: 0;
     top: 0;
     height: 0;
-    background-color: rgba(14, 15, 15, 0.65);
+    background-color: var(--scrim-65);
 }
 
 /* Key-map label in the lower-right corner. */
@@ -70,6 +70,6 @@
     font-size: 9px;
     -unity-font-style: bold;
     -unity-text-align: lower-right;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
     text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
 }

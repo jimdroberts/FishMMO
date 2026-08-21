@@ -9,7 +9,6 @@
         "WebTransport",
         "KinematicCharacterController",
         "QuickOutline",
-        "Unity.TextMeshPro",
         "Unity.InputSystem",
         "Unity.Splines",
         "Unity.Mathematics",

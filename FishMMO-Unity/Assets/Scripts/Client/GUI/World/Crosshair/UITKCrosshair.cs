@@ -1,10 +1,13 @@
-namespace FishMMO.Client
+﻿namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit crosshair control. Shows or hides the crosshair based on the current mouse mode.
 	/// </summary>
 	public class UITKCrosshair : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>
 		/// Subscribes to the mouse mode toggle event.
 		/// </summary>

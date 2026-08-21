@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -7,9 +7,9 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit factions panel. Replaces the legacy UGUI <see cref="UIFactions"/> / <see cref="UIFactionDescription"/>:
-	/// renders each known faction as a row with icon, name, description, a coloured standing bar, and the
-	/// numeric standing value. Standing colour reflects positive/neutral/negative reputation.
+	/// UI Toolkit factions panel. Renders each known faction as a row with icon, name, description,
+	/// a coloured standing bar, and the numeric standing value. Standing colour reflects
+	/// positive/neutral/negative reputation.
 	/// </summary>
 	public class UITKFactions : UITKCharacterControl
 	{
@@ -82,6 +82,13 @@ namespace FishMMO.Client
 			}
 
 			list = root.Q(LIST_NAME);
+			BindListChrome(
+				list,
+				root.Q<Label>("faction-count"),
+				root.Q<Label>("faction-subtitle"),
+				root.Q<Label>("faction-empty"),
+				"faction",
+				"factions");
 
 			OnSetCharacter += CharacterControl_OnSetCharacter;
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;

@@ -150,14 +150,14 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void SendClientHandshake(byte[] publicKey, byte[]? cookie, string? connectionToken, ushort minVersion, ushort maxVersion, string gameVersion)
 		{
-			AuthTestTrace.Log("Client", "SendClientHandshake", $"pk={AuthTestTrace.Hex(publicKey)} cookie={AuthTestTrace.Hex(cookie)} versions={minVersion}..{maxVersion} gameVersion={gameVersion}");
+			_ = AuthTestTrace.Log("Client", "SendClientHandshake", $"pk={AuthTestTrace.Hex(publicKey)} cookie={AuthTestTrace.Hex(cookie)} versions={minVersion}..{maxVersion} gameVersion={gameVersion}");
 			// Server side expects null-cookie on phase 1, non-null on phase 2.
 			server!.OnHandshakeReceived(clientId, publicKey, cookie!, null, minVersion, maxVersion, gameVersion);
 		}
 
 		protected override void SendTokenAuth(byte[] encryptedToken, uint seq)
 		{
-			AuthTestTrace.Log("Client", "SendTokenAuth", $"seq={seq} token={AuthTestTrace.Hex(encryptedToken)}");
+			_ = AuthTestTrace.Log("Client", "SendTokenAuth", $"seq={seq} token={AuthTestTrace.Hex(encryptedToken)}");
 			// Simplified token auth: bypass real crypto decryption and validate the pending token
 			// directly against the in-memory store. This exercises auth logic without requiring a
 			// full TokenAuthenticatorCore worker setup.
@@ -172,7 +172,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void SendSrpVerify(byte[] encryptedUsername, byte[] encryptedClientEphemeral, uint seq)
 		{
-			AuthTestTrace.Log("Client", "SendSrpVerify", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} pkA={AuthTestTrace.Hex(encryptedClientEphemeral)}");
+			_ = AuthTestTrace.Log("Client", "SendSrpVerify", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} pkA={AuthTestTrace.Hex(encryptedClientEphemeral)}");
 			SrpVerifySends.Add(new SrpVerifyCapture(encryptedUsername, encryptedClientEphemeral, seq));
 			byte[] outUser = encryptedUsername;
 			byte[] outEph = encryptedClientEphemeral;
@@ -181,7 +181,7 @@ namespace FishMMO.UnitTests.Harness
 				(byte[] user, byte[] eph)? replaced = SrpVerifyInterceptor(encryptedUsername, encryptedClientEphemeral);
 				if (replaced is null)
 				{
-					AuthTestTrace.Log("Client", "SendSrpVerify.dropped");
+					_ = AuthTestTrace.Log("Client", "SendSrpVerify.dropped");
 					return;
 				}
 				outUser = replaced.Value.user;
@@ -192,12 +192,12 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void SendSrpProof(byte[] encryptedProof, uint seq)
 		{
-			AuthTestTrace.Log("Client", "SendSrpProof", $"seq={seq} M1={AuthTestTrace.Hex(encryptedProof)}");
+			_ = AuthTestTrace.Log("Client", "SendSrpProof", $"seq={seq} M1={AuthTestTrace.Hex(encryptedProof)}");
 			SrpProofSends.Add(new SrpProofCapture(encryptedProof, seq));
 			byte[]? outProof = SrpProofInterceptor is null ? encryptedProof : SrpProofInterceptor(encryptedProof);
 			if (outProof is null)
 			{
-				AuthTestTrace.Log("Client", "SendSrpProof.dropped");
+				_ = AuthTestTrace.Log("Client", "SendSrpProof.dropped");
 				return;
 			}
 			server!.OnSrpProofReceived(clientId, outProof, seq);
@@ -206,25 +206,25 @@ namespace FishMMO.UnitTests.Harness
 		protected override void SendCreateAccount(byte[] encryptedUsername, byte[] encryptedEmail, byte[] encryptedAge,
 			byte[] encryptedSalt, byte[] encryptedVerifier, uint seq)
 		{
-			AuthTestTrace.Log("Client", "SendCreateAccount", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} email={AuthTestTrace.Hex(encryptedEmail)} age={AuthTestTrace.Hex(encryptedAge)} salt={AuthTestTrace.Hex(encryptedSalt)} v={AuthTestTrace.Hex(encryptedVerifier)}");
+			_ = AuthTestTrace.Log("Client", "SendCreateAccount", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} email={AuthTestTrace.Hex(encryptedEmail)} age={AuthTestTrace.Hex(encryptedAge)} salt={AuthTestTrace.Hex(encryptedSalt)} v={AuthTestTrace.Hex(encryptedVerifier)}");
 			CreateAccountSends.Add(new CreateAccountCapture(encryptedUsername, encryptedEmail, encryptedAge, encryptedSalt, encryptedVerifier, seq));
 		}
 
 		protected override void SendAccountVerify(byte[] encryptedUsername, byte[] encryptedCode, uint seq)
 		{
-			AuthTestTrace.Log("Client", "SendAccountVerify", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} code={AuthTestTrace.Hex(encryptedCode)}");
+			_ = AuthTestTrace.Log("Client", "SendAccountVerify", $"seq={seq} user={AuthTestTrace.Hex(encryptedUsername)} code={AuthTestTrace.Hex(encryptedCode)}");
 			AccountVerifySends.Add(new AccountVerifyCapture(encryptedUsername, encryptedCode, seq));
 		}
 
 		protected override void SendTwoFactorVerify(byte[] encryptedCode, uint seq)
 		{
-			AuthTestTrace.Log("Client", "SendTwoFactorVerify", $"seq={seq} code={AuthTestTrace.Hex(encryptedCode)}");
+			_ = AuthTestTrace.Log("Client", "SendTwoFactorVerify", $"seq={seq} code={AuthTestTrace.Hex(encryptedCode)}");
 			server!.OnTwoFactorVerifyReceived(clientId, encryptedCode, seq);
 		}
 
 		protected override void Disconnect()
 		{
-			AuthTestTrace.Log("Client", "Disconnect");
+			_ = AuthTestTrace.Log("Client", "Disconnect");
 			WasDisconnected = true;
 			// Complete the TCS so Drive() / DriveLogin() don't hang when the client
 			// self-disconnects (e.g., decryption failure) before an auth result arrives.
@@ -233,7 +233,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void OnAuthResultCallback(ClientAuthenticationResult result)
 		{
-			AuthTestTrace.Log("Client", "OnAuthResultCallback", $"result={result}");
+			_ = AuthTestTrace.Log("Client", "OnAuthResultCallback", $"result={result}");
 			LastResult = result;
 			if (result == ClientAuthenticationResult.LoginSuccess)
 				ReceivedSuccess = true;
@@ -242,7 +242,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void OnTwoFactorSetupCallback(string otpauthUri, string[] recoveryCodes)
 		{
-			AuthTestTrace.Log("Client", "OnTwoFactorSetupCallback", $"uri.len={otpauthUri?.Length ?? 0} codes={recoveryCodes?.Length ?? 0}");
+			_ = AuthTestTrace.Log("Client", "OnTwoFactorSetupCallback", $"uri.len={otpauthUri?.Length ?? 0} codes={recoveryCodes?.Length ?? 0}");
 			TwoFactorSetups.Add(new TwoFactorSetupCapture(otpauthUri!, recoveryCodes!));
 		}
 

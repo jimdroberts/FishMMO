@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -7,11 +7,14 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit color picker supporting an HSV picking texture plus H/S/V and R/G/B/A sliders,
-	/// inputs and a hex field. Mirrors the legacy UGUI <c>UIColorPicker</c> behaviour, generating
-	/// spectrum textures via <see cref="TinyColor"/> and binding them to element background images.
+	/// inputs and a hex field. Spectrum textures are generated via <see cref="TinyColor"/> and
+	/// bound to element background images.
 	/// </summary>
 	public class UITKColorPicker : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Modal;
+
 		/// <summary>
 		/// Width of slider backgrounds in pixels.
 		/// </summary>
@@ -436,6 +439,39 @@ namespace FishMMO.Client
 				cachedHSVTextures[hueIndex] = texture;
 			}
 			return texture;
+		}
+
+		/// <summary>
+		/// Shows the picker seeded with a colour, reporting each change to one caller.
+		/// </summary>
+		/// <param name="initial">Colour to start from.</param>
+		/// <param name="onChanged">Invoked with the selected colour as it changes.</param>
+		/// <remarks>
+		/// The picker is a single shared panel, so <see cref="OnColorChanged"/> is a field that
+		/// every caller writes to in turn. Assigning it directly means whoever opened the picker
+		/// last silently keeps receiving colours after they are done with it — this replaces the
+		/// subscriber outright on each open, so exactly one caller is ever listening.
+		/// </remarks>
+		public void Open(Color initial, Action<Color> onChanged)
+		{
+			OnColorChanged = onChanged;
+			InitialColor = initial;
+
+			Show();
+
+			/* Seeded after Show, not before: a panel that has never been shown has no visual tree,
+			 * so SetColor would have no sliders or inputs to write into and the picker would open
+			 * on its previous colour. */
+			SetColor(initial);
+		}
+
+		/// <summary>
+		/// Hides the picker and stops reporting changes to whoever opened it.
+		/// </summary>
+		public override void Hide()
+		{
+			OnColorChanged = null;
+			base.Hide();
 		}
 
 		/// <summary>

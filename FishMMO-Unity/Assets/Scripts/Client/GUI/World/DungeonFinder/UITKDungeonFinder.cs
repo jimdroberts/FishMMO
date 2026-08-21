@@ -6,9 +6,9 @@ using FishMMO.Logging;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit dungeon finder. Mirrors the legacy UGUI <see cref="UIDungeonFinder"/>: listens
-	/// for <see cref="DungeonFinderBroadcast"/> messages, displays the dungeon image and name, and
-	/// broadcasts a request to start the dungeon when the player confirms.
+	/// UI Toolkit dungeon finder. Listens for <see cref="DungeonFinderBroadcast"/> messages,
+	/// displays the dungeon image and name, and broadcasts a request to start the dungeon when
+	/// the player confirms.
 	/// </summary>
 	public class UITKDungeonFinder : UITKCharacterControl
 	{

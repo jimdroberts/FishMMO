@@ -7,22 +7,22 @@
                 <ui:Label text="SIGN IN" class="fish-panel__title" />
             </ui:VisualElement>
             <ui:VisualElement name="login-body" class="login-body">
-                <ui:Label text="Username" class="login-field-label" />
-                <ui:TextField name="login-username" class="login-input" />
-                <ui:Label text="Email" class="login-field-label" />
-                <ui:TextField name="login-email" class="login-input" />
-                <ui:Label text="Password" class="login-field-label" />
-                <ui:TextField name="login-password" password="true" class="login-input" />
-                <ui:Label text="Age" class="login-field-label" />
-                <ui:DropdownField name="login-age" class="login-dropdown" />
-                <ui:Label name="login-handshake" text="" class="login-handshake" />
+                <ui:Label text="Username" class="fish-label fish-label--caption login-field-label" />
+                <ui:TextField name="login-username" class="fish-input login-input" />
+                <ui:Label text="Email" class="fish-label fish-label--caption login-field-label" />
+                <ui:TextField name="login-email" class="fish-input login-input" />
+                <ui:Label text="Password" class="fish-label fish-label--caption login-field-label" />
+                <ui:TextField name="login-password" password="true" class="fish-input login-input" />
+                <ui:Label text="Age" class="fish-label fish-label--caption login-field-label" />
+                <ui:DropdownField name="login-age" class="fish-dropdown login-dropdown" />
+                <ui:Label name="login-handshake" text="" class="fish-label fish-label--muted login-handshake" />
                 <ui:VisualElement name="login-buttons" class="login-buttons">
-                    <ui:Button name="login-signin-btn" text="Sign In" class="fish-tab login-btn login-btn--primary" />
-                    <ui:Button name="login-register-btn" text="Register" class="fish-tab login-btn" />
+                    <ui:Button name="login-signin-btn" text="Sign In" class="fish-button login-btn fish-button--primary" />
+                    <ui:Button name="login-register-btn" text="Register" class="fish-button login-btn" />
                 </ui:VisualElement>
                 <ui:VisualElement name="login-buttons-secondary" class="login-buttons">
-                    <ui:Button name="login-options-btn" text="Options" class="fish-tab login-btn" />
-                    <ui:Button name="login-quit-btn" text="Quit" class="fish-tab login-btn" />
+                    <ui:Button name="login-options-btn" text="Options" class="fish-button login-btn" />
+                    <ui:Button name="login-quit-btn" text="Quit" class="fish-button login-btn" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

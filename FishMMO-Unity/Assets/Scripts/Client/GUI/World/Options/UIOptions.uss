@@ -7,7 +7,7 @@
     flex-grow: 1;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--overlay-dim);
 }
 
 .options-panel {
@@ -54,4 +54,87 @@
 
 .options-action {
     min-width: 96px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.options-header {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.options-header__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTIONS
+   Screen / Gameplay / Colours.
+   ═══════════════════════════════════════════════════════════ */
+
+.options-section {
+    margin-top: 14px;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    flex-shrink: 0;
+}
+
+/*
+    Container for the rows UITKOptions generates. It has no size of its own — the rows drive
+    the height — but flex-shrink: 0 stops the ScrollView compressing the list instead of
+    scrolling it once the three sections together exceed the panel's max height.
+*/
+.options-list {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.options-row--action {
+    justify-content: flex-end;
+}
+
+.options-reset-btn {
+    height: 26px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COLOUR SWATCHES
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    The swatch previews the colour a row controls. Its background is written inline by
+    UITKOptions when an override exists; when none does the --unset modifier below supplies
+    the appearance instead, so "no choice made" is visibly different from "chose white".
+*/
+.options-swatch {
+    width: 34px;
+    height: 18px;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: var(--abyss-400);
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.options-swatch--unset {
+    background-color: var(--abyss-700);
+    border-color: var(--abyss-500);
+}
+
+.options-swatch-btn {
+    width: 74px;
+    height: 22px;
+    flex-shrink: 0;
 }

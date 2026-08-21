@@ -2,7 +2,7 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIResourceBar.uss" />
     <ui:VisualElement name="bar-root" class="fish-bar res-bar">
-        <ui:VisualElement name="bar-fill" class="res-bar__fill" />
+        <ui:VisualElement name="bar-fill" class="fish-bar__fill res-bar__fill" />
         <ui:Label name="bar-label" text="0/0" class="res-bar__label" />
     </ui:VisualElement>
 </ui:UXML>

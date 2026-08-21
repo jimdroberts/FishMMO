@@ -2,11 +2,17 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIFactions.uss" />
     <ui:VisualElement name="faction-root" class="fish-panel faction-panel">
-        <ui:VisualElement name="faction-header" class="fish-panel__header faction-header">
-            <ui:Label text="REPUTATION" class="fish-panel__title" />
+        <ui:VisualElement name="panel-header" class="fish-panel__header faction-header">
+            <ui:VisualElement class="fish-panel__icon faction-header__icon" />
+            <ui:VisualElement class="faction-header__titles">
+                <ui:Label text="REPUTATION" class="fish-panel__title" />
+                <ui:Label name="faction-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="faction-count" text="0" class="fish-badge faction-count" />
         </ui:VisualElement>
         <ui:ScrollView name="faction-scroll" class="fish-scroll faction-scroll">
             <ui:VisualElement name="faction-list" class="faction-list" />
+            <ui:Label name="faction-empty" text="No factions encountered yet." class="fish-empty faction-empty" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

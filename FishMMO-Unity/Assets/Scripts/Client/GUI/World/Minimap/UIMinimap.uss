@@ -20,5 +20,5 @@
 .minimap-view {
     flex-grow: 1;
     -unity-background-scale-mode: scale-and-crop;
-    background-color: rgb(0, 0, 0);
+    background-color: var(--black);
 }

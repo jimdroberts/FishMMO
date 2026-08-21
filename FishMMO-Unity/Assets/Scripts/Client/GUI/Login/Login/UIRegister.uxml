@@ -7,20 +7,20 @@
                 <ui:Label text="CREATE ACCOUNT" class="fish-panel__title" />
             </ui:VisualElement>
             <ui:VisualElement name="register-body" class="register-body">
-                <ui:Label text="Username" class="register-field-label" />
-                <ui:TextField name="register-username" class="register-input" />
-                <ui:Label text="Email" class="register-field-label" />
-                <ui:TextField name="register-email" class="register-input" />
-                <ui:Label text="Password" class="register-field-label" />
-                <ui:TextField name="register-password" password="true" class="register-input" />
-                <ui:Label text="Registration Key (optional)" class="register-field-label" />
-                <ui:TextField name="register-key" class="register-input" />
-                <ui:Label text="Confirm Age" class="register-field-label" />
-                <ui:DropdownField name="register-age" class="register-dropdown" />
-                <ui:Label name="register-status" text="" class="register-status" />
+                <ui:Label text="Username" class="fish-label fish-label--caption register-field-label" />
+                <ui:TextField name="register-username" class="fish-input register-input" />
+                <ui:Label text="Email" class="fish-label fish-label--caption register-field-label" />
+                <ui:TextField name="register-email" class="fish-input register-input" />
+                <ui:Label text="Password" class="fish-label fish-label--caption register-field-label" />
+                <ui:TextField name="register-password" password="true" class="fish-input register-input" />
+                <ui:Label text="Registration Key (optional)" class="fish-label fish-label--caption register-field-label" />
+                <ui:TextField name="register-key" class="fish-input register-input" />
+                <ui:Label text="Confirm Age" class="fish-label fish-label--caption register-field-label" />
+                <ui:DropdownField name="register-age" class="fish-dropdown register-dropdown" />
+                <ui:Label name="register-status" text="" class="fish-label fish-label--muted register-status" />
                 <ui:VisualElement name="register-buttons" class="register-buttons">
-                    <ui:Button name="register-submit-btn" text="Register" class="fish-tab register-btn register-btn--primary" />
-                    <ui:Button name="register-quit-btn" text="Back" class="fish-tab register-btn" />
+                    <ui:Button name="register-submit-btn" text="Register" class="fish-button register-btn fish-button--primary" />
+                    <ui:Button name="register-quit-btn" text="Back" class="fish-button register-btn" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

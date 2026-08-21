@@ -1,4 +1,4 @@
-using UnityEngine.UIElements;
+﻿using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishNet.Transporting;
@@ -6,12 +6,14 @@ using FishNet.Transporting;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit pet control panel. Replaces the legacy UGUI <see cref="UIPetControl"/>: shows the
-	/// pet's name and health, and issues follow/stay/summon/release commands. All pet command
-	/// broadcasts are preserved verbatim.
+	/// UI Toolkit pet control panel. Shows the pet's name and health, and issues
+	/// follow/stay/summon/release commands.
 	/// </summary>
 	public class UITKPetControl : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Window;
+
 		/// <summary>Name of the pet name label element.</summary>
 		private const string NAME_LABEL_NAME = "pet-name";
 

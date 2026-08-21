@@ -69,7 +69,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void BroadcastCookieChallenge(int conn, byte[] cookie)
 		{
-			AuthTestTrace.Log("Server", "BroadcastCookieChallenge", $"conn={conn} cookie={AuthTestTrace.Hex(cookie)}");
+			_ = AuthTestTrace.Log("Server", "BroadcastCookieChallenge", $"conn={conn} cookie={AuthTestTrace.Hex(cookie)}");
 			LastChallengeCookie = cookie;
 			CookieChallengeCount++;
 			// Phase-1: serverPublicKey = null signals a cookie challenge to the client.
@@ -78,7 +78,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void BroadcastServerHandshake(int conn, byte[] serverPublicKey, ushort agreedVersion)
 		{
-			AuthTestTrace.Log("Server", "BroadcastServerHandshake", $"conn={conn} pk={AuthTestTrace.Hex(serverPublicKey)} v={agreedVersion}");
+			_ = AuthTestTrace.Log("Server", "BroadcastServerHandshake", $"conn={conn} pk={AuthTestTrace.Hex(serverPublicKey)} v={agreedVersion}");
 			LastServerPublicKey = serverPublicKey;
 			ServerHandshakeCount++;
 			// Phase-2: ECDH complete; cookie is unused on the client at this point but must be non-null.
@@ -87,7 +87,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void DisconnectConnection(int conn, bool graceful)
 		{
-			AuthTestTrace.Log("Server", "DisconnectConnection", $"conn={conn} graceful={graceful}");
+			_ = AuthTestTrace.Log("Server", "DisconnectConnection", $"conn={conn} graceful={graceful}");
 			disconnected = true;
 			DisconnectCount++;
 			client?.OnDisconnected();
@@ -103,24 +103,24 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override void BroadcastAuthResult(int conn, ClientAuthenticationResult result, bool reliable)
 		{
-			AuthTestTrace.Log("Server", "BroadcastAuthResult", $"conn={conn} result={result} reliable={reliable}");
+			_ = AuthTestTrace.Log("Server", "BroadcastAuthResult", $"conn={conn} result={result} reliable={reliable}");
 			AuthResultBroadcastCount++;
 			client!.OnAuthResultReceived(result);
 		}
 
 		protected override void BroadcastSrpVerifyResponse(int conn, byte[] encryptedSalt, byte[] encryptedPublicServerEphemeral)
 		{
-			AuthTestTrace.Log("Server", "BroadcastSrpVerifyResponse", $"conn={conn} salt={AuthTestTrace.Hex(encryptedSalt)} pkB={AuthTestTrace.Hex(encryptedPublicServerEphemeral)}");
+			_ = AuthTestTrace.Log("Server", "BroadcastSrpVerifyResponse", $"conn={conn} salt={AuthTestTrace.Hex(encryptedSalt)} pkB={AuthTestTrace.Hex(encryptedPublicServerEphemeral)}");
 			client!.OnSrpVerifyResponseReceived(encryptedSalt, encryptedPublicServerEphemeral);
 		}
 
 		protected override void BroadcastSrpSuccess(int conn, byte[] encryptedServerProof, ClientAuthenticationResult result, byte[]? encryptedToken)
 		{
-			AuthTestTrace.Log("Server", "BroadcastSrpSuccess", $"conn={conn} result={result} proof={AuthTestTrace.Hex(encryptedServerProof)} token={AuthTestTrace.Hex(encryptedToken)}");
+			_ = AuthTestTrace.Log("Server", "BroadcastSrpSuccess", $"conn={conn} result={result} proof={AuthTestTrace.Hex(encryptedServerProof)} token={AuthTestTrace.Hex(encryptedToken)}");
 			byte[]? outProof = SrpSuccessInterceptor is null ? encryptedServerProof : SrpSuccessInterceptor(encryptedServerProof);
 			if (outProof is null)
 			{
-				AuthTestTrace.Log("Server", "BroadcastSrpSuccess.dropped");
+				_ = AuthTestTrace.Log("Server", "BroadcastSrpSuccess.dropped");
 				return;
 			}
 			client!.OnSrpSuccessReceived(outProof, result, encryptedToken ?? Array.Empty<byte>());

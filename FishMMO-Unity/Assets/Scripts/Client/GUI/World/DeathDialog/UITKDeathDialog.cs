@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using UnityEngine;
@@ -36,6 +36,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKDeathDialog : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Modal;
+
 		/// <summary>Name of the death message label.</summary>
 		private const string MESSAGE_LABEL_NAME = "death-message";
 		/// <summary>Name of the respawn button.</summary>

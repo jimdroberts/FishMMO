@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -6,10 +6,9 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit NPC dialogue panel. Replaces the legacy UGUI <see cref="UINPCDialogue"/>:
-	/// receives server-authoritative dialogue state via broadcasts, renders the speaker, body text,
-	/// and dynamic choice buttons, and sends the player's choice back to the server for validation.
-	/// All dialogue broadcasts are preserved verbatim.
+	/// UI Toolkit NPC dialogue panel. Receives server-authoritative dialogue state via broadcasts,
+	/// renders the speaker, body text, and dynamic choice buttons, and sends the player's choice
+	/// back to the server for validation.
 	/// </summary>
 	public class UITKNPCDialogue : UITKCharacterControl
 	{
@@ -216,7 +215,7 @@ namespace FishMMO.Client
 					{
 						text = choice.Text,
 					};
-					btn.AddToClassList("fish-close-btn");
+					btn.AddToClassList("fish-button");
 					btn.AddToClassList(CHOICE_BUTTON_CLASS);
 					choicesContainer.Add(btn);
 				}

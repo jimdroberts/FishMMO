@@ -1,10 +1,8 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using TMPro;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using System;
@@ -25,118 +23,6 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The background image of the launcher UI.
 		/// </summary>
-		[SerializeField]
-		private Image background;
-		/// <summary>
-		/// The background image of the launcher UI.
-		/// </summary>
-		public Image Background => background;
-		/// <summary>
-		/// The title text of the launcher UI.
-		/// </summary>
-		[SerializeField]
-		private TMP_Text title;
-		/// <summary>
-		/// The title text of the launcher UI.
-		/// </summary>
-		public TMP_Text Title => title;
-		/// <summary>
-		/// The HTML view GameObject for displaying news or other content.
-		/// </summary>
-		[SerializeField]
-		private GameObject htmlView;
-		/// <summary>
-		/// The HTML view GameObject for displaying news or other content.
-		/// </summary>
-		public GameObject HTMLView => htmlView;
-		/// <summary>
-		/// The group GameObject containing the progress bar UI.
-		/// </summary>
-		[SerializeField]
-		private GameObject progressBarGroup;
-		/// <summary>
-		/// The group GameObject containing the progress bar UI.
-		/// </summary>
-		public GameObject ProgressBarGroup => progressBarGroup;
-		/// <summary>
-		/// The progress slider UI element.
-		/// </summary>
-		[SerializeField]
-		private Slider progressSlider;
-		/// <summary>
-		/// The progress slider UI element.
-		/// </summary>
-		public Slider ProgressSlider => progressSlider;
-		/// <summary>
-		/// The progress text UI element. Also used as a status/error message display
-		/// so the player can see what went wrong, not just the button label.
-		/// </summary>
-		[SerializeField]
-		private TMP_Text progressText;
-		/// <summary>
-		/// The progress text UI element.
-		/// </summary>
-		public TMP_Text ProgressText => progressText;
-		/// <summary>
-		/// The quit button UI element.
-		/// </summary>
-		[SerializeField]
-		private Button quitButton;
-		/// <summary>
-		/// The quit button UI element.
-		/// </summary>
-		public Button QuitButton => quitButton;
-		/// <summary>
-		/// The play button UI element.
-		/// </summary>
-		[SerializeField]
-		private Button playButton;
-		/// <summary>
-		/// The play button UI element.
-		/// </summary>
-		public Button PlayButton => playButton;
-		/// <summary>
-		/// The play button text UI element.
-		/// </summary>
-		[SerializeField]
-		private TMP_Text playButtonText;
-		/// <summary>
-		/// The play button text UI element.
-		/// </summary>
-		public TMP_Text PlayButtonText => playButtonText;
-		/// <summary>
-		/// The text UI element for displaying HTML content.
-		/// </summary>
-		[SerializeField]
-		private TMP_Text htmlText;
-		/// <summary>
-		/// The text UI element for displaying HTML content.
-		/// </summary>
-		public TMP_Text HtmlText => htmlText;
-		/// <summary>
-		/// The handler for clickable links in the HTML text.
-		/// </summary>
-		[SerializeField]
-		private TMPro_TextLinkHandler htmlTextLinkHandler;
-		/// <summary>
-		/// The handler for clickable links in the HTML text.
-		/// </summary>
-		public TMPro_TextLinkHandler HtmlTextLinkHandler => htmlTextLinkHandler;
-		/// <summary>
-		/// Optional status text element for displaying error/status messages to the user.
-		/// When assigned, the launcher writes human-readable feedback here so players
-		/// can see what went wrong without needing access to the log file.
-		/// When null, the ProgressText element is used as a fallback.
-		/// </summary>
-		[SerializeField]
-		private TMP_Text statusText;
-		/// <summary>
-		/// Optional status text element for displaying error/status messages to the user.
-		/// </summary>
-		public TMP_Text StatusText => statusText;
-		#endregion
-
-		#region CONFIGURATION
 		[Header("Configuration")]
 		/// <summary>
 		/// Optional per-scene override for the news URL. Leave empty in normal use.
@@ -165,6 +51,42 @@ namespace FishMMO.Client
 		/// </summary>
 		[SerializeField]
 		private string divClass = "content";
+
+		/// <summary>
+		/// Text shown in the news pane when no live feed is available.
+		/// </summary>
+		/// <remarks>
+		/// Used both when no feed is configured and when the fetch fails. The pane is filled
+		/// rather than hidden: hiding it collapsed the panel down to a header stacked directly on
+		/// a footer, which reads as a broken window rather than as a launcher with no news today.
+		/// <para>
+		/// Serialized and multi-line so it can be rewritten per deployment without a code change —
+		/// a shard running a private build wants its own words here.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Shown in the news pane when no feed is configured or the fetch fails.")]
+		[TextArea(6, 16)]
+		[SerializeField]
+		private string newsFallbackSummary =
+			"Welcome to FishMMO.\n\n" +
+			"FishMMO is an open source MMO framework built on Unity and FishNet. It ships the " +
+			"parts an online world actually needs and leaves the game itself to you: an " +
+			"authoritative server with client-side prediction, a login and world server split " +
+			"that scales to multiple scene servers, and a persistence layer backed by PostgreSQL.\n\n" +
+			"Characters carry inventories, equipment, banks, abilities, buffs, factions, guilds " +
+			"and parties, all synchronised through the same broadcast pipeline. Content is " +
+			"authored as scriptable templates — items, abilities, NPCs, dungeons and quests — so " +
+			"designers can build without touching networking code.\n\n" +
+			"This launcher keeps your install patched. It checks the configured patch server on " +
+			"start, downloads what has changed, and enables Play once you are up to date. Use " +
+			"Settings to control automatic updates, request timeouts and where patches are " +
+			"downloaded.\n\n" +
+			"No news feed is configured for this build, so you are seeing this summary instead.";
+
+		/// <summary>
+		/// Text shown in the news pane when no live feed is available.
+		/// </summary>
+		public string NewsFallbackSummary => this.newsFallbackSummary;
 		/// <summary>
 		/// The class name of the div to extract from the HTML content.
 		/// </summary>
@@ -247,11 +169,11 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Typed as <see cref="MonoBehaviour"/> because Unity cannot serialize an interface
-		/// reference. Leave unassigned to render through the legacy uGUI elements above; assign
-		/// a UI Toolkit view component to render through that instead. The fallback is what
-		/// keeps every existing scene working untouched.
+		/// reference. Required despite the name: <see cref="ResolveView"/> has nothing to fall
+		/// back to, so a scene that leaves this empty gets a launcher that cannot draw itself and
+		/// says so. <see cref="UITKClientLauncher"/> is what belongs here.
 		/// </remarks>
-		[Tooltip("Optional. A component implementing ILauncherView. Leave empty to use the uGUI elements above.")]
+		[Tooltip("Required. A component implementing ILauncherView, normally UITKClientLauncher.")]
 		[SerializeField]
 		private MonoBehaviour launcherViewComponent;
 		/// <summary>
@@ -268,7 +190,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Addressable scene name of the post-boot scene the launcher hands off to.
 		/// </summary>
-		private const string PostbootSceneName = "ClientPostboot";
+		/// <remarks>
+		/// Internal rather than private so <see cref="UITKClientLauncher"/> can watch for this
+		/// scene and dismiss itself, without duplicating the name in a second place where the two
+		/// could drift apart.
+		/// </remarks>
+		internal const string PostbootSceneName = "ClientPostboot";
 		/// <summary>
 		/// Addressable scene name of this launcher scene, unloaded once post-boot is up.
 		/// </summary>
@@ -395,7 +322,6 @@ namespace FishMMO.Client
 			public const string DetailApplyingPatch = "Applying the update to your game files. The client will restart automatically — do not close this window.";
 
 			public const string ErrorLoadingNews = "Error loading news: ";
-			public const string ErrorNoNewsContent = "Could not display news content.";
 			public const string ErrorParsingVersion = "Invalid version format: {0}. Expected Major.Minor.Patch[.PreRelease].";
 
 			public const string LogErrorFetchHtml = "Error fetching HTML from {0}: {1}";
@@ -468,10 +394,11 @@ namespace FishMMO.Client
 			 * raises OnFailure — so a launcher with news deliberately switched off reported a
 			 * fetch failure to the player and left "Could not display news content" sitting in
 			 * the pane. Hide the pane instead and never issue the request. */
-			if (string.IsNullOrWhiteSpace(this.HtmlViewURL))
+			if (!IsNewsUrlConfigured(this.HtmlViewURL))
 			{
-				Log.Debug("ClientLauncher", "No launcher news URL configured; skipping the news fetch.");
-				this.view.SetNewsVisible(false);
+				Log.Debug("ClientLauncher", "No launcher news URL configured; showing the built-in summary.");
+				this.view.SetNewsVisible(true);
+				this.view.SetNewsMessage(this.NewsFallbackSummary);
 			}
 			else
 			{
@@ -490,8 +417,13 @@ namespace FishMMO.Client
 						// Reporting this as "Connection Failed" would also mislead the player into
 						// thinking the game servers are down. If the network really is down, the
 						// version check reports that accurately on its own.
+						/* The player gets the summary rather than an error string. A feed that is
+						 * down is the operator's problem, not something the person trying to play
+						 * can act on, and an empty pane with an apology in it is worse than the
+						 * same pane carrying something worth reading. The reason still goes to
+						 * the log for whoever can actually fix it. */
 						Log.Warning("ClientLauncher", $"{UIText.ErrorLoadingNews}{error}");
-						this.view.SetNewsMessage(UIText.ErrorNoNewsContent);
+						this.view.SetNewsMessage(this.NewsFallbackSummary);
 					}));
 			}
 
@@ -609,10 +541,41 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Returns the view this launcher should render through: the assigned view component
-		/// when one implements <see cref="ILauncherView"/>, otherwise an adapter over the
-		/// legacy uGUI elements serialized on this component.
+		/// Whether a news URL is real, as opposed to absent or an unsubstituted build placeholder.
 		/// </summary>
+		/// <param name="url">The configured URL.</param>
+		/// <returns>True when a fetch is worth issuing.</returns>
+		/// <remarks>
+		/// <c>HostConfig.generated.cs</c> ships the URL as
+		/// <c>https://www.FISHMMO_SENTINEL_PLACEHOLDER_ROOT_DOMAIN/...</c>, and CI rewrites the
+		/// sentinel from FISHMMO_ROOT_DOMAIN at build time. In a working copy that substitution
+		/// has not happened, so the URL is non-empty but points at a host that cannot resolve —
+		/// the fetch fails and the launcher tells the developer "Could not display news content"
+		/// on every run, for a feed that was never configured.
+		///
+		/// An unsubstituted sentinel means the same thing as an empty string: no feed. Treating
+		/// them alike hides the pane instead of reporting a failure, and matches how
+		/// <c>ClientCertificatePinning</c> already screens sentinel values out of the pin set.
+		/// </remarks>
+		private static bool IsNewsUrlConfigured(string url)
+		{
+			if (string.IsNullOrWhiteSpace(url))
+			{
+				return false;
+			}
+			return !url.Contains(FishMMO.Client.Security.GeneratedPinSet.SentinelMarker);
+		}
+
+		/// <summary>
+		/// Returns the view this launcher renders through.
+		/// </summary>
+		/// <returns>The assigned view, or null when none is usable.</returns>
+		/// <remarks>
+		/// There is no longer a fallback. The uGUI adapter this used to drop back to rendered
+		/// through TextMeshPro, and both went with the UI Toolkit conversion — so a missing or
+		/// wrongly-typed assignment now means the launcher has no way to draw itself, and saying so
+		/// beats silently constructing a view over serialized fields that no longer exist.
+		/// </remarks>
 		private ILauncherView ResolveView()
 		{
 			if (this.launcherViewComponent is ILauncherView assigned)
@@ -622,27 +585,13 @@ namespace FishMMO.Client
 
 			if (this.launcherViewComponent != null)
 			{
-				Log.Error("ClientLauncher", $"Assigned launcher view '{this.launcherViewComponent.GetType().Name}' does not implement ILauncherView. Falling back to the uGUI view.");
+				Log.Error("ClientLauncher", $"Assigned launcher view '{this.launcherViewComponent.GetType().Name}' does not implement ILauncherView.");
 			}
-
-			// The size factor lives on the fetcher so the scene keeps its configured value.
-			// Guarded because this runs before the dependency check, on the path where the
-			// fetcher may be exactly what is missing.
-			float pxToTmpSizeFactor = this.htmlContentFetcher != null ? this.htmlContentFetcher.HtmlPxToTmpSizeFactor : 1.5f;
-
-			return new UGUILauncherView(
-				this.title,
-				this.htmlView,
-				this.progressBarGroup,
-				this.progressSlider,
-				this.progressText,
-				this.quitButton,
-				this.playButton,
-				this.playButtonText,
-				this.htmlText,
-				this.htmlTextLinkHandler,
-				this.statusText,
-				pxToTmpSizeFactor);
+			else
+			{
+				Log.Error("ClientLauncher", "No launcher view is assigned; the launcher cannot render.");
+			}
+			return null;
 		}
 
 		/// <summary>
@@ -1084,13 +1033,123 @@ namespace FishMMO.Client
 				return;
 			}
 
-			AddressableLoadProcessor.UnloadSceneByLabelAsync(LauncherSceneName);
+			/* Hidden before the unload is attempted, and independently of whether it succeeds.
+			 * The unload below only works when Addressables owns the scene; in the editor the
+			 * launcher scene is usually opened directly, so Addressables has no handle for it
+			 * and the call is a silent no-op — which left the launcher UI on screen behind the
+			 * login screen for the rest of the session.
+			 *
+			 * Unloading the scene is not what removes the UI either way. The launcher draws into
+			 * a panel owned by a PanelSettings asset shared with the login and world scenes, and
+			 * that panel outlives this scene, so the view has to detach itself. This call is the
+			 * one that does it; everything below is housekeeping. */
+			/* UnityEngine.Debug rather than FishMMO.Logging. Log.Initialize runs in
+			 * MainBootstrapSystem, which never executes when the editor opens ClientLauncher
+			 * directly through FishMMO/QuickStart — the console formatter is null on that path
+			 * and Log output does not reach the console at all. A diagnostic that only prints
+			 * on the entry path that already works is not a diagnostic. */
+			Debug.Log("[ClientLauncher] Hiding the launcher UI and unloading the launcher scene.");
+			this.view.SetVisible(false);
+
+			UnloadLauncherScene();
 
 			// Find the ClientPostbootSystem in the loaded scene and start its bootstrap process.
 			foreach (var rootGO in scene.GetRootGameObjects())
 			{
 				rootGO.GetComponent<ClientPostbootSystem>()?.StartBootstrap();
 			}
+		}
+
+		/// <summary>
+		/// Unloads the launcher scene, whichever way it was loaded.
+		/// </summary>
+		/// <remarks>
+		/// Addressables is asked first, because that is how a shipped build loads this scene and
+		/// its handle has to be released to free the bundle. It keeps its own dictionary of
+		/// scenes it loaded and does nothing for a scene missing from it, so the editor — where
+		/// the scene is opened directly or through the QuickStart menu — falls through to
+		/// <c>SceneManager</c>.
+		///
+		/// Unloading destroys this component, which is why nothing after the call may depend on
+		/// it; <c>UnloadSceneAsync</c> completes on a later frame, so the rest of the calling
+		/// method still runs.
+		/// </remarks>
+		private void UnloadLauncherScene()
+		{
+			AddressableLoadProcessor.UnloadSceneByLabelAsync(LauncherSceneName);
+
+			Scene launcherScene = SceneManager.GetSceneByName(LauncherSceneName);
+			if (!launcherScene.IsValid() || !launcherScene.isLoaded)
+			{
+				// Addressables already took it, or it was never a separate scene.
+				return;
+			}
+
+			/* Unloading the last remaining scene is an error in Unity, and would leave the client
+			 * with nothing loaded at all. The postboot scene is in by this point, so this is a
+			 * guard against an unexpected ordering rather than an expected branch. */
+			if (SceneManager.sceneCount <= 1)
+			{
+				Log.Warning("ClientLauncher",
+					$"{LauncherSceneName} is the only loaded scene; leaving it loaded and relying on the hidden UI.");
+				return;
+			}
+
+			/* Deactivated before the unload is requested. UnloadSceneAsync completes on a later
+			 * frame, and the login screen can finish loading inside that window — which is long
+			 * enough for the launcher to still be drawing over it. Deactivating the roots is
+			 * immediate and makes the unload's timing irrelevant. */
+			foreach (GameObject rootGO in launcherScene.GetRootGameObjects())
+			{
+				if (rootGO != null)
+				{
+					rootGO.SetActive(false);
+				}
+			}
+
+			Debug.Log($"[ClientLauncher] Unloading {LauncherSceneName} through SceneManager. Loaded scenes: {DescribeLoadedScenes()}");
+
+			/* The handle is kept and its outcome reported.
+			 *
+			 * UnloadSceneAsync returns null when Unity refuses the request outright rather than
+			 * throwing, and this one is issued from inside the postboot scene's own load
+			 * callback — the window in which Unity is least willing to start another scene
+			 * operation. A null went unnoticed before, so a launcher scene that was never going
+			 * to unload looked identical to one whose unload had simply not finished yet.
+			 *
+			 * Nothing on screen depends on the answer: the roots above are already deactivated
+			 * and the view has already detached itself from the shared UI panel. This reports
+			 * whether the scene also went away, which is the difference between a leak and a
+			 * visible launcher. */
+			AsyncOperation unload = SceneManager.UnloadSceneAsync(launcherScene);
+			if (unload == null)
+			{
+				Debug.LogError($"[ClientLauncher] SceneManager refused to unload {LauncherSceneName}. Its roots are deactivated, so it stays loaded but inert.");
+				return;
+			}
+
+			// Static-only body: the unload this waits on destroys the component that started it.
+			unload.completed += _ =>
+			{
+				Debug.Log($"[ClientLauncher] {LauncherSceneName} unload completed. Loaded scenes: {DescribeLoadedScenes()}");
+			};
+		}
+
+		/// <summary>
+		/// Comma-separated names of every currently loaded scene, for handoff diagnostics.
+		/// </summary>
+		/// <remarks>
+		/// Reported either side of the unload so the console shows whether the launcher scene
+		/// actually left, rather than only that an unload was requested.
+		/// </remarks>
+		private static string DescribeLoadedScenes()
+		{
+			string[] names = new string[SceneManager.sceneCount];
+			for (int i = 0; i < names.Length; ++i)
+			{
+				names[i] = SceneManager.GetSceneAt(i).name;
+			}
+			return string.Join(", ", names);
 		}
 
 		/// <summary>
@@ -1264,11 +1323,10 @@ namespace FishMMO.Client
 					 * still working through hosts. */
 					this.lastStateActivityTime = Time.realtimeSinceStartup;
 
-					/* Written to the button label rather than through SetStatus. On the uGUI
-					 * view a status message falls back to the progress label, which sits inside
-					 * the progress group this state hides — so the message would render to a
-					 * hidden object. The button label is the one status surface every view is
-					 * guaranteed to be showing here. */
+					/* Written to the button label rather than through SetStatus, because a
+					 * view is free to route status wherever it has room — including a surface
+					 * this state has hidden. The button label is the one status surface every
+					 * view is guaranteed to be showing here. */
 					if (candidates.Count > 1)
 					{
 						this.view.SetButtonText($"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})");

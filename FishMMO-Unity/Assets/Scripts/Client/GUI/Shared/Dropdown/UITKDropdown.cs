@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
@@ -8,10 +8,13 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit dropdown / context menu. Dynamically builds buttons and toggles and positions
-	/// itself at the mouse cursor. Mirrors the legacy UGUI <c>UIDropdown</c> API.
+	/// itself at the mouse cursor.
 	/// </summary>
 	public class UITKDropdown : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Popup;
+
 		/// <summary>
 		/// Name of the dropdown menu container element.
 		/// </summary>
@@ -37,6 +40,10 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
+			/* The dropdown dismisses itself when the pointer moves off it — no click required. */
+			OnLoseFocus -= Hide;
+			OnLoseFocus += Hide;
+
 			if (Root == null)
 			{
 				return;
@@ -57,6 +64,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
+			OnLoseFocus -= Hide;
 			if (Root != null)
 			{
 				Root.UnregisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -7,14 +7,28 @@ using FishMMO.Logging;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit options panel. Builds the screen/quality settings controls in code and binds
-	/// them directly to <see cref="Configuration.GlobalSettings"/>. This consolidates the legacy
-	/// UGUI <c>UIOptions</c> + <c>SettingOption</c> component graph into a single UITK control while
-	/// preserving every configuration key and apply behaviour verbatim.
-	/// Color settings (which require the color picker) are handled separately.
+	/// UI Toolkit options panel. Builds every settings control in code and binds it directly to
+	/// <see cref="Configuration.GlobalSettings"/>, rather than assembling the panel from a graph
+	/// of per-option components, so a configuration key cannot be lost by editing a scene.
 	/// </summary>
+	/// <remarks>
+	/// Three groups of settings live here:
+	///
+	/// • <b>Screen</b> — resolution, refresh rate, fullscreen, brightness, VSync.
+	///
+	/// • <b>Gameplay</b> — five toggles whose keys used to be set per GameObject in the scene
+	///   rather than in code. <c>ShowDamage</c> and <c>ShowHeals</c> are read live by
+	///   ClientCombatDisplay; the other three are stored for consumers that do not exist yet.
+	///
+	/// • <b>Colours</b> — the thirteen themeable colours, opened through the shared colour picker.
+	///   The values feed <see cref="UITKThemeManager"/> and are stored under the same config keys
+	///   the Canvas UI used, so a config written by an older client still applies.
+	/// </remarks>
 	public class UITKOptions : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Settings;
+
 		/// <summary>Name of the VSync toggle element in the UXML.</summary>
 		private const string VSYNC_TOGGLE_NAME = "vsync-toggle";
 		/// <summary>Name of the brightness slider element in the UXML.</summary>
@@ -27,6 +41,12 @@ namespace FishMMO.Client
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
 		/// <summary>Name of the close button element in the UXML.</summary>
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
+		/// <summary>Name of the container the gameplay toggles are built into.</summary>
+		private const string GAMEPLAY_LIST_NAME = "options-gameplay-list";
+		/// <summary>Name of the container the colour rows are built into.</summary>
+		private const string COLOR_LIST_NAME = "options-color-list";
+		/// <summary>Name of the button that clears every colour override.</summary>
+		private const string RESET_COLORS_NAME = "options-reset-colors-btn";
 
 		/// <summary>Configuration key for the VSync setting.</summary>
 		private const string VSyncKey = "VSync";
@@ -41,6 +61,45 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for the fullscreen mode setting.</summary>
 		private const string FullscreenKey = "Fullscreen";
 
+		/// <summary>
+		/// The gameplay toggles: configuration key paired with its player-facing label.
+		/// </summary>
+		/// <remarks>
+		/// The keys are ShowDamage, ShowHeals, IgnoreGuildInvites, IgnorePartyInvites and
+		/// ShowAchievements.
+		/// They are listed in code rather than authored per element so the set cannot be lost
+		/// again by editing a scene.
+		/// </remarks>
+		private static readonly (string Key, string Label, bool Default)[] GameplayToggles =
+		{
+			("ShowDamage",         "Show Damage Numbers",  true),
+			("ShowHeals",          "Show Healing Numbers", true),
+			("ShowAchievements",   "Show Achievement Popups", true),
+			("IgnorePartyInvites", "Ignore Party Invites", false),
+			("IgnoreGuildInvites", "Ignore Guild Invites", false),
+		};
+
+		/// <summary>
+		/// Player-facing labels for the themeable colours, indexed alongside
+		/// <see cref="UITKTheme.ColorNames"/>.
+		/// </summary>
+		private static readonly string[] ColorLabels =
+		{
+			"Panel Background",
+			"Slot Surface",
+			"Highlight",
+			"Window Background",
+			"Text",
+			"Health Bar",
+			"Mana Bar",
+			"Stamina Bar",
+			"Crosshair",
+			"Tooltip Title",
+			"Tooltip Label",
+			"Tooltip Value",
+			"Tooltip Stat",
+		};
+
 		/// <summary>The VSync toggle control.</summary>
 		private Toggle vsyncToggle;
 		/// <summary>The brightness slider control.</summary>
@@ -53,6 +112,14 @@ namespace FishMMO.Client
 		private DropdownField fullscreenDropdown;
 		/// <summary>The close button control.</summary>
 		private Button closeButton;
+		/// <summary>Container holding the generated gameplay toggles.</summary>
+		private VisualElement gameplayList;
+		/// <summary>Container holding the generated colour rows.</summary>
+		private VisualElement colorList;
+		/// <summary>Button that clears every colour override.</summary>
+		private Button resetColorsButton;
+		/// <summary>Swatch element for each colour row, indexed alongside UITKTheme.ColorNames.</summary>
+		private readonly VisualElement[] colorSwatches = new VisualElement[13];
 
 		/// <summary>
 		/// Refresh rate values (Hz) matching the entries in the refresh rate dropdown.
@@ -77,12 +144,17 @@ namespace FishMMO.Client
 			refreshRateDropdown = Root.Q<DropdownField>(REFRESHRATE_DROPDOWN_NAME);
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
 			closeButton = Root.Q<Button>(CLOSE_BUTTON_NAME);
+			gameplayList = Root.Q<VisualElement>(GAMEPLAY_LIST_NAME);
+			colorList = Root.Q<VisualElement>(COLOR_LIST_NAME);
+			resetColorsButton = Root.Q<Button>(RESET_COLORS_NAME);
 
 			InitializeVSync();
 			InitializeBrightness();
 			InitializeResolution();
 			InitializeRefreshRate();
 			InitializeFullscreen();
+			InitializeGameplayToggles();
+			InitializeColorSettings();
 
 			if (closeButton != null)
 			{
@@ -116,6 +188,208 @@ namespace FishMMO.Client
 #if !UNITY_EDITOR && !UNITY_WEBGL
 			Configuration.GlobalSettings.Save();
 #endif
+		}
+
+		/// <summary>
+		/// Builds one row per gameplay toggle and binds each to its configuration key.
+		/// </summary>
+		/// <remarks>
+		/// Rows are generated rather than authored in the UXML so the list and
+		/// <see cref="GameplayToggles"/> cannot drift apart — an earlier version kept its keys in
+		/// the scene, which is how all five were lost when the panel was rebuilt.
+		/// </remarks>
+		private void InitializeGameplayToggles()
+		{
+			if (gameplayList == null)
+			{
+				Log.Error("UITKOptions", "Gameplay settings container is missing.");
+				return;
+			}
+
+			gameplayList.Clear();
+
+			for (int i = 0; i < GameplayToggles.Length; ++i)
+			{
+				(string key, string label, bool fallback) = GameplayToggles[i];
+
+				VisualElement row = new VisualElement();
+				row.AddToClassList("options-row");
+
+				Label caption = new Label(label);
+				caption.AddToClassList("fish-label");
+				caption.AddToClassList("options-row-label");
+				row.Add(caption);
+
+				Toggle toggle = new Toggle { name = $"toggle-{key}" };
+				toggle.AddToClassList("fish-toggle");
+				toggle.AddToClassList("options-row-field");
+
+				Configuration.GlobalSettings.TryGetBool(key, out bool value, fallback);
+				toggle.value = value;
+
+				// Captured by value; the loop variable would otherwise be shared by every handler.
+				string capturedKey = key;
+				toggle.RegisterValueChangedCallback((evt) =>
+				{
+					Configuration.GlobalSettings.Set(capturedKey, evt.newValue);
+					SaveConfiguration();
+				});
+
+				row.Add(toggle);
+				gameplayList.Add(row);
+			}
+		}
+
+		/// <summary>
+		/// Builds one row per themeable colour, each opening the shared colour picker.
+		/// </summary>
+		private void InitializeColorSettings()
+		{
+			if (colorList == null)
+			{
+				Log.Error("UITKOptions", "Colour settings container is missing.");
+				return;
+			}
+
+			colorList.Clear();
+
+			for (int i = 0; i < UITKTheme.ColorNames.Length; ++i)
+			{
+				string name = UITKTheme.ColorNames[i];
+				string label = i < ColorLabels.Length ? ColorLabels[i] : name;
+
+				VisualElement row = new VisualElement();
+				row.AddToClassList("options-row");
+
+				Label caption = new Label(label);
+				caption.AddToClassList("fish-label");
+				caption.AddToClassList("options-row-label");
+				row.Add(caption);
+
+				VisualElement swatch = new VisualElement { name = $"swatch-{name}" };
+				swatch.AddToClassList("options-swatch");
+				colorSwatches[i] = swatch;
+				row.Add(swatch);
+
+				Button edit = new Button { text = "Change" };
+				edit.AddToClassList("fish-button");
+				edit.AddToClassList("options-swatch-btn");
+
+				string capturedName = name;
+				int capturedIndex = i;
+				edit.clicked += () => OpenColorPicker(capturedName, capturedIndex);
+				row.Add(edit);
+
+				colorList.Add(row);
+			}
+
+			if (resetColorsButton != null)
+			{
+				resetColorsButton.clicked += ResetColors;
+			}
+
+			RefreshSwatches();
+		}
+
+		/// <summary>
+		/// Opens the shared colour picker for one themeable colour.
+		/// </summary>
+		/// <param name="name">One of <see cref="UITKTheme.ColorNames"/>.</param>
+		/// <param name="index">Index of the colour, for updating its swatch.</param>
+		private void OpenColorPicker(string name, int index)
+		{
+			if (!UIManager.TryGetTK("UIColorPicker", out UITKColorPicker picker))
+			{
+				Log.Error("UITKOptions", "Colour picker is unavailable; cannot edit theme colours.");
+				return;
+			}
+
+			Color start = ResolveCurrent(name);
+			picker.Open(start, (chosen) =>
+			{
+				UITKTheme.Write(Configuration.GlobalSettings, name, chosen);
+				SaveConfiguration();
+
+				/* Reload rather than poking the one colour: the manager owns which USS classes a
+				 * colour maps onto, and re-reading configuration keeps this panel from having to
+				 * duplicate that mapping. */
+				UITKThemeManager.Reload();
+				RefreshSwatches();
+			});
+		}
+
+		/// <summary>
+		/// Clears every colour override, returning the UI to the stylesheet defaults.
+		/// </summary>
+		private void ResetColors()
+		{
+			for (int i = 0; i < UITKTheme.ColorNames.Length; ++i)
+			{
+				UITKTheme.Clear(Configuration.GlobalSettings, UITKTheme.ColorNames[i]);
+			}
+			SaveConfiguration();
+			UITKThemeManager.Reload();
+			RefreshSwatches();
+		}
+
+		/// <summary>
+		/// Reads the colour currently in force for a theme name.
+		/// </summary>
+		/// <param name="name">One of <see cref="UITKTheme.ColorNames"/>.</param>
+		/// <returns>The overridden colour, or white when none is set.</returns>
+		private static Color ResolveCurrent(string name)
+		{
+			UITKTheme theme = UITKThemeManager.Current;
+			if (theme == null || !theme.HasOverride(name))
+			{
+				return Color.white;
+			}
+
+			switch (name)
+			{
+				case "Primary":      return theme.Primary;
+				case "Secondary":    return theme.Secondary;
+				case "Highlight":    return theme.Highlight;
+				case "Background":   return theme.Background;
+				case "Text":         return theme.Text;
+				case "Health":       return theme.Health;
+				case "Mana":         return theme.Mana;
+				case "Stamina":      return theme.Stamina;
+				case "Crosshair":    return theme.Crosshair;
+				case "TooltipTitle": return theme.TooltipTitle;
+				case "TooltipLabel": return theme.TooltipLabel;
+				case "TooltipValue": return theme.TooltipValue;
+				case "TooltipStat":  return theme.TooltipStat;
+				default:             return Color.white;
+			}
+		}
+
+		/// <summary>
+		/// Repaints every colour swatch from the theme currently in force.
+		/// </summary>
+		private void RefreshSwatches()
+		{
+			UITKTheme theme = UITKThemeManager.Current;
+			for (int i = 0; i < colorSwatches.Length && i < UITKTheme.ColorNames.Length; ++i)
+			{
+				VisualElement swatch = colorSwatches[i];
+				if (swatch == null)
+				{
+					continue;
+				}
+
+				bool overridden = theme != null && theme.HasOverride(i);
+				if (overridden)
+				{
+					swatch.style.backgroundColor = ResolveCurrent(UITKTheme.ColorNames[i]);
+				}
+				else
+				{
+					// No override: let the stylesheet show the "unset" swatch appearance.
+					swatch.style.backgroundColor = StyleKeyword.Null;
+				}
+				swatch.EnableInClassList("options-swatch--unset", !overridden);
+			}
 		}
 
 		/// <summary>

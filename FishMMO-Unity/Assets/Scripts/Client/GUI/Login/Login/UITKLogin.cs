@@ -98,8 +98,8 @@ namespace FishMMO.Client
 		/// every result that arrived after that point — the <c>AccountVerified</c> that follows
 		/// a correct verification code, and the <c>LoginSuccess</c> or <c>TwoFactorInvalid</c>
 		/// that follows a TOTP code — so an account with 2FA enabled could enter the right code
-		/// and simply sit on the dialog forever. <see cref="UILogin"/> and
-		/// <see cref="UITKRegister"/> both use an explicit flag for exactly this reason.
+		/// and simply sit on the dialog forever. <see cref="UITKRegister"/> carries an explicit
+		/// flag of its own for exactly this reason.
 		/// </remarks>
 		private bool isAuthFlowActive;
 
@@ -492,9 +492,9 @@ namespace FishMMO.Client
 		private void OnVersionMismatch()
 		{
 			string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
-			// TryGetTK, not TryGet: every other dialog in this panel uses the UI Toolkit box,
-			// and a UI Toolkit scene has no UGUI UIDialogBox registered — so this lookup always
-			// failed and the player was disconnected with no explanation at all.
+			// Report the mismatch before forcing the disconnect. A bare disconnect here leaves
+			// the player staring at a login screen with no indication of why they were rejected,
+			// which is how this presented when the dialog lookup was silently failing.
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{
 				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
@@ -565,8 +565,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Shows the options panel. Options remains a reused UGUI overlay until its
-		/// SettingOption-driven settings subsystem is converted in a dedicated pass.
+		/// Shows the options panel, which lives in ClientPreboot and is therefore shared with
+		/// every scene loaded after it rather than owned by this one.
 		/// </summary>
 		public void OnClick_OnOptions()
 		{

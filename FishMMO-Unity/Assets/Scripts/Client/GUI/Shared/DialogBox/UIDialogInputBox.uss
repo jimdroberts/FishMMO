@@ -1,9 +1,15 @@
 /*
     UIDialogInputBox.uss
-    Additional layout for the input dialog (extends UIDialogBox.uss).
+    Additions on top of UIDialogBox.uss for the input variant.
 */
 
+/*
+    Sits under the prompt with room above it, so the sentence asking for the
+    value and the field taking it read as one unit rather than two stacked
+    controls.
+*/
 .dialog-input-field {
-    width: 100%;
-    margin-bottom: 16px;
+    height: 26px;
+    margin-top: 12px;
+    flex-shrink: 0;
 }

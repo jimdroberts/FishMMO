@@ -379,7 +379,7 @@ Shared/Core/Entity/Interactable/                # 16 core interfaces (IAbilityCr
 Shared/Implementation/Entity/Naming/             # SceneObjectNamer used by interactables
 Shared/Implementation/Entity/Spawner/            # ObjectSpawner that spawns/despawns interactables
 Server/Implementation/World/SceneServer/          # Server-side interaction handling systems
-Client/UI/Controls/World/                         # Client-side UI panels for each interaction type
+Client/GUI/World/                                 # Client-side UI Toolkit panels for each interaction type
 ```
 
 ## License

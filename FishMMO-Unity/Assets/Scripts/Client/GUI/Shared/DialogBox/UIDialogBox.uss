@@ -1,35 +1,75 @@
 /*
     UIDialogBox.uss
-    Layout for the modal confirmation dialog. Colours come from FishMMO-Theme.uss.
+    Layout for the shared dialog and input dialog. Colours come from
+    FishMMO-Theme.uss.
+
+    Header, message, actions. The header exists so a dialog that interrupts the
+    player says what kind of interruption it is before they read the sentence.
 */
 
+/*
+    A dimmed full-screen ground. A modal that does not dim what is behind it
+    reads as a floating window the player can ignore, which is the opposite of
+    what a dialog is for.
+*/
 .dialog-root {
-    flex-grow: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--overlay-dim);
 }
 
 .dialog-panel {
-    min-width: 320px;
+    min-width: 340px;
     max-width: 480px;
-    padding: 16px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.dialog-header {
+    flex-direction: row;
     align-items: center;
+    height: 34px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.dialog-header__icon {
+    width: 11px;
+    height: 11px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.dialog-body {
+    flex-direction: column;
+    padding: 16px;
 }
 
 .dialog-label {
     white-space: normal;
-    margin-bottom: 16px;
-    -unity-text-align: middle-center;
+    -unity-text-align: upper-left;
+    font-size: 12px;
 }
 
 .dialog-buttons {
     flex-direction: row;
-    justify-content: center;
+    align-items: center;
+    justify-content: flex-end;
+    height: 42px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
 }
 
 .dialog-button {
-    min-width: 96px;
-    margin-left: 8px;
-    margin-right: 8px;
+    min-width: 92px;
+    height: 26px;
+    margin-left: 6px;
+    flex-shrink: 0;
 }

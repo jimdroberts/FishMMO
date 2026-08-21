@@ -2,12 +2,22 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIDialogBox.uss" />
     <ui:VisualElement name="dialog-root" class="dialog-root">
-        <ui:VisualElement name="dialog-panel" class="fish-panel dialog-panel">
-            <ui:Label name="dialog-label" text="" class="fish-label dialog-label" />
-            <ui:VisualElement name="dialog-buttons" class="dialog-buttons">
-                <ui:Button name="dialog-accept-btn" text="Accept" class="fish-button dialog-button" />
+        <ui:VisualElement name="dialog-panel" class="fish-panel fish-panel--alert dialog-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header dialog-header">
+                <ui:VisualElement class="fish-panel__icon dialog-header__icon" />
+                <ui:Label name="dialog-title" text="NOTICE" class="fish-panel__title" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="dialog-body" class="dialog-body">
+                <ui:Label name="dialog-label" text="" class="fish-label fish-label--secondary dialog-label" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer dialog-buttons" >
+                <ui:Button name="dialog-accept-btn" text="Accept" class="fish-button fish-button--primary dialog-button" />
                 <ui:Button name="dialog-cancel-btn" text="Cancel" class="fish-button dialog-button" />
             </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

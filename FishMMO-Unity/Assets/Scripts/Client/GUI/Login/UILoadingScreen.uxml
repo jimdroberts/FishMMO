@@ -2,10 +2,19 @@
     <Style src="../FishMMO-Theme.uss" />
     <Style src="UILoadingScreen.uss" />
     <ui:VisualElement name="loading-root" class="loading-screen">
+
+        <!-- Full-bleed art behind everything; the sprite is assigned from C#. -->
         <ui:VisualElement name="loading-image" class="loading-image" />
-        <ui:Label name="loading-status" class="loading-status" text="" />
-        <ui:VisualElement name="loading-progress" class="loading-progress">
-            <ui:VisualElement name="loading-progress-fill" class="loading-progress__fill fish-bar__fill" />
+
+        <!-- The loading block sits together as one unit rather than pinned to the screen edge. -->
+        <ui:VisualElement name="loading-panel" class="loading-panel">
+            <ui:Label name="loading-status" class="loading-status" text="" />
+            <ui:VisualElement name="loading-progress" class="fish-bar loading-progress">
+                <ui:VisualElement name="loading-progress-fill" class="fish-bar__fill loading-progress__fill" />
+                <ui:Label name="loading-progress-text" class="fish-bar__label loading-progress__text" text="" />
+            </ui:VisualElement>
+            <ui:Label name="loading-hint" class="fish-hint loading-hint" text="" />
         </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

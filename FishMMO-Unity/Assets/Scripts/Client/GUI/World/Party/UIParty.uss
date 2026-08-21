@@ -1,79 +1,166 @@
 /*
     UIParty.uss
     Layout for the party panel. Colours come from FishMMO-Theme.uss.
+
+    The panel is a roster: a header carrying the party's identity and size, a
+    column strip naming what each field is, the member rows themselves, and a
+    footer of actions. The column strip matters more here than in most lists —
+    a health bar with no caption over it is just a coloured rectangle.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner. Left-centre matches where the uGUI party panel sat.
+*/
 .party-panel {
-    width: 240px;
-    height: 300px;
+    position: absolute;
+    left: 2%;
+    top: 50%;
+    translate: 0 -50%;
+    width: 260px;
+    max-height: 60%;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
+/* ── Header ─────────────────────────────────────────────── */
+
 .party-header {
-    height: 28px;
-    padding-left: 8px;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
+
+.party-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.party-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.party-count {
+    min-width: 34px;
+    height: 16px;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-shrink: 0;
+}
+
+/* ── Column strip ───────────────────────────────────────── */
+
+.party-columns {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    padding-left: 12px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.party-col--name   { flex-grow: 1; }
+.party-col--rank   { width: 54px; }
+.party-col--health { width: 62px; -unity-text-align: middle-right; }
+
+/* ── Body ───────────────────────────────────────────────── */
 
 .party-scroll {
     flex-grow: 1;
-    padding: 4px;
+    min-height: 60px;
 }
 
 .party-member-list {
     flex-direction: column;
 }
 
+/*
+    One roster row. The theme's .fish-row supplies the hover state and the
+    leading accent rail; this only sets the geometry.
+*/
 .party-member {
     flex-direction: row;
     align-items: center;
-    height: 24px;
-    padding-left: 4px;
-    padding-right: 4px;
-    border-radius: 4px;
-}
-
-.party-member:hover {
-    background-color: rgb(28, 31, 34);
+    height: 26px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
 }
 
 .party-member__name {
     flex-grow: 1;
-    font-size: 11px;
-    -unity-text-align: middle-left;
-    color: rgb(200, 205, 214);
+    overflow: hidden;
 }
 
 .party-member__rank {
-    width: 14px;
-    font-size: 12px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-    color: rgb(255, 173, 118);
+    width: 54px;
+    flex-shrink: 0;
 }
 
+/* Inset track; the fill inside it is driven from C#. */
 .party-member__health {
-    width: 70px;
+    width: 62px;
     height: 8px;
-    margin-left: 6px;
+    flex-shrink: 0;
 }
 
 .party-member__health-fill {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    height: 100%;
     width: 100%;
-    border-radius: 3px;
 }
+
+.party-empty {
+    margin-top: 18px;
+    margin-bottom: 18px;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
 
 .party-footer {
     flex-direction: row;
-    height: 30px;
-    padding: 4px;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
 
 .party-action {
     flex-grow: 1;
-    margin-right: 3px;
-    font-size: 10px;
+    height: 22px;
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+/* Shared caption sizing; the --name/--rank/--health modifiers set the widths. */
+.party-col {
+    flex-shrink: 0;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.party-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.party-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

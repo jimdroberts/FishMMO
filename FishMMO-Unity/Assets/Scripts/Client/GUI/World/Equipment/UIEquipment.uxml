@@ -70,7 +70,7 @@
             <ui:VisualElement name="column-left" class="eq-col">
 
                 <ui:VisualElement name="slot-head" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Head" />
                     <ui:Label         name="amount-head"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -81,7 +81,7 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement name="slot-chest" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Chest" />
                     <ui:Label         name="amount-chest"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -92,7 +92,7 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement name="slot-legs" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Legs" />
                     <ui:Label         name="amount-legs"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -103,7 +103,7 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement name="slot-feet" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Feet" />
                     <ui:Label         name="amount-feet"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -141,7 +141,7 @@
                 <ui:VisualElement name="center-slots" class="eq-center-slots">
 
                     <ui:VisualElement name="slot-neck" class="fish-slot eq-slot">
-                        <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                        <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                         <ui:Label         class="fish-slot__label eq-slot__label" text="Neck" />
                         <ui:Label         name="amount-neck"
                                           class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -150,7 +150,7 @@
                     </ui:VisualElement>
 
                     <ui:VisualElement name="slot-back" class="fish-slot eq-slot">
-                        <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                        <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                         <ui:Label         class="fish-slot__label eq-slot__label" text="Back" />
                         <ui:Label         name="amount-back"
                                           class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -159,7 +159,7 @@
                     </ui:VisualElement>
 
                     <ui:VisualElement name="slot-ring" class="fish-slot eq-slot">
-                        <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                        <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                         <ui:Label         class="fish-slot__label eq-slot__label" text="Ring" />
                         <ui:Label         name="amount-ring"
                                           class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -176,7 +176,7 @@
             <ui:VisualElement name="column-right" class="eq-col">
 
                 <ui:VisualElement name="slot-shoulders" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Shldr" />
                     <ui:Label         name="amount-shoulders"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -187,7 +187,7 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement name="slot-hands" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Hands" />
                     <ui:Label         name="amount-hands"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -198,7 +198,7 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement name="slot-mainhand" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Main" />
                     <ui:Label         name="amount-mainhand"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />
@@ -209,7 +209,7 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement name="slot-offhand" class="fish-slot eq-slot">
-                    <ui:VisualElement class="fish-slot__icon  eq-slot__icon" />
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                     <ui:Label         class="fish-slot__label eq-slot__label" text="Off" />
                     <ui:Label         name="amount-offhand"
                                       class="fish-slot__amount eq-slot__amount eq-hidden" />

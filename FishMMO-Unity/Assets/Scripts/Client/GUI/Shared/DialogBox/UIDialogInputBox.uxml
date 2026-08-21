@@ -3,13 +3,23 @@
     <Style src="UIDialogBox.uss" />
     <Style src="UIDialogInputBox.uss" />
     <ui:VisualElement name="dialog-input-root" class="dialog-root">
-        <ui:VisualElement name="dialog-input-panel" class="fish-panel dialog-panel">
-            <ui:Label name="dialog-input-label" text="" class="fish-label dialog-label" />
-            <ui:TextField name="dialog-input-field" class="fish-input dialog-input-field" />
-            <ui:VisualElement name="dialog-input-buttons" class="dialog-buttons">
-                <ui:Button name="dialog-input-accept-btn" text="Accept" class="fish-button dialog-button" />
+        <ui:VisualElement name="dialog-input-panel" class="fish-panel fish-panel--alert dialog-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header dialog-header">
+                <ui:VisualElement class="fish-panel__icon dialog-header__icon" />
+                <ui:Label name="dialog-input-title" text="INPUT REQUIRED" class="fish-panel__title" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="dialog-body" class="dialog-body">
+                <ui:Label name="dialog-input-label" text="" class="fish-label fish-label--secondary dialog-label" />
+                <ui:TextField name="dialog-input-field" class="fish-input dialog-input-field" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer dialog-buttons">
+                <ui:Button name="dialog-input-accept-btn" text="Accept" class="fish-button fish-button--primary dialog-button" />
                 <ui:Button name="dialog-input-cancel-btn" text="Cancel" class="fish-button dialog-button" />
             </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

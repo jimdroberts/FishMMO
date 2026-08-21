@@ -3,19 +3,26 @@
     <Style src="UIOptions.uss" />
     <ui:VisualElement name="options-root" class="options-root">
         <ui:VisualElement name="options-panel" class="fish-panel options-panel">
-            <ui:Label text="Options" class="fish-label options-title" />
-            <ui:ScrollView name="options-scroll" class="options-scroll">
+            <ui:VisualElement name="panel-header" class="fish-panel__header options-header">
+                <ui:VisualElement class="fish-panel__icon options-header__icon" />
+                <ui:Label text="OPTIONS" class="fish-panel__title" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="options-scroll" class="fish-scroll options-scroll">
+
+                <!-- ── Screen ───────────────────────────────────── -->
+                <ui:Label text="SCREEN" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Resolution" class="fish-label options-row-label" />
-                    <ui:DropdownField name="resolution-dropdown" class="options-row-field" />
+                    <ui:DropdownField name="resolution-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Refresh Rate" class="fish-label options-row-label" />
-                    <ui:DropdownField name="refreshrate-dropdown" class="options-row-field" />
+                    <ui:DropdownField name="refreshrate-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Fullscreen" class="fish-label options-row-label" />
-                    <ui:DropdownField name="fullscreen-dropdown" class="options-row-field" />
+                    <ui:DropdownField name="fullscreen-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Brightness" class="fish-label options-row-label" />
@@ -23,10 +30,26 @@
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="VSync" class="fish-label options-row-label" />
-                    <ui:Toggle name="vsync-toggle" class="options-row-field" />
+                    <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
                 </ui:VisualElement>
+
+                <!-- ── Gameplay ─────────────────────────────────── -->
+                <!-- Rows are built by UITKOptions from its GameplayToggles table. -->
+                <ui:Label text="GAMEPLAY" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-gameplay-list" class="options-list" />
+
+                <!-- ── Colours ──────────────────────────────────── -->
+                <!-- Rows are built by UITKOptions from UITKTheme.ColorNames. -->
+                <ui:Label text="COLOURS" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-color-list" class="options-list" />
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="options-reset-colors-btn" text="Reset All Colours"
+                               class="fish-button options-reset-btn" />
+                </ui:VisualElement>
+
             </ui:ScrollView>
-            <ui:VisualElement name="options-footer" class="options-footer">
+
+            <ui:VisualElement name="options-footer" class="fish-panel__footer options-footer">
                 <ui:Button name="options-close-btn" text="Close" class="fish-button options-action" />
             </ui:VisualElement>
         </ui:VisualElement>

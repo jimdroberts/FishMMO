@@ -4,7 +4,6 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using TMPro;
 #if !UNITY_SERVER
 using FishNet.Component.Animating;
 #endif
@@ -112,17 +111,17 @@ namespace FishMMO.Shared
 		}
 
 		[SerializeField]
-		private TextMeshPro characterNameLabel;
+		private WorldLabel characterNameLabel;
 		/// <summary>
-		/// The TextMeshPro label displaying the character's name above their model.
+		/// The label displaying the character's name above their model.
 		/// </summary>
-		public TextMeshPro CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
+		public WorldLabel CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
 		[SerializeField]
-		private TextMeshPro characterGuildLabel;
+		private WorldLabel characterGuildLabel;
 		/// <summary>
-		/// The TextMeshPro label displaying the character's guild above their model.
+		/// The label displaying the character's guild above their model.
 		/// </summary>
-		public TextMeshPro CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
+		public WorldLabel CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
 
 		[SerializeField]
 		private Transform meshRoot;

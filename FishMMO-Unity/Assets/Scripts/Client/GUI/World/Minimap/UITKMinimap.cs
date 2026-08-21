@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -12,6 +12,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKMinimap : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>Name of the minimap view element in the UXML.</summary>
 		private const string MINIMAP_VIEW_NAME = "minimap-view";
 

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -7,10 +7,8 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit achievements panel. Replaces the legacy UGUI <see cref="UIAchievements"/> /
-	/// <see cref="UIAchievementCategory"/> / <see cref="UIAchievementDescription"/>: renders achievement
-	/// category buttons and, for the selected category, each achievement's icon, description, progress bar,
-	/// and value.
+	/// UI Toolkit achievements panel. Renders achievement category buttons and, for the selected
+	/// category, each achievement's icon, description, progress bar, and value.
 	/// </summary>
 	public class UITKAchievements : UITKCharacterControl
 	{
@@ -85,6 +83,13 @@ namespace FishMMO.Client
 
 			categoryList = root.Q(CATEGORY_LIST_NAME);
 			descriptionList = root.Q(DESC_LIST_NAME);
+			BindListChrome(
+				descriptionList,
+				root.Q<Label>("achievement-count"),
+				root.Q<Label>("achievement-subtitle"),
+				root.Q<Label>("achievement-empty"),
+				"achievement",
+				"achievements");
 
 			OnSetCharacter += CharacterControl_OnSetCharacter;
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;

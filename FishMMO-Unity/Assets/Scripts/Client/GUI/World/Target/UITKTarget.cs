@@ -8,12 +8,15 @@ using UnityEngine.UIElements;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit target frame. Replaces the legacy UGUI <see cref="UITarget"/>: shows the current
-	/// target's name (faction-coloured), a health fill, and a strip of the target's buff/debuff icons.
-	/// The overhead 3D label / outline / faction logic is rendering-agnostic and preserved verbatim.
+	/// UI Toolkit target frame. Shows the current target's name (faction-coloured), a health fill,
+	/// and a strip of the target's buff/debuff icons. The overhead 3D label, outline and faction
+	/// colouring are rendering-agnostic and driven from here rather than from the visual tree.
 	/// </summary>
 	public class UITKTarget : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>Name of the target name label element.</summary>
 		private const string NAME_LABEL_NAME = "target-name";
 
@@ -63,7 +66,7 @@ namespace FishMMO.Client
 		private VisualElement buffList;
 
 		/// <summary>Overhead 3D label displayed above the target.</summary>
-		private Cached3DLabel targetLabel;
+		private UITKWorldLabel targetLabel;
 		/// <summary>Maps buff template IDs to their associated visual elements.</summary>
 		private readonly Dictionary<int, TargetBuffView> targetBuffs = new Dictionary<int, TargetBuffView>();
 		/// <summary>Scratch set used to track stale buff keys during refresh.</summary>
@@ -134,7 +137,7 @@ namespace FishMMO.Client
 				targetController.OnUpdateTarget -= TargetController_OnUpdateTarget;
 				targetController.OnClearTarget -= TargetController_OnClearTarget;
 
-				LabelMaker.Cache(targetLabel);
+				UITKLabelMaker.Cache(targetLabel);
 				targetLabel = null;
 			}
 		}
@@ -263,7 +266,7 @@ namespace FishMMO.Client
 
 			if (targetLabel != null)
 			{
-				LabelMaker.Cache(targetLabel);
+				UITKLabelMaker.Cache(targetLabel);
 				targetLabel = null;
 			}
 
@@ -422,7 +425,7 @@ namespace FishMMO.Client
 		{
 			if (targetLabel != null)
 			{
-				LabelMaker.Cache(targetLabel);
+				UITKLabelMaker.Cache(targetLabel);
 				targetLabel = null;
 			}
 
@@ -471,7 +474,7 @@ namespace FishMMO.Client
 					}
 				}
 
-				targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+				targetLabel = UITKLabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
 			}
 		}
 	}

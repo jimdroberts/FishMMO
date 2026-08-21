@@ -8,25 +8,32 @@
                 <ui:VisualElement name="launcher-logo" class="launcher-logo" />
                 <ui:Label name="launcher-title" text="FishMMO" class="fish-panel__title" />
                 <ui:VisualElement class="launcher-header-spacer" />
-                <ui:Button name="launcher-settings-btn" text="Settings" class="fish-tab launcher-header-btn" />
+                <ui:Button name="launcher-settings-btn" text="Settings" class="fish-button launcher-header-btn" />
             </ui:VisualElement>
             <ui:VisualElement name="launcher-hero" class="launcher-hero" />
             <ui:ScrollView name="launcher-news-scroll" class="fish-scroll launcher-news-scroll">
                 <ui:VisualElement name="launcher-news" class="launcher-news" />
             </ui:ScrollView>
             <ui:ScrollView name="launcher-settings" class="fish-scroll launcher-settings fish-hidden">
+                <!--
+                    No low-value/high-value here on purpose. UITKClientLauncher writes both from
+                    the LauncherSettings constants at bind time, which are the same bounds the
+                    setting clamps against on read and write. Literals here would be a second
+                    copy that drifts: raise a cap in code and the slider silently keeps refusing
+                    values the setting now accepts.
+                -->
                 <ui:Label text="DOWNLOAD" class="fish-attr-category launcher-settings-heading" />
-                <ui:Toggle name="launcher-setting-autoupdate" label="Download updates automatically" class="launcher-setting" />
-                <ui:SliderInt name="launcher-setting-timeout" label="Request timeout (s)" low-value="5" high-value="300" show-input-field="true" class="launcher-setting" />
-                <ui:SliderInt name="launcher-setting-retries" label="Retry attempts" low-value="0" high-value="10" show-input-field="true" class="launcher-setting" />
-                <ui:Slider name="launcher-setting-retrydelay" label="Retry delay (s)" low-value="0" high-value="30" show-input-field="true" class="launcher-setting" />
+                <ui:Toggle name="launcher-setting-autoupdate" label="Download updates automatically" class="fish-toggle launcher-setting" />
+                <ui:SliderInt name="launcher-setting-timeout" label="Request timeout (s)" show-input-field="true" class="fish-slider launcher-setting" />
+                <ui:SliderInt name="launcher-setting-retries" label="Retry attempts" show-input-field="true" class="fish-slider launcher-setting" />
+                <ui:Slider name="launcher-setting-retrydelay" label="Retry delay (s)" show-input-field="true" class="fish-slider launcher-setting" />
                 <ui:Label name="launcher-settings-note" text="" class="launcher-settings-note" />
                 <ui:Label text="STORAGE" class="fish-attr-category launcher-settings-heading launcher-settings-heading--spaced" />
                 <ui:Label name="launcher-install-path" text="" class="launcher-settings-note launcher-path" />
                 <ui:Label name="launcher-disk-size" text="Installation size: measuring..." class="launcher-settings-note" />
                 <ui:VisualElement name="launcher-patchdir-row" class="launcher-patchdir-row">
-                    <ui:TextField name="launcher-setting-patchdir" label="Patch download folder" class="launcher-setting launcher-patchdir-field" />
-                    <ui:Button name="launcher-patchdir-browse" text="Browse..." class="fish-tab launcher-browse-btn" />
+                    <ui:TextField name="launcher-setting-patchdir" label="Patch download folder" class="fish-input launcher-setting launcher-patchdir-field" />
+                    <ui:Button name="launcher-patchdir-browse" text="Browse..." class="fish-button launcher-browse-btn" />
                 </ui:VisualElement>
                 <ui:Label name="launcher-patchdir-note" text="" class="launcher-settings-note" />
             </ui:ScrollView>
@@ -38,9 +45,15 @@
                     </ui:VisualElement>
                     <ui:Label name="launcher-progress-text" text="" class="launcher-progress-text" />
                 </ui:VisualElement>
+                <!--
+                    Quit far left, Play far right, separated by the whole width of the panel.
+                    The affirmative action sits where the eye and the cursor finish, and the
+                    destructive one is far enough away that neither is hit by accident.
+                -->
                 <ui:VisualElement name="launcher-buttons" class="launcher-buttons">
-                    <ui:Button name="launcher-play-btn" text="Connect" class="fish-tab launcher-btn launcher-btn--primary" />
-                    <ui:Button name="launcher-quit-btn" text="Quit" class="fish-tab launcher-btn" />
+                    <ui:Button name="launcher-quit-btn" text="Quit" class="fish-button launcher-btn launcher-btn--quit" />
+                    <ui:VisualElement class="launcher-buttons__spacer" />
+                    <ui:Button name="launcher-play-btn" text="Connect" class="fish-button launcher-btn launcher-btn--primary" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -1,14 +1,17 @@
-using System;
+﻿using System;
 using UnityEngine.UIElements;
 
 namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit input dialog. Shows a message with a text field and accept/cancel buttons,
-	/// invoking a callback with the entered text. Mirrors the legacy UGUI <c>UIDialogInputBox</c> API.
+	/// invoking a callback with the entered text.
 	/// </summary>
 	public class UITKDialogInputBox : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Modal;
+
 		/// <summary>
 		/// Name of the dialog message label element.
 		/// </summary>

@@ -1,14 +1,17 @@
-using System;
+﻿using System;
 using UnityEngine.UIElements;
 
 namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit confirmation dialog. Shows a message with accept/cancel buttons and
-	/// invokes optional callbacks. Mirrors the legacy UGUI <c>UIDialogBox</c> API.
+	/// invokes optional callbacks.
 	/// </summary>
 	public class UITKDialogBox : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Modal;
+
 		/// <summary>
 		/// Name of the dialog message label element.
 		/// </summary>
@@ -117,7 +120,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// For content that updates while the box stays on screen — a queue position counting
 		/// down, say. Going through <see cref="Open"/> for that would re-evaluate the buttons
-		/// and re-Show on every tick. Mirrors the UGUI <c>UIDialogBox.SetText</c>.
+		/// and re-Show on every tick.
 		/// </remarks>
 		/// <param name="text">The new message.</param>
 		public void SetText(string text)
@@ -138,7 +141,7 @@ namespace FishMMO.Client
 			/* Cleared before invoking, not after. These outlive the dialog otherwise: Hide()
 			 * only switches the panel off, so anything that shows it again without going
 			 * through Open — and these callbacks do things like quit to login — would fire the
-			 * previous dialog's answer. The UGUI UIDialogBox clears for the same reason. */
+			 * previous dialog's answer. */
 			onAcceptCallback = null;
 			onCancelCallback = null;
 

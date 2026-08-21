@@ -434,7 +434,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private void HandleAutoDismiss()
 		{
-			if (!PlayerInputController.ForcedMouseMode && !UIManager.CloseNext(true))
+			/* Asks whether any visible panel needs the cursor, rather than whether anything is
+			 * Escape-closable. Those are different questions, and conflating them meant a panel
+			 * could only keep the cursor by also agreeing to be closed with Escape. */
+			if (!PlayerInputController.ForcedMouseMode && !UIManager.AnyCursorReleasingVisible())
 			{
 				if (PlayerInputController.MouseMode)
 				{
@@ -479,7 +482,7 @@ namespace FishMMO.Client
 
 			long targetCharacterID = targetPlayer.ID;
 
-			if (!UIManager.TryGet("UIContextMenu", out UIContextMenu contextMenu))
+			if (!UIManager.TryGetTK("UIContextMenu", out UITKContextMenu contextMenu))
 			{
 				return;
 			}
@@ -489,7 +492,7 @@ namespace FishMMO.Client
 			var entries = new List<(string label, Action callback)>();
 			entries.Add(("Inspect", new Action(() =>
 			{
-				if (UIManager.TryGet("UIInspect", out UIInspect uiInspect))
+				if (UIManager.TryGetTK("UIInspect", out UITKInspect uiInspect))
 				{
 					uiInspect.Inspect(capturedTarget);
 				}
@@ -658,18 +661,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{
-			/* UI Toolkit first, then the legacy panel. The two live in separate registries and
-			 * are unrelated types, so a name lookup only ever finds one of them — and once a
-			 * panel is migrated and its UGUI twin deactivated, a UGUI-only lookup silently
-			 * returns false and the keybind does nothing at all. */
-			if (UIManager.TryGetTK("UIChat", out UITKChat tkChat))
+			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
 			{
-				tkChat.EnableChatInput();
-				return;
-			}
-			if (UIManager.TryGet("UIChat", out UIChat uiChat))
-			{
-				uiChat.EnableChatInput();
+				chat.EnableChatInput();
 			}
 		}
 
@@ -679,17 +673,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
-			// See OnChatPerformed for why both registries are consulted.
-			if (UIManager.TryGetTK("UIEquipment", out UITKEquipment tkEquipment))
+			if (UIManager.TryGetTK("UIEquipment", out UITKEquipment equipment))
 			{
-				tkEquipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
-				tkEquipment.ToggleVisibility();
-				return;
-			}
-			if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
-			{
-				uiEquipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
-				uiEquipment.ToggleVisibility();
+				equipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
+				equipment.ToggleVisibility();
 			}
 		}
 

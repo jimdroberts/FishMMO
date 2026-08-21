@@ -1,50 +1,116 @@
 /*
     UIDungeonFinder.uss
-    Layout only — colours come from FishMMO-Theme.uss (.fish-panel, .fish-label, .fish-button).
+    Layout for the dungeon finder. Colours come from FishMMO-Theme.uss.
+
+    A preview image over a description, with the one action in a footer. The
+    image sits in a .fish-well so an unset preview reads as an empty frame
+    rather than a hole in the panel.
 */
 
 .dungeonfinder-root {
-    flex-grow: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
     align-items: center;
     justify-content: center;
+    background-color: var(--overlay-soft);
 }
 
 .dungeonfinder-panel {
-    width: 320px;
-    padding: 10px;
+    width: 360px;
     flex-direction: column;
+    flex-shrink: 0;
 }
 
 .dungeonfinder-header {
     flex-direction: row;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 7px;
+    flex-shrink: 0;
 }
 
-.dungeonfinder-title {
-    font-size: 16px;
-    -unity-font-style: bold;
+.dungeonfinder-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
 }
 
 .dungeonfinder-close-btn {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
 }
 
+.dungeonfinder-body {
+    flex-direction: column;
+    padding: 10px;
+}
+
+/*
+    16:9, so a dungeon splash drops in without letterboxing. The label behind
+    it shows through only while no image is assigned.
+*/
 .dungeonfinder-image {
-    height: 160px;
-    margin-bottom: 8px;
-    -unity-background-scale-mode: scale-to-fit;
-    background-color: rgba(0, 0, 0, 0.35);
+    height: 150px;
+    align-items: center;
+    justify-content: center;
+    -unity-background-scale-mode: scale-and-crop;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-image__label {
+    flex-grow: 0;
 }
 
 .dungeonfinder-description {
+    margin-top: 10px;
     white-space: normal;
-    margin-bottom: 10px;
-    -unity-text-align: upper-center;
+    -unity-text-align: upper-left;
+    min-height: 46px;
+}
+
+.dungeonfinder-footer {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
 }
 
 .dungeonfinder-start-btn {
-    height: 32px;
+    flex-grow: 1;
+    height: 28px;
+}
+
+/* Title inside the header's stacked title block. */
+.dungeonfinder-title {
+    flex-shrink: 0;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.dungeonfinder-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

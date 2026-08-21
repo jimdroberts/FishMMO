@@ -3,15 +3,27 @@
     Layout for the achievements panel. Colours come from FishMMO-Theme.uss.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
+    root with a size but no position resolves to the top-left corner — with the uGUI layer
+    gone, every one of these panels stacked there on top of each other. The values restore
+    where the panel sat in the uGUI scene, expressed as percentages so they hold at any
+    aspect ratio. Dragging overwrites left/top, which is why position is absolute here.
+*/
 .achievement-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
     width: 420px;
     height: 460px;
 }
 
 .achievement-header {
-    height: 28px;
-    padding-left: 8px;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
 
 .achievement-categories {
@@ -41,7 +53,7 @@
     padding: 6px;
     margin-bottom: 4px;
     border-radius: 4px;
-    background-color: rgb(20, 22, 24);
+    background-color: var(--abyss-800);
 }
 
 .achievement-desc__icon {
@@ -59,7 +71,7 @@
 .achievement-desc__label {
     white-space: normal;
     font-size: 12px;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
     margin-bottom: 4px;
 }
 
@@ -86,5 +98,58 @@
     font-size: 9px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-    color: rgb(255, 255, 255);
+    color: var(--white);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER AND EMPTY STATE
+   ═══════════════════════════════════════════════════════════ */
+
+.achievement-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.achievement-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.achievement-count {
+    min-width: 24px;
+    height: 16px;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+/*
+    Shown when the list behind it has nothing in it. A blank scroll area reads
+    as a panel that failed to load; a sentence reads as a panel that loaded and
+    found nothing.
+*/
+.achievement-empty {
+    margin-top: 22px;
+    margin-bottom: 22px;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.achievement-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.achievement-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

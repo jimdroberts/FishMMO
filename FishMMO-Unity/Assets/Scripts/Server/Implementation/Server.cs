@@ -386,21 +386,21 @@ namespace FishMMO.Server.Implementation
 					string problem = result.DescribeProblem();
 					if (problem == null)
 					{
-						Log.Debug("Server", "Database schema matches the entity model.");
+						_ = Log.Debug("Server", "Database schema matches the entity model.");
 					}
 					else if (result.UnavailableReason != null)
 					{
-						Log.Warning("Server", problem);
+						_ = Log.Warning("Server", problem);
 					}
 					else
 					{
-						Log.Error("Server", problem);
+						_ = Log.Error("Server", problem);
 					}
 				}
 				catch (Exception ex)
 				{
 					// A diagnostic must never be the thing that takes a server down.
-					Log.Warning("Server", $"Database schema check threw and was skipped: {ex.Message}");
+					_ = Log.Warning("Server", $"Database schema check threw and was skipped: {ex.Message}");
 				}
 			});
 		}
