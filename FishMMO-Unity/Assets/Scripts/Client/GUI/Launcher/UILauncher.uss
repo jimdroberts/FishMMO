@@ -141,6 +141,23 @@
     color: rgb(138, 147, 162);
 }
 
+/*
+    Sliders with show-input-field draw their value box from Unity's default theme, which
+    assumes a light panel — pale fill, pale text — and is close to unreadable against this
+    one. Both the field wrapper and its inner input are restyled: the wrapper is what the
+    layout sees, but the input element is what actually paints the background.
+*/
+.launcher-setting .unity-base-slider__text-field,
+.launcher-setting .unity-base-slider__text-field > .unity-base-text-field__input {
+    background-color: rgb(18, 20, 23);
+    border-color: rgb(58, 64, 74);
+    color: rgb(214, 219, 228);
+}
+
+.launcher-setting .unity-base-slider__text-field {
+    min-width: 46px;
+}
+
 .launcher-settings-heading--spaced {
     margin-top: 10px;
 }
