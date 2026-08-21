@@ -71,6 +71,33 @@ namespace FishMMO.Shared
 		private float nextTick = 0.0f;
 
 		/// <summary>
+		/// The transform this controller last told its subscribers was the target.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This exists because <c>Current.Target != Last.Target</c> cannot detect a target that
+		/// was destroyed. <see cref="Transform"/> derives from <see cref="UnityEngine.Object"/>,
+		/// whose <c>==</c> is overloaded to report a destroyed native object as equal to
+		/// <c>null</c>. When the target dies and despawns, <c>Last.Target</c> holds a live C#
+		/// reference to a destroyed object ("fake null") and <c>Current.Target</c> is a real
+		/// <c>null</c> — so the overloaded <c>!=</c> compares two things that both answer "I am
+		/// null" and returns <b>false</b>. Neither the change branch nor the update branch fired:
+		/// the frame stayed on the corpse, <c>onTargetClearTriggers</c> never ran, and the
+		/// overhead label was never released.
+		/// </para>
+		/// <para>
+		/// Keeping the last-reported transform in a plain field and comparing it with
+		/// <see cref="object.ReferenceEquals"/> restores the distinction the overload erases:
+		/// reference identity does not care whether the native object behind it is still alive,
+		/// so "was a transform, now nothing" is visible as the reference change it actually is.
+		/// The Unity-semantics test is still used — deliberately — to normalise a destroyed
+		/// target into a real null before it is stored, so the destruction is reported exactly
+		/// once instead of on every tick thereafter.
+		/// </para>
+		/// </remarks>
+		private Transform lastReportedTarget;
+
+		/// <summary>
 		/// Called when the object is being destroyed. Clears target events and resets state.
 		/// </summary>
 		public override void OnDestroying()
@@ -80,6 +107,7 @@ namespace FishMMO.Shared
 			OnClearTarget = null;
 			Last = default;
 			Current = default;
+			lastReportedTarget = null;
 		}
 
 		/// <summary>
@@ -105,26 +133,46 @@ namespace FishMMO.Shared
 
 				UpdateTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
 
+				/* Normalised through Unity's overloaded == on purpose: a destroyed transform
+				 * answers "I am null" here, which is exactly the collapse we want on the way IN.
+				 * The comparison below then uses reference identity, which is the only test that
+				 * can tell a destroyed previous target apart from never having had one. */
+				Transform resolvedTarget = Current.Target != null ? Current.Target : null;
+				Transform previousTarget = lastReportedTarget;
+
 				// If the target has changed, invoke change/clear events.
-				if (Current.Target != Last.Target)
+				if (!ReferenceEquals(resolvedTarget, previousTarget))
 				{
+					lastReportedTarget = resolvedTarget;
+
 					// Disable the previous outline and target label.
-					if (Last.Target != null)
+					if (previousTarget != null)
 					{
-						OnClearTarget?.Invoke(Last.Target);
-						Character.Invoke(onTargetClearTriggers, new EventData(Character, Last.Target.gameObject));
+						/* Unity semantics again: a target that was destroyed rather than
+						 * deselected fails this test, so subscribers are not handed a reference
+						 * whose GetComponent / gameObject access would throw
+						 * MissingReferenceException. The clear still fires — with no argument —
+						 * because the frame must come down either way. */
+						OnClearTarget?.Invoke(previousTarget);
+						Character.Invoke(onTargetClearTriggers, new EventData(Character, previousTarget.gameObject));
+					}
+					else if (!ReferenceEquals(previousTarget, null))
+					{
+						// The previous target was destroyed out from under us.
+						OnClearTarget?.Invoke(null);
+						Character.Invoke(onTargetClearTriggers, new EventData(Character, null));
 					}
 
 					// Invoke change target event.
-					OnChangeTarget?.Invoke(Current.Target);
-					Character.Invoke(onTargetChangeTriggers, new EventData(Character, Current.Target?.gameObject));
+					OnChangeTarget?.Invoke(resolvedTarget);
+					Character.Invoke(onTargetChangeTriggers, new EventData(Character, resolvedTarget != null ? resolvedTarget.gameObject : null));
 				}
 				else
 				{
 					// Invoke update event if the target remains the same.
-					if (Current.Target != null)
+					if (resolvedTarget != null)
 					{
-						OnUpdateTarget?.Invoke(Current.Target);
+						OnUpdateTarget?.Invoke(resolvedTarget);
 					}
 				}
 			}

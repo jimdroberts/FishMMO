@@ -1,4 +1,4 @@
-/*
+﻿/*
     UIBuffContainer.uss
     Layout for the buff / debuff icon strips. Shared by UIBuff.uxml and UIDebuff.uxml.
     Colours that are not buff/debuff specific come from FishMMO-Theme.uss.
@@ -77,7 +77,7 @@
     -unity-font-style: bold;
     -unity-text-align: lower-center;
     color: var(--abyss-100);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
+    text-shadow: 0 1px 1px var(--edge-dark);
 }
 
 /* Positive buffs glow ember-orange; debuffs glow danger-red. */

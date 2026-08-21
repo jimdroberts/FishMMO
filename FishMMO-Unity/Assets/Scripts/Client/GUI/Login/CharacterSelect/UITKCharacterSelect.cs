@@ -39,6 +39,14 @@ namespace FishMMO.Client
 		/// The name of the character list container in the UI.
 		/// </summary>
 		private const string CHARACTER_LIST_NAME = "character-list";
+		/// <summary>
+		/// The name of the refresh button in the UI.
+		/// </summary>
+		private const string REFRESH_BUTTON_NAME = "character-refresh-btn";
+		/// <summary>
+		/// The name of the status Label in the UI.
+		/// </summary>
+		private const string STATUS_NAME = "character-status";
 
 		/// <summary>
 		/// The USS class applied to each character row.
@@ -98,6 +106,10 @@ namespace FishMMO.Client
 		private VisualElement characterListContainer;
 		private Button connectButton;
 		private Button deleteButton;
+		/// <summary>Re-requests the character list; disabled while a request is outstanding.</summary>
+		private Button refreshButton;
+		/// <summary>Explains a list that did not arrive. Collapsed when there is nothing to say.</summary>
+		private Label statusLabel;
 
 		/// <summary>
 		/// The list of all character row view models currently displayed.
@@ -121,6 +133,13 @@ namespace FishMMO.Client
 			characterListContainer = Root.Q<VisualElement>(CHARACTER_LIST_NAME);
 			connectButton = Root.Q<Button>(CONNECT_BUTTON_NAME);
 			deleteButton = Root.Q<Button>(DELETE_BUTTON_NAME);
+			refreshButton = Root.Q<Button>(REFRESH_BUTTON_NAME);
+			statusLabel = Root.Q<Label>(STATUS_NAME);
+
+			if (refreshButton != null)
+			{
+				refreshButton.clicked += OnClick_Refresh;
+			}
 
 			if (connectButton != null)
 			{
@@ -148,6 +167,10 @@ namespace FishMMO.Client
 			{
 				quitButton.clicked += OnClick_Quit;
 			}
+
+			// Enter plays the highlighted character, Escape goes back to the login screen.
+			LoginKeys.Attach(Root, OnClick_SelectCharacter, OnClick_QuitToLogin);
+			LoginKeys.SetTabOrder(Root, connectButton, createButton, deleteButton, refreshButton, quitToLoginButton, quitButton);
 		}
 
 		/// <summary>
@@ -157,6 +180,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListResultBroadcast>(OnClientCharacterListResultBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
@@ -171,6 +195,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListResultBroadcast>(OnClientCharacterListResultBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterSelectResultBroadcast>(OnClientCharacterSelectResultBroadcastReceived);
@@ -269,6 +294,11 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg, Channel channel)
 		{
+			// The wait is over; see RequestCharacterList.
+			characterListGuard.Clear();
+			SetStatus(null);
+			SetRefreshLocked(false);
+
 			Hide();
 
 			if (msg.Characters != null)
@@ -562,6 +592,14 @@ namespace FishMMO.Client
 
 			SetDeleteButtonLocked(false);
 			SetConnectButtonLocked(false);
+
+			/* The list belongs to the account that just logged out. Leaving the rows behind meant
+			 * the next account to sign in saw the previous one's characters until its own list
+			 * arrived — and saw them again, indefinitely, if it never did. */
+			DestroyCharacterList();
+			characterListGuard.Clear();
+			SetRefreshLocked(false);
+			SetStatus(null);
 		}
 
 		/// <summary>
@@ -589,19 +627,166 @@ namespace FishMMO.Client
 		/// <remarks>See <see cref="PendingReplyGuard"/>.</remarks>
 		private readonly PendingReplyGuard replyGuard = new PendingReplyGuard();
 
+		/// <summary>
+		/// Guards the character-list request, which is the one request in this flow that nothing
+		/// was watching.
+		/// </summary>
+		/// <remarks>
+		/// Kept separate from <see cref="replyGuard"/> because the two waits overlap in neither
+		/// direction and have different exits: the connect guard puts this panel back, and this
+		/// one has to be able to ask again. The request itself is sent a second after login
+		/// success from <see cref="UITKLogin"/>, at the exact moment that panel hides itself, so
+		/// there is no screen at all behind an unanswered one.
+		/// </remarks>
+		private readonly PendingReplyGuard characterListGuard = new PendingReplyGuard();
+
+		/// <summary>
+		/// Asks the server for this account's character list, arming a deadline for the reply.
+		/// </summary>
+		/// <remarks>
+		/// The request used to be broadcast bare from <c>UITKLogin.OnProcessLoginSuccess</c> with
+		/// nothing armed on either side. The server has three refusal paths that answer nothing at
+		/// all — a 2000ms per-connection cooldown, another request in flight, and the async
+		/// handler's catch-all — and the client is at its most exposed at that moment: the login
+		/// panel has just hidden itself and this panel only shows when a list arrives. That is the
+		/// screen with no panel on it and no way out but Alt+F4.
+		/// <para>
+		/// The server now answers every request (see <c>CharacterListResultBroadcast</c>). This
+		/// deadline covers what a reply cannot: a request that never reached the server, and a
+		/// server that stops existing between receiving it and answering it.
+		/// </para>
+		/// </remarks>
+		public void RequestCharacterList()
+		{
+			if (Client == null)
+			{
+				return;
+			}
+
+			characterListGuard.Begin();
+			SetRefreshLocked(true);
+			SetStatus("Loading characters...");
+
+			Client.Broadcast(new CharacterRequestListBroadcast(), Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Handles a character-list request the server declined to answer with a list.
+		/// </summary>
+		/// <param name="msg">The refusal.</param>
+		/// <param name="channel">The network channel used.</param>
+		private void OnClientCharacterListResultBroadcastReceived(CharacterListResultBroadcast msg, Channel channel)
+		{
+			characterListGuard.Clear();
+			SetRefreshLocked(false);
+
+			/* Show, unconditionally. This message is the only thing standing between the player
+			 * and an empty screen: whatever hid the panel — login success, or this panel's own
+			 * handler for a previous list — has already run. */
+			Show();
+
+			SetStatus(msg.Result == CharacterListResult.Busy
+				? "The server is busy. Press Refresh to try again."
+				: "Your characters could not be loaded. This is a server-side problem, not a problem with your account. Press Refresh to try again.");
+		}
+
 		/// <inheritdoc/>
 		protected override void OnTick()
 		{
 			base.OnTick();
+
+			// Login-flow notices are refused while another dialog is up; see LoginNotice.
+			LoginNotice.Pump();
 
 			if (replyGuard.HasExpired())
 			{
 				SetConnectButtonLocked(false);
 				SetDeleteButtonLocked(false);
 				Show();
-				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox)) dialogBox.Open("The server did not respond. Please try again.");
+				LoginNotice.Show("The server did not respond. Please try again.");
+			}
+
+			if (characterListGuard.HasExpired())
+			{
+				SetRefreshLocked(false);
+				Show();
+				SetStatus("The server did not answer the character list request. Press Refresh to try again.");
 			}
 		}
+
+		/// <summary>
+		/// Re-requests the character list.
+		/// </summary>
+		/// <remarks>
+		/// There was no way to ask twice. The request was sent exactly once per session, from the
+		/// login panel, and any refusal or loss of it was final for that session.
+		/// </remarks>
+		public void OnClick_Refresh()
+		{
+			DestroyCharacterList();
+			RequestCharacterList();
+		}
+
+		/// <summary>
+		/// Writes the status line, collapsing it when there is nothing to say.
+		/// </summary>
+		/// <param name="text">Message to display, or null/empty to hide the line.</param>
+		private void SetStatus(string text)
+		{
+			/* Held as state as well as written to the tree. Enabling the UIDocument re-clones the
+			 * UXML, so a message written before a Show() is discarded — and every caller here is
+			 * "explain why, then show the panel". See UITKControl.OnAfterShow. */
+			this.pendingStatus = text;
+
+			if (statusLabel == null)
+			{
+				return;
+			}
+
+			bool hasText = !string.IsNullOrEmpty(text);
+			statusLabel.text = hasText ? text : string.Empty;
+			statusLabel.style.display = hasText ? DisplayStyle.Flex : DisplayStyle.None;
+		}
+
+		/// <summary>
+		/// Sets the locked state of the refresh button.
+		/// </summary>
+		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
+		private void SetRefreshLocked(bool locked)
+		{
+			if (refreshButton != null)
+			{
+				refreshButton.SetEnabled(!locked);
+			}
+		}
+
+		/// <summary>
+		/// Re-applies the status line and the refresh lock after the visual tree was rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// The elements are new after every hide/show, so a message written before the rebuild is
+		/// gone. This panel is shown precisely <i>because</i> something went wrong, so losing the
+		/// sentence explaining it would leave an empty list with no explanation.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+
+			SetStatus(this.pendingStatus);
+			SetRefreshLocked(characterListGuard.IsPending);
+		}
+
+		/// <inheritdoc/>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+
+			SetStatus(this.pendingStatus);
+			SetRefreshLocked(characterListGuard.IsPending);
+		}
+
+		/// <summary>The status message this panel wants displayed, held across tree rebuilds.</summary>
+		private string pendingStatus;
 
 		/// <summary>
 		/// Sets the locked state of the connect button.

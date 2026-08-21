@@ -6,6 +6,7 @@ using System;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Shared;
 
 namespace FishMMO.DiscordBot.Services
 {
@@ -27,6 +28,20 @@ namespace FishMMO.DiscordBot.Services
 		/// Byte value for the Discord chat channel type stored in the game database.
 		/// </summary>
 		private const byte DiscordChatChannelType = (byte)ChatChannel.Discord;
+
+		/// <summary>
+		/// Default cap on a bridged message body, matching <c>ChatBroadcast.MaxTextLength</c>.
+		/// </summary>
+		private const int DefaultMaxMessageLength = 128;
+
+		/// <summary>
+		/// Cap on the Discord display name written into the chat row's sender column.
+		/// </summary>
+		/// <remarks>
+		/// Discord names are up to 32 characters and are chosen by the user. They share the
+		/// message field with the body, so an unbounded one crowds out the message itself.
+		/// </remarks>
+		private const int MaxAuthorNameLength = 32;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="GameChatBridgeService"/> class.
@@ -52,9 +67,17 @@ namespace FishMMO.DiscordBot.Services
 			this.accountLinkingService = accountLinkingService;
 			this.logger = logger;
 
+			/* Defaults to the game's own chat limit, not to something larger.
+			 *
+			 * This was 500 while the game client discards any chat broadcast longer than
+			 * ChatBroadcast.MaxTextLength (128), so a long Discord message was written to the
+			 * chat table, relayed by the scene server, and then silently dropped by every client
+			 * that received it. Truncating here means a long message arrives shortened instead of
+			 * not arriving at all. The scene server truncates again on the way out; this is the
+			 * friendly cut, that one is the authoritative one. */
 			if (!int.TryParse(configuration["BridgeMessageMaxLength"], out int parsed) || parsed <= 0)
 			{
-				parsed = 500;
+				parsed = DefaultMaxMessageLength;
 			}
 			maxMessageLength = parsed;
 
@@ -93,15 +116,37 @@ namespace FishMMO.DiscordBot.Services
 				return BridgeResult.BridgeBanned;
 			}
 
-			string content = message.Content;
+			/* Discord is fully untrusted, and this is where it crosses into the game.
+			 *
+			 * Both halves of what gets written were taken raw: the author's Discord display name
+			 * (which that user picks, and can change to anything at any moment) and the message
+			 * body. They were concatenated into ChatEntity.Message, broadcast verbatim by the
+			 * scene server, exempted from the client's tab filtering, and rendered into a Label
+			 * that parses Unity rich text. A display name of "<size=500>" was therefore a
+			 * client-side attack on every player in the world, launched from outside the game by
+			 * somebody who does not need an account to do it.
+			 *
+			 * SanitizeIncoming is the same pipeline the server runs on player chat — control
+			 * characters (including U+202E and newlines), rich-text markup with reassembly
+			 * handled, and the FISHMMO_ control-code prefix. That last one matters here more than
+			 * it does for players: a Discord user typing FISHMMO_TELL_RELAYED would otherwise
+			 * have their message rendered in every recipient's log as a private whisper.
+			 *
+			 * The scene server sanitises this again when it relays the row. That is not
+			 * redundancy for its own sake — the chat table is shared state and the server must
+			 * not assume a row in it was written by a version of this bot that cleans. */
+			string content = ChatSanitizer.SanitizeIncoming(message.Content, maxMessageLength);
 			if (string.IsNullOrWhiteSpace(content))
 			{
 				return BridgeResult.EmptyMessage;
 			}
 
-			if (content.Length > maxMessageLength)
+			string authorName = ChatSanitizer.SanitizeIncoming(message.Author.Username, MaxAuthorNameLength);
+			if (string.IsNullOrWhiteSpace(authorName))
 			{
-				content = content.Substring(0, maxMessageLength);
+				// A display name made entirely of markup or invisible characters cleans to
+				// nothing. Fall back rather than write an empty sender column.
+				authorName = "DiscordUser";
 			}
 
 			var (worldId, sceneId) = dynamicChannelManager.GetWorldAndSceneIdsFromChannel(textChannel);
@@ -121,14 +166,14 @@ namespace FishMMO.DiscordBot.Services
 				var chatEntity = new ChatEntity
 				{
 					CharacterID = 0L,
-					CharacterName = message.Author.Username,
+					CharacterName = authorName,
 					AccountName = "Discord",
 					WorldServerID = worldId.Value,
 					SceneServerID = sceneId.Value,
 					ServerReceivedTime = DateTime.UtcNow,
 					TimeCreated = DateTime.UtcNow,
 					Channel = DiscordChatChannelType,
-					Message = $"{message.Author.Username} {content}"
+					Message = $"{authorName} {content}"
 				};
 
 				await dbContext.Chat.AddAsync(chatEntity);
@@ -138,7 +183,7 @@ namespace FishMMO.DiscordBot.Services
 
 				logger.LogInformation(
 					"Bridged Discord message to game DB: '{Content}' by '{User}' (World: {WorldId}, Scene: {SceneId}).",
-					content, message.Author.Username, worldId.Value, sceneId.Value);
+					content, authorName, worldId.Value, sceneId.Value);
 
 				return BridgeResult.Success;
 			}

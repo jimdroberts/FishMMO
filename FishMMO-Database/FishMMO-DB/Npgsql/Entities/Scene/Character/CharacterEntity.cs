@@ -64,6 +64,24 @@ namespace FishMMO.Database.Npgsql.Entities
 		public float InstanceRotW { get; set; }
 		/// <summary>Character race template ID.</summary>
 		public int RaceID { get; set; }
+		/// <summary>
+		/// Character level.
+		/// </summary>
+		/// <remarks>
+		/// This column is the AUTHORITATIVE home of a character's level, and it is new.
+		///
+		/// Before it, level did not exist anywhere in FishMMO: no column, no attribute template,
+		/// no experience curve, no UI. The guild roster's level column (AREAS E2) could therefore
+		/// not be "joined to wherever level is authoritative", because there was nowhere to join
+		/// to — so a home was made here, on the character row, next to <see cref="RaceID"/>, which
+		/// is the other per-character fact the roster reads.
+		///
+		/// It is deliberately NOT a denormalised copy of anything: there is no other store to
+		/// drift from. Until a progression system exists to write it, every character reads back
+		/// the default of 1, and the roster renders 1. That is a truthful "no progression yet",
+		/// not a stale cache.
+		/// </remarks>
+		public int Level { get; set; }
 		/// <summary>Character model/prefab index.</summary>
 		public int ModelIndex { get; set; }
 		/// <summary>

@@ -85,9 +85,28 @@ namespace FishMMO.Client
 		Drag = 800,
 
 		/// <summary>
-		/// Full-screen application state: the loading screen and the reconnect display.
+		/// Full-screen application state: the loading screen.
 		/// </summary>
 		/// <remarks>Covers everything, including modals — the session is not usable beneath it.</remarks>
 		System = 900,
+
+		/// <summary>
+		/// The reconnect display, which is raised on top of the loading overlay.
+		/// </summary>
+		/// <remarks>
+		/// These two used to share <see cref="System"/>, and they are on screen at the same time
+		/// for the whole of a reconnect: <c>Client_OnReconnectPending</c> raises the loading
+		/// overlay and <c>OnReconnectAttemptsChanged</c> raises this one over it. Panels at equal
+		/// sorting order fall back to registration order, and — per the remarks at the top of this
+		/// file — the loser receives no pointer events at all. Which of the two lost was decided by
+		/// scene load order, so the reconnect Cancel button could be dead for the whole backoff,
+		/// which is up to ten attempts.
+		/// <para>
+		/// The reconnect display wins deliberately: it is the one of the pair that has a control on
+		/// it, and the loading overlay behind it is a backdrop. Its own "Return to login" button
+		/// still works because it is only revealed when no reconnect display is up.
+		/// </para>
+		/// </remarks>
+		SystemAlert = 1000,
 	}
 }

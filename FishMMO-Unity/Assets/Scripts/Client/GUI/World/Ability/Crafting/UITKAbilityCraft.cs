@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -84,11 +84,50 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// The event templates chosen for each slot, as plain data.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="eventSlots"/> holds <see cref="Button"/>s, which belong to one visual tree,
+		/// and <c>UIDocument</c> re-clones the tree on every enable. Keeping the SELECTION only in
+		/// those buttons meant a hide/show — or any tree rebuild — silently emptied a half-built
+		/// craft while the panel still looked populated to the code that reads it.
+		/// </remarks>
+		private readonly List<ITooltip> selectedEvents = new List<ITooltip>();
+
+		/// <summary>The base ability selected for the craft, as plain data.</summary>
+		private ITooltip selectedMain;
+
+		/// <summary>How many event slots the selected ability allows.</summary>
+		private int selectedSlotCount;
+
+		/// <summary>True while a craft request is awaiting the server's reply.</summary>
+		private bool craftPending;
+
+		/// <summary>Unscaled time the pending craft request was sent.</summary>
+		private float craftPendingSince;
+
+		/// <summary>Cached reference to the craft confirm button, for the submit lock.</summary>
+		private Button craftButton;
+
+		/// <summary>
+		/// Seconds before a craft request with no reply releases the submit lock.
+		/// </summary>
+		/// <remarks>
+		/// The server answers an accepted craft with <c>AbilityAddBroadcast</c> and answers a
+		/// refused one with silence — every rejection path in
+		/// <c>InteractableSystem.OnServerAbilityCraftBroadcastReceived</c> is a bare <c>return</c>.
+		/// A lock that only a success can release would therefore be permanent after any refusal,
+		/// so it is released on a timeout as well.
+		/// </remarks>
+		private const float CraftReplyTimeoutSeconds = 5.0f;
+
+		/// <summary>
 		/// Registers the ability crafter broadcast handler when the client is set.
 		/// </summary>
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 		}
 
 		/// <summary>
@@ -97,6 +136,7 @@ namespace FishMMO.Client
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 		}
 
 		/// <summary>
@@ -104,6 +144,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
+			/* Every Button in eventSlots belongs to the tree that was just discarded. */
+			eventSlots.Clear();
+
 			VisualElement root = Root;
 			if (root == null)
 			{
@@ -123,7 +166,7 @@ namespace FishMMO.Client
 				mainEntryButton.RegisterCallback<PointerLeaveEvent>(OnSlotPointerLeave);
 			}
 
-			Button craftButton = root.Q<Button>(CRAFT_BUTTON_NAME);
+			craftButton = root.Q<Button>(CRAFT_BUTTON_NAME);
 			if (craftButton != null)
 			{
 				craftButton.clicked += OnCraft;
@@ -155,6 +198,47 @@ namespace FishMMO.Client
 		{
 			lastInteractableID = msg.InteractableID;
 			Show();
+		}
+
+		/// <inheritdoc />
+		protected override void OnAfterShow()
+		{
+			ApplySelection();
+		}
+
+		/// <inheritdoc />
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+
+			ApplySelection();
+		}
+
+		/// <summary>
+		/// Re-applies the in-progress craft to the current visual tree.
+		/// </summary>
+		/// <remarks>
+		/// Runs from both hooks: on the very first open <c>hasStarted</c> is still false so
+		/// <c>ReinitializeIfTreeReplaced</c> bails and only <c>OnAfterShow</c> fires, while on later
+		/// shows the tree may genuinely have been replaced.
+		/// </remarks>
+		private void ApplySelection()
+		{
+			mainTooltip = selectedMain;
+
+			if (mainEntryButton != null)
+			{
+				SetButtonIcon(mainEntryButton, selectedMain != null ? selectedMain.Icon : null);
+				mainEntryButton.text = selectedMain != null ? selectedMain.Name : "";
+			}
+
+			BuildEventSlots();
+			UpdateMainDescription();
+
+			if (craftButton != null)
+			{
+				craftButton.SetEnabled(!craftPending);
+			}
 		}
 
 		/// <summary>
@@ -266,6 +350,7 @@ namespace FishMMO.Client
 		private void SetMainEntry(ITooltip tooltip)
 		{
 			mainTooltip = tooltip;
+			selectedMain = tooltip;
 			if (mainEntryButton != null)
 			{
 				SetButtonIcon(mainEntryButton, tooltip != null ? tooltip.Icon : null);
@@ -290,6 +375,12 @@ namespace FishMMO.Client
 			slot.Tooltip = tooltip;
 			SetButtonIcon(slot.Button, tooltip != null ? tooltip.Icon : null);
 			slot.Button.text = tooltip != null ? tooltip.Name : "";
+
+			while (selectedEvents.Count <= index)
+			{
+				selectedEvents.Add(null);
+			}
+			selectedEvents[index] = tooltip;
 		}
 
 		/// <summary>
@@ -362,6 +453,16 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ClearSlots()
 		{
+			ClearSlotViews();
+			selectedEvents.Clear();
+			selectedSlotCount = 0;
+		}
+
+		/// <summary>
+		/// Detaches the event slot buttons without forgetting which events were chosen.
+		/// </summary>
+		private void ClearSlotViews()
+		{
 			foreach (EventSlot slot in eventSlots)
 			{
 				if (slot.Button != null)
@@ -378,13 +479,38 @@ namespace FishMMO.Client
 		/// <param name="count">The number of event slots to create.</param>
 		private void SetEventSlots(int count)
 		{
-			ClearSlots();
+			/* The per-ability limit. The server now enforces this too — it used to accept up to a
+			 * global 32 events regardless of what the template allowed, so this method was the ONLY
+			 * thing standing between a crafted packet and a 32-event ability on a 0-slot
+			 * template. */
+			selectedSlotCount = Mathf.Clamp(count, 0, MAX_CRAFT_EVENT_SLOTS);
+
+			BuildEventSlots();
+		}
+
+		/// <summary>
+		/// Rebuilds the event slot buttons for the current selection and re-applies the chosen
+		/// events to them.
+		/// </summary>
+		private void BuildEventSlots()
+		{
+			ClearSlotViews();
 
 			if (eventListContainer == null)
 			{
 				return;
 			}
 
+			while (selectedEvents.Count < selectedSlotCount)
+			{
+				selectedEvents.Add(null);
+			}
+			if (selectedEvents.Count > selectedSlotCount)
+			{
+				selectedEvents.RemoveRange(selectedSlotCount, selectedEvents.Count - selectedSlotCount);
+			}
+
+			int count = selectedSlotCount;
 			for (int i = 0; i < count && i < MAX_CRAFT_EVENT_SLOTS; ++i)
 			{
 				EventSlot slot = new EventSlot()
@@ -409,6 +535,10 @@ namespace FishMMO.Client
 				button.RegisterCallback<PointerLeaveEvent>(OnSlotPointerLeave);
 
 				slot.Button = button;
+				slot.Tooltip = i < selectedEvents.Count ? selectedEvents[i] : null;
+				SetButtonIcon(button, slot.Tooltip != null ? slot.Tooltip.Icon : null);
+				button.text = slot.Tooltip != null ? slot.Tooltip.Name : "";
+
 				eventSlots.Add(slot);
 				eventListContainer.Add(button);
 			}
@@ -419,6 +549,16 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnCraft()
 		{
+			/* Double-submit guard. The craft is a purchase: two clicks a frame apart used to send
+			 * two AbilityCraftBroadcasts, and only the server's 100ms ingress debounce stood
+			 * between the player and paying twice. Released by the AbilityAddBroadcast the server
+			 * sends on success, or by a timeout, because every refusal path on the server is a
+			 * silent return. */
+			if (craftPending)
+			{
+				return;
+			}
+
 			AbilityTemplate main = mainTooltip as AbilityTemplate;
 			if (main == null)
 			{
@@ -461,11 +601,49 @@ namespace FishMMO.Client
 
 			Client.Broadcast(abilityAddBroadcast, Channel.Reliable);
 
+			SetCraftPending(true);
+
 			SetMainEntry(null);
 			ClearSlots();
 
 			// update the main description text
 			UpdateMainDescription();
+		}
+
+		/// <summary>
+		/// Arms or releases the submit lock and reflects it on the confirm button.
+		/// </summary>
+		/// <param name="pending">True while a request is in flight.</param>
+		private void SetCraftPending(bool pending)
+		{
+			craftPending = pending;
+			craftPendingSince = Time.unscaledTime;
+
+			if (craftButton != null)
+			{
+				craftButton.SetEnabled(!pending);
+			}
+		}
+
+		/// <summary>
+		/// Releases a submit lock whose reply never arrived.
+		/// </summary>
+		protected override void OnTick()
+		{
+			if (craftPending && Time.unscaledTime - craftPendingSince >= CraftReplyTimeoutSeconds)
+			{
+				SetCraftPending(false);
+			}
+		}
+
+		/// <summary>
+		/// Releases the submit lock when the server confirms the crafted ability.
+		/// </summary>
+		/// <param name="msg">The broadcast message.</param>
+		/// <param name="channel">The network channel.</param>
+		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg, Channel channel)
+		{
+			SetCraftPending(false);
 		}
 
 		/// <summary>

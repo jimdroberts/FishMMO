@@ -73,3 +73,13 @@
     margin-left: 6px;
     flex-shrink: 0;
 }
+
+/*
+    Keyboard focus. These dialogs open with the button Enter would press already focused, and
+    the theme's default focus ring — a border colour change alone — is too quiet to find on a
+    button that already has a border. The accent fill says which button is armed.
+*/
+.dialog-button:focus {
+    background-color: var(--brand-press);
+    border-color: var(--brand-300);
+}

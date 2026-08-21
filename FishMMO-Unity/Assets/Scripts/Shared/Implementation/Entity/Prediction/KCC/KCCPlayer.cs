@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
@@ -210,9 +210,13 @@ namespace FishMMO.Shared
 				CharacterController.Character != null)
 			{
 				IPlayerCharacter character = CharacterController.Character;
+				/* IsFrozen used to be the only crowd-control flag tested here. IsStunned and
+				 * IsMesmerized were set by StateBuffTemplate / CompositeBuffTemplate and read
+				 * nowhere at all, so a stunned or mesmerized player kept moving normally.
+				 * CharacterIncapacitation is the one definition all three gates now share. */
 				if (character.IsFlagged(CharacterFlags.IsDead) ||
 					character.IsTeleporting ||
-					character.IsFlagged(CharacterFlags.IsFrozen) ||
+					CharacterIncapacitation.IsIncapacitated(character) ||
 					!character.IsFlagged(CharacterFlags.IsLoaded))
 				{
 					return;

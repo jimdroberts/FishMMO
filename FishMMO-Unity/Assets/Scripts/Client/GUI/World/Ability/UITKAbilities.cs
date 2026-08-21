@@ -90,6 +90,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
+			/* Every slot in these lists is a VisualElement from the tree that was just discarded.
+			 * Keeping them would leave the panel rendering nothing while still believing it is
+			 * full, and every later add would append to a dead container. */
+			abilities.Clear();
+			knownAbilities.Clear();
+			knownAbilityEvents.Clear();
+
 			VisualElement root = Root;
 			if (root == null)
 			{
@@ -116,6 +123,9 @@ namespace FishMMO.Client
 				eventsTab.clicked += () => SwitchTab(AbilityTabType.KnownAbilityEvent);
 			}
 
+			/* Static event, and OnStarting re-runs on every tree rebuild — remove before add so the
+			 * pair is idempotent instead of leaking one handler per rebuild. */
+			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;
 
 			SwitchTab(AbilityTabType.Ability);
@@ -128,7 +138,11 @@ namespace FishMMO.Client
 		{
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
 
+			UnsubscribeAbilityController();
+
 			ClearAllSlots();
+
+			base.OnDestroying();
 		}
 
 		/// <summary>
@@ -144,7 +158,91 @@ namespace FishMMO.Client
 				abilityController.OnAddAbility += AddAbility;
 				abilityController.OnAddKnownAbility += AddKnownAbility;
 				abilityController.OnAddKnownAbilityEvent += AddKnownAbilityEvent;
+				abilityController.OnRemoveAbility += RemoveAbility;
+
+				RebuildFromCharacter(abilityController);
 			}
+		}
+
+		/// <summary>
+		/// Drops the outgoing character's subscriptions before a new character is applied.
+		/// </summary>
+		/// <remarks>
+		/// <c>UITKCharacterControl.OnAfterStarting</c> calls Pre then Post on every tree rebuild so
+		/// the two cancel out. With Pre un-overridden the cancelling half did nothing and each
+		/// rebuild stacked another copy of all four handlers.
+		/// </remarks>
+		public override void OnPreSetCharacter()
+		{
+			UnsubscribeAbilityController();
+		}
+
+		/// <summary>
+		/// Drops every ability-controller subscription held on the current character.
+		/// </summary>
+		private void UnsubscribeAbilityController()
+		{
+			if (Character != null &&
+				Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.OnCanManipulate -= CanManipulateAbility;
+				abilityController.OnAddAbility -= AddAbility;
+				abilityController.OnAddKnownAbility -= AddKnownAbility;
+				abilityController.OnAddKnownAbilityEvent -= AddKnownAbilityEvent;
+				abilityController.OnRemoveAbility -= RemoveAbility;
+			}
+		}
+
+		/// <summary>
+		/// Repopulates all three tabs from the character's current knowledge.
+		/// </summary>
+		/// <param name="abilityController">The character's ability controller.</param>
+		/// <remarks>
+		/// The panel is otherwise fed exclusively by the <c>OnAdd*</c> events, which the controller
+		/// raises once, on <c>OnStartCharacter</c>. Anything that rebuilds the visual tree after
+		/// that point — the first hide/show, a theme reload — left the panel permanently empty,
+		/// because the events that would have filled it had already fired.
+		/// </remarks>
+		private void RebuildFromCharacter(IAbilityController abilityController)
+		{
+			ClearAllSlots();
+
+			foreach (Ability ability in abilityController.KnownAbilities.Values)
+			{
+				AddAbility(ability);
+			}
+
+			foreach (int templateID in abilityController.KnownBaseAbilities)
+			{
+				AddKnownAbility(BaseAbilityTemplate.Get<BaseAbilityTemplate>(templateID));
+			}
+
+			foreach (int eventID in abilityController.KnownAbilityEvents)
+			{
+				AddKnownAbilityEvent(AbilityEvent.Get<AbilityEvent>(eventID));
+			}
+
+			SwitchTab(currentTab);
+		}
+
+		/// <summary>
+		/// Removes the slot for an ability the character no longer knows.
+		/// </summary>
+		/// <param name="referenceID">The removed ability's reference ID.</param>
+		public void RemoveAbility(long referenceID)
+		{
+			for (int i = abilities.Count - 1; i >= 0; --i)
+			{
+				if (abilities[i].ReferenceID != referenceID)
+				{
+					continue;
+				}
+
+				abilities[i].Root?.RemoveFromHierarchy();
+				abilities.RemoveAt(i);
+			}
+
+			SwitchTab(currentTab);
 		}
 
 		/// <summary>
@@ -152,13 +250,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
-			if (Character.TryGet(out IAbilityController abilityController))
-			{
-				abilityController.OnCanManipulate -= CanManipulateAbility;
-				abilityController.OnAddAbility -= AddAbility;
-				abilityController.OnAddKnownAbility -= AddKnownAbility;
-				abilityController.OnAddKnownAbilityEvent -= AddKnownAbilityEvent;
-			}
+			UnsubscribeAbilityController();
+
 			ClearAllSlots();
 		}
 
@@ -287,7 +380,7 @@ namespace FishMMO.Client
 		{
 			if (!string.IsNullOrEmpty(slot.Tooltip) && UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
-				tooltip.Open(slot.Tooltip);
+				tooltip.Open(slot.Tooltip, slot.Root);
 			}
 		}
 

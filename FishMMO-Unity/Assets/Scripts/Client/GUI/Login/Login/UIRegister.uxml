@@ -13,8 +13,16 @@
                 <ui:TextField name="register-email" class="fish-input register-input" />
                 <ui:Label text="Password" class="fish-label fish-label--caption register-field-label" />
                 <ui:TextField name="register-password" password="true" class="fish-input register-input" />
-                <ui:Label text="Registration Key (optional)" class="fish-label fish-label--caption register-field-label" />
-                <ui:TextField name="register-key" class="fish-input register-input" />
+                <!--
+                    B4: the "Registration Key (optional)" field was removed. Nothing anywhere in
+                    the client, the shared auth core or the login server has ever had a parameter
+                    for it — SetLoginCredentials takes username, password, register, email and age
+                    — so whatever the player typed was cleared by ClearAllFields and discarded. An
+                    input that silently ignores what you put in it is worse than no input: on a
+                    server that does gate registration behind a key, a player with a valid key
+                    would enter it, be refused, and have no way to tell that the field was never
+                    read. Re-add it here only together with the wire field that carries it.
+                -->
                 <ui:Label text="Confirm Age" class="fish-label fish-label--caption register-field-label" />
                 <ui:DropdownField name="register-age" class="fish-dropdown register-dropdown" />
                 <ui:Label name="register-status" text="" class="fish-label fish-label--muted register-status" />

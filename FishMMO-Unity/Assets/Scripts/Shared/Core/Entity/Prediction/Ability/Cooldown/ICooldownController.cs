@@ -72,6 +72,22 @@ namespace FishMMO.Shared.Core
 		bool TryGetCooldown(long id, uint currentTick, out float cooldown);
 
 		/// <summary>
+		/// Tries to get the full <see cref="CooldownInstance"/> for an ability or consumable,
+		/// whether or not it is still running.
+		/// </summary>
+		/// <param name="id">Ability or consumable template ID.</param>
+		/// <param name="instance">The cooldown instance.</param>
+		/// <returns>True if a cooldown is tracked for the id.</returns>
+		/// <remarks>
+		/// <see cref="TryGetCooldown"/> reports only the REMAINING seconds, which is not enough to
+		/// draw a sweep — a sweep needs the fraction, and a fraction needs the total the cooldown
+		/// started from. The UI previously took its total from the instance handed to
+		/// <see cref="OnAddCooldown"/> and then never updated, which is what made the hotkey bar's
+		/// sweep binary rather than animated.
+		/// </remarks>
+		bool TryGetCooldownInstance(long id, out CooldownInstance instance);
+
+		/// <summary>
 		/// Adds a cooldown for the specified ability.
 		/// </summary>
 		/// <param name="id">Ability ID.</param>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using FishMMO.Database.Exceptions;
@@ -59,7 +59,15 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			var requestedMode = isTransactionScope ? ExecutionMode.Transaction : ExecutionMode.Write;
 			var state = State.Value;
-			if (state == null)
+
+			// Depth <= 0 means the previous scope in this flow has already exited, and the object we
+			// are looking at is a spent husk. It has to be replaced rather than reused: the exit path
+			// clears DbContext but cannot always clear State.Value itself, because the disposal may
+			// happen inside an async method whose AsyncLocal writes do not reach the caller. Reusing
+			// the husk would take the "inner scope" branch below, which deliberately does NOT install
+			// the DbContext — so a second unit of work in the same flow would silently run with no
+			// ambient context and every service inside it would commit independently.
+			if (state == null || state.Depth <= 0)
 			{
 				state = new ScopeState
 				{
@@ -96,7 +104,8 @@ namespace FishMMO.Database.Npgsql.Services
 		public static ScopeToken EnterReadOnly(NpgsqlDbContext? dbContext)
 		{
 			var state = State.Value;
-			if (state == null)
+			// See Enter: a Depth <= 0 state is spent and must be replaced, not reused.
+			if (state == null || state.Depth <= 0)
 			{
 				state = new ScopeState
 				{

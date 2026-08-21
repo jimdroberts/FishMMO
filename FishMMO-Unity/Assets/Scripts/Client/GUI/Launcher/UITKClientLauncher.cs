@@ -589,10 +589,9 @@ namespace FishMMO.Client
 
 		private void ApplyDiskSize()
 		{
-			if (this.diskSizeLabel != null)
-			{
-				this.diskSizeLabel.text = this.pendingDiskSizeText;
-			}
+			// Locally computed, but it costs nothing to keep every label this view writes on
+			// the same footing — one rule is easier to keep than an exception list.
+			RemoteText.SetText(this.diskSizeLabel, this.pendingDiskSizeText);
 		}
 
 		#region ILauncherView
@@ -845,10 +844,9 @@ namespace FishMMO.Client
 
 		private void ApplyTitle()
 		{
-			if (this.titleLabel != null)
-			{
-				this.titleLabel.text = this.pendingTitle;
-			}
+			// The title embeds the installed version string, which is read from disk and can
+			// have been written by a patch. Same treatment as the status line.
+			RemoteText.SetText(this.titleLabel, this.pendingTitle);
 		}
 
 		private void ApplyButtonText()
@@ -894,7 +892,16 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			this.statusLabel.text = this.pendingStatus;
+
+			/* S6: this label carries server-controlled text.
+			 *
+			 * ClientLauncher composes its detail strings from the version string the update
+			 * server returned and from the error strings the request layer produced — so
+			 * "Version {latest} is available" and "Error fetching latest version: {error}" are
+			 * both remote content in a Label whose enableRichText defaults to true. Routed
+			 * through RemoteText so it renders literally and cannot carry control characters. */
+			RemoteText.SetText(this.statusLabel, this.pendingStatus);
+
 			// Collapsed rather than merely blank so the footer does not reserve a gap for a
 			// message that is not there.
 			SetHidden(this.statusLabel, string.IsNullOrEmpty(this.pendingStatus));
@@ -905,6 +912,21 @@ namespace FishMMO.Client
 			SetHidden(this.newsScroll, !this.pendingNewsVisible);
 		}
 
+		/// <summary>
+		/// Longest news message rendered as plain text.
+		/// </summary>
+		/// <remarks>
+		/// Much larger than <see cref="RemoteText.MaxLength"/>, because the fallback summary is
+		/// genuinely a few paragraphs — but still bounded, because this path also carries
+		/// fetch-error text that originated off-machine.
+		/// </remarks>
+		private const int MaxNewsMessageLength = 16384;
+
+		/// <summary>
+		/// The in-flight incremental news render, so a second one can cancel the first.
+		/// </summary>
+		private Coroutine newsRenderRoutine;
+
 		private void ApplyNewsBody()
 		{
 			if (this.newsContainer == null)
@@ -912,16 +934,54 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Any previous render is abandoned before a new one starts. RenderIncremental spans
+			 * frames, so without this a fetch that lands while an earlier render is still
+			 * walking would interleave two documents into one container. */
+			if (this.newsRenderRoutine != null)
+			{
+				StopCoroutine(this.newsRenderRoutine);
+				this.newsRenderRoutine = null;
+			}
+
 			if (this.pendingNewsMessage != null)
 			{
 				this.newsContainer.Clear();
-				Label message = new Label(this.pendingNewsMessage);
-				message.AddToClassList("launcher-news__text");
-				this.newsContainer.Add(message);
+				/* Plain Label, rich text OFF. This path carries the built-in summary (safe) AND
+				 * fetch-error strings built from remote input (not), and there is no way to tell
+				 * them apart at this point — so both go through the same helper. See RemoteText
+				 * for why "it's only assigned to a Label" is not protection. */
+				this.newsContainer.Add(RemoteText.CreateLabel(
+					this.pendingNewsMessage,
+					"launcher-news__text",
+					allowNewlines: true,
+					maxLength: MaxNewsMessageLength));
 				return;
 			}
 
-			UITKHtmlContentRenderer.Render(this.pendingNewsContent, this.newsContainer, LauncherLinkPolicy.OpenIfSafe);
+			/* Incremental, and only when this component can host a coroutine. A disabled or
+			 * destroyed MonoBehaviour cannot, and StartCoroutine throws rather than no-opping —
+			 * so the synchronous form is the fallback. Both share the same budgets. */
+			if (isActiveAndEnabled)
+			{
+				this.newsRenderRoutine = StartCoroutine(RenderNewsIncremental(this.pendingNewsContent));
+			}
+			else
+			{
+				UITKHtmlContentRenderer.Render(this.pendingNewsContent, this.newsContainer, LauncherLinkPolicy.OpenIfSafe);
+			}
+		}
+
+		/// <summary>
+		/// Runs the bounded incremental news render and clears its handle when it finishes.
+		/// </summary>
+		private System.Collections.IEnumerator RenderNewsIncremental(HtmlNode content)
+		{
+			yield return UITKHtmlContentRenderer.RenderIncremental(
+				content,
+				this.newsContainer,
+				LauncherLinkPolicy.OpenIfSafe);
+
+			this.newsRenderRoutine = null;
 		}
 
 		/// <summary>

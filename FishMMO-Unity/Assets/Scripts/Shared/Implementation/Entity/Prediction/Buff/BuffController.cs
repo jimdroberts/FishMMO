@@ -1,5 +1,6 @@
 ﻿using FishNet.Connection;
 using FishNet.Managing.Timing;
+using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -168,6 +169,119 @@ namespace FishMMO.Shared
 		/// </summary>
 		private CharacterPredictionController predictionController;
 
+		#region Observed buffs (target frame)
+
+		/// <summary>
+		/// Backing store for <see cref="ObservedBuffs"/>.
+		/// </summary>
+		private ObservedBuffEntry[] observedBuffs = System.Array.Empty<ObservedBuffEntry>();
+
+		/// <inheritdoc />
+		public IReadOnlyList<ObservedBuffEntry> ObservedBuffs => observedBuffs;
+
+		/// <inheritdoc />
+		public float ObservedBuffsReceivedTime { get; private set; }
+
+		/// <summary>
+		/// Set on the server whenever the visible buff set structurally changed, consumed once per
+		/// replicate tick.
+		/// </summary>
+		/// <remarks>
+		/// Coalescing to one push per tick is what keeps this cheap. A dispel, a boss phase change
+		/// or a re-application cascade can add and remove several buffs inside one tick, and a
+		/// push per change would be several observer RPCs for one logical event.
+		/// </remarks>
+		private bool observedBuffsDirty;
+
+		/// <summary>
+		/// Server-side scratch list used to build the observer payload without allocating per push.
+		/// </summary>
+		private readonly List<ObservedBuffEntry> observedBuffBuffer = new List<ObservedBuffEntry>();
+
+		/// <summary>
+		/// Marks the observer-facing buff list as needing a push on the next server tick.
+		/// </summary>
+		/// <remarks>
+		/// Called from every path that structurally changes <see cref="buffs"/> — the same set of
+		/// call sites that set <see cref="snapshotDirty"/> — including the ones that run during a
+		/// replayed tick, because a replay changes the authoritative set just as much as a first
+		/// execution does. The push itself is gated on the server and on a non-replayed tick.
+		/// </remarks>
+		private void MarkObservedBuffsDirty()
+		{
+			observedBuffsDirty = true;
+		}
+
+		/// <summary>
+		/// Builds and pushes the server-filtered observer buff list, if it changed this tick.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>This is the whole trust boundary for the target-frame feature.</b> The client is never
+		/// asked what it may see and is never sent anything it may not: the list is assembled here,
+		/// on the server, from the server's own buff dictionary, and every entry marked
+		/// <see cref="BaseBuffTemplate.HiddenFromOthers"/> is dropped before it reaches the wire.
+		/// A client that ignores its own UI code still learns nothing extra.
+		/// </para>
+		/// <para>
+		/// Delivery is an <c>ObserversRpc</c>, so FishNet scopes it to the connections that can
+		/// already see this NetworkObject — the same set that can target it. <c>BufferLast</c> means
+		/// a player who comes into view later receives the current list as part of the spawn,
+		/// without any join-time request of its own.
+		/// </para>
+		/// </remarks>
+		private void PushObservedBuffs()
+		{
+			observedBuffsDirty = false;
+
+			observedBuffBuffer.Clear();
+			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
+			uint currentTick = GetCurrentDomainTick();
+
+			foreach (Buff buff in buffs.Values)
+			{
+				BaseBuffTemplate template = buff?.Template;
+				if (template == null || template.HiddenFromOthers)
+				{
+					continue;
+				}
+
+				float remaining = 0f;
+				if (!template.IsPermanent &&
+					buff.ExpiryTick != TimeManager.UNSET_TICK &&
+					currentTick != TimeManager.UNSET_TICK)
+				{
+					int remainingTicks = (int)(buff.ExpiryTick - currentTick);
+					remaining = remainingTicks > 0 ? remainingTicks * delta : 0f;
+				}
+
+				observedBuffBuffer.Add(new ObservedBuffEntry()
+				{
+					TemplateID = template.ID,
+					Stacks = buff.Stacks,
+					RemainingSeconds = remaining,
+					TotalSeconds = template.Duration,
+				});
+			}
+
+			RpcSetObservedBuffs(observedBuffBuffer.ToArray());
+		}
+
+		/// <summary>
+		/// Delivers the server-filtered observer buff list to everyone who can see this character.
+		/// </summary>
+		/// <param name="entries">The visible buffs.</param>
+		[ObserversRpc(BufferLast = true, RunLocally = true)]
+		private void RpcSetObservedBuffs(ObservedBuffEntry[] entries)
+		{
+			observedBuffs = entries ?? System.Array.Empty<ObservedBuffEntry>();
+			ObservedBuffsReceivedTime = Time.unscaledTime;
+
+			IBuffController.OnObservedBuffsChanged?.Invoke(this);
+		}
+
+		#endregion
+
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
@@ -293,6 +407,17 @@ namespace FishMMO.Shared
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
 			reconcileData.Buffs = CreateReconcileSnapshot();
+
+			/* Push the observer-facing buff list here rather than from OnReplicate. This runs once
+			 * per tick, only on the server (CharacterPredictionController.CreateReconcile gates on
+			 * IsServerStarted && IsSpawned), and — critically — OUTSIDE the [Replicate] method, so
+			 * the RPC is never dispatched from inside a replay of a past tick. Coalescing to one
+			 * push per tick matters: a dispel, a boss phase change or a re-application cascade can
+			 * add and remove several buffs within a single tick. */
+			if (observedBuffsDirty)
+			{
+				PushObservedBuffs();
+			}
 		}
 
 		/// <summary>
@@ -321,6 +446,7 @@ namespace FishMMO.Shared
 			RemoveAll(ignoreInvokeRemove: true);
 			cachedSnapshot = null;
 			snapshotDirty = true;
+			MarkObservedBuffsDirty();
 
 			uint payloadReferenceTick = reader.ReadUInt32();
 			uint currentReferenceTick = GetCurrentDomainTick();
@@ -502,7 +628,7 @@ namespace FishMMO.Shared
 				// Suppress per-tick UI dispatch during replay.
 				if (!isReplayingTick)
 				{
-					IBuffController.OnBuffTick?.Invoke(buff, currentTick);
+					IBuffController.OnBuffTick?.Invoke(this, buff, currentTick);
 				}
 
 				// Fire the periodic effect BEFORE the expiry check so a buff that both
@@ -521,6 +647,7 @@ namespace FishMMO.Shared
 					{
 						// Structural change: topmost stack removed, duration reset to full.
 						snapshotDirty = true;
+						MarkObservedBuffsDirty();
 						buff.RemoveStack(Character);
 						buff.ResetDuration(currentTick, tickDelta);
 					}
@@ -592,11 +719,11 @@ namespace FishMMO.Shared
 				{
 					if (template.IsDebuff)
 					{
-						IBuffController.OnAddDebuff?.Invoke(buffInstance);
+						IBuffController.OnAddDebuff?.Invoke(this, buffInstance);
 					}
 					else
 					{
-						IBuffController.OnAddBuff?.Invoke(buffInstance);
+						IBuffController.OnAddBuff?.Invoke(this, buffInstance);
 					}
 					// Include tick payload so actions triggered by buff apply can use the deterministic tick.
 					// replicateDomainTick is guaranteed replicate-domain by both entry points, so this is a
@@ -635,6 +762,7 @@ namespace FishMMO.Shared
 			if (changed)
 			{
 				snapshotDirty = true;
+				MarkObservedBuffsDirty();
 			}
 		}
 
@@ -743,6 +871,7 @@ namespace FishMMO.Shared
 			if (!buffs.ContainsKey(buff.Template.ID))
 			{
 				snapshotDirty = true;
+				MarkObservedBuffsDirty();
 				buff.Apply(Character);
 				buffs.Add(buff.Template.ID, buff);
 
@@ -753,11 +882,11 @@ namespace FishMMO.Shared
 
 				if (buff.Template.IsDebuff)
 				{
-					IBuffController.OnAddDebuff?.Invoke(buff);
+					IBuffController.OnAddDebuff?.Invoke(this, buff);
 				}
 				else
 				{
-					IBuffController.OnAddBuff?.Invoke(buff);
+					IBuffController.OnAddBuff?.Invoke(this, buff);
 				}
 
 				// FX are suppressed during reconcile restoration to avoid redundant sound/VFX
@@ -780,6 +909,7 @@ namespace FishMMO.Shared
 			if (buffs.TryGetValue(buffID, out Buff buffInstance))
 			{
 				snapshotDirty = true;
+				MarkObservedBuffsDirty();
 				BaseBuffTemplate template = buffInstance.Template;
 				if (!TryRemoveBuffEffects(buffInstance, buffID, nameof(Remove)))
 				{
@@ -792,11 +922,11 @@ namespace FishMMO.Shared
 				{
 					if (template.IsDebuff)
 					{
-						IBuffController.OnRemoveDebuff?.Invoke(buffInstance);
+						IBuffController.OnRemoveDebuff?.Invoke(this, buffInstance);
 					}
 					else
 					{
-						IBuffController.OnRemoveBuff?.Invoke(buffInstance);
+						IBuffController.OnRemoveBuff?.Invoke(this, buffInstance);
 					}
 					Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buffInstance));
 				}
@@ -848,6 +978,7 @@ namespace FishMMO.Shared
 		public void RemoveAll(bool ignoreInvokeRemove = false)
 		{
 			snapshotDirty = true;
+			MarkObservedBuffsDirty();
 			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			// Use a dedicated buffer so that a RemoveAll() triggered from within a Tick() OnTick
 			// callback does not clear the keysToRemove list that Tick() is currently iterating.
@@ -877,11 +1008,11 @@ namespace FishMMO.Shared
 					{
 						if (template.IsDebuff)
 						{
-							IBuffController.OnRemoveDebuff?.Invoke(buff);
+							IBuffController.OnRemoveDebuff?.Invoke(this, buff);
 						}
 						else
 						{
-							IBuffController.OnRemoveBuff?.Invoke(buff);
+							IBuffController.OnRemoveBuff?.Invoke(this, buff);
 						}
 						Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buff));
 					}
@@ -1064,6 +1195,7 @@ namespace FishMMO.Shared
 			if (changed)
 			{
 				snapshotDirty = true;
+				MarkObservedBuffsDirty();
 			}
 
 			// Fire remove events BEFORE add events so that subscribers iterating the
@@ -1074,11 +1206,11 @@ namespace FishMMO.Shared
 				Buff removed = reconcileRemovedEvents[i];
 				if (removed.Template.IsDebuff)
 				{
-					IBuffController.OnRemoveDebuff?.Invoke(removed);
+					IBuffController.OnRemoveDebuff?.Invoke(this, removed);
 				}
 				else
 				{
-					IBuffController.OnRemoveBuff?.Invoke(removed);
+					IBuffController.OnRemoveBuff?.Invoke(this, removed);
 				}
 				BuffEventData eventData = new BuffEventData(Character, removed);
 				if (reconcileTick != TimeManager.UNSET_TICK)
@@ -1094,11 +1226,11 @@ namespace FishMMO.Shared
 				Buff added = reconcileAddedEvents[i];
 				if (added.Template.IsDebuff)
 				{
-					IBuffController.OnAddDebuff?.Invoke(added);
+					IBuffController.OnAddDebuff?.Invoke(this, added);
 				}
 				else
 				{
-					IBuffController.OnAddBuff?.Invoke(added);
+					IBuffController.OnAddBuff?.Invoke(this, added);
 				}
 				BuffEventData eventData = new BuffEventData(Character, added);
 				if (reconcileTick != TimeManager.UNSET_TICK)

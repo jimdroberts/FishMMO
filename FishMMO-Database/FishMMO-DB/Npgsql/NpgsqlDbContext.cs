@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -79,6 +79,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterAttributeEntity> CharacterAttributes { get; set; }
 		/// <summary>Character achievements.</summary>
 		public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
+		/// <summary>Per-character dialogue choice bitmasks.</summary>
+		public DbSet<CharacterDialogueChoiceEntity> CharacterDialogueChoices { get; set; }
 		/// <summary>Character inventory items.</summary>
 		public DbSet<CharacterInventoryEntity> CharacterInventoryItems { get; set; }
 		/// <summary>Character equipped items.</summary>
@@ -115,6 +117,12 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<GuildEntity> Guilds { get; set; }
 		/// <summary>Guild update records.</summary>
 		public DbSet<GuildUpdateEntity> GuildUpdates { get; set; }
+		/// <summary>Guild activity log rows.</summary>
+		public DbSet<GuildLogEntity> GuildLogs { get; set; }
+		/// <summary>Per-guild editable rank rows.</summary>
+		public DbSet<GuildRankEntity> GuildRanks { get; set; }
+		/// <summary>Pending guild recruitment applications.</summary>
+		public DbSet<GuildApplicationEntity> GuildApplications { get; set; }
 		/// <summary>Character party memberships.</summary>
 		public DbSet<CharacterPartyEntity> CharacterParties { get; set; }
 		/// <summary>Parties.</summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishNet.Object.Prediction;
@@ -987,6 +987,15 @@ namespace FishMMO.Shared
 			if (Character == null ||
 				Character.IsTeleporting ||
 				!Character.IsSpawned)
+				return false;
+
+			/* Crowd control. ValidateActiveCast calls this every tick of an active activation, so
+			 * a stun landing mid-cast now cancels the cast rather than letting it finish; Activate
+			 * and ActivateConsumable call it before queueing, so a new activation is refused for
+			 * the duration. Runs on both client and server: the client prediction refuses locally
+			 * and the server refuses authoritatively, which keeps the two in agreement instead of
+			 * producing a reconcile correction on every attempt. */
+			if (CharacterIncapacitation.IsIncapacitated(Character))
 				return false;
 
 			return true;

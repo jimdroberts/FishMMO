@@ -194,16 +194,28 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				// Filter out local-only messages for the specified scene server.
-				// World chat is intentionally NOT in this list — it is a global channel
-				// and must be visible to all players regardless of which scene server
-				// they are connected to.
+				/* Suppress a scene server's own echo of the messages it already delivered.
+				 *
+				 * This list does NOT mark a channel as non-global. It is only ever applied
+				 * together with `c.SceneServerID == sceneServerId` below, so it filters exactly
+				 * one thing: the copy the ORIGIN server is fetching back of a message it has
+				 * already broadcast locally. Every other scene server still pulls it and
+				 * delivers it, so a channel in this list remains fully global.
+				 *
+				 * World used to be omitted here, with a comment reasoning that it is a global
+				 * channel and so must not be filtered — which confused those two meanings and
+				 * made world chat appear TWICE for players on the sending scene server.
+				 * OnWorldChat and OnTradeChat (ChatSystem.WorldChat.cs) are identical in
+				 * delivery: a live message is buffered into OutboundWorldBroadcastBuffer and
+				 * flushed to local players, and the pump-sourced copy is broadcast on arrival.
+				 * Trade was in this list and World was not, so only World double-delivered. */
 				var localChannels = new byte[]
 				{
 					(byte)ChatChannel.Tell,
 					(byte)ChatChannel.Guild,
 					(byte)ChatChannel.Party,
-					(byte)ChatChannel.Trade
+					(byte)ChatChannel.Trade,
+					(byte)ChatChannel.World
 				};
 
 				var messages = await dbContext.Chat

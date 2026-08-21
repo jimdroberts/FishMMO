@@ -137,6 +137,18 @@ namespace FishMMO.Database.Npgsql.Services
 		private const string RollbackFailedMessage = "Transaction rollback failed after an operation error.";
 
 		/// <summary>
+		/// Reported when the caller's token cancels the operation.
+		/// </summary>
+		/// <remarks>
+		/// Cancellation used to surface two different ways from the same method depending on
+		/// timing — thrown when the token fired between retries, returned as a result when it
+		/// fired inside the delegate. Callers written against one contract broke under the other.
+		/// Every path now returns, matching the text <c>MapFinalException</c> already produced
+		/// for a cancelled operation.
+		/// </remarks>
+		private const string CanceledMessage = "The database operation was canceled.";
+
+		/// <summary>
 		/// Outcome classification for exception handling in database operations.
 		/// </summary>
 		private enum ExceptionOutcome
@@ -440,7 +452,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			for (int attempt = 1; attempt <= RetryPolicy.MaxRetries; attempt++)
 			{
-				cancellationToken.ThrowIfCancellationRequested();
+				if (cancellationToken.IsCancellationRequested)
+				{
+					return DatabaseResult<TResult>.Failure(DatabaseErrorCodes.Canceled, CanceledMessage);
+				}
 
 				var stopwatch = PerformanceTracker?.StartTracking();
 				var attemptStartUtc = stopwatch == null ? DateTime.UtcNow : default;
@@ -484,7 +499,14 @@ namespace FishMMO.Database.Npgsql.Services
 					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 					if (ShouldRetry(ex, sqlState, attempt))
 					{
-						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						try
+						{
+							await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						}
+						catch (OperationCanceledException)
+						{
+							return DatabaseResult<TResult>.Failure(DatabaseErrorCodes.Canceled, CanceledMessage);
+						}
 						continue;
 					}
 
@@ -503,12 +525,12 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				finally
 				{
-					transaction?.Dispose();
+					SafeDispose(transaction);
 					if (scopeEntered)
 					{
 						scope.Dispose();
 					}
-					context?.Dispose();
+					SafeDispose(context);
 				}
 			}
 
@@ -652,7 +674,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			for (int attempt = 1; attempt <= RetryPolicy.MaxRetries; attempt++)
 			{
-				cancellationToken.ThrowIfCancellationRequested();
+				if (cancellationToken.IsCancellationRequested)
+				{
+					return DatabaseResult<TResult>.Failure(DatabaseErrorCodes.Canceled, CanceledMessage);
+				}
 
 				var stopwatch = PerformanceTracker?.StartTracking();
 				var attemptStartUtc = stopwatch == null ? DateTime.UtcNow : default;
@@ -680,7 +705,14 @@ namespace FishMMO.Database.Npgsql.Services
 					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 					if (ShouldRetry(ex, sqlState, attempt))
 					{
-						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						try
+						{
+							await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						}
+						catch (OperationCanceledException)
+						{
+							return DatabaseResult<TResult>.Failure(DatabaseErrorCodes.Canceled, CanceledMessage);
+						}
 						continue;
 					}
 					return CreateExceptionResult<TResult>(ex, ClassifyException(ex, sqlState));
@@ -691,7 +723,7 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						scope.Dispose();
 					}
-					context?.Dispose();
+					SafeDispose(context);
 				}
 			}
 
@@ -769,17 +801,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 			for (int attempt = 1; attempt <= RetryPolicy.MaxRetries; attempt++)
 			{
-				cancellationToken.ThrowIfCancellationRequested();
+				if (cancellationToken.IsCancellationRequested)
+				{
+					return DatabaseResult<TResult>.Failure(DatabaseErrorCodes.Canceled, CanceledMessage);
+				}
 
 				var stopwatch = PerformanceTracker?.StartTracking();
 				var attemptStartUtc = stopwatch == null ? DateTime.UtcNow : default;
 
+				NpgsqlDbContext? readContext = null;
 				try
 				{
-					using var context = DbContextFactory.CreateDbContext();
-					using var scope = DatabaseExecutionScope.EnterReadOnly(context);
+					readContext = DbContextFactory.CreateDbContext();
+					using var scope = DatabaseExecutionScope.EnterReadOnly(readContext);
 
-					var result = await action(context).ConfigureAwait(false);
+					var result = await action(readContext).ConfigureAwait(false);
 					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: true);
 					return DatabaseResult<TResult>.Success(result);
 				}
@@ -788,10 +824,21 @@ namespace FishMMO.Database.Npgsql.Services
 					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 					if (ShouldRetry(ex, sqlState, attempt))
 					{
-						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						try
+						{
+							await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						}
+						catch (OperationCanceledException)
+						{
+							return DatabaseResult<TResult>.Failure(DatabaseErrorCodes.Canceled, CanceledMessage);
+						}
 						continue;
 					}
 					return CreateExceptionResult<TResult>(ex, ClassifyException(ex, sqlState));
+				}
+				finally
+				{
+					SafeDispose(readContext);
 				}
 			}
 
@@ -826,7 +873,37 @@ namespace FishMMO.Database.Npgsql.Services
 			catch (Exception ex)
 			{
 				// Monitoring must never break core database execution.
-				Debug.WriteLine($"[FishMMO-DB] Monitoring failure in RecordOperationAttempt: {ex.Message}");
+				//
+				// Trace rather than Debug: Debug.WriteLine is [Conditional("DEBUG")], so in a
+				// Release build this catch compiled down to an empty one and telemetry failures
+				// went unrecorded in exactly the builds where they matter. TRACE is defined in
+				// both configurations, and this stays a diagnostic breadcrumb rather than a
+				// logger dependency this project deliberately does not take.
+				Trace.WriteLine($"[FishMMO-DB] Monitoring failure in RecordOperationAttempt: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Disposes a resource without letting a disposal failure replace the result the caller
+		/// is about to receive.
+		/// </summary>
+		/// <remarks>
+		/// Disposal runs after the outcome of the operation is already decided. A broken
+		/// connection throwing on its way back to the pool says nothing about whether the write
+		/// landed, and an exception escaping a <c>finally</c> discards the returned
+		/// <see cref="DatabaseResult"/> that does — turning a reported success, or a precisely
+		/// classified failure, into an unclassified throw the caller was never told to expect.
+		/// Each resource is disposed independently so one failure cannot leak the others.
+		/// </remarks>
+		private static void SafeDispose(IDisposable? resource)
+		{
+			try
+			{
+				resource?.Dispose();
+			}
+			catch
+			{
+				// Intentionally ignored; see remarks.
 			}
 		}
 

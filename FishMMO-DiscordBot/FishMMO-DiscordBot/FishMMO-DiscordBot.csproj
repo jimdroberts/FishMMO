@@ -22,6 +22,19 @@
     <ProjectReference Include="..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
   </ItemGroup>
 
+  <!--
+    The chat sanitiser is compiled from the game's own source rather than copied.
+
+    It is the security boundary for everything Discord sends into the game, and the server runs
+    the identical code on the way back out. A second copy of it here would drift, and the copy
+    that drifts is the one guarding the untrusted side. The file is deliberately free of Unity
+    and of every other project dependency so that it can be shared this way.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\FishMMO-Unity\Assets\Scripts\Shared\Implementation\Network\Chat\ChatSanitizer.cs"
+             Link="Shared\ChatSanitizer.cs" />
+  </ItemGroup>
+
   <!-- Copy-and-rename config from FishMMO-Setup/ to output. -->
   <Target Name="CopyFishMMOConfig" AfterTargets="Build">
     <Copy SourceFiles="..\..\FishMMO-Setup\Development\appsettings.DiscordBot.json"

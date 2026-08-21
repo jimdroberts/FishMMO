@@ -138,3 +138,69 @@
     height: 22px;
     flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SCREEN SECTION — staged apply
+   Apply arms an auto-revert countdown; Keep disarms it. See UITKOptions.
+   ═══════════════════════════════════════════════════════════ */
+
+.options-screen-status {
+    flex-grow: 1;
+    font-size: 10px;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+}
+
+.options-screen-btn {
+    height: 24px;
+    min-width: 68px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CONTROLS SECTION
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    The binding button is the control itself: pressing it starts listening, and its own label
+    becomes the prompt. That keeps a row to two controls instead of three and makes it obvious
+    which binding is being captured, because only one row can ever be in the listening state.
+*/
+.options-bind-btn {
+    width: 130px;
+    height: 22px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.options-bind-btn--listening {
+    background-color: var(--brand-mid);
+    border-color: var(--brand-border);
+    color: var(--text-bright);
+}
+
+/*
+    A binding that collides with another action. Left applied until the conflict is resolved, so
+    scrolling away and back does not lose the warning.
+*/
+.options-bind-btn--conflict {
+    background-color: var(--danger-tint);
+    border-color: var(--danger-border);
+}
+
+.options-bind-reset {
+    width: 26px;
+    height: 22px;
+    margin-left: 4px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.options-controls-status {
+    margin-top: 2px;
+    margin-bottom: 2px;
+    min-height: 13px;
+    font-size: 10px;
+    flex-shrink: 0;
+}

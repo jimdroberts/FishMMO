@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using FishMMO.Logging;
+using FishMMO.WebServers.Signing;
 
 /// <summary>
 /// API controller exposing patch metadata and downloads. Only patch files
@@ -12,10 +13,12 @@ using FishMMO.Logging;
 public class PatchController : ControllerBase
 {
 	private readonly PatchVersionService versionService;
+	private readonly VersionManifestSigner signer;
 
-	public PatchController(PatchVersionService versionService)
+	public PatchController(PatchVersionService versionService, VersionManifestSigner signer)
 	{
 		this.versionService = versionService;
+		this.signer = signer;
 	}
 
 	/// <summary>
@@ -30,6 +33,25 @@ public class PatchController : ControllerBase
 	/// hammer the origin; the ETag is derived from the indexed patch's hash so
 	/// new patches invalidate the cache immediately.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Every shape this endpoint returns is Ed25519-signed</b> (see
+	/// <see cref="VersionManifestSigner"/>). The <c>sha256</c> field here is the only integrity
+	/// check the launcher applies to a patch archive, so whoever writes this document chooses the
+	/// bytes that get installed; TLS proves who is answering on the socket, not who produced the
+	/// document. The <c>signature</c> field is always present — filled in when a key is
+	/// configured, empty otherwise — because the client's verifier locates the field textually and
+	/// refuses to guess a canonical form when it is missing.
+	/// </para>
+	/// <para>
+	/// The older <c>X-FishMMO-Version-Signature</c> HMAC header is left in place and is a
+	/// different thing solving a different problem: it is keyed on the shared client-gate secret,
+	/// which every client already holds, so it authenticates "a party that knows the gate secret"
+	/// rather than "the release key holder" and cannot survive that secret being extracted from a
+	/// shipped binary. It is retained for compatibility with anything already reading it; the
+	/// body signature is the one that carries the security property.
+	/// </para>
+	/// </remarks>
 	[HttpGet("latest_version")]
 	[HttpHead("latest_version")]
 	public IActionResult GetLatestVersion([FromQuery] string? from)
@@ -41,13 +63,26 @@ public class PatchController : ControllerBase
 			return StatusCode(500, "Latest version information not available on server.");
 		}
 
-		// Build the response payload and a weak ETag derived from its contents.
-		object payload;
+		/* Build the response payload and a weak ETag derived from its contents.
+		 *
+		 * The payload is built as EXPLICIT JSON TEXT rather than an anonymous object handed to
+		 * MVC's serialiser, because the Ed25519 signature below covers the literal bytes the
+		 * client receives. The client verifies by locating its own "signature" field in the
+		 * received string and blanking it — it never re-serialises — so if the framework changed
+		 * the spacing, the property naming policy or the escaping table (an AddJsonOptions call
+		 * anywhere in Program.cs would), every manifest in the field would stop verifying and
+		 * nothing would connect that to the change. ManifestJsonWriter owns the format instead.
+		 *
+		 * All four response shapes go through the same path, so all four are signed. The
+		 * short "latest_version only" shape is signed for the same reason as the rest: it is what
+		 * decides whether the launcher believes an update exists at all, and an unsigned shape
+		 * would be a downgrade oracle (strip the patch fields, keep the version). */
+		ManifestJsonWriter writer = new ManifestJsonWriter();
 		string etagSource;
 
 		if (string.IsNullOrEmpty(from))
 		{
-			payload = new { latest_version = latest };
+			writer.AddString("latest_version", latest);
 			etagSource = "v:" + latest;
 		}
 		else
@@ -67,7 +102,8 @@ public class PatchController : ControllerBase
 
 			if (clientVersion >= latestVersion)
 			{
-				payload = new { latest_version = latest, up_to_date = true };
+				writer.AddString("latest_version", latest)
+					  .AddBool("up_to_date", true);
 				etagSource = "u:" + latest;
 			}
 			else
@@ -75,18 +111,16 @@ public class PatchController : ControllerBase
 				var entry = versionService.TryGetPatch(clientVersion.FullVersion, latestVersion.FullVersion);
 				if (entry == null)
 				{
-					payload = new { latest_version = latest, patch_available = false };
+					writer.AddString("latest_version", latest)
+						  .AddBool("patch_available", false);
 					etagSource = "n:" + clientVersion.FullVersion + "->" + latestVersion.FullVersion;
 				}
 				else
 				{
-					payload = new
-					{
-						latest_version = latest,
-						patch_available = true,
-						sha256 = entry.Sha256Hex,
-						size = entry.Size,
-					};
+					writer.AddString("latest_version", latest)
+						  .AddBool("patch_available", true)
+						  .AddString("sha256", entry.Sha256Hex)
+						  .AddNumber("size", entry.Size);
 					etagSource = entry.Sha256Hex;
 				}
 			}
@@ -128,13 +162,32 @@ public class PatchController : ControllerBase
 			Response.Headers["X-FishMMO-Version-Signature"] = signature;
 		}
 
+		/* Sign before the HEAD short-circuit so a HEAD and a GET cannot disagree about whether
+		 * this server is capable of producing a manifest at all. Ed25519 is deterministic
+		 * (RFC 8032), so the same payload always yields the same signature and the ETag above
+		 * stays a correct cache key. */
+		string document;
+		try
+		{
+			document = signer.BuildDocument(writer);
+		}
+		catch (Exception ex)
+		{
+			/* SignDocument throws only when its canonicalisation self-check fails, i.e. the
+			 * document it is about to emit would NOT reproduce the bytes it signed. Serving it
+			 * anyway would hand every client a manifest it must refuse; serving it unsigned would
+			 * be worse. 500 is the honest answer. */
+			Log.Error("PatchController", $"Refusing to serve an unverifiable version manifest: {ex.Message}");
+			return StatusCode(500, "Internal server error: version manifest could not be signed.");
+		}
+
 		if (HttpMethods.IsHead(Request.Method))
 		{
 			// HEAD: emit headers only, no body.
 			return new EmptyResult();
 		}
 
-		return Ok(payload);
+		return Content(document, "application/json");
 	}
 
 	/// <summary>

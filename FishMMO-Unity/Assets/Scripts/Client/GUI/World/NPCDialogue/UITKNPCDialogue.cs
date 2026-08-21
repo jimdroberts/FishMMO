@@ -10,8 +10,33 @@ namespace FishMMO.Client
 	/// renders the speaker, body text, and dynamic choice buttons, and sends the player's choice
 	/// back to the server for validation.
 	/// </summary>
+	/// <remarks>
+	/// <para><b>Content is written after Show, and again after a tree rebuild.</b> A
+	/// <c>UIDocument</c> re-clones its UXML on every enable, so the speaker, body and choice
+	/// buttons written before <see cref="UITKControl.Show"/> belonged to a tree that was discarded
+	/// microseconds later — the panel opened blank. The node arrives in a broadcast, is kept as
+	/// plain data, and is rendered from <see cref="OnAfterShow"/> and
+	/// <see cref="OnAfterStarting"/>. Both, because on a panel's first open <c>hasStarted</c> is
+	/// still false and the re-initialisation path bails out before <c>OnAfterShow</c> would help.</para>
+	///
+	/// <para><b>There is always a way out.</b> A node whose choices have all been filtered away —
+	/// every one already taken, every one's conditions unmet — used to render no buttons at all,
+	/// and this panel has no close button of its own. The player was left with a dialogue box that
+	/// could only be escaped, and escaping it left the session open on the server. A Leave button
+	/// is added whenever no choice survives the filter, and closing the panel by any route tells
+	/// the server the conversation is over.</para>
+	/// </remarks>
 	public class UITKNPCDialogue : UITKCharacterControl
 	{
+		/// <summary>
+		/// Choice index that tells the server the player has left the conversation.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors <c>InteractableSystem.DialogueLeaveChoiceIndex</c>. Declared here rather than
+		/// shared because the server type lives in the server assembly, which the client does not
+		/// reference; the value is part of the wire contract either way.
+		/// </remarks>
+		private const int LEAVE_CHOICE_INDEX = -1;
 		/// <summary>Name of the speaker label element.</summary>
 		private const string SPEAKER_NAME = "dialogue-speaker";
 
@@ -114,8 +139,73 @@ namespace FishMMO.Client
 			}
 
 			currentNode = startNode;
-			RefreshUI();
+
+			/* Show first, then render. Enabling the document clones a fresh tree, so a RefreshUI
+			 * before this line writes into elements that are thrown away — which is exactly what
+			 * this did, and why the dialogue opened blank. Show() calls OnAfterShow, which
+			 * renders. */
 			Show();
+
+			// Already visible: Show is a no-op and OnAfterShow never ran, so render directly.
+			RefreshUI();
+		}
+
+		/// <summary>
+		/// Renders the current node into the tree the player will actually see.
+		/// </summary>
+		protected override void OnAfterShow()
+		{
+			RefreshUI();
+		}
+
+		/// <summary>
+		/// Renders the current node again after the visual tree has been rebuilt.
+		/// </summary>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+			RefreshUI();
+		}
+
+		/// <summary>
+		/// Tells the server the conversation is over whenever this panel closes.
+		/// </summary>
+		/// <remarks>
+		/// Escape, the close-on-escape registration and any other route through Hide all land
+		/// here. Without it the server session outlived the panel, and every later dialogue
+		/// message was validated against a conversation the player had walked away from.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
+		{
+			/* Guarded on Visible: Hide is reached from several places, and telling the server the
+			 * player left a conversation they were not having would end a session that a later
+			 * open had legitimately started. */
+			if (!overrideIsAlwaysOpen && Visible)
+			{
+				SendLeave();
+			}
+			base.Hide(overrideIsAlwaysOpen);
+		}
+
+		/// <summary>
+		/// Sends the leave message for the active session, if there is one, and clears local state.
+		/// </summary>
+		private void SendLeave()
+		{
+			if (currentNode == null || Character == null || Client == null)
+			{
+				ClearDialogue();
+				return;
+			}
+
+			Client.NetworkManager.ClientManager.Broadcast(new DialogueChoiceBroadcast()
+			{
+				InteractableID = currentInteractableID,
+				NodeId = currentNode.NodeId,
+				ChoiceIndex = LEAVE_CHOICE_INDEX,
+			}, Channel.Reliable);
+
+			ClearDialogue();
 		}
 
 		/// <summary>
@@ -174,6 +264,10 @@ namespace FishMMO.Client
 
 			ClearChoiceButtons();
 
+			int rendered = 0;
+
+			/* Choices is a serialized list, so an authored node can legitimately leave it null.
+			 * Reading .Count off it threw straight out of a broadcast handler. */
 			if (currentNode.Choices != null)
 			{
 				for (int i = 0; i < currentNode.Choices.Count; i++)
@@ -218,8 +312,36 @@ namespace FishMMO.Client
 					btn.AddToClassList("fish-button");
 					btn.AddToClassList(CHOICE_BUTTON_CLASS);
 					choicesContainer.Add(btn);
+					++rendered;
 				}
 			}
+
+			/* Every filter above can reject every choice — a node whose options are all one-time
+			 * and all already taken does exactly that, and so does a node authored with no choices
+			 * at all. Without this the panel showed text, no buttons, and no close, while the
+			 * server sat holding an open session. */
+			if (rendered == 0)
+			{
+				Button leave = new Button(OnLeaveSelected)
+				{
+					text = "Leave",
+				};
+				leave.AddToClassList("fish-button");
+				leave.AddToClassList(CHOICE_BUTTON_CLASS);
+				choicesContainer.Add(leave);
+			}
+		}
+
+		/// <summary>
+		/// Ends the conversation from the Leave button.
+		/// </summary>
+		/// <remarks>
+		/// Goes through <see cref="UITKControl.Hide()"/> rather than sending directly, so the
+		/// button and the Escape key take exactly the same path and cannot drift apart.
+		/// </remarks>
+		private void OnLeaveSelected()
+		{
+			Hide();
 		}
 
 		/// <summary>

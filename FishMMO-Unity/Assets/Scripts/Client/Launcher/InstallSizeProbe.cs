@@ -77,7 +77,20 @@ namespace FishMMO.Client
 			inProgress = false;
 
 			long? result = null;
-			if (task.IsFaulted)
+			if (task.IsCompletedSuccessfully)
+			{
+				/* Read only on the success path.
+				 *
+				 * Task.Result on a faulted or cancelled task does not return — it re-throws,
+				 * wrapped in an AggregateException, from inside a coroutine, where Unity logs it
+				 * and silently stops the coroutine. The completion check above means it never
+				 * blocks, but "never blocks" was the only thing the old shape guaranteed; the
+				 * else-branch it sat in covered faulted and cancelled alike, and only faulted
+				 * was actually handled. IsCompletedSuccessfully states the precondition that
+				 * makes reading Result safe instead of inferring it. */
+				result = task.Result;
+			}
+			else if (task.IsFaulted)
 			{
 				// Task.Run captures exceptions into the task rather than raising them, so
 				// without this an unreadable install directory would fail silently and the
@@ -86,7 +99,9 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				result = task.Result;
+				// Cancelled. Nothing cancels this today, but reporting "unavailable" is the
+				// correct answer for a measurement that did not finish, and it is one line.
+				Log.Debug("InstallSizeProbe", "Install size measurement did not complete.");
 			}
 
 			if (result.HasValue)

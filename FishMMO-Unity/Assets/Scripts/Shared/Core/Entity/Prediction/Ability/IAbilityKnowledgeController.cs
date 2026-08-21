@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
@@ -22,6 +22,16 @@ namespace FishMMO.Shared.Core
 		/// Event triggered when a new ability event is added.
 		/// </summary>
 		event Action<AbilityEvent> OnAddKnownAbilityEvent;
+		/// <summary>
+		/// Event triggered when a crafted ability is removed (forgotten / re-crafted).
+		/// Carries the ability's reference ID; the instance is already gone by then.
+		/// </summary>
+		/// <remarks>
+		/// The add half of this pair has always existed. Without the remove half every subscriber
+		/// had to poll <see cref="KnownAbilities"/> to notice a forgotten ability — which is
+		/// exactly what the hotkey bar was doing, on every frame, for all twelve slots.
+		/// </remarks>
+		event Action<long> OnRemoveAbility;
 
 		/// <summary>
 		/// Dictionary of known abilities by ID.

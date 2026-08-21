@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -238,6 +238,28 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterFriendData>)friends;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> IsBlockedAsync(long characterId, long otherCharacterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || otherCharacterId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID. Character IDs must be greater than 0.");
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				return await dbContext.CharacterFriends
+					.AsNoTracking()
+					.AnyAsync(f => f.CharacterID == characterId &&
+								   f.FriendCharacterID == otherCharacterId &&
+								   f.IsBlocked &&
+								   !f.Deleted, cancellationToken)
+					.ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

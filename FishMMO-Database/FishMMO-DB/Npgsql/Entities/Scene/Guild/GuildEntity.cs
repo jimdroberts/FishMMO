@@ -41,6 +41,27 @@ namespace FishMMO.Database.Npgsql.Entities
 		public string MessageOfTheDay { get; set; }
 
 		/// <summary>
+		/// Recruitment advertisement shown in the guild directory.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="Notice"/> and <see cref="MessageOfTheDay"/> on purpose. Those
+		/// two are written for people who are already members; this one is written for people who
+		/// are not, and a guild that had to advertise with its internal notice would either leak
+		/// its business or stop using the notice.
+		/// </remarks>
+		public string Blurb { get; set; }
+
+		/// <summary>
+		/// Comma-separated recruitment tags, lower-cased, used by directory search.
+		/// </summary>
+		public string Tags { get; set; }
+
+		/// <summary>
+		/// Whether the guild is listed in the recruitment directory and accepting applications.
+		/// </summary>
+		public bool IsRecruiting { get; set; }
+
+		/// <summary>
 		/// Row creation timestamp (UTC).
 		/// </summary>
 		public DateTime TimeCreated { get; set; }
@@ -49,5 +70,15 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// Gets or sets the guild membership relationships.
 		/// </summary>
 		public List<CharacterGuildEntity> Characters { get; set; }
+
+		/// <summary>
+		/// Gets or sets the guild's editable rank rows.
+		/// </summary>
+		public List<GuildRankEntity> Ranks { get; set; }
+
+		/// <summary>
+		/// Gets or sets the guild's pending recruitment applications.
+		/// </summary>
+		public List<GuildApplicationEntity> Applications { get; set; }
 	}
 }

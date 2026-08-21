@@ -118,7 +118,9 @@ namespace FishMMO.Shared
 			for (int i = 0; i < Items.Count; ++i)
 			{
 				Item item = Items[i];
-				if (item.Template.ID == itemTemplate.ID)
+				// Empty slots are stored as nulls, so this has to be guarded — the sibling
+				// GetItemCount below always did, and the Interactable Container's copy does too.
+				if (item != null && item.Template.ID == itemTemplate.ID)
 				{
 					return true;
 				}
@@ -259,6 +261,14 @@ namespace FishMMO.Shared
 			uint amountRemaining = item.IsStackable ? item.Stackable.Amount : 1;
 			for (int i = 0; i < Items.Count; ++i)
 			{
+				// A locked slot is mid-operation (a consumable is being activated out of it) and
+				// must not be counted as available capacity — otherwise CanAddItem promises room
+				// that TryAddItem then refuses to use, and the caller sees a silent failure.
+				if (IsSlotLocked(i))
+				{
+					continue;
+				}
+
 				// If we find an empty slot, we return instantly.
 				if (IsSlotEmpty(i))
 				{
@@ -270,9 +280,11 @@ namespace FishMMO.Shared
 					!Items[i].Stackable.IsStackFull &&
 					Items[i].IsMatch(item))
 				{
-					uint remainingCapacity = Items[i].Template.MaxStackSize - Items[i].Stackable.Amount;
-
-					amountRemaining = remainingCapacity.AbsoluteSubtract(amountRemaining);
+					// Saturating: consume as much of the outstanding amount as this stack can take.
+					// RemainingCapacity clamps at zero, so a stack already sitting above MaxStackSize
+					// (a template whose cap was lowered, or an older overflowed row) contributes
+					// nothing instead of underflowing into ~4 billion free space.
+					amountRemaining -= Math.Min(amountRemaining, Items[i].Stackable.RemainingCapacity);
 				}
 
 				if (amountRemaining < 1) return true;
@@ -304,7 +316,9 @@ namespace FishMMO.Shared
 				for (int i = 0; i < Items.Count; ++i)
 				{
 					// Search for items of the same type so we can stack it.
+					// Never merge into a locked slot: the item in it is being consumed.
 					if (Items[i] != null &&
+						!IsSlotLocked(i) &&
 						Items[i].IsStackable &&
 						Items[i].Stackable.AddToStack(item))
 					{
@@ -327,8 +341,13 @@ namespace FishMMO.Shared
 				// Find the first slot to put the remaining item in.
 				if (IsSlotEmpty(i))
 				{
-					// Set the item slot to the item, presume it succeeded.
-					SetItemSlot(item, i);
+					// SetItemSlot can now refuse (locked slot), so the result is checked rather
+					// than presumed: keep looking instead of reporting a placement that did not
+					// happen and dropping the item on the floor.
+					if (!SetItemSlot(item, i))
+					{
+						continue;
+					}
 
 					// Add the modified item to the list.
 					modifiedItems.Add(item);
@@ -346,12 +365,23 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Sets the item in the specified slot. Previous item will be lost if not referenced elsewhere.
 		/// </summary>
+		/// <remarks>
+		/// Refuses a locked slot. This is the write primitive every other mutation funnels through,
+		/// and it was the one that did not check the lock — so a cross-container move could overwrite
+		/// a slot whose item was mid-consumption, and the activation would then complete against an
+		/// item that had already gone somewhere else. RemoveItem and SwapItemSlots check the lock
+		/// themselves before calling in here, so this guard is redundant for them by design.
+		/// <para>
+		/// Callers MUST check the return value. It is a genuine refusal, not a formality.
+		/// </para>
+		/// </remarks>
 		/// <param name="item">The item to set.</param>
 		/// <param name="slot">The slot index to set the item in.</param>
 		/// <returns>True if the item was successfully set, false otherwise.</returns>
 		public bool SetItemSlot(Item item, int slot)
 		{
-			if (!IsValidSlot(slot))
+			if (!IsValidSlot(slot) ||
+				IsSlotLocked(slot))
 			{
 				// Setting the slot failed.
 				return false;

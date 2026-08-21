@@ -28,6 +28,52 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Write operations are executed inside the BaseService execution wrappers for retry and exception mapping.
 	/// Version/authority semantics are enforced in UPSERT via <see cref="BaseService{TEntity}.ExecuteBulkUpsertAsync"/>.
 	/// </remarks>
+	/// <remarks>
+	/// SLOT VERSIONING CONTRACT — read this before touching the delete or upsert SQL below.
+	/// <para>
+	/// A row in this table represents <b>the occupancy of one (character_id, slot) pair</b>, and
+	/// <c>version</c> is the optimistic-concurrency counter of the <b>item currently occupying it</b>.
+	/// The upsert and the delete have to agree on that, or the table eats items.
+	/// </para>
+	/// <para>
+	/// The upsert is gated <c>EXCLUDED.version &gt; version</c> so a late write cannot overwrite a newer
+	/// state of the same slot. The slot delete used to SOFT-delete the row and stamp the caller's
+	/// version into it — and because a vacated slot has no item whose version could be quoted, every
+	/// ordinary move passed <c>long.MaxValue</c> ("to ensure the delete succeeds"). The row therefore
+	/// survived at version 9223372036854775807, nothing could ever exceed it, and that slot became
+	/// permanently unwritable: the next item placed there was rejected with a StaleStateException and
+	/// vanished on the next login. Moving any item out of any slot once was enough, in ordinary play,
+	/// with no exploit. That reassuring comment is exactly how the bug was introduced.
+	/// </para>
+	/// <para>
+	/// Resolution, in two halves that between them make the failure unreachable:
+	/// </para>
+	/// <para>
+	/// 1. <b>Vacating a slot HARD-deletes the row.</b> An empty slot is the absence of a row, not a row
+	/// wearing a flag. There is then no surviving version for the next occupant to have to beat, which
+	/// is the honest answer: the departed item's version and the arriving item's version are two
+	/// unrelated counters, and no ordering between them means anything. The delete keeps a
+	/// <c>version &lt;= incoming</c> guard so a genuinely stale delete cannot remove a row that has
+	/// already moved on; <c>long.MaxValue</c> still reads as "unconditional", but it can no longer
+	/// leave a poisoned corpse behind, because it leaves nothing behind at all.
+	/// </para>
+	/// <para>
+	/// 2. <b>The upsert may reclaim a soft-deleted row unconditionally</b>
+	/// (<c>WHERE deleted = TRUE OR EXCLUDED.version &gt; version</c>). A deleted row holds no item, so
+	/// there is no concurrent state to protect and the version comparison is meaningless. This half is
+	/// what repairs rows that are ALREADY poisoned in a live database: they are tombstones, so the
+	/// first write to that slot now simply takes it over. No migration and no manual SQL is required.
+	/// Live (non-deleted) rows remain fully version-gated exactly as before.
+	/// </para>
+	/// <para>
+	/// KNOWN GAP, deliberately not closed here: <c>version</c> travels with the <i>item</i>, not with the
+	/// slot, so a per-item sequence is being used as a per-slot sequence. With the tombstone path gone
+	/// the remaining exposure is narrow — per-character writes are serialised FIFO by the async
+	/// worker's entity key — but two scene servers writing the same character concurrently are still
+	/// unordered. Making <c>version</c> a slot-owned sequence is the real fix, and it is a schema
+	/// change rather than a targeted one.
+	/// </para>
+	/// </remarks>
 	public sealed class CharacterBankService : BaseService<CharacterBankEntity>, ICharacterBankService
 	{
 		/// <summary>
@@ -100,7 +146,8 @@ namespace FishMMO.Database.Npgsql.Services
 							time_deleted = NULL,
 							version = EXCLUDED.version
 						WHERE
-							EXCLUDED.version > {TableName}.version
+							{TableName}.deleted = TRUE
+							OR EXCLUDED.version > {TableName}.version
 						RETURNING id
 					)
 					SELECT COALESCE((SELECT id FROM upserted LIMIT 1), 0)::bigint AS value";
@@ -183,7 +230,15 @@ namespace FishMMO.Database.Npgsql.Services
 				var versionArray = activeItems.Select(i => i.Version).ToArray();
 				var templateIdArray = activeItems.Select(i => i.TemplateID).ToArray();
 				var seedArray = activeItems.Select(i => i.Seed).ToArray();
-				var amountArray = activeItems.Select(i => i.Amount).ToArray();
+				// Amount is a uint in the DTO and a bigint in the table. Both halves of that mismatch
+				// mattered: Npgsql 5 cannot bind a CLR uint[] at all ("The CLR array type
+				// System.UInt32[] isn't supported"), so every batched item write threw
+				// NotSupportedException at runtime and was reported as a plain DATABASE_ERROR; and
+				// the UNNEST cast was ::integer[], which would have silently overflowed any stack
+				// above int.MaxValue had the bind ever succeeded. Projecting to long[] and casting
+				// to bigint[] fixes both. (Caught against PostgreSQL 18.6 — a batched persist could
+				// not complete at all before this.)
+				var amountArray = activeItems.Select(i => (long)i.Amount).ToArray();
 
 				var sql = GetUpsertSql();
 
@@ -197,8 +252,21 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
-		private string GetUpsertSql()
+		/// <summary>
+		/// Builds the UNNEST + UPSERT statement for a batch of rows.
+		/// </summary>
+		/// <param name="versionGated">
+		/// <c>true</c> for incremental writes, which must lose to a newer state of the same slot.
+		/// <c>false</c> for <see cref="SaveSnapshotAsync"/>, which is authoritative and must land.
+		/// </param>
+		private string GetUpsertSql(bool versionGated = true)
 		{
+			// Reclaiming a soft-deleted row is unconditional in both modes: a deleted row holds no
+			// item, so there is no concurrent state for the version comparison to protect.
+			string gate = versionGated
+				? $"\n\t\t\t\tWHERE\n\t\t\t\t\t{TableName}.deleted = TRUE\n\t\t\t\t\tOR EXCLUDED.version > {TableName}.version"
+				: string.Empty;
+
 			return $@"
 				INSERT INTO {TableName}
 					(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
@@ -218,7 +286,7 @@ namespace FishMMO.Database.Npgsql.Services
 					{{2}}::bigint[],
 					{{3}}::integer[],
 					{{4}}::integer[],
-					{{5}}::integer[]
+					{{5}}::bigint[]
 				) AS u(character_id, slot, version, template_id, seed, amount)
 				ON CONFLICT (character_id, slot)
 				DO UPDATE SET
@@ -227,9 +295,7 @@ namespace FishMMO.Database.Npgsql.Services
 					amount = EXCLUDED.amount,
 					deleted = FALSE,
 					time_deleted = NULL,
-					version = EXCLUDED.version
-				WHERE
-					EXCLUDED.version > {TableName}.version;";
+					version = EXCLUDED.version{gate};";
 		}
 
 		/// <inheritdoc/>
@@ -251,12 +317,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var now = DateTime.UtcNow;
-				var sql = $@"UPDATE {TableName}
-					SET deleted = TRUE, time_deleted = {{0}}, version = {{1}}
-					WHERE character_id = {{2}} AND deleted = FALSE AND version < {{1}}";
+				// See the SLOT VERSIONING CONTRACT on this class: vacating a slot removes its row
+				// outright rather than leaving a tombstone stamped with the caller's version.
+				// Callers legitimately pass long.MaxValue here (character deletion), and that must
+				// not be able to render every slot unwritable for the rest of the row's life.
+				var sql = $@"DELETE FROM {TableName}
+					WHERE character_id = {{1}} AND version <= {{0}}";
+
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { now, incomingVersion, characterId }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { incomingVersion, characterId }, cancellationToken)
 					.ConfigureAwait(false);
 
 				if (rowsAffected == 0)
@@ -293,12 +362,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var now = DateTime.UtcNow;
-				var sql = $@"UPDATE {TableName}
-					SET deleted = TRUE, time_deleted = {{0}}, version = {{1}}
-					WHERE character_id = {{2}} AND slot = {{3}} AND deleted = FALSE AND version < {{1}}";
+				// See the SLOT VERSIONING CONTRACT on this class. The row IS the slot occupancy:
+				// when the item leaves, the row goes with it. The old statement soft-deleted the row
+				// and stamped the incoming version into it, so a caller passing long.MaxValue — which
+				// every ordinary move did — left an unwritable slot behind for the character's life.
+				var sql = $@"DELETE FROM {TableName}
+					WHERE character_id = {{1}} AND slot = {{2}} AND version <= {{0}}";
+
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { now, incomingVersion, characterId, slot }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { incomingVersion, characterId, slot }, cancellationToken)
 					.ConfigureAwait(false);
 
 				if (rowsAffected == 0)
@@ -313,6 +385,103 @@ namespace FishMMO.Database.Npgsql.Services
 						throw new StaleStateException("Bank slot delete rejected due to a stale Version.");
 					}
 				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> SaveSnapshotAsync(long characterId, IEnumerable<CharacterBankData> items, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID");
+			}
+
+			// A null collection means "this character holds nothing", which is a legitimate snapshot
+			// and must still prune. It is NOT the same as the batch PersistAsync above, which treats
+			// an empty collection as a caller error because it has nothing to say.
+			var snapshot = items?.ToList() ?? new List<CharacterBankData>();
+
+			if (snapshot.Any(i => i.CharacterID != characterId))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Snapshot contained rows belonging to a different character.");
+			}
+
+			if (snapshot.Any(i => i.Version <= 0))
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"One or more bank items had an invalid Version. Version must be greater than 0.");
+			}
+
+			// Two rows claiming one slot would make the upsert "affect row a second time"; the last
+			// writer wins, matching the in-memory container which can only hold one item per slot.
+			if (snapshot.Count > 1)
+			{
+				var deduped = new Dictionary<int, CharacterBankData>();
+				foreach (var item in snapshot)
+				{
+					deduped[item.Slot] = item;
+				}
+
+				if (deduped.Count != snapshot.Count)
+				{
+					snapshot = deduped.Values.ToList();
+				}
+			}
+
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				var slotArray = snapshot.Select(i => i.Slot).ToArray();
+
+				// Prune first: any slot the character no longer occupies loses its row. Without this
+				// the snapshot could only ever add, and a delete that failed to persist would leave a
+				// phantom item that reappears on every login. `slot <> ALL('{}')` is TRUE, so an
+				// empty snapshot correctly empties the container.
+				var pruneSql = $@"DELETE FROM {TableName}
+					WHERE character_id = {{0}} AND slot <> ALL({{1}}::integer[])";
+
+				await dbContext.Database
+					.ExecuteSqlRawAsync(pruneSql, new object[] { characterId, slotArray }, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (snapshot.Count == 0)
+				{
+					return;
+				}
+
+				var now = DateTime.UtcNow;
+				var characterIdArray = snapshot.Select(i => i.CharacterID).ToArray();
+				var versionArray = snapshot.Select(i => i.Version).ToArray();
+				var templateIdArray = snapshot.Select(i => i.TemplateID).ToArray();
+				var seedArray = snapshot.Select(i => i.Seed).ToArray();
+				// Amount is a uint in the DTO and a bigint in the table. Both halves of that mismatch
+				// mattered: Npgsql 5 cannot bind a CLR uint[] at all ("The CLR array type
+				// System.UInt32[] isn't supported"), so every batched item write threw
+				// NotSupportedException at runtime and was reported as a plain DATABASE_ERROR; and
+				// the UNNEST cast was ::integer[], which would have silently overflowed any stack
+				// above int.MaxValue had the bind ever succeeded. Projecting to long[] and casting
+				// to bigint[] fixes both. (Caught against PostgreSQL 18.6 — a batched persist could
+				// not complete at all before this.)
+				var amountArray = snapshot.Select(i => (long)i.Amount).ToArray();
+
+				// Ungated on purpose — see the interface remarks. Every row must land, so there is no
+				// expected-row-count assertion to make either: the upsert affects all of them.
+				await dbContext.Database
+					.ExecuteSqlRawAsync(
+						GetUpsertSql(versionGated: false),
+						new object[] { characterIdArray, slotArray, versionArray, templateIdArray, seedArray, amountArray, now },
+						cancellationToken)
+					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

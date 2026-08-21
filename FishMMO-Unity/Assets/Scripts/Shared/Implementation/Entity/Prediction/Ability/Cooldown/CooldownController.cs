@@ -501,6 +501,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Tries to get the full cooldown instance for an ability or consumable.
+		/// </summary>
+		/// <param name="id">Ability or consumable template ID.</param>
+		/// <param name="instance">The cooldown instance.</param>
+		/// <returns>True if a cooldown is tracked for the id.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool TryGetCooldownInstance(long id, out CooldownInstance instance)
+		{
+			return cooldowns.TryGetValue(id, out instance);
+		}
+
+		/// <summary>
 		/// Adds a cooldown for the specified ability.
 		/// </summary>
 		/// <param name="id">Ability ID.</param>

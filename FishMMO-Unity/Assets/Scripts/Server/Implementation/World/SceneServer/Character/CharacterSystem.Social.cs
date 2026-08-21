@@ -1,4 +1,4 @@
-using FishNet.Broadcast;
+﻿using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Transporting;
 using System;
@@ -27,10 +27,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// All parameters must be captured on the main thread before enqueueing.
 		/// </summary>
 		/// <param name="owner">Network connection of the character owner (captured on main thread).</param>
+		/// <param name="characterID">The character the payload is for (captured on main thread).</param>
 		/// <param name="guildID">Guild ID (captured on main thread).</param>
 		/// <param name="partyID">Party ID (captured on main thread).</param>
 		/// <param name="friendIDs">Friend character IDs (captured on main thread), or null if none.</param>
-		private async Task SendAllCharacterDataAsync(NetworkConnection owner, long guildID, long partyID, List<long> friendIDs)
+		private async Task SendAllCharacterDataAsync(NetworkConnection owner, long characterID, long guildID, long partyID, List<long> friendIDs)
 		{
 			if (owner == null || !owner.IsActive)
 			{
@@ -51,13 +52,76 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					DatabaseResult<IReadOnlyList<CharacterGuildData>> guildResult = await guildService.FetchManyAsync(guildID);
 					if (guildResult.IsSuccess && guildResult.Data != null && guildResult.Data.Count > 0)
 					{
-						var addBroadcasts = guildResult.Data.Select(x => new GuildAddBroadcast()
+						IReadOnlyList<CharacterGuildData> members = guildResult.Data;
+
+						/* The connecting character's own membership row, found in the roster that
+						 * was just read rather than fetched again — it is guaranteed to be in
+						 * there, since this roster is the guild they belong to. */
+						byte viewerRankOrder = 0;
+						for (int i = 0; i < members.Count; ++i)
+						{
+							if (members[i].CharacterID == characterID)
+							{
+								viewerRankOrder = members[i].Rank;
+								break;
+							}
+						}
+
+						/* The officer note is filtered HERE, where the payload is built, not in
+						 * the panel. A client that may not read the note never receives it, so
+						 * there is nothing in the packet for a modified client or a packet capture
+						 * to recover. The viewer's permissions come from the guild's own rank
+						 * rows, so a guild that has taken ViewOfficerNotes off a rank stops
+						 * sending the column to that rank on the very next connect. */
+						GuildPermissions viewerPermissions = GuildPermissions.None;
+						byte leaderRankOrder = 0;
+						GuildRankEntry[] rankEntries = Array.Empty<GuildRankEntry>();
+						if (Server.Database.ServiceRegistry.TryGet<IGuildRankService>(out var rankService))
+						{
+							DatabaseResult<IReadOnlyList<GuildRankData>> ladderResult = await rankService.FetchManyAsync(guildID);
+							if (ladderResult.IsSuccess && ladderResult.Data != null)
+							{
+								rankEntries = new GuildRankEntry[ladderResult.Data.Count];
+								for (int i = 0; i < ladderResult.Data.Count; ++i)
+								{
+									GuildRankData rank = ladderResult.Data[i];
+									if (rank.RankOrder > leaderRankOrder)
+									{
+										leaderRankOrder = rank.RankOrder;
+									}
+									if (rank.RankOrder == viewerRankOrder)
+									{
+										viewerPermissions = (GuildPermissions)rank.Permissions;
+									}
+
+									rankEntries[i] = new GuildRankEntry()
+									{
+										RankOrder = rank.RankOrder,
+										Name = rank.Name ?? string.Empty,
+										Permissions = rank.Permissions,
+									};
+								}
+							}
+						}
+
+						bool mayReadOfficerNotes = (viewerPermissions & GuildPermissions.ViewOfficerNotes) == GuildPermissions.ViewOfficerNotes;
+
+						var addBroadcasts = members.Select(x => new GuildAddBroadcast()
 						{
 							GuildID = x.GuildID,
 							CharacterID = x.CharacterID,
-							Rank = (GuildRank)x.Rank,
-							Location = x.Location,
+							RankOrder = x.Rank,
+							Location = x.Location ?? string.Empty,
+							RaceID = x.RaceID,
+							Level = x.Level,
+							PublicNote = x.PublicNote ?? string.Empty,
+							OfficerNote = mayReadOfficerNotes ? (x.OfficerNote ?? string.Empty) : string.Empty,
+							LastOnlineUtcTicks = x.LastOnlineUtc.Ticks,
 						}).ToList();
+
+						GuildPermissions capturedPermissions = viewerPermissions;
+						byte capturedRankOrder = viewerRankOrder;
+						byte capturedLeaderRankOrder = leaderRankOrder;
 
 						TryEnqueueMainThread(() =>
 						{
@@ -67,6 +131,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								{
 									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
+
+								/* The ladder goes out WITH the roster, not on request. Every
+								 * roster row renders its rank by NAME, and the name lives only in
+								 * the ladder — a client that had the roster but not the ladder
+								 * would render a column of bare numbers until something else
+								 * happened to the guild. */
+								Server.NetworkWrapper.Broadcast(owner, new GuildRankListBroadcast()
+								{
+									GuildID = guildID,
+									Ranks = rankEntries,
+									ViewerRankOrder = capturedRankOrder,
+									ViewerPermissions = (long)capturedPermissions,
+									LeaderRankOrder = capturedLeaderRankOrder,
+								}, true, Channel.Reliable);
+
+								/* Refresh the server's own cache of this character's standing, so
+								 * the cheap pre-filters in GuildSystem start out agreeing with the
+								 * database rather than with whatever the character loaded with. */
+								if (owner.FirstObject != null)
+								{
+									IGuildController guildController = owner.FirstObject.GetComponent<IGuildController>();
+									if (guildController != null && guildController.ID == guildID)
+									{
+										guildController.RankOrder = capturedRankOrder;
+										guildController.Permissions = capturedPermissions;
+										guildController.LeaderRankOrder = capturedLeaderRankOrder;
+									}
+								}
 							}
 						});
 					}

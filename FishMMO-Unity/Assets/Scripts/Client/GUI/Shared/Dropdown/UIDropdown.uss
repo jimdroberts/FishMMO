@@ -17,3 +17,12 @@
     margin: 2px 0;
     width: 100%;
 }
+
+/*
+    Keyboard focus. The arrow keys walk the entries and there is otherwise nothing on screen
+    saying which one Enter would activate.
+*/
+.dropdown-item:focus {
+    background-color: var(--brand-hover);
+    border-color: var(--brand-300);
+}

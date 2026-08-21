@@ -439,6 +439,8 @@ namespace FishMMO.UnitTests
 			public List<Trigger> OnBuffApplyTriggers { get; } = new List<Trigger>();
 			public List<Trigger> OnBuffRemoveTriggers { get; } = new List<Trigger>();
 			public SortedDictionary<int, Buff> Buffs { get; } = new SortedDictionary<int, Buff>();
+			public IReadOnlyList<ObservedBuffEntry> ObservedBuffs { get; } = new List<ObservedBuffEntry>();
+			public float ObservedBuffsReceivedTime => 0f;
 
 			public void InitializeOnce(ICharacter character) { }
 			public void OnStartCharacter() { }
@@ -500,6 +502,12 @@ namespace FishMMO.UnitTests
 			public bool TryGetCooldown(long id, uint currentTick, out float cooldown)
 			{
 				cooldown = 0f;
+				return false;
+			}
+
+			public bool TryGetCooldownInstance(long id, out CooldownInstance instance)
+			{
+				instance = default;
 				return false;
 			}
 

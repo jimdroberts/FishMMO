@@ -234,6 +234,19 @@
     bottom: 0;
 }
 
+/*
+    Waiting on the server, as opposed to locked by the container.
+    Both mean "this slot is busy", so they share one overlay element and differ only in
+    colour: a container lock is a refusal (danger tint, inherited from .fish-slot__lock),
+    an in-flight request is just a wait. The override is a neutral scrim rather than a
+    second danger tint so the player can tell a pending click from a rejected one.
+*/
+.eq-slot__lock--pending {
+    background-color: var(--scrim-60);
+    border-color: var(--brand-border);
+    border-width: 1px;
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    FOOTER  (attribute scroll list)

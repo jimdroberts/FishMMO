@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
@@ -24,6 +24,9 @@ namespace FishMMO.Shared
 		/// Event invoked when a new ability event is learned.
 		/// </summary>
 		public event Action<AbilityEvent> OnAddKnownAbilityEvent;
+
+		/// <inheritdoc />
+		public event Action<long> OnRemoveAbility;
 
 		/// <summary>
 		/// All known abilities for this character, indexed by ability ID.
@@ -281,7 +284,13 @@ namespace FishMMO.Shared
 			{
 				templateToAbilityID.Remove(removedAbility.Template.ID);
 			}
-			KnownAbilities.Remove(referenceID);
+			if (!KnownAbilities.Remove(referenceID))
+			{
+				// Nothing was bound to that ID; do not raise a removal nobody can act on.
+				return;
+			}
+
+			OnRemoveAbility?.Invoke(referenceID);
 		}
 	}
 }

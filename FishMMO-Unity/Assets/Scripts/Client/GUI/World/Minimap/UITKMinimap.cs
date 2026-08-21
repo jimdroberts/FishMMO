@@ -31,11 +31,6 @@ namespace FishMMO.Client
 		public LayerMask AdditionalLayers;
 
 		/// <summary>
-		/// Stores the original global fog state before minimap rendering.
-		/// </summary>
-		private bool originalFogState;
-
-		/// <summary>
 		/// The element that displays the minimap camera's RenderTexture.
 		/// </summary>
 		private VisualElement minimapView;
@@ -104,13 +99,59 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Clears the character-derived state when the character goes away.
+		/// </summary>
+		/// <remarks>
+		/// The camera is parked rather than left where it was. <c>LateUpdate</c> stops following
+		/// the instant <c>Character</c> is null, so without this the minimap kept rendering — and
+		/// displaying — the patch of world the *previous* character was standing in, which on a
+		/// character switch is another character's location shown under the new one's name. Turning
+		/// the camera off also stops it rendering into its RenderTexture while there is nothing to
+		/// follow.
+		/// </remarks>
+		public override void OnPostUnsetCharacter()
+		{
+			base.OnPostUnsetCharacter();
+
+			if (MinimapCamera != null)
+			{
+				MinimapCamera.enabled = false;
+			}
+		}
+
+		/// <summary>
 		/// Updates the minimap camera position every frame to follow the character.
 		/// </summary>
+		/// <remarks>
+		/// <para>The camera is also enabled and disabled from here, and that is the point of the
+		/// method rather than an aside. A <c>Camera</c> renders its target every frame for as long
+		/// as it is enabled, entirely independently of whether anything is looking at the
+		/// RenderTexture — so a minimap the player had closed still cost a full extra scene render
+		/// per frame, for the whole session. Gating on <see cref="UITKControl.Visible"/> makes a
+		/// closed minimap cost what a closed panel should cost: nothing but this comparison.</para>
+		/// <para><c>LateUpdate</c> rather than <c>Update</c> so the camera follows the position the
+		/// character actually ended the frame at, after movement and any camera rig have run.
+		/// Following in <c>Update</c> lags by a frame and shows as jitter on the map.</para>
+		/// </remarks>
 		void LateUpdate()
 		{
-			if (Character == null || Character.MeshRoot == null || MinimapCamera == null)
+			if (MinimapCamera == null)
 			{
 				return;
+			}
+
+			if (!Visible || Character == null || Character.MeshRoot == null)
+			{
+				if (MinimapCamera.enabled)
+				{
+					MinimapCamera.enabled = false;
+				}
+				return;
+			}
+
+			if (!MinimapCamera.enabled)
+			{
+				MinimapCamera.enabled = true;
 			}
 
 			// Position the minimap camera above the character
@@ -120,33 +161,20 @@ namespace FishMMO.Client
 			MinimapCamera.transform.position = newPosition;
 		}
 
-		/// <summary>
-		/// Disables fog for the minimap render pass.
-		/// </summary>
-		void OnPreRender()
-		{
-			if (MinimapCamera == null || !MinimapCamera.enabled)
-			{
-				return;
-			}
-
-			// Store the current global fog state
-			originalFogState = RenderSettings.fog;
-			// Disable fog for this camera's render pass
-			RenderSettings.fog = false;
-		}
-
-		/// <summary>
-		/// Restores fog after the minimap render pass.
-		/// </summary>
-		void OnPostRender()
-		{
-			if (MinimapCamera == null || !MinimapCamera.enabled)
-			{
-				return;
-			}
-			// Revert fog to its original state after this camera has finished rendering
-			RenderSettings.fog = originalFogState;
-		}
+		/* OnPreRender/OnPostRender used to live here, saving and restoring RenderSettings.fog
+		 * around the minimap pass. They never ran, and could not have:
+		 *
+		 *   - Unity delivers both messages only to components on the GameObject that carries the
+		 *     Camera doing the rendering. This component lives on the UI panel; MinimapCamera is
+		 *     an inspector reference to a camera somewhere else entirely.
+		 *   - They are built-in-render-pipeline callbacks, and are not invoked at all under SRP.
+		 *
+		 * So the fog state they claimed to manage was never touched, and the minimap has always
+		 * rendered with whatever the scene's fog happened to be — which is the behaviour players
+		 * have. Removed rather than repaired: doing this properly means a component on the camera
+		 * itself (or an SRP begin/end-camera-render hook), and mutating the GLOBAL RenderSettings
+		 * mid-frame to do it is a scene-wide side effect for one panel's benefit. If fog on the
+		 * minimap is ever actually a problem, the fix is the camera's own layer/volume setup, not
+		 * a global toggle. */
 	}
 }

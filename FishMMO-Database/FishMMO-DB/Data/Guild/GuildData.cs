@@ -26,14 +26,36 @@ namespace FishMMO.Database.Data
 		public readonly string MessageOfTheDay;
 
 		/// <summary>
+		/// Recruitment blurb shown in the directory to non-members.
+		/// </summary>
+		public readonly string Blurb;
+
+		/// <summary>
+		/// Comma-separated recruitment tags, lower-cased.
+		/// </summary>
+		public readonly string Tags;
+
+		/// <summary>
+		/// Whether the guild is listed in the recruitment directory.
+		/// </summary>
+		public readonly bool IsRecruiting;
+
+		/// <summary>
 		/// Initializes a new instance of the <see cref="GuildData"/> struct.
 		/// </summary>
-		public GuildData(long id, string name, string notice, string messageOfTheDay)
+		/// <remarks>
+		/// The recruitment fields default so that the callers which only care about name, notice
+		/// and message of the day are unchanged.
+		/// </remarks>
+		public GuildData(long id, string name, string notice, string messageOfTheDay, string blurb = "", string tags = "", bool isRecruiting = false)
 		{
 			ID = id;
 			Name = name;
 			Notice = notice;
 			MessageOfTheDay = messageOfTheDay;
+			Blurb = blurb;
+			Tags = tags;
+			IsRecruiting = isRecruiting;
 		}
 	}
 }

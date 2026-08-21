@@ -24,5 +24,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Rolls back the underlying transaction.
 		/// </summary>
 		Task<DatabaseResult> RollbackAsync(CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// The failure from an implicit rollback performed during disposal, or <c>null</c> when
+		/// disposal completed cleanly or the work was already committed or rolled back.
+		/// </summary>
+		/// <remarks>
+		/// Disposal is the one path in this layer with no return value to report through, and
+		/// this project deliberately has no logger to fall back on. A <c>using</c> block that
+		/// returns early without committing therefore discarded its transaction silently, and a
+		/// rollback that itself failed — leaving the transaction to be reaped server-side —
+		/// discarded the reason too. Recording it here keeps it recoverable: check it after the
+		/// scope ends when the distinction matters.
+		/// </remarks>
+		DatabaseResult? DisposeFault { get; }
 	}
 }

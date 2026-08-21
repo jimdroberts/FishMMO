@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -25,6 +25,12 @@ namespace FishMMO.Shared
 		/// Event triggered when a party member is added. Provides member ID, rank, and health percent.
 		/// </summary>
 		public event Action<long, PartyRank, float> OnAddPartyMember;
+
+		/// <summary>
+		/// Event triggered when a party member's live health changes. Provides member ID and
+		/// health fraction (0-1).
+		/// </summary>
+		public event Action<long, float> OnUpdatePartyMemberHealth;
 
 		/// <summary>
 		/// Event triggered to validate the current set of party members.
@@ -84,6 +90,7 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<PartyAddMultipleBroadcast>(OnClientPartyAddMultipleBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
+			ClientManager.RegisterBroadcast<PartyMemberHealthUpdateBroadcast>(OnClientPartyMemberHealthUpdateBroadcastReceived);
 		}
 
 		/// <summary>
@@ -101,6 +108,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<PartyAddMultipleBroadcast>(OnClientPartyAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
+				ClientManager.UnregisterBroadcast<PartyMemberHealthUpdateBroadcast>(OnClientPartyMemberHealthUpdateBroadcastReceived);
 			}
 		}
 
@@ -197,6 +205,29 @@ namespace FishMMO.Shared
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg, Channel channel)
 		{
 			OnRemovePartyMember?.Invoke(msg.CharacterID);
+		}
+
+		/// <summary>
+		/// Handles the live party health payload, raising one event per member.
+		/// </summary>
+		/// <param name="msg">The broadcast message carrying member health.</param>
+		/// <param name="channel">The network channel.</param>
+		/// <remarks>
+		/// Raised per member rather than as one list event so the party panel can update a single
+		/// row without walking its whole roster, and so a member the client does not know about
+		/// yet is simply ignored by the handler rather than needing a guard here.
+		/// </remarks>
+		public void OnClientPartyMemberHealthUpdateBroadcastReceived(PartyMemberHealthUpdateBroadcast msg, Channel channel)
+		{
+			if (msg.Members == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < msg.Members.Length; ++i)
+			{
+				OnUpdatePartyMemberHealth?.Invoke(msg.Members[i].CharacterID, msg.Members[i].HealthPCT);
+			}
 		}
 #endif
 	}

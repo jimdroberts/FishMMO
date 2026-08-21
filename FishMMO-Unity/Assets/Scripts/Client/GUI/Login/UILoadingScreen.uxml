@@ -14,6 +14,16 @@
                 <ui:Label name="loading-progress-text" class="fish-bar__label loading-progress__text" text="" />
             </ui:VisualElement>
             <ui:Label name="loading-hint" class="fish-hint loading-hint" text="" />
+
+            <!--
+                The universal way out. Revealed from C# only once the overlay has held the screen
+                longer than any honest transition takes; before that it is display: none and the
+                loading screen looks exactly as it did. See UITKLoadingScreen.RevealEscapeHatch.
+            -->
+            <ui:VisualElement name="loading-actions" class="loading-actions">
+                <ui:Label name="loading-stuck" class="loading-status loading-stuck" text="" />
+                <ui:Button name="loading-return-btn" text="Return to Login" class="fish-button loading-return-btn" />
+            </ui:VisualElement>
         </ui:VisualElement>
 
     </ui:VisualElement>

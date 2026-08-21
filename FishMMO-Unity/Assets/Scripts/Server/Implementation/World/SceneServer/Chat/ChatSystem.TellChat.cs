@@ -53,8 +53,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			// Sender must be in a loaded scene to send tell messages.
-			if (sender == null || !sender.IsFlagged(CharacterFlags.IsLoaded))
+			/* A live sender must be in a loaded scene. A null sender must NOT be refused here.
+			 *
+			 * null means the message came from the database pump, which is the only way a whisper
+			 * reaches a target on a different scene server: the origin server persists the row,
+			 * every other scene server fetches it and replays it through this handler with no
+			 * sender. Refusing that case dropped the whisper on the floor at exactly the moment
+			 * it was supposed to be delivered — and the origin server had already sent
+			 * FISHMMO_TELL_RELAYED back to the player, so the sender was told the message was
+			 * delivered while the recipient never saw it. Cross-scene-server whispers have
+			 * therefore never worked, silently, in a way neither party could detect.
+			 *
+			 * Everything downstream is already null-safe for this: the sender echo is guarded on
+			 * senderConn, and `persist` is false so the pump cannot re-persist what it just read. */
+			if (sender != null && !sender.IsFlagged(CharacterFlags.IsLoaded))
 				return false;
 
 			if (Server?.Database?.ServiceRegistry == null)
@@ -103,20 +115,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Look up target character by name
 				DatabaseResult<CharacterData?> result = await characterService.FetchAsync(targetName);
-				if (!result.IsSuccess || !result.Data.HasValue)
+
+				/* A name that does not exist answers exactly as a name that is offline.
+				 *
+				 * The two used to be distinguishable: an offline character produced
+				 * FISHMMO_TARGET_OFFLINE and a nonexistent one produced nothing at all. That
+				 * turns /tell into a character-name oracle — a script can walk a name list and
+				 * learn which characters exist on the shard, with no rate limit beyond ordinary
+				 * chat throttling and nothing recorded anywhere. Character names are the handle
+				 * players are known by and are worth as little as possible to enumerate.
+				 *
+				 * A database error is deliberately reported the same way rather than surfaced,
+				 * for the same reason: the sender learns "not delivered", never why. */
+				bool resolved = result.IsSuccess && result.Data.HasValue && result.Data.Value.ID > 0;
+				if (!resolved)
 				{
+					TryEnqueueMainThread(() =>
+					{
+						if (senderConn == null || !senderConn.IsActive)
+						{
+							return;
+						}
+						Server.NetworkWrapper.Broadcast(senderConn, new ChatBroadcast()
+						{
+							Channel = channel,
+							SenderID = senderID,
+							Text = ChatHelper.TARGET_OFFLINE + " " + targetName,
+						}, true, Channel.Reliable);
+					});
 					return;
 				}
 
 				CharacterData targetData = result.Data.Value;
 				long targetID = targetData.ID;
 				bool online = targetData.Online;
-
-				// did we find the ID?
-				if (targetID < 1)
-				{
-					return;
-				}
 
 				// Marshal Broadcasts to main thread
 				TryEnqueueMainThread(() =>

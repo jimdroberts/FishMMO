@@ -1,9 +1,11 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Auth.Core;
 using FishMMO.Logging;
+using FishMMO.Client.Security;
+using System.Collections.Generic;
 using System.IO;
 
 namespace FishMMO.Client
@@ -36,10 +38,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private const string AGE_SELECT_NAME = "register-age";
 		/// <summary>
-		/// The name of the key TextField in the UI.
-		/// </summary>
-		private const string KEY_NAME = "register-key";
-		/// <summary>
 		/// The name of the register submit button in the UI.
 		/// </summary>
 		private const string REGISTER_BUTTON_NAME = "register-submit-btn";
@@ -69,7 +67,6 @@ namespace FishMMO.Client
 		private TextField email;
 		private TextField password;
 		private DropdownField ageSelect;
-		private TextField key;
 		private Button registerButton;
 		private Button quitToLoginButton;
 		private Label statusMessage;
@@ -86,6 +83,31 @@ namespace FishMMO.Client
 		private string savedTwoFactorSetupPath;
 
 		/// <summary>
+		/// The password the in-flight registration was submitted with, held only until the 2FA
+		/// payload has been encrypted with it.
+		/// </summary>
+		/// <remarks>
+		/// <para>This is a deliberate, bounded extension of the password's lifetime, and it is the
+		/// price of encrypting the recovery codes at rest. The alternative — a key bound to this
+		/// machine — is worse: it does not survive the reinstall that is the whole reason a player
+		/// reaches for recovery codes. See <see cref="TwoFactorRecoveryCrypto"/>.</para>
+		/// <para>The window is from the Register click to the arrival of
+		/// <c>TwoFactorSetupBroadcast</c>, which is the same window the SRP handshake already holds
+		/// the password open for; it is dropped the instant the envelope is written, and again on
+		/// every terminal exit from the flow. It is never written to disk and never logged. .NET
+		/// strings cannot be zeroed, so releasing the reference early is the whole of the available
+		/// mitigation — the same reasoning as <c>UITKLogin.PendingCredentials</c>.</para>
+		/// </remarks>
+		private string pendingAccountPassword;
+
+		/// <summary>
+		/// True once this panel has looked for recovery payloads left behind by an earlier,
+		/// interrupted registration. Once per panel lifetime — the offer is a recovery aid, not a
+		/// thing to re-ask on every hide/show.
+		/// </summary>
+		private bool leftoverRecoveryChecked;
+
+		/// <summary>
 		/// Resolves and caches visual elements, populates age dropdown, and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -99,7 +121,6 @@ namespace FishMMO.Client
 			email = Root.Q<TextField>(EMAIL_NAME);
 			password = Root.Q<TextField>(PASSWORD_NAME);
 			ageSelect = Root.Q<DropdownField>(AGE_SELECT_NAME);
-			key = Root.Q<TextField>(KEY_NAME);
 			registerButton = Root.Q<Button>(REGISTER_BUTTON_NAME);
 			quitToLoginButton = Root.Q<Button>(QUIT_BUTTON_NAME);
 			statusMessage = Root.Q<Label>(STATUS_NAME);
@@ -128,6 +149,10 @@ namespace FishMMO.Client
 			{
 				quitToLoginButton.clicked += OnClick_QuitToLogin;
 			}
+
+			// Enter registers, Escape goes back to the sign-in screen.
+			LoginKeys.Attach(Root, OnClick_Register, OnClick_QuitToLogin);
+			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, registerButton, quitToLoginButton);
 		}
 
 		/// <summary>
@@ -158,6 +183,7 @@ namespace FishMMO.Client
 			base.OnQuitToLogin();
 
 			pendingVerifyUsername = null;
+			this.accountCreated = false;
 			DeleteSavedTwoFactorSetupFile();
 			ClearAllFields();
 			SetFormLocked(false);
@@ -166,9 +192,20 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Hides the registration panel and resets the status message.
 		/// </summary>
-		public override void Hide()
+		/// <remarks>
+		/// Overrides <c>Hide(bool)</c>, not <c>Hide()</c>. <c>Hide()</c> is non-virtual and only
+		/// forwards here, so this is the one place teardown can live where every caller reaches
+		/// it — quit-to-login calls the bool form directly.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
 		{
-			base.Hide();
+			base.Hide(overrideIsAlwaysOpen);
+
+			if (overrideIsAlwaysOpen || Document == null)
+			{
+				// The base refused the hide; the form is still up, so keep its status line.
+				return;
+			}
 
 			if (statusMessage != null)
 			{
@@ -195,18 +232,30 @@ namespace FishMMO.Client
 				 * Read before SetFormLocked below, which clears isAuthFlowActive. */
 				bool droppedWithoutExplanation = isAuthFlowActive;
 
-				if (statusMessage != null)
-				{
-					statusMessage.text = "";
-				}
+				/* Whether the account survives the drop is the difference between "try again"
+				 * and "you already have an account". Read before it is cleared below. */
+				bool accountWasCreated = this.accountCreated;
+
+				SetStatus(null);
 				SetFormLocked(false);
 				pendingVerifyUsername = null;
+				this.accountCreated = false;
 				DeleteSavedTwoFactorSetupFile();
 
+				/* The panel has to come back. Registration hides itself for the whole 2FA and
+				 * email-verification stretch, so a drop in that window left nothing at all on
+				 * screen — and this is the window in which drops are most likely, because it is
+				 * the longest. */
 				if (droppedWithoutExplanation)
 				{
-					ShowValidationError("Connection to login server lost. Please check your network and try again. " +
-						"If the problem persists, the login server may be temporarily down.");
+					Show();
+
+					ShowValidationError(accountWasCreated
+						? "Your account was created, but the connection to the login server was lost before " +
+							"verification finished. Sign in with your new account to continue; you will be asked " +
+							"for the verification code that was emailed to you."
+						: "Connection to login server lost. Please check your network and try again. " +
+							"If the problem persists, the login server may be temporarily down.");
 				}
 			}
 		}
@@ -246,25 +295,43 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.ServerBusy:
 					OnRegistrationDialog("Server is busy. Please try again later.");
 					break;
-				// Not applicable during registration flow.
-				case ClientAuthenticationResult.SrpVerify:
-				case ClientAuthenticationResult.SrpProof:
-				case ClientAuthenticationResult.AlreadyOnline:
-				case ClientAuthenticationResult.LoginSuccess:
-				case ClientAuthenticationResult.WorldLoginSuccess:
-				case ClientAuthenticationResult.SceneLoginSuccess:
 				case ClientAuthenticationResult.ServerFull:
-				case ClientAuthenticationResult.NoCharacterSelected:
+					OnRegistrationDialog("The server is full. Please try again shortly.");
+					break;
+				case ClientAuthenticationResult.AlreadyOnline:
+					OnRegistrationDialog("That account is already online.");
+					break;
+				case ClientAuthenticationResult.AccountUnverified:
+					/* The account exists and is waiting for its code. Registering again cannot
+					 * help, but the verification prompt can — it is the same code, and the same
+					 * account name is already in pendingVerifyUsername. */
+					OpenVerifyCodeDialog();
+					break;
 				case ClientAuthenticationResult.TokenInvalid:
 				case ClientAuthenticationResult.TokenExpired:
 				case ClientAuthenticationResult.TokenRevoked:
-				case ClientAuthenticationResult.AccountUnverified:
-				case ClientAuthenticationResult.TwoFactorRequired:
-				case ClientAuthenticationResult.TwoFactorInvalid:
+				case ClientAuthenticationResult.TokenDecryptFailed:
+					OnRegistrationDialog("Your connection to the login server has expired. Please try again.");
+					break;
 				case ClientAuthenticationResult.VersionMismatch:
 					OnVersionMismatch();
 					break;
-				case ClientAuthenticationResult.TokenDecryptFailed:
+				/* The fall-through that used to swallow this whole block is the bug: the eleven
+				 * cases above it were listed as "not applicable during registration flow" with a
+				 * comment and no `break`, so every one of them fell into OnVersionMismatch and
+				 * told the player their client was out of date. A full server, an account that is
+				 * already online, an expired connection token and a mid-handshake SRP progress
+				 * message all reported "game version mismatch" and advised an update that could
+				 * not possibly fix any of them. Each now says what actually happened, and the
+				 * genuinely inapplicable ones below say nothing at all. */
+				case ClientAuthenticationResult.SrpVerify:
+				case ClientAuthenticationResult.SrpProof:
+				case ClientAuthenticationResult.LoginSuccess:
+				case ClientAuthenticationResult.WorldLoginSuccess:
+				case ClientAuthenticationResult.SceneLoginSuccess:
+				case ClientAuthenticationResult.NoCharacterSelected:
+				case ClientAuthenticationResult.TwoFactorRequired:
+				case ClientAuthenticationResult.TwoFactorInvalid:
 					break;
 			}
 		}
@@ -274,12 +341,75 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnAccountCreated()
 		{
+			/* The account now exists in the database. Everything after this point is recoverable
+			 * by verifying the email, so the flag below turns the reply timeout from "give up"
+			 * into "skip the step that went missing". */
+			this.accountCreated = true;
+
 			SetFormLocked(true);
-			Hide();
+
+			/* Deliberately does NOT hide the panel here any more, and deliberately leaves the
+			 * reply deadline armed. What the client is waiting for at this point is one more
+			 * message from the server — TwoFactorSetupBroadcast — and it is the one message in
+			 * this flow the server can silently decline to send: AccountCreationSystem logs and
+			 * carries on when TotpMasterKey is missing or the wrong length, and again if the
+			 * setup block throws. The account is created either way, so the player was left on a
+			 * hidden panel, form locked, in front of a status line they could not see, forever. */
+			SetStatus("Setting up two-factor authentication...");
+		}
+
+		/// <summary>
+		/// True once the server has confirmed the account exists.
+		/// </summary>
+		/// <remarks>
+		/// Distinguishes "the request failed" from "the request succeeded and a later step went
+		/// missing". Only the second is recoverable, and the recovery is different — retrying
+		/// registration for an account that already exists just produces a refusal.
+		/// </remarks>
+		private bool accountCreated;
+
+		/// <summary>
+		/// Writes the status line, holding the text across tree rebuilds.
+		/// </summary>
+		/// <param name="text">The message, or null to clear the line.</param>
+		private void SetStatus(string text)
+		{
+			this.pendingStatus = text;
+
 			if (statusMessage != null)
 			{
-				statusMessage.text = "Setting up two-factor authentication...";
+				statusMessage.text = text ?? string.Empty;
 			}
+		}
+
+		/// <summary>The status message this panel wants displayed, held across tree rebuilds.</summary>
+		private string pendingStatus;
+
+		/// <summary>
+		/// Re-applies the status line after the visual tree was rebuilt.
+		/// </summary>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+
+			if (statusMessage != null)
+			{
+				statusMessage.text = this.pendingStatus ?? string.Empty;
+			}
+		}
+
+		/// <inheritdoc/>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+
+			if (statusMessage != null)
+			{
+				statusMessage.text = this.pendingStatus ?? string.Empty;
+			}
+			LoginKeys.FocusFirst(Root, username);
+
+			OfferLeftoverRecovery();
 		}
 
 		/// <summary>
@@ -295,23 +425,76 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// Save recovery codes and otpauth URI to disk immediately so the user has a
-			// persistent copy. The file is best-effort and is scrubbed on every terminal
-			// exit of the registration flow.
-			string savePath = Path.Combine(Application.persistentDataPath, $"2fa_setup_{pendingVerifyUsername}.txt");
+			/* Recovery codes and the otpauth secret are written to disk so the player has a copy
+			 * they can act on, and scrubbed on every terminal exit of the flow.
+			 *
+			 * S2, first pass: the filename used to be $"2fa_setup_{username}.txt" in
+			 * persistentDataPath — a world-readable directory on every desktop platform. That
+			 * leaked the account name to anything that could list the directory even after the
+			 * contents were deleted, and it made the path guessable. The name is now a random
+			 * token that says nothing about the account, in its own permission-tightened folder.
+			 *
+			 * S2, this pass: the *contents* were still plaintext, so the leak survived every one
+			 * of those mitigations — a chmod that did not take, a backup agent, a sync client or a
+			 * lifted disk all read the codes and the TOTP secret straight out of the file. They
+			 * are now encrypted under the account password; TwoFactorRecoveryCrypto documents why
+			 * that key and not a machine-bound one, and TwoFactorRecoveryStore documents why the
+			 * write is verified before it is published.
+			 *
+			 * The password is available here because this is still the same registration attempt
+			 * the player typed it into — see pendingAccountPassword. If it is somehow not (a
+			 * broadcast arriving outside a flow this panel started), the payload is not written at
+			 * all rather than written in the clear, and the dialog below says so: the codes are on
+			 * screen either way, which is the copy that actually matters.
+			 *
+			 * Residual risk: a process killed between this write and the scrub leaves the
+			 * envelope behind. It is now an encrypted envelope rather than a readable file, and
+			 * OfferLeftoverRecovery below is the path that finds it on the next run. */
+			string savePath = null;
+			string storagePassword = pendingAccountPassword;
 			try
 			{
-				string saveContent = $"OTPAuth URI:\n{otpauthUri}\n\nRecovery Codes:\n{string.Join("\n", recoveryCodes)}\n";
-				File.WriteAllText(savePath, saveContent);
-				TryRestrictTwoFactorSetupFilePermissions(savePath);
-				savedTwoFactorSetupPath = savePath;
-				Log.Info("UITKRegister", $"2FA setup data saved to: {savePath}");
+				if (string.IsNullOrEmpty(storagePassword))
+				{
+					Log.Warning("UITKRegister", "No account password is in hand; the 2FA payload was not written to disk.");
+				}
+				else
+				{
+					string saveDirectory = TwoFactorRecoveryStore.EnsureDirectory(Application.persistentDataPath);
+					string saveContent = $"OTPAuth URI:\n{otpauthUri}\n\nRecovery Codes:\n{string.Join("\n", recoveryCodes)}\n";
+
+					if (TwoFactorRecoveryStore.TrySave(saveDirectory, storagePassword, saveContent, out savePath))
+					{
+						savedTwoFactorSetupPath = savePath;
+
+						// Debug, not Info, and never the path — the log is shipped with bug reports.
+						Log.Debug("UITKRegister", "Two-factor setup data written to the local recovery folder.");
+
+						/* The one moment in the whole client where a *server-confirmed* password is
+						 * in hand: account creation just succeeded with it. That is the only safe
+						 * moment to re-encrypt a payload left in the clear by an older build,
+						 * because encrypting under a merely-typed password would succeed and
+						 * produce a file nobody can ever open. */
+						MigrateLegacyRecoveryFiles(saveDirectory, storagePassword);
+					}
+					else
+					{
+						savePath = null;
+						savedTwoFactorSetupPath = null;
+					}
+				}
 			}
 			catch (System.Exception ex)
 			{
 				Log.Warning("UITKRegister", $"Failed to save 2FA setup data: {ex.Message}");
 				savePath = null;
 				savedTwoFactorSetupPath = null;
+			}
+			finally
+			{
+				// The password has done its one job. Drop it before anything else can capture it.
+				storagePassword = null;
+				pendingAccountPassword = null;
 			}
 
 			string codesDisplay = string.Join("\n", recoveryCodes);
@@ -321,9 +504,18 @@ namespace FishMMO.Client
 				"Recovery Codes (save these somewhere safe!):\n\n" +
 				codesDisplay + "\n\n" +
 				(savePath != null
-					? $"A temporary copy was written to:\n{savePath}\n(It will be deleted once registration completes.)\n\n"
-					: "") +
+					? $"An encrypted copy was written to:\n{savePath}\n" +
+						"It is protected with your account password and is deleted once registration completes. " +
+						"If this client is interrupted before then, it will offer the codes back the next time you " +
+						"open this screen.\n\n"
+					: "Write these down now — no copy could be saved to this computer.\n\n") +
 				"Press Confirm to continue to email verification.";
+
+			/* Stop the clock. From here the client is waiting on a person — one who has to open
+			 * an authenticator app and scan a URI — not on the server, and a reply deadline that
+			 * kept running would tear the session down mid-scan. It is re-armed the moment a code
+			 * is actually submitted; see OpenVerifyCodeDialog. */
+			replyGuard.Clear();
 
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
 			{
@@ -352,6 +544,9 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OpenVerifyCodeDialog()
 		{
+			// Waiting on the player, not on the server. See OnTwoFactorSetupReceived.
+			replyGuard.Clear();
+
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
 				uiDialogInputBox.Open(
@@ -361,6 +556,9 @@ namespace FishMMO.Client
 						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
 						{
 							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim());
+
+							// A request is outstanding again; restart the clock.
+							replyGuard.Begin();
 						}
 					},
 					() =>
@@ -383,14 +581,12 @@ namespace FishMMO.Client
 		private void OnAccountVerified()
 		{
 			pendingVerifyUsername = null;
+			this.accountCreated = false;
 			DeleteSavedTwoFactorSetupFile();
 			Client.ForceDisconnect();
 			SetFormLocked(false);
 
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open("Your account has been verified! You may now log in.");
-			}
+			LoginNotice.Show("Your account has been verified! You may now log in.");
 			if (UIManager.TryGetTK("UILogin", out UITKLogin uiLogin))
 			{
 				Hide();
@@ -405,11 +601,9 @@ namespace FishMMO.Client
 		private void OnVersionMismatch()
 			{
 				string myVersion = MainBootstrapSystem.GameVersion ?? "unknown";
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
-			}
+			LoginNotice.Show($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
 			pendingVerifyUsername = null;
+			this.accountCreated = false;
 			DeleteSavedTwoFactorSetupFile();
 			Client.ForceDisconnect();
 			SetFormLocked(false);
@@ -421,21 +615,26 @@ namespace FishMMO.Client
 		/// <param name="message">The message to display.</param>
 		private void OnRegistrationDialog(string message)
 		{
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open(message);
-			}
+			LoginNotice.Show(message);
 			pendingVerifyUsername = null;
+			this.accountCreated = false;
 			DeleteSavedTwoFactorSetupFile();
 			Client.ForceDisconnect();
 			SetFormLocked(false);
 		}
 
 		/// <summary>
-		/// Deletes the on-disk copy of the 2FA setup payload, if any.
+		/// Drops the in-flight account password and deletes the on-disk copy of the 2FA setup
+		/// payload, if any.
 		/// </summary>
 		private void DeleteSavedTwoFactorSetupFile()
 		{
+			/* Every terminal exit from the flow already calls this, which makes it the one place
+			 * that reliably sees the end of a registration attempt — so the password backstop lives
+			 * here too. It is normally already null by now (the storage block drops it the moment
+			 * the envelope is written); this covers the attempts that never got that far. */
+			pendingAccountPassword = null;
+
 			string path = savedTwoFactorSetupPath;
 			savedTwoFactorSetupPath = null;
 			if (string.IsNullOrEmpty(path))
@@ -456,26 +655,174 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Best-effort tightening of the 2FA setup file permissions so other local users cannot read it.
+		/// Re-encrypts any recovery payloads an older build left in the clear.
 		/// </summary>
-		/// <param name="path">The file path to restrict.</param>
-		private static void TryRestrictTwoFactorSetupFilePermissions(string path)
+		/// <param name="directory">The recovery directory.</param>
+		/// <param name="confirmedPassword">
+		/// A password the server has just accepted. Never a merely-typed one — see the remarks on
+		/// <see cref="TwoFactorRecoveryStore.TryMigrateLegacy"/>.
+		/// </param>
+		/// <remarks>
+		/// Best effort, and deliberately silent on failure: a plaintext file that will not migrate
+		/// is still a file the player can read, which is the outcome that matters most. It is
+		/// reported by <see cref="OfferLeftoverRecovery"/> instead, where the player can act on it.
+		/// </remarks>
+		private void MigrateLegacyRecoveryFiles(string directory, string confirmedPassword)
 		{
-#if UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX || UNITY_ANDROID || UNITY_EDITOR_LINUX || UNITY_EDITOR_OSX
+			List<string> legacy = TwoFactorRecoveryStore.List(directory, legacyPlaintext: true);
+			for (int i = 0; i < legacy.Count; ++i)
+			{
+				// Never the file this attempt just wrote — that one is already an envelope.
+				if (string.Equals(legacy[i], savedTwoFactorSetupPath, System.StringComparison.Ordinal))
+				{
+					continue;
+				}
+				TwoFactorRecoveryStore.TryMigrateLegacy(directory, legacy[i], confirmedPassword, out _);
+			}
+		}
+
+		/// <summary>
+		/// Looks for recovery payloads left behind by an earlier registration that never finished,
+		/// and offers them back to the player.
+		/// </summary>
+		/// <remarks>
+		/// <para>Encrypting the payload closed a leak but removed something real: the player used
+		/// to be able to open the file in a text editor after a crash. This is what replaces that,
+		/// and it is the reason the key is the account password — the password is the one secret
+		/// the player still has on a fresh install, so it is the one that can open the file at the
+		/// moment they actually need it.</para>
+		/// <para>Runs once per panel lifetime and only outside an active flow, so it can never
+		/// interrupt a registration in progress. A plaintext leftover is *reported*, not opened:
+		/// nothing here has a confirmed password, and the player can read it themselves — the
+		/// warning tells them to, and to delete it afterwards.</para>
+		/// </remarks>
+		private void OfferLeftoverRecovery()
+		{
+			if (leftoverRecoveryChecked || isAuthFlowActive || accountCreated || !string.IsNullOrEmpty(pendingVerifyUsername))
+			{
+				return;
+			}
+			leftoverRecoveryChecked = true;
+
+			string directory;
+			List<string> envelopes;
+			List<string> legacy;
 			try
 			{
-				var psi = new System.Diagnostics.ProcessStartInfo("/bin/chmod", $"600 \"{path}\"")
+				directory = Path.Combine(Application.persistentDataPath, TwoFactorRecoveryStore.DirectoryName);
+				if (!Directory.Exists(directory))
 				{
-					UseShellExecute = false,
-					CreateNoWindow = true,
-					RedirectStandardError = true,
-					RedirectStandardOutput = true,
-				};
-				using var p = System.Diagnostics.Process.Start(psi);
-				p?.WaitForExit(500);
+					return;
+				}
+				envelopes = TwoFactorRecoveryStore.List(directory);
+				legacy = TwoFactorRecoveryStore.List(directory, legacyPlaintext: true);
 			}
-			catch { /* best effort */ }
-#endif
+			catch (System.Exception ex)
+			{
+				Log.Warning("UITKRegister", $"Could not inspect the recovery folder: {ex.Message}");
+				return;
+			}
+
+			if (legacy.Count > 0)
+			{
+				/* Queued, not Open'd: the shared dialog refuses a second question rather than
+				 * replacing the first, and this one has to be seen — it is telling the player
+				 * their recovery codes are sitting on the disk unencrypted. */
+				LoginNotice.Show(
+					$"{legacy.Count} unencrypted two-factor recovery file(s) from an older version of this " +
+					$"client are still on this computer, in:\n{directory}\n\n" +
+					"Copy the codes somewhere safe and delete those files. Newer files are encrypted with " +
+					"your account password.");
+			}
+
+			if (envelopes.Count < 1)
+			{
+				return;
+			}
+
+			string newest = envelopes[0];
+			if (!UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) ||
+				!dialogBox.Open(
+					"A two-factor recovery file from an interrupted registration was found on this computer.\n\n" +
+					"It is encrypted with the account password it was created under. Would you like to unlock and " +
+					"view it now?",
+					() => PromptForLeftoverRecoveryPassword(newest),
+					null))
+			{
+				// The dialog was busy or absent. The file is untouched and the offer returns on the
+				// next run; nothing here is allowed to destroy a payload the player has not seen.
+				leftoverRecoveryChecked = false;
+			}
+		}
+
+		/// <summary>
+		/// Asks for the account password and, if it opens the envelope, shows the codes.
+		/// </summary>
+		/// <param name="path">The envelope to unlock.</param>
+		/// <remarks>
+		/// Opened through the masked overload of <see cref="UITKDialogInputBox.Open(string, bool,
+		/// Action{string}, Action)"/>, so the account password is not rendered in clear text while
+		/// it is typed. That overload was added for this call site: the prompt previously used the
+		/// plain form and put the password on screen, which is a shoulder-surfing exposure on a
+		/// recovery path the player has deliberately opened.
+		/// </remarks>
+		private void PromptForLeftoverRecoveryPassword(string path)
+		{
+			if (!UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox inputBox))
+			{
+				return;
+			}
+
+			inputBox.Open(
+				"Enter the account password this recovery file was created with.",
+				masked: true,
+				onAccept: (entered) =>
+				{
+					if (string.IsNullOrEmpty(entered))
+					{
+						return;
+					}
+
+					TwoFactorRecoveryReadResult result = TwoFactorRecoveryStore.TryRead(path, entered, out string payload);
+					entered = null;
+
+					switch (result)
+					{
+						case TwoFactorRecoveryReadResult.Success:
+							/* Shown, then removed. The player is looking at the codes; leaving the
+							 * file would re-ask this question on every launch forever, and the
+							 * payload has served its only purpose. Nothing is deleted on any other
+							 * branch of this switch. */
+							LoginNotice.Show("Recovered two-factor setup data:\n\n" + payload);
+							TwoFactorRecoveryStore.Delete(path);
+							break;
+
+						case TwoFactorRecoveryReadResult.WrongPasswordOrTampered:
+							/* Both halves are said out loud on purpose. AES-GCM cannot distinguish
+							 * a wrong password from an edited file, and quietly implying the first
+							 * would hide the second. The file is kept either way. */
+							LoginNotice.Show(
+								"That password did not open the recovery file.\n\n" +
+								"Either it is not the password the file was created with, or the file has been " +
+								"altered. It has been left where it is so you can try again.");
+							break;
+
+						case TwoFactorRecoveryReadResult.LegacyPlaintext:
+							LoginNotice.Show("That file is an older unencrypted one:\n\n" + payload);
+							break;
+
+						case TwoFactorRecoveryReadResult.Empty:
+							LoginNotice.Show("The recovery file is no longer there.");
+							break;
+
+						default:
+							LoginNotice.Show(
+								"The recovery file could not be read — it is damaged or was written by a newer " +
+								"client. It has been left where it is.");
+							break;
+					}
+				},
+				null);
 		}
 
 		/// <summary>
@@ -490,7 +837,12 @@ namespace FishMMO.Client
 			// Map dropdown index to actual age: index 0 = not selected, index 1 = age 13, etc.
 			int age = ageIndex > 0 ? ageIndex + 12 : 0;
 
-			Log.Info("UITKRegister", $"Create Account clicked: username='{usernameText}', email='{emailText}', age={age}, register=true");
+			/* No identifiers in the log. This used to print the username and the email address
+			 * verbatim on every click, at Info level, into a log that is written to disk, shipped
+			 * with bug reports and read by anyone with the machine — and it printed them before
+			 * validation, so a mistyped password attempt still deposited the email address. The
+			 * account name is recoverable from the server's own logs when it is actually needed. */
+			Log.Debug("UITKRegister", "Create Account clicked.");
 
 			ClearAllFields();
 
@@ -520,12 +872,14 @@ namespace FishMMO.Client
 
 			SetFormLocked(true);
 
+			/* Held from here until the 2FA payload has been encrypted with it, and no longer. See
+			 * the field's remarks: this is the price of encrypting the recovery codes at rest, and
+			 * the window is the same one the SRP handshake already keeps the password open for. */
+			pendingAccountPassword = passwordText;
+
 			StartCoroutine(Client.GetLoginServerList((error) =>
 			{
-				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-				{
-					uiDialogBox.Open(error);
-				}
+				LoginNotice.Show(error);
 				Log.Error("UITKRegister", error);
 				SetFormLocked(false);
 			},
@@ -567,7 +921,7 @@ namespace FishMMO.Client
 				{
 					statusMessage.text = "Creating account...";
 				}
-				Log.Info("UITKRegister", $"SetLoginCredentials: username='{usernameText}', password=***, register=true, email='{emailText}', age={age}");
+					Log.Debug("UITKRegister", "Submitting account creation.");
 				Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age);
 				Client.ConnectToServer(serverPort);
 			}
@@ -583,10 +937,7 @@ namespace FishMMO.Client
 		/// <param name="error">The validation error message.</param>
 		private void ShowValidationError(string error)
 		{
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open(error);
-			}
+			LoginNotice.Show(error);
 			SetFormLocked(false);
 		}
 
@@ -607,10 +958,6 @@ namespace FishMMO.Client
 			{
 				password.value = "";
 			}
-			if (key != null)
-			{
-				key.value = "";
-			}
 			if (ageSelect != null)
 			{
 				ageSelect.index = 0;
@@ -629,11 +976,69 @@ namespace FishMMO.Client
 		{
 			base.OnTick();
 
+			// Login-flow notices are refused while another dialog is up; see LoginNotice.
+			LoginNotice.Pump();
+
 			if (replyGuard.HasExpired())
 			{
-				ReleaseControls(true);
-				if (statusMessage != null) statusMessage.text = "The server did not respond. Please try again.";
+				OnReplyTimedOut();
 			}
+		}
+
+		/// <summary>
+		/// Ends a registration the server stopped answering, on a screen the player can see.
+		/// </summary>
+		/// <remarks>
+		/// The timeout used to re-enable the controls and write a sentence into
+		/// <c>statusMessage</c>. That label is on this panel, and the panel is hidden for the
+		/// whole of the part of the flow that can actually stall — so the one failure this
+		/// watchdog exists for produced no visible change whatsoever.
+		/// <para>
+		/// The <see cref="accountCreated"/> branch is the real fix for the 2FA hang. When the
+		/// account exists and only <c>TwoFactorSetupBroadcast</c> went missing — which is
+		/// guaranteed, not hypothetical, whenever the login server's <c>TotpMasterKey</c> is
+		/// unset or not 32 bytes: <c>AccountCreationSystem</c> logs an error and carries straight
+		/// on — the correct exit is not to fail, it is to skip the step. The account is real, the
+		/// verification email has been sent, and email verification is the next step regardless.
+		/// Restarting registration instead would only earn a refusal for an account that already
+		/// exists.
+		/// </para>
+		/// </remarks>
+		private void OnReplyTimedOut()
+		{
+			ReleaseControls(true);
+
+			/* Cancel any prompt still on screen first. Under the shared dialog contract a Hide()
+			 * on an armed dialog resolves it down its cancel path, so this cannot strand a
+			 * caller. */
+			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox inputBox) && inputBox.Visible)
+			{
+				inputBox.Hide();
+			}
+
+			Show();
+
+			if (this.accountCreated && !string.IsNullOrEmpty(pendingVerifyUsername))
+			{
+				SetStatus("Two-factor setup did not complete.");
+
+				string message = "Your account was created, but the server did not finish setting up " +
+					"two-factor authentication.\n\nYour account is fine. Continue to email verification " +
+					"and sign in as normal; two-factor authentication can be set up later.";
+
+				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) &&
+					dialogBox.Open(message, OpenVerifyCodeDialog, OpenVerifyCodeDialog))
+				{
+					return;
+				}
+
+				// Dialog busy or absent — the verification prompt is the important half.
+				Log.Warning("UITKRegister", message);
+				OpenVerifyCodeDialog();
+				return;
+			}
+
+			SetStatus("The server did not respond. Please try again.");
 		}
 
 		/// <summary>
@@ -688,10 +1093,6 @@ namespace FishMMO.Client
 			if (password != null)
 			{
 				password.SetEnabled(interactable);
-			}
-			if (key != null)
-			{
-				key.SetEnabled(interactable);
 			}
 			if (ageSelect != null)
 			{

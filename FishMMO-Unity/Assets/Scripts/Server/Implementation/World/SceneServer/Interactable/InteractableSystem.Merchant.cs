@@ -92,48 +92,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				switch (msg.Type)
 				{
 					case MerchantTabType.Item:
-						if (merchantTemplate.Items == null ||
-							msg.Index < 0 ||
-							msg.Index >= merchantTemplate.Items.Count)
+						if (!TryPurchaseItem(conn, character, inventoryController, merchantTemplate, msg))
 						{
 							return;
-						}
-
-						BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
-						if (itemTemplate == null)
-						{
-							return;
-						}
-
-						// do we have enough currency to purchase this?
-						if (currencyTemplate == null)
-						{
-							Log.Debug("InteractableSystem", "currencyTemplate is null.");
-							return;
-						}
-						if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-							!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-							currency.FinalValue < itemTemplate.Price ||
-							itemTemplate.Price <= 0)
-						{
-							return;
-						}
-
-						Item newItem = new Item(itemTemplate, 1);
-
-						if (SendNewItemBroadcast(conn, character, inventoryController, newItem))
-						{
-							// Persist the currency deduction BEFORE in-memory deduction and
-							// item grant. If the server crashes after this persist, the DB
-							// reflects the deduction and the item persist (below) is also
-							// enqueued - no infinite-money exploit. If the persist fails
-							// to enqueue, reject the purchase so the client can retry.
-							if (!TryPersistMerchantAttributes(character))
-							{
-								break;
-							}
-
-							currency.AddValue(-itemTemplate.Price);
 						}
 						break;
 					case MerchantTabType.Ability:
@@ -166,6 +127,376 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			finally
 			{
 				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Buys one merchant item entry for the requesting character.
+		/// </summary>
+		/// <param name="conn">The buyer's connection.</param>
+		/// <param name="character">The buying character.</param>
+		/// <param name="inventoryController">The buyer's inventory.</param>
+		/// <param name="merchantTemplate">The merchant's template, already validated against the live merchant.</param>
+		/// <param name="msg">The purchase request.</param>
+		/// <returns>True when the purchase completed.</returns>
+		/// <remarks>
+		/// <para><b>Nothing about price comes from the client.</b> The request carries an index
+		/// into the merchant's own item list and a quantity; the unit price is read from the
+		/// template that index resolves to, and the total is multiplied here. The quantity is
+		/// clamped to one stack and then to what the character can actually pay for, so an
+		/// oversized request is trimmed rather than refused.</para>
+		///
+		/// <para><b>Affordability is checked against <c>Value</c>, not <c>FinalValue</c>.</b>
+		/// <c>AddValue</c> writes the base value, while <c>FinalValue</c> is the base plus every
+		/// modifier in force. Testing one and writing the other meant a character carrying any
+		/// currency-boosting buff could buy against currency it did not have and end up with a
+		/// negative balance — and because the check used the larger number, the shortfall was
+		/// exactly the size of the buff.</para>
+		///
+		/// <para><b>The currency is deducted and enqueued for persistence before the item is
+		/// granted.</b> The previous order granted the item first and then bailed out with a
+		/// <c>break</c> if the persist could not be enqueued, which left the player holding the
+		/// item and still holding the money. It also enqueued the persist <em>before</em> the
+		/// in-memory deduction, and <see cref="TryPersistMerchantAttributes"/> snapshots the
+		/// current in-memory values — so the row it wrote was the pre-purchase balance and the
+		/// deduction never reached the database at all. Both are fixed by deducting first,
+		/// snapshotting the deducted value, and refunding if any later step fails.</para>
+		///
+		/// <para>The remaining window — a crash after the deduction is enqueued and before the
+		/// item persist is — charges the player for an item they do not receive. That is the
+		/// correct direction for an authoritative server to fail: a transient loss the player can
+		/// report, rather than currency created from nothing.</para>
+		/// </remarks>
+		private bool TryPurchaseItem(
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			IInventoryController inventoryController,
+			MerchantTemplate merchantTemplate,
+			MerchantPurchaseBroadcast msg)
+		{
+			if (merchantTemplate.Items == null ||
+				msg.Index < 0 ||
+				msg.Index >= merchantTemplate.Items.Count)
+			{
+				return false;
+			}
+
+			BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
+			if (itemTemplate == null || itemTemplate.Price <= 0)
+			{
+				return false;
+			}
+
+			if (currencyTemplate == null)
+			{
+				Log.Debug("InteractableSystem", "currencyTemplate is null.");
+				return false;
+			}
+			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+			{
+				return false;
+			}
+
+			// One stack at most, so a purchase can always be represented as a single Item.
+			long maxStack = itemTemplate.MaxStackSize > 0 ? itemTemplate.MaxStackSize : 1;
+			long requested = msg.Quantity <= 0 ? 1 : msg.Quantity;
+			long quantity = Math.Min(requested, maxStack);
+
+			/* Long arithmetic throughout. Price and quantity are both ints, and a client asking
+			 * for int.MaxValue of a costly item would overflow the product into a negative
+			 * "total" that every affordability test passes. */
+			long affordable = currency.Value / itemTemplate.Price;
+			quantity = Math.Min(quantity, affordable);
+			if (quantity < 1)
+			{
+				return false;
+			}
+
+			long total = quantity * itemTemplate.Price;
+			if (total > int.MaxValue || currency.Value < total)
+			{
+				return false;
+			}
+
+			int charge = (int)total;
+
+			// Deduct, then snapshot: the persist reads the in-memory values as they stand now.
+			currency.AddValue(-charge);
+
+			if (!TryPersistMerchantAttributes(character))
+			{
+				Log.Warning("InteractableSystem", $"TryPurchaseItem: currency persist rejected for CharID={character.ID}; refunding {charge}.");
+				currency.AddValue(charge);
+				return false;
+			}
+
+			Item newItem = new Item(itemTemplate, (uint)quantity);
+			if (!SendNewItemBroadcast(conn, character, inventoryController, newItem))
+			{
+				/* No room, or the add was refused. Nothing was granted, so put the money back and
+				 * persist the refund — the deduction has already been enqueued and would otherwise
+				 * be the only half of the transaction the database ever sees. */
+				currency.AddValue(charge);
+				if (!TryPersistMerchantAttributes(character))
+				{
+					Log.Error("InteractableSystem", $"TryPurchaseItem: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
+				}
+				return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Handles a <see cref="MerchantSellBroadcast"/>: sells an inventory slot to a merchant.
+		/// </summary>
+		/// <remarks>
+		/// The mirror image of <see cref="TryPurchaseItem"/>, and authoritative in the same way.
+		/// The request names an inventory slot and a quantity; the server resolves the item in
+		/// that slot itself, takes the unit price from that item's own template, and applies the
+		/// merchant template's <see cref="MerchantTemplate.SellPriceMultiplier"/>. No identity and
+		/// no value travels from the client.
+		/// <para>
+		/// The ordering is the reverse of a purchase, for the same reason: the item is removed and
+		/// its removal enqueued before the currency is granted, so the failure direction is a lost
+		/// payout rather than an item that was sold and kept.
+		/// </para>
+		/// <para>
+		/// Every exit sends a <see cref="MerchantSellResultBroadcast"/>. The client disables the
+		/// sell control while a request is outstanding — the double-submit guard that stops one
+		/// mis-timed double click selling a stack twice — and a handler that returned silently
+		/// would leave that control disabled for good.
+		/// </para>
+		/// </remarks>
+		private void OnServerMerchantSellBroadcastReceived(NetworkConnection conn, MerchantSellBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null ||
+				!character.TryGet(out IInventoryController inventoryController) ||
+				!CharacterStateValidation.CanAct(character))
+			{
+				SendSellResult(conn, msg.Slot, false, 0, 0);
+				return;
+			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
+			{
+				SendSellResult(conn, msg.Slot, false, 0, 0);
+				return;
+			}
+
+			bool succeeded = false;
+			int soldQuantity = 0;
+			int payout = 0;
+
+			try
+			{
+				// Validate the scene the character is actually in — see CurrentSceneName.
+				string currentScene = character.CurrentSceneName();
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(currentScene, out _))
+				{
+					return;
+				}
+
+				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+				{
+					return;
+				}
+
+				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
+				if (interactable == null || !interactable.InRange(character.Transform))
+				{
+					return;
+				}
+
+				IMerchant merchant = interactable as IMerchant;
+				MerchantTemplate merchantTemplate = merchant?.Template;
+				if (merchantTemplate == null || !merchantTemplate.BuysItems)
+				{
+					return;
+				}
+
+				if (!inventoryController.IsValidSlot(msg.Slot) ||
+					inventoryController.IsSlotLocked(msg.Slot) ||
+					!inventoryController.TryGetItem(msg.Slot, out Item item) ||
+					item == null ||
+					item.Template == null)
+				{
+					return;
+				}
+
+				if (currencyTemplate == null ||
+					!character.TryGet(out ICharacterAttributeController attributeController) ||
+					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+				{
+					return;
+				}
+
+				long available = item.IsStackable ? item.Stackable.Amount : 1;
+				long requested = msg.Quantity <= 0 ? available : msg.Quantity;
+				long quantity = Math.Min(requested, available);
+				if (quantity < 1)
+				{
+					return;
+				}
+
+				/* Unit payout is floored before multiplying, so selling ten singles and selling a
+				 * stack of ten pay the same — a per-total round would otherwise make one of the
+				 * two strictly better and turn the difference into a grind. */
+				long unitPayout = (long)Math.Floor(item.Template.Price * (double)merchantTemplate.SellPriceMultiplier);
+				if (unitPayout < 0)
+				{
+					unitPayout = 0;
+				}
+
+				long total = unitPayout * quantity;
+				if (total > int.MaxValue)
+				{
+					total = int.MaxValue;
+				}
+
+				// Remove first. A partial sale leaves the stack behind with a reduced amount.
+				long characterID = character.ID;
+				bool wholeSlot = quantity >= available;
+				if (wholeSlot)
+				{
+					Item removed = inventoryController.RemoveItem(msg.Slot);
+					if (removed == null)
+					{
+						return;
+					}
+
+					removed.Version++;
+					long version = removed.Version;
+					int slot = msg.Slot;
+					if (!EnqueuePersistence(() => DeleteMerchantSoldSlotAsync(characterID, slot, version), characterID))
+					{
+						/* Could not record the removal, so undo it. Selling an item whose deletion
+						 * is never written means the item comes back on the next login while the
+						 * payout does not — a duplication bug in the player's favour. */
+						inventoryController.SetItemSlot(removed, slot);
+						return;
+					}
+
+					Server.NetworkWrapper.Broadcast(conn, new InventoryRemoveItemBroadcast()
+					{
+						Slot = slot,
+					}, true, Channel.Reliable);
+				}
+				else
+				{
+					item.Stackable.Remove((uint)quantity);
+					item.Version++;
+
+					List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>
+					{
+						new CharacterInventoryData(
+							id: item.ID,
+							version: item.Version,
+							characterID: characterID,
+							templateID: item.Template.ID,
+							slot: item.Slot,
+							seed: item.IsGenerated ? item.Generator.Seed : 0,
+							amount: item.Stackable.Amount),
+					};
+
+					if (!EnqueuePersistence(() => PersistInventoryItemsAsync(itemsToSave), characterID))
+					{
+						/* Put the stack back. Amount is written directly rather than through a
+						 * helper because ItemStackable exposes only a saturating Remove; there is
+						 * no Add, and the value being restored is one this method just took. */
+						item.Stackable.Amount += (uint)quantity;
+						item.Version++;
+						return;
+					}
+
+					Server.NetworkWrapper.Broadcast(conn, new InventorySetItemBroadcast()
+					{
+						InstanceID = item.ID,
+						TemplateID = item.Template.ID,
+						Slot = item.Slot,
+						Seed = item.IsGenerated ? item.Generator.Seed : 0,
+						StackSize = item.Stackable.Amount,
+					}, true, Channel.Reliable);
+				}
+
+				payout = (int)total;
+				if (payout > 0)
+				{
+					currency.AddValue(payout);
+					if (!TryPersistMerchantAttributes(character))
+					{
+						Log.Error("InteractableSystem", $"MerchantSell: payout persist rejected for CharID={characterID}; the item removal is recorded but the payout is not.");
+					}
+				}
+
+				soldQuantity = (int)quantity;
+				succeeded = true;
+
+				// Increment achievement for any merchant interaction.
+				if (merchant.AchievementTemplate != null &&
+					character.TryGet(out IAchievementController achievementController))
+				{
+					achievementController.Increment(merchant.AchievementTemplate, 1);
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+				SendSellResult(conn, msg.Slot, succeeded, soldQuantity, payout);
+			}
+		}
+
+		/// <summary>
+		/// Sends the single reply every exit from the sell handler owes the client.
+		/// </summary>
+		private void SendSellResult(NetworkConnection conn, int slot, bool success, int quantity, int payout)
+		{
+			Server.NetworkWrapper.Broadcast(conn, new MerchantSellResultBroadcast()
+			{
+				Slot = slot,
+				Success = success,
+				Quantity = quantity,
+				Payout = payout,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Deletes an inventory slot emptied by a merchant sale.
+		/// </summary>
+		/// <remarks>
+		/// The version is the item's own, incremented once by the caller, rather than
+		/// <c>long.MaxValue</c>. Stamping the maximum makes the surviving soft-deleted row
+		/// permanently unwritable, because every later write is version-gated against it — see the
+		/// per-slot persistence poisoning in the audit findings. A sale must not create one.
+		/// </remarks>
+		private async Task DeleteMerchantSoldSlotAsync(long characterID, int slot, long version)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
+				{
+					await Log.Error("InteractableSystem", "DeleteMerchantSoldSlotAsync: Failed to resolve ICharacterInventoryService");
+					return;
+				}
+
+				DatabaseResult result = await inventoryService.DeleteAsync(characterID, slot, version);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"DeleteMerchantSoldSlotAsync DB error (CharID={characterID}, Slot={slot}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"DeleteMerchantSoldSlotAsync failed (CharID={characterID}, Slot={slot}): {ex}");
 			}
 		}
 
@@ -205,9 +536,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Log.Debug("InteractableSystem", "currencyTemplate is null.");
 				return;
 			}
+			/* Value, not FinalValue. AddValue below writes the base value; FinalValue is the base
+			 * plus every modifier in force, so testing one and writing the other let a character
+			 * with a currency-boosting buff spend money it did not have and go negative. Same
+			 * defect, same fix, as the item purchase path. */
+			int price = priceSelector(template);
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
 				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-				currency.FinalValue < priceSelector(template))
+				currency.Value < price)
 			{
 				Log.Debug("InteractableSystem", "Not enough currency!");
 				return;
@@ -233,7 +569,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			learnFunc(abilityController, new List<TTemplate> { template });
 
 			// remove the price from the characters currency
-			currency.AddValue(-priceSelector(template));
+			currency.AddValue(-price);
+
+			/* Enqueued AFTER the deduction, because TryPersistMerchantAttributes snapshots the
+			 * in-memory values as they stand when it is called. Enqueuing it first — which the
+			 * item purchase path used to do — writes the pre-purchase balance and loses the
+			 * deduction entirely. */
+			if (!TryPersistMerchantAttributes(character))
+			{
+				Log.Warning("InteractableSystem", $"LearnAbilityGeneric: currency persist rejected for CharID={charID}; the deduction is in memory only until the next character save.");
+			}
 
 			// tell the client about the new ability/event
 			Server.NetworkWrapper.Broadcast(conn, broadcastFactory(template), true, Channel.Reliable);
@@ -352,7 +697,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			return dtos.Count > 0 &&
-				TryEnqueueAsyncWork(() => PersistMerchantAttributesToDbAsync(dtos, charID), charID);
+				EnqueuePersistence(() => PersistMerchantAttributesToDbAsync(dtos, charID), charID);
 		}
 
 		/// <summary>

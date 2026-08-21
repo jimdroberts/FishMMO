@@ -30,6 +30,29 @@ namespace FishMMO.Client
 		/// The name of the optional status Label in the UI.
 		/// </summary>
 		private const string LOADING_STATUS_NAME = "loading-status";
+		/// <summary>Name of the container holding the escape hatch.</summary>
+		private const string LOADING_ACTIONS_NAME = "loading-actions";
+		/// <summary>Name of the label explaining why the escape hatch appeared.</summary>
+		private const string LOADING_STUCK_NAME = "loading-stuck";
+		/// <summary>Name of the "Return to Login" button.</summary>
+		private const string LOADING_RETURN_BUTTON_NAME = "loading-return-btn";
+
+		/// <summary>
+		/// How long the overlay may hold the screen before the escape hatch is offered.
+		/// </summary>
+		/// <remarks>
+		/// Longer than any honest transition. A world entry is three round trips and an
+		/// Addressable preload; a scene load on a cold disk is seconds. A reconnect backoff can
+		/// legitimately run for minutes, but that case raises <see cref="UITKReconnectDisplay"/>
+		/// on top of this panel with a Cancel button of its own, so the player is not stuck
+		/// there — this is the backstop for when nothing else is on screen.
+		/// <para>
+		/// Deliberately generous rather than tight: offering a way out is harmless, but offering
+		/// it during a slow-but-working load invites the player to abandon a login that was about
+		/// to succeed.
+		/// </para>
+		/// </remarks>
+		private const float EscapeHatchDelaySeconds = 45.0f;
 
 		/// <summary>
 		/// Cache containing details for world scenes, including transition images.
@@ -52,10 +75,32 @@ namespace FishMMO.Client
 		/// reason for. Null when the document does not define one.
 		/// </summary>
 		private Label loadingStatus;
+		/// <summary>Container holding the escape hatch; collapsed until it is offered.</summary>
+		private VisualElement loadingActions;
+		/// <summary>Explains why the escape hatch has appeared.</summary>
+		private Label loadingStuck;
+		/// <summary>The "Return to Login" button.</summary>
+		private Button loadingReturnButton;
 		/// <summary>
 		/// The currently displayed loading screen sprite, or null if none is set.
 		/// </summary>
 		private Sprite currentSprite;
+
+		/// <summary>
+		/// Unscaled time at which the overlay last became visible, or -1 when it is not up.
+		/// </summary>
+		private float overlayShownAtUnscaled = -1.0f;
+
+		/// <summary>
+		/// True once the escape hatch has been offered for the current showing.
+		/// </summary>
+		/// <remarks>
+		/// Latched rather than recomputed. Taking the button away again because a stalled load
+		/// briefly ticked forward would be worse than leaving it: the player has already been told
+		/// the transition is in trouble, and a control that appears and vanishes is not one anybody
+		/// trusts enough to press.
+		/// </remarks>
+		private bool escapeHatchOffered;
 
 		/// <summary>
 		/// Resolves cached elements, subscribes to addressable progress updates, and seeds
@@ -82,9 +127,21 @@ namespace FishMMO.Client
 				loadingProgressText = Root.Q<Label>(LOADING_PROGRESS_TEXT_NAME);
 				loadingHint = Root.Q<Label>(LOADING_HINT_NAME);
 				loadingStatus = Root.Q<Label>(LOADING_STATUS_NAME);
+				loadingActions = Root.Q<VisualElement>(LOADING_ACTIONS_NAME);
+				loadingStuck = Root.Q<Label>(LOADING_STUCK_NAME);
+				loadingReturnButton = Root.Q<Button>(LOADING_RETURN_BUTTON_NAME);
+
+				/* Assigned, not accumulated: OnStarting runs again on every tree rebuild and the
+				 * button is a new element each time. A rebuild that reused one would otherwise
+				 * stack a second handler and quit to login twice on a single click. */
+				if (loadingReturnButton != null)
+				{
+					loadingReturnButton.clicked += OnClick_ReturnToLogin;
+				}
 			}
 
 			SetStatus(null);
+			ApplyEscapeHatch();
 
 			AddressableLoadProcessor.OnProgressUpdate += OnProgressUpdate;
 
@@ -250,13 +307,142 @@ namespace FishMMO.Client
 			/* No LoadingSuppressed check here. Scene transitions and reconnects call this
 			 * directly and must always be able to show the overlay; only the incidental
 			 * Addressable path in OnProgressUpdate is suppressed. */
+			// Read before base.Show(), which sets Visible.
+			bool wasVisible = Visible;
+
 			base.Show();
+
+			/* Start the escape-hatch clock on the transition into visibility, not on every call.
+			 * The drivers call Show() repeatedly — every Addressable progress tick can reach it —
+			 * and restarting the clock each time meant the deadline could never be reached by an
+			 * overlay that was busily reporting progress on a transfer that was going nowhere. */
+			if (!wasVisible)
+			{
+				this.overlayShownAtUnscaled = Time.unscaledTime;
+				this.escapeHatchOffered = false;
+			}
 
 			SetProgress(0.0f);
 			SetHint(null);
+			ApplyEscapeHatch();
 			if (loadingImage != null)
 			{
 				loadingImage.style.display = currentSprite != null ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+		}
+
+		/// <summary>
+		/// Re-applies the escape hatch after the visual tree was rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// The overlay can be re-shown while the hatch is already offered — a reconnect attempt
+		/// lands on an overlay that has been up for a minute — and the rebuilt tree carries the
+		/// UXML's collapsed default, so without this the only control on the screen would silently
+		/// disappear at the worst possible moment.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+			ApplyEscapeHatch();
+		}
+
+		/// <inheritdoc/>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+			ApplyEscapeHatch();
+		}
+
+		/// <summary>
+		/// Offers the escape hatch once the overlay has outlasted any honest transition, and
+		/// keeps the deferred login notices moving.
+		/// </summary>
+		/// <remarks>
+		/// This is the invariant this panel is responsible for: the loading overlay covers every
+		/// other panel in the client, including the modals, so for as long as it is up it <b>is</b>
+		/// the UI. Four independent drivers raise it and two of them —
+		/// <see cref="worldEntryActive"/> and <see cref="reconnectPendingActive"/> — are cleared
+		/// only by <see cref="Hide(bool)"/>, so anything that leaves one set holds the screen with
+		/// nothing on it to press. Rather than enumerate the ways that can happen, the overlay
+		/// gives itself a deadline and then offers a way out.
+		/// </remarks>
+		protected override void OnTick()
+		{
+			base.OnTick();
+
+			// Login-flow notices are refused while another dialog is up; see LoginNotice.
+			LoginNotice.Pump();
+
+			/* Client null means boot: the overlay is covering the initial Addressable load, there
+			 * is no session to quit and no login panel to return to yet. Offering the button there
+			 * would be offering nothing. */
+			if (!Visible || Client == null || this.escapeHatchOffered || this.overlayShownAtUnscaled < 0.0f)
+			{
+				return;
+			}
+
+			if (Time.unscaledTime - this.overlayShownAtUnscaled < EscapeHatchDelaySeconds)
+			{
+				return;
+			}
+
+			this.escapeHatchOffered = true;
+			ApplyEscapeHatch();
+		}
+
+		/// <summary>
+		/// Shows or collapses the escape hatch to match <see cref="escapeHatchOffered"/>.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent, and tolerates elements that are still null: it runs from
+		/// <see cref="OnStarting"/>, <see cref="Show"/>, <see cref="OnAfterShow"/>,
+		/// <see cref="OnAfterStarting"/> and <see cref="OnTick"/>, and on the very first show the
+		/// visual tree does not exist yet.
+		/// </remarks>
+		private void ApplyEscapeHatch()
+		{
+			if (loadingActions != null)
+			{
+				loadingActions.style.display = this.escapeHatchOffered ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
+			if (loadingStuck != null)
+			{
+				loadingStuck.text = this.escapeHatchOffered
+					? "This is taking longer than it should."
+					: string.Empty;
+			}
+
+			/* A button nobody can click is not an escape hatch. The overlay is normally shown over
+			 * gameplay with the cursor locked, and the panel does not declare ReleasesCursor
+			 * because doing so would release the cursor on every routine scene load. Releasing it
+			 * at the point the button appears gives the player a pointer exactly when there is
+			 * finally something to point at. */
+			if (this.escapeHatchOffered)
+			{
+				PlayerInputController.MouseMode = true;
+			}
+		}
+
+		/// <summary>
+		/// Abandons whatever the overlay was waiting for and returns the player to the login screen.
+		/// </summary>
+		/// <remarks>
+		/// <c>QuitToLogin</c> rather than a bare <see cref="Hide(bool)"/>. Hiding alone would
+		/// reveal whichever panel happened to be underneath — which, on every path that reaches
+		/// this button, is none: the login panel has hidden itself, character select hides on
+		/// Stopped, and the world is either half-built or gone. The teardown is what puts a panel
+		/// back and it is the route every login panel already implements.
+		/// </remarks>
+		public void OnClick_ReturnToLogin()
+		{
+			// Clear the drivers first so the teardown's own RefreshVisibility cannot raise the
+			// overlay straight back up over the login screen. See OnQuitToLogin.
+			Hide();
+
+			if (Client != null)
+			{
+				Client.QuitToLogin();
 			}
 		}
 
@@ -268,9 +454,28 @@ namespace FishMMO.Client
 		/// overlay (<c>Client.DismissLoadingScreen</c> does, on local character start).
 		/// Stale flags would otherwise let the next refresh pop the overlay back up over
 		/// live gameplay.
+		/// <para>
+		/// <b>This must override <c>Hide(bool)</c>, not <c>Hide()</c>.</b> <c>Hide()</c> is
+		/// <c>Hide(IsAlwaysOpen)</c>, and the quit-to-login teardown calls <c>Hide(false)</c>
+		/// directly — so with the clearing on the parameterless overload the teardown took the
+		/// panel down without clearing a single driver, and <see cref="OnQuitToLogin"/> then
+		/// re-ran <see cref="RefreshVisibility"/>, saw <see cref="worldEntryActive"/> still set
+		/// from the session that had just ended, and put the overlay straight back up. The result
+		/// was a full-screen loading overlay covering the login screen with no driver left that
+		/// could ever take it down and, before the escape hatch below, no button on it: quitting
+		/// to login from the world was itself a route to the unrecoverable empty screen.
+		/// </para>
 		/// </remarks>
-		public override void Hide()
+		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
+		public override void Hide(bool overrideIsAlwaysOpen)
 		{
+			if (overrideIsAlwaysOpen || Document == null)
+			{
+				// Refused; the overlay is still up, so its drivers still describe the truth.
+				base.Hide(overrideIsAlwaysOpen);
+				return;
+			}
+
 			addressableLoadActive = false;
 			sceneTransitionActive = false;
 			reconnectPendingActive = false;
@@ -280,7 +485,12 @@ namespace FishMMO.Client
 			// one, which is usually an ordinary scene load with nothing to explain.
 			SetStatus(null);
 
-			base.Hide();
+			// The next showing gets its own deadline and its own decision about the hatch.
+			this.overlayShownAtUnscaled = -1.0f;
+			this.escapeHatchOffered = false;
+			ApplyEscapeHatch();
+
+			base.Hide(overrideIsAlwaysOpen);
 		}
 
 		/// <summary>

@@ -29,7 +29,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	[RequiresDataContainer(typeof(GuildCharacterMappingData))]
 	[RequiresDataContainer(typeof(GuildSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
-	public class GuildSystem : ServerBehaviour, IGuildSystem<NetworkConnection>
+	public partial class GuildSystem : ServerBehaviour, IGuildSystem<NetworkConnection>
 	{
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -77,6 +77,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int invitationSweepMaxRemove = 128;
 
 		/// <summary>
+		/// Minimum seconds between invitations from the same inviter to the same target.
+		/// </summary>
+		/// <remarks>
+		/// The pending-invitation slot is not a rate limit — declining clears it instantly — and
+		/// the ingress debounce is per connection rather than per target, so neither stops one
+		/// player from keeping a modal permanently on another player's screen. This does.
+		/// </remarks>
+		[Tooltip("Minimum seconds between guild invitations to the same target from the same inviter")]
+		[SerializeField] private float perTargetInviteCooldownSeconds = 60.0f;
+
+		/// <summary>
+		/// Number of activity log rows retained per guild, and the most a client can be sent.
+		/// </summary>
+		/// <remarks>
+		/// An append-only table on a long-lived guild grows without limit and nothing else in the
+		/// schema would ever remove from it, so the append path trims to this depth. It is also
+		/// the read cap: the panel shows a scrollback, not an archive.
+		/// </remarks>
+		[Header("Activity Log")]
+		[Tooltip("Activity log rows retained per guild")]
+		[SerializeField] private int guildLogRetainedEntries = 100;
+
+		/// <summary>
+		/// How many appends may pass before the log is trimmed again.
+		/// </summary>
+		/// <remarks>
+		/// Pruning on every append would double the write cost of every guild event for a table
+		/// that only needs to stay roughly bounded. Trimming every N appends keeps the row count
+		/// within N of the target and costs one extra statement per N events.
+		/// </remarks>
+		[Tooltip("Appends between activity log prune passes")]
+		[SerializeField] private int guildLogPruneInterval = 25;
+
+		/// <summary>
 		/// Debounce window in milliseconds for guild ingress operations.
 		/// </summary>
 		[Header("Ingress Protection")]
@@ -104,6 +138,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Achievement to increment when a player creates a guild.
 		/// </summary>
+		/// <summary>
+		/// Directory rows returned per browse request.
+		/// </summary>
+		/// <remarks>
+		/// A cap, not a page cursor. The directory is browsed by SEARCHING rather than by paging
+		/// — a player looking for a guild types "pvp", they do not read page four of everything —
+		/// so a bounded result set with a search box is the honest shape, and it keeps one request
+		/// from serialising every recruiting guild on the shard.
+		/// </remarks>
+		[Header("Recruitment")]
+		[Tooltip("Directory rows returned per browse request")]
+		[SerializeField] private int guildDirectoryPageSize = 50;
+
+		/// <summary>
+		/// Pending applications sent to an officer per request.
+		/// </summary>
+		[Tooltip("Pending applications sent per queue request")]
+		[SerializeField] private int guildApplicationPageSize = 50;
+
+		/// <summary>
+		/// Most applications one character may have outstanding at once.
+		/// </summary>
+		/// <remarks>
+		/// Enforced inside the INSERT alongside the per-guild uniqueness. The unique index stops
+		/// repeat applications to one guild; this stops one player queuing themselves into every
+		/// guild on the shard and making the officer queues useless for everybody.
+		/// </remarks>
+		[Tooltip("Most applications one character may have outstanding")]
+		[SerializeField] private int maxPendingApplicationsPerCharacter = 5;
+
+		/// <summary>
+		/// Minimum seconds between applications from the same character.
+		/// </summary>
+		/// <remarks>
+		/// The rate limit proper. The ingress debounce is a hundred milliseconds and exists to
+		/// absorb a double-click; the per-guild unique index does not constrain a sweep ACROSS
+		/// guilds; and the outstanding cap can be reset by withdrawing. A player working down the
+		/// directory can defeat all three, and this is what stops them.
+		/// </remarks>
+		[Tooltip("Minimum seconds between guild applications from the same character")]
+		[SerializeField] private float applicationCooldownSeconds = 30.0f;
+
 		[Header("Achievements")]
 		public AchievementTemplate GuildCreateAchievementTemplate;
 
@@ -124,6 +200,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Leave = 5,
 			Remove = 6,
 			ChangeRank = 7,
+			SetInfo = 8,
+			TransferLeadership = 9,
+			Disband = 10,
+			LogRequest = 11,
+			RankList = 12,
+			EditRank = 13,
+			CreateRank = 14,
+			DeleteRank = 15,
+			SetNote = 16,
+			SetRecruitment = 17,
+			Directory = 18,
+			Apply = 19,
+			ApplicationList = 20,
+			ResolveApplication = 21,
 		}
 
 		/// <summary>
@@ -202,6 +292,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildSetMessageOfTheDayBroadcast>(OnServerGuildSetMessageOfTheDayBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildSetNoticeBroadcast>(OnServerGuildSetNoticeBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildTransferLeadershipBroadcast>(OnServerGuildTransferLeadershipBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildDisbandBroadcast>(OnServerGuildDisbandBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildLogRequestBroadcast>(OnServerGuildLogRequestBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildRankListRequestBroadcast>(OnServerGuildRankListRequestBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildEditRankBroadcast>(OnServerGuildEditRankBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildCreateRankBroadcast>(OnServerGuildCreateRankBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildDeleteRankBroadcast>(OnServerGuildDeleteRankBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildSetMemberNoteBroadcast>(OnServerGuildSetMemberNoteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildSetRecruitmentBroadcast>(OnServerGuildSetRecruitmentBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildDirectoryRequestBroadcast>(OnServerGuildDirectoryRequestBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildApplyBroadcast>(OnServerGuildApplyBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildApplicationListRequestBroadcast>(OnServerGuildApplicationListRequestBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildResolveApplicationBroadcast>(OnServerGuildResolveApplicationBroadcastReceived, true);
 
 			// Character system events
 			characterSystem.OnConnect += CharacterSystem_OnConnect;
@@ -224,6 +329,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			invitationSweepIntervalSeconds = Mathf.Max(0.1f, invitationSweepIntervalSeconds);
 			invitationSweepMaxScan = Mathf.Max(1, invitationSweepMaxScan);
 			invitationSweepMaxRemove = Mathf.Max(1, invitationSweepMaxRemove);
+			perTargetInviteCooldownSeconds = Mathf.Max(0.0f, perTargetInviteCooldownSeconds);
+			guildLogRetainedEntries = Mathf.Clamp(guildLogRetainedEntries, 10, 200);
+			guildLogPruneInterval = Mathf.Max(1, guildLogPruneInterval);
 			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
@@ -261,6 +369,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildSetMessageOfTheDayBroadcast>(OnServerGuildSetMessageOfTheDayBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildSetNoticeBroadcast>(OnServerGuildSetNoticeBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildTransferLeadershipBroadcast>(OnServerGuildTransferLeadershipBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildDisbandBroadcast>(OnServerGuildDisbandBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildLogRequestBroadcast>(OnServerGuildLogRequestBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildRankListRequestBroadcast>(OnServerGuildRankListRequestBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildEditRankBroadcast>(OnServerGuildEditRankBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildCreateRankBroadcast>(OnServerGuildCreateRankBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildDeleteRankBroadcast>(OnServerGuildDeleteRankBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildSetMemberNoteBroadcast>(OnServerGuildSetMemberNoteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildSetRecruitmentBroadcast>(OnServerGuildSetRecruitmentBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildDirectoryRequestBroadcast>(OnServerGuildDirectoryRequestBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildApplyBroadcast>(OnServerGuildApplyBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildApplicationListRequestBroadcast>(OnServerGuildApplicationListRequestBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildResolveApplicationBroadcast>(OnServerGuildResolveApplicationBroadcastReceived);
 
 			// Character system events
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
@@ -361,6 +484,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				TimeSpan.FromSeconds(invitationTtlSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
+
+			/* Cooldown entries are pure memory and nothing else ever removes them, so they need
+			 * the same bounded sweep the invitations get. Their TTL is the cooldown itself: once
+			 * it has elapsed the entry can no longer refuse anything. */
+			runtimeData.SweepInviteCooldowns(
+				nowUtc,
+				TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
+				invitationSweepMaxScan,
+				invitationSweepMaxRemove);
+
+			runtimeData.SweepApplicationCooldowns(
+				nowUtc,
+				TimeSpan.FromSeconds(applicationCooldownSeconds),
+				invitationSweepMaxScan,
+				invitationSweepMaxRemove);
+		}
+
+		/// <summary>
+		/// Begins the per-character guild application cooldown.
+		/// </summary>
+		/// <param name="characterID">The applying character.</param>
+		/// <returns>True when the application may proceed.</returns>
+		private bool TryBeginApplicationCooldown(long characterID)
+		{
+			if (Server == null ||
+				!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData) ||
+				runtimeData == null)
+			{
+				/* No runtime data means no rate limiting is possible. Refusing would take guild
+				 * applications offline entirely over a container lookup; the database still
+				 * enforces the per-guild uniqueness and the outstanding cap. */
+				return true;
+			}
+
+			return runtimeData.TryBeginApplicationCooldown(
+				characterID,
+				TimeSpan.FromSeconds(applicationCooldownSeconds),
+				DateTime.UtcNow);
 		}
 
 		/// <summary>
@@ -433,6 +594,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				HashSet<long> updatedGuilds = new HashSet<long>();
 				// Collect per-guild member data
 				Dictionary<long, IReadOnlyList<CharacterGuildData>> guildMembersMap = new Dictionary<long, IReadOnlyList<CharacterGuildData>>();
+				/* Per-guild rank ladders, fetched here on the async path so the main-thread block
+				 * below can decide who may see an officer note WITHOUT a database call and
+				 * WITHOUT trusting the rank cached on the character. The membership rows and the
+				 * ladder are read in the same pass, so the filter is applied against the same
+				 * snapshot the roster itself was built from. */
+				Dictionary<long, IReadOnlyList<GuildRankData>> guildLaddersMap = new Dictionary<long, IReadOnlyList<GuildRankData>>();
+
+				TryGetDbService(out IGuildRankService rankService);
 
 				foreach (GuildUpdateData update in updates)
 				{
@@ -446,6 +615,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (membersResult.IsSuccess && membersResult.Data != null)
 					{
 						guildMembersMap[update.GuildID] = membersResult.Data;
+					}
+
+					if (rankService != null)
+					{
+						IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(update.GuildID, rankService);
+						if (ladder != null)
+						{
+							guildLaddersMap[update.GuildID] = ladder;
+						}
 					}
 				}
 
@@ -508,23 +686,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						// Cache the guild member IDs
 						mapData.GuildMemberTracker[guildID] = currentMemberIDs;
 
-						var addBroadcasts = new List<GuildAddBroadcast>(dbMembers.Count);
-						for (int i = 0; i < dbMembers.Count; i++)
-						{
-							var x = dbMembers[i];
-							addBroadcasts.Add(new GuildAddBroadcast()
-							{
-								GuildID = x.GuildID,
-								CharacterID = x.CharacterID,
-								Rank = (GuildRank)x.Rank,
-								Location = x.Location,
-							});
-						}
+						guildLaddersMap.TryGetValue(guildID, out IReadOnlyList<GuildRankData> ladder);
 
-						GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
+						/* Two projections of the same roster. The officer note is a column a
+						 * client either may read or may never receive — hiding it in the panel
+						 * would leave it in the packet — so the message is built twice and the
+						 * recipient's own rank decides which copy they get. */
+						GuildAddMultipleBroadcast publicRoster = BuildRoster(dbMembers, includeOfficerNotes: false);
+						GuildAddMultipleBroadcast officerRoster = BuildRoster(dbMembers, includeOfficerNotes: true);
+
+						byte guildLeaderRankOrder = 0;
+						if (ladder != null)
 						{
-							Members = addBroadcasts.ToArray(),
-						};
+							for (int i = 0; i < ladder.Count; ++i)
+							{
+								if (ladder[i].RankOrder > guildLeaderRankOrder)
+								{
+									guildLeaderRankOrder = ladder[i].RankOrder;
+								}
+							}
+						}
 
 						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 						{
@@ -538,9 +719,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									{
 										continue;
 									}
-									// Update server rank in the case of a membership rank change
-									guildController.Rank = (GuildRank)member.Rank;
-									Server.NetworkWrapper.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
+
+									/* Refresh the server-side cache of this member's standing from
+									 * the row that was just read. The cache is only ever a
+									 * pre-filter — every operation re-resolves before deciding —
+									 * but a rank change made on another scene server reaches this
+									 * one through the pump, and leaving the cache stale would
+									 * leave the player's own panel offering actions the server
+									 * will refuse. */
+									GuildPermissions memberPermissions = PermissionsForOrder(ladder, member.Rank);
+									guildController.RankOrder = member.Rank;
+									guildController.Permissions = memberPermissions;
+									guildController.LeaderRankOrder = guildLeaderRankOrder;
+
+									bool mayReadOfficerNotes = (memberPermissions & GuildPermissions.ViewOfficerNotes) == GuildPermissions.ViewOfficerNotes;
+									Server.NetworkWrapper.Broadcast(character.Owner, mayReadOfficerNotes ? officerRoster : publicRoster, true, Channel.Reliable);
+
+									Server.NetworkWrapper.Broadcast(character.Owner, new GuildRankListBroadcast()
+									{
+										GuildID = guildID,
+										Ranks = BuildRankEntries(ladder),
+										ViewerRankOrder = member.Rank,
+										ViewerPermissions = (long)memberPermissions,
+										LeaderRankOrder = guildLeaderRankOrder,
+									}, true, Channel.Reliable);
 								}
 							}
 						}
@@ -643,7 +845,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Fire-and-forget async DB persist
 			long characterID = character.ID;
 			long guildID = guildController.ID;
-			byte rank = (byte)guildController.Rank;
+			byte rank = guildController.RankOrder;
 			string sceneName = character.SceneName;
 
 			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, rank, sceneName), characterID);
@@ -656,7 +858,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">The character that disconnected.</param>
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+			IGuildSystemRuntimeData runtimeData = null;
+			if (character != null && Server.DataContainerRegistry.TryGet(out runtimeData))
 			{
 				runtimeData.RemovePendingInvitation(character.ID);
 			}
@@ -680,10 +883,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			RemoveGuildCharacterTracker(guildController.ID, character.ID);
 
+			/* A kick or a leave deletes the membership row from a background task, and this
+			 * character's controller still carries the old guild ID until that delete lands.
+			 * Persisting from it here would UPSERT the row straight back — putting the player
+			 * into the guild they had just been removed from, permanently, because nothing
+			 * afterwards knows the row is not supposed to exist. Disconnecting inside that
+			 * window is the whole exploit, and it is a window a player can aim for. */
+			if (runtimeData != null && runtimeData.IsMembershipRemovalInFlight(character.ID))
+			{
+				return;
+			}
+
 			// Fire-and-forget async DB persist with "Offline" location
 			long characterID = character.ID;
 			long guildID = guildController.ID;
-			byte rank = (byte)guildController.Rank;
+			byte rank = guildController.RankOrder;
 
 			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, rank, "Offline"), characterID);
 		}
@@ -725,6 +939,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!updateResult.IsSuccess)
 				{
 					await Log.Warning("GuildSystem", $"PersistGuildMemberAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
+
+				/* Send the guild's notice and message of the day to this member alone. The roster
+				 * pump does not carry them — it deals in membership rows — so without this a
+				 * player would only ever see the text if somebody edited it while they were
+				 * logged in, which is precisely why the columns sat unused. Skipped when the
+				 * member is going Offline: there is nobody left to render it. */
+				if (!string.Equals(location, "Offline", StringComparison.OrdinalIgnoreCase))
+				{
+					await PublishGuildInfoAsync(guildID, characterID);
 				}
 			}
 			catch (Exception ex)
@@ -853,7 +1077,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long newGuildID = createResult.Data.Value;
 
 				// Save the character as guild leader
-				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, newGuildID, (byte)GuildRank.Leader, sceneName);
+				/* The founder is seeded at the DEFAULT leader order. A brand-new guild has the
+				 * seeded three-rung ladder and nothing above it, so this is its top seat; a guild
+				 * that later adds ranks moves its leader by editing the ladder, not by this line. */
+				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, newGuildID, GuildRankDefaults.DefaultLeaderRankOrder, sceneName);
 				DatabaseResult leaderResult = await charGuildService.PersistAsync(memberData, maxGuildSize);
 				if (!leaderResult.IsSuccess)
 				{
@@ -870,7 +1097,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (gc == null || gc.ID > 0) return;
 
 					gc.ID = newGuildID;
-					gc.Rank = GuildRank.Leader;
+					gc.RankOrder = GuildRankDefaults.DefaultLeaderRankOrder;
+					gc.Permissions = GuildRankDefaults.LeaderPermissions;
+					gc.LeaderRankOrder = GuildRankDefaults.DefaultLeaderRankOrder;
 
 					AddGuildCharacterTracker(gc.ID, characterID);
 
@@ -879,9 +1108,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						GuildID = gc.ID,
 						CharacterID = characterID,
-						Rank = gc.Rank,
+						RankOrder = gc.RankOrder,
 						Location = sceneName,
 					}, true, Channel.Reliable);
+
+					// Hand the founder the (empty) notice and message of the day so the panel's
+					// info band is populated from the moment the guild exists.
+					_ = PublishGuildInfoAsync(newGuildID, characterID);
+
+					AppendGuildLog(newGuildID, GuildLogEventType.Created, characterID);
 
 					// Increment achievement for creating a guild
 					if (GuildCreateAchievementTemplate != null)
@@ -934,12 +1169,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				IGuildController inviter = conn.FirstObject.GetComponent<IGuildController>();
 
-				// validate guild leader or officer is inviting
+				/* Pre-filter only. The cached mask keeps an obviously-illegal request off the
+				 * database, but it is a value the pump refreshes rather than the authority —
+				 * InviteToGuildAsync re-resolves the inviter's standing from the guild's own rank
+				 * rows before the invitation is actually issued. */
 				if (inviter == null ||
 					inviter.ID < 1 ||
 					inviter.Character.ID == msg.TargetCharacterID ||
-					!(inviter.Rank == GuildRank.Leader || inviter.Rank == GuildRank.Officer))
+					!inviter.HasGuildPermission(GuildPermissions.Invite))
 				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
 					return;
 				}
 
@@ -977,11 +1216,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				/* AUTHORITATIVE permission check. The handler that queued this work read a cached
+				 * mask on the main thread; between then and now the inviter may have been
+				 * demoted, kicked, or had the Invite bit taken off their rank. Re-resolving here
+				 * is what makes the cached read a performance decision rather than a security
+				 * one. */
+				GuildAuthority inviterAuthority = await ResolveGuildAuthorityAsync(guildID, inviterCharacterID);
+				if (!inviterAuthority.Has(GuildPermissions.Invite))
+				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
 				// Check guild is not full
 				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
-				if (!countResult.IsSuccess || countResult.Data >= maxGuildSize)
+				if (!countResult.IsSuccess)
 				{
 					return;
+				}
+				if (countResult.Data >= maxGuildSize)
+				{
+					SendGuildResult(conn, GuildResultType.GuildFull);
+					return;
+				}
+
+				/* Blocking has existed in the friend table since it was written and nothing has
+				 * ever read the column, so a blocked player could still be invited by whoever
+				 * they blocked. Asked about the TARGET, not the inviter: the question is whether
+				 * the person about to receive a modal has refused contact from the sender. */
+				if (TryGetDbService(out ICharacterFriendService friendService))
+				{
+					DatabaseResult<bool> blockedResult = await friendService.IsBlockedAsync(targetCharacterID, inviterCharacterID);
+					if (blockedResult.IsSuccess && blockedResult.Data)
+					{
+						SendGuildResult(conn, GuildResultType.TargetIsBlocked);
+						return;
+					}
 				}
 
 				// Marshal invite logic back to main thread
@@ -992,8 +1262,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
+					DateTime nowUtc = DateTime.UtcNow;
+
+					/* Per (inviter, target), not per connection. Recorded before the pending slot
+					 * is taken so a target who declines instantly still cannot be re-invited
+					 * until the cooldown elapses — declining used to free the slot and let the
+					 * next invite through on the following frame. */
+					if (perTargetInviteCooldownSeconds > 0.0f &&
+						!runtimeData.TryBeginInviteCooldown(
+							inviterCharacterID,
+							targetCharacterID,
+							TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
+							nowUtc))
+					{
+						SendGuildResult(conn, GuildResultType.InviteOnCooldown);
+						return;
+					}
+
+					PendingGuildInvitation invitation = new PendingGuildInvitation(guildID, inviterCharacterID, nowUtc);
+
 					// if the target doesn't already have a pending invite
-					if (runtimeData.TryAddPendingInvitation(targetCharacterID, guildID, DateTime.UtcNow) &&
+					if (runtimeData.TryAddPendingInvitation(targetCharacterID, invitation) &&
 						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
 						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
 						targetCharacter.TryGet(out IGuildController targetGuildController))
@@ -1027,6 +1316,57 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("GuildSystem", $"Error inviting to guild (GuildID={guildID}, TargetID={targetCharacterID}): {ex}");
 			}
+		}
+
+		/// <summary>
+		/// Clears a character's pending invitation from the async path.
+		/// </summary>
+		/// <param name="characterID">The character whose invitation should be dropped.</param>
+		/// <remarks>
+		/// Marshalled: the runtime data container is main-thread state and the callers are
+		/// background tasks.
+		/// </remarks>
+		private void ClearPendingInvitation(long characterID)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (Server != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+				{
+					runtimeData.RemovePendingInvitation(characterID);
+				}
+			});
+		}
+
+		/// <summary>
+		/// Sends a guild operation result to a connection, if it is still active.
+		/// </summary>
+		/// <param name="conn">The connection to notify.</param>
+		/// <param name="result">The result to report.</param>
+		/// <remarks>
+		/// Every refusal path used to be a bare <c>return</c>, so a player whose request was
+		/// rejected saw exactly what a player whose request was accepted-and-lost saw: nothing.
+		/// A refusal the client can render is the difference between a rule and a bug report.
+		/// Marshalled to the main thread because most callers are on the async path.
+		/// </remarks>
+		private void SendGuildResult(NetworkConnection conn, GuildResultType result)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			TryEnqueueMainThread(() =>
+			{
+				if (conn == null || !conn.IsActive || Server == null)
+				{
+					return;
+				}
+
+				Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+				{
+					Result = result,
+				}, true, Channel.Reliable);
+			});
 		}
 
 		/// <summary>
@@ -1069,20 +1409,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// validate guild invite
-				if (runtimeData.TryGetPendingInvitation(guildController.Character.ID, out long pendingGuildID))
+				if (!runtimeData.TryGetPendingInvitation(guildController.Character.ID, out PendingGuildInvitation invitation))
 				{
-					if (Server?.Database?.ServiceRegistry == null)
-					{
-						return;
-					}
-
-					// Capture immutable data for async path
-					long characterID = guildController.Character.ID;
-					string sceneName = conn.FirstObject.gameObject.scene.name;
-
-					deferGuardRelease = TryEnqueueIngressWork(() => AcceptGuildInviteAsync(conn, characterID, pendingGuildID, sceneName), guardKey, characterID);
-					if (!deferGuardRelease) SendServerBusy(conn);
+					SendGuildResult(conn, GuildResultType.InvitationExpired);
+					return;
 				}
+
+				/* The client names the invitation it is answering. It used to send an empty
+				 * struct, so the server could only resolve "whatever is pending" — and an invite
+				 * dialog left open past the TTL then accepted whichever guild invited the player
+				 * NEXT. This is a claim being CHECKED, not trusted: the authority is the server's
+				 * own pending record and the client is only allowed to disagree with it by being
+				 * refused. */
+				if (msg.InviterCharacterID != invitation.InviterCharacterID)
+				{
+					SendGuildResult(conn, GuildResultType.InvitationExpired);
+					return;
+				}
+
+				/* Expiry is re-tested here against the issue time rather than left to the sweep.
+				 * The sweep is bounded and periodic, so an invitation can outlive its TTL by up
+				 * to a sweep interval — and reading the entry refreshes the queue's clock, which
+				 * pushed the sweep further away every time the entry was looked at. */
+				if (DateTime.UtcNow - invitation.IssuedUtc > TimeSpan.FromSeconds(invitationTtlSeconds))
+				{
+					runtimeData.RemovePendingInvitation(guildController.Character.ID);
+					SendGuildResult(conn, GuildResultType.InvitationExpired);
+					return;
+				}
+
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				// Capture immutable data for async path
+				long characterID = guildController.Character.ID;
+				string sceneName = conn.FirstObject.gameObject.scene.name;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => AcceptGuildInviteAsync(conn, characterID, invitation.GuildID, sceneName), guardKey, characterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1102,7 +1468,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="guildID">Guild identifier from pending invitation.</param>
 		/// <param name="sceneName">Current scene name.</param>
 		/// <returns>Asynchronous accept-invite task.</returns>
-		private async Task AcceptGuildInviteAsync(NetworkConnection conn, long characterID, long guildID, string sceneName)
+		private Task AcceptGuildInviteAsync(NetworkConnection conn, long characterID, long guildID, string sceneName)
+		{
+			return JoinGuildAsync(conn, characterID, guildID, sceneName, fromInvitation: true);
+		}
+
+		/// <summary>
+		/// THE join path. Every way a character can end up in a guild goes through here.
+		/// </summary>
+		/// <param name="conn">The joining connection.</param>
+		/// <param name="characterID">The joining character.</param>
+		/// <param name="guildID">The guild being joined.</param>
+		/// <param name="sceneName">Current scene name.</param>
+		/// <param name="fromInvitation">
+		/// True when an invitation is being answered, false when a recruitment application was
+		/// accepted. The only difference it makes is whether a pending invitation is cleared.
+		/// </param>
+		/// <returns>Asynchronous join task.</returns>
+		/// <remarks>
+		/// <para>
+		/// E10 accepts an application by calling THIS, not by writing a membership row of its own.
+		/// That is deliberate and it is the point: the capacity check, the guild-still-exists
+		/// check, the bottom-rung rank resolution, the tracker registration, the guild-info push
+		/// and the achievement are all things an application accept has to get right, and a second
+		/// implementation of them would drift. In particular a separate accept path is how a guild
+		/// ends up over its member cap — the applicant queue is exactly the mechanism that lets
+		/// several joins land at once.
+		/// </para>
+		/// <para>
+		/// The capacity and existence checks therefore run at ADMISSION time, not at application
+		/// time, which is what makes "an accept arriving after the guild filled" a refusal rather
+		/// than an overflow.
+		/// </para>
+		/// </remarks>
+		private async Task JoinGuildAsync(NetworkConnection conn, long characterID, long guildID, string sceneName, bool fromInvitation)
 		{
 			try
 			{
@@ -1112,19 +1511,67 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Check guild capacity
-				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
-				if (!countResult.IsSuccess || countResult.Data >= maxGuildSize)
+				/* The guild can be disbanded between the invite and the accept — the last member
+				 * leaving deletes the row outright. Without this the accept persisted a
+				 * membership pointing at a guild that no longer exists, failed its foreign key or
+				 * (worse) succeeded against a recycled id, and told the player nothing either
+				 * way. Checked before capacity, because a missing guild counts as zero members
+				 * and would otherwise sail through the capacity test. */
+				if (!TryGetDbService(out IGuildService guildExistsService))
 				{
 					return;
 				}
 
+				DatabaseResult<GuildData?> guildResult = await guildExistsService.FetchAsync(guildID);
+				if (!guildResult.IsSuccess || !guildResult.Data.HasValue)
+				{
+					SendGuildResult(conn, GuildResultType.GuildNotFound);
+					if (fromInvitation)
+					{
+						ClearPendingInvitation(characterID);
+					}
+					return;
+				}
+
+				// Check guild capacity
+				DatabaseResult<int> countResult = await charGuildService.CountAsync(guildID);
+				if (!countResult.IsSuccess)
+				{
+					return;
+				}
+				if (countResult.Data >= maxGuildSize)
+				{
+					SendGuildResult(conn, GuildResultType.GuildFull);
+					return;
+				}
+
 				// Persist membership
-				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, guildID, (byte)GuildRank.Member, sceneName);
+				/* New members land on the LOWEST rung the guild actually has, not on a constant.
+				 * A guild that deleted its bottom rank would otherwise admit people into a rank
+				 * with no row, which resolves to no permissions and cannot be promoted out of by
+				 * name. */
+				byte joinRankOrder = await ResolveLowestRankOrderAsync(guildID);
+				CharacterGuildData memberData = new CharacterGuildData(0, 1, characterID, guildID, joinRankOrder, sceneName);
 				DatabaseResult saveResult = await charGuildService.PersistAsync(memberData, maxGuildSize);
 				if (!saveResult.IsSuccess)
 				{
+					await Log.Warning("GuildSystem", $"JoinGuildAsync membership persist failed (CharID={characterID}, GuildID={guildID}): {saveResult.ErrorCode} - {saveResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.GuildNotFound);
 					return;
+				}
+
+				/* Every OTHER application this character has outstanding is dropped the moment
+				 * they join anything. An application that outlives its applicant's guildless
+				 * state is an accept waiting to fail — and worse, a second guild's officer
+				 * pressing Accept on somebody who is already in a guild would otherwise get a
+				 * silent no-op with no idea why. */
+				if (TryGetDbService(out IGuildApplicationService applicationService))
+				{
+					DatabaseResult<int> withdrawResult = await applicationService.DeleteManyByCharacterAsync(characterID);
+					if (!withdrawResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"JoinGuildAsync application cleanup failed (CharID={characterID}): {withdrawResult.ErrorCode} - {withdrawResult.ErrorMessage}");
+					}
 				}
 
 				// Tell the other servers to update their guild lists
@@ -1143,9 +1590,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (gc == null || gc.ID > 0) return;
 
 					gc.ID = guildID;
-					gc.Rank = GuildRank.Member;
+					gc.RankOrder = joinRankOrder;
+					gc.Permissions = GuildPermissions.None;
 
-					if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+					if (fromInvitation &&
+						Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 					{
 						runtimeData.RemovePendingInvitation(characterID);
 					}
@@ -1157,9 +1606,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						GuildID = gc.ID,
 						CharacterID = characterID,
-						Rank = GuildRank.Member,
+						RankOrder = joinRankOrder,
 						Location = sceneName,
 					}, true, Channel.Reliable);
+
+					// The new member has no guild text yet; send it alongside the join rather than
+					// making them wait for somebody to edit it.
+					_ = PublishGuildInfoAsync(guildID, characterID);
+
+					AppendGuildLog(guildID, GuildLogEventType.Joined, characterID);
 
 					// Increment achievement for joining a guild
 					if (GuildJoinAchievementTemplate != null)
@@ -1175,7 +1630,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("GuildSystem", $"Error accepting guild invite (CharID={characterID}, GuildID={guildID}): {ex}");
+				await Log.Error("GuildSystem", $"Error joining guild (CharID={characterID}, GuildID={guildID}, FromInvitation={fromInvitation}): {ex}");
 			}
 		}
 
@@ -1207,7 +1662,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) && CharacterStateValidation.CanAct(character))
 				{
-					runtimeData.RemovePendingInvitation(character.ID);
+					/* Only clear the invitation the client actually declined. A decline that
+					 * arrives after the slot has been refilled would otherwise silently throw
+					 * away an invitation the player has not been shown yet. */
+					if (runtimeData.TryGetPendingInvitation(character.ID, out PendingGuildInvitation invitation) &&
+						msg.InviterCharacterID == invitation.InviterCharacterID)
+					{
+						runtimeData.RemovePendingInvitation(character.ID);
+					}
 				}
 			}
 			finally
@@ -1258,9 +1720,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Capture immutable data for async path
 				long characterID = guildController.Character.ID;
 				long guildID = guildController.ID;
-				GuildRank rank = guildController.Rank;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => LeaveGuildAsync(conn, characterID, guildID, rank), guardKey, characterID);
+				/* Marked BEFORE the async hop. The membership row is deleted on a background
+				 * task while this character still carries a live guild ID, and disconnecting in
+				 * that window would run the ordinary disconnect persist and write the row back.
+				 * The marker is cleared on every exit from LeaveGuildAsync. */
+				BeginMembershipRemoval(characterID);
+
+				deferGuardRelease = TryEnqueueIngressWork(() => LeaveGuildAsync(conn, characterID, guildID), guardKey, characterID);
+				if (!deferGuardRelease)
+				{
+					EndMembershipRemoval(characterID);
+				}
 				if (!deferGuardRelease)
 				{
 					SendServerBusy(conn);
@@ -1283,9 +1754,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="conn">Leaving character connection.</param>
 		/// <param name="characterID">Leaving character identifier.</param>
 		/// <param name="guildID">Guild identifier being left.</param>
-		/// <param name="rank">Leaving character rank.</param>
 		/// <returns>Asynchronous leave-guild task.</returns>
-		private async Task LeaveGuildAsync(NetworkConnection conn, long characterID, long guildID, GuildRank rank)
+		/// <remarks>
+		/// The leaver's rank is no longer passed in from the handler. It is read from the
+		/// membership rows this method already fetches, which removes a parameter that could
+		/// disagree with the database and makes "is the leaver the leader?" a question about the
+		/// guild's own ladder rather than about a captured enum.
+		/// </remarks>
+		private async Task LeaveGuildAsync(NetworkConnection conn, long characterID, long guildID)
 		{
 			try
 			{
@@ -1308,20 +1784,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Find the leaving member's version for optimistic concurrency on delete
 				long leavingMemberVersion = 1;
+				byte leavingRankOrder = 0;
 				foreach (CharacterGuildData member in members)
 				{
 					if (member.CharacterID == characterID)
 					{
 						leavingMemberVersion = member.Version + 1;
+						leavingRankOrder = member.Rank;
 						break;
 					}
 				}
 
-				// Handle leadership transfer if the leaving member is the leader
-				if (rank == GuildRank.Leader && remainingCount > 0)
+				/* The leader is whichever member sits highest on the ladder, read from the rows
+				 * rather than compared against a constant. A guild that added a rank above the
+				 * seeded three has a leader this code cannot name in advance. */
+				byte topRankOrder = 0;
+				foreach (CharacterGuildData member in members)
 				{
-					List<CharacterGuildData> officers = new List<CharacterGuildData>();
+					if (member.Rank > topRankOrder)
+					{
+						topRankOrder = member.Rank;
+					}
+				}
+
+				bool leaverIsLeader = leavingRankOrder > 0 && leavingRankOrder >= topRankOrder;
+
+				// Handle leadership transfer if the leaving member is the leader
+				if (leaverIsLeader && remainingCount > 0)
+				{
+					/* Succession prefers the most senior remaining member, whoever that is. The
+					 * old code looked specifically for GuildRank.Officer and fell back to anyone;
+					 * with an arbitrary ladder there is no "officer" to look for, and "the next
+					 * one down" is both the same answer for a default guild and the right answer
+					 * for an edited one. */
 					List<CharacterGuildData> remainingMembers = new List<CharacterGuildData>();
+					byte highestRemainingOrder = 0;
 
 					foreach (CharacterGuildData member in members)
 					{
@@ -1330,34 +1827,59 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							continue;
 						}
 
-						if (member.Rank == (byte)GuildRank.Officer)
+						if (member.Rank > highestRemainingOrder)
 						{
-							officers.Add(member);
+							highestRemainingOrder = member.Rank;
 						}
 						remainingMembers.Add(member);
 					}
 
+					List<CharacterGuildData> mostSenior = new List<CharacterGuildData>();
+					foreach (CharacterGuildData member in remainingMembers)
+					{
+						if (member.Rank == highestRemainingOrder)
+						{
+							mostSenior.Add(member);
+						}
+					}
+
 					CharacterGuildData? newLeader = null;
 					var rng = new DeterministicRNG();
-					if (officers.Count > 0)
+					if (mostSenior.Count > 0)
 					{
-						// pick a random officer
-						newLeader = officers[rng.Next(officers.Count)];
+						// pick a random member from the most senior remaining rank
+						newLeader = mostSenior[rng.Next(mostSenior.Count)];
 					}
 					else if (remainingMembers.Count > 0)
 					{
-						// pick a random member
 						newLeader = remainingMembers[rng.Next(remainingMembers.Count)];
 					}
 
-					// update the guild leader status in the database
-					if (newLeader.HasValue)
+					/* A guild with no leader can never promote, kick, invite or disband again —
+					 * every one of those paths needs a permission only the top rank holds — so it
+					 * is not a degraded state, it is a permanently soft-locked one with no
+					 * in-game recovery. The old code logged the failed transfer and then deleted the
+					 * leader anyway, manufacturing exactly that. Refusing the leave leaves the
+					 * player in a guild they wanted to leave, which they can retry; the
+					 * alternative leaves everyone else in a guild nobody can administer. */
+					if (!newLeader.HasValue)
 					{
-						DatabaseResult leaderResult = await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, (byte)GuildRank.Leader, newLeader.Value.Version + 1);
-						if (!leaderResult.IsSuccess)
-						{
-							await Log.Warning("GuildSystem", $"LeaveGuildAsync leadership transfer failed (GuildID={guildID}, NewLeader={newLeader.Value.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
-						}
+						await Log.Error("GuildSystem", $"LeaveGuildAsync found no successor among {remainingCount} remaining members (GuildID={guildID}); refusing the leave rather than leaving the guild leaderless.");
+						SendGuildResult(conn, GuildResultType.InsufficientRank);
+						return;
+					}
+
+					// update the guild leader status in the database
+					/* Promoted to the seat the LEAVER held, so the guild's top rank stays
+					 * occupied whatever number that rank happens to be. Promoting to a constant
+					 * would silently demote the guild's leadership to rank 3 in a guild whose
+					 * ladder goes to 5. */
+					DatabaseResult leaderResult = await charGuildService.UpdateRankAsync(newLeader.Value.CharacterID, newLeader.Value.GuildID, leavingRankOrder, newLeader.Value.Version + 1);
+					if (!leaderResult.IsSuccess)
+					{
+						await Log.Error("GuildSystem", $"LeaveGuildAsync leadership transfer failed (GuildID={guildID}, NewLeader={newLeader.Value.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}; refusing the leave rather than leaving the guild leaderless.");
+						SendGuildResult(conn, GuildResultType.InsufficientRank);
+						return;
 					}
 				}
 
@@ -1406,16 +1928,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 
 					guildController.ID = 0;
-					guildController.Rank = GuildRank.None;
+					guildController.RankOrder = 0;
+					guildController.Permissions = GuildPermissions.None;
+					guildController.LeaderRankOrder = 0;
 					RemoveGuildCharacterTracker(guildID, characterID);
 
 					Server.NetworkWrapper.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
+
+					// Skipped when the guild itself has just been deleted — there is no log left.
+					if (remainingCount > 0)
+					{
+						AppendGuildLog(guildID, GuildLogEventType.Left, characterID);
+					}
 				});
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("GuildSystem", $"Error leaving guild (CharID={characterID}, GuildID={guildID}): {ex}");
 			}
+			finally
+			{
+				/* Released on EVERY exit, including the refusals above. A marker left set would
+				 * suppress the disconnect persist for the rest of the session and quietly stop
+				 * recording this character's guild location. */
+				EndMembershipRemoval(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Marks a character's guild membership as being removed.
+		/// </summary>
+		/// <param name="characterID">The character leaving or being kicked.</param>
+		private void BeginMembershipRemoval(long characterID)
+		{
+			if (Server?.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) == true)
+			{
+				runtimeData.BeginMembershipRemoval(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Clears the membership-removal marker for a character.
+		/// </summary>
+		/// <param name="characterID">The character whose removal has finished.</param>
+		/// <remarks>
+		/// Marshalled to the main thread: the marker is main-thread state and the callers that
+		/// release it are background tasks. The disconnect handler that reads it also runs on the
+		/// main thread, so the two can never interleave.
+		/// </remarks>
+		private void EndMembershipRemoval(long characterID)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (Server?.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData) == true)
+				{
+					runtimeData.EndMembershipRemoval(characterID);
+				}
+			});
 		}
 
 		/// <summary>
@@ -1450,11 +2019,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
-				// validate character
+				// validate character — pre-filter; RemoveGuildMemberAsync re-resolves the standing
 				if (guildController == null ||
 					guildController.ID < 1 ||
-					guildController.Rank < GuildRank.Officer)
+					!guildController.HasGuildPermission(GuildPermissions.Kick))
 				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
 					return;
 				}
 
@@ -1473,10 +2043,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long guildID = guildController.ID;
 				long memberID = msg.CharacterID;
 				long characterID = guildController.Character.ID;
-				GuildRank requesterRank = guildController.Rank;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID, requesterRank), guardKey, characterID);
-				if (!deferGuardRelease) SendServerBusy(conn);
+				/* Marked for the TARGET, not the requester: it is the target's membership row
+				 * being deleted, and it is the target who could disconnect mid-delete and have
+				 * the disconnect persist write it straight back. */
+				BeginMembershipRemoval(memberID);
+
+				deferGuardRelease = TryEnqueueIngressWork(() => RemoveGuildMemberAsync(guildID, memberID, characterID), guardKey, characterID);
+				if (!deferGuardRelease)
+				{
+					EndMembershipRemoval(memberID);
+					SendServerBusy(conn);
+				}
 			}
 			finally
 			{
@@ -1496,7 +2074,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="requesterCharacterID">Requester character identifier.</param>
 		/// <param name="requesterRank">Requester rank for permission checks.</param>
 		/// <returns>Asynchronous remove-member task.</returns>
-		private async Task RemoveGuildMemberAsync(long guildID, long memberID, long requesterCharacterID, GuildRank requesterRank)
+		private async Task RemoveGuildMemberAsync(long guildID, long memberID, long requesterCharacterID)
 		{
 			try
 			{
@@ -1505,6 +2083,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
+
+				/* AUTHORITATIVE. The requester's rank arrived here as a parameter captured from
+				 * their controller before the async hop; it is now re-read from the guild's own
+				 * rows, so a demotion that landed while this was queued is honoured. */
+				GuildAuthority requester = await ResolveGuildAuthorityAsync(guildID, requesterCharacterID);
 
 				// Verify the target member exists and check rank permission
 				DatabaseResult<CharacterGuildData?> memberResult = await charGuildService.FetchAsync(memberID);
@@ -1521,8 +2104,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Rank permission check: can't kick someone of equal or higher rank
-				if ((GuildRank)targetMember.Rank >= requesterRank)
+				// THE decision. Permission plus strict seniority — see GuildRules.CanKick.
+				if (GuildRules.CanKick(requester, targetMember.Rank) != GuildActionResult.Allowed)
 				{
 					return;
 				}
@@ -1541,15 +2124,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Warning("GuildSystem", $"RemoveGuildMemberAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
 				}
 
+				AppendGuildLog(guildID, GuildLogEventType.Kicked, requesterCharacterID, memberID);
+
 				// Marshal tracker cleanup to main thread
 				TryEnqueueMainThread(() =>
 				{
 					RemoveGuildCharacterTracker(guildID, memberID);
+
+					/* Tell the kicked member immediately if they are on this scene server.
+					 * Nothing used to: their controller kept a live guild ID until the next
+					 * periodic pump noticed the row was gone, which is up to a full pump interval
+					 * of being in a guild they had been removed from — and any guild action they
+					 * took in that window was authorised against the stale ID. Clearing the
+					 * controller here also closes the disconnect-resurrection window for good,
+					 * since the disconnect persist reads that same ID. */
+					if (Server != null &&
+						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
+						characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter targetCharacter) &&
+						targetCharacter != null &&
+						targetCharacter.TryGet(out IGuildController targetGuildController) &&
+						targetGuildController.ID == guildID)
+					{
+						targetGuildController.ID = 0;
+						targetGuildController.RankOrder = 0;
+						targetGuildController.Permissions = GuildPermissions.None;
+						targetGuildController.LeaderRankOrder = 0;
+
+						if (targetCharacter.Owner != null)
+						{
+							Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
+						}
+					}
 				});
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("GuildSystem", $"Error removing guild member (GuildID={guildID}, MemberID={memberID}): {ex}");
+			}
+			finally
+			{
+				EndMembershipRemoval(memberID);
 			}
 		}
 
@@ -1586,11 +2200,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
-				// validate character
+				// validate character — pre-filter; ChangeGuildRankAsync re-resolves the standing
 				if (guildController == null ||
 					guildController.ID < 1 ||
-					guildController.Rank != GuildRank.Leader)
+					!guildController.HasGuildPermission(GuildPermissions.Promote))
 				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
 					return;
 				}
 
@@ -1608,16 +2223,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Capture immutable data for async path
 				long guildID = guildController.ID;
 				long memberID = msg.CharacterID;
-				GuildRank newRank = msg.Rank;
-
-				// Validate rank is within assignable range — only Member or Officer are valid targets.
-				// Leader promotion is handled separately via leadership transfer.
-				if (newRank < GuildRank.Member || newRank >= GuildRank.Leader)
+				/* The requested ladder position, as sent. There is nothing to validate about it
+				 * HERE beyond it being a legal byte: whether the guild has a rank at that
+				 * position, and whether the requester is allowed to put somebody there, are both
+				 * questions about rows this thread must not read. ChangeGuildRankAsync answers
+				 * them. */
+				byte newRankOrder = msg.RankOrder;
+				if (newRankOrder < GuildRankDefaults.MinRankOrder || newRankOrder > GuildRankDefaults.MaxRankOrder)
 				{
 					return;
 				}
 
-				deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRank), guardKey, guildID);
+				long requesterCharacterID = guildController.Character.ID;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => ChangeGuildRankAsync(guildID, memberID, newRankOrder, requesterCharacterID), guardKey, guildID);
 				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
@@ -1634,9 +2253,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="guildID">Guild identifier containing the member.</param>
 		/// <param name="memberID">Member character identifier.</param>
-		/// <param name="newRank">New rank to apply.</param>
+		/// <param name="newRankOrder">Ladder position to move the member to.</param>
+		/// <param name="requesterCharacterID">The character who requested the change, for the activity log.</param>
 		/// <returns>Asynchronous rank-change task.</returns>
-		private async Task ChangeGuildRankAsync(long guildID, long memberID, GuildRank newRank)
+		/// <remarks>
+		/// Four separate refusals live here, and they are separate on purpose:
+		/// the requester must hold <c>Promote</c>; the destination rank must EXIST in this guild;
+		/// the requester must outrank both the member's current rank and the destination rank;
+		/// and the guild's top seat cannot be entered or left through this path.
+		/// Dropping any one of them is a privilege escalation, and three of the four are invisible
+		/// in the request itself.
+		/// </remarks>
+		private async Task ChangeGuildRankAsync(long guildID, long memberID, byte newRankOrder, long requesterCharacterID)
 		{
 			try
 			{
@@ -1646,6 +2274,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				// AUTHORITATIVE: re-resolve the requester against the guild's own rank rows.
+				GuildAuthority requester = await ResolveGuildAuthorityAsync(guildID, requesterCharacterID);
+
 				// Fetch the member's current version for optimistic concurrency
 				DatabaseResult<CharacterGuildData?> memberResult = await charGuildService.FetchAsync(memberID);
 				if (!memberResult.IsSuccess || !memberResult.Data.HasValue)
@@ -1653,9 +2284,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, (byte)newRank, memberResult.Data.Value.Version + 1);
+				/* Confirm the target is actually in the requester's guild. The UPDATE's own WHERE
+				 * clause happens to carry the guild id, so the wrong-guild case was saved by SQL
+				 * rather than by anything in this method — which meant the app-level code was one
+				 * refactor of that statement away from letting a leader re-rank a stranger, and
+				 * meanwhile burned a round trip and a version bump on a write it knew would miss.
+				 * The check belongs where the decision is made. */
+				if (memberResult.Data.Value.GuildID != guildID)
+				{
+					await Log.Warning("GuildSystem", $"ChangeGuildRankAsync refused: target is not in the requesting guild (GuildID={guildID}, MemberID={memberID}, TargetGuildID={memberResult.Data.Value.GuildID}).");
+					return;
+				}
+
+				byte currentRankOrder = memberResult.Data.Value.Rank;
+
+				/* THE decision. Destination must exist, the top seat is off limits to this path,
+				 * and the requester must outrank BOTH the member's current rank and the
+				 * destination — see GuildRules.CanChangeMemberRank. */
+				if (GuildRules.CanChangeMemberRank(requester, currentRankOrder, newRankOrder) != GuildActionResult.Allowed)
+				{
+					return;
+				}
+
+				DatabaseResult rankResult = await charGuildService.UpdateRankAsync(memberID, guildID, newRankOrder, memberResult.Data.Value.Version + 1);
 				if (rankResult.IsSuccess)
 				{
+					/* Promotion or demotion is decided by comparing against the rank the member
+					 * actually held, read above — not by what the requester called the action. */
+					requester.TryGetRank(newRankOrder, out GuildRankData destinationRank);
+
+					AppendGuildLog(
+						guildID,
+						newRankOrder > currentRankOrder ? GuildLogEventType.Promoted : GuildLogEventType.Demoted,
+						requesterCharacterID,
+						memberID,
+						destinationRank.Name ?? string.Empty);
+
 					// Tell the other servers to update their guild lists
 					DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
 					if (!updateResult.IsSuccess)
@@ -1671,6 +2335,758 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("GuildSystem", $"Error changing guild rank (GuildID={guildID}, MemberID={memberID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Handles a request to change the guild message of the day.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">The requested message of the day.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		public void OnServerGuildSetMessageOfTheDayBroadcastReceived(NetworkConnection conn, GuildSetMessageOfTheDayBroadcast msg, Channel channel)
+		{
+			HandleGuildTextEdit(conn, msg.MessageOfTheDay, GuildTextLimits.MaxMessageOfTheDayLength, isMessageOfTheDay: true);
+		}
+
+		/// <summary>
+		/// Handles a request to change the guild notice.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">The requested notice text.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		public void OnServerGuildSetNoticeBroadcastReceived(NetworkConnection conn, GuildSetNoticeBroadcast msg, Channel channel)
+		{
+			HandleGuildTextEdit(conn, msg.Notice, GuildTextLimits.MaxNoticeLength, isMessageOfTheDay: false);
+		}
+
+		/// <summary>
+		/// Shared validation and dispatch for the two guild text fields.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="text">The requested text.</param>
+		/// <param name="maxLength">Maximum accepted length for this field.</param>
+		/// <param name="isMessageOfTheDay">True for the message of the day, false for the notice.</param>
+		/// <remarks>
+		/// The two fields are separately permissioned — <c>EditMessageOfTheDay</c> and
+		/// <c>EditNotice</c> — because a guild that wants a recruiter able to keep the MOTD
+		/// current should not have to also let them rewrite the notice. Under the old enum both
+		/// were "officer or better" and there was no way to separate them.
+		///
+		/// The permission is read from the SERVER's copy of the controller as a pre-filter and
+		/// re-resolved from the guild's rank rows on the async path; never from the message. The
+		/// length cap is re-applied here as well: the client trims so the player can see the
+		/// limit, but a hand-built packet would otherwise reach a 500-character column and fail at
+		/// the database instead of at the boundary.
+		/// </remarks>
+		private void HandleGuildTextEdit(NetworkConnection conn, string text, int maxLength, bool isMessageOfTheDay)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetInfo, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (guildController == null || guildController.ID < 1)
+				{
+					return;
+				}
+
+				GuildPermissions required = isMessageOfTheDay
+					? GuildPermissions.EditMessageOfTheDay
+					: GuildPermissions.EditNotice;
+
+				if (!guildController.HasGuildPermission(required))
+				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
+				string sanitized = text ?? string.Empty;
+				sanitized = sanitized.Trim();
+				if (sanitized.Length > maxLength)
+				{
+					sanitized = sanitized.Substring(0, maxLength);
+				}
+
+				long guildID = guildController.ID;
+				long editorCharacterID = guildController.Character.ID;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => SetGuildTextAsync(guildID, sanitized, isMessageOfTheDay, editorCharacterID), guardKey, guildID);
+				if (!deferGuardRelease) SendServerBusy(conn);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Persists one of the guild text fields and re-publishes the guild information.
+		/// </summary>
+		/// <param name="guildID">Guild identifier being edited.</param>
+		/// <param name="text">The sanitized text to store.</param>
+		/// <param name="isMessageOfTheDay">True for the message of the day, false for the notice.</param>
+		/// <param name="editorCharacterID">The character who made the edit, for the activity log.</param>
+		/// <returns>Asynchronous edit task.</returns>
+		private async Task SetGuildTextAsync(long guildID, string text, bool isMessageOfTheDay, long editorCharacterID)
+		{
+			try
+			{
+				if (!TryGetDbService(out IGuildService guildService))
+				{
+					return;
+				}
+
+				// AUTHORITATIVE: the pre-filter above read a cache; this reads the guild's rows.
+				GuildAuthority editor = await ResolveGuildAuthorityAsync(guildID, editorCharacterID);
+				if (!editor.Has(isMessageOfTheDay ? GuildPermissions.EditMessageOfTheDay : GuildPermissions.EditNotice))
+				{
+					return;
+				}
+
+				DatabaseResult persistResult = isMessageOfTheDay
+					? await guildService.PersistMessageOfTheDayAsync(guildID, text)
+					: await guildService.PersistNoticeAsync(guildID, text);
+
+				if (!persistResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"SetGuildTextAsync persist failed (GuildID={guildID}, MOTD={isMessageOfTheDay}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+					return;
+				}
+
+				AppendGuildLog(
+					guildID,
+					isMessageOfTheDay ? GuildLogEventType.MessageOfTheDayChanged : GuildLogEventType.NoticeChanged,
+					editorCharacterID);
+
+				await PublishGuildInfoAsync(guildID);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error setting guild text (GuildID={guildID}, MOTD={isMessageOfTheDay}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Reads a guild's descriptive text and sends it to every member on this scene server.
+		/// </summary>
+		/// <param name="guildID">Guild identifier to publish.</param>
+		/// <param name="onlyCharacterID">
+		/// When non-zero, sends to just this one character instead of the whole local roster.
+		/// </param>
+		/// <returns>Asynchronous publish task.</returns>
+		/// <remarks>
+		/// Sent to the members this scene server hosts, resolved through the guild character
+		/// tracker. Members elsewhere get their copy from their own scene server, which is running
+		/// the same code against the same row.
+		/// </remarks>
+		private async Task PublishGuildInfoAsync(long guildID, long onlyCharacterID = 0)
+		{
+			if (!TryGetDbService(out IGuildService guildService))
+			{
+				return;
+			}
+
+			DatabaseResult<GuildData?> guildResult = await guildService.FetchAsync(guildID);
+			if (!guildResult.IsSuccess || !guildResult.Data.HasValue)
+			{
+				return;
+			}
+
+			GuildData guild = guildResult.Data.Value;
+
+			GuildInfoBroadcast broadcast = new GuildInfoBroadcast()
+			{
+				GuildID = guild.ID,
+				Name = guild.Name ?? string.Empty,
+				Notice = guild.Notice ?? string.Empty,
+				MessageOfTheDay = guild.MessageOfTheDay ?? string.Empty,
+			};
+
+			TryEnqueueMainThread(() =>
+			{
+				if (Server == null ||
+					!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+				{
+					return;
+				}
+
+				if (onlyCharacterID > 0)
+				{
+					if (characterMappingData.CharactersByID.TryGetValue(onlyCharacterID, out IPlayerCharacter single) &&
+						single?.Owner != null)
+					{
+						Server.NetworkWrapper.Broadcast(single.Owner, broadcast, true, Channel.Reliable);
+					}
+					return;
+				}
+
+				if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+					!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs))
+				{
+					return;
+				}
+
+				foreach (long memberID in memberIDs)
+				{
+					if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
+						member?.Owner != null)
+					{
+						Server.NetworkWrapper.Broadcast(member.Owner, broadcast, true, Channel.Reliable);
+					}
+				}
+			});
+		}
+
+		/// <summary>
+		/// Handles a request to transfer guild leadership to another member.
+		/// </summary>
+		/// <param name="conn">Network connection of the current leader.</param>
+		/// <param name="msg">The broadcast naming the successor.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		/// <remarks>
+		/// The successor may be OFFLINE. Leadership is a database rank, not a session, and a guild
+		/// whose leader can only hand over while the successor happens to be logged in is a guild
+		/// that stays stuck for exactly the reason S5 describes.
+		/// </remarks>
+		public void OnServerGuildTransferLeadershipBroadcastReceived(NetworkConnection conn, GuildTransferLeadershipBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.TransferLeadership, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (guildController == null || guildController.ID < 1)
+				{
+					return;
+				}
+
+				if (!guildController.HasGuildPermission(GuildPermissions.TransferLeadership))
+				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
+				if (msg.CharacterID < 1 || msg.CharacterID == guildController.Character.ID)
+				{
+					return;
+				}
+
+				long guildID = guildController.ID;
+				long currentLeaderID = guildController.Character.ID;
+				long successorID = msg.CharacterID;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => TransferGuildLeadershipAsync(conn, guildID, currentLeaderID, successorID), guardKey, guildID);
+				if (!deferGuardRelease) SendServerBusy(conn);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Promotes a member to leader and demotes the outgoing leader to officer.
+		/// </summary>
+		/// <param name="conn">Requesting connection, for feedback.</param>
+		/// <param name="guildID">Guild identifier.</param>
+		/// <param name="currentLeaderID">The outgoing leader's character identifier.</param>
+		/// <param name="successorID">The incoming leader's character identifier.</param>
+		/// <returns>Asynchronous transfer task.</returns>
+		/// <remarks>
+		/// The successor is promoted FIRST. If the second write fails the guild briefly has two
+		/// leaders, which is recoverable by either of them; doing it the other way round would
+		/// produce a guild with none, which is not recoverable at all. The pump reconciles both
+		/// ranks from the database on its next pass either way.
+		/// </remarks>
+		private async Task TransferGuildLeadershipAsync(NetworkConnection conn, long guildID, long currentLeaderID, long successorID)
+		{
+			try
+			{
+				if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
+				{
+					return;
+				}
+
+				/* AUTHORITATIVE, and stricter than the permission alone: the requester must also
+				 * currently OCCUPY the top seat. A rank other than the leader's could in principle
+				 * be granted TransferLeadership by a rank editor, and handing the top seat away is
+				 * not something a subordinate rank should be able to do to its own leader. */
+				GuildAuthority requester = await ResolveGuildAuthorityAsync(guildID, currentLeaderID);
+				if (GuildRules.CanTransferLeadership(requester) != GuildActionResult.Allowed)
+				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
+				DatabaseResult<CharacterGuildData?> successorResult = await charGuildService.FetchAsync(successorID);
+				if (!successorResult.IsSuccess || !successorResult.Data.HasValue)
+				{
+					SendGuildResult(conn, GuildResultType.GuildNotFound);
+					return;
+				}
+
+				CharacterGuildData successor = successorResult.Data.Value;
+				if (successor.GuildID != guildID)
+				{
+					// Not a member of this guild — nothing to transfer to.
+					SendGuildResult(conn, GuildResultType.GuildNotFound);
+					return;
+				}
+
+				/* Promoted into the seat the OUTGOING leader vacates, whatever number that is,
+				 * and the outgoing leader drops to the rung immediately below it. Both were
+				 * constants (Leader / Officer) before; in a guild with five ranks that would have
+				 * moved the leadership to rank 3 and parked the ex-leader at rank 2, skipping the
+				 * two ranks in between and handing whoever sat at rank 4 or 5 seniority over the
+				 * guild's own leader. */
+				byte leaderRankOrder = requester.RankOrder;
+				byte demotedRankOrder = FindNextRankBelow(requester.Ladder, leaderRankOrder);
+
+				DatabaseResult promoteResult = await charGuildService.UpdateRankAsync(successorID, guildID, leaderRankOrder, successor.Version + 1);
+				if (!promoteResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"TransferGuildLeadershipAsync promote failed (GuildID={guildID}, Successor={successorID}): {promoteResult.ErrorCode} - {promoteResult.ErrorMessage}");
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
+				DatabaseResult<CharacterGuildData?> outgoingResult = await charGuildService.FetchAsync(currentLeaderID);
+				if (outgoingResult.IsSuccess && outgoingResult.Data.HasValue)
+				{
+					CharacterGuildData outgoing = outgoingResult.Data.Value;
+					DatabaseResult demoteResult = await charGuildService.UpdateRankAsync(currentLeaderID, guildID, demotedRankOrder, outgoing.Version + 1);
+					if (!demoteResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"TransferGuildLeadershipAsync demote failed (GuildID={guildID}, OutgoingLeader={currentLeaderID}): {demoteResult.ErrorCode} - {demoteResult.ErrorMessage}");
+					}
+				}
+
+				DatabaseResult updateResult = await guildUpdateService.PersistAsync(guildID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"TransferGuildLeadershipAsync guild update notification failed (GuildID={guildID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
+
+				AppendGuildLog(guildID, GuildLogEventType.LeadershipTransferred, currentLeaderID, successorID);
+
+				SendGuildResult(conn, GuildResultType.Success);
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error transferring guild leadership (GuildID={guildID}, Successor={successorID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Handles a request to disband the guild.
+		/// </summary>
+		/// <param name="conn">Network connection of the leader.</param>
+		/// <param name="msg">The broadcast carrying the confirmation name.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		public void OnServerGuildDisbandBroadcastReceived(NetworkConnection conn, GuildDisbandBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Disband, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (guildController == null || guildController.ID < 1)
+				{
+					return;
+				}
+
+				if (!guildController.HasGuildPermission(GuildPermissions.Disband))
+				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
+				long guildID = guildController.ID;
+				long requesterCharacterID = guildController.Character.ID;
+				string confirmation = msg.ConfirmationName ?? string.Empty;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => DisbandGuildAsync(conn, guildID, confirmation, requesterCharacterID), guardKey, guildID);
+				if (!deferGuardRelease) SendServerBusy(conn);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Deletes a guild and evicts every member.
+		/// </summary>
+		/// <param name="conn">Requesting connection, for feedback.</param>
+		/// <param name="guildID">Guild identifier to delete.</param>
+		/// <param name="confirmationName">The guild name the requester typed.</param>
+		/// <param name="requesterCharacterID">The character requesting the disband.</param>
+		/// <returns>Asynchronous disband task.</returns>
+		/// <remarks>
+		/// The name is re-checked against the database rather than against anything the client
+		/// sent alongside it. Membership rows go via the guild table's CASCADE, and every local
+		/// member is told immediately instead of being left holding a live guild ID until the pump
+		/// notices — which is the same window the kick path had to close.
+		/// </remarks>
+		private async Task DisbandGuildAsync(NetworkConnection conn, long guildID, string confirmationName, long requesterCharacterID)
+		{
+			try
+			{
+				if (!TryGetDbService(out IGuildService guildService) ||
+					!TryGetDbService(out IGuildUpdateService guildUpdateService))
+				{
+					return;
+				}
+
+				/* AUTHORITATIVE. Disband is the one guild action with no undo, so the cached
+				 * pre-filter in the handler is re-established here before anything is deleted. */
+				GuildAuthority requester = await ResolveGuildAuthorityAsync(guildID, requesterCharacterID);
+				if (!requester.Has(GuildPermissions.Disband))
+				{
+					SendGuildResult(conn, GuildResultType.InsufficientRank);
+					return;
+				}
+
+				DatabaseResult<GuildData?> guildResult = await guildService.FetchAsync(guildID);
+				if (!guildResult.IsSuccess || !guildResult.Data.HasValue)
+				{
+					SendGuildResult(conn, GuildResultType.GuildNotFound);
+					return;
+				}
+
+				/* Typing the name is the confirmation. Compared case-insensitively against the
+				 * stored name so the player is confirming the guild that actually exists, not the
+				 * one their client last rendered. */
+				if (!string.Equals(guildResult.Data.Value.Name, confirmationName, StringComparison.OrdinalIgnoreCase))
+				{
+					SendGuildResult(conn, GuildResultType.InvalidGuildName);
+					return;
+				}
+
+				DatabaseResult deleteResult = await guildService.DeleteAsync(guildID);
+				if (!deleteResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"DisbandGuildAsync guild delete failed (GuildID={guildID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+					return;
+				}
+
+				DatabaseResult<int> updateDeleteResult = await guildUpdateService.DeleteAsync(guildID);
+				if (!updateDeleteResult.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"DisbandGuildAsync guild update delete failed (GuildID={guildID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
+				}
+
+				TryEnqueueMainThread(() =>
+				{
+					if (Server == null ||
+						!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+						!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs) ||
+						!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+					{
+						return;
+					}
+
+					// Copied before iterating: clearing each member mutates the tracker.
+					List<long> localMembers = new List<long>(memberIDs);
+
+					foreach (long memberID in localMembers)
+					{
+						if (!characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) ||
+							member == null ||
+							!member.TryGet(out IGuildController memberGuildController) ||
+							memberGuildController.ID != guildID)
+						{
+							continue;
+						}
+
+						memberGuildController.ID = 0;
+						memberGuildController.RankOrder = 0;
+						memberGuildController.Permissions = GuildPermissions.None;
+						memberGuildController.LeaderRankOrder = 0;
+
+						if (member.Owner != null)
+						{
+							Server.NetworkWrapper.Broadcast(member.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
+						}
+					}
+
+					mappingData.GuildCharacterTracker.Remove(guildID);
+					mappingData.GuildMemberTracker.Remove(guildID);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error disbanding guild (GuildID={guildID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Counts appends since the last activity log prune.
+		/// </summary>
+		private int guildLogAppendsSincePrune;
+
+		/// <summary>
+		/// Appends one row to a guild's activity log, trimming the table periodically.
+		/// </summary>
+		/// <param name="guildID">Guild the event belongs to.</param>
+		/// <param name="eventType">What happened.</param>
+		/// <param name="actorCharacterID">The acting character, or zero.</param>
+		/// <param name="targetCharacterID">The subject character, or zero.</param>
+		/// <param name="detail">Optional short detail, such as a rank name.</param>
+		/// <remarks>
+		/// Fire-and-forget through the persistence queue. A guild event must not fail, or be
+		/// delayed, because the log could not be written — the log is a record OF the game, not a
+		/// step IN it, and making the two share a failure path would let a full disk stop players
+		/// from being promoted.
+		/// </remarks>
+		private void AppendGuildLog(long guildID, GuildLogEventType eventType, long actorCharacterID, long targetCharacterID = 0, string detail = null)
+		{
+			if (guildID < 1 || Server?.Database?.ServiceRegistry == null)
+			{
+				return;
+			}
+
+			bool prune = false;
+			if (++guildLogAppendsSincePrune >= guildLogPruneInterval)
+			{
+				guildLogAppendsSincePrune = 0;
+				prune = true;
+			}
+
+			int retain = guildLogRetainedEntries;
+
+			EnqueuePersistence(async () =>
+			{
+				try
+				{
+					if (!TryGetDbService(out IGuildLogService logService))
+					{
+						return;
+					}
+
+					GuildLogData entry = new GuildLogData(
+						0,
+						guildID,
+						eventType,
+						actorCharacterID,
+						targetCharacterID,
+						detail ?? string.Empty,
+						DateTime.UtcNow);
+
+					DatabaseResult appendResult = await logService.AppendAsync(entry);
+					if (!appendResult.IsSuccess)
+					{
+						await Log.Warning("GuildSystem", $"AppendGuildLog failed (GuildID={guildID}, Event={eventType}): {appendResult.ErrorCode} - {appendResult.ErrorMessage}");
+						return;
+					}
+
+					if (prune)
+					{
+						DatabaseResult<int> pruneResult = await logService.PruneAsync(guildID, retain);
+						if (!pruneResult.IsSuccess)
+						{
+							await Log.Warning("GuildSystem", $"AppendGuildLog prune failed (GuildID={guildID}): {pruneResult.ErrorCode} - {pruneResult.ErrorMessage}");
+						}
+					}
+				}
+				catch (Exception ex)
+				{
+					await Log.Error("GuildSystem", $"Error appending guild log (GuildID={guildID}, Event={eventType}): {ex}");
+				}
+			}, guildID);
+		}
+
+		/// <summary>
+		/// Handles a request for the guild's recent activity log.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">The request broadcast.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		/// <remarks>
+		/// The guild is taken from the requester's SERVER-side controller, never from the message.
+		/// The request carries no guild id precisely so that there is nothing to forge: a player
+		/// can only ever ask for the log of the guild the server already believes they are in.
+		/// </remarks>
+		public void OnServerGuildLogRequestBroadcastReceived(NetworkConnection conn, GuildLogRequestBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.LogRequest, out long guardKey))
+			{
+				return;
+			}
+
+			bool deferGuardRelease = false;
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+				if (guildController == null || guildController.ID < 1)
+				{
+					return;
+				}
+
+				long guildID = guildController.ID;
+				int limit = guildLogRetainedEntries;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => SendGuildLogAsync(conn, guildID, limit), guardKey, guildID);
+				if (!deferGuardRelease) SendServerBusy(conn);
+			}
+			finally
+			{
+				if (!deferGuardRelease)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Reads a guild's recent log and sends it to one connection.
+		/// </summary>
+		/// <param name="conn">The requesting connection.</param>
+		/// <param name="guildID">Guild identifier.</param>
+		/// <param name="limit">Maximum entries to send.</param>
+		/// <returns>Asynchronous send task.</returns>
+		private async Task SendGuildLogAsync(NetworkConnection conn, long guildID, int limit)
+		{
+			try
+			{
+				if (!TryGetDbService(out IGuildLogService logService))
+				{
+					return;
+				}
+
+				DatabaseResult<IReadOnlyList<GuildLogData>> fetchResult = await logService.FetchRecentAsync(guildID, limit);
+				if (!fetchResult.IsSuccess || fetchResult.Data == null)
+				{
+					return;
+				}
+
+				IReadOnlyList<GuildLogData> rows = fetchResult.Data;
+				GuildLogEntry[] entries = new GuildLogEntry[rows.Count];
+				for (int i = 0; i < rows.Count; ++i)
+				{
+					GuildLogData row = rows[i];
+					entries[i] = new GuildLogEntry()
+					{
+						Event = (GuildLogEvent)row.EventType,
+						ActorCharacterID = row.ActorCharacterID,
+						TargetCharacterID = row.TargetCharacterID,
+						Detail = row.Detail ?? string.Empty,
+						TimeUtcTicks = row.TimeCreated.Ticks,
+					};
+				}
+
+				GuildLogBroadcast broadcast = new GuildLogBroadcast()
+				{
+					GuildID = guildID,
+					Entries = entries,
+				};
+
+				TryEnqueueMainThread(() =>
+				{
+					if (conn == null || !conn.IsActive || Server == null)
+					{
+						return;
+					}
+
+					/* Re-checked on delivery, not only on request. The read is asynchronous and the
+					 * requester may have left or been kicked while it was in flight, and a log is
+					 * exactly the kind of thing an ex-member should stop receiving. */
+					if (conn.FirstObject == null)
+					{
+						return;
+					}
+
+					IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+					if (guildController == null || guildController.ID != guildID)
+					{
+						return;
+					}
+
+					Server.NetworkWrapper.Broadcast(conn, broadcast, true, Channel.Reliable);
+				});
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"Error sending guild log (GuildID={guildID}): {ex}");
 			}
 		}
 

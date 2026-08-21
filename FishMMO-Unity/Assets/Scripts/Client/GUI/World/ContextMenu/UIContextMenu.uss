@@ -49,3 +49,11 @@
     -unity-text-align: middle-left;
     flex-shrink: 0;
 }
+
+/*
+    Keyboard focus. The entries carry no border of their own, so the focused one is marked with
+    the accent fill rather than an outline that would reintroduce the toolbar look.
+*/
+.context-entry:focus {
+    background-color: var(--brand-hover);
+}

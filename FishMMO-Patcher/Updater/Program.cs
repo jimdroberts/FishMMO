@@ -269,7 +269,18 @@ class Program
 		// Naming scheme shared with the launcher's download path and the patcher server's
 		// index. See PatchesDirectory.
 		string expectedPatchFileName = $"{Version}-{LatestVersion}.zip";
-		string patchFilePath = Path.Combine(PatchesDirectory, expectedPatchFileName);
+
+		/* Both halves of that name come from the command line, and the launcher's copy of
+		 * LatestVersion came from the update server — so this is a server-influenced string
+		 * being interpolated into a path. It only ever names a file to READ, but a read of an
+		 * arbitrary path is still a read of an arbitrary path, and the launcher-side fix
+		 * (Constants.GetPatchFileName) validates the same name for the same reason. */
+		if (!PathContainment.TryResolve(PatchesDirectory, expectedPatchFileName, out string patchFilePath, out string patchNameReason))
+		{
+			Console.WriteLine($"SECURITY: Refusing patch file name '{expectedPatchFileName}': {patchNameReason}");
+			TryStartExecutableAndExit(Executable, PID);
+			return;
+		}
 
 		if (!File.Exists(patchFilePath))
 		{
@@ -364,7 +375,25 @@ class Program
 				Console.WriteLine($"Processing {manifest.NewFiles?.Count ?? 0} new files in parallel...");
 				Parallel.ForEach(manifest.NewFiles ?? new List<NewFileEntry>(), (newFile, loopState) =>
 				{
-					string fullPath = Path.Combine(WorkingDirectory, newFile.RelativePath);
+					string fullPath;
+					try
+					{
+						// CONTAINMENT. Untrusted manifest path -> filesystem write. See
+						// PathContainment; a rejection fails the whole patch rather than
+						// skipping the entry.
+						fullPath = PathContainment.ResolveOrThrow(WorkingDirectory, newFile.RelativePath);
+					}
+					catch (PathContainmentException ex)
+					{
+						lock (consoleLock)
+						{
+							Console.WriteLine($"\tSECURITY: {ex.Message}");
+						}
+						parallelExceptions.Add(ex);
+						loopState.Stop();
+						return;
+					}
+
 					ZipArchiveEntry newFileZipEntry = archive.GetEntry(newFile.FileDataEntryName);
 
 					if (newFileZipEntry != null)
@@ -435,7 +464,25 @@ class Program
 				Parallel.ForEach(manifest.ModifiedFiles ?? new List<ModifiedFileEntry>(), (modifiedFile, loopState) =>
 				{
 					Patcher patcher = new Patcher(); // Each task gets its own Patcher instance
-					string oldFilePath = Path.Combine(WorkingDirectory, modifiedFile.RelativePath);
+
+					string oldFilePath;
+					try
+					{
+						// CONTAINMENT. This path is both read from and (in Phase 7) moved over,
+						// so an unchecked entry is an arbitrary-file overwrite.
+						oldFilePath = PathContainment.ResolveOrThrow(WorkingDirectory, modifiedFile.RelativePath);
+					}
+					catch (PathContainmentException ex)
+					{
+						lock (consoleLock)
+						{
+							Console.WriteLine($"\tSECURITY: {ex.Message}");
+						}
+						parallelExceptions.Add(ex);
+						loopState.Stop();
+						return;
+					}
+
 					ZipArchiveEntry patchDataEntry = archive.GetEntry(modifiedFile.PatchDataEntryName);
 
 					if (patchDataEntry != null)
@@ -520,7 +567,15 @@ class Program
 				{
 					foreach (var deletedFile in manifest.DeletedFiles)
 					{
-						string fullPath = Path.Combine(WorkingDirectory, deletedFile.RelativePath);
+						/* CONTAINMENT — and this one is the reason the helper throws.
+						 *
+						 * An unchecked delete is arbitrary file deletion: it needs no code
+						 * execution to be destructive, and unlike the write paths there is no
+						 * hash to fail afterwards. Rejecting here throws out to the outer catch,
+						 * which rolls the patch back; the alternative — logging and continuing —
+						 * would let a hostile manifest mix real deletions with escaping ones and
+						 * still have the patch report success. */
+						string fullPath = PathContainment.ResolveOrThrow(WorkingDirectory, deletedFile.RelativePath);
 						if (File.Exists(fullPath))
 						{
 							filesToDelete.Add(fullPath);
@@ -719,13 +774,24 @@ class Program
 	{
 		HashSet<string> directoriesToCreate = new HashSet<string>();
 
+		/* CONTAINMENT, and it has to happen HERE as well as in the phases that write.
+		 *
+		 * This pass runs FIRST and calls Directory.CreateDirectory on whatever it derives, so
+		 * an escaping entry creates directories outside the install before any later check
+		 * could refuse the file itself — enough on its own to litter a system, and enough to
+		 * pre-create the parent a subsequent entry needs.
+		 *
+		 * A rejection is recorded rather than thrown because the caller already treats a
+		 * non-empty exception bag as a fatal, rollback-triggering failure; adding to it keeps
+		 * one failure convention for the whole apply. */
 		if (manifest.NewFiles != null)
 		{
 			foreach (var newFile in manifest.NewFiles)
 			{
-				string fullPath = Path.Combine(WorkingDirectory, newFile.RelativePath);
-				string directoryPath = Path.GetDirectoryName(fullPath);
-				if (!string.IsNullOrEmpty(directoryPath)) directoriesToCreate.Add(directoryPath);
+				if (!TryQueueDirectory(newFile.RelativePath, directoriesToCreate, parallelExceptions))
+				{
+					return;
+				}
 			}
 		}
 
@@ -733,9 +799,10 @@ class Program
 		{
 			foreach (var modifiedFile in manifest.ModifiedFiles)
 			{
-				string fullPath = Path.Combine(WorkingDirectory, modifiedFile.RelativePath);
-				string directoryPath = Path.GetDirectoryName(fullPath);
-				if (!string.IsNullOrEmpty(directoryPath)) directoriesToCreate.Add(directoryPath);
+				if (!TryQueueDirectory(modifiedFile.RelativePath, directoriesToCreate, parallelExceptions))
+				{
+					return;
+				}
 			}
 		}
 
@@ -759,6 +826,31 @@ class Program
 				}
 			});
 		}
+	}
+
+	/// <summary>
+	/// Resolves <paramref name="relativePath"/> under the install root and queues its parent
+	/// directory for creation.
+	/// </summary>
+	/// <param name="relativePath">The manifest-supplied path, which is untrusted.</param>
+	/// <param name="directoriesToCreate">Accumulator of directories to create.</param>
+	/// <param name="parallelExceptions">Failure bag; a rejection is added here.</param>
+	/// <returns>False when the path was refused, in which case the caller must stop.</returns>
+	private static bool TryQueueDirectory(string relativePath, HashSet<string> directoriesToCreate, ConcurrentBag<Exception> parallelExceptions)
+	{
+		if (!PathContainment.TryResolve(WorkingDirectory, relativePath, out string fullPath, out string reason))
+		{
+			Console.WriteLine($"SECURITY: Refusing manifest path '{relativePath}': {reason}");
+			parallelExceptions.Add(new PathContainmentException(relativePath ?? "<null>", reason));
+			return false;
+		}
+
+		string directoryPath = Path.GetDirectoryName(fullPath);
+		if (!string.IsNullOrEmpty(directoryPath))
+		{
+			directoriesToCreate.Add(directoryPath);
+		}
+		return true;
 	}
 
 	/// <summary>
@@ -902,7 +994,19 @@ class Program
 		{
 			try
 			{
-				string fullExecutablePath = Path.Combine(WorkingDirectory, executable);
+				/* Contained as well. -exe is supplied on the command line rather than by the
+				 * manifest, so it is a rung below the archive entries in trust — but it is the
+				 * one argument that ends in Process.Start, and "the launcher passes a constant"
+				 * is a property of today's caller, not of this program. Restricting it to the
+				 * install root costs nothing (the client executable is always there) and takes
+				 * away the process-launch primitive. */
+				if (!PathContainment.TryResolve(WorkingDirectory, executable, out string fullExecutablePath, out string reason))
+				{
+					Console.WriteLine($"SECURITY: Refusing to start '{executable}': {reason}");
+					Environment.Exit(0);
+					return;
+				}
+
 				ProcessStartInfo startInfo = new ProcessStartInfo(fullExecutablePath)
 				{
 					WorkingDirectory = Path.GetDirectoryName(fullExecutablePath),

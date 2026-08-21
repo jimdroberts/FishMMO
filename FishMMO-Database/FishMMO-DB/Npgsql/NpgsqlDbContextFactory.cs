@@ -387,14 +387,32 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>True if a connection can be established; false otherwise.</returns>
 		public async Task<bool> CanConnectAsync(CancellationToken cancellationToken = default)
 		{
+			return (await TryConnectAsync(cancellationToken).ConfigureAwait(false)).Connected;
+		}
+
+		/// <summary>
+		/// Tests whether the database is reachable, reporting why when it is not.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="CanConnectAsync"/> collapses every cause into <c>false</c>: a wrong password
+		/// (SQLSTATE 28000), an unreachable host, an exhausted pool, and a factory that has
+		/// already shut down are indistinguishable to its caller. That turns a five-second fix
+		/// into an outage spent checking the network, so the reason is preserved here for callers
+		/// that report to an operator. Never throws.
+		/// </remarks>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Whether the connection succeeded, and the failure reason when it did not.</returns>
+		public async Task<(bool Connected, string? FailureReason)> TryConnectAsync(CancellationToken cancellationToken = default)
+		{
 			try
 			{
 				using var context = CreateDbContext();
-				return await context.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false);
+				bool connected = await context.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false);
+				return (connected, connected ? null : "the database rejected the connection attempt without raising an error");
 			}
-			catch
+			catch (Exception ex)
 			{
-				return false;
+				return (false, $"{ex.Message} ({ex.GetType().Name})");
 			}
 		}
 
@@ -447,19 +465,23 @@ namespace FishMMO.Database.Npgsql
 				}
 
 				bool driftCheckFailed = false;
+				string? driftCheckFailureReason = null;
 				bool modelChanged = false;
 				try
 				{
 					modelChanged = HasModelDrift(context);
 				}
-				catch
+				catch (Exception ex)
 				{
 					// EF internals moved, or the snapshot could not be finalized. Report the
-					// pending-migration result we do have rather than failing the caller.
+					// pending-migration result we do have rather than failing the caller — but
+					// keep the reason. Discarding it left a caller that checked DriftCheckFailed
+					// unable to learn anything beyond the fact that something went wrong.
 					driftCheckFailed = true;
+					driftCheckFailureReason = ex.Message;
 				}
 
-				return new SchemaValidationResult(pending, modelChanged, driftCheckFailed, null);
+				return new SchemaValidationResult(pending, modelChanged, driftCheckFailed, null, driftCheckFailureReason);
 			}
 			catch (Exception ex)
 			{

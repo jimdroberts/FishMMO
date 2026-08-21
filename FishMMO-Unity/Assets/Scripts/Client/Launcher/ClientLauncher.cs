@@ -132,6 +132,39 @@ namespace FishMMO.Client
 		[Tooltip("Seconds the launcher may sit in a non-interactive state before recovering. Download progress resets the timer.")]
 		[SerializeField]
 		private float transientStateTimeoutSeconds = 120f;
+		/// <summary>
+		/// Hard ceiling on a whole version-check sweep, regardless of how many API hosts are
+		/// configured or how each attempt behaves.
+		/// </summary>
+		/// <remarks>
+		/// <b>H3.</b> The sweep tries every candidate host in turn, and each candidate costs up
+		/// to (request timeout x (retries + 1)) plus the inter-attempt delays. Those are all
+		/// player-adjustable — the settings panel allows a 60s timeout and 10 retries — so a
+		/// list of a few hosts multiplied out to <em>hours</em> with the button disabled and no
+		/// way to stop it. Worse, the loop marked activity at the start of every attempt
+		/// specifically so the transient-state watchdog would not fire, which meant the one
+		/// thing that could have ended it was disarmed by the thing it was meant to catch.
+		/// <para>
+		/// This is the ceiling the heartbeat cannot move. The sweep stops at the next candidate
+		/// boundary once it is passed, reports what it managed, and hands the player a working
+		/// retry button.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Hard ceiling in seconds on a whole version-check sweep across all API hosts.")]
+		[SerializeField]
+		private float versionSweepBudgetSeconds = 90f;
+		/// <summary>
+		/// Absolute ceiling on any transient state other than a downloading patch, measured
+		/// from when the state was entered and NOT resettable by activity heartbeats.
+		/// </summary>
+		/// <remarks>
+		/// The heartbeat timer answers "is this making progress?"; this one answers "has this
+		/// been going on too long to be believable regardless?". Both are needed, because a
+		/// loop that heartbeats per iteration satisfies the first one forever.
+		/// </remarks>
+		[Tooltip("Absolute ceiling in seconds for a non-download transient state, ignoring activity heartbeats.")]
+		[SerializeField]
+		private float transientStateHardCeilingSeconds = 300f;
 		#endregion
 
 		#region DEPENDENCIES (Injected via Inspector)
@@ -283,6 +316,46 @@ namespace FishMMO.Client
 		/// heartbeat, used by the transient-state watchdog.
 		/// </summary>
 		private float lastStateActivityTime;
+		/// <summary>
+		/// <see cref="Time.realtimeSinceStartup"/> at which the current state was entered.
+		/// Never moved by a heartbeat — that is the whole point of it.
+		/// </summary>
+		private float stateEnteredTime;
+
+		/* Coroutine handles.
+		 *
+		 * The watchdog used to clear isConnecting/isUpdating and move the UI on while the
+		 * coroutines that owned those flags were still running — so a "recovered" launcher had a
+		 * live version check and a live download underneath it, both still able to call
+		 * SetLauncherState and overwrite whatever the player did next. Recovery now stops the
+		 * work as well as clearing the flag. */
+
+		/// <summary>The running version check, or null.</summary>
+		private Coroutine versionCheckRoutine;
+		/// <summary>The running patch download, or null.</summary>
+		private Coroutine patchDownloadRoutine;
+		/// <summary>The running updater handoff, or null.</summary>
+		private Coroutine updaterRoutine;
+		/// <summary>
+		/// Destination of the patch download currently in flight, so a cancellation can clean
+		/// up the partial file without recomputing the path.
+		/// </summary>
+		private string pendingPatchFilePath;
+		/// <summary>
+		/// The running launch watchdog, or null.
+		/// </summary>
+		/// <remarks>
+		/// Held so it can be cancelled. It was never stopped when a launch failed by another
+		/// route, so its timeout fired later and replaced a specific, actionable message
+		/// ("Addressable bundles are not built") with the generic "Scene load timed out" — the
+		/// diagnosis overwritten by the fallback.
+		/// </remarks>
+		private Coroutine launchWatchdogRoutine;
+		/// <summary>
+		/// False once this component is being torn down, so the watchdog loop ends rather than
+		/// spinning on a destroyed object.
+		/// </summary>
+		private bool watchdogActive = true;
 		#endregion
 
 		#region UI TEXT CONSTANTS
@@ -308,6 +381,8 @@ namespace FishMMO.Client
 			public const string StatusClientAhead = "Client Version Ahead";
 			public const string StatusPatchUnavailable = "Update Unavailable";
 			public const string StatusServerRejectedVersion = "Version Rejected by Server";
+			public const string ButtonCancel = "Cancel";
+			public const string StatusCancelled = "Cancelled";
 
 			// Default player-facing detail for states that would otherwise show only a
 			// two-word button label with no explanation of what to do next.
@@ -320,6 +395,7 @@ namespace FishMMO.Client
 			public const string DetailClientAhead = "This client is newer than the server. Press the button to re-check once the server has been updated.";
 			public const string DetailPatchUnavailable = "No update path exists from this client version. Please download and install the latest full client.";
 			public const string DetailApplyingPatch = "Applying the update to your game files. The client will restart automatically — do not close this window.";
+			public const string DetailCancelled = "Cancelled. Press the button to try again.";
 
 			public const string ErrorLoadingNews = "Error loading news: ";
 			public const string ErrorParsingVersion = "Invalid version format: {0}. Expected Major.Minor.Patch[.PreRelease].";
@@ -351,6 +427,22 @@ namespace FishMMO.Client
 			// Resolved first so that even the fatal-dependency path below has somewhere to
 			// report to. A player who hits that path has no access to the log file.
 			this.view = ResolveView();
+
+			/* ResolveView returns null when the scene has no view assigned, or has one that does
+			 * not implement ILauncherView — and every line after this dereferences it, starting
+			 * with the "Fatal Error" report for missing dependencies. So the one path built to
+			 * explain a misconfigured launcher was itself an NRE on exactly the misconfiguration
+			 * it explains: the player got a silent, blank window and the log got a stack trace
+			 * instead of the message.
+			 *
+			 * ResolveView has already logged which of the two cases this is. Nothing below can
+			 * run without a view, so stop here. */
+			if (this.view == null)
+			{
+				Log.Error("ClientLauncher", "No usable launcher view; the launcher cannot start. Assign a component implementing ILauncherView (normally UITKClientLauncher) to the launcher scene.");
+				enabled = false;
+				return;
+			}
 
 			// SystemUpdaterLauncher is a plain C# class, directly instantiate it
 			this.updaterLauncher = new SystemUpdaterLauncher();
@@ -563,7 +655,84 @@ namespace FishMMO.Client
 			{
 				return false;
 			}
-			return !url.Contains(FishMMO.Client.Security.GeneratedPinSet.SentinelMarker);
+			if (url.Contains(FishMMO.Client.Security.GeneratedPinSet.SentinelMarker))
+			{
+				return false;
+			}
+			return IsNewsUrlAllowed(url);
+		}
+
+		/// <summary>
+		/// Whether the news URL may be fetched at all.
+		/// </summary>
+		/// <returns>True when the URL is an absolute https URL (or a dev-only http loopback).</returns>
+		/// <remarks>
+		/// <para>
+		/// <b>S5.</b> This was the one launcher endpoint that never had its scheme checked. Every
+		/// other one goes through <see cref="ApiHostResolver"/>, which rejects anything that is
+		/// not https outside a development build. The news URL went straight to
+		/// <c>UnityWebRequest</c> from a serialized field and a generated constant — so an
+		/// <c>http://</c> feed was fetched in plaintext, and cert pinning does not apply to a
+		/// connection that never negotiates TLS. The pinning is not bypassed by defeating it;
+		/// it is bypassed by not reaching it.
+		/// </para>
+		/// <para>
+		/// That matters more than "it's only the news pane". The document is parsed by
+		/// HtmlAgilityPack and rendered into launcher chrome, and its links are handed to
+		/// <see cref="LauncherLinkPolicy"/> and from there to the OS URL handler — so anyone on
+		/// the path could rewrite the pane a player is reading while they decide whether to
+		/// press Play.
+		/// </para>
+		/// <para>
+		/// The rule deliberately mirrors <see cref="ApiHostResolver"/> rather than being a
+		/// second, subtly different one: https always, http only in editor/development builds
+		/// and only against loopback. A rejected URL is treated exactly like an unconfigured
+		/// one — the built-in summary is shown — because from the player's side "no feed" and
+		/// "a feed we will not fetch" are the same situation, and neither is theirs to fix.
+		/// </para>
+		/// </remarks>
+		private static bool IsNewsUrlAllowed(string url)
+		{
+			if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+			{
+				Log.Warning("ClientLauncher", $"Ignoring launcher news URL (not an absolute URI): {ApiHostResolver.SanitizeForLog(url)}");
+				return false;
+			}
+
+			bool isHttps = string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+			bool isHttp = string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase);
+
+			if (!isHttps && !isHttp)
+			{
+				Log.Warning("ClientLauncher", $"Ignoring launcher news URL (scheme '{uri.Scheme}' is not http/https): {ApiHostResolver.SanitizeForLog(url)}");
+				return false;
+			}
+
+			// userinfo in a URL is never legitimate here and is a classic way to make a hostile
+			// host read as a trusted one in a log line. Same rule ApiHostResolver applies.
+			if (!string.IsNullOrEmpty(uri.UserInfo))
+			{
+				Log.Warning("ClientLauncher", $"Ignoring launcher news URL (userinfo is not permitted): {ApiHostResolver.SanitizeForLog(url)}");
+				return false;
+			}
+
+			if (isHttp)
+			{
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+				bool loopback;
+				try { loopback = uri.IsLoopback; } catch { loopback = false; }
+				if (!loopback)
+				{
+					Log.Warning("ClientLauncher", $"Ignoring launcher news URL (http is only allowed for loopback in development builds): {ApiHostResolver.SanitizeForLog(url)}");
+					return false;
+				}
+#else
+				Log.Error("ClientLauncher", $"Ignoring launcher news URL (http bypasses certificate pinning and is not allowed in release builds): {ApiHostResolver.SanitizeForLog(url)}");
+				return false;
+#endif
+			}
+
+			return true;
 		}
 
 		/// <summary>
@@ -612,6 +781,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnDestroy()
 		{
+			// Ends the watchdog loop explicitly rather than relying on Unity stopping the
+			// coroutine, so its lifetime is stated in code rather than inferred.
+			this.watchdogActive = false;
+
 			// Null when Awake bailed before resolving a view.
 			this.view?.Teardown();
 		}
@@ -629,21 +802,31 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void SetStatus(string message, LogLevel level = LogLevel.Info)
 		{
+			/* S6: sanitised before it reaches the log.
+			 *
+			 * Several of the strings arriving here are composed from server-supplied version
+			 * strings and from request-layer error text, so this is the point at which remote
+			 * content enters the log file. A newline in one of them forges log lines; a bidi
+			 * override makes the line read as something it is not. The view sanitises again on
+			 * its own side (see RemoteText) because a view is free to render this anywhere and
+			 * must not depend on the caller having done it. */
+			string safe = RemoteText.Sanitize(message);
+
 			switch (level)
 			{
 				case LogLevel.Warning:
-					Log.Warning("ClientLauncher", message);
+					Log.Warning("ClientLauncher", safe);
 					break;
 				case LogLevel.Error:
 				case LogLevel.Critical:
-					Log.Error("ClientLauncher", message);
+					Log.Error("ClientLauncher", safe);
 					break;
 				default:
-					Log.Info("ClientLauncher", message);
+					Log.Info("ClientLauncher", safe);
 					break;
 			}
 
-			this.view.ShowStatus(message);
+			this.view.ShowStatus(safe);
 		}
 
 		/// <summary>
@@ -665,6 +848,7 @@ namespace FishMMO.Client
 				case LauncherState.ClientAhead: return UIText.DetailClientAhead;
 				case LauncherState.PatchUnavailable: return UIText.DetailPatchUnavailable;
 				case LauncherState.ApplyingPatch: return UIText.DetailApplyingPatch;
+				case LauncherState.Cancelled: return UIText.DetailCancelled;
 				default: return null;
 			}
 		}
@@ -679,6 +863,8 @@ namespace FishMMO.Client
 		{
 			this.currentLauncherState = newState;
 			this.lastStateActivityTime = Time.realtimeSinceStartup;
+			// Separate from the heartbeat clock on purpose; see transientStateHardCeilingSeconds.
+			this.stateEnteredTime = this.lastStateActivityTime;
 
 			bool isButtonInteractable = false;
 			string buttonText = "";
@@ -695,7 +881,14 @@ namespace FishMMO.Client
 					buttonAction = PlayButtonConnect;
 					break;
 				case LauncherState.CheckingVersion:
-					buttonText = UIText.StatusCheckingVersion;
+					/* Cancellable. This state can legitimately last minutes — it walks every
+					 * configured API host, each with its own timeout and retry budget — and it
+					 * used to present a disabled button for the whole of it with no way out
+					 * short of killing the process. The per-attempt progress moves to the status
+					 * line so the button can carry the action. */
+					buttonText = UIText.ButtonCancel;
+					isButtonInteractable = true;
+					buttonAction = CancelVersionCheck;
 					break;
 				case LauncherState.UpdateAvailable:
 					buttonText = UIText.ButtonUpdate;
@@ -703,7 +896,12 @@ namespace FishMMO.Client
 					buttonAction = PlayButtonUpdate;
 					break;
 				case LauncherState.DownloadingPatch:
-					buttonText = UIText.StatusDownloadingPatch;
+					// Same reasoning as CheckingVersion: a large patch on a slow link is a long
+					// wait the player must be able to abandon. The progress bar carries the
+					// "downloading" message, so the button is free to be the escape hatch.
+					buttonText = UIText.ButtonCancel;
+					isButtonInteractable = true;
+					buttonAction = CancelUpdate;
 					progressBarVisible = true;
 					break;
 				case LauncherState.ApplyingPatch:
@@ -768,6 +966,11 @@ namespace FishMMO.Client
 					// Allow the player to go back to the version-check/connect flow
 					// instead of retrying the same failing launch path. A failing
 					// scene load is often recoverable by re-downloading the patch.
+					buttonAction = PlayButtonConnect;
+					break;
+				case LauncherState.Cancelled:
+					buttonText = UIText.ButtonConnect;
+					isButtonInteractable = true;
 					buttonAction = PlayButtonConnect;
 					break;
 				case LauncherState.VersionError:
@@ -857,7 +1060,13 @@ namespace FishMMO.Client
 		{
 			WaitForSeconds tick = new WaitForSeconds(1f);
 
-			while (true)
+			/* Conditioned rather than `while (true)`.
+			 *
+			 * A coroutine on a destroyed MonoBehaviour is stopped by Unity, so the old
+			 * unconditional loop was not actually a leak — but it also said nothing about when
+			 * it was supposed to end, which meant the only description of its lifetime lived
+			 * outside it. This is the same loop with its exit condition written down. */
+			while (this.watchdogActive)
 			{
 				yield return tick;
 
@@ -865,22 +1074,130 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (Time.realtimeSinceStartup - this.lastStateActivityTime <= this.transientStateTimeoutSeconds)
+
+				float now = Time.realtimeSinceStartup;
+				bool stalled = now - this.lastStateActivityTime > this.transientStateTimeoutSeconds;
+
+				/* The second clock, and the one the previous implementation was missing.
+				 *
+				 * Every transient state has something that heartbeats: the download reports
+				 * progress, and the version sweep marked activity once per candidate host
+				 * specifically so a slow sweep would not be aborted. That made the stall test
+				 * unfalsifiable for exactly the case worth catching — a sweep that will run for
+				 * hours heartbeats perfectly the whole time. This ceiling is measured from when
+				 * the state was entered and no heartbeat moves it.
+				 *
+				 * DownloadingPatch is deliberately exempt: a genuinely large patch on a genuinely
+				 * slow link can exceed any ceiling honestly, and it is bounded instead by an idle
+				 * timeout inside the request layer, which distinguishes "slow" from "stopped"
+				 * without guessing at how long a legitimate download may take. */
+				bool overCeiling = this.currentLauncherState != LauncherState.DownloadingPatch &&
+								   this.transientStateHardCeilingSeconds > 0f &&
+								   now - this.stateEnteredTime > this.transientStateHardCeilingSeconds;
+
+				if (!stalled && !overCeiling)
 				{
 					continue;
 				}
 
-				LauncherState stalled = this.currentLauncherState;
-				Log.Error("ClientLauncher", $"Launcher stalled in {stalled} for over {this.transientStateTimeoutSeconds}s with no activity. Recovering.");
+				LauncherState stuckState = this.currentLauncherState;
+				Log.Error("ClientLauncher",
+					overCeiling
+						? $"Launcher has been in {stuckState} for over {this.transientStateHardCeilingSeconds}s. Recovering."
+						: $"Launcher stalled in {stuckState} for over {this.transientStateTimeoutSeconds}s with no activity. Recovering.");
 
-				// Clear the in-flight guards; whatever owned them is not coming back.
-				this.isConnecting = false;
-				this.isUpdating = false;
+				/* Stop the work, THEN clear the guards.
+				 *
+				 * Clearing the flags alone left the coroutines that owned them running: a
+				 * "recovered" launcher still had a version check and a download in flight, both
+				 * able to call SetLauncherState later and stamp their own outcome over whatever
+				 * the player had started in the meantime. */
+				AbortInFlightWork();
 
 				SetLauncherState(
-					stalled == LauncherState.DownloadingPatch ? LauncherState.PatchDownloadFailed : LauncherState.ConnectionFailed,
-					$"The launcher stopped responding while it was busy ({stalled}). Press the button to try again.");
+					stuckState == LauncherState.DownloadingPatch ? LauncherState.PatchDownloadFailed : LauncherState.ConnectionFailed,
+					$"The launcher stopped responding while it was busy ({stuckState}). Press the button to try again.");
 			}
+		}
+
+		/// <summary>
+		/// Stops every in-flight launcher coroutine and clears the guards they own.
+		/// </summary>
+		/// <remarks>
+		/// A guard flag and the coroutine holding it are one thing, and they have to be released
+		/// together. Releasing only the flag lets a new operation start alongside the old one;
+		/// releasing only the coroutine leaves the launcher permanently refusing to retry.
+		/// </remarks>
+		private void AbortInFlightWork()
+		{
+			StopIfRunning(ref this.versionCheckRoutine);
+			StopIfRunning(ref this.patchDownloadRoutine);
+			StopIfRunning(ref this.updaterRoutine);
+
+			this.isConnecting = false;
+			this.isUpdating = false;
+		}
+
+		/// <summary>
+		/// Stops <paramref name="routine"/> if it is running and clears the handle.
+		/// </summary>
+		private void StopIfRunning(ref Coroutine routine)
+		{
+			if (routine == null)
+			{
+				return;
+			}
+			StopCoroutine(routine);
+			routine = null;
+		}
+
+		/// <summary>
+		/// Abandons a version check the player no longer wants to wait for.
+		/// </summary>
+		private void CancelVersionCheck()
+		{
+			if (!this.isConnecting && this.versionCheckRoutine == null)
+			{
+				return;
+			}
+
+			Log.Info("ClientLauncher", "Version check cancelled by the player.");
+			StopIfRunning(ref this.versionCheckRoutine);
+			this.isConnecting = false;
+			SetLauncherState(LauncherState.Cancelled, "Version check cancelled. Press the button to try again.");
+		}
+
+		/// <summary>
+		/// Abandons an in-flight patch download and removes whatever landed on disk.
+		/// </summary>
+		/// <remarks>
+		/// The partial archive is deleted rather than kept for a resume, because there is no
+		/// resume: the download restarts from zero, and a truncated file sitting at the exact
+		/// path the next run treats as its patch is worse than no file at all.
+		/// </remarks>
+		private void CancelUpdate()
+		{
+			if (!this.isUpdating && this.patchDownloadRoutine == null)
+			{
+				return;
+			}
+
+			Log.Info("ClientLauncher", "Patch download cancelled by the player.");
+			StopIfRunning(ref this.patchDownloadRoutine);
+			this.isUpdating = false;
+
+			// The request itself lives on the shared web-request service; ask it to stop so the
+			// socket and the file handle are released rather than running to completion into a
+			// callback nobody is listening to any more.
+			if (this.unityWebRequestService != null)
+			{
+				this.unityWebRequestService.AbortAll();
+			}
+
+			TryDeletePatchFile(this.pendingPatchFilePath);
+			this.pendingPatchFilePath = null;
+
+			SetLauncherState(LauncherState.Cancelled, "Update cancelled. Press the button to try again.");
 		}
 
 		/// <summary>
@@ -908,7 +1225,9 @@ namespace FishMMO.Client
 			if (this.isConnecting) return;
 			this.isConnecting = true;
 			SetLauncherState(LauncherState.Connecting);
-			StartCoroutine(GetLatestVersion());
+			// Handle kept so the watchdog and the Cancel button can actually stop it, rather
+			// than clearing isConnecting and leaving it running.
+			this.versionCheckRoutine = StartCoroutine(GetLatestVersion());
 		}
 
 		/// <summary>
@@ -967,7 +1286,9 @@ namespace FishMMO.Client
 			// If the Addressable scene load fails asynchronously (no synchronous throw),
 			// OnPostbootSceneLoaded never fires and the button stays permanently disabled.
 			// The watchdog re-enables the button after a generous timeout so the player can retry.
-			StartCoroutine(LaunchWatchdog());
+			// The handle is kept so every other path that concludes the launch can cancel it;
+			// see CancelLaunchWatchdog.
+			this.launchWatchdogRoutine = StartCoroutine(LaunchWatchdog());
 		}
 
 		/// <summary>
@@ -986,8 +1307,30 @@ namespace FishMMO.Client
 			}
 
 			this.isLaunching = false;
+
+			/* Cancel the watchdog before reporting.
+			 *
+			 * The watchdog was never stopped on this path, so a specific failure reported here
+			 * — naming the bundles that could not load — was silently replaced 30 seconds later
+			 * by the watchdog's generic "Scene load timed out", overwriting the diagnosis with
+			 * the fallback. Whoever concludes the launch owns the message. */
+			CancelLaunchWatchdog();
+
 			SetLauncherState(LauncherState.LaunchFailed,
 				$"Could not load the game scene ({string.Join(", ", batch.FailedItems)}). Check that Addressable bundles are built and up to date.");
+		}
+
+		/// <summary>
+		/// Stops the launch watchdog, if one is running.
+		/// </summary>
+		/// <remarks>
+		/// Called from every path that reaches a conclusion about the launch — success, an
+		/// asynchronous batch failure, or an unusable scene — so the watchdog only ever speaks
+		/// when nothing else did.
+		/// </remarks>
+		private void CancelLaunchWatchdog()
+		{
+			StopIfRunning(ref this.launchWatchdogRoutine);
 		}
 
 		/// <summary>
@@ -1011,6 +1354,7 @@ namespace FishMMO.Client
 			 * be false from the connection failure path.
 			 */
 			this.isLaunching = false;
+			this.launchWatchdogRoutine = null;
 			SetLauncherState(LauncherState.LaunchFailed,
 				"Scene load timed out. Check that Addressable bundles are built and up to date.");
 		}
@@ -1026,8 +1370,10 @@ namespace FishMMO.Client
 			if (!scene.IsValid() || !scene.isLoaded)
 			{
 				// Bail out rather than unloading ourselves and leaving the player with no
-				// UI at all. The watchdog will surface this as a launch failure.
+				// UI at all. This path reports the failure itself, so the watchdog is cancelled
+				// rather than left to replace this message with its generic one.
 				this.isLaunching = false;
+				CancelLaunchWatchdog();
 				SetLauncherState(LauncherState.LaunchFailed,
 					$"The game scene '{PostbootSceneName}' reported as loaded but is not usable. Check that Addressable bundles are built and up to date.");
 				return;
@@ -1049,6 +1395,15 @@ namespace FishMMO.Client
 			 * and Log output does not reach the console at all. A diagnostic that only prints
 			 * on the entry path that already works is not a diagnostic. */
 			Debug.Log("[ClientLauncher] Hiding the launcher UI and unloading the launcher scene.");
+
+			/* The launch succeeded, so nothing is left for the watchdog to catch. On the shipped
+			 * path the unload below destroys this component and Unity stops the coroutine anyway
+			 * — but in the editor the launcher scene is usually opened directly, Addressables has
+			 * no handle for it, the unload is a silent no-op, and the component survives. The
+			 * watchdog then fired 30 seconds into a perfectly good session and reported a launch
+			 * failure over the running game. */
+			CancelLaunchWatchdog();
+
 			this.view.SetVisible(false);
 
 			UnloadLauncherScene();
@@ -1183,9 +1538,25 @@ namespace FishMMO.Client
 			 * found", relaunches the client unchanged, and the launcher detects the same
 			 * version mismatch again on the next run, forever. */
 			string patchesDirectory = LauncherSettings.ResolvePatchDirectory(Constants.GetPatchesDirectory());
-			string patchFilePath = Path.Combine(
-				patchesDirectory,
-				Constants.GetPatchFileName(MainBootstrapSystem.GameVersion, this.latestVersionString));
+
+			/* S2: the file name is built from a SERVER-SUPPLIED version and then combined into a
+			 * path. Constants.GetPatchFileName now refuses a version carrying anything that is
+			 * not a version character and returns null — which has to be checked here, because
+			 * the whole point of the refusal is that the alternative was Path.Combine writing
+			 * the "patch" wherever the server chose. VersionConfig.Parse rejects such a version
+			 * a step earlier; this is the second of the two independent checks. */
+			string patchFileName = Constants.GetPatchFileName(MainBootstrapSystem.GameVersion, this.latestVersionString);
+			if (string.IsNullOrEmpty(patchFileName))
+			{
+				this.isUpdating = false;
+				Log.Error("ClientLauncher", "Refusing to download a patch: the server's version string cannot form a valid patch file name.");
+				SetLauncherState(LauncherState.VersionError,
+					"The update server returned an unusable version. Please try again later or reinstall the client.");
+				return;
+			}
+
+			string patchFilePath = Path.Combine(patchesDirectory, patchFileName);
+			this.pendingPatchFilePath = patchFilePath;
 
 			// Use the APIHost that succeeded during the version check so the patch we
 			// download corresponds to the version we were told about. Fall back to the
@@ -1195,14 +1566,17 @@ namespace FishMMO.Client
 				? this.selectedApiHost
 				: Constants.Configuration.APIHost;
 
-			// Delegate patch download to patch server service
-			StartCoroutine(this.patchServerService.DownloadPatch(
+			// Delegate patch download to patch server service. Handle kept so Cancel and the
+			// watchdog can stop it rather than only clearing the guard flag.
+			this.patchDownloadRoutine = StartCoroutine(this.patchServerService.DownloadPatch(
 				$"{patchApiHost}{MainBootstrapSystem.GameVersion}",
 				patchFilePath,
 				this.expectedPatchSha256,
 				this.expectedPatchSize,
 				onComplete: (patchWritten) =>
 				{
+					this.patchDownloadRoutine = null;
+
 					if (!patchWritten)
 					{
 						// Server answered "already up to date" mid-flight (the version we
@@ -1210,6 +1584,7 @@ namespace FishMMO.Client
 						// Nothing to apply — go straight to Play instead of invoking the
 						// updater on a patch that does not exist.
 						this.isUpdating = false;
+						this.pendingPatchFilePath = null;
 						SetLauncherState(LauncherState.ReadyToPlay);
 						return;
 					}
@@ -1219,7 +1594,7 @@ namespace FishMMO.Client
 					// Delegate updater launch to updater launcher service. NOTE: the patch
 					// archive is deliberately NOT deleted here — the Updater is about to
 					// read it, and it removes the archive itself once applied.
-					StartCoroutine(this.updaterLauncher.LaunchUpdater(
+					this.updaterRoutine = StartCoroutine(this.updaterLauncher.LaunchUpdater(
 						this.updaterPath,
 						MainBootstrapSystem.GameVersion,
 						this.latestVersionString,
@@ -1234,17 +1609,20 @@ namespace FishMMO.Client
 						},
 						onError: (error) =>
 						{
+							this.updaterRoutine = null;
 							this.isUpdating = false;
 							SetLauncherState(LauncherState.UpdaterFailed, error);
 						}));
 				},
 				onError: (error) =>
 				{
+					this.patchDownloadRoutine = null;
 					this.isUpdating = false;
 					SetLauncherState(LauncherState.PatchDownloadFailed, error);
 
 					// Attempt to clean up any partially downloaded file if an error occurs.
 					TryDeletePatchFile(patchFilePath);
+					this.pendingPatchFilePath = null;
 				},
 				onProgress: (stats) =>
 				{
@@ -1302,9 +1680,28 @@ namespace FishMMO.Client
 				PatchInfo patchInfo = default;
 				bool succeeded = false;
 				string successfulHost = null;
+				bool budgetExhausted = false;
+
+				/* H3: the sweep gets a wall-clock budget, fixed before the first attempt.
+				 *
+				 * Each candidate costs up to (timeout x (retries + 1)) plus the retry delays,
+				 * and all three are player-adjustable — so "try every host" multiplied out to
+				 * hours on a badly configured install with the button dead the whole time. The
+				 * budget is checked at the candidate boundary rather than mid-attempt, because
+				 * abandoning a request that is already in flight buys nothing: it is the NEXT
+				 * host's full budget that would push this past the ceiling. */
+				float sweepDeadline = Time.realtimeSinceStartup + Mathf.Max(1f, this.versionSweepBudgetSeconds);
 
 				for (int i = 0; i < candidates.Count && !succeeded; i++)
 				{
+					if (Time.realtimeSinceStartup >= sweepDeadline)
+					{
+						budgetExhausted = true;
+						Log.Warning("ClientLauncher",
+							$"Version check budget of {this.versionSweepBudgetSeconds:0}s exhausted after {i} of {candidates.Count} API host(s); giving up so the player gets a working retry button.");
+						break;
+					}
+
 					string host = candidates[i];
 					bool callbackFired = false;
 					string attemptError = null;
@@ -1327,10 +1724,15 @@ namespace FishMMO.Client
 					 * view is free to route status wherever it has room — including a surface
 					 * this state has hidden. The button label is the one status surface every
 					 * view is guaranteed to be showing here. */
-					if (candidates.Count > 1)
-					{
-						this.view.SetButtonText($"{UIText.StatusCheckingVersion} ({i + 1}/{candidates.Count})");
-					}
+					/* Written to the status line, not the button.
+					 *
+					 * The button now carries Cancel for this state — a state that can last
+					 * minutes had no way out at all before — so the progress needs somewhere
+					 * else to go, and the status line is a real element in this launcher's UXML
+					 * that ApplyStatus un-hides whenever it is non-empty. */
+					this.view.ShowStatus(candidates.Count > 1
+						? $"{UIText.StatusCheckingVersion} (host {i + 1} of {candidates.Count})"
+						: UIText.StatusCheckingVersion);
 
 					yield return StartCoroutine(this.patchServerService.GetLatestVersion(
 						host,
@@ -1351,13 +1753,29 @@ namespace FishMMO.Client
 
 					if (!succeeded)
 					{
-						lastError = attemptError ?? (callbackFired ? "Unknown error" : "No response");
-						Log.Debug("ClientLauncher", $"APIHost {host} version check failed ({lastError}); trying next.");
+						/* S6: both halves of this line are remote. The host is a configured
+						 * string and the error text originates at the far end of the request, so
+						 * an unsanitised interpolation is a log-injection primitive (CWE-117) —
+						 * a CR/LF in an error message forges whole log lines and buries the real
+						 * failure. ApiHostResolver.SanitizeForLog already exists for the host;
+						 * RemoteText.Sanitize does the same for the error and additionally
+						 * strips the bidi overrides that make one string display as another. */
+						lastError = RemoteText.Sanitize(
+							attemptError ?? (callbackFired ? "Unknown error" : "No response"),
+							maxLength: 512);
+						Log.Debug("ClientLauncher", $"APIHost {ApiHostResolver.SanitizeForLog(host)} version check failed ({lastError}); trying next.");
 					}
 				}
 
 				if (!succeeded)
 				{
+					if (budgetExhausted)
+					{
+						SetLauncherState(LauncherState.VersionCheckFailed,
+							"The update server did not answer in time. Press the button to try again, or lower the request timeout in Settings.");
+						yield break;
+					}
+
 					SetLauncherState(LauncherState.VersionCheckFailed,
 						lastError ?? "All API hosts failed. Check your internet connection and firewall.");
 					yield break;
@@ -1374,6 +1792,11 @@ namespace FishMMO.Client
 				}
 
 				this.selectedApiHost = successfulHost;
+				/* FullVersion is rebuilt from the parsed components rather than echoed from the
+				 * wire, and VersionConfig.Parse now enforces a real SemVer charset — so by this
+				 * point the string is known to contain only digits, dots, letters and hyphens.
+				 * That is what makes it safe to interpolate into a file name below and into the
+				 * status line above. */
 				this.latestVersionString = serverVersion.FullVersion; // Store for updater launch
 				this.expectedPatchSha256 = patchInfo.Sha256; // May be null/empty when not provided.
 				this.expectedPatchSize = patchInfo.Size; // May be 0 when not provided.
@@ -1445,6 +1868,7 @@ namespace FishMMO.Client
 			finally
 			{
 				this.isConnecting = false;
+				this.versionCheckRoutine = null;
 			}
 		}
 

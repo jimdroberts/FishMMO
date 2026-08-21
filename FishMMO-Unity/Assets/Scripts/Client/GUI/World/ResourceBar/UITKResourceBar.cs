@@ -164,7 +164,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Smoothly interpolates the fill width toward the target value each frame.
 		/// </summary>
-		private void Update()
+		/// <remarks>
+		/// This was <c>private void Update()</c>. <see cref="UITKControl"/> declares its own
+		/// <c>Update</c> and Unity binds only the MOST DERIVED one, so a second <c>Update</c> in a
+		/// subclass silently disables <c>PollLoseFocus</c> and <c>OnTick</c> for the whole panel —
+		/// the failure the base class's own comment warns about, and it was live on all three
+		/// resource bars.
+		/// </remarks>
+		protected override void OnTick()
 		{
 			if (fill == null || !initialized)
 			{

@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
@@ -1398,7 +1398,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				character.TryGet(out IGuildController guildController))
 			{
 				guildController.ID = guildData.Value.GuildID;
-				guildController.Rank = (GuildRank)guildData.Value.Rank;
+				/* The ladder POSITION, as stored. What that position is allowed to do is not
+				 * knowable from the membership row alone — it depends on the guild's own rank
+				 * rows — so the permission mask stays empty until GuildSystem resolves and
+				 * publishes it. Empty is the safe direction: the pre-filters that read this mask
+				 * refuse, and every guild operation re-resolves before acting anyway. */
+				guildController.RankOrder = guildData.Value.Rank;
+				guildController.Permissions = GuildPermissions.None;
 			}
 
 			// Party
@@ -1773,9 +1779,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					friendIDs = new List<long>(fc.Friends);
 				}
 				NetworkConnection owner = character.Owner;
+				/* Captured on the main thread with everything else. The guild roster payload needs
+				 * to know WHOSE roster it is in order to apply the officer-note filter, and the
+				 * async path must not reach back into the character to ask. */
+				long socialCharacterID = character.ID;
 
 				// Enqueue only the DB-dependent social data fetch
-				if (!EnqueueAsyncWork(() => SendAllCharacterDataAsync(owner, guildID, partyID, friendIDs)))
+				if (!EnqueueAsyncWork(() => SendAllCharacterDataAsync(owner, socialCharacterID, guildID, partyID, friendIDs)))
 				{
 					Log.Warning("CharacterSystem", $"Failed to enqueue social data broadcast fetch for character {character.ID}.");
 				}

@@ -71,6 +71,25 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Maximum entries retained in the TOTP username-failure tracker.</summary>
 		private const int MaxTotpUsernameFailureEntries = 10_000;
 
+		/// <summary>
+		/// Maximum SRP proof failures tracked per username before that username is locked out.
+		/// Override to 0 in test subclasses to disable the lockout.
+		/// </summary>
+		/// <remarks>
+		/// Higher than the TOTP threshold on purpose. A TOTP code is six digits read off a screen
+		/// and typed immediately, so fifteen failures is already generous; a password is typed from
+		/// memory by someone who may have several, and locking a legitimate owner out of their own
+		/// account is itself a denial of service. Ten failures inside the window is well beyond
+		/// ordinary mistyping and far below what guessing needs.
+		/// </remarks>
+		protected virtual int MaxLoginFailuresPerUsername => 10;
+		/// <summary>Duration of the per-username login lockout after <see cref="MaxLoginFailuresPerUsername"/> failures.</summary>
+		private static readonly TimeSpan LoginUsernameLockoutDuration = TimeSpan.FromMinutes(15);
+		/// <summary>Maximum entries scanned per login username-failure sweep pass.</summary>
+		private const int LoginUsernameFailureSweepMaxScan = 64;
+		/// <summary>Maximum entries retained in the login username-failure tracker.</summary>
+		private const int MaxLoginUsernameFailureEntries = 10_000;
+
 		#endregion
 
 		#region Fields
@@ -117,6 +136,29 @@ namespace FishMMO.Auth.Implementation
 
 		/// <summary>Tracks per-username TOTP failure counts and first-failure timestamps for lockout enforcement.</summary>
 		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> totpUsernameFailures
+			= new ConcurrentDictionary<string, (int Count, DateTime FirstFailure)>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Tracks per-username SRP proof failure counts and first-failure timestamps for
+		/// password-guessing lockout enforcement.
+		/// </summary>
+		/// <remarks>
+		/// Password guessing was the one credential in the system with no per-account limit at
+		/// all. TOTP has <see cref="totpUsernameFailures"/> and the account-verify code has its
+		/// own per-username lockout, but the password was protected only by
+		/// <see cref="IpAuthAttemptDebounceSeconds"/> — one attempt per second <i>per IP</i>. That
+		/// bounds a single attacker and does nothing whatsoever about a distributed one: a
+		/// thousand hosts is a thousand guesses a second against one named account, indefinitely,
+		/// with no trace beyond the log.
+		/// <para>
+		/// Keyed on the username the client supplied, not on an account that was found. Usernames
+		/// that do not exist are tracked exactly like ones that do — the SRP verify step already
+		/// answers non-existent accounts with a per-username fake salt for precisely this reason,
+		/// and a tracker that only counted real accounts would reintroduce the enumeration oracle
+		/// that design exists to close, as a timing difference on the eleventh attempt.
+		/// </para>
+		/// </remarks>
+		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> loginUsernameFailures
 			= new ConcurrentDictionary<string, (int Count, DateTime FirstFailure)>(StringComparer.OrdinalIgnoreCase);
 
 		#endregion
@@ -316,6 +358,7 @@ namespace FishMMO.Auth.Implementation
 			totpEnabledByClientId.Clear();
 			verifyCodeExpiryByClientId.Clear();
 			totpUsernameFailures.Clear();
+			loginUsernameFailures.Clear();
 			totpSemaphore?.Dispose();
 			totpSemaphore = null;
 			kickRequestNextAllowedUtcByAccount.Clear();
@@ -333,6 +376,7 @@ namespace FishMMO.Auth.Implementation
 		{
 			SweepStaleUnauthenticatedAccountState();
 			SweepExpiredTotpUsernameFailures();
+			SweepExpiredLoginUsernameFailures();
 		}
 
 		/// <summary>
@@ -394,6 +438,32 @@ namespace FishMMO.Auth.Implementation
 				if (now - kvp.Value.FirstFailure > TotpUsernameLockoutDuration)
 				{
 					totpUsernameFailures.TryRemove(kvp.Key, out _);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Evicts expired entries from <see cref="loginUsernameFailures"/>.
+		/// </summary>
+		/// <remarks>
+		/// Bounded exactly like <see cref="SweepExpiredTotpUsernameFailures"/>, and subject to the
+		/// same caveat: under a sustained attack spread across many distinct usernames, entries can
+		/// arrive faster than they are swept until <see cref="MaxLoginUsernameFailureEntries"/> is
+		/// reached, at which point new usernames stop being tracked until the sweep frees capacity.
+		/// The per-IP debounce bounds the arrival rate, and an attacker who spends that capacity on
+		/// ten thousand throwaway usernames is not making progress against any of them.
+		/// </remarks>
+		private void SweepExpiredLoginUsernameFailures()
+		{
+			DateTime now = DateTime.UtcNow;
+			int scanned = 0;
+			foreach (var kvp in loginUsernameFailures)
+			{
+				if (++scanned > LoginUsernameFailureSweepMaxScan)
+					break;
+				if (now - kvp.Value.FirstFailure > LoginUsernameLockoutDuration)
+				{
+					loginUsernameFailures.TryRemove(kvp.Key, out _);
 				}
 			}
 		}
@@ -973,6 +1043,20 @@ namespace FishMMO.Auth.Implementation
 			accessLevel = accountData.AccessLevel;
 			isUnverified = accountData.IsUnverified;
 
+			/* Per-account password lockout. Checked here, at the proof, rather than at the verify
+			 * step: verify is where the fake-salt timing equalisation lives, and refusing early
+			 * would have made a locked-out account answer measurably faster than an ordinary one.
+			 * The refusal is byte-for-byte the same as a wrong password —
+			 * InvalidUsernameOrPassword through RejectAndPurge — so it says nothing about whether
+			 * the account exists, whether the password was right, or that a lockout is in force.
+			 * An attacker who tripped it already knows they did; nobody else learns anything. */
+			if (IsLoginUsernameLockedOut(username))
+			{
+				await Log.Warning(LogPrefix, "Refused an SRP proof for a username that is locked out after repeated failures.");
+				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
+				return;
+			}
+
 			// Phase 2: Compute the SRP proof OUTSIDE the lock.
 			// SrpData is per-connection and only one proof verification runs per
 			// connection at a time (enforced by the ProofPending → SrpSuccess
@@ -981,10 +1065,16 @@ namespace FishMMO.Auth.Implementation
 			bool proofOk = srpDataSnapshot.GetProof(clientProof, out string computedProof);
 			if (!proofOk || computedProof == null)
 			{
+				// The one branch that means "that password was wrong" — for a real account and,
+				// identically, for a fake one. See loginUsernameFailures.
+				TrackLoginUsernameFailure(username);
 				RejectAndPurge(conn, ClientAuthenticationResult.InvalidUsernameOrPassword);
 				return;
 			}
 			serverProof = computedProof;
+
+			// Correct password: the owner is here, so the counter goes back to zero.
+			ClearLoginUsernameFailures(username);
 
 			// Phase 3: Atomically advance the auth state under the lock.
 			// The callback is now a trivial validation — no CPU-bound work.
@@ -1296,6 +1386,62 @@ namespace FishMMO.Auth.Implementation
 				key,
 				_ => (1, DateTime.UtcNow),
 				(_, prev) => (prev.Count + 1, prev.FirstFailure));
+		}
+
+		/// <summary>
+		/// Whether the supplied username is currently locked out for password guessing.
+		/// </summary>
+		/// <remarks>
+		/// Self-expiring: an entry whose window has elapsed is removed on the way past, so a
+		/// lockout always clears itself even if the periodic sweep has not reached that key yet.
+		/// </remarks>
+		/// <param name="username">The username the client supplied.</param>
+		/// <returns><c>true</c> when further attempts must be refused.</returns>
+		private bool IsLoginUsernameLockedOut(string? username)
+		{
+			int threshold = MaxLoginFailuresPerUsername;
+			if (threshold <= 0 || string.IsNullOrEmpty(username)) return false;
+
+			string key = username!.ToLowerInvariant();
+			if (!loginUsernameFailures.TryGetValue(key, out var failInfo)) return false;
+
+			if (DateTime.UtcNow - failInfo.FirstFailure > LoginUsernameLockoutDuration)
+			{
+				loginUsernameFailures.TryRemove(key, out _);
+				return false;
+			}
+
+			return failInfo.Count >= threshold;
+		}
+
+		/// <summary>
+		/// Records a failed password attempt for the given username toward the per-username lockout.
+		/// </summary>
+		/// <param name="username">The username the client supplied.</param>
+		private void TrackLoginUsernameFailure(string? username)
+		{
+			if (MaxLoginFailuresPerUsername <= 0 || string.IsNullOrEmpty(username)) return;
+			string key = username!.ToLowerInvariant();
+			if (loginUsernameFailures.Count >= MaxLoginUsernameFailureEntries &&
+				!loginUsernameFailures.ContainsKey(key)) return;
+			loginUsernameFailures.AddOrUpdate(
+				key,
+				_ => (1, DateTime.UtcNow),
+				(_, prev) => (prev.Count + 1, prev.FirstFailure));
+		}
+
+		/// <summary>
+		/// Clears the failure count for a username that has just proved it knows the password.
+		/// </summary>
+		/// <remarks>
+		/// Without this, nine failed attempts followed by a correct one would leave the owner one
+		/// typo away from a fifteen-minute lockout for the rest of the window.
+		/// </remarks>
+		/// <param name="username">The username that authenticated.</param>
+		private void ClearLoginUsernameFailures(string? username)
+		{
+			if (string.IsNullOrEmpty(username)) return;
+			loginUsernameFailures.TryRemove(username!.ToLowerInvariant(), out _);
 		}
 
 		/// <summary>

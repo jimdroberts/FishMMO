@@ -215,6 +215,13 @@ namespace FishMMO.Shared
 			uint amountRemaining = item.IsStackable ? item.Stackable.Amount : 1;
 			for (int i = 0; i < Items.Count; ++i)
 			{
+				// A locked slot is mid-operation and is not available capacity — see the matching
+				// guard in ItemContainer.CanAddItem.
+				if (IsSlotLocked(i))
+				{
+					continue;
+				}
+
 				if (IsSlotEmpty(i))
 				{
 					return true;
@@ -224,8 +231,11 @@ namespace FishMMO.Shared
 					!Items[i].Stackable.IsStackFull &&
 					Items[i].IsMatch(item))
 				{
-					uint remainingCapacity = Items[i].Template.MaxStackSize - Items[i].Stackable.Amount;
-					amountRemaining = remainingCapacity.AbsoluteSubtract(amountRemaining);
+					// Saturating — same reasoning as ItemContainer.CanAddItem. AbsoluteSubtract
+					// returns |a - b|, so the ordinary "it all fits" case reported the UNUSED
+					// capacity as the amount still outstanding and this container claimed to be
+					// full when it was not, silently refusing loot.
+					amountRemaining -= Math.Min(amountRemaining, Items[i].Stackable.RemainingCapacity);
 				}
 
 				if (amountRemaining < 1) return true;
@@ -248,6 +258,7 @@ namespace FishMMO.Shared
 				for (int i = 0; i < Items.Count; ++i)
 				{
 					if (Items[i] != null &&
+						!IsSlotLocked(i) &&
 						Items[i].IsStackable &&
 						Items[i].Stackable.AddToStack(item))
 					{
@@ -266,7 +277,11 @@ namespace FishMMO.Shared
 			{
 				if (IsSlotEmpty(i))
 				{
-					SetItemSlot(item, i);
+					// Checked, not presumed — SetItemSlot can refuse a locked slot.
+					if (!SetItemSlot(item, i))
+					{
+						continue;
+					}
 
 					modifiedItems.Add(item);
 
@@ -276,9 +291,14 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		/// <summary>
+		/// Sets the item in the specified slot, refusing a locked slot.
+		/// Callers must check the return value — see <see cref="ItemContainer.SetItemSlot"/>.
+		/// </summary>
 		public bool SetItemSlot(Item item, int slot)
 		{
-			if (!IsValidSlot(slot))
+			if (!IsValidSlot(slot) ||
+				IsSlotLocked(slot))
 			{
 				return false;
 			}

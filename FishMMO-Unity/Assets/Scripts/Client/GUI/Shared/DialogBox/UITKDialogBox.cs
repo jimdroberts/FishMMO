@@ -7,11 +7,13 @@ namespace FishMMO.Client
 	/// UI Toolkit confirmation dialog. Shows a message with accept/cancel buttons and
 	/// invokes optional callbacks.
 	/// </summary>
-	public class UITKDialogBox : UITKControl
+	/// <remarks>
+	/// The open/close callback rules — refuse rather than hijack, exactly one callback per
+	/// request on every exit path, callbacks cleared before they are invoked — live in
+	/// <see cref="UITKCallbackDialog"/> and are shared with the input dialog and the selector.
+	/// </remarks>
+	public class UITKDialogBox : UITKCallbackDialog
 	{
-		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
-		protected override UITKPanelLayer Layer => UITKPanelLayer.Modal;
-
 		/// <summary>
 		/// Name of the dialog message label element.
 		/// </summary>
@@ -48,6 +50,16 @@ namespace FishMMO.Client
 		private Action onCancelCallback;
 
 		/// <summary>
+		/// Message the current request wants displayed.
+		/// </summary>
+		/// <remarks>
+		/// Held as a field rather than written straight into <see cref="dialogLabel"/> by
+		/// <see cref="Open"/>, because the label that exists at that moment is about to be
+		/// thrown away — see <see cref="UITKCallbackDialog"/>.
+		/// </remarks>
+		private string pendingText = string.Empty;
+
+		/// <summary>
 		/// Resolves cached elements and wires button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -61,6 +73,10 @@ namespace FishMMO.Client
 			acceptButton = Root.Q<Button>(ACCEPT_BUTTON_NAME);
 			cancelButton = Root.Q<Button>(CANCEL_BUTTON_NAME);
 
+			/* Assigned rather than accumulated: this runs again on every visual tree rebuild,
+			 * and the elements are new each time, so there is nothing to unsubscribe from — but
+			 * a rebuild that reused an element would otherwise stack a second handler on it and
+			 * answer the dialog twice per click. */
 			if (acceptButton != null)
 			{
 				acceptButton.clicked += OnClick_Accept;
@@ -69,6 +85,8 @@ namespace FishMMO.Client
 			{
 				cancelButton.clicked += OnClick_Cancel;
 			}
+
+			AttachDialogKeys(Root);
 		}
 
 		/// <summary>
@@ -80,22 +98,63 @@ namespace FishMMO.Client
 		/// <param name="text">Message to display.</param>
 		/// <param name="onAccept">Optional callback invoked when accepted.</param>
 		/// <param name="onCancel">Optional callback invoked when cancelled.</param>
-		public void Open(string text, Action onAccept = null, Action onCancel = null)
+		/// <returns>
+		/// False when the dialog was already showing another question and this one was refused.
+		/// A refused request is answered immediately through <paramref name="onCancel"/>, so a
+		/// caller that locked itself while waiting is released either way.
+		/// </returns>
+		public bool Open(string text, Action onAccept = null, Action onCancel = null)
 		{
-			if (dialogLabel != null)
+			if (!TryClaim())
 			{
-				dialogLabel.text = text;
+				onCancel?.Invoke();
+				return false;
 			}
 
+			pendingText = text ?? string.Empty;
 			onAcceptCallback = onAccept;
 			onCancelCallback = onCancel;
 
-			bool acceptVisible = onAccept != null;
+			/* Show first. Everything above is state, not tree writes — the tree is filled in by
+			 * ApplyRequest, which Show calls back into once the document has finished cloning. */
+			Show();
+			return true;
+		}
+
+		/// <summary>
+		/// Replaces the message without reopening the dialog.
+		/// </summary>
+		/// <remarks>
+		/// For content that updates while the box stays on screen — a queue position counting
+		/// down, say. Going through <see cref="Open"/> for that would be refused outright, since
+		/// the box is already showing the caller's own question.
+		/// </remarks>
+		/// <param name="text">The new message.</param>
+		public void SetText(string text)
+		{
+			pendingText = text ?? string.Empty;
+			if (dialogLabel != null)
+			{
+				dialogLabel.text = pendingText;
+			}
+		}
+
+		/// <summary>
+		/// Writes the current request's message and button layout into the live tree.
+		/// </summary>
+		protected override void ApplyRequest()
+		{
+			if (dialogLabel != null)
+			{
+				dialogLabel.text = pendingText;
+			}
+
+			bool acceptVisible = onAcceptCallback != null;
 			SetButtonVisible(acceptButton, acceptVisible);
 
 			if (acceptVisible)
 			{
-				bool cancelVisible = onCancel != null;
+				bool cancelVisible = onCancelCallback != null;
 				SetButtonVisible(cancelButton, cancelVisible);
 				if (cancelButton != null)
 				{
@@ -104,31 +163,38 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				/* No accept handler means the only thing the player can do is dismiss, so the
+				 * remaining button says so — and it is always shown, or an informational dialog
+				 * opened with no callbacks at all would have no way out. */
 				SetButtonVisible(cancelButton, true);
 				if (cancelButton != null)
 				{
 					cancelButton.text = "Close";
 				}
 			}
-
-			Show();
 		}
 
 		/// <summary>
-		/// Replaces the message without reopening the dialog.
+		/// Drops the callbacks and the message this request was opened with.
 		/// </summary>
-		/// <remarks>
-		/// For content that updates while the box stays on screen — a queue position counting
-		/// down, say. Going through <see cref="Open"/> for that would re-evaluate the buttons
-		/// and re-Show on every tick.
-		/// </remarks>
-		/// <param name="text">The new message.</param>
-		public void SetText(string text)
+		protected override void ClearRequest()
 		{
-			if (dialogLabel != null)
+			onAcceptCallback = null;
+			onCancelCallback = null;
+			pendingText = string.Empty;
+		}
+
+		/// <summary>
+		/// Enter accepts when there is something to accept, and dismisses otherwise.
+		/// </summary>
+		protected override void OnSubmitKey()
+		{
+			if (onAcceptCallback != null)
 			{
-				dialogLabel.text = text;
+				OnClick_Accept();
+				return;
 			}
+			OnClick_Cancel();
 		}
 
 		/// <summary>
@@ -137,16 +203,7 @@ namespace FishMMO.Client
 		private void OnClick_Accept()
 		{
 			Action callback = onAcceptCallback;
-
-			/* Cleared before invoking, not after. These outlive the dialog otherwise: Hide()
-			 * only switches the panel off, so anything that shows it again without going
-			 * through Open — and these callbacks do things like quit to login — would fire the
-			 * previous dialog's answer. */
-			onAcceptCallback = null;
-			onCancelCallback = null;
-
-			callback?.Invoke();
-			Hide();
+			Resolve(() => callback?.Invoke());
 		}
 
 		/// <summary>
@@ -154,13 +211,17 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClick_Cancel()
 		{
+			CancelRequest();
+		}
+
+		/// <summary>
+		/// Answers the request down its cancel path. Escape, quit-to-login and a bare
+		/// <see cref="UITKControl.Hide()"/> all arrive here.
+		/// </summary>
+		protected override void CancelRequest()
+		{
 			Action callback = onCancelCallback;
-
-			onAcceptCallback = null;
-			onCancelCallback = null;
-
-			callback?.Invoke();
-			Hide();
+			Resolve(() => callback?.Invoke());
 		}
 
 		/// <summary>

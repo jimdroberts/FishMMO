@@ -65,6 +65,18 @@ namespace FishMMO.Client
 		/// <summary>The target Y offset for upward movement.</summary>
 		public float YIncreaseValue = 200.0f;
 
+		/// <summary>
+		/// How far the caption drifts upward over its lifetime, in panel points.
+		/// </summary>
+		/// <remarks>
+		/// Kept separately from <see cref="YIncreaseValue"/>, which is the resolved <em>target</em>.
+		/// <see cref="Initialize"/> used to compute the target as <c>YIncreaseValue = OldY +
+		/// YIncreaseValue</c>, which folds the target back into the distance: a region banner
+		/// initialised a second time drifted 400 points, a third time 600, and so on, so the same
+		/// caption ended up further off-screen every time the player crossed a border.
+		/// </remarks>
+		private float yIncreaseDistance = 200.0f;
+
 		/// <summary>The element this label draws through.</summary>
 		private Label element;
 
@@ -81,13 +93,16 @@ namespace FishMMO.Client
 		/// Creates the backing element, or returns the existing one.
 		/// </summary>
 		/// <returns>The element, or null when no label layer is loaded.</returns>
+		/// <remarks>
+		/// The cached element is re-validated rather than trusted. A <c>UIDocument</c> discards its
+		/// visual tree whenever it is disabled and clones a fresh one on enable, so a caption that
+		/// outlives a layer reload — a scene change, or the label layer being toggled — kept
+		/// writing into an element that had been detached from any panel. Nothing about that fails
+		/// loudly: the caption simply never appears again for the rest of the session. Comparing
+		/// the parent against the live screen container catches it for one reference comparison.
+		/// </remarks>
 		private Label ResolveElement()
 		{
-			if (element != null)
-			{
-				return element;
-			}
-
 			UITKWorldLabelLayer layer = UITKWorldLabelLayer.Instance;
 			VisualElement parent = layer != null ? layer.ScreenContainer : null;
 			if (parent == null)
@@ -95,9 +110,28 @@ namespace FishMMO.Client
 				return null;
 			}
 
+			if (element != null)
+			{
+				if (ReferenceEquals(element.parent, parent))
+				{
+					return element;
+				}
+
+				// Belongs to a tree that is gone; drop it and build against the live one.
+				element.RemoveFromHierarchy();
+				element = null;
+			}
+
 			element = new Label { name = "screen-label", pickingMode = PickingMode.Ignore };
 			element.AddToClassList(LABEL_CLASS);
 			element.style.position = Position.Absolute;
+
+			/* Written once, here. These never change, and re-assigning them from Apply on every
+			 * frame of a fading caption dirties the element's layout for no reason — the drift is
+			 * expressed entirely through translate, which is transform-only. */
+			element.style.left = Length.Percent(50.0f);
+			element.style.top = Length.Percent(50.0f);
+
 			parent.Add(element);
 			return element;
 		}
@@ -123,9 +157,7 @@ namespace FishMMO.Client
 			/* Positioned from the centre of the panel rather than from Screen.width: the panel is
 			 * scaled by PanelSettings, so screen pixels and panel points differ, and using screen
 			 * pixels here put the caption progressively further off-centre as resolution rose.
-			 * Percentages resolve against the panel, which is the space the offsets belong to. */
-			target.style.left = Length.Percent(50.0f);
-			target.style.top = Length.Percent(50.0f);
+			 * The 50%/50% anchor is written once in ResolveElement; only the offset moves. */
 			target.style.translate = new Translate(
 				new Length(-PixelOffset.x, LengthUnit.Pixel),
 				new Length(-PixelOffset.y, LengthUnit.Pixel));
@@ -273,7 +305,7 @@ namespace FishMMO.Client
 				{
 					IncreaseY = true;
 					OldY = pixelOffset.y;
-					YIncreaseValue = OldY + YIncreaseValue;
+					YIncreaseValue = OldY + yIncreaseDistance;
 				}
 			}
 			else

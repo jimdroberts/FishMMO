@@ -16,6 +16,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="target-buff-list" class="buff-list target-buff-list" />
+        <ui:VisualElement name="target-debuff-list" class="buff-list target-buff-list target-debuff-list" />
 
     </ui:VisualElement>
 </ui:UXML>

@@ -1,4 +1,4 @@
-/*
+﻿/*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     FishMMO-Theme.uss
     Abyss / Signal Blue  —  Shared Visual Theme
@@ -151,6 +151,18 @@
     --scrim-80:     rgba(0, 8, 11, 0.82);
     --overlay-dim:  rgba(0, 4, 6, 0.62);
     --overlay-soft: rgba(0, 4, 6, 0.40);
+
+    /* ── Text shadows ─────────────────────────────────────
+       Text drawn over the world (floating combat numbers, nameplates, region banners) and over
+       the loading art has no panel behind it, so legibility depends entirely on the shadow.
+       These are near-opaque black rather than a scrim tint: the shadow has to read against
+       whatever the camera happens to be pointing at, not against a known panel colour.
+       Separate tokens because USS cannot compose alpha — a single token plus an opacity is not
+       expressible, so each strength is its own value.
+         hard — tight 1-2px offset, for small text competing with a busy background
+         soft — wider 2-4px offset, for larger display text                              */
+    --shadow-text-hard: rgba(0, 0, 0, 0.95);
+    --shadow-text-soft: rgba(0, 0, 0, 0.90);
 
     /* ── Extras ───────────────────────────────────────── */
     --black: rgb(0, 0, 0);

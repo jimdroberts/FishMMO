@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -48,11 +48,49 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving all guild members.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterGuildEntity>> getGuildMembersQuery =
+		/// <remarks>
+		/// Includes the character row so the roster can carry race and last-seen. The alternative
+		/// — one point-read per member — would be a hundred round trips per guild per pump at the
+		/// configured cap, for data the same page of the database already has.
+		/// </remarks>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<GuildMemberProjection>> getGuildMembersQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId) =>
 				context.CharacterGuilds
 					.AsNoTracking()
-					.Where(g => g.GuildID == guildId));
+					.Where(g => g.GuildID == guildId)
+					.Select(g => new GuildMemberProjection
+					{
+						ID = g.ID,
+						Version = g.Version,
+						CharacterID = g.CharacterID,
+						GuildID = g.GuildID,
+						Rank = g.Rank,
+						Location = g.Location,
+						RaceID = g.Character.RaceID,
+						LastSaved = g.Character.LastSaved,
+						Level = g.Character.Level,
+						PublicNote = g.PublicNote,
+						OfficerNote = g.OfficerNote,
+					}));
+
+		/// <summary>
+		/// Flat shape for the guild roster read, so the membership row and the two character
+		/// columns it needs come back in one query.
+		/// </summary>
+		private sealed class GuildMemberProjection
+		{
+			public long ID { get; set; }
+			public long Version { get; set; }
+			public long CharacterID { get; set; }
+			public long GuildID { get; set; }
+			public byte Rank { get; set; }
+			public string Location { get; set; }
+			public int RaceID { get; set; }
+			public DateTime LastSaved { get; set; }
+			public int Level { get; set; }
+			public string PublicNote { get; set; }
+			public string OfficerNote { get; set; }
+		}
 
 		/// <summary>
 		/// Compiled query for counting guild members.
@@ -144,6 +182,12 @@ namespace FishMMO.Database.Npgsql.Services
 							rank = EXCLUDED.rank,
 							location = EXCLUDED.location,
 							version = EXCLUDED.version
+							/* Notes are deliberately absent from the SET list. This UPSERT is the
+							 * connect/disconnect location persist as well as the join, and its
+							 * callers build a membership from a controller that has never held a
+							 * note — including them would blank both notes on every login. The
+							 * note edit path owns those two columns and nothing else writes
+							 * them. */
 						WHERE
 							EXCLUDED.version > {TableName}.version
 						RETURNING 1
@@ -167,7 +211,10 @@ namespace FishMMO.Database.Npgsql.Services
 				? result.Data switch
 				{
 					0 => DatabaseResult.Success(),
-					1 => throw new DatabaseEntityNotFoundException("Character", guildData.CharacterID.ToString(), "Character not found or deleted."),
+					// Returned rather than thrown: this switch runs outside the ExecuteWriteAsync
+					// delegate, so a throw here escapes the mapping that turns failures into a
+					// DatabaseResult and reaches the caller as a raw exception instead.
+					1 => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"Character with ID {guildData.CharacterID} was not found or has been deleted."),
 					2 => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, $"Guild with ID {guildData.GuildID} does not exist."),
 					3 => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Guild has reached maximum capacity of {maxCapacity} members."),
 					4 => DatabaseResult.Failure(DatabaseErrorCodes.StaleState, "Guild membership update rejected due to a stale Version."),
@@ -292,7 +339,9 @@ namespace FishMMO.Database.Npgsql.Services
 					characterID: entity.CharacterID,
 					guildID: entity.GuildID,
 					rank: entity.Rank,
-					location: entity.Location);
+					location: entity.Location,
+					publicNote: entity.PublicNote,
+					officerNote: entity.OfficerNote);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
@@ -316,10 +365,58 @@ namespace FishMMO.Database.Npgsql.Services
 					characterID: g.CharacterID,
 					guildID: g.GuildID,
 					rank: g.Rank,
-					location: g.Location)).ToList();
+					location: g.Location,
+					raceID: g.RaceID,
+					lastOnlineUtc: g.LastSaved,
+					level: g.Level,
+					publicNote: g.PublicNote,
+					officerNote: g.OfficerNote)).ToList();
 
 				return (IReadOnlyList<CharacterGuildData>)members;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> UpdateNoteAsync(long characterId, long guildId, string note, bool isOfficerNote, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || guildId <= 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid character ID or guild ID. Both must be greater than 0.");
+			}
+
+			string body = note ?? string.Empty;
+			if (body.Length > 128)
+			{
+				body = body.Substring(0, 128);
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				/* The column name is chosen by a C# branch, never interpolated from caller input.
+				 * Both branches are compile-time constants; the note text itself is a parameter.
+				 *
+				 * No version gate. A note is free text with a single writer at a time and no
+				 * derived state — the optimistic-concurrency machinery elsewhere in this service
+				 * arbitrates writes that must not interleave, and two officers editing the same
+				 * note is last-writer-wins by nature. Bumping the version here would also fight
+				 * the location persist, which uses the same row and does gate on version. */
+				var column = isOfficerNote ? "officer_note" : "public_note";
+				var sql = $@"UPDATE {TableName}
+					SET {column} = {{0}}
+					WHERE character_id = {{1}} AND guild_id = {{2}}";
+
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { body, characterId, guildId }, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("CharacterGuild", characterId.ToString());
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
 

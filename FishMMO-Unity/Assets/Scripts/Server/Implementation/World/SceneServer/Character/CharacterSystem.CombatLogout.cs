@@ -636,15 +636,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			if (buffDataList.Count > 0)
 			{
-				EnqueueAsyncWork(() => SaveBuffsAsync(buffDataList));
+				EnqueuePersistence(() => SaveBuffsAsync(buffDataList));
 			}
 			if (attributeDataList.Count > 0)
 			{
-				EnqueueAsyncWork(() => SaveAttributesAsync(attributeDataList));
+				EnqueuePersistence(() => SaveAttributesAsync(attributeDataList));
 			}
 			if (abilityDataList.Count > 0)
 			{
-				EnqueueAsyncWork(() => SaveAbilitiesAsync(abilityDataList));
+				EnqueuePersistence(() => SaveAbilitiesAsync(abilityDataList));
 			}
 		}
 	}

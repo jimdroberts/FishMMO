@@ -8,6 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Ed25519 for signing the version manifest. Already a first-class dependency of this
+      solution (FishMMO-AuthShared and FishMMO-Dependencies both reference it, and the Unity
+      client verifies the signature with the same library), so this adds no new supply-chain
+      surface. .NET 8 has no built-in Ed25519.
+    -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />

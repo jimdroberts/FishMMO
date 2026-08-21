@@ -1,4 +1,4 @@
-/*
+﻿/*
     UITarget.uss
     Layout for the target frame. Colours come from FishMMO-Theme.uss; the buff
     icons reuse the .buff-group classes from UIBuffContainer.uss.
@@ -50,7 +50,7 @@
     -unity-font-style: bold;
     -unity-text-align: middle-left;
     overflow: hidden;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+    text-shadow: 0 1px 2px var(--edge-dark);
 }
 
 .target-faction {
@@ -84,8 +84,16 @@
     font-size: 9px;
 }
 
-/* Buff icons the target is carrying, generated at runtime. */
+/*
+    Buff icons the target is carrying, generated at runtime from the SERVER-filtered observed
+    list. Two strips, buffs above debuffs, so a long debuff bar cannot push a defensive cooldown
+    off the row the player is watching. Both reuse .buff-group from UIBuffContainer.uss.
+*/
 .target-buff-list {
     margin-top: 5px;
     flex-shrink: 0;
+}
+
+.target-debuff-list {
+    margin-top: 2px;
 }

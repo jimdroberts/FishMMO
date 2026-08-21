@@ -259,5 +259,117 @@ namespace FishMMO.UnitTests
 				await AuthTestTrace.LogTestEnd(nameof(Login_SameCredentials_CaseSensitivePassword_Rejected));
 			}
 		}
+
+		/// <summary>
+		/// Number of wrong-password attempts that must trip the per-username lockout.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors <c>SrpAuthenticatorCore.MaxLoginFailuresPerUsername</c>. The constant is
+		/// protected rather than public, so this is a deliberate duplicate: if the production value
+		/// is lowered this test still passes (it simply overshoots), and if it is raised the test
+		/// fails loudly, which is the direction that matters.
+		/// </remarks>
+		private const int LockoutThreshold = 10;
+
+		/// <summary>
+		/// Gives each login attempt a distinct source IP, so the per-IP debounce cannot be what
+		/// stops the attack.
+		/// </summary>
+		/// <remarks>
+		/// This is the whole point of the test. Password guessing used to be limited only by
+		/// <c>IpAuthAttemptDebounceSeconds</c> — one attempt per second <i>per IP</i> — which is no
+		/// limit at all to an attacker with more than one host. Handing every attempt a fresh
+		/// address reproduces exactly that, so a pass here can only come from a per-account limit.
+		/// </remarks>
+		private static void SpreadAttemptsAcrossDistinctIps(AuthTestHarness h)
+		{
+			int next = 0;
+			h.Server.AddressResolver = (_) =>
+			{
+				next++;
+				return $"203.0.113.{next % 251}";
+			};
+		}
+
+		[Test]
+		public async Task Login_DistributedPasswordGuessing_LocksTheAccountOut()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(nameof(Login_DistributedPasswordGuessing_LocksTheAccountOut),
+					$"Test: per-account lockout after {LockoutThreshold} wrong passwords (S1).\n"
+					+ "Procedure: Drive wrong-password attempts against one account, each from a different source IP so the per-IP debounce is bypassed, then present the CORRECT password.\n"
+					+ "Expected: every wrong attempt returns InvalidUsernameOrPassword, and the correct password is also refused with InvalidUsernameOrPassword while the lockout holds.\n"
+					+ "Failure: if the correct password authenticates, distributed password guessing is unbounded — the per-IP debounce alone does not limit an attacker with more than one host.");
+				using AuthTestHarness h = new AuthTestHarness();
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.SeedAccount("target", "correct horse battery staple");
+
+				for (int attempt = 1; attempt <= LockoutThreshold; attempt++)
+				{
+					ClientAuthenticationResult wrong = await h.Client.AttemptLogin("target", $"guess-{attempt}");
+					LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrong,
+						$"Attempt {attempt}: expected InvalidUsernameOrPassword, got {wrong}.");
+				}
+
+				ClientAuthenticationResult afterLockout = await h.Client.AttemptLogin("target", "correct horse battery staple");
+				LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, afterLockout,
+					$"The account must stay locked out even for the correct password, got {afterLockout}.");
+				LogAssert.IsTrue(!h.Client.ReceivedSuccess,
+					"The client must not have been flagged successful while the account is locked out.");
+
+				await AuthTestTrace.Log("LoginTests", "SUCCESS", nameof(Login_DistributedPasswordGuessing_LocksTheAccountOut));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("LoginTests", "FAILURE", $"{nameof(Login_DistributedPasswordGuessing_LocksTheAccountOut)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_DistributedPasswordGuessing_LocksTheAccountOut));
+			}
+		}
+
+		[Test]
+		public async Task Login_CorrectPasswordBeforeThreshold_ClearsTheFailureCount()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(nameof(Login_CorrectPasswordBeforeThreshold_ClearsTheFailureCount),
+					"Test: a successful sign-in resets the per-account failure count (S1).\n"
+					+ "Procedure: fail one short of the lockout threshold, sign in correctly, then fail that many times again and sign in once more.\n"
+					+ "Expected: both correct sign-ins return LoginSuccess.\n"
+					+ "Failure: if the second sign-in is refused, the counter is not reset on success and an owner who mistypes a few times is one typo away from a lockout for the rest of the window.");
+				using AuthTestHarness h = new AuthTestHarness();
+				SpreadAttemptsAcrossDistinctIps(h);
+				h.Store.SeedAccount("owner", "correct horse battery staple");
+
+				for (int round = 0; round < 2; round++)
+				{
+					for (int attempt = 1; attempt < LockoutThreshold; attempt++)
+					{
+						ClientAuthenticationResult wrong = await h.Client.AttemptLogin("owner", $"typo-{round}-{attempt}");
+						LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, wrong,
+							$"Round {round} attempt {attempt}: expected InvalidUsernameOrPassword, got {wrong}.");
+					}
+
+					ClientAuthenticationResult ok = await h.Client.AttemptLogin("owner", "correct horse battery staple");
+					LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, ok,
+						$"Round {round}: the correct password must still authenticate below the threshold, got {ok}.");
+				}
+
+				await AuthTestTrace.Log("LoginTests", "SUCCESS", nameof(Login_CorrectPasswordBeforeThreshold_ClearsTheFailureCount));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("LoginTests", "FAILURE", $"{nameof(Login_CorrectPasswordBeforeThreshold_ClearsTheFailureCount)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_CorrectPasswordBeforeThreshold_ClearsTheFailureCount));
+			}
+		}
 	}
 }

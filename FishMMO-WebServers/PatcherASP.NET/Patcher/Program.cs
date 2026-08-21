@@ -54,6 +54,19 @@ namespace FishMMO.WebServer
 					var holder = scope.ServiceProvider.GetRequiredService<GateSecretHolder>();
 					holder.Secret = result.Data;
 					await Log.Info("Program", "Gate secret loaded from database.");
+
+					/* Force construction of the manifest signer while we are still inside the
+					 * try block. Resolving a singleton from a scope returns the root instance, so
+					 * this is the same object the controllers will use. In Production its
+					 * constructor throws when no signing key is configured; that lands in the
+					 * catch below as a non-zero exit rather than becoming a 500 on some player's
+					 * first update check. */
+					var manifestSigner = scope.ServiceProvider.GetRequiredService<VersionManifestSigner>();
+					if (!manifestSigner.IsConfigured)
+					{
+						await Log.Error("Program",
+							"Version manifest signing is NOT configured. This is only permitted outside Production.");
+					}
 				}
 
 				host.Run();
@@ -122,6 +135,13 @@ namespace FishMMO.WebServer
 						services.AddScoped<IDeploymentSecretService, DeploymentSecretService>();
 
 						services.AddSingleton<GateSecretHolder>();
+
+						/* Ed25519 release key for signing the version manifest. Registered as a
+						 * singleton and force-resolved in Main below, BEFORE host.Run(), so that a
+						 * Production deployment with no key configured fails at STARTUP rather than
+						 * lazily on the first request — see VersionManifestSigner's remarks for why
+						 * "start anyway and log" was rejected. */
+						services.AddSingleton<VersionManifestSigner>();
 						services.AddSingleton<PatchVersionService>(sp =>
 						{
 							var env = sp.GetRequiredService<IHostEnvironment>();

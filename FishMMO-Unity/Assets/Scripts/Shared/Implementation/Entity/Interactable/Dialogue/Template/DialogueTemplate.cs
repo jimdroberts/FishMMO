@@ -176,7 +176,12 @@ namespace FishMMO.Shared
 			int bitIndex = 0;
 			for (int i = 0; i < Nodes.Count; i++)
 			{
-				if (Nodes[i] == null)
+				/* Choices is a serialized list and an authored node can legitimately have none, so
+				 * it can come back null. Reading .Count off it threw a NullReferenceException out
+				 * of the server's dialogue choice handler — the same defect that was fixed at the
+				 * handler's own call site, but this one is reached one line later, on the path
+				 * that records the choice as taken. */
+				if (Nodes[i] == null || Nodes[i].Choices == null)
 				{
 					continue;
 				}

@@ -45,5 +45,31 @@ namespace FishMMO.Client
 		/// reported client version. Present only when a patch is available.
 		/// </summary>
 		public long size;
+
+		/// <summary>
+		/// Base64 Ed25519 signature over this document.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>S4.</b> Every other field here is trusted absolutely — <c>sha256</c> in particular
+		/// is the ONLY integrity check applied to the patch archive, so whoever writes this
+		/// document chooses which bytes the updater installs. It travelled over pinned TLS and
+		/// nothing more, which the project's own TODO called out: TLS authenticates the
+		/// transport, and says nothing about a compromised gateway, a mis-issued certificate or
+		/// a hostile CDN edge.
+		/// </para>
+		/// <para>
+		/// The signed form is this document with the value of <c>signature</c> replaced by an
+		/// empty string, with the base64 signature appended — byte-identical handling to the pin
+		/// manifest, so one signing tool serves both. See
+		/// <c>FishMMO.Client.Security.Ed25519ManifestVerifier</c>.
+		/// </para>
+		/// <para>
+		/// Absent when the deployment has not configured signing. The client reports that
+		/// loudly rather than treating it as normal; once a verification key is embedded, an
+		/// unsigned or wrongly-signed manifest is refused.
+		/// </para>
+		/// </remarks>
+		public string signature;
 	}
 }

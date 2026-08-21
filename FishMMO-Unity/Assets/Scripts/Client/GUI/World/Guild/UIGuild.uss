@@ -1,11 +1,16 @@
-/*
+﻿/*
     UIGuild.uss
-    Layout for the guild roster. Colours come from FishMMO-Theme.uss.
+    Layout for the guild panel. Colours come from FishMMO-Theme.uss.
 
-    Three columns — member, rank, location — so the roster reads as a table.
-    Rank is the field a player scans for, so it sits between the name and the
-    location rather than at the far edge where it would be hardest to pair
-    with the name beside it.
+    Four roster columns — member, rank, class, location. Rank sits beside the
+    name because it is the field a player scans for, and pairing it with the
+    name it belongs to is the whole point of a table; class and location follow
+    because they answer "who is this" and "can I reach them", in that order.
+
+    The panel is taller and wider than the roster alone needed. It now carries a
+    tab strip, a notice band and a filter bar above the list, and a roster that
+    can reach a hundred members: at the old 380px the list itself was down to
+    about six visible rows once those were subtracted.
 */
 
 /*
@@ -18,8 +23,8 @@
     left: 50%;
     top: 50%;
     translate: -50% -50%;
-    width: 420px;
-    height: 380px;
+    width: 520px;
+    height: 500px;
     flex-direction: column;
     flex-shrink: 0;
 }
@@ -57,6 +62,93 @@
     flex-shrink: 0;
 }
 
+/* ── Tabs ───────────────────────────────────────────────── */
+
+.guild-tabs {
+    flex-direction: row;
+    align-items: center;
+    height: 24px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.guild-tab {
+    height: 20px;
+    min-width: 70px;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+/*
+    Only one page is in the tree's flow at a time. Both are display: none until
+    the tab handler shows one, so the panel cannot flash both pages stacked on
+    the frame before the first tab is applied.
+*/
+.guild-tab-page {
+    display: none;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* ── Notice band ────────────────────────────────────────── */
+
+/*
+    Sits between the tabs and the page so it is visible from both. Hidden from
+    C# when the notice is empty rather than merely collapsed to zero height —
+    an empty band still draws its border and reads as a broken element.
+*/
+.guild-notice-band {
+    flex-direction: row;
+    align-items: center;
+    min-height: 20px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    background-color: var(--brand-lo);
+    border-left-color: var(--brand-500);
+    border-left-width: 2px;
+    flex-shrink: 0;
+}
+
+.guild-notice-band__text {
+    color: var(--abyss-100);
+    font-size: 11px;
+    white-space: normal;
+    flex-grow: 1;
+}
+
+/* ── Filter bar ─────────────────────────────────────────── */
+
+.guild-filter-bar {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.guild-search {
+    flex-grow: 1;
+    height: 20px;
+    margin-right: 4px;
+}
+
+/*
+    Fixed width so the two cycle buttons do not resize as their labels change —
+    a control that moves under the cursor between clicks is a control that gets
+    misclicked.
+*/
+.guild-filter-button {
+    width: 74px;
+    height: 20px;
+    margin-left: 3px;
+    flex-shrink: 0;
+}
+
 /* ── Column strip ───────────────────────────────────────── */
 
 .guild-columns {
@@ -72,8 +164,12 @@
 }
 
 .guild-column--name     { flex-grow: 1; }
-.guild-column--rank     { width: 90px; }
-.guild-column--location { width: 120px; }
+/* Narrow and fixed. A level is at most three digits and the roster is read by scanning
+   down the column, so a width that tracks content would make it unscannable. */
+.guild-column--level    { width: 44px; }
+.guild-column--rank     { width: 70px; }
+.guild-column--class    { width: 90px; }
+.guild-column--location { width: 110px; }
 
 /* ── Body ───────────────────────────────────────────────── */
 
@@ -95,18 +191,39 @@
     flex-shrink: 0;
 }
 
+/*
+    The presence dot leads the row. Colour is the fastest read for online state,
+    and the location column beside it carries the same fact in words for anyone
+    who cannot separate the dot colours.
+*/
+.guild-member__dot {
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
 .guild-member__name {
     flex-grow: 1;
     overflow: hidden;
 }
 
-.guild-member__rank {
-    width: 90px;
+.guild-member__level {
+    width: 44px;
     flex-shrink: 0;
 }
 
+.guild-member__rank {
+    width: 70px;
+    flex-shrink: 0;
+}
+
+.guild-member__class {
+    width: 90px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
 .guild-member__location {
-    width: 120px;
+    width: 110px;
     flex-shrink: 0;
     overflow: hidden;
 }
@@ -114,6 +231,126 @@
 .guild-empty {
     margin-top: 24px;
     margin-bottom: 24px;
+}
+
+/* ── Info page ──────────────────────────────────────────── */
+
+.guild-info-scroll {
+    flex-grow: 1;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.guild-info-caption {
+    margin-top: 10px;
+    margin-bottom: 3px;
+    flex-shrink: 0;
+}
+
+.guild-info-text {
+    color: var(--abyss-100);
+    font-size: 11px;
+    white-space: normal;
+    min-height: 30px;
+    margin-bottom: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    background-color: var(--abyss-850);
+    border-left-color: var(--abyss-400);
+    border-left-width: 1px;
+}
+
+.guild-info-action {
+    height: 22px;
+    align-self: flex-start;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+
+/* ── Log page ───────────────────────────────────────────── */
+
+.guild-log-scroll {
+    flex-grow: 1;
+}
+
+.guild-log-list {
+    flex-direction: column;
+}
+
+/*
+    Two lines per entry — the sentence and the time beneath it — rather than
+    one row with a time column. Entry text varies enormously in length, and a
+    fixed time column would either clip the long ones or waste the width of the
+    panel on the short ones.
+*/
+.guild-log-entry {
+    flex-direction: column;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    flex-shrink: 0;
+}
+
+.guild-log-entry__text {
+    color: var(--abyss-100);
+    font-size: 11px;
+    white-space: normal;
+}
+
+.guild-log-entry__time {
+    color: var(--abyss-300);
+    font-size: 9px;
+}
+
+.guild-log-empty {
+    margin-top: 24px;
+    margin-bottom: 24px;
+}
+
+/* ── Hover card ─────────────────────────────────────────── */
+
+/*
+    Absolutely positioned and pointer-transparent. Positioned from C# against
+    the row it describes; leaving it in the flow would push the roster sideways
+    every time the pointer crossed a row.
+*/
+.guild-hover-card {
+    position: absolute;
+    display: none;
+    width: 190px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background-color: var(--scrim-80);
+    border-left-color: var(--brand-border);
+    border-right-color: var(--brand-border);
+    border-top-color: var(--brand-border);
+    border-bottom-color: var(--brand-border);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    flex-direction: column;
+}
+
+.guild-hover-card__name {
+    color: var(--text-bright);
+    font-size: 12px;
+    -unity-font-style: bold;
+    margin-bottom: 3px;
+    white-space: normal;
+}
+
+.guild-hover-card__line {
+    color: var(--abyss-200);
+    font-size: 10px;
+    white-space: normal;
 }
 
 /* ── Footer ─────────────────────────────────────────────── */
@@ -134,7 +371,7 @@
     margin-right: 3px;
 }
 
-/* Shared caption sizing; the --name/--rank/--location modifiers set the widths. */
+/* Shared caption sizing; the --name/--rank/--class/--location modifiers set the widths. */
 .guild-column {
     flex-shrink: 0;
 }

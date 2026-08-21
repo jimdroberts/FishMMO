@@ -11,6 +11,11 @@
             <ui:ScrollView name="options-scroll" class="fish-scroll options-scroll">
 
                 <!-- ── Screen ───────────────────────────────────── -->
+                <!--
+                    Display settings are staged, not applied on change. A bad mode can leave the
+                    player unable to see the control that would undo it, so nothing here takes
+                    effect until Apply, and Apply arms a countdown that puts it back.
+                -->
                 <ui:Label text="SCREEN" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Resolution" class="fish-label options-row-label" />
@@ -31,6 +36,25 @@
                 <ui:VisualElement class="options-row">
                     <ui:Label text="VSync" class="fish-label options-row-label" />
                     <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Label name="options-screen-status" text="" class="fish-hint options-screen-status" />
+                    <ui:Button name="options-screen-keep-btn" text="Keep"
+                               class="fish-button fish-button--primary options-screen-btn" />
+                    <ui:Button name="options-screen-revert-btn" text="Revert"
+                               class="fish-button options-screen-btn" />
+                    <ui:Button name="options-screen-apply-btn" text="Apply"
+                               class="fish-button fish-button--primary options-screen-btn" />
+                </ui:VisualElement>
+
+                <!-- ── Controls ─────────────────────────────────── -->
+                <!-- Rows are built by UITKOptions from the PlayerControls asset. -->
+                <ui:Label text="CONTROLS" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-controls-list" class="options-list" />
+                <ui:Label name="options-controls-status" text="" class="fish-hint options-controls-status" />
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="options-reset-controls-btn" text="Reset All Keys"
+                               class="fish-button options-reset-btn" />
                 </ui:VisualElement>
 
                 <!-- ── Gameplay ─────────────────────────────────── -->

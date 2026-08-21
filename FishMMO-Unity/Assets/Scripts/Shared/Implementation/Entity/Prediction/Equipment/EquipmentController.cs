@@ -437,7 +437,26 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					container.RemoveItem(inventoryIndex);
+					// RemoveItem returns null when the slot is locked, out of range, already empty,
+					// or the container refuses manipulation (dead character). The result used to be
+					// discarded and the equip proceeded regardless, leaving the SAME Item instance
+					// referenced by both the source slot and the equipment slot: two live references,
+					// two persistence rows, one duplicated item after the next login.
+					//
+					// The identity check matters as much as the null check. A concurrent request can
+					// have moved something else into inventoryIndex between validation and here, in
+					// which case we would otherwise delete an unrelated item to make room.
+					Item removed = container.RemoveItem(inventoryIndex);
+					if (!ReferenceEquals(removed, item))
+					{
+						// Put back whatever we took and refuse the equip. Nothing has been mutated
+						// on this side yet, so this leaves both containers exactly as we found them.
+						if (removed != null)
+						{
+							container.SetItemSlot(removed, inventoryIndex);
+						}
+						return false;
+					}
 				}
 			}
 

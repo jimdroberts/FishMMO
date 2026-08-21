@@ -154,102 +154,304 @@ namespace FishMMO.Client
 			{
 				quitButton.clicked += OnClick_Quit;
 			}
+
+			// Enter creates, Escape goes back to the character list rather than to login — Back
+			// on this screen means "I changed my mind about creating", not "log me out".
+			LoginKeys.Attach(Root, OnClick_CreateCharacter, OnEscape_BackToCharacterSelect);
+			LoginKeys.SetTabOrder(Root, nameField, raceDropdown, modelDropdown, locationDropdown, createButton, quitToLoginButton, quitButton);
 		}
 
 		/// <summary>
-		/// Initialises dropdowns and subscribes to events when the client is injected.
+		/// Returns to the character list without tearing the session down.
+		/// </summary>
+		private void OnEscape_BackToCharacterSelect()
+		{
+			if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect characterSelect))
+			{
+				Hide();
+				characterSelect.Show();
+				return;
+			}
+
+			// No character list panel; the login screen is the only other place to be.
+			OnClick_QuitToLogin();
+		}
+
+		/// <summary>
+		/// Subscribes to events and populates the dropdowns when the client is injected.
 		/// </summary>
 		public override void OnClientSet()
 		{
-			// Initialise race dropdown.
-			if (raceDropdown != null &&
-				InitialRaceNames != null &&
-				InitialModelNames != null)
-			{
-				raceNameMap.Clear();
-				InitialRaceNames.Clear();
-				InitialModelNames.Clear();
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
 
-				Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.GetCache<RaceTemplate>();
-				foreach (KeyValuePair<int, RaceTemplate> pair in raceTemplates)
+			PopulateDropdowns();
+		}
+
+		/// <summary>
+		/// Re-populates the dropdowns after the visual tree was rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// This is half of the fix for a character-create screen that was inert on the first
+		/// login. The scene sets <c>StartOpen: 0</c>, so the document is disabled and
+		/// <c>TryStart</c> defers <see cref="OnStarting"/> to the visual-tree retry coroutine.
+		/// <c>UIManager.SetClient</c> then runs <see cref="OnClientSet"/> — which is where the
+		/// population lived — while <c>raceDropdown</c>, <c>modelDropdown</c> and
+		/// <c>locationDropdown</c> were all still null, and every access was guarded by a null
+		/// check, so the whole thing silently did nothing. The player got three empty dropdowns and
+		/// a Create button that could never satisfy its own preconditions.
+		/// <para>
+		/// Both hooks are needed and neither is sufficient. <see cref="OnAfterShow"/> alone misses
+		/// the very first open, because <c>hasStarted</c> is still false there and
+		/// <c>ReinitializeIfTreeReplaced</c> bails out; this one alone misses nothing structural
+		/// but is not called on an ordinary re-show. Population is idempotent and selection is
+		/// preserved by name, so running it from both costs a rebuild of three small lists.
+		/// </para>
+		/// <para>
+		/// Reordering the one call in <c>UIManager.SetClient</c> would also have made the symptom
+		/// go away, and would have left the panel just as dependent on the order two unrelated
+		/// systems happen to initialise in — which is what produced the bug's nastiest property:
+		/// quitting to login does <c>SetClient(null)</c> then <c>SetClient(client)</c>, by which
+		/// time the tree exists, so it healed itself on the second login and presented as
+		/// intermittent.
+		/// </para>
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+			PopulateDropdowns();
+
+			// The rebuilt tree carries the UXML's empty placeholder; put the message back.
+			if (resultLabel != null)
+			{
+				resultLabel.text = this.pendingResult ?? string.Empty;
+			}
+		}
+
+		/// <inheritdoc cref="OnAfterStarting"/>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+			PopulateDropdowns();
+
+			SetResult(null);
+			LoginKeys.FocusFirst(Root, nameField);
+		}
+
+		/// <summary>
+		/// Builds the race/model/location caches and writes them into the dropdowns.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent and order-independent: safe to call before the client exists, before the
+		/// visual tree exists, and any number of times afterwards.
+		/// </remarks>
+		private void PopulateDropdowns()
+		{
+			BuildTemplateCaches();
+			ApplyRaceAndModelChoices();
+			UpdateStartLocationDropdown();
+		}
+
+		/// <summary>
+		/// True once <see cref="BuildTemplateCaches"/> has produced a usable set of races.
+		/// </summary>
+		private bool templateCachesBuilt;
+
+		/// <summary>
+		/// Model names per race, in template order.
+		/// </summary>
+		/// <remarks>
+		/// Per race, not one flat list. The models of every race used to be appended to a single
+		/// <c>InitialModelNames</c> and handed to the model dropdown whole, so selecting the second
+		/// race offered the first race's models and the index sent to the server addressed a model
+		/// that race does not have.
+		/// </remarks>
+		private readonly Dictionary<string, List<string>> raceModelNames = new Dictionary<string, List<string>>();
+
+		/// <summary>
+		/// Reads the race templates into the name/model/spawn caches.
+		/// </summary>
+		/// <remarks>
+		/// Needs the client, because a race is only offerable if its prefab is actually in
+		/// <c>NetworkManager.SpawnablePrefabs</c> — a race whose prefab the server will not spawn
+		/// is a character the player can create and then never log in to.
+		/// </remarks>
+		private void BuildTemplateCaches()
+		{
+			if (this.templateCachesBuilt ||
+				Client == null ||
+				Client.NetworkManager == null ||
+				WorldSceneDetailsCache == null ||
+				WorldSceneDetailsCache.Scenes == null)
+			{
+				return;
+			}
+
+			raceNameMap.Clear();
+			raceModelNames.Clear();
+			raceSpawnPositionMap.Clear();
+			InitialRaceNames?.Clear();
+			InitialModelNames?.Clear();
+
+			Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.GetCache<RaceTemplate>();
+			foreach (KeyValuePair<int, RaceTemplate> pair in raceTemplates)
+			{
+				if (pair.Value.Prefab == null)
 				{
-					if (pair.Value.Prefab == null)
+					continue;
+				}
+				IPlayerCharacter character = pair.Value.Prefab.GetComponent<IPlayerCharacter>();
+				if (character == null)
+				{
+					continue;
+				}
+				if (Client.NetworkManager.SpawnablePrefabs.GetObject(false, character.NetworkObject.PrefabId) == null)
+				{
+					continue;
+				}
+
+				string raceName = pair.Value.Name;
+				if (raceNameMap.ContainsKey(raceName))
+				{
+					// Two templates claiming one name; the first wins rather than throwing.
+					Log.Warning("UITKCharacterCreate", $"Duplicate race name '{raceName}'; ignoring the later template.");
+					continue;
+				}
+
+				raceNameMap.Add(raceName, pair.Key);
+				InitialRaceNames?.Add(raceName);
+
+				List<string> models = new List<string>();
+				int modelCount = pair.Value.GetModelCount(CharacterGender.Unspecified);
+				for (int modelIndex = 0; modelIndex < modelCount; modelIndex++)
+				{
+					string modelName = pair.Value.GetModelName(modelIndex);
+					if (!string.IsNullOrWhiteSpace(modelName))
 					{
-						continue;
+						models.Add(modelName);
 					}
-					IPlayerCharacter character = pair.Value.Prefab.GetComponent<IPlayerCharacter>();
-					if (character == null)
+				}
+
+				if (models.Count < 1)
+				{
+					if (pair.Value.PlaceholderModel != null)
 					{
-						continue;
-					}
-					if (Client.NetworkManager.SpawnablePrefabs.GetObject(false, character.NetworkObject.PrefabId) == null)
-					{
-						continue;
-					}
-					raceNameMap.Add(pair.Value.Name, pair.Key);
-					InitialRaceNames.Add(pair.Value.Name);
-					int modelCount = pair.Value.GetModelCount(CharacterGender.Unspecified);
-					if (modelCount > 0)
-					{
-						for (int modelIndex = 0; modelIndex < modelCount; modelIndex++)
-						{
-							string modelName = pair.Value.GetModelName(modelIndex);
-							if (!string.IsNullOrWhiteSpace(modelName))
-							{
-								InitialModelNames.Add(modelName);
-							}
-						}
-					}
-					else if (pair.Value.PlaceholderModel != null)
-					{
-						ModelIndex = 0;
+						/* A race with only a placeholder still has exactly one model — index 0 —
+						 * and the dropdown needs a row for it, or the create button's
+						 * ModelIndex > -1 precondition can never be met for that race. */
+						models.Add("Default");
 					}
 					else
 					{
 						Log.Warning("UITKCharacterCreate", $"No standard model or placeholder exists for {pair.Value.name}");
 					}
+				}
 
-					// Initialise spawn position map.
-					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))
-					{
-						raceSpawnPositionMap.Add(pair.Value.Name, spawners = new HashSet<string>());
-					}
+				raceModelNames[raceName] = models;
 
-					foreach (WorldSceneDetails details in WorldSceneDetailsCache.Scenes.Values)
+				// Spawn positions this race is allowed to start at.
+				if (!raceSpawnPositionMap.TryGetValue(raceName, out HashSet<string> spawners))
+				{
+					raceSpawnPositionMap.Add(raceName, spawners = new HashSet<string>());
+				}
+
+				foreach (WorldSceneDetails details in WorldSceneDetailsCache.Scenes.Values)
+				{
+					foreach (CharacterInitialSpawnPositionDetails initialSpawnPosition in details.InitialSpawnPositions.Values)
 					{
-						foreach (CharacterInitialSpawnPositionDetails initialSpawnPosition in details.InitialSpawnPositions.Values)
+						foreach (RaceTemplate raceTemplate in initialSpawnPosition.AllowedRaces)
 						{
-							foreach (RaceTemplate raceTemplate in initialSpawnPosition.AllowedRaces)
+							if (raceName == raceTemplate.Name)
 							{
-								if (pair.Value.Name == raceTemplate.Name &&
-									!spawners.Contains(initialSpawnPosition.SpawnerName))
-								{
-									spawners.Add(initialSpawnPosition.SpawnerName);
-								}
+								spawners.Add(initialSpawnPosition.SpawnerName);
 							}
 						}
 					}
 				}
-				raceDropdown.choices = new List<string>(InitialRaceNames);
-				modelDropdown.choices = new List<string>(InitialModelNames);
-
-				// Set initial race selection.
-				RaceIndex = 0;
-				ModelIndex = 0;
-				if (raceDropdown.choices.Count > 0)
-				{
-					raceDropdown.index = 0;
-				}
-				if (modelDropdown.choices.Count > 0)
-				{
-					modelDropdown.index = 0;
-				}
 			}
 
-			UpdateStartLocationDropdown();
+			// Only latch once there is something to offer, so a call that arrived before the
+			// template cache was loaded does not permanently poison the panel.
+			this.templateCachesBuilt = raceNameMap.Count > 0;
+		}
 
-			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
+		/// <summary>
+		/// Writes the race and model choices into their dropdowns, preserving the current
+		/// selection by name rather than by index.
+		/// </summary>
+		private void ApplyRaceAndModelChoices()
+		{
+			if (raceDropdown == null || raceNameMap.Count < 1)
+			{
+				return;
+			}
+
+			// Remember what was selected before the rebuild; indices are meaningless across one.
+			string selectedRace = raceDropdown.index >= 0 && raceDropdown.index < raceDropdown.choices.Count
+				? raceDropdown.choices[raceDropdown.index]
+				: null;
+
+			List<string> raceNames = new List<string>(raceNameMap.Keys);
+			raceDropdown.choices = raceNames;
+
+			int raceIndex = selectedRace != null ? raceNames.IndexOf(selectedRace) : -1;
+			if (raceIndex < 0)
+			{
+				raceIndex = raceNames.Count > 0 ? 0 : -1;
+			}
+			raceDropdown.index = raceIndex;
+			RaceIndex = raceIndex;
+
+			ApplyModelChoices();
+		}
+
+		/// <summary>
+		/// Writes the currently selected race's models into the model dropdown.
+		/// </summary>
+		private void ApplyModelChoices()
+		{
+			if (modelDropdown == null)
+			{
+				return;
+			}
+
+			string raceName = SelectedRaceName();
+			List<string> models = raceName != null && raceModelNames.TryGetValue(raceName, out List<string> found)
+				? found
+				: new List<string>();
+
+			string selectedModel = modelDropdown.index >= 0 && modelDropdown.index < modelDropdown.choices.Count
+				? modelDropdown.choices[modelDropdown.index]
+				: null;
+
+			modelDropdown.choices = new List<string>(models);
+			InitialModelNames?.Clear();
+			if (InitialModelNames != null)
+			{
+				InitialModelNames.AddRange(models);
+			}
+
+			int modelIndex = selectedModel != null ? models.IndexOf(selectedModel) : -1;
+			if (modelIndex < 0)
+			{
+				modelIndex = models.Count > 0 ? 0 : -1;
+			}
+			modelDropdown.index = modelIndex;
+			ModelIndex = modelIndex;
+		}
+
+		/// <summary>
+		/// The race name currently selected in the dropdown, or null when there is none.
+		/// </summary>
+		private string SelectedRaceName()
+		{
+			if (raceDropdown == null ||
+				raceDropdown.index < 0 ||
+				raceDropdown.index >= raceDropdown.choices.Count)
+			{
+				return null;
+			}
+			return raceDropdown.choices[raceDropdown.index];
 		}
 
 		/// <summary>
@@ -289,9 +491,9 @@ namespace FishMMO.Client
 					characterSelect.Show();
 				}
 			}
-			else if (resultLabel != null)
+			else
 			{
-				resultLabel.text = msg.Result.ToString();
+				SetResult(DescribeCreateResult(msg.Result));
 			}
 		}
 
@@ -300,9 +502,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnRaceDropdownValueChanged()
 		{
-			RaceIndex = raceDropdown != null ? raceDropdown.index : 0;
-			// Reset Model Index.
-			ModelIndex = 0;
+			RaceIndex = raceDropdown != null ? raceDropdown.index : -1;
+
+			/* The model list belongs to the race. It used to be a single flat list built by
+			 * appending every race's models in turn, so choosing the second race left the first
+			 * race's models on screen and the index this panel sent to the server addressed a
+			 * model the chosen race does not have. */
+			ApplyModelChoices();
 
 			UpdateStartLocationDropdown();
 		}
@@ -329,29 +535,42 @@ namespace FishMMO.Client
 		/// </summary>
 		private void UpdateStartLocationDropdown()
 		{
-			// Update start location dropdown.
-			if (locationDropdown != null &&
-				raceDropdown != null &&
-				raceDropdown.choices.Count > RaceIndex &&
-				RaceIndex >= 0 &&
-				InitialSpawnLocationNames != null)
+			if (locationDropdown == null || InitialSpawnLocationNames == null)
 			{
-				InitialSpawnLocationNames.Clear();
-
-				string raceName = raceDropdown.choices[RaceIndex];
-
-				// Find all spawn locations that allow the currently selected race.
-				if (raceSpawnPositionMap.TryGetValue(raceName, out HashSet<string> spawners))
-				{
-					foreach (string spawner in spawners)
-					{
-						InitialSpawnLocationNames.Add(spawner);
-					}
-				}
-				locationDropdown.choices = new List<string>(InitialSpawnLocationNames);
-				SelectedSpawnPosition = InitialSpawnLocationNames.Count > 0 ? 0 : -1;
-				locationDropdown.index = SelectedSpawnPosition;
+				return;
 			}
+
+			string raceName = SelectedRaceName();
+			if (raceName == null)
+			{
+				return;
+			}
+
+			// Remember the selection by name; the index means nothing across a rebuild.
+			string selectedSpawner = locationDropdown.index >= 0 && locationDropdown.index < locationDropdown.choices.Count
+				? locationDropdown.choices[locationDropdown.index]
+				: null;
+
+			InitialSpawnLocationNames.Clear();
+
+			// Find all spawn locations that allow the currently selected race.
+			if (raceSpawnPositionMap.TryGetValue(raceName, out HashSet<string> spawners))
+			{
+				foreach (string spawner in spawners)
+				{
+					InitialSpawnLocationNames.Add(spawner);
+				}
+			}
+
+			locationDropdown.choices = new List<string>(InitialSpawnLocationNames);
+
+			int spawnIndex = selectedSpawner != null ? InitialSpawnLocationNames.IndexOf(selectedSpawner) : -1;
+			if (spawnIndex < 0)
+			{
+				spawnIndex = InitialSpawnLocationNames.Count > 0 ? 0 : -1;
+			}
+			SelectedSpawnPosition = spawnIndex;
+			locationDropdown.index = spawnIndex;
 		}
 
 		/// <summary>
@@ -367,33 +586,136 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_CreateCharacter()
 		{
-			if (Client.IsConnectionReady() &&
-				Authentication.IsAllowedCharacterName(CharacterName) &&
-				WorldSceneDetailsCache != null &&
-				RaceIndex > -1 &&
-				ModelIndex > -1 &&
-				SelectedSpawnPosition > -1)
+			/* Every precondition reports. This method used to be one big `if` with no `else` and
+			 * a `foreach` that could fall off the end, so eight distinct reasons for refusing —
+			 * a disconnected client, an unusable name, a race with no models, a race with no
+			 * spawn point, an unloaded scene cache — all presented identically as a button that
+			 * did nothing at all when clicked. */
+			if (Client == null || !Client.IsConnectionReady())
 			{
-				foreach (WorldSceneDetails details in WorldSceneDetailsCache.Scenes.Values)
-				{
-					string raceName = raceDropdown.choices[RaceIndex];
+				SetResult("Not connected to the login server.");
+				return;
+			}
 
-					if (details.InitialSpawnPositions.TryGetValue(InitialSpawnLocationNames[SelectedSpawnPosition], out CharacterInitialSpawnPositionDetails spawnPosition) &&
-						raceNameMap.TryGetValue(raceName, out int raceTemplateID))
-					{
-						// Create character.
-						Client.Broadcast(new CharacterCreateBroadcast()
-						{
-							CharacterName = CharacterName,
-							RaceTemplateID = raceTemplateID,
-							ModelIndex = ModelIndex,
-							SceneName = spawnPosition.SceneName,
-							SpawnerName = spawnPosition.SpawnerName,
-						}, Channel.Reliable);
-						SetCreateButtonLocked(true);
-						return;
-					}
+			if (!Authentication.IsAllowedCharacterName(CharacterName))
+			{
+				SetResult(string.IsNullOrWhiteSpace(CharacterName)
+					? "Please enter a character name."
+					: "That name cannot be used. Names are 3-32 characters, letters only.");
+				return;
+			}
+
+			if (WorldSceneDetailsCache == null || WorldSceneDetailsCache.Scenes == null)
+			{
+				SetResult("The world data is still loading. Please try again in a moment.");
+				return;
+			}
+
+			string raceName = SelectedRaceName();
+			if (raceName == null || RaceIndex < 0)
+			{
+				SetResult("Please choose a race.");
+				return;
+			}
+
+			if (ModelIndex < 0)
+			{
+				SetResult("Please choose a model.");
+				return;
+			}
+
+			if (SelectedSpawnPosition < 0 ||
+				InitialSpawnLocationNames == null ||
+				SelectedSpawnPosition >= InitialSpawnLocationNames.Count)
+			{
+				SetResult("Please choose a starting location.");
+				return;
+			}
+
+			if (!raceNameMap.TryGetValue(raceName, out int raceTemplateID))
+			{
+				SetResult("That race is not available on this server.");
+				return;
+			}
+
+			string spawnerName = InitialSpawnLocationNames[SelectedSpawnPosition];
+
+			foreach (WorldSceneDetails details in WorldSceneDetailsCache.Scenes.Values)
+			{
+				if (!details.InitialSpawnPositions.TryGetValue(spawnerName, out CharacterInitialSpawnPositionDetails spawnPosition))
+				{
+					continue;
 				}
+
+				SetResult("Creating character...");
+
+				// Create character.
+				Client.Broadcast(new CharacterCreateBroadcast()
+				{
+					CharacterName = CharacterName,
+					RaceTemplateID = raceTemplateID,
+					ModelIndex = ModelIndex,
+					SceneName = spawnPosition.SceneName,
+					SpawnerName = spawnPosition.SpawnerName,
+				}, Channel.Reliable);
+				SetCreateButtonLocked(true);
+				return;
+			}
+
+			// The spawner is in this panel's own list but in none of the loaded scenes, which
+			// means the scene cache and the spawn map disagree. Nothing the player can do.
+			SetResult($"Starting location '{spawnerName}' is not available. Please choose another.");
+			Log.Warning("UITKCharacterCreate", $"Spawner '{spawnerName}' was offered but exists in no loaded WorldSceneDetails.");
+		}
+
+		/// <summary>
+		/// Writes the result line, holding the text across tree rebuilds.
+		/// </summary>
+		/// <remarks>
+		/// Held as state as well as written, because the panel is re-cloned on every show and this
+		/// label is the only feedback the screen has. See <see cref="UITKControl.OnAfterShow"/>.
+		/// </remarks>
+		/// <param name="text">The message, or null to clear the line.</param>
+		private void SetResult(string text)
+		{
+			this.pendingResult = text;
+
+			if (resultLabel != null)
+			{
+				resultLabel.text = text ?? string.Empty;
+			}
+		}
+
+		/// <summary>The result message this panel wants displayed, held across tree rebuilds.</summary>
+		private string pendingResult;
+
+		/// <summary>
+		/// Turns a server refusal into a sentence.
+		/// </summary>
+		/// <remarks>
+		/// The label used to show <c>msg.Result.ToString()</c>, i.e. the raw enum member name —
+		/// "CharacterNameTaken", "InvalidSpawn" — which tells a player what happened only if they
+		/// happen to have read the source.
+		/// </remarks>
+		/// <param name="result">The server's refusal.</param>
+		/// <returns>A message for the result line.</returns>
+		private static string DescribeCreateResult(CharacterCreateResult result)
+		{
+			switch (result)
+			{
+				case CharacterCreateResult.TooMany:
+					return "You already have the maximum number of characters on this account.";
+				case CharacterCreateResult.InvalidCharacterName:
+					return "That name cannot be used. Names are 3-32 characters, letters only.";
+				case CharacterCreateResult.CharacterNameTaken:
+					return "That name is already taken. Please choose another.";
+				case CharacterCreateResult.InvalidSpawn:
+					return "That starting location is not available. Please choose another.";
+				case CharacterCreateResult.Error:
+					return "The server could not create the character. Please try again.";
+				case CharacterCreateResult.Success:
+				default:
+					return string.Empty;
 			}
 		}
 
@@ -436,10 +758,18 @@ namespace FishMMO.Client
 		{
 			base.OnTick();
 
+			// Login-flow notices are refused while another dialog is up; see LoginNotice.
+			LoginNotice.Pump();
+
 			if (replyGuard.HasExpired())
 			{
 				SetCreateButtonLocked(false);
-				if (resultLabel != null) resultLabel.text = "The server did not respond. Please try again.";
+
+				/* Show as well as say. This panel hides itself on Stopped, and the create result
+				 * is the only thing that ever brings it back — so a timeout that only wrote a
+				 * label wrote it into a panel that may not be on screen. */
+				Show();
+				SetResult("The server did not respond. Please try again.");
 			}
 		}
 

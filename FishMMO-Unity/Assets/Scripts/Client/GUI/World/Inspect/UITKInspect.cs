@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -213,12 +213,21 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Hides the panel and forgets the inspected character.
 		/// </summary>
-		public override void Hide()
+		/// <remarks>
+		/// Overrides <c>Hide(bool)</c>, not <c>Hide()</c>. <c>Hide()</c> is non-virtual and only
+		/// forwards here, so this is the one place teardown can live where every caller reaches
+		/// it — quit-to-login calls the bool form directly.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
 		{
 			/* Cleared so a later tree rebuild does not silently repopulate a panel the player
-			 * closed, and so the character reference is not held past its usefulness. */
-			inspected = null;
-			base.Hide();
+			 * closed, and so the character reference is not held past its usefulness. Guarded so
+			 * a refused hide leaves the still-open panel's subject intact. */
+			if (!overrideIsAlwaysOpen && Document != null)
+			{
+				inspected = null;
+			}
+			base.Hide(overrideIsAlwaysOpen);
 		}
 	}
 }
