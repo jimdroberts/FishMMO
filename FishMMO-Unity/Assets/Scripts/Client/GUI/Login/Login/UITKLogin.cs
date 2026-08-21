@@ -10,7 +10,7 @@ using System.Collections;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit implementation of the login control providing username/email/password input,
+	/// UI Toolkit implementation of the login control providing identifier/password input,
 	/// registration access, sign-in and the full authentication-result handling flow.
 	/// </summary>
 	/// <remarks>
@@ -23,21 +23,21 @@ namespace FishMMO.Client
 	public class UITKLogin : UITKControl
 	{
 		/// <summary>
-		/// The name of the username TextField in the UI.
+		/// The name of the identifier TextField in the UI — a username <b>or</b> an email address.
 		/// </summary>
+		/// <remarks>
+		/// One field, not two. The panel used to carry a separate Email input beside Username and
+		/// pick whichever was filled, which asked the player to classify their own credential
+		/// before typing it; the submit path already decides that from the text itself. It also
+		/// carried an Age dropdown that was never populated and never read — an empty control that
+		/// looked broken and collected nothing. Age belongs to registration, where it is gated.
+		/// </remarks>
 		private const string USERNAME_NAME = "login-username";
-		/// <summary>
-		/// The name of the email TextField in the UI.
-		/// </summary>
-		private const string EMAIL_NAME = "login-email";
 		/// <summary>
 		/// The name of the password TextField in the UI.
 		/// </summary>
 		private const string PASSWORD_NAME = "login-password";
 		/// <summary>
-		/// The name of the age DropdownField in the UI.
-		/// </summary>
-		private const string AGE_SELECT_NAME = "login-age";
 		/// <summary>
 		/// The name of the register button in the UI.
 		/// </summary>
@@ -60,9 +60,7 @@ namespace FishMMO.Client
 		private const string HANDSHAKE_NAME = "login-handshake";
 
 		private TextField username;
-		private TextField email;
 		private TextField password;
-		private DropdownField ageSelect;
 		private Button registerButton;
 		private Button signInButton;
 		private Label handshakeMessage;
@@ -134,9 +132,7 @@ namespace FishMMO.Client
 			}
 
 			username = Root.Q<TextField>(USERNAME_NAME);
-			email = Root.Q<TextField>(EMAIL_NAME);
 			password = Root.Q<TextField>(PASSWORD_NAME);
-			ageSelect = Root.Q<DropdownField>(AGE_SELECT_NAME);
 			registerButton = Root.Q<Button>(REGISTER_BUTTON_NAME);
 			signInButton = Root.Q<Button>(SIGN_IN_BUTTON_NAME);
 			handshakeMessage = Root.Q<Label>(HANDSHAKE_NAME);
@@ -173,7 +169,7 @@ namespace FishMMO.Client
 			 * something destructive, because this is the screen the rest of the flow escapes back
 			 * TO and there is nothing above it to close. */
 			LoginKeys.Attach(Root, OnClick_Login, OnEscape_ClearForm);
-			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, signInButton, registerButton, optionsButton, quitButton);
+			LoginKeys.SetTabOrder(Root, username, password, signInButton, registerButton, optionsButton, quitButton);
 		}
 
 		/// <summary>
@@ -187,7 +183,6 @@ namespace FishMMO.Client
 		private void OnEscape_ClearForm()
 		{
 			if (username != null) username.value = string.Empty;
-			if (email != null) email.value = string.Empty;
 			if (password != null) password.value = string.Empty;
 			LoginKeys.FocusFirst(Root, username);
 		}
@@ -652,35 +647,39 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Login()
 		{
-			string usernameText = username != null ? username.value : null;
-			string emailText = email != null ? email.value : null;
+			string identifier = username != null ? username.value : null;
 
-			// Determine which identifier to use: prefer email if filled, otherwise username.
-			string identifier;
-			if (!string.IsNullOrWhiteSpace(emailText) && Authentication.IsAllowedEmailUsername(emailText))
+			if (string.IsNullOrWhiteSpace(identifier))
 			{
-				identifier = emailText;
-			}
-			else if (!string.IsNullOrWhiteSpace(usernameText) && Authentication.IsAllowedUsername(usernameText))
-			{
-				identifier = usernameText;
-			}
-			else
-			{
-				// Provide user-facing feedback so the player knows why the button did nothing.
-				if (!string.IsNullOrWhiteSpace(emailText) || !string.IsNullOrWhiteSpace(usernameText))
+				// Say which of the two things is missing rather than that "login failed".
+				if (handshakeMessage != null)
 				{
-					if (handshakeMessage != null)
-					{
-						handshakeMessage.text = "Invalid username or email format. Use 3-32 characters (letters, numbers, underscores).";
-					}
+					handshakeMessage.text = "Please enter your username or email address.";
 				}
-				else
+				Log.Warning("UITKLogin", "Login validation failed: no identifier entered.");
+				return;
+			}
+
+			/* One field, so the text decides which kind of credential it holds. The two regexes
+			 * behind these validators are disjoint — a username is `^[a-zA-Z0-9_]+$` and cannot
+			 * contain '@', while an email address must — so testing for '@' picks exactly the
+			 * validator that could match, and the same split is what AccountService uses to choose
+			 * between its by-email and by-name lookups. Classifying first is what lets the failure
+			 * message describe what the player actually typed: validating an address as a username
+			 * would reject it for containing the one character that makes it an address, and then
+			 * complain about username format. */
+			bool looksLikeEmail = identifier.IndexOf('@') >= 0;
+			bool identifierValid = looksLikeEmail
+				? Authentication.IsAllowedEmailUsername(identifier)
+				: Authentication.IsAllowedUsername(identifier);
+
+			if (!identifierValid)
+			{
+				if (handshakeMessage != null)
 				{
-					if (handshakeMessage != null)
-					{
-						handshakeMessage.text = "Please enter a username or email address.";
-					}
+					handshakeMessage.text = looksLikeEmail
+						? "That does not look like a valid email address."
+						: "Invalid username format. Use 3-32 characters (letters, numbers, underscores).";
 				}
 				Log.Warning("UITKLogin", "Login validation failed: invalid identifier.");
 				return;
@@ -1065,17 +1064,9 @@ namespace FishMMO.Client
 			{
 				username.SetEnabled(interactable);
 			}
-			if (email != null)
-			{
-				email.SetEnabled(interactable);
-			}
 			if (password != null)
 			{
 				password.SetEnabled(interactable);
-			}
-			if (ageSelect != null)
-			{
-				ageSelect.SetEnabled(interactable);
 			}
 		}
 	}

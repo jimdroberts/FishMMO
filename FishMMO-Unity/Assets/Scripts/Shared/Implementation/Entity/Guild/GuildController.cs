@@ -1,4 +1,4 @@
-using FishNet.Object.Synchronizing;
+﻿using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -98,9 +98,34 @@ namespace FishMMO.Shared
 		public byte RankOrder { get; set; }
 
 		/// <summary>
+		/// Storage for <see cref="Permissions"/>, held as the underlying <see cref="long"/>.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not an auto-property of type <see cref="GuildPermissions"/>. This type is a
+		/// <c>CharacterBehaviour</c>, so FishNet's code generator walks its fields, and it rejects a
+		/// <c>long</c>-backed enum outright:
+		/// <c>"Unsupported enum type 'FishMMO.Shared.GuildPermissions' used for field
+		/// '&lt;Permissions&gt;k__BackingField'"</c>. The compiler-generated backing field of an
+		/// auto-property is what it sees, so there is nowhere to put an attribute even if one
+		/// existed.
+		/// <para>
+		/// Narrowing the enum to <c>int</c> would also have silenced it, and was rejected: the
+		/// mask is stored in a <c>bigint</c> column and travels as a <c>long</c> on the wire, both
+		/// chosen deliberately for headroom, and capping the flag set at 31 to satisfy a
+		/// serializer that never needed to touch this value is the wrong trade. A plain
+		/// <c>long</c> field is a type the generator already supports, and the conversion is free.
+		/// </para>
+		/// </remarks>
+		private long permissionsMask;
+
+		/// <summary>
 		/// The permissions the character's rank holds, as computed by the server.
 		/// </summary>
-		public GuildPermissions Permissions { get; set; }
+		public GuildPermissions Permissions
+		{
+			get { return (GuildPermissions)this.permissionsMask; }
+			set { this.permissionsMask = (long)value; }
+		}
 
 		/// <summary>
 		/// The highest rank order that exists in this guild — the leader's seat.

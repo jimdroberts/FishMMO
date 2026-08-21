@@ -55,6 +55,20 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static readonly string[] SmallNumberCache = BuildSmallNumberCache(2048);
 
+		/// <summary>
+		/// False until the cached values below were read from real settings.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Initialize"/> runs from <c>Client.Initialize</c>, which happens while the
+		/// postboot Addressable batch is completing — <c>Configuration.GlobalSettings</c> does not
+		/// exist yet at that point. Reading the three flags per event, as this used to, hid that:
+		/// the first damage event arrived long after settings had loaded. Caching them at startup
+		/// is the right optimisation but it moved the read in front of its dependency, so the
+		/// cache is now filled on first use if startup was too early, and the flags stay at their
+		/// safe default of false until then.
+		/// </remarks>
+		private bool configLoaded;
+
 		/// <summary>Cached "ShowDamage" config value.</summary>
 		private bool showDamage;
 		/// <summary>Cached "ShowHeals" config value.</summary>
@@ -100,9 +114,32 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void RefreshConfig()
 		{
+			if (Configuration.GlobalSettings == null)
+			{
+				// Too early. EnsureConfig retries on the first event that needs a value.
+				configLoaded = false;
+				return;
+			}
+
 			showDamage = Config("ShowDamage");
 			showHeals = Config("ShowHeals");
 			showAchievements = Config("ShowAchievementCompletion");
+			configLoaded = true;
+		}
+
+		/// <summary>
+		/// Fills the config cache if <see cref="RefreshConfig"/> ran before settings existed.
+		/// </summary>
+		/// <remarks>
+		/// Costs one boolean test per event once loaded, which is the whole point of the cache;
+		/// before then it costs the dictionary probe this used to pay on every hit anyway.
+		/// </remarks>
+		private void EnsureConfig()
+		{
+			if (!configLoaded)
+			{
+				RefreshConfig();
+			}
 		}
 
 		/// <summary>
@@ -173,6 +210,7 @@ namespace FishMMO.Client
 
 		private void OnDamaged(ICharacter attacker, ICharacter target, int amount, DamageAttributeTemplate dmg)
 		{
+			EnsureConfig();
 			if (target == null || !showDamage) return;
 			var pos = target.Transform.position;
 			pos.y += GetDisplayHeight(target);
@@ -182,6 +220,7 @@ namespace FishMMO.Client
 
 		private void OnHealed(ICharacter healer, ICharacter healed, int amount)
 		{
+			EnsureConfig();
 			if (healed == null || !showHeals) return;
 			var pos = healed.Transform.position;
 			pos.y += GetDisplayHeight(healed);
@@ -203,6 +242,7 @@ namespace FishMMO.Client
 
 		private void OnAchievement(ICharacter character, AchievementTemplate template, AchievementTier tier)
 		{
+			EnsureConfig();
 			if (character == null || template == null || !showAchievements) return;
 			var pos = character.Transform.position;
 			pos.y += GetDisplayHeight(character);
@@ -210,7 +250,11 @@ namespace FishMMO.Client
 			UITKLabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 2.0f, 4.0f, false, fx);
 		}
 
+		/// <remarks>
+		/// Null-guarded: settings are not guaranteed to exist when this type is constructed.
+		/// </remarks>
 		private static bool Config(string key) =>
+			Configuration.GlobalSettings != null &&
 			Configuration.GlobalSettings.TryGetBool(key, out bool r) && r;
 	}
 }

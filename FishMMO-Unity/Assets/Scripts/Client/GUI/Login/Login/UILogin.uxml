@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UILogin.uss" />
     <ui:VisualElement name="login-root" class="login-screen">
@@ -7,14 +7,10 @@
                 <ui:Label text="SIGN IN" class="fish-panel__title" />
             </ui:VisualElement>
             <ui:VisualElement name="login-body" class="login-body">
-                <ui:Label text="Username" class="fish-label fish-label--caption login-field-label" />
+                <ui:Label text="Username or Email" class="fish-label fish-label--caption login-field-label" />
                 <ui:TextField name="login-username" class="fish-input login-input" />
-                <ui:Label text="Email" class="fish-label fish-label--caption login-field-label" />
-                <ui:TextField name="login-email" class="fish-input login-input" />
                 <ui:Label text="Password" class="fish-label fish-label--caption login-field-label" />
                 <ui:TextField name="login-password" password="true" class="fish-input login-input" />
-                <ui:Label text="Age" class="fish-label fish-label--caption login-field-label" />
-                <ui:DropdownField name="login-age" class="fish-dropdown login-dropdown" />
                 <ui:Label name="login-handshake" text="" class="fish-label fish-label--muted login-handshake" />
                 <ui:VisualElement name="login-buttons" class="login-buttons">
                     <ui:Button name="login-signin-btn" text="Sign In" class="fish-button login-btn fish-button--primary" />

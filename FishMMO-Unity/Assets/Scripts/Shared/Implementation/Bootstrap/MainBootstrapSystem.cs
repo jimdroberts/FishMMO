@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
 using System;
@@ -66,6 +66,35 @@ namespace FishMMO.Shared
 		/// Unity Awake message. Starts the bootstrap initialization chain.
 		/// </summary>
 		/// <remarks>
+		/// <summary>
+		/// Clears the shutdown latches at the start of every play session.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="isInitiatingShutdown"/> and <see cref="canQuitApplication"/> are static and
+		/// are only ever set to true, so with Enter Play Mode Options disabling domain reload they
+		/// survive into the next play session — and every teardown from the second session onward
+		/// is skipped silently. <see cref="OnApplicationWantsToQuit"/> sees the latch already set
+		/// and returns the stale <c>canQuitApplication</c>, so the editor quits immediately;
+		/// <see cref="InitiateShutdown"/> early-returns, so <c>ReleaseAllAssets</c> never runs and
+		/// the addressables stay held; and <see cref="OnDestroy"/>'s <c>!isInitiatingShutdown</c>
+		/// fallback cannot fire either. Nothing logs an error, because from the code's point of
+		/// view shutdown had already happened.
+		/// <para>
+		/// This project currently has <c>m_EnterPlayModeOptionsEnabled: 0</c>, so Unity reloads the
+		/// domain and clears these itself — the bug is latent rather than live. It arms the moment
+		/// anyone enables the option for faster iteration, which is exactly the setting a developer
+		/// turns on without expecting teardown to change. <c>AddressableLoadProcessor</c> guards its
+		/// own statics the same way and for the same reason.
+		/// </para>
+		/// </remarks>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void ResetStaticState()
+		{
+			isInitiatingShutdown = false;
+			canQuitApplication = false;
+		}
+
+		/// <summary>
 		/// Overrides rather than hides the base. Declaring a second <c>void Awake()</c>
 		/// shadowed the base implementation, so the base never ran for this system.
 		/// </remarks>
@@ -138,9 +167,9 @@ namespace FishMMO.Shared
 			}
 			isInitiatingShutdown = true;
 
-			// Perform Graphics Cleanup.
+			// Perform Graphics Cleanup. Synchronous by design — see GraphicsCleanup.
 			Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
-			GraphicsCleanup().Wait();
+			GraphicsCleanup();
 			Debug.Log("[MainBootstrapSystem] Graphics cleanup completed.");
 
 			// Detach UnityLoggerBridge before async shutdown.
@@ -150,9 +179,9 @@ namespace FishMMO.Shared
 			// Editor-specific shutdown logic
 			if (Log.IsInitialized)
 			{
-				Debug.Log("[MainBootstrapSystem] Editor shutdown: Awaiting synchronous Log.Shutdown().");
-				Log.Shutdown().Wait();
-				Debug.Log("[MainBootstrapSystem] Editor shutdown: Log system synchronously shut down.");
+				Debug.Log("[MainBootstrapSystem] Editor shutdown: completing Log.Shutdown().");
+				DrainOnTeardown(Log.Shutdown(), "Log.Shutdown");
+				Debug.Log("[MainBootstrapSystem] Editor shutdown: Log system shut down.");
 			}
 			else
 			{
@@ -221,13 +250,79 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Placeholder for actual graphics cleanup logic. Typically does nothing for dedicated server builds.
+		/// Milliseconds a teardown task is given before the editor gives up waiting on it.
 		/// </summary>
-		/// <returns>A completed Task.</returns>
-		private Task GraphicsCleanup()
+		private const int TeardownDrainTimeoutMs = 2000;
+
+		/// <summary>
+		/// Completes a teardown task from a callback that cannot yield, without risking a hang.
+		/// </summary>
+		/// <param name="task">The teardown task. May already be complete.</param>
+		/// <param name="label">Name used in log output.</param>
+		/// <remarks>
+		/// Editor teardown runs from <c>playModeStateChanged/ExitingPlayMode</c>, which offers no
+		/// way to defer the domain unload, so the work genuinely has to finish here — a
+		/// fire-and-forget would let the loggers be torn down mid-flush. What it must NOT do is
+		/// <c>Task.Wait()</c> with no bound, which is what it used to do:
+		/// <list type="bullet">
+		/// <item>the fast path is free — <see cref="Log.Shutdown"/> currently completes
+		/// synchronously (its only <c>await</c> is <c>await Task.CompletedTask</c>), so the task
+		/// arrives already completed and nothing blocks at all;</item>
+		/// <item>if real asynchronous work is ever added behind that signature — the method's own
+		/// comment invites it — an unbounded <c>Wait</c> on the main thread deadlocks outright the
+		/// moment any continuation needs that same thread. A bounded wait cannot: it recovers,
+		/// says so, and lets the editor exit.</item>
+		/// </list>
+		/// A timeout is a worse outcome than a clean flush and a better one than a frozen editor,
+		/// which is the whole trade being made here. Exceptions are unwrapped and reported rather
+		/// than surfacing later as an unobserved-task crash during domain reload.
+		/// </remarks>
+		private static void DrainOnTeardown(Task task, string label)
+		{
+			if (task == null)
+			{
+				return;
+			}
+
+			try
+			{
+				// Already finished: observe any fault and return without touching the scheduler.
+				if (task.IsCompleted)
+				{
+					task.GetAwaiter().GetResult();
+					return;
+				}
+
+				Debug.LogWarning($"[MainBootstrapSystem] {label} did not complete synchronously; " +
+					$"waiting up to {TeardownDrainTimeoutMs}ms.");
+
+				if (!task.Wait(TeardownDrainTimeoutMs))
+				{
+					Debug.LogError($"[MainBootstrapSystem] {label} did not finish within " +
+						$"{TeardownDrainTimeoutMs}ms and was abandoned so the editor can exit. " +
+						"Its remaining work — most likely a log flush — did not complete.");
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[MainBootstrapSystem] {label} threw during teardown: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Releases every addressable handle the processor still holds.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately <c>void</c> and synchronous. <see cref="AddressableLoadProcessor.ReleaseAllAssets"/>
+		/// is synchronous work, and the previous signature returned <see cref="Task.CompletedTask"/>
+		/// only for the caller to immediately <c>.Wait()</c> on it — a main-thread block that did
+		/// nothing today and would have become a deadlock the moment any real asynchronous work
+		/// was added behind that signature. Returning a Task the caller must block on is the
+		/// shape of the bug, so the shape is gone.
+		/// </remarks>
+		private void GraphicsCleanup()
 		{
 			AddressableLoadProcessor.ReleaseAllAssets();
-			return Task.CompletedTask;
 		}
 
 		/// <summary>

@@ -484,12 +484,44 @@ namespace FishMMO.Client
 			ApplySortingOrder();
 			UIManager.RegisterTK(this);
 
-			// Applied before OnStarting, and independently of it. A panel's initial visibility
-			// must not wait on the visual tree, and a hidden panel disables its UIDocument —
-			// which is precisely why OnStarting cannot run here for every control.
+			/* Applied before OnStarting, and independently of it. A panel's initial visibility
+			 * must not wait on the visual tree, and a hidden panel disables its UIDocument —
+			 * which is precisely why OnStarting cannot run here for every control. */
 			if (!StartOpen)
 			{
 				Hide();
+			}
+			else
+			{
+				/* A StartOpen panel never passes through Show(), because there is nothing to
+				 * show — the UIDocument is already enabled and the player can see it. But
+				 * Visible is only ever assigned inside Show()/Hide(), so left alone it reports
+				 * FALSE for a panel that is on screen, and every one of the ~18 places that
+				 * tests it gets the wrong answer for the whole of startup.
+				 *
+				 * Two panels ship with StartOpen set — UITKLogin and UITKLoadingScreen — which
+				 * are exactly the two at the centre of the startup and stuck-overlay paths.
+				 * Observed consequences: UITKLogin's stopped-connection invariant reported "no
+				 * login-flow panel was visible" two seconds into a cold boot and restored a
+				 * screen that was already up, and UIManager.Hide — which no-ops unless the
+				 * panel reports visible — could decline to hide the loading overlay and so skip
+				 * clearing the driver flags that hold it, which is the documented
+				 * "overlay reappears with nothing to take it down" failure.
+				 *
+				 * The cursor and Escape registration are applied here for the same reason: they
+				 * are the parts of Show() that describe an on-screen panel's state rather than
+				 * the act of revealing one, and a panel the player is looking at should own them. */
+				Visible = true;
+
+				if (ReleasesCursor)
+				{
+					PlayerInputController.MouseMode = true;
+				}
+
+				if (CloseOnEscape)
+				{
+					UIManager.RegisterCloseOnEscapeTK(this);
+				}
 			}
 
 			if (!TryStart())
