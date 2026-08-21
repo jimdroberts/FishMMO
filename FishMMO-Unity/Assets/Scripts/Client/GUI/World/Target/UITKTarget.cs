@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -19,6 +19,9 @@ namespace FishMMO.Client
 
 		/// <summary>Name of the target health fill element.</summary>
 		private const string HEALTH_FILL_NAME = "target-health-fill";
+
+		/// <summary>Name of the target health bar container element.</summary>
+		private const string HEALTH_BAR_NAME = "target-health";
 
 		/// <summary>Name of the container that holds the target's buff icons.</summary>
 		private const string BUFF_LIST_NAME = "target-buff-list";
@@ -53,6 +56,9 @@ namespace FishMMO.Client
 		private Label nameLabel;
 		/// <summary>Cached reference to the target health fill element.</summary>
 		private VisualElement healthFill;
+		/// <summary>Cached reference to the target health bar container element.</summary>
+		private VisualElement healthBar;
+
 		/// <summary>Cached reference to the target buff list container element.</summary>
 		private VisualElement buffList;
 
@@ -76,7 +82,28 @@ namespace FishMMO.Client
 
 			nameLabel = root.Q<Label>(NAME_LABEL_NAME);
 			healthFill = root.Q(HEALTH_FILL_NAME);
+			healthBar = root.Q(HEALTH_BAR_NAME);
 			buffList = root.Q(BUFF_LIST_NAME);
+		}
+
+		/// <summary>
+		/// Unsubscribes from the target controller before a character is set.
+		/// </summary>
+		/// <remarks>
+		/// Pairs with <see cref="OnPostSetCharacter"/> so the two can be run back to back without
+		/// subscribing twice. That happens whenever this panel's visual tree is rebuilt and its
+		/// state has to be re-applied — the unsubscribe already existed for the unset path, but
+		/// re-applying the same character never went through it.
+		/// </remarks>
+		public override void OnPreSetCharacter()
+		{
+			if (Character != null &&
+				Character.TryGet(out ITargetController targetController))
+			{
+				targetController.OnChangeTarget -= TargetController_OnChangeTarget;
+				targetController.OnUpdateTarget -= TargetController_OnUpdateTarget;
+				targetController.OnClearTarget -= TargetController_OnClearTarget;
+			}
 		}
 
 		/// <summary>
@@ -155,8 +182,19 @@ namespace FishMMO.Client
 				nameLabel.style.color = color;
 			}
 
-			if (characterAttributeController != null &&
-				characterAttributeController.TryGetResourceAttribute(HealthAttributeID, out CharacterResourceAttribute health))
+			/* Whether a health bar is shown follows from whether the target actually has a health
+			 * resource, rather than from what kind of thing it is. A portal or a signpost is
+			 * worth targeting and naming but has no health to show, and an empty bar reads as a
+			 * dead one. Anything that does gain health later — a destructible structure, a siege
+			 * engine — starts showing a bar the moment it has the attribute, with no change
+			 * here. */
+			CharacterResourceAttribute health = default;
+			bool hasHealth = characterAttributeController != null &&
+				characterAttributeController.TryGetResourceAttribute(HealthAttributeID, out health);
+
+			SetHealthVisible(hasHealth);
+
+			if (hasHealth)
 			{
 				SetHealthFill(health.FinalValue > 0 ? health.CurrentValue / health.FinalValueAsFloat : 0.0f);
 
@@ -164,10 +202,6 @@ namespace FishMMO.Client
 				{
 					nameLabel.text += $" [{health.CurrentValue}/{health.FinalValue}]";
 				}
-			}
-			else
-			{
-				SetHealthFill(0.0f);
 			}
 
 			RefreshTargetBuffs(buffController);
@@ -236,6 +270,18 @@ namespace FishMMO.Client
 			ClearTargetBuffs();
 
 			Hide();
+		}
+
+		/// <summary>
+		/// Shows or hides the health bar.
+		/// </summary>
+		/// <param name="visible">True to show the bar.</param>
+		private void SetHealthVisible(bool visible)
+		{
+			if (healthBar != null)
+			{
+				healthBar.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+			}
 		}
 
 		/// <summary>

@@ -3,11 +3,24 @@
     Layout only — colours come from FishMMO-Theme.uss (.fish-bar, .fish-bar__fill--*).
 */
 
+/*
+    Each bar lives in its own UIDocument, so the three cannot be laid out relative to one
+    another by a shared container — every panel root fills the screen independently. Left
+    unanchored they all resolved to the same full-width strip across the top and drew on top
+    of each other, so only whichever panel sorted last was visible and the other two looked
+    like they were missing entirely. Anchoring each one explicitly is what keeps them apart.
+*/
 .res-bar {
-    width: 100%;
+    position: absolute;
+    left: 24px;
+    width: 220px;
     height: 22px;
-    position: relative;
 }
+
+/* Stacked bottom-left, clear of the hotkey bar along the bottom centre. */
+.res-bar--hp   { bottom: 96px; }
+.res-bar--mp   { bottom: 68px; }
+.res-bar--stam { bottom: 40px; }
 
 /* The fill grows left-to-right; width is driven from C# as a percentage. */
 .res-bar__fill {
