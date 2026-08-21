@@ -37,7 +37,7 @@
 }
 
 .character-row--selected {
-    background-color: rgba(88, 214, 178, 0.25);
+    background-color: var(--teal-mid);
 }
 
 .character-row__name {

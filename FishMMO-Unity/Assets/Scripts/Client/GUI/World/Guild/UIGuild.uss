@@ -1,93 +1,156 @@
 /*
     UIGuild.uss
-    Layout for the guild panel. Colours come from FishMMO-Theme.uss.
+    Layout for the guild roster. Colours come from FishMMO-Theme.uss.
+
+    Three columns — member, rank, location — so the roster reads as a table.
+    Rank is the field a player scans for, so it sits between the name and the
+    location rather than at the far edge where it would be hardest to pair
+    with the name beside it.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner. Centred, matching where the uGUI guild window opened.
+*/
 .guild-panel {
-    width: 320px;
-    height: 360px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 420px;
+    height: 380px;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
+/* ── Header ─────────────────────────────────────────────── */
+
 .guild-header {
-    height: 28px;
-    padding-left: 8px;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
+
+.guild-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.guild-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.guild-count {
+    min-width: 26px;
+    height: 16px;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+/* ── Column strip ───────────────────────────────────────── */
 
 .guild-columns {
     flex-direction: row;
+    align-items: center;
     height: 18px;
-    padding-left: 8px;
-    padding-right: 8px;
-    background-color: rgb(14, 15, 15);
+    padding-left: 12px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
 }
 
-.guild-column {
-    flex-grow: 1;
-    width: 33%;
-    font-size: 9px;
-    -unity-font-style: bold;
-    letter-spacing: 1px;
-    color: rgb(255, 173, 118);
-    -unity-text-align: middle-left;
-}
+.guild-column--name     { flex-grow: 1; }
+.guild-column--rank     { width: 90px; }
+.guild-column--location { width: 120px; }
+
+/* ── Body ───────────────────────────────────────────────── */
 
 .guild-scroll {
     flex-grow: 1;
-    padding: 4px;
 }
 
 .guild-member-list {
     flex-direction: column;
 }
 
+/* One roster row; .fish-row supplies hover and the leading accent rail. */
 .guild-member {
     flex-direction: row;
     align-items: center;
-    height: 22px;
-    padding-left: 4px;
-    padding-right: 4px;
-    border-radius: 4px;
-}
-
-.guild-member:hover {
-    background-color: rgb(28, 31, 34);
+    height: 24px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
 }
 
 .guild-member__name {
     flex-grow: 1;
-    width: 33%;
-    font-size: 11px;
-    -unity-text-align: middle-left;
-    color: rgb(200, 205, 214);
-    cursor: link;
+    overflow: hidden;
 }
 
 .guild-member__rank {
-    flex-grow: 1;
-    width: 33%;
-    font-size: 11px;
-    -unity-text-align: middle-left;
-    color: rgb(255, 173, 118);
-    cursor: link;
+    width: 90px;
+    flex-shrink: 0;
 }
 
 .guild-member__location {
-    flex-grow: 1;
-    width: 33%;
-    font-size: 11px;
-    -unity-text-align: middle-left;
-    color: rgb(138, 147, 162);
+    width: 120px;
+    flex-shrink: 0;
+    overflow: hidden;
 }
+
+.guild-empty {
+    margin-top: 24px;
+    margin-bottom: 24px;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
 
 .guild-footer {
     flex-direction: row;
-    height: 30px;
-    padding: 4px;
+    align-items: center;
+    height: 36px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
 
 .guild-action {
     flex-grow: 1;
+    height: 24px;
+    margin-left: 3px;
     margin-right: 3px;
-    font-size: 10px;
+}
+
+/* Shared caption sizing; the --name/--rank/--location modifiers set the widths. */
+.guild-column {
+    flex-shrink: 0;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.guild-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.guild-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

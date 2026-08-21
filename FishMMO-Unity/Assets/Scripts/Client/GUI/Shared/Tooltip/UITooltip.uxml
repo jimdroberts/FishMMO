@@ -3,7 +3,7 @@
     <Style src="UITooltip.uss" />
     <ui:VisualElement name="tooltip-root" class="tooltip-root" picking-mode="Ignore">
         <ui:VisualElement name="tooltip-box" class="fish-tooltip tooltip-box" picking-mode="Ignore">
-            <ui:Label name="tooltip-text" text="" class="tooltip-text" picking-mode="Ignore" />
+            <ui:Label name="tooltip-text" text="" class="fish-tooltip__body tooltip-text" picking-mode="Ignore" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

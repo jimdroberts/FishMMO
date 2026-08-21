@@ -1,4 +1,4 @@
-using UnityEngine.UIElements;
+﻿using UnityEngine.UIElements;
 
 namespace FishMMO.Client
 {
@@ -8,6 +8,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKReconnectDisplay : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.System;
+
 		/// <summary>
 		/// The name of the cancel button in the UI.
 		/// </summary>

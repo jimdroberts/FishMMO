@@ -320,7 +320,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							}
 							catch (Exception ex)
 							{
-								Log.Error("InteractableSystem", $"Fallback inventory persist failed for CharID={character.ID}: {ex}");
+								_ = Log.Error("InteractableSystem", $"Fallback inventory persist failed for CharID={character.ID}: {ex}");
 							}
 						}
 						PersistWithFaultHandling();

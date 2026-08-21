@@ -1,0 +1,61 @@
+/*
+    UIWorldLabels.uss
+    Layout for the world-anchored label layer. Colour is written per-label from C# — every label
+    carries its own tint (faction standing, damage type, guild colour), so there is no single
+    themed colour to inherit here.
+*/
+
+/*
+    The layer must never intercept a click: it covers the whole viewport and sits above the world,
+    so a pickable root would swallow every click meant for the scene. picking-mode is set in the
+    UXML as well because it is an attribute rather than a USS property, and an element whose
+    parent ignores picking is still picked itself.
+*/
+.world-label-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.world-label-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+/*
+    Each label is absolutely positioned from C# and translated up and left by its own size, so it
+    hangs above its anchor point and stays centred as the text changes width. white-space: nowrap
+    keeps a two-line nameplate breaking only where the generator put a newline, never on width.
+*/
+.world-label {
+    position: absolute;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+
+/*
+    Screen-anchored captions (region names). Declared after the world container in the UXML so a
+    caption always draws over the projected labels rather than fighting them for order.
+*/
+.screen-label-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.screen-label {
+    position: absolute;
+    -unity-text-align: middle-center;
+    white-space: nowrap;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+}

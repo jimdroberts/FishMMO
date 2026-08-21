@@ -1,51 +1,92 @@
 /*
     UISelector.uss
-    Layout for the modal option selector.
+    Layout for the shared list-selection dialog. Colours come from
+    FishMMO-Theme.uss.
+
+    A scrolling list of choices with accept and cancel. Entries are generated
+    at runtime and carry .fish-row, so selection and hover behave the same way
+    they do in every other list in the game.
 */
 
 .selector-root {
-    flex-grow: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--overlay-dim);
 }
 
 .selector-panel {
-    min-width: 320px;
+    min-width: 340px;
     max-width: 480px;
     max-height: 70%;
-    padding: 16px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.selector-header {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 12px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.selector-header__icon {
+    width: 11px;
+    height: 11px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.selector-count {
+    min-width: 22px;
+    height: 15px;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-shrink: 0;
 }
 
 .selector-scroll {
     flex-grow: 1;
-    margin-bottom: 12px;
+    min-height: 80px;
 }
 
 .selector-list {
     flex-direction: column;
 }
 
-.selector-item {
-    width: 100%;
-    margin: 2px 0;
+/* One choice. .fish-row supplies hover and the leading accent rail. */
+.selector-entry {
+    height: 26px;
+    padding-left: 12px;
+    padding-right: 12px;
+    -unity-text-align: middle-left;
+    flex-shrink: 0;
 }
 
-.selector-item-selected {
-    border-left-width: 3px;
-    border-right-width: 3px;
-    border-top-width: 3px;
-    border-bottom-width: 3px;
-    border-color: rgb(220, 200, 120);
+.selector-empty {
+    margin-top: 22px;
+    margin-bottom: 22px;
 }
 
 .selector-buttons {
     flex-direction: row;
-    justify-content: center;
+    align-items: center;
+    justify-content: flex-end;
+    height: 42px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
 }
 
 .selector-action {
-    min-width: 96px;
-    margin-left: 8px;
-    margin-right: 8px;
+    min-width: 92px;
+    height: 26px;
+    margin-left: 6px;
+    flex-shrink: 0;
 }

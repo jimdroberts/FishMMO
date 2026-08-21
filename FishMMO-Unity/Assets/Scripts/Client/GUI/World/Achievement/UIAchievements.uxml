@@ -2,12 +2,18 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIAchievements.uss" />
     <ui:VisualElement name="achievement-root" class="fish-panel achievement-panel">
-        <ui:VisualElement name="achievement-header" class="fish-panel__header achievement-header">
-            <ui:Label text="ACHIEVEMENTS" class="fish-panel__title" />
+        <ui:VisualElement name="panel-header" class="fish-panel__header achievement-header">
+            <ui:VisualElement class="fish-panel__icon achievement-header__icon" />
+            <ui:VisualElement class="achievement-header__titles">
+                <ui:Label text="ACHIEVEMENTS" class="fish-panel__title" />
+                <ui:Label name="achievement-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="achievement-count" text="0" class="fish-badge achievement-count" />
         </ui:VisualElement>
         <ui:VisualElement name="achievement-categories" class="achievement-categories" />
         <ui:ScrollView name="achievement-scroll" class="fish-scroll achievement-scroll">
             <ui:VisualElement name="achievement-descriptions" class="achievement-descriptions" />
+            <ui:Label name="achievement-empty" text="No achievements in this category." class="fish-empty achievement-empty" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

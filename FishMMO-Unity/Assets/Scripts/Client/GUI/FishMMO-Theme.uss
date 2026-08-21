@@ -1,128 +1,259 @@
-﻿/*
+/*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     FishMMO-Theme.uss
-    Obsidian / Ember Orange  —  Shared Visual Theme
+    Abyss / Signal Blue  —  Shared Visual Theme
     Unity UIToolkit  (Unity 6.x LTS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     PURPOSE
     ───────
-    Pure color, typography, border, shadow, and transition
-    rules. NO layout properties here (no flex-direction,
-    width, height, padding, margin, position, etc.).
-    Those live in each panel's own .uss file.
+    Colour, typography, border, shadow and transition rules.
+    NO layout properties here (no flex-direction, width,
+    height, padding, margin, position). Those live in each
+    panel's own .uss file.
 
     USAGE
     ───────
-    Load this FIRST in every UXML, then load the panel USS:
+    Load this FIRST in every UXML, then the panel USS:
 
         <ui:Style src="FishMMO-Theme.uss" />
         <ui:Style src="UIEquipment.uss" />
 
-    Or set it as the global Panel Settings Theme Style Sheet
-    so every UIDocument inherits it automatically.
-
     PALETTE
     ───────
-    Obsidian
-        ob900  #0E0F0F   deepest background
-        ob800  #141618   panel background
-        ob700  #1C1F22   elevated surface
-        ob600  #242830   card / slot surface
-        ob500  #2E333B   hover surface
-        ob400  #3C4250   border / separator
-        ob300  #5A6272   muted text
-        ob200  #8A93A2   secondary text
-        ob100  #C8CDD6   primary text
+    Sampled from the project logo and banner, not invented.
+    The fish body is #00364E, the eye is #0073C0, the wordmark
+    runs #0073C0 into #58B3F1, and the plate behind it falls
+    away to #001012. Those five values are the whole scheme:
+    a cold, deep-water ground with one saturated blue that
+    means "this is live, look here".
 
-    Ember Orange (accent)
-        em500  #FF6B1A   primary accent
-        em400  #FF8C45   hover accent
-        em300  #FFAD76   light accent / category labels
-        em-lo  rgba(255,107,26,0.12)   subtle tint
-        em-mid rgba(255,107,26,0.25)   divider / border tint
+        Abyss (grounds → text)
+            900  #00080B   outside the frame
+            850  #000E14   window ground
+            800  #00141C   panel body
+            700  #001C28   raised surface
+            600  #002333   slot / card
+            500  #00304A   hover surface
+            400  #0A3A52   border
+            300  #3F6D87   muted text
+            200  #7FA3B8   secondary text
+            100  #C7DCEA   primary text
 
-    Semantic
-        teal   #58D6B2   percent / positive stats
-        hp     #E74C3C   health
-        mp     #3498DB   mana
-        stam   #2ECC71   stamina / energy
-        danger #D63031   locked / error
+        Signal Blue (brand accent)
+            600  #00518A   pressed / deep
+            500  #0073C0   primary accent  ← the eye
+            400  #2A97DC   hover accent
+            300  #58B3F1   highlight       ← the wordmark
+
+        Semantic
+            hp     #C8384A   mana #2A8FD8   stam #37A86B
+            teal   #3FC9C0   danger #C8384A  warn #D8952A
+            xp     #58B3F1
+
+    DEPTH
+    ───────
+    UI Toolkit has no box-shadow, so depth is built two ways:
+    stacked surface tokens (850 → 800 → 700 → 600), and
+    per-side borders — a lighter top edge with a darker bottom
+    edge reads as raised, the reverse reads as inset. Both are
+    used deliberately below; neither is decoration.
+
+    RUNTIME THEMING
+    ───────
+    UITKThemeManager overrides a subset of these at runtime
+    from the player's configuration. See that class for which
+    ones, and for why the override is an inline style rather
+    than a rewritten token.
+
+    NO CURSOR RULES
+    ───────
+    Do not add `cursor: link` (or any other keyword cursor)
+    to this file or to a panel stylesheet. USS cursor keywords
+    are editor-only: a runtime panel can only change the
+    cursor from a texture, and a keyword one logs
+
+        "Runtime cursors other than the default cursor need
+         to be defined using a texture."
+
+    from both UIElementsRuntimeUtility and the EventSystem on
+    every frame the pointer sits over the element — a console
+    full of warnings for a cursor that never actually changes.
+
+    To give buttons and slots a real hand cursor, import a
+    cursor texture and use the texture form instead:
+
+        cursor: url("path/to/hand.png") 8 8;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
+
+:root {
+    /* ── Abyss ────────────────────────────────────────── */
+    --abyss-900: rgb(0, 8, 11);
+    --abyss-850: rgb(0, 14, 20);
+    --abyss-800: rgb(0, 20, 28);
+    --abyss-700: rgb(0, 28, 40);
+    --abyss-600: rgb(0, 35, 51);
+    --abyss-500: rgb(0, 48, 74);
+    --abyss-400: rgb(10, 58, 82);
+    --abyss-300: rgb(63, 109, 135);
+    --abyss-200: rgb(127, 163, 184);
+    --abyss-100: rgb(199, 220, 234);
+
+    /* ── Signal Blue ──────────────────────────────────── */
+    --brand-600: rgb(0, 81, 138);
+    --brand-500: rgb(0, 115, 192);
+    --brand-400: rgb(42, 151, 220);
+    --brand-300: rgb(88, 179, 241);
+
+    /* Tints. USS cannot compose alpha, so each one is its own token. */
+    --brand-lo:     rgba(0, 115, 192, 0.12);
+    --brand-mid:    rgba(0, 115, 192, 0.26);
+    --brand-border: rgba(0, 115, 192, 0.45);
+    --brand-hover:  rgba(0, 115, 192, 0.18);
+    --brand-press:  rgba(0, 115, 192, 0.34);
+    --brand-glow:   rgba(88, 179, 241, 0.22);
+
+    /* ── Bevel edges ──────────────────────────────────── */
+    /*
+        A raised element takes --edge-light on top and --edge-dark on the
+        bottom; an inset element takes them the other way round. Kept as
+        tokens so the whole UI's sense of depth moves together.
+    */
+    --edge-light: rgba(88, 179, 241, 0.16);
+    --edge-dark:  rgba(0, 0, 0, 0.55);
+
+    /* ── Semantic ─────────────────────────────────────── */
+    --hp:     rgb(200, 56, 74);
+    --mp:     rgb(42, 143, 216);
+    --stam:   rgb(55, 168, 107);
+    --teal:   rgb(63, 201, 192);
+    --danger: rgb(200, 56, 74);
+    --warn:   rgb(216, 149, 42);
+    --xp:     rgb(88, 179, 241);
+    --danger-tint:   rgba(200, 56, 74, 0.34);
+    --danger-border: rgba(200, 56, 74, 0.55);
+    --danger-fill:   rgba(200, 56, 74, 0.28);
+    --teal-lo:  rgba(63, 201, 192, 0.12);
+    --teal-mid: rgba(63, 201, 192, 0.26);
+
+    /* ── Rarity ───────────────────────────────────────── */
+    --rarity-common:    rgb(178, 196, 208);
+    --rarity-uncommon:  rgb(55, 168, 107);
+    --rarity-rare:      rgb(42, 151, 220);
+    --rarity-epic:      rgb(163, 106, 224);
+    --rarity-legendary: rgb(224, 148, 38);
+
+    /* ── Scrims ───────────────────────────────────────── */
+    --clear:        rgba(0, 0, 0, 0);
+    --scrim-60:     rgba(0, 8, 11, 0.60);
+    --scrim-65:     rgba(0, 8, 11, 0.65);
+    --scrim-80:     rgba(0, 8, 11, 0.82);
+    --overlay-dim:  rgba(0, 4, 6, 0.62);
+    --overlay-soft: rgba(0, 4, 6, 0.40);
+
+    /* ── Extras ───────────────────────────────────────── */
+    --black: rgb(0, 0, 0);
+    --white: rgb(255, 255, 255);
+    --text-bright: rgb(226, 240, 250);
+    --gold: rgb(224, 178, 92);
+    --swatch-border: rgb(10, 58, 82);
+    --cast: rgb(88, 179, 241);
+}
 
 
 /* ═══════════════════════════════════════════════════════════
    1. PANEL CHROME
-   Applies to any .fish-panel root element.
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    The frame every window sits in. A 2px accent rail across the top names
+    the panel as active UI, the light top edge and dark bottom edge lift it
+    off whatever is behind, and the body is one step above the window ground
+    so a panel over the world still reads as a solid object.
+*/
 .fish-panel {
-    background-color: rgb(20, 22, 24);          /* ob800 */
-    border-color: rgb(60, 66, 80);              /* ob400 */
-    border-width: 1px;
-    border-top-color: rgb(255, 107, 26);        /* em500 accent top edge */
+    background-color: var(--abyss-800);
+    border-left-color: var(--abyss-400);
+    border-right-color: var(--abyss-400);
+    border-bottom-color: var(--abyss-400);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-top-color: var(--brand-500);
     border-top-width: 2px;
-    border-radius: 10px;
+    border-radius: 6px;
     overflow: hidden;
 }
 
-/* Buttons.
-   Referenced by eight panels but never defined, so every one of them fell back to the
-   engine default: a flat grey box that reads as a disabled control. */
-.fish-button {
-    background-color: rgb(38, 42, 48);          /* ob600 */
-    border-color: rgb(60, 66, 80);              /* ob400 */
-    border-width: 1px;
-    border-radius: 6px;
-    color: rgb(232, 234, 238);
-    -unity-font-style: bold;
-    font-size: 13px;
-    padding-top: 6px;
-    padding-bottom: 6px;
-    padding-left: 14px;
-    padding-right: 14px;
-    transition-property: background-color, border-color;
-    transition-duration: 0.12s;
-}
-
-.fish-button:hover {
-    background-color: rgb(52, 58, 66);
-    border-color: rgb(255, 107, 26);            /* em500 */
-}
-
-.fish-button:active {
-    background-color: rgb(28, 31, 34);
-}
-
-/* Genuinely disabled, as opposed to merely unstyled. */
-.fish-button:disabled {
-    opacity: 0.45;
+/* A panel that is the focus of the moment — dialogs, death, level up. */
+.fish-panel--alert {
+    border-left-color: var(--brand-border);
+    border-right-color: var(--brand-border);
+    border-bottom-color: var(--brand-border);
+    border-top-color: var(--brand-300);
 }
 
 .fish-panel__header {
-    background-color: rgb(14, 15, 15);          /* ob900 */
-    border-bottom-color: rgb(46, 51, 59);
+    background-color: var(--abyss-900);
+    border-bottom-color: var(--abyss-400);
     border-bottom-width: 1px;
 }
 
+/*
+    The small square that opens a header. Reads as a status lamp rather than
+    a decoration — panels tint it from C# to show state where they have one.
+*/
 .fish-panel__icon {
-    background-color: rgb(255, 107, 26);        /* em500 */
-    border-radius: 3px;
+    background-color: var(--brand-500);
+    border-radius: 2px;
+    border-color: var(--brand-300);
+    border-width: 1px;
 }
 
 .fish-panel__title {
-    color: rgb(200, 205, 214);                  /* ob100 */
+    color: var(--abyss-100);
     -unity-font-style: bold;
     letter-spacing: 2px;
-    font-size: 13px;
+    font-size: 12px;
+    -unity-text-align: middle-left;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Secondary line in a header — item counts, connection state, gold. */
+.fish-panel__subtitle {
+    color: var(--abyss-300);
+    font-size: 10px;
+    letter-spacing: 1px;
     -unity-text-align: middle-left;
 }
 
+/*
+    Footers carry status, not actions — counts, totals, capacity. Darker than
+    the body so a panel reads as content bracketed by chrome.
+*/
 .fish-panel__footer {
-    background-color: rgb(14, 15, 15);          /* ob900 */
-    border-top-color: rgb(46, 51, 59);
+    background-color: var(--abyss-900);
+    border-top-color: var(--abyss-400);
     border-top-width: 1px;
+}
+
+/* Body region between header and footer. */
+.fish-panel__body {
+    background-color: var(--clear);
+}
+
+/*
+    A raised sub-surface inside a panel: preview boxes, grouped settings,
+    the reading pane of a two-pane window.
+*/
+.fish-well {
+    background-color: var(--abyss-850);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-top-color: var(--edge-dark);
+    border-radius: 4px;
+    overflow: hidden;
 }
 
 
@@ -131,15 +262,15 @@
    ═══════════════════════════════════════════════════════════ */
 
 .fish-close-btn {
-    background-color: rgba(0, 0, 0, 0);
-    border-color: rgb(60, 66, 80);              /* ob400 */
+    background-color: var(--clear);
+    border-color: var(--abyss-400);
     border-width: 1px;
-    border-radius: 5px;
-    color: rgb(138, 147, 162);                  /* ob200 */
-    font-size: 13px;
+    border-radius: 3px;
+    color: var(--abyss-300);
+    font-size: 12px;
+    -unity-font-style: bold;
     -unity-text-align: middle-center;
     padding: 0;
-    cursor: link;
     transition:
         background-color 0.12s ease,
         border-color     0.12s ease,
@@ -147,13 +278,13 @@
 }
 
 .fish-close-btn:hover {
-    background-color: rgba(255, 107, 26, 0.15);
-    border-color: rgb(255, 107, 26);
-    color: rgb(255, 107, 26);
+    background-color: var(--danger-fill);
+    border-color: var(--danger);
+    color: var(--text-bright);
 }
 
 .fish-close-btn:active {
-    background-color: rgba(255, 107, 26, 0.30);
+    background-color: var(--danger-tint);
     scale: 0.94;
 }
 
@@ -162,116 +293,169 @@
    3. TABS
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    A tab is marked by a bottom rule, not a filled pill. The inactive rule is
+    transparent and the active one is brand blue, so the row reads as a single
+    strip with one live entry rather than a set of separate buttons.
+*/
 .fish-tab {
-    background-color: rgba(0, 0, 0, 0);
-    border-color: rgba(0, 0, 0, 0);
-    border-width: 1px;
-    border-radius: 4px;
-    color: rgb(90, 98, 114);                    /* ob300 */
+    background-color: var(--clear);
+    border-color: var(--clear);
+    border-width: 0;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--clear);
+    border-radius: 0;
+    color: var(--abyss-300);
     font-size: 10px;
     -unity-font-style: bold;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
     -unity-text-align: middle-center;
-    cursor: link;
     transition:
-        color            0.12s ease,
-        background-color 0.12s ease,
-        border-color     0.12s ease;
+        color             0.12s ease,
+        background-color  0.12s ease,
+        border-bottom-color 0.12s ease;
 }
 
 .fish-tab:hover {
-    color: rgb(200, 205, 214);                  /* ob100 */
-    border-color: rgb(60, 66, 80);              /* ob400 */
+    color: var(--abyss-100);
+    background-color: var(--abyss-700);
+    border-bottom-color: var(--abyss-400);
 }
 
 .fish-tab--active {
-    color: rgb(255, 140, 69);                   /* em400 */
-    border-color: rgba(255, 107, 26, 0.40);
-    background-color: rgba(255, 107, 26, 0.12);
+    color: var(--brand-300);
+    background-color: var(--brand-lo);
+    border-bottom-color: var(--brand-500);
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   4. DIVIDER
+   4. DIVIDERS
    ═══════════════════════════════════════════════════════════ */
 
 .fish-divider {
-    background-color: rgb(46, 51, 59);          /* ob400-ish */
+    background-color: var(--abyss-400);
     height: 1px;
+}
+
+.fish-divider--accent {
+    background-color: var(--brand-border);
+    height: 1px;
+}
+
+/*
+    A vertical accent bar on the leading edge of a block. Used to mark the
+    active row in a list and the speaker's side of a dialogue.
+*/
+.fish-rail {
+    background-color: var(--brand-500);
+    width: 2px;
 }
 
 
 /* ═══════════════════════════════════════════════════════════
    5. ITEM / REFERENCE SLOT
-   Shared by equipment, inventory, bank, hotkey slots.
+   Shared by equipment, inventory, bank, hotkey and ability slots.
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    Inset: dark top edge, light bottom edge — the slot reads as a recess cut
+    into the panel, so an item in it reads as sitting inside something.
+*/
 .fish-slot {
-    background-color: rgb(28, 31, 34);          /* ob700 */
-    border-color: rgb(46, 51, 59);
+    background-color: var(--abyss-600);
+    border-color: var(--abyss-400);
     border-width: 1px;
-    border-radius: 7px;
+    border-top-color: var(--edge-dark);
+    border-bottom-color: var(--edge-light);
+    border-radius: 4px;
     overflow: hidden;
-    cursor: link;
     transition:
         background-color 0.10s ease,
         border-color     0.10s ease;
 }
 
 .fish-slot:hover {
-    background-color: rgb(46, 51, 59);          /* ob500 */
-    border-color: rgb(255, 107, 26);            /* em500 */
+    background-color: var(--abyss-500);
+    border-color: var(--brand-400);
+    border-top-color: var(--brand-400);
+    border-bottom-color: var(--brand-400);
 }
 
 .fish-slot:active {
-    background-color: rgba(255, 107, 26, 0.12);
+    background-color: var(--brand-mid);
     scale: 0.95;
 }
 
 .fish-slot:disabled {
-    background-color: rgb(20, 22, 24);          /* ob800 */
-    border-color: rgb(36, 40, 48);
+    background-color: var(--abyss-800);
+    border-color: var(--abyss-700);
+    border-top-color: var(--abyss-700);
+    border-bottom-color: var(--abyss-700);
     opacity: 0.45;
-    cursor: arrow;
 }
 
-/* Icon image — layout (position/inset) set in panel USS */
+/* An empty slot the panel wants to name — an equipment socket, say. */
+.fish-slot--empty {
+    background-color: var(--abyss-700);
+    border-color: var(--abyss-600);
+}
+
+/* The slot the player is dragging from, or the current selection. */
+.fish-slot--selected {
+    border-color: var(--brand-300);
+    border-top-color: var(--brand-300);
+    border-bottom-color: var(--brand-300);
+    background-color: var(--brand-lo);
+}
+
+/* Icon image — layout (position/inset) set in panel USS. */
 .fish-slot__icon {
     -unity-background-scale-mode: scale-to-fit;
 }
 
-/* Slot name label */
+/* Slot name label, for sockets that show what belongs in them. */
 .fish-slot__label {
-    color: rgb(90, 98, 114);                    /* ob300 */
+    color: var(--abyss-300);
     font-size: 8px;
     letter-spacing: 0.5px;
     -unity-text-align: lower-center;
 }
 
-/* Stack count badge */
+/* Stack count badge. */
 .fish-slot__amount {
-    color: rgb(255, 173, 118);                  /* em300 */
-    background-color: rgba(14, 15, 15, 0.80);
-    border-radius: 3px;
+    color: var(--text-bright);
+    background-color: var(--scrim-80);
+    border-radius: 2px;
     font-size: 9px;
     -unity-font-style: bold;
     -unity-text-align: lower-right;
 }
 
-/* Cooldown overlay */
+/* Cooldown sweep overlay; height is driven from C#. */
 .fish-slot__cooldown {
-    background-color: rgba(14, 15, 15, 0.60);
-    color: rgb(200, 205, 214);                  /* ob100 */
-    font-size: 13px;
+    background-color: var(--scrim-65);
+    color: var(--text-bright);
+    font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
 }
 
-/* Lock overlay */
+/* Lock overlay. */
 .fish-slot__lock {
-    background-color: rgba(214, 48, 49, 0.40);  /* danger tint */
-    border-radius: 6px;
+    background-color: var(--danger-tint);
+    border-radius: 3px;
 }
+
+/*
+    Rarity ring. Applied to the slot itself so the border carries the rarity —
+    the colour a player scans for before they read anything.
+*/
+.fish-slot--common    { border-color: var(--rarity-common); }
+.fish-slot--uncommon  { border-color: var(--rarity-uncommon); }
+.fish-slot--rare      { border-color: var(--rarity-rare); }
+.fish-slot--epic      { border-color: var(--rarity-epic); }
+.fish-slot--legendary { border-color: var(--rarity-legendary); }
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -279,15 +463,16 @@
    ═══════════════════════════════════════════════════════════ */
 
 .fish-preview {
-    background-color: rgb(10, 11, 12);
-    border-color: rgb(46, 51, 59);
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-400);
     border-width: 1px;
-    border-radius: 8px;
+    border-top-color: var(--edge-dark);
+    border-radius: 4px;
     overflow: hidden;
 }
 
 .fish-preview__label {
-    color: rgb(60, 66, 80);                     /* ob400 — very muted */
+    color: var(--abyss-400);
     font-size: 9px;
     letter-spacing: 1.5px;
     -unity-text-align: middle-center;
@@ -296,7 +481,7 @@
 
 /* ═══════════════════════════════════════════════════════════
    7. SCROLLVIEW
-   Override Unity's internal scroller child IDs.
+   Overrides Unity's internal scroller child IDs.
    ═══════════════════════════════════════════════════════════ */
 
 .fish-scroll > #unity-content-container {
@@ -304,17 +489,17 @@
 }
 
 .fish-scroll > #unity-vertical-scroller {
-    width: 5px;
-    background-color: rgb(20, 22, 24);          /* ob800 */
+    width: 6px;
+    background-color: var(--abyss-900);
 }
 
 .fish-scroll > #unity-vertical-scroller > #unity-tracker {
-    background-color: rgb(60, 66, 80);          /* ob400 */
+    background-color: var(--abyss-400);
     border-radius: 3px;
 }
 
 .fish-scroll > #unity-vertical-scroller > #unity-tracker:hover {
-    background-color: rgb(255, 107, 26);        /* em500 */
+    background-color: var(--brand-500);
 }
 
 .fish-scroll > #unity-horizontal-scroller {
@@ -323,149 +508,591 @@
 
 
 /* ═══════════════════════════════════════════════════════════
-   8. ATTRIBUTE LIST  (runtime-generated rows)
+   8. LIST ROWS
+   Guild rosters, party members, friends, servers, characters.
    ═══════════════════════════════════════════════════════════ */
 
-.fish-attr-category {
-    color: rgb(255, 173, 118);                  /* em300 */
-    font-size: 9px;
-    -unity-font-style: bold;
-    letter-spacing: 2px;
-    -unity-text-align: middle-left;
-    border-bottom-color: rgba(255, 107, 26, 0.25);
+/*
+    Rows are separated by a hairline rather than by gaps, so a long roster
+    reads as one table. The leading border is transparent until hover, where
+    it becomes the accent rail — the row lights up from its leading edge.
+*/
+.fish-row {
+    background-color: var(--clear);
+    border-bottom-color: var(--abyss-700);
     border-bottom-width: 1px;
+    border-left-color: var(--clear);
+    border-left-width: 2px;
+    transition:
+        background-color 0.09s ease,
+        border-left-color 0.09s ease;
 }
 
-.fish-attr-row {
-    border-radius: 4px;
-    transition: background-color 0.08s ease;
+.fish-row:hover {
+    background-color: var(--abyss-700);
+    border-left-color: var(--brand-400);
 }
 
-.fish-attr-row:hover {
-    background-color: rgb(28, 31, 34);          /* ob700 */
+.fish-row--selected {
+    background-color: var(--brand-lo);
+    border-left-color: var(--brand-500);
 }
 
-.fish-attr-row__name {
-    color: rgb(138, 147, 162);                  /* ob200 */
+.fish-row__name {
+    color: var(--abyss-100);
     font-size: 11px;
     -unity-text-align: middle-left;
 }
 
-.fish-attr-row__value {
-    color: rgb(200, 205, 214);                  /* ob100 */
-    font-size: 11px;
+.fish-row__meta {
+    color: var(--abyss-300);
+    font-size: 10px;
+    -unity-text-align: middle-left;
+}
+
+.fish-row__value {
+    color: var(--abyss-200);
+    font-size: 10px;
     -unity-font-style: bold;
     -unity-text-align: middle-right;
 }
 
-/* Value colour modifiers */
-.fish-attr-row__value--resource { color: rgb(255, 140, 69); }  /* em400  */
-.fish-attr-row__value--percent  { color: rgb(88, 214, 178); }  /* teal   */
-.fish-attr-row__value--negative { color: rgb(214, 48, 49); }   /* danger */
+/* Column captions above a roster. */
+.fish-col-head {
+    color: var(--abyss-300);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 1.5px;
+    -unity-text-align: middle-left;
+}
+
+/* Offline / unavailable rows. */
+.fish-row--dim { opacity: 0.45; }
 
 
 /* ═══════════════════════════════════════════════════════════
-   9. STATUS BAR CHIPS  (HP / MP / STM)
+   9. BADGES, PILLS, STATUS DOTS
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    A small outlined chip carrying one fact: a rank, a level, a channel, an
+    online count. Outlined rather than filled so a row of them stays quiet.
+*/
+.fish-badge {
+    background-color: var(--abyss-700);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-radius: 3px;
+    color: var(--abyss-200);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+    -unity-text-align: middle-center;
+}
+
+.fish-badge--accent {
+    background-color: var(--brand-lo);
+    border-color: var(--brand-border);
+    color: var(--brand-300);
+}
+
+.fish-badge--danger {
+    background-color: var(--danger-fill);
+    border-color: var(--danger-border);
+    color: var(--danger);
+}
+
+.fish-badge--good {
+    background-color: var(--teal-lo);
+    border-color: var(--teal-mid);
+    color: var(--teal);
+}
+
+/* Presence dot. */
+.fish-dot {
+    border-radius: 50%;
+    background-color: var(--abyss-400);
+}
+
+.fish-dot--online  { background-color: var(--stam); }
+.fish-dot--offline { background-color: var(--abyss-400); }
+.fish-dot--busy    { background-color: var(--warn); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   10. STATUS BAR CHIPS  (HP / MP / STM)
    ═══════════════════════════════════════════════════════════ */
 
 .fish-chip__dot {
     border-radius: 50%;
 }
 
-.fish-chip__dot--hp   { background-color: rgb(231, 76, 60); }
-.fish-chip__dot--mp   { background-color: rgb(52, 152, 219); }
-.fish-chip__dot--stam { background-color: rgb(46, 204, 113); }
+.fish-chip__dot--hp   { background-color: var(--hp); }
+.fish-chip__dot--mp   { background-color: var(--mp); }
+.fish-chip__dot--stam { background-color: var(--stam); }
 
 .fish-chip__label {
-    color: rgb(138, 147, 162);                  /* ob200 */
+    color: var(--abyss-300);
     font-size: 10px;
+    letter-spacing: 0.5px;
     -unity-text-align: middle-left;
 }
 
 .fish-chip__value {
-    color: rgb(200, 205, 214);                  /* ob100 */
+    color: var(--abyss-100);
     font-size: 10px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
 }
 
 .fish-gear-score {
-    color: rgb(255, 173, 118);                  /* em300 */
+    color: var(--brand-300);
     font-size: 10px;
+    -unity-font-style: bold;
     letter-spacing: 1px;
     -unity-text-align: middle-right;
 }
 
 
 /* ═══════════════════════════════════════════════════════════
-   10. RESOURCE / STAT BARS
+   11. ATTRIBUTE LIST  (runtime-generated rows)
    ═══════════════════════════════════════════════════════════ */
 
+.fish-attr-category {
+    color: var(--brand-300);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    -unity-text-align: middle-left;
+    border-bottom-color: var(--brand-border);
+    border-bottom-width: 1px;
+}
+
+.fish-attr-row {
+    border-radius: 3px;
+    transition: background-color 0.08s ease;
+}
+
+.fish-attr-row:hover {
+    background-color: var(--abyss-700);
+}
+
+.fish-attr-row__name {
+    color: var(--abyss-200);
+    font-size: 11px;
+    -unity-text-align: middle-left;
+}
+
+.fish-attr-row__value {
+    color: var(--abyss-100);
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+}
+
+.fish-attr-row__value--resource { color: var(--brand-400); }
+.fish-attr-row__value--percent  { color: var(--teal); }
+.fish-attr-row__value--negative { color: var(--danger); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   12. RESOURCE / STAT BARS
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    The track is inset — dark top edge, light bottom — so the fill reads as
+    liquid in a channel rather than a rectangle drawn over a rectangle.
+*/
 .fish-bar {
-    background-color: rgb(36, 40, 48);          /* ob600 */
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-top-color: var(--edge-dark);
+    border-bottom-color: var(--edge-light);
     border-radius: 3px;
     overflow: hidden;
 }
 
 .fish-bar__fill {
-    border-radius: 3px;
-    background-color: rgb(255, 107, 26);        /* em500 default */
+    border-radius: 2px;
+    background-color: var(--brand-500);
     transition: width 0.25s ease;
 }
 
-.fish-bar__fill--hp   { background-color: rgb(231, 76, 60); }
-.fish-bar__fill--mp   { background-color: rgb(52, 152, 219); }
-.fish-bar__fill--stam { background-color: rgb(46, 204, 113); }
-.fish-bar__fill--xp   { background-color: rgb(255, 107, 26); }
-.fish-bar__fill--teal { background-color: rgb(88, 214, 178); }
+.fish-bar__fill--hp   { background-color: var(--hp); }
+.fish-bar__fill--mp   { background-color: var(--mp); }
+.fish-bar__fill--stam { background-color: var(--stam); }
+.fish-bar__fill--xp   { background-color: var(--xp); }
+.fish-bar__fill--teal { background-color: var(--teal); }
+
+/* Numeric overlay centred on a bar. */
+.fish-bar__label {
+    color: var(--text-bright);
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
 
 
 /* ═══════════════════════════════════════════════════════════
-   11. TOOLTIP
+   13. TOOLTIP
    ═══════════════════════════════════════════════════════════ */
 
 .fish-tooltip {
-    background-color: rgb(14, 15, 15);          /* ob900 */
-    border-color: rgb(255, 107, 26);            /* em500 */
+    background-color: var(--abyss-900);
+    border-color: var(--brand-border);
     border-width: 1px;
-    border-radius: 6px;
+    border-top-color: var(--brand-500);
+    border-top-width: 2px;
+    border-radius: 4px;
 }
 
 .fish-tooltip__title {
-    color: rgb(200, 205, 214);                  /* ob100 */
-    font-size: 13px;
+    color: var(--abyss-100);
+    font-size: 12px;
     -unity-font-style: bold;
+    letter-spacing: 0.5px;
 }
 
 .fish-tooltip__body {
-    color: rgb(138, 147, 162);                  /* ob200 */
+    color: var(--abyss-200);
     font-size: 11px;
 }
 
 .fish-tooltip__stat {
-    color: rgb(255, 173, 118);                  /* em300 */
+    color: var(--brand-300);
     font-size: 11px;
 }
 
-/* Rarity colours */
-.fish-rarity--common    { color: rgb(200, 205, 214); }
-.fish-rarity--uncommon  { color: rgb(88, 214, 178); }
-.fish-rarity--rare      { color: rgb(66, 153, 255); }
-.fish-rarity--epic      { color: rgb(176, 125, 255); }
-.fish-rarity--legendary { color: rgb(255, 107, 26); }
+/* Rarity colours, for text that names an item. */
+.fish-rarity--common    { color: var(--rarity-common); }
+.fish-rarity--uncommon  { color: var(--rarity-uncommon); }
+.fish-rarity--rare      { color: var(--rarity-rare); }
+.fish-rarity--epic      { color: var(--rarity-epic); }
+.fish-rarity--legendary { color: var(--rarity-legendary); }
 
 
 /* ═══════════════════════════════════════════════════════════
-   12. UTILITY
+   14. CONTROLS
+   Buttons, labels, text fields, toggles, dropdowns.
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Raised: light top edge, dark bottom edge, one step above the panel body.
+    Hover lifts the surface and lights the border; active inverts the bevel so
+    the button visibly presses in rather than only changing colour.
+*/
+.fish-button,
+Button.fish-button {
+    background-color: var(--abyss-700);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-top-color: var(--edge-light);
+    border-bottom-color: var(--edge-dark);
+    border-radius: 4px;
+    color: var(--abyss-100);
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    letter-spacing: 1px;
+    transition:
+        background-color 0.12s ease,
+        border-color     0.12s ease,
+        color            0.12s ease;
+}
+
+.fish-button:hover,
+Button.fish-button:hover {
+    background-color: var(--abyss-500);
+    border-color: var(--brand-400);
+    border-top-color: var(--brand-400);
+    color: var(--text-bright);
+}
+
+.fish-button:active,
+Button.fish-button:active {
+    background-color: var(--brand-press);
+    border-color: var(--brand-500);
+    border-top-color: var(--edge-dark);
+    border-bottom-color: var(--edge-light);
+    color: var(--text-bright);
+    scale: 0.98;
+}
+
+.fish-button:focus,
+Button.fish-button:focus {
+    border-color: var(--brand-500);
+}
+
+.fish-button:disabled,
+Button.fish-button:disabled {
+    background-color: var(--abyss-800);
+    border-color: var(--abyss-700);
+    border-top-color: var(--abyss-700);
+    border-bottom-color: var(--abyss-700);
+    color: var(--abyss-300);
+    opacity: 0.5;
+}
+
+/* The affirmative action in a pair. */
+.fish-button--primary,
+Button.fish-button--primary {
+    background-color: var(--brand-600);
+    border-color: var(--brand-500);
+    border-top-color: var(--brand-400);
+    border-bottom-color: var(--edge-dark);
+    color: var(--text-bright);
+}
+
+.fish-button--primary:hover,
+Button.fish-button--primary:hover {
+    background-color: var(--brand-500);
+    border-color: var(--brand-300);
+    border-top-color: var(--brand-300);
+    color: var(--white);
+}
+
+/* Destructive — delete character, leave guild, disband. */
+.fish-button--danger,
+Button.fish-button--danger {
+    background-color: var(--abyss-700);
+    border-color: var(--danger-border);
+    border-top-color: var(--danger-border);
+    color: var(--danger);
+}
+
+.fish-button--danger:hover,
+Button.fish-button--danger:hover {
+    background-color: var(--danger-fill);
+    border-color: var(--danger);
+    border-top-color: var(--danger);
+    color: var(--text-bright);
+}
+
+/* Quiet — a tertiary action that should not compete. */
+.fish-button--ghost,
+Button.fish-button--ghost {
+    background-color: var(--clear);
+    border-color: var(--abyss-400);
+    border-top-color: var(--abyss-400);
+    border-bottom-color: var(--abyss-400);
+    color: var(--abyss-200);
+}
+
+.fish-button--ghost:hover,
+Button.fish-button--ghost:hover {
+    background-color: var(--abyss-700);
+    color: var(--abyss-100);
+}
+
+.fish-label,
+Label.fish-label {
+    color: var(--abyss-100);
+    font-size: 11px;
+    -unity-text-align: middle-left;
+}
+
+.fish-label--muted     { color: var(--abyss-300); }
+.fish-label--secondary { color: var(--abyss-200); }
+.fish-label--accent    { color: var(--brand-300); }
+.fish-label--danger    { color: var(--danger); }
+.fish-label--good      { color: var(--stam); }
+
+.fish-label--title {
+    color: var(--abyss-100);
+    font-size: 15px;
+    -unity-font-style: bold;
+    letter-spacing: 1.5px;
+}
+
+.fish-label--caption {
+    color: var(--abyss-300);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 1.2px;
+}
+
+/* Numbers that line up in a column. */
+.fish-label--numeric {
+    -unity-text-align: middle-right;
+    -unity-font-style: bold;
+}
+
+/*
+    Text fields. UI Toolkit puts the editable surface on an inner
+    #unity-text-input child, so background and border have to be set there —
+    styling only the outer element leaves the visible box at Unity's defaults
+    and the field looks unthemed.
+*/
+.fish-input,
+TextField.fish-input {
+    font-size: 11px;
+}
+
+.fish-input > #unity-text-input,
+TextField.fish-input > #unity-text-input {
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-top-color: var(--edge-dark);
+    border-bottom-color: var(--edge-light);
+    border-radius: 3px;
+    color: var(--abyss-100);
+    -unity-text-align: middle-left;
+    transition: border-color 0.12s ease;
+}
+
+.fish-input > #unity-text-input:hover,
+TextField.fish-input > #unity-text-input:hover {
+    border-color: var(--abyss-300);
+}
+
+.fish-input:focus > #unity-text-input,
+TextField.fish-input:focus > #unity-text-input {
+    border-color: var(--brand-500);
+    border-top-color: var(--brand-500);
+}
+
+.fish-input:disabled > #unity-text-input,
+TextField.fish-input:disabled > #unity-text-input {
+    background-color: var(--abyss-800);
+    border-color: var(--abyss-700);
+    color: var(--abyss-300);
+    opacity: 0.5;
+}
+
+.fish-toggle > .unity-toggle__input > .unity-toggle__checkmark {
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-top-color: var(--edge-dark);
+    border-radius: 3px;
+}
+
+.fish-toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
+    background-color: var(--brand-500);
+    border-color: var(--brand-300);
+}
+
+.fish-toggle > .unity-toggle__input > .unity-toggle__checkmark:hover {
+    border-color: var(--brand-400);
+}
+
+.fish-toggle > .unity-toggle__input > Label {
+    color: var(--abyss-200);
+    font-size: 11px;
+}
+
+.fish-dropdown > .unity-base-popup-field__input {
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-top-color: var(--edge-dark);
+    border-bottom-color: var(--edge-light);
+    border-radius: 3px;
+    color: var(--abyss-100);
+    font-size: 11px;
+}
+
+.fish-dropdown > .unity-base-popup-field__input:hover {
+    border-color: var(--brand-400);
+}
+
+.fish-dropdown .unity-base-popup-field__text {
+    color: var(--abyss-100);
+}
+
+.fish-dropdown .unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--abyss-200);
+}
+
+/* Sliders. */
+.fish-slider .unity-base-slider__tracker {
+    background-color: var(--abyss-900);
+    border-color: var(--abyss-400);
+    border-width: 1px;
+    border-radius: 2px;
+}
+
+.fish-slider .unity-base-slider__dragger {
+    background-color: var(--brand-500);
+    border-color: var(--brand-300);
+    border-width: 1px;
+    border-radius: 2px;
+}
+
+.fish-slider .unity-base-slider__dragger:hover {
+    background-color: var(--brand-400);
+}
+
+/*
+    The value box a slider draws when show-input-field is set. Unity's default theme
+    assumes a light panel — pale fill, pale text — which is close to unreadable on this
+    one. Both the field wrapper and its inner input are restyled: the wrapper is what
+    the layout sees, but the input element is what actually paints the background, and
+    styling only one leaves a pale ring around the box.
+
+    Sits a step darker than the panels these sliders appear on, so the box reads as
+    recessed. min-width keeps three digits from clipping.
+*/
+.fish-slider .unity-base-slider__text-field,
+.fish-slider .unity-base-slider__text-field > .unity-base-text-field__input {
+    background-color: var(--abyss-850);
+    border-color: var(--abyss-500);
+    color: var(--abyss-100);
+}
+
+.fish-slider .unity-base-slider__text-field {
+    min-width: 46px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   15. SECTIONS AND EMPTY STATES
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    A labelled group inside a scrolling body. The rule under the caption is
+    what turns a list of controls into a document with structure.
+*/
+.fish-section {
+    color: var(--brand-300);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    -unity-text-align: middle-left;
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+}
+
+/*
+    Shown where a list has nothing in it. Every roster, bag and log needs one —
+    a blank area reads as broken, a sentence reads as empty.
+*/
+.fish-empty {
+    color: var(--abyss-300);
+    font-size: 11px;
+    -unity-text-align: middle-center;
+}
+
+.fish-hint {
+    color: var(--abyss-300);
+    font-size: 9px;
+    -unity-text-align: middle-center;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   16. UTILITY
    ═══════════════════════════════════════════════════════════ */
 
 .fish-hidden { display: none; }
 
-/* Text colour helpers */
-.fish-text--primary   { color: rgb(200, 205, 214); }
-.fish-text--secondary { color: rgb(138, 147, 162); }
-.fish-text--muted     { color: rgb(90, 98, 114); }
-.fish-text--accent    { color: rgb(255, 107, 26); }
-.fish-text--teal      { color: rgb(88, 214, 178); }
-.fish-text--danger    { color: rgb(214, 48, 49); }
+.fish-text--primary   { color: var(--abyss-100); }
+.fish-text--secondary { color: var(--abyss-200); }
+.fish-text--muted     { color: var(--abyss-300); }
+.fish-text--accent    { color: var(--brand-500); }
+.fish-text--teal      { color: var(--teal); }
+.fish-text--danger    { color: var(--danger); }
 .fish-text--bold      { -unity-font-style: bold; }

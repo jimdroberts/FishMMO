@@ -28,9 +28,14 @@
 
             <ui:VisualElement name="header-left" class="bank-header__left">
                 <ui:VisualElement name="header-icon" class="fish-panel__icon bank-header__icon" />
-                <ui:Label name="header-title"
-                          class="fish-panel__title bank-header__title"
-                          text="BANK" />
+                <ui:VisualElement name="header-titles" class="bank-header__titles">
+                    <ui:Label name="header-title"
+                              class="fish-panel__title bank-header__title"
+                              text="BANK" />
+                    <ui:Label name="header-subtitle"
+                              class="fish-panel__subtitle bank-header__subtitle"
+                              text="0 / 0 slots" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:Button name="close-button" class="fish-close-btn bank-close-btn" text="✕" />
@@ -51,8 +56,18 @@
                      Lock        →  fish-slot__lock bank-slot__lock
             -->
             <ui:VisualElement name="slot-grid" class="bank-grid" />
+            <ui:Label name="bank-empty" text="Your vault is empty." class="fish-empty bank-empty" />
 
         </ui:ScrollView>
+
+        <!-- ── FOOTER : capacity readout ────────────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer bank-footer">
+            <ui:Label name="bank-used" text="0 used" class="fish-label fish-label--caption bank-footer__stat" />
+            <ui:VisualElement name="bank-capacity-track" class="fish-bar bank-capacity">
+                <ui:VisualElement name="bank-capacity-fill" class="fish-bar__fill bank-capacity__fill" />
+            </ui:VisualElement>
+            <ui:Label name="bank-free" text="0 free" class="fish-label fish-label--caption bank-footer__stat bank-footer__stat--right" />
+        </ui:VisualElement>
 
     </ui:VisualElement>
 

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 
@@ -6,10 +6,13 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit tooltip control. Displays a text box near the mouse cursor and adjusts its
-	/// vertical position to remain on-screen. Mirrors the legacy UGUI <c>UITooltip</c> API.
+	/// vertical position to remain on-screen.
 	/// </summary>
 	public class UITKTooltip : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Tooltip;
+
 		/// <summary>
 		/// Name of the tooltip box container element.
 		/// </summary>

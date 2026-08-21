@@ -1,4 +1,4 @@
-using FishMMO.Shared;
+﻿using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using KinematicCharacterController;
 using UnityEngine;
@@ -47,7 +47,7 @@ namespace FishMMO.Client
 			var pos = target.Transform.position;
 			pos.y += GetDisplayHeight(target);
 			int fx = 0; fx.EnableBit(LabelEffect.FloatRandom); fx.EnableBit(LabelEffect.FadeOut);
-			LabelMaker.Display3D(amount.ToString(), pos, dmg.DisplayColor, 2.0f, 1.0f, false, fx);
+			UITKLabelMaker.Display3D(amount.ToString(), pos, dmg.DisplayColor, 2.0f, 1.0f, false, fx);
 		}
 
 		private void OnHealed(ICharacter healer, ICharacter healed, int amount)
@@ -56,19 +56,19 @@ namespace FishMMO.Client
 			var pos = healed.Transform.position;
 			pos.y += GetDisplayHeight(healed);
 			int fx = 0; fx.EnableBit(LabelEffect.FloatUp); fx.EnableBit(LabelEffect.FadeOut);
-			LabelMaker.Display3D(amount.ToString(), pos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false, fx);
+			UITKLabelMaker.Display3D(amount.ToString(), pos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false, fx);
 		}
 
 		private void OnKilled(ICharacter killer, ICharacter victim)
 		{
 			if (victim == null || !victim.NetworkObject.IsOwner) return;
-			if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog d)) d.ShowDeathDialog();
+			if (UIManager.TryGetTK("UIDeathDialog", out UITKDeathDialog d)) d.ShowDeathDialog();
 		}
 
 		private void OnResurrected(ICharacter resurrector, ICharacter resurrected)
 		{
 			if (resurrected == null || !resurrected.NetworkObject.IsOwner) return;
-			if (UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog d)) d.Hide();
+			if (UIManager.TryGetTK("UIDeathDialog", out UITKDeathDialog d)) d.Hide();
 		}
 
 		private void OnAchievement(ICharacter character, AchievementTemplate template, AchievementTier tier)
@@ -77,7 +77,7 @@ namespace FishMMO.Client
 			var pos = character.Transform.position;
 			pos.y += GetDisplayHeight(character);
 			int fx = 0; fx.EnableBit(LabelEffect.FadeIn); fx.EnableBit(LabelEffect.FadeOut); fx.EnableBit(LabelEffect.Bounce);
-			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 2.0f, 4.0f, false, fx);
+			UITKLabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 2.0f, 4.0f, false, fx);
 		}
 
 		private static bool Config(string key) =>

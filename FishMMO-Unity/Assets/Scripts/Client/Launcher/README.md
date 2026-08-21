@@ -32,17 +32,39 @@ Everything it does over the network goes through an injected service so the flow
 | News HTML | `IHtmlContentFetcher` | `UnityHtmlContentFetcher` |
 | Version + patch download | `IPatchServerService` | `HttpPatchServerService` |
 | Updater process | `IUpdaterLauncher` | `SystemUpdaterLauncher` |
-| Presentation | `ILauncherView` | `UGUILauncherView` |
+| Presentation | `ILauncherView` | `UITKClientLauncher` |
 
 Rendering is behind `ILauncherView` so the state machine, version check, and patch flow exist
-once regardless of which UI technology draws them. `ClientLauncher` falls back to
-`UGUILauncherView` — built from the element references already serialized on it — whenever no
-view component is assigned, so existing scenes keep working untouched.
+once regardless of which UI technology draws them. `UITKClientLauncher` — a UI Toolkit
+`MonoBehaviour` over a `UIDocument`, living in [`Client/GUI/Launcher/`](../GUI/Launcher) beside
+its UXML and USS — is the only implementation, and it must be assigned to `ClientLauncher`'s
+`launcherViewComponent` field in the scene. The field is typed as `MonoBehaviour` because Unity
+cannot serialize an interface reference; `ResolveView()` does the cast.
 
-The interface deliberately expresses intent (*show this status*) rather than widget
-manipulation (*set this label, activate that group*). The uGUI view has no dedicated status
-element and has to borrow the progress label and reveal its parent group to be seen at all;
-encoding that quirk in the interface would export one view's limitation to every other.
+There is no fallback. `ClientLauncher` used to build a uGUI adapter out of the widget
+references serialized on it whenever no view was assigned; that adapter rendered through
+TextMeshPro, and both went with the client's conversion to UI Toolkit. `ResolveView()` now logs
+an error and returns null when the assignment is missing or does not implement the interface,
+which beats silently constructing a view over serialized fields that no longer exist. The
+widget fields themselves (background, title, progress bar, buttons, status label, and the news
+text and its link handler) were removed from the component at the same time.
+
+The interface still expresses intent (*show this status*) rather than widget manipulation
+(*set this label, activate that group*), and that is worth keeping with one implementation in
+the tree: it is what allowed the uGUI view to be deleted without a line of the state machine
+changing. A view is free to satisfy each call however its technology prefers — the uGUI one had
+no dedicated status element and borrowed the progress label, while UI Toolkit simply writes to
+a status label; encoding either quirk in the interface would export one view's limitation to
+every other.
+
+`SetVisible(bool)` is on the interface for one specific reason. The launcher calls it the
+moment the game scene is ready, *before* the launcher scene is unloaded,
+because the unload is asynchronous and in the editor may not happen at all — the launcher scene
+is usually opened directly there, so Addressables holds no handle for it and its unload call is
+a silent no-op. Hiding is synchronous and works on both paths, so the launcher can never be
+left sitting behind the login screen. The UI Toolkit view disables the whole `UIDocument`
+rather than just hiding the root, so the panel stops swallowing pointer input as well as
+drawing.
 
 ## Supported Platforms
 
@@ -66,7 +88,7 @@ encoding that quirk in the interface would export one view's limitation to every
 
 ## Prerequisites
 
-- The `ClientLauncher` scene, with `ClientLauncher` and its four service components wired in the Inspector. A missing dependency is reported at `Awake` and the launcher refuses to run rather than null-referencing mid-flow.
+- The `ClientLauncher` scene, with `ClientLauncher`, its service components, and a component implementing `ILauncherView` (`UITKClientLauncher`) wired in the Inspector. A missing dependency is reported at `Awake` and the launcher refuses to run rather than null-referencing mid-flow.
 - `Constants.Configuration.APIHost` and `LauncherHtmlUrl`, both baked at build time from `GeneratedHostConfig` (CI substitutes them from `FISHMMO_ROOT_DOMAIN`).
 - `ClientApiSecret.generated.cs`, produced by **FishMMO Dashboard > Game Settings**. A build still carrying the sentinel value will be rejected by `ClientGate`.
 - The Updater executable present at the install root (`Constants.Configuration.UpdaterExecutable`).
@@ -78,11 +100,27 @@ encoding that quirk in the interface would export one view's limitation to every
 | Property | Type | Default | Purpose |
 |---|---|---|---|
 | `htmlViewURL` | `string` | `""` | Per-scene override for the news URL. **Leave empty.** |
-| `divClass` | `string` | — | CSS class of the `div` whose text is extracted from the fetched page |
+| `divClass` | `string` | `content` | CSS class of the `div` whose text is extracted from the fetched page |
+| `newsFallbackSummary` | `string` (`TextArea`) | built-in blurb | Shown in the news pane when no feed is configured, and when a fetch fails |
 | `defaultScreenWidth` / `defaultScreenHeight` | `int` | — | Window size applied on launch |
 | `transientStateTimeoutSeconds` | `float` | `120` | Watchdog timeout for states with no interactive button |
 
 > **Why `htmlViewURL` defaults to empty.** A non-empty default gets baked into the scene the first time it is saved, and the serialized copy then silently wins over the build-time configured value for every subsequent build — which is exactly how a stale hard-coded URL once shipped. Resolution happens at read time instead: `HtmlViewURL` falls back to `Constants.Configuration.LauncherHtmlUrl` whenever the override is blank.
+
+> **Why the news pane always has content.** No feed is a valid deployment, not a failure, but
+> hiding the pane collapsed the panel into a header stacked directly on a footer, which reads
+> as a broken window rather than as a launcher with no news today. The pane is filled with
+> `newsFallbackSummary` instead — both when nothing is configured and when the fetch fails, so
+> a dead feed never leaves an error string as the only thing to look at. It is serialized and
+> multi-line so a shard running its own build can rewrite the copy without a code change.
+
+> **Why an unsubstituted URL counts as "not configured".** `HostConfig.generated.cs` ships the
+> news URL containing `FISHMMO_SENTINEL_PLACEHOLDER`, which CI rewrites from
+> `FISHMMO_ROOT_DOMAIN` at build time. In a working copy that substitution has not happened, so
+> the URL is non-empty but names a host that cannot resolve. `IsNewsUrlConfigured` screens the
+> sentinel out and skips the request entirely, rather than reporting a fetch failure for a feed
+> nobody configured — the same convention `ClientCertificatePinning` uses to keep sentinel
+> values out of the pin set.
 
 ### Player settings
 
@@ -102,6 +140,13 @@ live in the world scene, so nothing had read a settings file this early.
 The transfer tunables take the component's serialized value as their fallback, so an install
 where nothing has been changed behaves exactly as it did before these existed.
 
+The Settings panel's sliders take their `lowValue`/`highValue` from the same
+`LauncherSettings` constants the clamps use (`MinRequestTimeout`/`MaxRequestTimeout`,
+`MinRetries`/`MaxRetriesLimit`, `MinRetryDelay`/`MaxRetryDelay`) rather than repeating those
+numbers as UXML literals, so a slider cannot offer a value the setter will silently clamp away.
+Each label carries its range for the same reason — a slider with no numbers on it gives the
+player no way to tell what a drag is worth.
+
 `Launcher.PatchDirectory` is **not** a "move the game" setting and cannot be one — the Updater
 patches files relative to its own location and ships beside the client binaries, so the install
 root is fixed by construction. It exists to keep large, transient archives off a small system
@@ -116,6 +161,25 @@ the only real throughput controls available, which is why nothing else is offere
 
 All player-facing strings are constants on the nested `UIText` class — status labels (`StatusPatchUnavailable`, `StatusServerRejectedVersion`, …), long-form explanations (`DetailPatchUnavailable`, `DetailApplyingPatch`, …), and log format strings. Change copy there, not at the call sites.
 
+### Panel layout
+
+The panel is authored in `UILauncher.uxml` and styled by `UILauncher.uss` on top of the shared
+`FishMMO-Theme.uss`, so element names are the contract between the two: `UITKClientLauncher`
+queries them by name and reports which ones it could not find rather than failing element by
+element later.
+
+Two layout decisions are enforced in code rather than in the stylesheet:
+
+- **The brand banner's height is derived from its resolved width.** USS has no aspect-ratio
+  property, so a fixed height on a full-width strip can only be wrong — `scale-and-crop` slices
+  the top and bottom off the artwork, `scale-to-fit` leaves the panel background showing down
+  both sides, and the banner is far wider in proportion than the panel it sits in. Driving
+  height from width removes the tradeoff at any panel size. The ratio is measured from the
+  assigned image, so replacing the artwork needs no code change.
+- **Quit sits at the far left of the footer and Play/Connect at the far right**, separated by
+  the full panel width. The affirmative action is where the eye and the cursor finish, and the
+  destructive one is far enough away that neither is reachable by a mis-click on the other.
+
 ## State Machine
 
 | State | Button | Click action | Meaning |
@@ -123,6 +187,7 @@ All player-facing strings are constants on the nested `UIText` class — status 
 | `LoadingNews` | disabled | — | Fetching the news page |
 | `Connecting` | disabled | — | Contacting the API host |
 | `CheckingVersion` | disabled | — | Comparing installed version to the server's |
+| `UpdateAvailable` | **Update** | `PlayButtonUpdate` | A patch exists and `Launcher.AutoUpdate` is off — the player starts it |
 | `DownloadingPatch` | disabled | — | Progress bar visible; heartbeats the watchdog |
 | `ApplyingPatch` | disabled | — | Updater has been handed the install |
 | `ReadyToPlay` | **Play** | `PlayButtonLaunch` | Versions match |
@@ -162,8 +227,15 @@ A download error deletes the partial file best-effort and lands in `PatchDownloa
 
 `PlayButtonLaunch()` enqueues the `ClientPostboot` scene, waits on the returned `AddressableLoadBatch`, then in `OnPostbootSceneLoaded`:
 
-1. Unloads the `ClientLauncher` scene.
-2. Finds the `ClientPostbootSystem` among the loaded scene's roots and calls `StartBootstrap()` on it.
+1. Hides the view via `ILauncherView.SetVisible(false)`.
+2. Unloads the `ClientLauncher` scene.
+3. Finds the `ClientPostbootSystem` among the loaded scene's roots and calls `StartBootstrap()` on it.
+
+The hide happens first, and independently of whether the unload succeeds. Addressables unloads
+only scenes it loaded itself and silently does nothing for any other, so in the editor — where
+the launcher scene is usually opened directly or through QuickStart — the unload is a no-op and
+the launcher UI would otherwise sit on screen behind the login screen for the rest of the
+session. Unloading also destroys the component, so nothing after that call may depend on it.
 
 If `ClientPostboot` is already loaded — reachable when a previous launch failed — the launch completes directly instead of enqueueing a second load, which would otherwise dead-end.
 
@@ -183,7 +255,9 @@ The signing secret lives in `GeneratedClientSecret.Secret` (`ClientApiSecret.gen
 
 | Check | How to verify | Expected result |
 |---|---|---|
-| News renders | Launch a standalone build | News panel populated; on failure, a logged warning and the flow continues to the version check |
+| News renders | Launch a standalone build | News panel populated; on failure, a logged warning, `newsFallbackSummary` in the pane, and the flow continues to the version check |
+| No feed configured | Launch with an empty or still-sentinel news URL | No request is issued; the pane shows `newsFallbackSummary` rather than an error |
+| Launcher gets out of the way | Press **Play** in the editor and in a build | Launcher UI disappears at the handoff on both paths, even where the scene unload no-ops |
 | Host failover | Point the first candidate at a dead host | Debug log per failed candidate, then success on the next |
 | Up-to-date client | Launch at the server's version | Button reads **Play** |
 | Patch applied | Launch an outdated client with a published patch | Download progress → `ApplyingPatch` → launcher exits → client restarts at the new version, and `Patches/` is empty afterwards |
@@ -240,14 +314,15 @@ flowchart TD
 ```
 Client/Launcher/
 ├── ClientLauncher.cs            # MonoBehaviour: state machine, orchestration
-├── LauncherState.cs             # The 15 UI/process states
+├── LauncherState.cs             # The 16 UI/process states
+├── LauncherSettings.cs          # Typed access to the persisted Launcher.* settings + their clamps
 ├── PatchInfo.cs                 # Server patch metadata: UpToDate, PatchAvailable, Sha256, Size
 ├── VersionFetch.cs              # Version response parsing
 │
 ├── ILauncherView.cs             # Contract: the presentation surface the state machine drives
-├── UGUILauncherView.cs          #   → legacy uGUI/TextMeshPro implementation
-├── HtmlToTmpTextConverter.cs    # News node tree → TextMeshPro rich text (uGUI view only)
-├── LauncherLinkPolicy.cs        # Scheme allowlist for opening news links (shared by all views)
+├── DownloadStats.cs             # Download snapshot handed to the view (bytes, rate, remaining)
+├── DownloadRateTracker.cs       # Sliding-window transfer rate and time-remaining estimate
+├── LauncherLinkPolicy.cs        # Scheme allowlist for opening news links (any view)
 │
 ├── IPatchServerService.cs       # Contract: GetLatestVersion, DownloadPatch
 ├── HttpPatchServerService.cs    #   → HTTP implementation with SHA-256 verification
@@ -257,12 +332,32 @@ Client/Launcher/
 ├── SystemUpdaterLauncher.cs     #   → Process.Start implementation
 ├── UnityWebRequestService.cs    # Shared UnityWebRequest wrapper
 │
+├── InstallSizeProbe.cs          # Off-thread install size measurement for the Settings panel
+├── NativeFolderPicker.cs        # OS folder dialog for the patch directory (Windows only)
+│
 ├── ApiHostResolver.cs           # Candidate host list, loopback detection, log sanitizing
 ├── ClientApiSigner.cs           # X-FishMMO-Client HMAC header
 └── ClientApiSecret.cs           # Compiled-in gate secret (NOT a credential)
 ```
 
 `ClientApiSecret.generated.cs` sits alongside these but is generated, not committed.
+
+The view lives outside this folder, with the rest of the client's UI Toolkit assets:
+
+```
+Client/GUI/Launcher/
+├── UITKClientLauncher.cs        # The ILauncherView implementation, over a UIDocument
+├── UITKHtmlContentRenderer.cs   # News node tree → VisualElement tree
+├── UILauncher.uxml              # Panel structure; element names are the code's contract
+└── UILauncher.uss               # Launcher styles on top of the shared FishMMO-Theme.uss
+```
+
+`UITKHtmlContentRenderer` builds elements rather than a markup string on purpose: composing
+markup means remote news content is concatenated into a string that is then parsed, so a page
+containing tag-like text can restyle everything after it. Text assigned to a `Label` is never
+parsed as markup. It also bounds traversal depth and element count, and routes every link
+through `LauncherLinkPolicy`, because the news document comes from an operator-configured URL
+this client does not control.
 
 ### Related
 

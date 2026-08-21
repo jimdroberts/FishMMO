@@ -57,7 +57,7 @@
     height: 22px;
     margin-right: 10px;
     -unity-background-scale-mode: scale-to-fit;
-    background-color: rgb(255, 107, 26);
+    background-color: var(--brand-500);
     border-radius: 3px;
 }
 
@@ -67,10 +67,24 @@
 
         .launcher-hero { height: 180px; background-image: url("..."); }
 */
+/*
+    Brand banner across the top of the panel.
+
+    The height here is only a starting value — UITKClientLauncher.AttachHeroAspect recomputes it
+    from the resolved width every time the panel resizes, so the strip always matches the image's
+    own proportions. That is what keeps the banner full-width, uncropped and unstretched at the
+    same time; USS has no aspect-ratio property to express it directly.
+
+    scale-to-fill rather than crop or fit, because with the height already correct there is
+    nothing to crop away and nothing to letterbox.
+*/
 .launcher-hero {
-    height: 0;
+    height: 96px;
     flex-shrink: 0;
-    -unity-background-scale-mode: scale-and-crop;
+    background-image: url("../../../../Sprites/FishMMOBanner.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
 }
 
 /* ── Header ─────────────────────────────────────────────── */
@@ -113,8 +127,8 @@
 */
 .launcher-settings {
     flex-direction: column;
-    background-color: rgb(28, 31, 34);
-    border-top-color: rgb(46, 51, 59);
+    background-color: var(--abyss-700);
+    border-top-color: var(--abyss-500);
     border-top-width: 1px;
     flex-shrink: 0;
     max-height: 38%;
@@ -133,29 +147,12 @@
 .launcher-setting {
     margin-bottom: 4px;
     font-size: 11px;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
 }
 
 .launcher-setting > .unity-base-field__label {
     min-width: 180px;
-    color: rgb(138, 147, 162);
-}
-
-/*
-    Sliders with show-input-field draw their value box from Unity's default theme, which
-    assumes a light panel — pale fill, pale text — and is close to unreadable against this
-    one. Both the field wrapper and its inner input are restyled: the wrapper is what the
-    layout sees, but the input element is what actually paints the background.
-*/
-.launcher-setting .unity-base-slider__text-field,
-.launcher-setting .unity-base-slider__text-field > .unity-base-text-field__input {
-    background-color: rgb(18, 20, 23);
-    border-color: rgb(58, 64, 74);
-    color: rgb(214, 219, 228);
-}
-
-.launcher-setting .unity-base-slider__text-field {
-    min-width: 46px;
+    color: var(--abyss-200);
 }
 
 .launcher-settings-heading--spaced {
@@ -182,7 +179,7 @@
 
 .launcher-settings-note {
     font-size: 10px;
-    color: rgb(90, 98, 114);
+    color: var(--abyss-300);
     white-space: normal;
     margin-top: 4px;
 }
@@ -190,7 +187,7 @@
 /* Paths wrap rather than clip — a truncated path is useless for diagnosing anything. */
 .launcher-path {
     white-space: normal;
-    color: rgb(138, 147, 162);
+    color: var(--abyss-200);
 }
 
 /* ── News pane ──────────────────────────────────────────── */
@@ -221,7 +218,7 @@
 
 .launcher-status {
     font-size: 11px;
-    color: rgb(138, 147, 162);
+    color: var(--abyss-200);
     white-space: normal;
     -unity-text-align: middle-left;
     margin-bottom: 6px;
@@ -244,32 +241,45 @@
 
 .launcher-progress-text {
     font-size: 10px;
-    color: rgb(90, 98, 114);
+    color: var(--abyss-300);
     -unity-text-align: middle-right;
     margin-top: 4px;
 }
 
+/*
+    A spacer between the two buttons rather than justify: space-between, so the row keeps working
+    if a third button is ever added — space-between would spread all three evenly and put
+    something new between Quit and Play.
+*/
 .launcher-buttons {
     flex-direction: row;
-    justify-content: flex-end;
+    align-items: center;
+}
+
+.launcher-buttons__spacer {
+    flex-grow: 1;
 }
 
 .launcher-btn {
     height: 34px;
     min-width: 120px;
-    margin-left: 8px;
     font-size: 11px;
+    flex-shrink: 0;
+}
+
+/* Quit is destructive but not dangerous — quiet, not red. */
+.launcher-btn--quit {
+    color: var(--abyss-200);
 }
 
 .launcher-btn--primary {
-    color: rgb(255, 140, 69);
-    border-color: rgba(255, 107, 26, 0.40);
-    background-color: rgba(255, 107, 26, 0.12);
+    color: var(--brand-400);
+    border-color: var(--brand-border);
+    background-color: var(--brand-lo);
 }
 
 .launcher-btn:disabled {
     opacity: 0.45;
-    cursor: arrow;
 }
 
 /* ── News content (built at runtime) ────────────────────── */
@@ -281,14 +291,14 @@
 
 .launcher-news__text {
     font-size: 12px;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
     white-space: normal;
 }
 
 .launcher-news__h1 {
     font-size: 22px;
     -unity-font-style: bold;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
     white-space: normal;
     margin-top: 10px;
     margin-bottom: 4px;
@@ -297,7 +307,7 @@
 .launcher-news__h2 {
     font-size: 18px;
     -unity-font-style: bold;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
     white-space: normal;
     margin-top: 8px;
     margin-bottom: 4px;
@@ -306,7 +316,7 @@
 .launcher-news__h3 {
     font-size: 15px;
     -unity-font-style: bold;
-    color: rgb(255, 173, 118);
+    color: var(--brand-300);
     white-space: normal;
     margin-top: 6px;
     margin-bottom: 3px;
@@ -320,13 +330,13 @@
 
 .launcher-news__bullet {
     font-size: 12px;
-    color: rgb(255, 107, 26);
+    color: var(--brand-500);
     margin-right: 6px;
 }
 
 .launcher-news__rule {
     height: 1px;
-    background-color: rgb(46, 51, 59);
+    background-color: var(--abyss-500);
     margin-top: 8px;
     margin-bottom: 8px;
 }
@@ -337,12 +347,11 @@
 */
 .launcher-news__link {
     font-size: 12px;
-    color: rgb(255, 107, 26);
+    color: var(--brand-500);
     white-space: normal;
-    cursor: link;
 }
 
 .launcher-news__link:hover {
-    color: rgb(255, 140, 69);
+    color: var(--brand-400);
     -unity-font-style: bold;
 }

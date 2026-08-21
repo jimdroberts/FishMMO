@@ -1,0 +1,51 @@
+/*
+    UIContextMenu.uss
+    Layout for the right-click context menu. Colours come from FishMMO-Theme.uss.
+*/
+
+/*
+    The root fills the panel but ignores picking, so a click anywhere outside the menu reaches
+    the world instead of being swallowed by an invisible full-screen element — which is also
+    what lets UITKContextMenu detect an outside click at all.
+*/
+.context-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/*
+    Absolutely positioned; left/top are written from C# at the pointer, then clamped once the
+    menu's own size resolves. min-width keeps a one-word entry like "Trade" from producing a
+    menu too narrow to read as one.
+*/
+.context-menu {
+    position: absolute;
+    min-width: 132px;
+    padding: 4px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.context-entry-list {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/*
+    Entries are left-aligned and borderless: a stack of bordered buttons reads as a toolbar,
+    not a menu. The themed hover state still marks the row under the pointer.
+*/
+.context-entry {
+    height: 24px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    border-width: 0;
+    border-radius: 3px;
+    -unity-text-align: middle-left;
+    flex-shrink: 0;
+}

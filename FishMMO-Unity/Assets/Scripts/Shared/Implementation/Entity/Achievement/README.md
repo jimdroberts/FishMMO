@@ -211,7 +211,7 @@ Item rewards attempt inventory first. If the inventory lacks sufficient free slo
 - **Buff System** — Achievement tiers can define buff rewards (not yet handled server-side).
 - **Title System** — Achievement tiers can define title rewards (not yet handled server-side).
 - **Database Layer** — Achievements are persisted and restored via `CharacterAchievementData` DTO. Reward persistence (abilities, items) uses fire-and-forget async via `ICharacterKnownAbilityService`, `ICharacterInventoryService`, and `ICharacterBankService`.
-- **UI** — `UIAchievements` panel subscribes to `OnUpdateAchievement` for real-time progress display.
+- **UI** — `UITKAchievements` panel subscribes to `OnUpdateAchievement` for real-time progress display.
 - **Client** — `Client.cs` subscribes to `OnCompleteAchievement` for client-side completion effects (messages, sounds).
 
 ## Operational Checks
@@ -227,7 +227,7 @@ Item rewards attempt inventory first. If the inventory lacks sufficient free slo
 | Item rewards — inventory | Complete a tier with item rewards; confirm items appear in inventory |
 | Item rewards — bank fallback | Fill inventory, complete a tier with item rewards; confirm items appear in bank |
 | Database persistence | Disconnect and reconnect; confirm achievement state is restored |
-| UI reflects progress | Open `UIAchievements` panel; confirm progress updates in real time |
+| UI reflects progress | Open `UITKAchievements` panel; confirm progress updates in real time |
 
 ## Flow Diagram
 
@@ -327,7 +327,7 @@ Shared/Implementation/Network/Character/AchievementBroadcasts.cs              # 
 Server/Implementation/World/SceneServer/Achievement/AchievementSystem.cs       # Server-side achievement tracking, rewards, and DB persistence
 Shared/Implementation/Entity/ECA/Actions/Character/Achievement/AchievementIncrementAction.cs  # ECA action calling Increment()
 Client/Client.cs                                                               # Client-side OnCompleteAchievement handler
-Client/UI/Controls/World/Achievement/UIAchievements.cs                         # Achievement UI panel
+Client/GUI/World/Achievement/UITKAchievements.cs                               # Achievement UI Toolkit panel
 ```
 
 ### Inheritance Hierarchies

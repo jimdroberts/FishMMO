@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -7,10 +7,9 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit abilities panel. Replaces the legacy UGUI <see cref="UIAbilities"/> /
-	/// <see cref="UIAbilityButton"/>: renders the character's abilities, known abilities, and known ability
-	/// events as tabbed icon slots. Hovering shows the entry tooltip; left-clicking a known ability picks it
-	/// up onto the shared drag object so it can be assigned to a hotkey.
+	/// UI Toolkit abilities panel. Renders the character's abilities, known abilities, and known
+	/// ability events as tabbed icon slots. Hovering shows the entry tooltip; left-clicking a known
+	/// ability picks it up onto the shared drag object so it can be assigned to a hotkey.
 	/// </summary>
 	public class UITKAbilities : UITKCharacterControl
 	{
@@ -38,10 +37,10 @@ namespace FishMMO.Client
 		/// <summary>USS class applied to an ability slot's icon element.</summary>
 		private const string SLOT_ICON_CLASS = "ability-slot__icon";
 
-		/// <summary>Name of the shared UGUI drag object overlay.</summary>
+		/// <summary>Name of the shared drag object overlay panel.</summary>
 		private const string DRAG_OBJECT_NAME = "UIDragObject";
 
-		/// <summary>Name of the shared UGUI tooltip overlay.</summary>
+		/// <summary>Name of the shared tooltip overlay panel.</summary>
 		private const string TOOLTIP_NAME = "UITooltip";
 
 		/// <summary>
@@ -347,6 +346,20 @@ namespace FishMMO.Client
 			SetListVisible(abilityList, tab == AbilityTabType.Ability);
 			SetListVisible(knownList, tab == AbilityTabType.KnownAbility);
 			SetListVisible(eventsList, tab == AbilityTabType.KnownAbilityEvent);
+
+			/* The header count describes what the player is looking at, so it follows the tab.
+			 * Binding it once at startup would leave it reporting the ability list while the
+			 * effects tab is open. */
+			VisualElement active =
+				tab == AbilityTabType.Ability ? abilityList :
+				tab == AbilityTabType.KnownAbility ? knownList : eventsList;
+			BindListChrome(
+				active,
+				Root?.Q<Label>("ability-count"),
+				Root?.Q<Label>("ability-subtitle"),
+				Root?.Q<Label>("ability-empty"),
+				"ability",
+				"abilities");
 
 			SetTabActive(abilityTab, tab == AbilityTabType.Ability);
 			SetTabActive(knownTab, tab == AbilityTabType.KnownAbility);

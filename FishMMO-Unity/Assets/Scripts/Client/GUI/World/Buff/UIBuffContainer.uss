@@ -4,10 +4,27 @@
     Colours that are not buff/debuff specific come from FishMMO-Theme.uss.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
+    container with no position resolves to the top-left corner — which is right for buffs and
+    wrong for debuffs, and put both strips on top of each other. The modifiers below place each
+    one where its uGUI anchor had it: buffs top-left, debuffs top-right.
+*/
 .buff-container {
+    position: absolute;
+    top: 12px;
     flex-direction: row;
     align-items: flex-start;
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--clear);
+}
+
+.buff-container--buff {
+    left: 12px;
+}
+
+.buff-container--debuff {
+    right: 12px;
+    justify-content: flex-end;
 }
 
 /* Horizontal strip that holds the generated buff groups. */
@@ -24,9 +41,9 @@
     margin-right: 4px;
     margin-bottom: 4px;
     border-width: 1px;
-    border-color: rgb(46, 51, 59);
+    border-color: var(--abyss-500);
     border-radius: 6px;
-    background-color: rgb(20, 22, 24);
+    background-color: var(--abyss-800);
     overflow: hidden;
 }
 
@@ -37,7 +54,7 @@
     right: 0;
     bottom: 0;
     height: 100%;
-    background-color: rgba(255, 107, 26, 0.30);
+    background-color: var(--brand-press);
 }
 
 /* Buff icon sprite. */
@@ -59,28 +76,28 @@
     font-size: 8px;
     -unity-font-style: bold;
     -unity-text-align: lower-center;
-    color: rgb(200, 205, 214);
+    color: var(--abyss-100);
     text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
 }
 
 /* Positive buffs glow ember-orange; debuffs glow danger-red. */
 .buff-container--buff .buff-group__fill {
-    background-color: rgba(255, 107, 26, 0.30);
+    background-color: var(--brand-press);
 }
 
 .buff-container--debuff .buff-group {
-    border-color: rgba(214, 48, 49, 0.55);
+    border-color: var(--danger-border);
 }
 
 .buff-container--debuff .buff-group__fill {
-    background-color: rgba(214, 48, 49, 0.30);
+    background-color: var(--danger-fill);
 }
 
 /* Standalone debuff modifier (used where groups are mixed in one list, e.g. target frame). */
 .buff-group--debuff {
-    border-color: rgba(214, 48, 49, 0.55);
+    border-color: var(--danger-border);
 }
 
 .buff-group--debuff .buff-group__fill {
-    background-color: rgba(214, 48, 49, 0.30);
+    background-color: var(--danger-fill);
 }

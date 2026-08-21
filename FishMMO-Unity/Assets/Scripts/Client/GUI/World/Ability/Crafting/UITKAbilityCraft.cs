@@ -9,10 +9,10 @@ using FishMMO.Logging;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit ability crafting panel. Mirrors the legacy UGUI <see cref="UIAbilityCraft"/>:
-	/// the player selects a base ability for the main entry and optional ability events for each
-	/// additional event slot, then crafts the resulting ability for a currency cost. Slot buttons
-	/// are built at runtime (replacing the legacy UITooltipButton prefab) and use the shared
+	/// UI Toolkit ability crafting panel. The player selects a base ability for the main entry
+	/// and optional ability events for each additional event slot, then crafts the resulting
+	/// ability for a currency cost. Slot buttons are built at runtime rather than instantiated
+	/// from a prefab, and use the shared
 	/// <see cref="UITKSelector"/> for picking and <see cref="UITKTooltip"/> for hover info.
 	/// </summary>
 	public class UITKAbilityCraft : UITKCharacterControl

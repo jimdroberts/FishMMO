@@ -37,7 +37,7 @@
 }
 
 .server-row--selected {
-    background-color: rgba(88, 214, 178, 0.25);
+    background-color: var(--teal-mid);
 }
 
 .server-row__name {

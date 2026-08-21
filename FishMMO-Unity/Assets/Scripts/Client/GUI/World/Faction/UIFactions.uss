@@ -4,15 +4,27 @@
     Standing colours are applied inline from C#.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
+    root with a size but no position resolves to the top-left corner — with the uGUI layer
+    gone, every one of these panels stacked there on top of each other. The values restore
+    where the panel sat in the uGUI scene, expressed as percentages so they hold at any
+    aspect ratio. Dragging overwrites left/top, which is why position is absolute here.
+*/
 .faction-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
     width: 360px;
     height: 420px;
 }
 
 .faction-header {
-    height: 28px;
-    padding-left: 8px;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
 }
 
 .faction-scroll {
@@ -30,7 +42,7 @@
     padding: 6px;
     margin-bottom: 4px;
     border-radius: 4px;
-    background-color: rgb(20, 22, 24);
+    background-color: var(--abyss-800);
 }
 
 .faction-row__icon {
@@ -53,7 +65,7 @@
 .faction-row__desc {
     white-space: normal;
     font-size: 10px;
-    color: rgb(138, 147, 162);
+    color: var(--abyss-200);
     margin-bottom: 4px;
 }
 
@@ -80,5 +92,58 @@
     font-size: 9px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-    color: rgb(255, 255, 255);
+    color: var(--white);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER AND EMPTY STATE
+   ═══════════════════════════════════════════════════════════ */
+
+.faction-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.faction-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.faction-count {
+    min-width: 24px;
+    height: 16px;
+    padding-left: 6px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+/*
+    Shown when the list behind it has nothing in it. A blank scroll area reads
+    as a panel that failed to load; a sentence reads as a panel that loaded and
+    found nothing.
+*/
+.faction-empty {
+    margin-top: 22px;
+    margin-bottom: 22px;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.faction-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.faction-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

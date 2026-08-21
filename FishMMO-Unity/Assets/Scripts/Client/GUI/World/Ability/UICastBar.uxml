@@ -1,8 +1,8 @@
-﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UICastBar.uss" />
-    <ui:VisualElement name="castbar-root" class="fish-bar castbar-root" picking-mode="Ignore">
-        <ui:VisualElement name="castbar-fill" class="castbar-fill" />
-        <ui:Label name="castbar-label" text="" class="castbar-label" />
+    <ui:VisualElement name="castbar-root" class="fish-bar castbar-root">
+        <ui:VisualElement name="castbar-fill" class="fish-bar__fill castbar-fill" />
+        <ui:Label name="castbar-label" text="" class="fish-label castbar-label" />
     </ui:VisualElement>
 </ui:UXML>

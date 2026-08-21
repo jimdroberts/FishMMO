@@ -107,7 +107,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `maxMainThreadActionsPerFrame` | int | 100 | Max chat-system actions drained from main-thread queue per frame |
 | `maxIncomingChatsPerFrame` | int | 500 | Max incoming chat messages processed from the lock-free queue per frame |
 | `maxIncomingQueueSize` | int | 10000 | Maximum pending incoming chat messages before the sender is kicked (DoS protection) |
-| `messageRateLimit` | float | 500.0 | Server chat rate limit in milliseconds (should match client `UIChat.messageRateLimit`) |
+| `messageRateLimit` | float | 500.0 | Server chat rate limit in milliseconds (should match client `UITKChat.MessageRateLimit`) |
 | `chatTokenBucketCapacity` | int | 5 | Maximum number of chat tokens a player can accumulate (burst capacity) |
 | `chatTokenRefillRate` | float | 1.0 | Tokens refilled per second (1.0 = one message permit per second) |
 | `persistFlushIntervalSeconds` | float | 0.1 | Seconds between batch DB persistence flushes |

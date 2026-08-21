@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -7,9 +7,9 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit friend list. Replaces the legacy UGUI <see cref="UIFriendList"/> / <see cref="UIFriend"/>:
-	/// renders friends as dynamic rows with online status and a remove button, and handles add/remove
-	/// actions. All friend broadcasts are preserved verbatim and the shared UGUI dialog overlays are reused.
+	/// Friend list panel. Renders each friend as a row carrying a presence dot, name, status and a
+	/// remove button, and handles the add and remove actions. Rows are built at runtime rather than
+	/// cloned from a per-entry control, and the shared dialog panels are reused for the prompts.
 	/// </summary>
 	public class UITKFriendList : UITKCharacterControl
 	{
@@ -30,6 +30,14 @@ namespace FishMMO.Client
 
 		/// <summary>USS class applied to a friend row's remove button.</summary>
 		private const string ROW_REMOVE_CLASS = "friend-row__remove";
+		/// <summary>USS class for a row's presence dot.</summary>
+		private const string ROW_DOT_CLASS = "friend-row__dot";
+		/// <summary>Name of the header label describing list state.</summary>
+		private const string SUBTITLE_NAME = "friend-subtitle";
+		/// <summary>Name of the header badge showing the online count.</summary>
+		private const string COUNT_NAME = "friend-online-count";
+		/// <summary>Name of the label shown when the list is empty.</summary>
+		private const string EMPTY_NAME = "friend-empty";
 
 		/// <summary>
 		/// Visual elements and state backing a single friend row.
@@ -42,6 +50,10 @@ namespace FishMMO.Client
 			public Label Name;
 			/// <summary>Friend online/offline status label.</summary>
 			public Label Status;
+			/// <summary>Presence dot leading the row.</summary>
+			public VisualElement Dot;
+			/// <summary>Last known online state, so the header count can be recomputed.</summary>
+			public bool Online;
 			/// <summary>The friend's character ID.</summary>
 			public long FriendID;
 		}
@@ -50,6 +62,12 @@ namespace FishMMO.Client
 		private readonly Dictionary<long, FriendRow> friends = new Dictionary<long, FriendRow>();
 		/// <summary>The container element that holds the generated friend rows.</summary>
 		private VisualElement friendList;
+		/// <summary>Header label describing list state.</summary>
+		private Label subtitleLabel;
+		/// <summary>Header badge showing how many friends are online.</summary>
+		private Label onlineCountLabel;
+		/// <summary>Label shown in place of the list when it is empty.</summary>
+		private Label emptyLabel;
 
 		/// <summary>
 		/// Queries the friend list and wires up the add-friend button.
@@ -63,6 +81,10 @@ namespace FishMMO.Client
 			}
 
 			friendList = root.Q(FRIEND_LIST_NAME);
+			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
+			onlineCountLabel = root.Q<Label>(COUNT_NAME);
+			emptyLabel = root.Q<Label>(EMPTY_NAME);
+			RefreshHeader();
 
 			Button add = root.Q<Button>(ADD_BUTTON_NAME);
 			if (add != null)
@@ -126,8 +148,55 @@ namespace FishMMO.Client
 				row.Name.text = n;
 			});
 
+			row.Online = online;
 			row.Status.text = online ? "Online" : "Offline";
 			row.Status.EnableInClassList("friend-row__status--online", online);
+			if (row.Dot != null)
+			{
+				row.Dot.EnableInClassList("fish-dot--online", online);
+				row.Dot.EnableInClassList("fish-dot--offline", !online);
+			}
+			// Offline friends recede so the online ones read first.
+			row.Root.EnableInClassList("fish-row--dim", !online);
+			RefreshHeader();
+		}
+
+		/// <summary>
+		/// Updates the header count, state line and empty placeholder from the list.
+		/// </summary>
+		/// <remarks>
+		/// The badge counts friends who are online rather than friends in total, because that is
+		/// the number a player opens this panel to find. The total is in the line beneath it.
+		/// </remarks>
+		private void RefreshHeader()
+		{
+			int total = friends.Count;
+			int online = 0;
+			foreach (KeyValuePair<long, FriendRow> kvp in friends)
+			{
+				if (kvp.Value.Online)
+				{
+					++online;
+				}
+			}
+
+			if (onlineCountLabel != null)
+			{
+				onlineCountLabel.text = online.ToString();
+				onlineCountLabel.EnableInClassList("fish-badge--good", online > 0);
+			}
+
+			if (subtitleLabel != null)
+			{
+				subtitleLabel.text = total == 0
+					? "No friends added"
+					: $"{online} of {total} online";
+			}
+
+			if (emptyLabel != null)
+			{
+				emptyLabel.style.display = total == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+			}
 		}
 
 		/// <summary>
@@ -140,6 +209,7 @@ namespace FishMMO.Client
 			{
 				row.Root?.RemoveFromHierarchy();
 				friends.Remove(friendID);
+				RefreshHeader();
 			}
 		}
 
@@ -211,13 +281,26 @@ namespace FishMMO.Client
 			}
 
 			VisualElement rowRoot = new VisualElement();
+			/* The theme class supplies the hover state and leading accent rail shared by every
+			 * roster; the panel class only carries geometry. */
+			rowRoot.AddToClassList("fish-row");
 			rowRoot.AddToClassList(ROW_CLASS);
 
+			/* The presence dot leads the row. Colour is the fastest read for online state, and
+			 * the status word beside it carries the same fact for anyone who cannot separate
+			 * the dot colours. */
+			VisualElement dot = new VisualElement();
+			dot.AddToClassList("fish-dot");
+			dot.AddToClassList(ROW_DOT_CLASS);
+			rowRoot.Add(dot);
+
 			Label name = new Label();
+			name.AddToClassList("fish-row__name");
 			name.AddToClassList(ROW_NAME_CLASS);
 			rowRoot.Add(name);
 
 			Label status = new Label();
+			status.AddToClassList("fish-row__meta");
 			status.AddToClassList(ROW_STATUS_CLASS);
 			rowRoot.Add(status);
 
@@ -234,11 +317,13 @@ namespace FishMMO.Client
 				Root = rowRoot,
 				Name = name,
 				Status = status,
+				Dot = dot,
 				FriendID = friendID,
 			};
 
 			friendList.Add(rowRoot);
 			friends.Add(friendID, row);
+			RefreshHeader();
 			return row;
 		}
 
@@ -252,6 +337,7 @@ namespace FishMMO.Client
 				row.Root?.RemoveFromHierarchy();
 			}
 			friends.Clear();
+			RefreshHeader();
 		}
 	}
 }

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -6,13 +6,15 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit cast bar bound to the character's ability controller. Mirrors the legacy
-	/// UGUI <see cref="UICastBar"/>: displays casting progress and the cast label, and hides
-	/// itself when the cast completes or is cancelled. The fill width is driven as a percentage
-	/// in place of the legacy UGUI Slider value.
+	/// UI Toolkit cast bar bound to the character's ability controller. Displays casting
+	/// progress and the cast label, and hides itself when the cast completes or is cancelled.
+	/// Progress is driven as a percentage of the fill element's width.
 	/// </summary>
 	public class UITKCastBar : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>Name of the progress fill element inside the cast-bar UXML.</summary>
 		private const string FILL_NAME = "castbar-fill";
 

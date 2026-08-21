@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -7,12 +7,14 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Abstract UI Toolkit resource bar (health/mana/stamina) bound to a character attribute.
-	/// Replicates the behaviour of the legacy UGUI <see cref="UIResourceBar"/> using a fill
-	/// VisualElement (percent width) in place of a UGUI Slider. The fill smoothly interpolates
-	/// toward the target value to avoid jitter from prediction corrections.
+	/// The value is rendered as a fill VisualElement whose width is a percentage of the bar, and
+	/// smoothly interpolates toward the target value to avoid jitter from prediction corrections.
 	/// </summary>
 	public abstract class UITKResourceBar : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>Name of the fill element inside the resource-bar UXML.</summary>
 		private const string FILL_NAME = "bar-fill";
 

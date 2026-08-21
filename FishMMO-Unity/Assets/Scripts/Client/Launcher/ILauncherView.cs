@@ -1,20 +1,20 @@
-using System;
+﻿using System;
 using HtmlAgilityPack;
 
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The presentation surface <see cref="ClientLauncher"/> drives. Implemented once per UI
-	/// technology so the launcher's state machine, version check, and patch flow exist in
-	/// exactly one place regardless of which UI is rendering them.
+	/// The presentation surface <see cref="ClientLauncher"/> drives, keeping the launcher's state
+	/// machine, version check and patch flow in exactly one place rather than coupled to a
+	/// widget tree.
 	/// </summary>
 	/// <remarks>
 	/// Members are expressed as intent ("show this status", "the progress bar is relevant now")
-	/// rather than as widget manipulation, so each view is free to satisfy them however its
-	/// technology prefers. That distinction is load-bearing: the UGUI implementation has no
-	/// dedicated status element and has to borrow the progress label and reveal its parent
-	/// group, while the UI Toolkit implementation simply writes to a status label. Encoding
-	/// that difference in the interface would export one view's limitation to the other.
+	/// rather than as widget manipulation, so an implementation is free to satisfy them however
+	/// its technology prefers. <see cref="UITKClientLauncher"/> is currently the only one, but the
+	/// boundary is worth keeping: it is what stopped the version-check and patch logic from being
+	/// forked per view while a second implementation existed, and it is why replacing the renderer
+	/// again would not touch any of it.
 	/// </remarks>
 	public interface ILauncherView
 	{
@@ -22,6 +22,19 @@ namespace FishMMO.Client
 		/// Sets the launcher window title (project name and version).
 		/// </summary>
 		void SetTitle(string title);
+
+		/// <summary>
+		/// Shows or hides the entire launcher UI.
+		/// </summary>
+		/// <param name="visible">True to show the launcher, false to hide it.</param>
+		/// <remarks>
+		/// Called the moment the game scene is ready, before the launcher scene is unloaded.
+		/// The unload is asynchronous and, in the editor, may not happen at all — the launcher
+		/// scene is opened directly there rather than through Addressables, so the Addressables
+		/// unload has no handle for it and silently does nothing. Hiding is synchronous and
+		/// works either way, so the launcher cannot be left sitting behind the login screen.
+		/// </remarks>
+		void SetVisible(bool visible);
 
 		/// <summary>
 		/// Sets the label on the primary (Play/Connect/Update) button.
@@ -83,9 +96,14 @@ namespace FishMMO.Client
 		void ClearStatus();
 
 		/// <summary>
-		/// Shows or hides the news pane. Hidden when no news URL is configured, which is a
-		/// valid deployment rather than a failure.
+		/// Shows or hides the news pane.
 		/// </summary>
+		/// <remarks>
+		/// The launcher keeps the pane visible in every ordinary case and fills it with a
+		/// built-in summary when there is no live feed — hiding it collapsed the panel into a
+		/// header stacked directly on a footer, which reads as a broken window rather than as a
+		/// launcher with no news today.
+		/// </remarks>
 		void SetNewsVisible(bool visible);
 
 		/// <summary>
@@ -99,10 +117,10 @@ namespace FishMMO.Client
 		/// Renders fetched news content into the news pane.
 		/// </summary>
 		/// <remarks>
-		/// Takes the parsed node rather than a pre-formatted string because the two views have
-		/// no common text format: TextMeshPro and UI Toolkit disagree on tag casing, on how
-		/// alignment is written, and — decisively — UI Toolkit has no equivalent of TMP's
-		/// <c>&lt;link&gt;</c> tag at all. Each view converts the tree on its own terms.
+		/// Takes the parsed node rather than a pre-formatted string because UI Toolkit's rich text
+		/// has no equivalent of a link tag: a news link cannot be markup inside a label, it has to
+		/// become a real element that can receive a click. Handing the view a formatted string
+		/// would make that impossible, so the view walks the tree itself.
 		/// <para>
 		/// <paramref name="content"/> is untrusted remote content. Implementations must bound
 		/// their traversal depth and must route any link activation through
@@ -127,10 +145,11 @@ namespace FishMMO.Client
 		/// Releases anything the view subscribed to. Called from the launcher's OnDestroy.
 		/// </summary>
 		/// <remarks>
-		/// Present because a view is not necessarily a component with its own Unity lifecycle —
-		/// the UGUI implementation is a plain class owned by the launcher, so something has to
-		/// tell it when to let go. Implementations backed by a MonoBehaviour may leave this
-		/// empty and clean up in OnDestroy instead.
+		/// Present because a view is not required to be a component with its own Unity lifecycle.
+		/// A plain class owned by the launcher has no OnDestroy of its own, so something has to
+		/// tell it when to let go. An implementation backed by a MonoBehaviour —
+		/// <see cref="UITKClientLauncher"/> is one — may leave this empty and clean up in
+		/// OnDestroy instead.
 		/// </remarks>
 		void Teardown();
 	}

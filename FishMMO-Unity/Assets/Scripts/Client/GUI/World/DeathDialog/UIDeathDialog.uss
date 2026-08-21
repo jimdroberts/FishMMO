@@ -90,7 +90,6 @@
     -unity-text-align: middle-center;
     margin: 0;
     padding: 0;
-    cursor: link;
     transition:
         background-color 0.12s ease,
         border-color     0.12s ease,
@@ -99,26 +98,26 @@
 
 /* Primary action: respawn. Ember accent, matching .fish-close-btn:hover. */
 .death-btn--primary {
-    background-color: rgba(255, 107, 26, 0.12);
-    border-color: rgb(255, 107, 26);
-    color: rgb(255, 173, 118);
+    background-color: var(--brand-lo);
+    border-color: var(--brand-500);
+    color: var(--brand-300);
 }
 
 .death-btn--primary:hover {
-    background-color: rgba(255, 107, 26, 0.25);
-    color: rgb(255, 140, 69);
+    background-color: var(--brand-mid);
+    color: var(--brand-400);
 }
 
 /* Secondary action: accept a resurrect. Teal, the theme's positive colour. */
 .death-btn--accept {
-    background-color: rgba(88, 214, 178, 0.12);
-    border-color: rgb(88, 214, 178);
-    color: rgb(88, 214, 178);
+    background-color: var(--teal-lo);
+    border-color: var(--teal);
+    color: var(--teal);
     margin-top: 8px;
 }
 
 .death-btn--accept:hover {
-    background-color: rgba(88, 214, 178, 0.25);
+    background-color: var(--teal-mid);
 }
 
 /* Collapses rather than merely hiding, so the panel shrinks to fit. */

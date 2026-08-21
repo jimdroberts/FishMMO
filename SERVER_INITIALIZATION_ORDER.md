@@ -230,7 +230,18 @@ Each server scene contains:
 → DatabaseConfigurationHelper.BuildDesignTimeConfiguration()
     • appsettings.json + appsettings.{env}.json + environment variables
 → Database = new Database.Database(dbConfig)
+→ VerifyDatabaseSchema()
+    • ValidateSchemaAsync on a thread-pool thread — NOT awaited, NOT fatal
+    • Reports pending migrations and model drift, with the command that fixes each
+    • A check that cannot run at all logs a warning; it never stops startup
 ```
+
+> The schema check is deliberately fire-and-forget. Migrations are generated per developer and
+> applied locally, so pulling an entity change brings no migration with it — the server starts
+> and authenticates perfectly and the mismatch surfaces much later as a query failing on a
+> column that does not exist, which reaches a player as missing data rather than as a schema
+> problem. A server whose schema is stale still serves everything that does not touch the
+> changed tables, so refusing to start would be a worse outcome than a loud log line.
 
 **4.3 Address Provider, Account Manager, and Network Configuration**
 ```

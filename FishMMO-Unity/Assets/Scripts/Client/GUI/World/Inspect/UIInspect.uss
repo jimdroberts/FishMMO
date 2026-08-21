@@ -1,0 +1,100 @@
+/*
+    UIInspect.uss
+    Layout for the character inspect panel. Colours come from FishMMO-Theme.uss; the equipment
+    slots reuse the shared .fish-slot classes so inspected gear reads the same as your own.
+*/
+
+/*
+    Each panel is its own UIDocument whose root fills the screen, so a panel with a size but no
+    alignment resolves to the top-left corner. Centring is what puts it where a modal belongs.
+*/
+.inspect-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.inspect-panel {
+    width: 300px;
+    max-height: 70%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.inspect-header {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 10px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.inspect-header__icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.inspect-title {
+    flex-grow: 1;
+}
+
+.inspect-close-btn {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.inspect-scroll {
+    flex-grow: 1;
+    padding: 8px;
+}
+
+/*
+    A wrapping row of slots rather than a fixed grid: a character may have anywhere from one to
+    a dozen items equipped, and wrapping keeps the panel the same width either way.
+*/
+.inspect-slot-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+}
+
+.inspect-slot {
+    width: 44px;
+    height: 44px;
+    margin: 3px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.inspect-slot__icon {
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    right: 3px;
+    bottom: 3px;
+}
+
+/*
+    The item name sits under the icon inside the slot. Absolute so it overlays rather than
+    displacing the icon, and clipped by the slot's own overflow: hidden.
+*/
+.inspect-slot__label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 1px;
+}
+
+.inspect-empty {
+    -unity-text-align: middle-center;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}

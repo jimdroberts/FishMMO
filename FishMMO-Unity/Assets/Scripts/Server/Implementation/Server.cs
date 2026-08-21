@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Linq;
@@ -175,26 +175,6 @@ namespace FishMMO.Server.Implementation
 			ServerEvents.OnLoginServerInitialized += loginServerInitializedLogHandler;
 			ServerEvents.OnWorldServerInitialized += worldServerInitializedLogHandler;
 			ServerEvents.OnSceneServerInitialized += sceneServerInitializedLogHandler;
-
-			// Skip the external IP lookup entirely when the operator has already
-			// configured a loopback Address (local/LAN dev deployments). The lookup
-			// hits an external HTTPS service (checkip.amazonaws.com); on some hosts
-			// UnityWebRequest can stall on that call indefinitely even though the
-			// 30s WaitForSeconds fallback below is meant to catch slow/unreachable
-			// responses, so avoid it altogether when it isn't needed.
-			//
-			// Configuration.GetString would normally return null here — the config
-			// file isn't loaded until CoreServer.Initialize() calls
-			// SaveDefaultsIfMissing(), which happens later inside OnFinalizeSetup.
-			// Force that same load early so the Address value is available now.
-			Configuration.SaveDefaultsIfMissing(gameObject.scene.name, "Unknown", Constants.GetWorkingDirectory());
-			string configuredAddress = Configuration.GetString("Address", null);
-			if (!string.IsNullOrWhiteSpace(configuredAddress) && NetHelper.IsLoopbackAddress(configuredAddress))
-			{
-				Log.Debug("Server", $"Configured Address '{configuredAddress}' is loopback; skipping external IP lookup.");
-				OnFinalizeSetup(configuredAddress);
-				return;
-			}
 
 			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
 
@@ -406,21 +386,21 @@ namespace FishMMO.Server.Implementation
 					string problem = result.DescribeProblem();
 					if (problem == null)
 					{
-						Log.Debug("Server", "Database schema matches the entity model.");
+						_ = Log.Debug("Server", "Database schema matches the entity model.");
 					}
 					else if (result.UnavailableReason != null)
 					{
-						Log.Warning("Server", problem);
+						_ = Log.Warning("Server", problem);
 					}
 					else
 					{
-						Log.Error("Server", problem);
+						_ = Log.Error("Server", problem);
 					}
 				}
 				catch (Exception ex)
 				{
 					// A diagnostic must never be the thing that takes a server down.
-					Log.Warning("Server", $"Database schema check threw and was skipped: {ex.Message}");
+					_ = Log.Warning("Server", $"Database schema check threw and was skipped: {ex.Message}");
 				}
 			});
 		}

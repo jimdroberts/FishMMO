@@ -1,29 +1,76 @@
 /*
     UIMenu.uss
-    Centered main menu layout.
+    Layout for the in-game menu. Colours come from FishMMO-Theme.uss.
+
+    Ordered by how often each entry is used, not by severity: Resume is what
+    the player wants nearly every time they open this, so it leads and carries
+    the primary emphasis. The two ways to leave are separated by a rule so
+    neither is hit on the way to Options.
 */
 
+/*
+    A dimmed full-screen ground behind the panel. The menu is modal in
+    intent — the game is still running behind it, and the scrim is what says
+    the player's input is going here rather than to the world.
+*/
 .menu-root {
-    flex-grow: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--overlay-dim);
 }
 
 .menu-panel {
-    min-width: 240px;
-    padding: 16px;
-    align-items: stretch;
+    min-width: 220px;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
-.menu-title {
-    font-size: 20px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-    margin-bottom: 12px;
+.menu-header {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.menu-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.menu-body {
+    flex-direction: column;
+    padding: 12px;
 }
 
 .menu-action {
-    margin: 4px 0;
-    min-height: 32px;
+    height: 30px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+    flex-shrink: 0;
+}
+
+.menu-sep {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.menu-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.menu-hint {
+    flex-grow: 1;
 }

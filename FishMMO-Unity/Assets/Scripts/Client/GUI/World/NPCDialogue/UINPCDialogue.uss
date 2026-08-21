@@ -1,46 +1,118 @@
 /*
     UINPCDialogue.uss
     Layout for the NPC dialogue panel. Colours come from FishMMO-Theme.uss.
+
+    Speech is set against a leading accent rail — the visual convention for a
+    quotation — so the NPC's words are distinguishable from the player's reply
+    options below without either needing a label saying which is which.
 */
 
+/*
+    Anchored explicitly, low on the screen. Each panel is its own UIDocument
+    whose root fills the screen, so a root with a size but no position resolves
+    to the top-left corner. Sitting it low keeps the NPC visible while talking.
+*/
 .dialogue-panel {
-    width: 460px;
-    min-height: 220px;
-    max-height: 420px;
+    position: absolute;
+    left: 50%;
+    bottom: 12%;
+    translate: -50% 0;
+    width: 520px;
+    max-height: 46%;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
 .dialogue-header {
-    height: 30px;
-    padding-left: 10px;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
 }
 
-.dialogue-speaker {
-    font-size: 14px;
+.dialogue-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.dialogue-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.dialogue-body {
+    flex-direction: row;
+    padding: 12px;
+    flex-grow: 1;
+    min-height: 70px;
+}
+
+.dialogue-rail {
+    margin-right: 10px;
+    flex-shrink: 0;
 }
 
 .dialogue-text-scroll {
     flex-grow: 1;
-    padding: 10px;
 }
 
 .dialogue-text {
     white-space: normal;
-    font-size: 13px;
-    color: rgb(200, 205, 214);
+    -unity-text-align: upper-left;
+    font-size: 12px;
 }
 
-.dialogue-choices {
+.dialogue-footer {
     flex-direction: column;
     padding: 8px;
+    flex-shrink: 0;
+}
+
+/*
+    Reply options, generated at runtime. Stacked full-width and left-aligned so
+    they read as a list of things to say rather than a row of controls.
+*/
+.dialogue-choices {
+    flex-direction: column;
 }
 
 .dialogue-choice {
-    height: auto;
-    min-height: 28px;
-    margin-bottom: 4px;
-    padding: 6px 10px;
-    white-space: normal;
-    font-size: 12px;
+    height: 26px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    padding-left: 10px;
+    padding-right: 10px;
     -unity-text-align: middle-left;
+    flex-shrink: 0;
+}
+
+/* Speaker name and the role line beneath it. */
+.dialogue-speaker {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.dialogue-role {
+    flex-shrink: 0;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.dialogue-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.dialogue-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
 }

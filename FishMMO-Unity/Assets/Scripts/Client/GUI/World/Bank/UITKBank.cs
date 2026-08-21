@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -9,19 +9,28 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit implementation of the bank panel.
-	/// Binds to <c>UIBank.uxml</c> / <c>UIBank.uss</c> and replicates all behaviour of the
-	/// legacy UGUI <see cref="UIBank"/> and <see cref="UIBankButton"/> classes without modifying
-	/// them. Item drag-and-drop and tooltips reuse the existing UGUI <see cref="UIDragObject"/>
-	/// and <see cref="UITooltip"/> overlays via <see cref="UIManager"/>.
+	/// Binds to <c>UIBank.uxml</c> / <c>UIBank.uss</c> and renders the character's bank as a
+	/// grid of slot buttons. Item drag-and-drop and tooltips reuse the shared
+	/// <see cref="UITKDragObject"/> and <see cref="UITKTooltip"/> overlays via <see cref="UIManager"/>.
 	/// </summary>
 	public class UITKBank : UITKCharacterControl
 	{
 		// ── UXML element names ────────────────────────────────────────────────
 
 		private const string SLOT_GRID_NAME = "slot-grid";
+		/// <summary>Name of the header subtitle showing slot usage.</summary>
+		private const string SUBTITLE_NAME = "header-subtitle";
+		/// <summary>Name of the footer label counting occupied slots.</summary>
+		private const string USED_NAME = "bank-used";
+		/// <summary>Name of the footer label counting free slots.</summary>
+		private const string FREE_NAME = "bank-free";
+		/// <summary>Name of the footer capacity bar fill.</summary>
+		private const string CAPACITY_FILL_NAME = "bank-capacity-fill";
+		/// <summary>Name of the label shown when nothing is stored.</summary>
+		private const string EMPTY_NAME = "bank-empty";
 		private const string CLOSE_BTN_NAME = "close-button";
 
-		// ── Shared UI overlay names (legacy UGUI controls reused via UIManager) ──
+		// ── Shared UI overlay names (panels resolved by GameObject name via UIManager) ──
 
 		private const string DRAG_OBJECT_NAME = "UIDragObject";
 		private const string TOOLTIP_NAME = "UITooltip";
@@ -56,6 +65,16 @@ namespace FishMMO.Client
 
 		/// <summary>Slot views indexed by bank slot index.</summary>
 		private readonly List<SlotView> slotViews = new List<SlotView>();
+		/// <summary>Header line showing slot usage.</summary>
+		private Label subtitleLabel;
+		/// <summary>Footer label counting occupied slots.</summary>
+		private Label usedLabel;
+		/// <summary>Footer label counting free slots.</summary>
+		private Label freeLabel;
+		/// <summary>Footer capacity bar fill.</summary>
+		private VisualElement capacityFill;
+		/// <summary>Label shown in place of the grid when nothing is stored.</summary>
+		private Label emptyLabel;
 
 		/// <summary>Cached item sprite per slot, used to seed the drag object.</summary>
 		private readonly List<Sprite> slotSprites = new List<Sprite>();
@@ -77,6 +96,11 @@ namespace FishMMO.Client
 			}
 
 			slotGrid = root.Q(SLOT_GRID_NAME);
+			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
+			usedLabel = root.Q<Label>(USED_NAME);
+			freeLabel = root.Q<Label>(FREE_NAME);
+			capacityFill = root.Q(CAPACITY_FILL_NAME);
+			emptyLabel = root.Q<Label>(EMPTY_NAME);
 
 			Button closeBtn = root.Q<Button>(CLOSE_BTN_NAME);
 			if (closeBtn != null)
@@ -114,7 +138,6 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Shows the bank panel when a banker interaction succeeds, otherwise hides it.
-		/// Mirrors <see cref="UIBank.OnClientBankerBroadcastReceived"/>.
 		/// </summary>
 		private void OnClientBankerBroadcastReceived(BankerBroadcast msg, Channel channel)
 		{
@@ -295,6 +318,7 @@ namespace FishMMO.Client
 
 			Sprite sprite = item.Template != null ? item.Template.Icon : null;
 			slotSprites[slotIndex] = sprite;
+			RefreshCapacity();
 
 			if (view.Icon != null)
 			{
@@ -319,6 +343,52 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Recomputes the header subtitle, footer counts and capacity bar.
+		/// </summary>
+		/// <remarks>
+		/// Occupancy is read from <c>slotSprites</c> rather than from the controller: this runs
+		/// on every slot write, and the sprite array is already the view's own record of which
+		/// slots are filled. Asking the controller would re-derive a fact the view just set.
+		/// </remarks>
+		private void RefreshCapacity()
+		{
+			int total = slotSprites.Count;
+			int used = 0;
+			for (int i = 0; i < total; ++i)
+			{
+				if (slotSprites[i] != null)
+				{
+					++used;
+				}
+			}
+			int free = total - used;
+
+			if (subtitleLabel != null)
+			{
+				subtitleLabel.text = $"{used} / {total} slots";
+			}
+			if (usedLabel != null)
+			{
+				usedLabel.text = $"{used} used";
+			}
+			if (freeLabel != null)
+			{
+				freeLabel.text = $"{free} free";
+			}
+			if (capacityFill != null)
+			{
+				float fraction = total > 0 ? (float)used / total : 0.0f;
+				capacityFill.style.width = new StyleLength(Length.Percent(fraction * 100.0f));
+				// Near-full is worth flagging before the player finds out by failing to loot.
+				capacityFill.EnableInClassList("fish-bar__fill--hp", total > 0 && free <= 2);
+			}
+			if (emptyLabel != null)
+			{
+				emptyLabel.style.display = used == 0 && total > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+		}
+
+		/// <summary>
 		/// Clears a slot's icon and hides its stack-count badge.
 		/// </summary>
 		private void ClearSlot(int slotIndex)
@@ -335,6 +405,7 @@ namespace FishMMO.Client
 			}
 
 			slotSprites[slotIndex] = null;
+			RefreshCapacity();
 
 			if (view.Icon != null)
 			{
@@ -393,7 +464,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Left-click: completes an in-progress drag (swap or unequip to bank) or begins
-		/// dragging the item currently in this slot. Mirrors <see cref="UIBankButton.OnLeftClick"/>.
+		/// dragging the item currently in this slot.
 		/// </summary>
 		private void HandleSlotLeftClick(int slotIndex)
 		{

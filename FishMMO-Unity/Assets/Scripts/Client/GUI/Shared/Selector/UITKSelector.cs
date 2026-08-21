@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -8,12 +8,14 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit selector. Presents a list of selectable cached objects, lets the user pick one,
-	/// and confirms or cancels the selection. Mirrors the legacy UGUI <c>UISelector</c> API.
-	/// In UI Toolkit each option row is a plain <see cref="Button"/>, so no separate tooltip-button
-	/// class is required.
+	/// and confirms or cancels the selection. Each option row is a plain <see cref="Button"/>, so
+	/// no separate tooltip-button class is required.
 	/// </summary>
 	public class UITKSelector : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Popup;
+
 		/// <summary>
 		/// Name of the selector list container element.
 		/// </summary>
@@ -29,7 +31,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// USS class applied to the currently selected item.
 		/// </summary>
-		private const string SELECTED_CLASS = "selector-item-selected";
+		private const string SELECTED_CLASS = "fish-row--selected";
 
 		/// <summary>
 		/// The container element for the option buttons.
@@ -147,8 +149,12 @@ namespace FishMMO.Client
 				{
 					text = tooltipObject.Name,
 				};
-				button.AddToClassList("fish-button");
-				button.AddToClassList("selector-item");
+				/* A row in a list, not a button in a toolbar: .fish-row gives it the shared
+				 * hover and selection treatment every other list in the game uses, where
+				 * .fish-button would have made a stack of separate-looking controls. */
+				button.AddToClassList("fish-row");
+				button.AddToClassList("fish-row__name");
+				button.AddToClassList("selector-entry");
 
 				string tooltipText = tooltipObject.Tooltip();
 				button.RegisterCallback<PointerEnterEvent>((evt) =>

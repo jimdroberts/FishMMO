@@ -1,4 +1,6 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
+using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Logging;
@@ -7,8 +9,8 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Abstract base class for UI Toolkit-backed controls. Mirrors the lifecycle of
-	/// <see cref="UIControl"/> but drives a <see cref="UIDocument"/> instead of a UGUI Canvas.
+	/// Abstract base class for UI Toolkit-backed controls. Drives a <see cref="UIDocument"/> and
+	/// owns the show/hide, focus, drag and Escape-close behaviour every panel shares.
 	/// Automatically registers and unregisters with <see cref="UIManager"/> on Awake/OnDestroy.
 	/// </summary>
 	public abstract class UITKControl : MonoBehaviour
@@ -39,39 +41,58 @@ namespace FishMMO.Client
 		/// If true, showing this panel releases the mouse cursor so it can be clicked.
 		/// </summary>
 		/// <remarks>
-		/// Mirrors what <see cref="UIControl"/> does for its own panels, where the same behaviour
-		/// is gated on <c>CloseOnEscape</c>: a window the player interacts with needs the cursor,
-		/// and a HUD element that is permanently on screen must not take it away. Defaulting this
-		/// to false keeps bars and hotkey strips from stealing the cursor the moment they appear.
+		/// A window the player interacts with needs the cursor, and a HUD element that is
+		/// permanently on screen must not take it away. Defaulting this to false keeps bars and
+		/// hotkey strips from stealing the cursor the moment they appear.
 		/// <para>
-		/// Only ever set true here, never false, which matches the legacy panels — releasing the
-		/// cursor is a panel's business but recapturing it is not, since another panel may still
-		/// be open. <see cref="PlayerInputController"/> and <see cref="Client"/> own the reset.
+		/// Only ever set true here, never false — releasing the cursor is a panel's business but
+		/// recapturing it is not, since another panel may still be open.
+		/// <see cref="PlayerInputController"/> and <see cref="Client"/> own the reset.
 		/// </para>
 		/// </remarks>
 		[Tooltip("Show() releases the mouse cursor. Enable for windows and dialogs, not for HUD elements.")]
 		public bool ReleasesCursor = false;
 
 		/// <summary>
-		/// If true, the panel can be dragged around the screen by its header.
+		/// Whether Escape closes this panel.
 		/// </summary>
 		/// <remarks>
-		/// Mirrors <see cref="UIControl.CanDrag"/>. The panel is found by its
-		/// <c>fish-panel</c> class and dragged by its <c>fish-panel__header</c> strip, falling
-		/// back to the panel itself when it has no header — the same convention the UXML files
-		/// already follow, so no per-panel wiring is needed.
+		/// Separate from <see cref="ReleasesCursor"/>. The two were briefly
+		/// merged because <c>PlayerInputController</c> used "is anything Escape-closable"
+		/// as its test for whether to keep the mouse cursor free — so a panel that released the
+		/// cursor without registering for Escape had it taken straight back.
+		///
+		/// That proxy was the thing at fault, not the separation: the question the input
+		/// controller actually wants is "is any panel that needs the cursor on screen", which
+		/// <see cref="UIManager.AnyCursorReleasingVisible"/> now answers directly. Keeping the
+		/// flags apart matters because they genuinely differ — a confirm dialog needs the cursor
+		/// but must not be dismissable with Escape, since the point of it is that the player
+		/// chooses.
 		/// </remarks>
-		[Tooltip("Panel can be dragged by its header. Enable for windows, not for HUD elements.")]
+		public bool CloseOnEscape = false;
+
+		/// <summary>
+		/// If true, the player can drag this panel around the screen.
+		/// </summary>
+		/// <remarks>
+		/// Defaults to false so HUD elements stay where their stylesheet puts them; windows are
+		/// the panels that opt in.
+		/// </remarks>
+		[Header("Drag")]
+		[Tooltip("Allow the player to drag this panel. Enable for windows, not for HUD elements.")]
 		public bool CanDrag = false;
 
-		/// <summary>The element actually moved by a drag: the panel, not the full-screen root.</summary>
-		private VisualElement dragTarget;
-
-		/// <summary>Pointer offset within the panel when the drag began.</summary>
-		private Vector2 dragOffset;
-
-		/// <summary>True while a drag is in progress.</summary>
-		private bool isDragging;
+		/// <summary>
+		/// If true, a dragged panel is kept fully inside the screen.
+		/// </summary>
+		/// <remarks>
+		/// Without this a window can be dragged far enough off-screen that the header used to
+		/// drag it back is no longer reachable,
+		/// which for a panel with no other way to move it is unrecoverable short of resetting
+		/// the layout.
+		/// </remarks>
+		[Tooltip("Keep a dragged panel fully on screen.")]
+		public bool ClampToScreen = true;
 
 		/// <summary>
 		/// GameObject name; used as the key in <see cref="UIManager"/>.
@@ -93,6 +114,318 @@ namespace FishMMO.Client
 		/// Returns null if <see cref="Document"/> is not assigned.
 		/// </summary>
 		protected VisualElement Root => Document != null ? Document.rootVisualElement : null;
+
+		/// <summary>
+		/// True when the pointer is over this panel or one of its elements has keyboard focus.
+		/// </summary>
+		/// <remarks>
+		/// UI Toolkit already tracks both facts, so this reads them rather than shadowing them in
+		/// a field that can fall out of step. A cached flag maintained by pointer enter/leave
+		/// handlers is the trap here: a panel destroyed while the pointer is inside never gets
+		/// its exit event, and the flag stays true forever.
+		/// </remarks>
+		public bool HasFocus
+		{
+			get
+			{
+				VisualElement root = Root;
+				if (!Visible || root == null || root.panel == null)
+				{
+					return false;
+				}
+
+				if (IsInputFieldFocused)
+				{
+					return true;
+				}
+
+				/* Picked rather than bounds-tested. Every panel's root fills the screen — each
+				 * one is its own UIDocument — so a rectangle test against the root is true
+				 * everywhere and would report every panel as hovered at once. Pick returns the
+				 * topmost element that actually accepts the pointer, which is the real question:
+				 * is the cursor over this panel's content, or over the world behind it. */
+				VisualElement picked = root.panel.Pick(PointerPanelPosition(root.panel));
+				while (picked != null)
+				{
+					if (ReferenceEquals(picked, root))
+					{
+						// The root itself is the full-screen container, not content.
+						return false;
+					}
+					if (picked.parent != null && ReferenceEquals(picked.parent, root))
+					{
+						return true;
+					}
+					picked = picked.parent;
+				}
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// True when a text field inside this panel currently has keyboard focus.
+		/// </summary>
+		/// <remarks>
+		/// Gates player movement: <c>PlayerInputController</c> asks
+		/// <see cref="UIManager.InputControlHasFocus(UITKControl)"/> before reading movement input,
+		/// so without this a player typing "west" into chat walks off in three directions.
+		/// </remarks>
+		public bool IsInputFieldFocused
+		{
+			get
+			{
+				VisualElement root = Root;
+				if (!Visible || root == null || root.panel == null)
+				{
+					return false;
+				}
+
+				Focusable focused = root.panel.focusController?.focusedElement;
+				if (focused == null)
+				{
+					return false;
+				}
+
+				/* A TextField delegates focus to its inner #unity-text-input, so the focused
+				 * element is usually that child rather than the field itself. Walking up to the
+				 * root is what catches both, and confirms the field belongs to this panel and
+				 * not to some other document that happens to be focused. */
+				VisualElement element = focused as VisualElement;
+				bool sawTextInput = false;
+				while (element != null)
+				{
+					if (element is TextField || element is TextElement)
+					{
+						sawTextInput = true;
+					}
+					if (ReferenceEquals(element, root))
+					{
+						return sawTextInput;
+					}
+					element = element.parent;
+				}
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Reads the pointer position in panel coordinates.
+		/// </summary>
+		/// <param name="panel">The panel to convert into.</param>
+		/// <returns>The pointer position in panel points.</returns>
+		private static Vector2 PointerPanelPosition(IPanel panel)
+		{
+			Vector2 screenPosition = UnityEngine.InputSystem.Mouse.current != null
+				? UnityEngine.InputSystem.Mouse.current.position.ReadValue()
+				: Vector2.zero;
+			// Input System reports Y from the bottom; UI Toolkit lays out from the top.
+			return RuntimePanelUtils.ScreenToPanel(
+				panel,
+				new Vector2(screenPosition.x, Screen.height - screenPosition.y));
+		}
+
+		/// <summary>
+		/// Draw and input order for this panel. Override to place a panel outside
+		/// <see cref="UITKPanelLayer.Window"/>.
+		/// </summary>
+		/// <remarks>
+		/// See <see cref="UITKPanelLayer"/> for why this is declared in code rather than set on
+		/// each UIDocument in the scene.
+		/// </remarks>
+		protected virtual UITKPanelLayer Layer => UITKPanelLayer.Window;
+
+		/// <summary>
+		/// Raised when the pointer leaves this panel, having previously been over it.
+		/// </summary>
+		/// <remarks>
+		/// Two panels use this to dismiss themselves: the dropdown and the chat channel picker
+		/// both do <c>OnLoseFocus += Hide</c>, so moving the mouse off them closes them without a
+		/// click. UI Toolkit has no equivalent event on a panel root — every root fills the
+		/// screen, so the pointer never leaves one — which is why this is derived from
+		/// <see cref="HasFocus"/> rather than from a PointerLeaveEvent.
+		/// <para>
+		/// Polling is gated on there being a subscriber, so a panel nobody listens to costs
+		/// nothing: <see cref="HasFocus"/> runs a pick against the panel, and doing that every
+		/// frame for all forty-odd panels to serve two of them would be wasteful.
+		/// </para>
+		/// </remarks>
+		public Action OnLoseFocus;
+
+		/// <summary>
+		/// Whether the pointer was over this panel on the previous frame.
+		/// </summary>
+		private bool hadPointerFocus;
+
+		/// <summary>
+		/// Fires <see cref="OnLoseFocus"/> on the frame the pointer leaves the panel.
+		/// </summary>
+		private void PollLoseFocus()
+		{
+			if (OnLoseFocus == null)
+			{
+				return;
+			}
+
+			if (!Visible)
+			{
+				// A hidden panel cannot be exited; reset so re-showing does not fire immediately.
+				hadPointerFocus = false;
+				return;
+			}
+
+			bool has = HasFocus;
+			if (hadPointerFocus && !has)
+			{
+				OnLoseFocus.Invoke();
+			}
+			hadPointerFocus = has;
+		}
+
+		/// <summary>
+		/// Whether clicking this panel raises it above its peers and makes it the next panel
+		/// Escape closes.
+		/// </summary>
+		/// <remarks>
+		/// This used to be a per-scene flag, set on every window and on chat and left off for pure
+		/// HUD readouts — a health bar has nothing to raise above and nothing to focus. The same
+		/// split falls out of the layer, so it no longer has to be authored: windows and
+		/// the menu are things the player opens, arranges and closes, and everything at
+		/// <see cref="UITKPanelLayer.Hud"/> is a readout. Panels that disagree override this.
+		/// </remarks>
+		protected virtual bool FocusOnSelect =>
+			Layer == UITKPanelLayer.Window || Layer == UITKPanelLayer.Menu;
+
+		/// <summary>
+		/// Focus order within each layer, most recently focused last.
+		/// </summary>
+		/// <remarks>
+		/// Panels are raised within their own tier rather than globally. A single flat ordering
+		/// lets focusing a panel put it above anything at all — which is exactly how Options once
+		/// ended up unreachable behind Login. Keeping the raise inside a tier restores
+		/// click-to-front between peers while a modal stays above a window no matter what the
+		/// player clicked last.
+		/// </remarks>
+		private static readonly Dictionary<UITKPanelLayer, List<UITKControl>> focusOrder =
+			new Dictionary<UITKPanelLayer, List<UITKControl>>();
+
+		/// <summary>
+		/// Highest offset a panel may take inside its layer band.
+		/// </summary>
+		/// <remarks>
+		/// Layers are spaced 100 apart, so an offset is capped short of that to guarantee a
+		/// focused panel can never climb into the tier above it. No tier holds anything close to
+		/// this many panels; the clamp exists so that a leak in the focus list degrades into
+		/// panels sharing a sorting order rather than into a modal being outranked by a window.
+		/// </remarks>
+		private const int MaxFocusOffset = 89;
+
+		/// <summary>
+		/// Raises this panel above the others in its layer.
+		/// </summary>
+		/// <remarks>
+		/// A Canvas would re-parent the transform to make the panel the last sibling. Documents
+		/// have no sibling order to exploit, so the equivalent is to renumber the tier: this goes
+		/// to the end of its layer's list and every panel in that layer is re-stamped from the
+		/// layer's base value.
+		/// </remarks>
+		public void BringToFront()
+		{
+			if (Document == null)
+			{
+				return;
+			}
+
+			if (!focusOrder.TryGetValue(Layer, out List<UITKControl> ordered))
+			{
+				ordered = new List<UITKControl>();
+				focusOrder[Layer] = ordered;
+			}
+
+			ordered.Remove(this);
+			ordered.Add(this);
+
+			// Destroyed panels would otherwise hold slots and push live ones towards the clamp.
+			ordered.RemoveAll(c => c == null);
+
+			int baseOrder = (int)Layer;
+			for (int i = 0; i < ordered.Count; ++i)
+			{
+				UITKControl control = ordered[i];
+				if (control != null && control.Document != null)
+				{
+					control.Document.sortingOrder = baseOrder + Mathf.Min(i, MaxFocusOffset);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Raises the panel and moves it to the front of the Escape-close order.
+		/// </summary>
+		/// <remarks>
+		/// Re-registering for Escape is not incidental:
+		/// with three windows open, Escape should close the one the player last touched, not the
+		/// one that happened to open first.
+		/// </remarks>
+		private void Focus()
+		{
+			if (!FocusOnSelect)
+			{
+				return;
+			}
+
+			BringToFront();
+
+			if (CloseOnEscape)
+			{
+				UIManager.UnregisterCloseOnEscapeTK(this);
+				UIManager.RegisterCloseOnEscapeTK(this);
+			}
+		}
+
+		/// <summary>
+		/// Raises the panel when it is clicked anywhere.
+		/// </summary>
+		/// <param name="evt">The pointer press.</param>
+		private void OnRootPointerDown(PointerDownEvent evt)
+		{
+			Focus();
+		}
+
+		/// <summary>
+		/// Subscribes the focus handler to the panel root.
+		/// </summary>
+		/// <remarks>
+		/// Registered in the trickle-down phase so a press that lands on a button, a slot or a
+		/// text field still raises the panel. In the bubble phase a child that stops propagation —
+		/// which several controls do — would swallow the press and the window would stay behind.
+		/// </remarks>
+		private void AttachFocusHandler()
+		{
+			VisualElement root = Root;
+			if (root == null)
+			{
+				return;
+			}
+			root.UnregisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
+			root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
+		}
+
+		/// <summary>
+		/// Writes <see cref="Layer"/> onto the document's sorting order.
+		/// </summary>
+		/// <remarks>
+		/// Applied on Awake and again on every Show. Once is not enough: hiding a panel disables
+		/// its UIDocument, and UI Toolkit drops and re-registers the panel when it is re-enabled,
+		/// so a panel that is shown after another was created can otherwise come back in the
+		/// wrong order.
+		/// </remarks>
+		private void ApplySortingOrder()
+		{
+			if (Document != null)
+			{
+				Document.sortingOrder = (float)Layer;
+			}
+		}
 
 		/// <summary>
 		/// True once <see cref="OnStarting"/> has run against a populated visual tree.
@@ -123,6 +456,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void Awake()
 		{
+			ApplySortingOrder();
 			UIManager.RegisterTK(this);
 
 			// Applied before OnStarting, and independently of it. A panel's initial visibility
@@ -191,117 +525,82 @@ namespace FishMMO.Client
 			this.hasStarted = true;
 			this.startedTreeRoot = root[0];
 			OnStarting();
-			SetupDragging();
 			OnAfterStarting();
+			AttachDragHandlers();
+
+			/* Registered here rather than in Awake because the theme is applied by querying the
+			 * visual tree for USS classes, and until the tree is cloned there is nothing to
+			 * query. ReinitializeIfTreeReplaced re-registers if the tree is later rebuilt. */
+			UITKThemeManager.Register(root);
 			return true;
 		}
 
 		/// <summary>
-		/// Wires header dragging, if this panel allows it.
+		/// Keeps a list panel's header count, status line and empty placeholder in step with
+		/// the number of rows in its container.
 		/// </summary>
+		/// <param name="list">Container whose children are the rows.</param>
+		/// <param name="count">Header badge showing the row count. May be null.</param>
+		/// <param name="subtitle">Header line describing the list. May be null.</param>
+		/// <param name="empty">Placeholder shown when the list has no rows. May be null.</param>
+		/// <param name="singular">Noun for exactly one row, e.g. "item".</param>
+		/// <param name="plural">Noun for zero or many rows, e.g. "items".</param>
 		/// <remarks>
-		/// Called after every initialisation, including the re-run that follows a visual tree
-		/// rebuild. That is safe and necessary: a rebuilt tree contains different element
-		/// instances, so the previous registrations went with the discarded tree rather than
-		/// accumulating on the new one.
+		/// Driven off the container's own geometry rather than from each panel's rebuild path.
+		/// The panels that own these lists fill them from half a dozen different broadcast
+		/// handlers, and hooking every one of them is how a count ends up disagreeing with the
+		/// list beneath it. UI Toolkit has no "children changed" event, but adding or removing a
+		/// row relayouts the container, so its geometry is a reliable proxy — and a redundant
+		/// recount costs one integer read.
 		/// </remarks>
-		private void SetupDragging()
+		protected void BindListChrome(VisualElement list, Label count, Label subtitle,
+			Label empty, string singular, string plural)
 		{
-			this.dragTarget = null;
-			this.isDragging = false;
-
-			if (!CanDrag)
+			if (list == null)
 			{
 				return;
 			}
 
-			VisualElement root = Root;
-			if (root == null)
+			void Refresh()
 			{
-				return;
+				int rows = list.childCount;
+
+				if (count != null)
+				{
+					count.text = rows.ToString();
+					count.EnableInClassList("fish-badge--accent", rows > 0);
+				}
+				if (subtitle != null)
+				{
+					subtitle.text = rows == 1 ? $"1 {singular}" : $"{rows} {plural}";
+				}
+				if (empty != null)
+				{
+					empty.style.display = rows == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+				}
 			}
 
-			// The panel, not the panel's root: the root fills the screen, so moving it would
-			// move nothing visible.
-			this.dragTarget = root.Q(className: "fish-panel");
-			if (this.dragTarget == null)
-			{
-				return;
-			}
+			list.UnregisterCallback<GeometryChangedEvent>(OnListGeometryChanged);
+			list.userData = (Action)Refresh;
+			list.RegisterCallback<GeometryChangedEvent>(OnListGeometryChanged);
 
-			VisualElement handle = this.dragTarget.Q(className: "fish-panel__header") ?? this.dragTarget;
-			handle.RegisterCallback<PointerDownEvent>(OnDragPointerDown);
-			handle.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
-			handle.RegisterCallback<PointerUpEvent>(OnDragPointerUp);
+			Refresh();
 		}
 
 		/// <summary>
-		/// Begins a drag, unless the pointer went down on something interactive.
+		/// Runs the refresh closure a container was bound with.
 		/// </summary>
-		private void OnDragPointerDown(PointerDownEvent evt)
+		/// <param name="evt">The geometry change that triggered it.</param>
+		/// <remarks>
+		/// A named handler rather than a lambda so the matching Unregister above actually
+		/// removes it — unregistering a freshly-allocated closure silently does nothing, and
+		/// re-binding after a visual tree rebuild would stack duplicate callbacks forever.
+		/// </remarks>
+		private static void OnListGeometryChanged(GeometryChangedEvent evt)
 		{
-			// A header usually carries a close button, and dragging from it would both move the
-			// panel and swallow the click.
-			if (evt.target is Button)
+			if (evt.target is VisualElement element && element.userData is Action refresh)
 			{
-				return;
-			}
-
-			VisualElement handle = (VisualElement)evt.currentTarget;
-
-			/* Pinned to its current on-screen position before the first move. Panels are laid
-			 * out by flex — centred, or anchored to an edge — and writing left/top to a
-			 * flex-positioned element does nothing. Reading the resolved rect first means the
-			 * panel does not jump when the drag starts. */
-			Rect panel = this.dragTarget.worldBound;
-			this.dragTarget.style.position = Position.Absolute;
-			this.dragTarget.style.left = panel.x;
-			this.dragTarget.style.top = panel.y;
-			this.dragTarget.style.right = StyleKeyword.Auto;
-			this.dragTarget.style.bottom = StyleKeyword.Auto;
-
-			this.dragOffset = new Vector2(evt.position.x - panel.x, evt.position.y - panel.y);
-			this.isDragging = true;
-			handle.CapturePointer(evt.pointerId);
-			evt.StopPropagation();
-		}
-
-		/// <summary>
-		/// Moves the panel with the pointer, kept within the screen.
-		/// </summary>
-		private void OnDragPointerMove(PointerMoveEvent evt)
-		{
-			if (!this.isDragging || this.dragTarget == null)
-			{
-				return;
-			}
-
-			Rect screen = Root.worldBound;
-			Rect panel = this.dragTarget.worldBound;
-
-			// Clamped so a panel can never be dragged fully off screen and become unreachable.
-			float x = Mathf.Clamp(evt.position.x - this.dragOffset.x, 0.0f, Mathf.Max(0.0f, screen.width - panel.width));
-			float y = Mathf.Clamp(evt.position.y - this.dragOffset.y, 0.0f, Mathf.Max(0.0f, screen.height - panel.height));
-
-			this.dragTarget.style.left = x;
-			this.dragTarget.style.top = y;
-		}
-
-		/// <summary>
-		/// Ends a drag.
-		/// </summary>
-		private void OnDragPointerUp(PointerUpEvent evt)
-		{
-			if (!this.isDragging)
-			{
-				return;
-			}
-
-			this.isDragging = false;
-			VisualElement handle = (VisualElement)evt.currentTarget;
-			if (handle.HasPointerCapture(evt.pointerId))
-			{
-				handle.ReleasePointer(evt.pointerId);
+				refresh();
 			}
 		}
 
@@ -404,6 +703,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void Update()
 		{
+			PollLoseFocus();
 			OnTick();
 		}
 
@@ -446,17 +746,22 @@ namespace FishMMO.Client
 				return;
 			}
 			Document.enabled = true;
+			ApplySortingOrder();
 			Visible = true;
+
+			// A panel the player just opened belongs above the ones already on screen.
+			if (FocusOnSelect)
+			{
+				BringToFront();
+			}
 
 			if (ReleasesCursor)
 			{
 				PlayerInputController.MouseMode = true;
+			}
 
-				/* Registered together with the cursor release, and not optional. The input
-				 * controller recaptures the cursor on every frame where nothing is registered as
-				 * closeable, so a panel that releases it without registering gets it taken back
-				 * before the player can click anything. Escape closing the panel falls out of the
-				 * same registration. */
+			if (CloseOnEscape)
+			{
 				UIManager.RegisterCloseOnEscapeTK(this);
 			}
 
@@ -500,9 +805,234 @@ namespace FishMMO.Client
 			 * OnAfterStarting re-applies that state, and pairs Pre with Post so re-running it does
 			 * not stack up duplicate event subscriptions. */
 			OnStarting();
-			SetupDragging();
 			OnAfterStarting();
+
+			/* The handle lives in the tree that was just replaced, so the callbacks registered
+			 * on the old one went with it. Re-registering is not optional: a panel that has
+			 * been hidden and re-shown would otherwise silently stop being draggable. */
+			AttachDragHandlers();
+			AttachFocusHandler();
+
+			// The rebuilt tree carries none of the inline overrides the old one was painted with.
+			UITKThemeManager.Apply(root);
 		}
+
+		#region Drag
+
+		/// <summary>Name of the header element panels use as a drag handle, when they have one.</summary>
+		private const string DragHandleName = "panel-header";
+
+		/// <summary>USS class marking a header element, used when the name lookup misses.</summary>
+		private const string DragHandleClass = "fish-panel__header";
+
+		/// <summary>The element the pointer grabs, or null when this panel is not draggable.</summary>
+		private VisualElement dragHandle;
+
+		/// <summary>The element actually moved — the panel content root, not the handle.</summary>
+		private VisualElement dragTarget;
+
+		/// <summary>Pointer position when the drag began, in panel coordinates.</summary>
+		private Vector2 dragStartPointer;
+
+		/// <summary>Target's left/top when the drag began.</summary>
+		private Vector2 dragStartPosition;
+
+		/// <summary>Id of the pointer that owns the in-flight drag, or -1 when idle.</summary>
+		private int dragPointerId = -1;
+
+		/// <summary>
+		/// Wires pointer handling for dragging, replacing any handlers on a previous tree.
+		/// </summary>
+		/// <remarks>
+		/// Called after every initialisation, including the re-initialisation that follows a
+		/// visual tree being rebuilt — the handlers belong to elements, so they are discarded
+		/// with the tree that owned them.
+		/// </remarks>
+		private void AttachDragHandlers()
+		{
+			DetachDragHandlers();
+
+			if (!CanDrag)
+			{
+				return;
+			}
+
+			VisualElement root = Root;
+			if (root == null || root.childCount == 0)
+			{
+				return;
+			}
+
+			// The panel root belongs to the UIDocument and fills the screen; moving it would
+			// move nothing visible. What the player drags is the content root the UXML declares.
+			this.dragTarget = root[0];
+
+			/* Prefer a header. Dragging from anywhere on the panel means a press that begins on
+			 * a button and moves a few pixels drags the window instead of pressing it. UI
+			 * Toolkit events bubble to the root, so the panel would receive the press either
+			 * way. A panel with no header still drags from anywhere rather than becoming
+			 * immovable. */
+			this.dragHandle = this.dragTarget.Q(DragHandleName)
+				?? this.dragTarget.Q(className: DragHandleClass)
+				?? this.dragTarget;
+
+			this.dragHandle.RegisterCallback<PointerDownEvent>(OnDragPointerDown);
+			this.dragHandle.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
+			this.dragHandle.RegisterCallback<PointerUpEvent>(OnDragPointerUp);
+			this.dragHandle.RegisterCallback<PointerCaptureOutEvent>(OnDragPointerCaptureOut);
+		}
+
+		/// <summary>
+		/// Removes pointer handling for dragging.
+		/// </summary>
+		private void DetachDragHandlers()
+		{
+			if (this.dragHandle != null)
+			{
+				this.dragHandle.UnregisterCallback<PointerDownEvent>(OnDragPointerDown);
+				this.dragHandle.UnregisterCallback<PointerMoveEvent>(OnDragPointerMove);
+				this.dragHandle.UnregisterCallback<PointerUpEvent>(OnDragPointerUp);
+				this.dragHandle.UnregisterCallback<PointerCaptureOutEvent>(OnDragPointerCaptureOut);
+			}
+
+			this.dragHandle = null;
+			this.dragTarget = null;
+			this.dragPointerId = -1;
+		}
+
+		/// <summary>
+		/// Begins a drag and captures the pointer.
+		/// </summary>
+		/// <remarks>
+		/// Capturing is what makes the drag survive the pointer leaving the handle — without
+		/// it a quick movement outruns the panel, the handle stops receiving moves, and the
+		/// window is left stuck mid-drag until the next press.
+		/// </remarks>
+		private void OnDragPointerDown(PointerDownEvent evt)
+		{
+			if (!CanDrag || this.dragTarget == null || evt.button != 0)
+			{
+				return;
+			}
+
+			// Resolved once here rather than read per move: style.left is a StyleLength that
+			// reads back as the value last written, which is NaN until something writes one.
+			this.dragStartPosition = new Vector2(this.dragTarget.layout.x, this.dragTarget.layout.y);
+			this.dragStartPointer = (Vector2)evt.position;
+			this.dragPointerId = evt.pointerId;
+
+			this.dragHandle.CapturePointer(evt.pointerId);
+
+			/* Stopped so the press does not also reach whatever is under it. Not prevented
+			 * from bubbling further up, because the panel above still wants to know it was
+			 * touched — focus ordering is decided there, not here. */
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Moves the panel with the pointer.
+		/// </summary>
+		private void OnDragPointerMove(PointerMoveEvent evt)
+		{
+			if (this.dragPointerId != evt.pointerId || this.dragTarget == null)
+			{
+				return;
+			}
+
+			Vector2 delta = (Vector2)evt.position - this.dragStartPointer;
+			SetDragPosition(this.dragStartPosition + delta);
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Ends a drag and releases the pointer.
+		/// </summary>
+		private void OnDragPointerUp(PointerUpEvent evt)
+		{
+			if (this.dragPointerId != evt.pointerId)
+			{
+				return;
+			}
+
+			this.dragHandle.ReleasePointer(evt.pointerId);
+			this.dragPointerId = -1;
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Clears drag state when the capture is lost to something other than a pointer-up.
+		/// </summary>
+		/// <remarks>
+		/// A capture can be taken away — the panel being hidden mid-drag is the ordinary case.
+		/// Without this the control still believes a drag is in flight, and the next move from
+		/// that pointer id teleports the panel by the distance travelled in between.
+		/// </remarks>
+		private void OnDragPointerCaptureOut(PointerCaptureOutEvent evt)
+		{
+			this.dragPointerId = -1;
+		}
+
+		/// <summary>
+		/// Writes an absolute position to the panel, clamped to the screen when asked.
+		/// </summary>
+		/// <param name="position">Desired top-left of the panel, in panel coordinates.</param>
+		private void SetDragPosition(Vector2 position)
+		{
+			VisualElement root = Root;
+			if (this.dragTarget == null || root == null)
+			{
+				return;
+			}
+
+			if (ClampToScreen)
+			{
+				/* Clamped by the panel's own resolved size, so the whole window stays on
+				 * screen rather than only its top-left corner. contentRect is the panel root's
+				 * size in UI Toolkit's coordinate space, which is what a panel-space position
+				 * is measured against — Screen.width/height would be wrong under any
+				 * PanelSettings scale mode that is not one-to-one with the display. */
+				float maxX = Mathf.Max(0.0f, root.contentRect.width - this.dragTarget.layout.width);
+				float maxY = Mathf.Max(0.0f, root.contentRect.height - this.dragTarget.layout.height);
+
+				position.x = Mathf.Clamp(position.x, 0.0f, maxX);
+				position.y = Mathf.Clamp(position.y, 0.0f, maxY);
+			}
+
+			/* Absolute, so left/top mean what is written here. A panel laid out by its parent
+			 * flexbox would otherwise have these quietly ignored, which reads as a drag that
+			 * does nothing at all. */
+			this.dragTarget.style.position = Position.Absolute;
+			this.dragTarget.style.left = position.x;
+			this.dragTarget.style.top = position.y;
+		}
+
+		/// <summary>
+		/// Returns the panel to the position its stylesheet gives it and ends any drag.
+		/// </summary>
+		/// <remarks>
+		/// Clearing the inline styles rather than writing a remembered position hands the panel
+		/// back to the USS that placed it,
+		/// so it lands where an untouched install would put it on this screen size.
+		/// </remarks>
+		public void ResetPosition()
+		{
+			if (this.dragPointerId != -1 && this.dragHandle != null)
+			{
+				this.dragHandle.ReleasePointer(this.dragPointerId);
+				this.dragPointerId = -1;
+			}
+
+			if (this.dragTarget == null)
+			{
+				return;
+			}
+
+			this.dragTarget.style.position = StyleKeyword.Null;
+			this.dragTarget.style.left = StyleKeyword.Null;
+			this.dragTarget.style.top = StyleKeyword.Null;
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Hides the panel unless <see cref="IsAlwaysOpen"/> is true.
@@ -543,6 +1073,7 @@ namespace FishMMO.Client
 			}
 			Client = null;
 
+			UITKThemeManager.Unregister(Root);
 			UIManager.UnregisterTK(this);
 		}
 	}

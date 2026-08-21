@@ -2,8 +2,13 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIAbilities.uss" />
     <ui:VisualElement name="ability-root" class="fish-panel ability-panel">
-        <ui:VisualElement name="ability-header" class="fish-panel__header ability-header">
-            <ui:Label text="ABILITIES" class="fish-panel__title" />
+        <ui:VisualElement name="panel-header" class="fish-panel__header ability-header">
+            <ui:VisualElement class="fish-panel__icon ability-header__icon" />
+            <ui:VisualElement class="ability-header__titles">
+                <ui:Label text="ABILITIES" class="fish-panel__title" />
+                <ui:Label name="ability-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="ability-count" text="0" class="fish-badge ability-count" />
         </ui:VisualElement>
         <ui:VisualElement name="ability-tabs" class="ability-tabs">
             <ui:Button name="ability-tab-abilities" text="Abilities" class="fish-tab ability-tab" />
@@ -14,6 +19,7 @@
             <ui:VisualElement name="ability-list-abilities" class="ability-list" />
             <ui:VisualElement name="ability-list-known" class="ability-list" />
             <ui:VisualElement name="ability-list-events" class="ability-list" />
+            <ui:Label name="ability-empty" text="No abilities learned." class="fish-empty ability-empty" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

@@ -72,7 +72,7 @@ FishMMO is a complete multiplayer online game framework consisting of:
 
 | Component | Description |
 |---|---|
-| **FishMMO-Unity** | Unity project containing client, server, and shared game code (970+ C# files) — full prediction pipeline, modular character visuals, threat-based AI, ECA trigger system |
+| **FishMMO-Unity** | Unity project containing client, server, and shared game code (900+ C# files) — full prediction pipeline, modular character visuals, threat-based AI, ECA trigger system |
 | **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, X25519 ECDH, token auth, TOTP 2FA) |
 | **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (41 entities/tables, 42 services) |
 | **FishMMO-WebTransport** | C++ native library wrapping MsQuic (QUIC/HTTP3) — P/Invoked from C# as a FishNet transport plugin |
@@ -588,6 +588,19 @@ export FISHMMO_ENVIRONMENT=Production
 export FISHMMO_DB_PASSWORD=super_secret
 ```
 
+**Every timestamp is stored in UTC.** The timestamp columns are `timestamp without time zone`, and `CURRENT_TIMESTAMP` is a `timestamptz` — assigning it converts to the *session's* time zone, so on any server not running in UTC the value written was local time while everything reading it compared against `DateTime.UtcNow`. Every default and every raw-SQL write now uses `timezone('UTC', CURRENT_TIMESTAMP)` instead. This matters most for `last_pulse`: the liveness query already compared in UTC, so a non-UTC database made servers appear stale or fresh by exactly the UTC offset.
+
+> Rows written before this change keep whatever offset they were written with. `last_pulse` corrects itself on the next heartbeat; historical `time_created` values do not.
+
+**Schema drift is reported at startup.** Migrations are generated per developer and applied locally rather than shared through source control, so pulling someone else's entity change brings no migration with it and nothing applies one on your behalf — the server starts and authenticates perfectly, and the mismatch surfaces much later as a query failing on a column that does not exist, which typically reaches a player as *missing data* rather than as a schema problem. `NpgsqlDbContextFactory.ValidateSchemaAsync` reports two distinct states, and `Server.VerifyDatabaseSchema` logs whichever applies with the command that fixes it:
+
+| State | Meaning | Fix |
+|---|---|---|
+| **Pending migrations** | Migrations exist that this database has not run | `dotnet ef database update` |
+| **Model drift** | The entity model changed after the newest migration was created, so no migration covers it yet | `dotnet ef migrations add <name>`, then `database update` |
+
+The check is deliberately neither awaited nor fatal. A server whose schema is stale still serves everything that does not touch the changed tables, and refusing to start would be a worse outcome than a loud log line. It costs one query and reports within a second or so of startup; a check that cannot run at all is a warning, never a crash.
+
 ---
 
 ## Unity Project Setup
@@ -675,6 +688,8 @@ The build process copies the appropriate `.cfg` and `appsettings.json` files fro
 
 > **Important:** Build Addressables first, then build the game. The game build depends on the Addressable bundles produced in the first step.
 
+**Headless builds and the build-target switch.** A CLI build (`-batchmode -executeMethod`) that has to switch build target used to be rejected for running while scripts were compiling, producing no artifact — and re-running the identical command immediately afterwards succeeded, because by then the target already matched and no switch happened. `SwitchActiveBuildTarget` is synchronous and already recompiles for the new target, and the `AssetDatabase.Refresh(ForceUpdate)` that follows settles the define symbols; the extra `ForceEditorScriptRecompile` on top of that queued a *further* compile, and under `-executeMethod` nothing turns the editor loop over until the method returns, so it stayed pending for the rest of the invocation. That recompile is now skipped in batch mode — interactive Dashboard builds keep it, where the editor loop can service it. `RunCliBuild` also fails fast, naming the reason, if scripts somehow are still compiling: nothing on that thread can advance a pending compile in batch mode, so waiting cannot help and sleeping would block the very thread that runs compilation.
+
 ### Patching — PatchGenerator and Updater
 
 #### PatchGenerator
@@ -694,10 +709,10 @@ Patch files are ZIP archives named `<from_version>-<to_version>.zip` (e.g., `1.0
 The FishMMO Updater is a standalone .NET 8 executable that applies **one** patch archive to the client. It is launched automatically by the game launcher.
 
 ```
-Updater.exe -version=1.0.0 -latestversion=1.0.1 -pid=1234 -exe=FishMMOClient.exe
+Updater.exe -version=1.0.0 -latestversion=1.0.1 -pid=1234 -exe=FishMMOClient.exe [-patches=D:\FishMMO\Patches]
 ```
 
-It looks for exactly one archive — `Patches/{version}-{latestversion}.zip`, resolved relative to its own base directory — and applies it. **There is no multi-step chaining**: if the server only publishes `1.0.0-1.0.1` and `1.0.1-1.0.2`, a `1.0.0` client cannot reach `1.0.2` in one run. Publish a direct `1.0.0-1.0.2` patch for every version you intend to support upgrading from.
+It looks for exactly one archive — `{version}-{latestversion}.zip` in the patches directory, by default `Patches/` resolved relative to its own base directory — and applies it. `-patches=` overrides that directory and **must be absolute**; a relative, missing, or unreadable path is ignored with a warning and the default is used. The launcher applies the identical rule to its own `Launcher.PatchDirectory` setting and passes the resolved path here explicitly, so the two cannot disagree — and a disagreement is silent: the Updater finds no archive, does nothing, restarts the client at the same version, and the launcher detects the same mismatch again on the next run, forever. `-patches` changes only where a **verified** archive is read from; the launcher has already checked it against the server-supplied SHA-256 before the Updater is invoked at all, and it does **not** relocate the install. **There is no multi-step chaining**: if the server only publishes `1.0.0-1.0.1` and `1.0.1-1.0.2`, a `1.0.0` client cannot reach `1.0.2` in one run. Publish a direct `1.0.0-1.0.2` patch for every version you intend to support upgrading from.
 
 Behaviour:
 
@@ -710,7 +725,7 @@ Behaviour:
 | **Launcher shutdown** | `Process.CloseMainWindow()` on Windows; on Linux/macOS the Updater P/Invokes `kill(pid, SIGTERM)` from `libc`, because `CloseMainWindow` is Windows-only. A forced kill follows if the graceful request is not honoured |
 | **Restart** | The client executable named by `-exe` is started again on every exit path, patched or not |
 
-> The `Patches` directory name is a three-way contract: the Unity client resolves it via `Constants.Configuration.PatchesDirectoryName` / `Constants.GetPatchesDirectory()`, the standalone Updater hard-codes `"Patches"` (it cannot reference the Unity assembly), and the patch server reads it from `Patches:DirectoryName` in `appsettings.Patcher.json`. Change one, change all three.
+> The `Patches` directory *name* is a three-way contract: the Unity client resolves it via `Constants.Configuration.PatchesDirectoryName` / `Constants.GetPatchesDirectory()`, the standalone Updater defaults to `"Patches"` (it cannot reference the Unity assembly), and the patch server reads it from `Patches:DirectoryName` in `appsettings.Patcher.json`. Change one, change all three. The player-facing `Launcher.PatchDirectory` override sits on top of that default and is carried across the launcher → Updater handoff by `-patches=`, so overriding it does not require touching any of the three.
 
 #### Patch Server
 
@@ -1777,8 +1792,10 @@ See [FishMMO-CMS/README.md](FishMMO-CMS/README.md) for the full endpoint table a
 
 ### Client Launcher Flow
 
-1. **Launcher starts** — Fetches the news HTML from `Constants.Configuration.LauncherHtmlUrl` (baked at build time from `GeneratedHostConfig.LauncherHtmlUrl`, which CI substitutes from `FISHMMO_ROOT_DOMAIN`) and extracts the configured `div` class. News is cosmetic: a fetch failure is shown in the news pane and does **not** block the version check.
-2. **Version check** — Queries `{APIHost}latest_version?from={clientVersion}`. If a patch is available, the launcher downloads it into `<install root>/Patches/{from}-{to}.zip`, verifies it against the `sha256` the server reported, then hands off to the external Updater and quits so the Updater can replace the client binaries. If the server reports `patch_available: false`, the launcher enters `PatchUnavailable` — retrying cannot help, the player needs a full reinstall.
+1. **Launcher starts** — Fetches the news HTML from `Constants.Configuration.LauncherHtmlUrl` (baked at build time from `GeneratedHostConfig.LauncherHtmlUrl`, which CI substitutes from `FISHMMO_ROOT_DOMAIN`) and extracts the configured `div` class. `IHtmlContentFetcher` yields the **parsed node**, not formatted text: UI Toolkit's rich text has no link tag, so a news link cannot be markup inside a label — it has to become a real element that can receive a click, which means the view walks the tree itself rather than being handed a formatted string. Every href is routed through `LauncherLinkPolicy`, which parses the URI and allows only absolute `http`/`https` before it reaches `Application.OpenURL`. News is cosmetic and does **not** block the version check.
+
+   `IsNewsUrlConfigured` decides whether the request is worth issuing at all. An empty URL and a `FISHMMO_SENTINEL_PLACEHOLDER` the build never substituted mean the same thing — no feed — so both are treated alike, the same sentinel convention `ClientCertificatePinning` uses to screen unsubstituted values out of the pin set; without it a working copy fetched a host that cannot resolve and reported a failure on every run for a feed that was never configured. On both that path and a genuine fetch failure the pane is filled with `ClientLauncher.newsFallbackSummary`, a serialized `[TextArea]` field a deployment can reword without a code change. It is filled rather than hidden because hiding it collapsed the panel into a header stacked directly on a footer, which reads as a broken window rather than as a launcher with no news today.
+2. **Version check** — Queries `{APIHost}latest_version?from={clientVersion}`. If a patch is available, the launcher downloads it into `{patch directory}/{from}-{to}.zip` (see `Launcher.PatchDirectory` below; `<install root>/Patches` by default), verifies it against the `sha256` the server reported, then hands off to the external Updater and quits so the Updater can replace the client binaries. Download progress carries a `DownloadStats` snapshot — bytes transferred against the manifest's expected total, current throughput, and an ETA — so the bar shows a real total from its first frame rather than waiting on response headers. If `Launcher.AutoUpdate` is off, the launcher parks on an **Update** button with the patch size instead of starting a download the player has not agreed to. If the server reports `patch_available: false`, the launcher enters `PatchUnavailable` — retrying cannot help, the player needs a full reinstall.
 3. **Play** — The launcher loads the `ClientPostboot` scene, calls `StartBootstrap()` on its `ClientPostbootSystem`, and unloads its own scene.
 4. **Login** — Client connects to the LoginServer discovered via `api.fishmmo.com/LoginServer`.
 5. **QUIC/WebTransport Handshake** — X25519 ECDH key agreement + stateless cookie challenge → AES-256-GCM encrypted session.
@@ -1786,6 +1803,27 @@ See [FishMMO-CMS/README.md](FishMMO-CMS/README.md) for the full endpoint table a
 7. **Character Select** — Choose or create a character.
 8. **World Entry** — WorldServer routes the character to the correct SceneServer.
 9. **Gameplay** — SceneServer handles all in-game simulation.
+
+#### Launcher Rendering and Settings
+
+The launcher renders through `ILauncherView`, an interface describing the presentation surface in terms of intent (*show this status*) rather than widget manipulation, so all version-check and patch logic stays in `ClientLauncher` and never branches on what is drawing it. `UITKClientLauncher` is the only implementation. The uGUI adapter and the `HtmlToTmpTextConverter` behind it were deleted with the UI Toolkit conversion, along with the scene's `Canvas` root, so `ResolveView()` has nothing to fall back to: an unassigned or wrongly-typed **Launcher View Component** is reported as an error and leaves the view null. Saying so beats silently constructing a view over serialized fields that no longer exist.
+
+The panel is a `UIDocument` bound to `UILauncher.uxml` and the shared `PanelSettings`. Its brand banner (`Assets/Sprites/FishMMOBanner.png`) has its height recomputed from its own resolved width on every geometry change, because USS has no aspect-ratio property and a fixed height on a full-width element can only be wrong: `scale-and-crop` fills the strip but slices the top and bottom off the artwork, `scale-to-fit` keeps it whole but leaves the panel background showing down both sides, and at 3.2:1 against a panel nowhere near that shape either was visible. The ratio is read from the assigned image rather than hardcoded, so replacing the artwork needs no code change. In the footer, Quit sits at the far left and Play/Connect at the far right, separated by the whole width of the panel — the affirmative action where the eye and the cursor finish, the destructive one far enough away that neither is hit by accident.
+
+On handoff the launcher hides its UI and unloads its own scene. Addressables is asked first, because that is how a shipped build loaded the scene and its handle has to be released to free the bundle; `SceneManager` is the fallback, because Addressables only tracks scenes it loaded itself and silently no-ops for any other — which is exactly the editor case, where `ClientLauncher.unity` is opened directly and the launcher UI otherwise stayed on screen over the login screen for the rest of the session. `UITKClientLauncher` also watches `sceneLoaded` and dismisses itself the moment `ClientPostboot` arrives, whoever loaded it, as a second and independent guarantee against the same failure.
+
+Settings live in the shared `Configuration.GlobalSettings` file alongside the game's other options, so the launcher and the in-game Options panel cannot end up with two stores. Every getter clamps: the file is plain text a player can edit, and a timeout of `0` or a retry count of `100000` would otherwise be honoured literally and look like a launcher bug.
+
+| Key | Default | Range | Description |
+|---|---|---|---|
+| `Launcher.AutoUpdate` | `true` | — | Start downloading an available update without asking. Off parks the launcher on an Update button showing the patch size — the difference between a convenience and a cost on a metered connection |
+| `Launcher.RequestTimeout` | serialized field | 5–300 s | Per-request timeout for version checks and patch downloads |
+| `Launcher.MaxRetries` | serialized field | 0–10 | Retries after an initial failure. Honoured by the patch download only — the news fetch is cosmetic and deliberately runs with none |
+| `Launcher.RetryDelay` | serialized field | 0–30 s | Delay between retries |
+| `Launcher.PatchDirectory` | *(empty)* | absolute path | Where patch archives are downloaded to and read from. Empty uses the install's own `Patches` folder. Created if missing; anything unusable falls back to the default with a warning. **Not** a "move the game" setting — the Updater patches files relative to its own location, so the install root is fixed by construction |
+| `Launcher.WindowWidth` / `Launcher.WindowHeight` | *(unset)* | ≥ 480 × 360 | Last window size the player chose. Written shortly after a resize settles rather than at shutdown, because the Updater terminates the launcher rather than closing it. Clamped against the current display, so a size saved on a larger monitor cannot come back with the footer buttons off-screen |
+
+On Windows, **Browse** opens the native folder dialog (`NativeFolderPicker`, a `SHBrowseForFolder` shell call). Unity exposes no runtime folder picker, so the button is hidden on other platforms — the path text field sets the folder on every platform and nothing is unreachable without it.
 
 > The launcher is a plain `MonoBehaviour` and only exists in **Standalone** builds. In the Editor and on WebGL the `ClientPreboot` bootstrap loads `ClientPostboot` directly, because neither can run the external updater. A transient-state watchdog (`transientStateTimeoutSeconds`, default `120`) recovers the UI if a launcher coroutine dies mid-flight.
 

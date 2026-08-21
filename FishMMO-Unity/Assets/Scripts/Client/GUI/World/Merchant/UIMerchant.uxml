@@ -2,8 +2,13 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIMerchant.uss" />
     <ui:VisualElement name="merchant-root" class="fish-panel merchant-panel">
-        <ui:VisualElement name="merchant-header" class="fish-panel__header merchant-header">
-            <ui:Label text="MERCHANT" class="fish-panel__title" />
+        <ui:VisualElement name="panel-header" class="fish-panel__header merchant-header">
+            <ui:VisualElement class="fish-panel__icon merchant-header__icon" />
+            <ui:VisualElement class="merchant-header__titles">
+                <ui:Label text="MERCHANT" class="fish-panel__title" />
+                <ui:Label name="merchant-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="merchant-count" text="0" class="fish-badge merchant-count" />
         </ui:VisualElement>
         <ui:VisualElement name="merchant-tabs" class="merchant-tabs">
             <ui:Button name="merchant-tab-items" text="Items" class="fish-tab merchant-tab" />
@@ -14,6 +19,7 @@
             <ui:VisualElement name="merchant-items" class="merchant-list" />
             <ui:VisualElement name="merchant-abilities" class="merchant-list" />
             <ui:VisualElement name="merchant-events" class="merchant-list" />
+            <ui:Label name="merchant-empty" text="Nothing for sale." class="fish-empty merchant-empty" />
         </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

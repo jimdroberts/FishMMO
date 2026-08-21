@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEditor;
 using UnityEditorInternal;
 using System.IO;
@@ -135,12 +135,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <summary>
 		/// Builds the game executable using the current Build Environment Options (Build Type and OS Target).
 		/// </summary>
-		/// <param name="rootPath">
-		/// Output directory to build into. When null/empty, BuildExecutor falls back to an
-		/// interactive folder picker (EditorUtility.SaveFolderPanel), which does not work in
-		/// -batchmode. CLI callers must supply this explicitly.
-		/// </param>
-		public static void BuildGameWithEnvironmentOptions(string rootPath = null)
+		public static void BuildGameWithEnvironmentOptions()
 		{
 			// Check if scripts are currently compiling
 			if (BuildEnvironmentOptions.IsCompiling())
@@ -172,8 +167,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				customBuildType,
 				GetBuildOptions(buildTarget),
 				buildSubtarget,
-				buildTarget,
-				rootPath);
+				buildTarget);
 		}
 
 		/// <summary>
@@ -297,7 +291,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 		}
 
-		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget, string rootPath = null)
+		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 		{
 			InitializeLogger();
 
@@ -311,7 +305,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				buildTool.RunBuild(
 					linkerRootPath: assets,
 					linkerDirectoryPath: Path.Combine(assets, "Dependencies"),
-					rootPath: rootPath ?? string.Empty,
+					rootPath: string.Empty,
 					executableName: executableName,
 					bootstrapScenes: bootstrapScenes,
 					excludedAddressableGroups: customBuildType == CustomBuildType.Server ? clientAddressableGroups : serverAddressableGroups,
@@ -427,21 +421,17 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				BuildEnvironmentOptions.SetOSTarget(osTarget);
 				BuildEnvironmentOptions.SwitchToEnvironmentBuildTarget();
 
-				/* Switching build target (e.g. Client -> Server) triggers a script recompile,
-				 * and the Addressables/player builds below reject requests made while scripts
-				 * are compiling. SwitchToEnvironmentBuildTarget drives that compile to
-				 * completion synchronously when running in batch mode, so by this point it is
-				 * already done.
-				 *
-				 * This used to be a Thread.Sleep poll loop, which could never succeed: Unity
-				 * runs compilation on the main thread's editor tick, so sleeping that thread
-				 * is what stopped the very work it was waiting for. It burned its full 120s
-				 * budget and failed on every single target switch. Do not reintroduce a sleep
-				 * here — if compilation is genuinely still pending there is nothing this
-				 * thread can do to advance it, so fail immediately rather than hang. */
+				/* SwitchToEnvironmentBuildTarget recompiles for the new target before it
+				 * returns, so scripts should be settled by the time we get here. If they are
+				 * not, the Addressables/player builds below reject the request for running
+				 * while scripts are compiling, and under -batchmode there is nothing this
+				 * thread can do about it: compilation is driven by the editor loop, which
+				 * does not turn over until this method returns. Waiting here cannot help and
+				 * sleeping actively prevents it, so fail immediately with a clear reason
+				 * rather than hand back an opaque build rejection. */
 				if (Application.isBatchMode && BuildEnvironmentOptions.IsCompiling())
 				{
-					UnityEngine.Debug.LogError("[CustomBuildTool] Scripts are still compiling after the build target switch; cannot start a CLI build. This should not happen — SwitchToEnvironmentBuildTarget forces a synchronous import in batch mode.");
+					UnityEngine.Debug.LogError("[CustomBuildTool] Scripts are still compiling after the build target switch; cannot start a CLI build.");
 					EditorApplication.Exit(1);
 					return;
 				}
@@ -453,14 +443,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				if (!addressablesOnly)
 				{
-					string outputPath;
-					if (!TryGetArg("-fishmmoOutputPath", out outputPath) || string.IsNullOrWhiteSpace(outputPath))
-					{
-						string projectRoot = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-						string subFolder = buildType == BuildTypeEnvironment.Server ? "Server" : "Client";
-						outputPath = Path.Combine(projectRoot, "Builds", subFolder);
-					}
-					BuildGameWithEnvironmentOptions(outputPath);
+					BuildGameWithEnvironmentOptions();
 				}
 
 				if (Application.isBatchMode)

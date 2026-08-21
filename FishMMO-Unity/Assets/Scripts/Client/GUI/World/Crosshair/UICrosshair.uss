@@ -9,8 +9,14 @@
     justify-content: center;
 }
 
+/*
+    8px, not the 32px this was built at. The uGUI crosshair was an 8x8 rect against a
+    1680-wide reference; PanelSettings references 1200, so a point here is 1.4x larger on
+    screen and 32 rendered roughly four times the original. A crosshair is a sighting mark —
+    growing it is a functional change, not a cosmetic one.
+*/
 .crosshair-icon {
-    width: 32px;
-    height: 32px;
+    width: 8px;
+    height: 8px;
     -unity-background-scale-mode: scale-to-fit;
 }

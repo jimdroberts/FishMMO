@@ -1,0 +1,8 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../FishMMO-Theme.uss" />
+    <Style src="UIWorldLabels.uss" />
+    <ui:VisualElement name="world-label-root" class="world-label-root" picking-mode="Ignore">
+        <ui:VisualElement name="world-label-container" class="world-label-container" picking-mode="Ignore" />
+        <ui:VisualElement name="screen-label-container" class="screen-label-container" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

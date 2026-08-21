@@ -10,13 +10,13 @@
                 <ui:VisualElement name="character-list" class="character-list" />
             </ui:ScrollView>
             <ui:VisualElement name="character-buttons" class="character-buttons">
-                <ui:Button name="character-connect-btn" text="Play" class="fish-tab character-btn character-btn--primary" />
-                <ui:Button name="character-create-btn" text="Create" class="fish-tab character-btn" />
-                <ui:Button name="character-delete-btn" text="Delete" class="fish-tab character-btn character-btn--danger" />
+                <ui:Button name="character-connect-btn" text="Play" class="fish-button character-btn fish-button--primary" />
+                <ui:Button name="character-create-btn" text="Create" class="fish-button character-btn" />
+                <ui:Button name="character-delete-btn" text="Delete" class="fish-button character-btn fish-button--danger" />
             </ui:VisualElement>
             <ui:VisualElement name="character-buttons-secondary" class="character-buttons">
-                <ui:Button name="character-quit-login-btn" text="Back" class="fish-tab character-btn" />
-                <ui:Button name="character-quit-btn" text="Quit" class="fish-tab character-btn" />
+                <ui:Button name="character-quit-login-btn" text="Back" class="fish-button character-btn" />
+                <ui:Button name="character-quit-btn" text="Quit" class="fish-button character-btn" />
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

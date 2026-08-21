@@ -179,19 +179,6 @@ namespace FishMMO.Server.Implementation
 		/// <summary>Display name used in log messages. Defaults to the concrete class name.</summary>
 		protected virtual string LogPrefix => GetType().Name;
 
-		/// <summary>
-		/// Whether this authenticator's connections require an IPFetch-issued connection
-		/// token for real-IP recovery. Only true for authenticators deployed behind an L4
-		/// UDP proxy (the LoginServer, reached via IPFetch/nginx). World/Scene servers are
-		/// connected to directly by IP:port from server-select data — the client never
-		/// requests or sends a connection token for them (see
-		/// <see cref="FishMMO.Client.ClientLoginAuthenticator.ConnectionToken"/>, which is
-		/// explicitly null for World/Scene connections) — so enforcing the token/cookie-echo
-		/// gate for them would reject every legitimate first handshake. Overridden to
-		/// <c>false</c> in <see cref="TokenServerAuthenticator"/>.
-		/// </summary>
-		protected virtual bool RequiresConnectionToken => true;
-
 		#region Lifecycle
 
 		/// <inheritdoc/>
@@ -790,14 +777,10 @@ namespace FishMMO.Server.Implementation
 		#region Rate Limit Key Resolution
 
 		/// <summary>
-		/// Resolves the real client IP for rate limiting. For authenticators behind an
-		/// L4 proxy (<see cref="RequiresConnectionToken"/> true), this requires the IP to
-		/// have been recovered from a verified connection token — <c>conn.GetAddress()</c>
-		/// returns the proxy's loopback for every client there, so it is never used as a
-		/// fallback and a null result means callers MUST disconnect. For authenticators
-		/// not behind a proxy (World/Scene, connected to directly), <c>conn.GetAddress()</c>
-		/// IS the real client IP, so it is used as a safe fallback (falling back further to
-		/// a per-connection key if it happens to report loopback, e.g. local dev testing).
+		/// Resolves the real client IP for rate limiting. Requires the IP to have been
+		/// recovered from a verified connection token or auth token. Returns null if
+		/// the real IP is not yet available — callers MUST disconnect the client.
+		/// Never falls back to proxy IP or ClientId.
 		/// </summary>
 		/// <remarks>
 		/// Every game server (Login, World and Scene alike) sits behind the same L4 UDP
@@ -816,19 +799,7 @@ namespace FishMMO.Server.Implementation
 			{
 				return recoveredIp;
 			}
-
-			if (RequiresConnectionToken)
-			{
-				// Behind an L4 proxy: conn.GetAddress() is the proxy's loopback for
-				// every client, so it is not a safe fallback here.
-				return null;
-			}
-
-			// Not behind a proxy — conn.GetAddress() is the client's real address.
-			string addr = conn.GetAddress();
-			if (!string.IsNullOrEmpty(addr) && !NetHelper.IsLoopbackAddress(addr))
-				return addr;
-			return $"conn:{conn.ClientId}";
+			return null;
 		}
 
 		/// <summary>
@@ -1043,24 +1014,23 @@ namespace FishMMO.Server.Implementation
 		{
 			if (conn == null) return;
 
-			if (connectionStopped)
+			if (!connectionStopped)
 			{
-				/* The transport has already dropped its id mapping by the time the stopped
-				 * event fires, so anything that reaches conn.GetAddress() makes FishNet log
-				 * an error. Only the recovered IP is resolvable here, and it is the only
-				 * address-derived key worth clearing on a disconnect: an IP-keyed window
-				 * SHOULD outlive the connection, or a reconnect flood from one address
-				 * would escape the limiter entirely. */
-				string? recoveredIp = ResolveRecoveredIpKey(conn);
-				if (!string.IsNullOrEmpty(recoveredIp))
-				{
-					handshakeRateLimiter.Remove(recoveredIp!);
-				}
-			}
-			else
-			{
+				/* Live connection: the server is inviting a re-handshake (login-queue
+				 * admission), so the window it would be gated by is cleared whatever key it
+				 * resolves to. Safe here because the transport still holds its id mapping. */
 				handshakeRateLimiter.Remove(ResolveHandshakeRateLimitKey(conn));
 			}
+			/* On the stopped path only the ClientId key below is cleared.
+			 *
+			 * Two reasons, and they point the same way. The transport has already dropped its
+			 * id mapping by the time this event fires, so anything reaching conn.GetAddress()
+			 * makes FishNet log "TransportIdData could not be found" for every disconnect —
+			 * which is what ResolveHandshakeRateLimitKey would do here. And an IP-keyed window
+			 * MUST outlive the connection it was opened by: clearing it on disconnect would
+			 * let a client reset its own per-IP handshake budget at will by disconnecting, so
+			 * a reconnect flood from one address would walk straight past the limiter. Only
+			 * the ClientId key is the connection's own, and only it is recycled. */
 
 			// The resolved key may differ from the key used at gate time: the real IP
 			// is only known after connection-token processing, so the initial handshake
@@ -1081,7 +1051,6 @@ namespace FishMMO.Server.Implementation
 		/// while this async method is suspended at an await point.</summary>
 		internal async Task OnServerClientHandshakeReceivedAsync(int clientId, ClientHandshake msg, Channel channel)
 		{
-
 			// Resolve the connection at entry.  If it's already gone, bail.
 			if (!TryResolveConnection(clientId, out var conn))
 				return;
@@ -1147,16 +1116,6 @@ namespace FishMMO.Server.Implementation
 			// pre-authentication client share one rate-limit bucket — a single
 			// attacker could saturate it and deny service to all legitimate clients.
 			// Fall back to ClientId (unique per QUIC connection) instead.
-			//
-			// Only gate the cookieless (Phase 1) handshake here. The cookie-echo
-			// retry (msg.Cookie != null) is the natural, bounded continuation of an
-			// already-rate-limited Phase 1 attempt on the SAME connection/key — not
-			// an independent new attempt an attacker could use to flood forged-token
-			// verification — so it must not share this budget. On a fast loopback
-			// connection the full challenge/echo round trip can complete in well
-			// under HandshakeRateLimitInterval (100ms), which would otherwise cause
-			// this gate to silently disconnect the echo before it ever reaches the
-			// core handshake handler.
 			if (msg.Cookie == null || msg.Cookie.Length == 0)
 			{
 				string rateLimitKey = ResolveHandshakeRateLimitKey(conn);
@@ -1224,9 +1183,6 @@ namespace FishMMO.Server.Implementation
 					conn.Disconnect(true);
 				return;
 			}
-			// else: RequiresConnectionToken is false (e.g. World/Scene servers, which are
-			// connected to directly rather than through the IPFetch/L4 proxy path) — no
-			// token was ever expected, so proceed straight to the core handshake below.
 
 			// ── Re-resolve connection after await ──────────────────
 			// ProcessConnectionTokenAsync yielded at an await.  The
@@ -1658,9 +1614,11 @@ namespace FishMMO.Server.Implementation
 				// (FishNet reuses IDs after disconnect) does not inherit a stale
 				// 100ms block on its first handshake.
 				//
-				// Must run BEFORE the recovered IP is dropped below: that IP is the key the
-				// gate rate-limited under, and once it is gone the key can no longer be
-				// resolved, so the clear would silently miss the entry it exists to remove.
+				// connectionStopped keeps this off the transport: Multipass has already
+				// dropped its id mapping, so resolving an address-derived key here would make
+				// FishNet log an error for every disconnect. It also confines the clear to
+				// the ClientId key, which is the only one this connection owns — see
+				// ClearHandshakeRateLimit for why an IP-keyed window has to survive.
 				ClearHandshakeRateLimit(conn, connectionStopped: true);
 				// Drop the recovered IP so a recycled ClientId cannot inherit the previous
 				// occupant's identity (FishNet reuses ClientIds after disconnect).

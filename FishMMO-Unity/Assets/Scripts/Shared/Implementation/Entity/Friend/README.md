@@ -137,8 +137,8 @@ This ensures:
 |--------|-------------|
 | **CharacterSystem** | Loads friend list from database during character initialization via `AddFriend()` |
 | **Database Layer** | Friends are persisted via `ICharacterFriendService` (add: `PersistAsync`, remove: `DeleteAsync`, load: fetched during character load) |
-| **UI** | `UIFriendList` displays the friend list panel; `UIFriend` represents individual entries with remove buttons. The UI subscribes to `OnAddFriend` and `OnRemoveFriend` instance events |
-| **Input System** | `PlayerInputController` toggles `UIFriendList` visibility via the Friends keybind |
+| **UI** | `UITKFriendList` displays the friend list panel; it builds one row per friend at runtime (name, online/offline status, presence dot, remove button) rather than instantiating a per-entry control. The panel subscribes to `OnAddFriend` and `OnRemoveFriend` instance events |
+| **Input System** | `PlayerInputController` toggles the panel registered as `"UIFriendList"` via the Friends keybind |
 
 ## Operational Checks
 
@@ -229,8 +229,9 @@ Shared/Implementation/Network/Character/FriendBroadcasts.cs                     
 Server/Implementation/World/SceneServer/Friend/FriendSystem.cs                 # Server-side friend management, validation, and DB persistence
 Server/Implementation/World/SceneServer/Friend/FriendSystemMainThreadQueueData.cs  # Main-thread queue for marshalling async DB results
 Server/Implementation/World/SceneServer/Character/CharacterSystem.cs           # Loads friend list from DB on character load
-Client/UI/Controls/World/FriendList/UIFriendList.cs                            # Friend list UI panel
-Client/UI/Controls/World/FriendList/UIFriend.cs                                # Individual friend entry UI element
+Client/GUI/World/FriendList/UITKFriendList.cs                                  # Friend list UI Toolkit panel
+Client/GUI/World/FriendList/UIFriendList.uxml                                  # Panel layout
+Client/GUI/World/FriendList/UIFriendList.uss                                   # Panel stylesheet
 ```
 
 ### Inheritance Hierarchies

@@ -1,0 +1,19 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIInspect.uss" />
+    <ui:VisualElement name="inspect-root" class="inspect-root">
+        <ui:VisualElement name="inspect-panel" class="fish-panel inspect-panel">
+            <ui:VisualElement name="panel-header" class="fish-panel__header inspect-header">
+                <ui:VisualElement class="fish-panel__icon inspect-header__icon" />
+                <ui:Label name="inspect-name" text="" class="fish-panel__title inspect-title" />
+                <ui:Button name="inspect-close-btn" text="X" class="fish-close-btn inspect-close-btn" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="inspect-scroll" class="fish-scroll inspect-scroll">
+                <ui:VisualElement name="inspect-slot-list" class="inspect-slot-list" />
+                <ui:Label name="inspect-empty" text="Nothing equipped."
+                          class="fish-label fish-label--muted inspect-empty" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

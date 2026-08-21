@@ -28,9 +28,14 @@
 
             <ui:VisualElement name="header-left" class="inv-header__left">
                 <ui:VisualElement name="header-icon" class="fish-panel__icon inv-header__icon" />
-                <ui:Label name="header-title"
-                          class="fish-panel__title inv-header__title"
-                          text="INVENTORY" />
+                <ui:VisualElement name="header-titles" class="inv-header__titles">
+                    <ui:Label name="header-title"
+                              class="fish-panel__title inv-header__title"
+                              text="INVENTORY" />
+                    <ui:Label name="header-subtitle"
+                              class="fish-panel__subtitle inv-header__subtitle"
+                              text="0 / 0 slots" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:Button name="close-button" class="fish-close-btn inv-close-btn" text="✕" />
@@ -51,8 +56,18 @@
                      Lock        →  fish-slot__lock inv-slot__lock
             -->
             <ui:VisualElement name="slot-grid" class="inv-grid" />
+            <ui:Label name="inv-empty" text="Your pack is empty." class="fish-empty inv-empty" />
 
         </ui:ScrollView>
+
+        <!-- ── FOOTER : capacity readout ────────────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer inv-footer">
+            <ui:Label name="inv-used" text="0 used" class="fish-label fish-label--caption inv-footer__stat" />
+            <ui:VisualElement name="inv-capacity-track" class="fish-bar inv-capacity">
+                <ui:VisualElement name="inv-capacity-fill" class="fish-bar__fill inv-capacity__fill" />
+            </ui:VisualElement>
+            <ui:Label name="inv-free" text="0 free" class="fish-label fish-label--caption inv-footer__stat inv-footer__stat--right" />
+        </ui:VisualElement>
 
     </ui:VisualElement>
 

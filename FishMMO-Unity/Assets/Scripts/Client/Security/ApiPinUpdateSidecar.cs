@@ -43,13 +43,13 @@ namespace FishMMO.Client.Security
 			}
 			catch (Exception ex)
 			{
-				Log.Warning(logChannel, $"Manifest public key is not valid base64: {ex.Message}");
+				_ = Log.Warning(logChannel, $"Manifest public key is not valid base64: {ex.Message}");
 				return null;
 			}
 
 			if (publicKey.Length != 32) // Ed25519 public key is exactly 32 bytes
 			{
-				Log.Warning(logChannel,
+				_ = Log.Warning(logChannel,
 					$"Manifest public key is {publicKey.Length} bytes (expected 32 for Ed25519).");
 				return null;
 			}
@@ -63,12 +63,12 @@ namespace FishMMO.Client.Security
 			}
 			catch (OperationCanceledException)
 			{
-				Log.Info(logChannel, "Pin update fetch cancelled (timeout or shutdown).");
+				_ = Log.Info(logChannel, "Pin update fetch cancelled (timeout or shutdown).");
 				return null;
 			}
 			catch (Exception ex)
 			{
-				Log.Warning(logChannel, $"Failed to fetch pin manifest from {url}: {ex.Message}");
+				_ = Log.Warning(logChannel, $"Failed to fetch pin manifest from {url}: {ex.Message}");
 				return null;
 			}
 
@@ -84,13 +84,13 @@ namespace FishMMO.Client.Security
 			}
 			catch (Exception ex)
 			{
-				Log.Warning(logChannel, $"Failed to parse pin manifest JSON: {ex.Message}");
+				_ = Log.Warning(logChannel, $"Failed to parse pin manifest JSON: {ex.Message}");
 				return null;
 			}
 
 			if (payload == null || payload.pins == null || payload.pins.Length == 0)
 			{
-				Log.Warning(logChannel, "Pin manifest contains no pins.");
+				_ = Log.Warning(logChannel, "Pin manifest contains no pins.");
 				return null;
 			}
 
@@ -98,13 +98,13 @@ namespace FishMMO.Client.Security
 			if (!DateTime.TryParse(payload.effectiveFromUtc, null,
 					System.Globalization.DateTimeStyles.RoundtripKind, out DateTime effectiveFrom))
 			{
-				Log.Warning(logChannel, "Pin manifest missing or invalid effectiveFromUtc.");
+				_ = Log.Warning(logChannel, "Pin manifest missing or invalid effectiveFromUtc.");
 				return null;
 			}
 			if (!DateTime.TryParse(payload.expiresAtUtc, null,
 					System.Globalization.DateTimeStyles.RoundtripKind, out DateTime expiresAt))
 			{
-				Log.Warning(logChannel, "Pin manifest missing or invalid expiresAtUtc.");
+				_ = Log.Warning(logChannel, "Pin manifest missing or invalid expiresAtUtc.");
 				return null;
 			}
 
@@ -114,13 +114,13 @@ namespace FishMMO.Client.Security
 
 			if (now < effectiveFrom)
 			{
-				Log.Warning(logChannel,
+				_ = Log.Warning(logChannel,
 					$"Pin manifest not yet effective (effective={effectiveFrom:O}, now={now:O}).");
 				return null;
 			}
 			if (now >= expiresAt)
 			{
-				Log.Warning(logChannel,
+				_ = Log.Warning(logChannel,
 					$"Pin manifest has expired (expires={expiresAt:O}, now={now:O}).");
 				return null;
 			}
@@ -133,17 +133,17 @@ namespace FishMMO.Client.Security
 			}
 			catch
 			{
-				Log.Warning(logChannel, "Pin manifest signature is not valid base64.");
+				_ = Log.Warning(logChannel, "Pin manifest signature is not valid base64.");
 				return null;
 			}
 
 			if (!VerifyEd25519(publicKey, responseJson, payload.signature, signature))
 			{
-				Log.Warning(logChannel, "Pin manifest signature verification FAILED — discarding update.");
+				_ = Log.Warning(logChannel, "Pin manifest signature verification FAILED — discarding update.");
 				return null;
 			}
 
-			Log.Info(logChannel,
+			_ = Log.Info(logChannel,
 				$"Pin manifest accepted: {payload.pins.Length} pin(s), " +
 				$"effective={effectiveFrom:O}, expires={expiresAt:O}.");
 
@@ -270,6 +270,10 @@ namespace FishMMO.Client.Security
 			return json + signatureBase64;
 		}
 
+		/* Every field is populated by JsonUtility through reflection, which the compiler
+		 * cannot see — hence CS0649 "never assigned" on all four. Disabled over the type
+		 * rather than project-wide so a genuinely unassigned field elsewhere still warns. */
+#pragma warning disable 0649
 		[Serializable]
 		private sealed class PinManifestPayload
 		{
@@ -278,5 +282,6 @@ namespace FishMMO.Client.Security
 			public string expiresAtUtc;
 			public string signature;
 		}
+#pragma warning restore 0649
 	}
 }

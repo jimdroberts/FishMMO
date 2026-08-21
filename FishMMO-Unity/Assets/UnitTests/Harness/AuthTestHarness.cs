@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.Harness
 
 		public AuthTestHarness(int connectionId = 1, long loginServerId = 42)
 		{
-			AuthTestTrace.Log("Harness", "ctor.start", $"conn={connectionId} loginServerId={loginServerId}");
+			_ = AuthTestTrace.Log("Harness", "ctor.start", $"conn={connectionId} loginServerId={loginServerId}");
 			Store = new InMemoryAccountStore();
 			accountManager = new SrpAccountManager<int>(nameof(AuthTestHarness));
 
@@ -39,20 +39,20 @@ namespace FishMMO.UnitTests.Harness
 			Client.TokenStore = Store;
 
 			Server.InitializeWorkers(cts.Token);
-			AuthTestTrace.Log("Harness", "ctor.done", "workers initialized");
+			_ = AuthTestTrace.Log("Harness", "ctor.done", "workers initialized");
 		}
 
 		public void Dispose()
 		{
 			if (disposed) return;
 			disposed = true;
-			AuthTestTrace.Log("Harness", "dispose.start");
+			_ = AuthTestTrace.Log("Harness", "dispose.start");
 			try { Server.ShutdownWorkers(); } catch { /* swallow */ }
 			cts.Cancel();
 			cts.Dispose();
 			accountManager.Clear();
 			Client.Dispose();
-			AuthTestTrace.Log("Harness", "dispose.done");
+			_ = AuthTestTrace.Log("Harness", "dispose.done");
 		}
 	}
 }

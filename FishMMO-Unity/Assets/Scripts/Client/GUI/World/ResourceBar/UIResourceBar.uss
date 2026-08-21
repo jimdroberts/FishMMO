@@ -13,8 +13,8 @@
 .res-bar {
     position: absolute;
     left: 24px;
-    width: 220px;
-    height: 22px;
+    width: 160px;
+    height: 20px;
 }
 
 /* Stacked bottom-left, clear of the hotkey bar along the bottom centre. */
@@ -42,6 +42,6 @@
     -unity-text-align: middle-center;
     -unity-font-style: bold;
     font-size: 11px;
-    color: rgb(232, 234, 238);
+    color: var(--text-bright);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }

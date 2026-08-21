@@ -2,21 +2,33 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIGuild.uss" />
     <ui:VisualElement name="guild-root" class="fish-panel guild-panel">
-        <ui:VisualElement name="guild-header" class="fish-panel__header guild-header">
-            <ui:Label name="guild-name" text="Guild" class="fish-panel__title" />
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header guild-header">
+            <ui:VisualElement class="fish-panel__icon guild-header__icon" />
+            <ui:VisualElement class="guild-header__titles">
+                <ui:Label name="guild-name" text="GUILD" class="fish-panel__title" />
+                <ui:Label name="guild-subtitle" text="Not in a guild" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="guild-count" text="0" class="fish-badge guild-count" />
         </ui:VisualElement>
+
         <ui:VisualElement name="guild-columns" class="guild-columns">
-            <ui:Label text="NAME" class="guild-column" />
-            <ui:Label text="RANK" class="guild-column" />
-            <ui:Label text="LOCATION" class="guild-column" />
+            <ui:Label text="MEMBER" class="fish-col-head guild-column guild-column--name" />
+            <ui:Label text="RANK" class="fish-col-head guild-column guild-column--rank" />
+            <ui:Label text="LOCATION" class="fish-col-head guild-column guild-column--location" />
         </ui:VisualElement>
+
         <ui:ScrollView name="guild-scroll" class="fish-scroll guild-scroll">
             <ui:VisualElement name="guild-member-list" class="guild-member-list" />
+            <ui:Label name="guild-empty" text="You are not in a guild."
+                      class="fish-empty guild-empty" />
         </ui:ScrollView>
-        <ui:VisualElement name="guild-footer" class="fish-panel__footer guild-footer">
-            <ui:Button name="guild-create" text="Create" class="fish-close-btn guild-action" />
-            <ui:Button name="guild-invite" text="Invite" class="fish-close-btn guild-action" />
-            <ui:Button name="guild-leave" text="Leave" class="fish-close-btn guild-action" />
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer guild-footer">
+            <ui:Button name="guild-create" text="Create" class="fish-button guild-action" />
+            <ui:Button name="guild-invite" text="Invite" class="fish-button fish-button--primary guild-action" />
+            <ui:Button name="guild-leave" text="Leave" class="fish-button fish-button--danger guild-action" />
         </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

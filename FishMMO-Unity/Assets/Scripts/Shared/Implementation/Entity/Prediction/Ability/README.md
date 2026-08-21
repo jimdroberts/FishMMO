@@ -635,7 +635,7 @@ Shared/Implementation/Entity/Prediction/Buff/                  # Buff system int
 Shared/Implementation/Entity/Target/                           # TargetController used for targeted abilities
 Shared/Implementation/Entity/Prediction/                       # CharacterPredictionController, CharacterReplicateData, CharacterReconcileData, delta serializers
 Server/Implementation/World/SceneServer/Ability/               # Server-side ability systems and DB persistence
-Client/UI/Controls/World/Ability/                              # Client-side ability bar and crafting UI
+Client/GUI/World/Ability/                                      # Client-side ability bar and crafting UI
 ```
 
 ## License

@@ -5,7 +5,6 @@
         "FishNet.Runtime",
         "GameKit.Dependencies",
         "KinematicCharacterController",
-        "Unity.TextMeshPro",
         "Unity.InputSystem",
         "Unity.Addressables",
         "Unity.ResourceManager"

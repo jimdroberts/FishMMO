@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -12,11 +12,9 @@ namespace FishMMO.Client
 	/// Renders a parsed launcher news fragment into a tree of <see cref="VisualElement"/>s.
 	/// </summary>
 	/// <remarks>
-	/// The UI Toolkit counterpart to <see cref="HtmlToTmpTextConverter"/>, which produces a
-	/// TextMeshPro rich-text string instead. They cannot share an output format: UI Toolkit
-	/// parses only lowercase rich-text tags, writes alignment differently, and — decisively —
-	/// has no equivalent of TMP's <c>&lt;link&gt;</c> tag, so a news link cannot be a span of
-	/// styled text here. It has to be an element that can receive a click.
+	/// Builds elements rather than a rich-text string. UI Toolkit's rich text has no equivalent
+	/// of a link tag, so a news link cannot be a span of styled text — it has to be an element
+	/// that can receive a click, which means the tree has to be walked rather than flattened.
 	/// <para>
 	/// Building elements rather than markup also removes an escaping problem. Composing a
 	/// markup string means remote content is concatenated into a string that is then parsed,

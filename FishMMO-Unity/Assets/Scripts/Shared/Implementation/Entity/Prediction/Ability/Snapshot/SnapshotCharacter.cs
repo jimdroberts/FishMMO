@@ -1,9 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Managing.Predicting;
-using TMPro;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -97,10 +96,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc/>
-		public TextMeshPro CharacterNameLabel { get; set; }
+		public WorldLabel CharacterNameLabel { get; set; }
 
 		/// <inheritdoc/>
-		public TextMeshPro CharacterGuildLabel { get; set; }
+		public WorldLabel CharacterGuildLabel { get; set; }
 
 		/// <inheritdoc/>
 		public Transform MeshRoot => null;

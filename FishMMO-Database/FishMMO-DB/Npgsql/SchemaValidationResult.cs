@@ -31,7 +31,7 @@ namespace FishMMO.Database.Npgsql
 		/// Why the check could not run at all, or null when it ran. When set, every other
 		/// property is meaningless — nothing was determined.
 		/// </summary>
-		public string UnavailableReason { get; }
+		public string? UnavailableReason { get; }
 
 		/// <summary>True when the check ran and found nothing wrong.</summary>
 		public bool IsUpToDate =>
@@ -42,7 +42,7 @@ namespace FishMMO.Database.Npgsql
 		/// <summary>
 		/// Creates a result.
 		/// </summary>
-		public SchemaValidationResult(string[] pendingMigrations, bool modelChangedSinceLastMigration, bool driftCheckFailed, string unavailableReason)
+		public SchemaValidationResult(string[] pendingMigrations, bool modelChangedSinceLastMigration, bool driftCheckFailed, string? unavailableReason)
 		{
 			PendingMigrations = pendingMigrations ?? Array.Empty<string>();
 			ModelChangedSinceLastMigration = modelChangedSinceLastMigration;
@@ -54,7 +54,7 @@ namespace FishMMO.Database.Npgsql
 		/// Creates a result for a check that could not be performed.
 		/// </summary>
 		/// <param name="reason">Why nothing could be determined.</param>
-		public static SchemaValidationResult Unavailable(string reason) =>
+		public static SchemaValidationResult Unavailable(string? reason) =>
 			new SchemaValidationResult(Array.Empty<string>(), false, false, reason ?? "unknown");
 
 		/// <summary>
@@ -66,7 +66,7 @@ namespace FishMMO.Database.Npgsql
 		/// missing player data, and someone reading it for the first time has no reason to
 		/// connect that to a migration they were never told to run.
 		/// </remarks>
-		public string DescribeProblem()
+		public string? DescribeProblem()
 		{
 			if (UnavailableReason != null)
 			{

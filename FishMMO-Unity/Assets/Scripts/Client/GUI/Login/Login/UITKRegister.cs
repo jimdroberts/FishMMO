@@ -191,7 +191,6 @@ namespace FishMMO.Client
 				 * unsupported protocol version, a tripped handshake rate limit — and every one
 				 * of those is a bare transport close. Clearing the status text and handing the
 				 * form back is then indistinguishable from the button having done nothing.
-				 * <see cref="UIRegister"/> already reported this; this is the copy that did not.
 				 *
 				 * Read before SetFormLocked below, which clears isAuthFlowActive. */
 				bool droppedWithoutExplanation = isAuthFlowActive;

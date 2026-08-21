@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Managing.Predicting;
@@ -10,7 +10,6 @@ using NUnit.Framework;
 using UnityEngine;
 using AuthTestTrace = FishMMO.UnitTests.Harness.AuthTestTrace;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
-using TMPro;
 
 namespace FishMMO.UnitTests
 {
@@ -391,8 +390,8 @@ namespace FishMMO.UnitTests
 			public bool IsSpawned => true;
 			public int Flags { get; set; }
 
-		public TextMeshPro CharacterNameLabel { get; set; }
-		public TextMeshPro CharacterGuildLabel { get; set; }
+		public WorldLabel CharacterNameLabel { get; set; }
+		public WorldLabel CharacterGuildLabel { get; set; }
 
 		public Transform MeshRoot => null;
 

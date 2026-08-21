@@ -6,8 +6,8 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Abstract base class for UI Toolkit controls that are bound to a player character.
-	/// Mirrors the lifecycle of <see cref="UICharacterControl"/> but derives from
-	/// <see cref="UITKControl"/> rather than the UGUI-backed <see cref="UIControl"/>.
+	/// Extends <see cref="UITKControl"/> with the character set/clear lifecycle that
+	/// <see cref="UIManager"/> drives on world entry and exit.
 	/// </summary>
 	public abstract class UITKCharacterControl : UITKControl
 	{

@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using FishNet.Broadcast;
 using FishNet.Managing;
 
@@ -234,7 +234,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Label used to display the current region name on the client UI.
 		/// </summary>
-		private UIAdvancedLabel regionNameLabel;
+		private UITKAdvancedLabel regionNameLabel;
 
 		// ── Lifecycle ───────────────────────────────────────────────────
 
@@ -372,7 +372,7 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStopLocalClient += OnCharacterStopLocal;
 			IGuildController.OnReadID += OnGuildReadId;
 			Pet.OnReadID += OnPetReadId;
-			this.regionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
+			this.regionNameLabel = UITKAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UITKAdvancedLabel;
 			DisplayRegionNameAction.OnDisplay2DLabel += OnRegionNameDisplay;
 		}
 
@@ -1081,7 +1081,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The server busy message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGet("UIDialogBox", out UIDialogBox d)) d.Open("Server is busy. Please try again."); }
+		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox d)) d.Open("Server is busy. Please try again."); }
 
 		/// <summary>
 		/// Handles a <see cref="SceneTransferRefusedBroadcast"/> — the server declined a channel
@@ -1096,7 +1096,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void OnSceneTransferRefused(SceneTransferRefusedBroadcast msg, Channel ch)
 		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox d))
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox d))
 			{
 				d.Open(DescribeTransferRefusal(msg.Reason));
 			}
@@ -1137,8 +1137,8 @@ namespace FishMMO.Client
 		/// Both queues in the connection pipeline — the LoginServer's admission queue and the
 		/// WorldServer's scene-routing queue — present through this one control so they cannot
 		/// drift apart, and so a client cannot end up showing two competing wait dialogs.
-		/// <see cref="UIDialogBox.Open"/> is a no-op while the box is already visible, which is
-		/// why an update has to go through <see cref="UIDialogBox.SetText"/> instead.
+		/// <see cref="UITKDialogBox.Open"/> is a no-op while the box is already visible, which is
+		/// why an update has to go through <see cref="UITKDialogBox.SetText"/> instead.
 		/// <para>
 		/// Opened with no accept handler, which makes the remaining button read "Close" — the
 		/// only action a waiting player has is to give up, and that is what
@@ -1149,29 +1149,18 @@ namespace FishMMO.Client
 		/// <param name="onLeave">Invoked if the player abandons the wait.</param>
 		private static void ShowQueueDialog(string text, Action onLeave)
 		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+			if (!UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox))
 			{
-				if (dialogBox.Visible)
-				{
-					dialogBox.SetText(text);
-				}
-				else
-				{
-					dialogBox.Open(text, onAccept: null, onCancel: onLeave);
-				}
 				return;
 			}
 
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox))
+			if (dialogBox.Visible)
 			{
-				if (tkDialogBox.Visible)
-				{
-					tkDialogBox.SetText(text);
-				}
-				else
-				{
-					tkDialogBox.Open(text, onAccept: null, onCancel: onLeave);
-				}
+				dialogBox.SetText(text);
+			}
+			else
+			{
+				dialogBox.Open(text, onAccept: null, onCancel: onLeave);
 			}
 		}
 
@@ -1180,40 +1169,21 @@ namespace FishMMO.Client
 		/// </summary>
 		private static void HideQueueDialog()
 		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox) && dialogBox.Visible)
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) && dialogBox.Visible)
 			{
 				dialogBox.Hide();
-				return;
-			}
-
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox) && tkDialogBox.Visible)
-			{
-				tkDialogBox.Hide();
 			}
 		}
 
 		/// <summary>
-		/// Opens a one-off informational dialog through whichever dialog control this build
-		/// registers.
+		/// Opens a one-off informational dialog.
 		/// </summary>
-		/// <remarks>
-		/// The UGUI and UI Toolkit control sets live in separate registries, and a build ships
-		/// one or the other. Resolving both here is what keeps the queue messages from silently
-		/// doing nothing on a UI Toolkit build — which is how the login queue's own dialogs
-		/// behaved, because they only ever asked for the UGUI control.
-		/// </remarks>
 		/// <param name="text">Message to display.</param>
 		private static void ShowInfoDialog(string text)
 		{
-			if (UIManager.TryGet("UIDialogBox", out UIDialogBox dialogBox))
+			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox))
 			{
 				dialogBox.Open(text);
-				return;
-			}
-
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tkDialogBox))
-			{
-				tkDialogBox.Open(text);
 			}
 		}
 
@@ -1274,7 +1244,7 @@ namespace FishMMO.Client
 					}
 					catch (Exception ex)
 					{
-						Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
+						_ = Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
 					}
 				}
 				RetryWithFaultHandling();
@@ -1503,7 +1473,7 @@ namespace FishMMO.Client
 		/// <returns><c>true</c> when the dialog was found and shown.</returns>
 		private bool TryShowDeathDialog()
 		{
-			if (!UIManager.TryGetTK("UITKDeathDialog", out UITKDeathDialog deathDialog))
+			if (!UIManager.TryGetTK("UIDeathDialog", out UITKDeathDialog deathDialog))
 			{
 				return false;
 			}
@@ -1941,8 +1911,7 @@ namespace FishMMO.Client
 			 * dismissal that arrived while the panel was momentarily down left a driver
 			 * latched — and the next refresh popped the overlay back up over live gameplay
 			 * with nothing left to take it down again. */
-			if (UIManager.TryGetTK<UITKLoadingScreen>("UITKLoadingScreen", out UITKLoadingScreen tkLoadingScreen)) tkLoadingScreen.Hide();
-			if (UIManager.TryGet<UILoadingScreen>("UILoadingScreen", out UILoadingScreen loadingScreen)) loadingScreen.Hide();
+			if (UIManager.TryGetTK<UITKLoadingScreen>("UILoadingScreen", out UITKLoadingScreen loadingScreen)) loadingScreen.Hide();
 		}
 
 		/// <summary>

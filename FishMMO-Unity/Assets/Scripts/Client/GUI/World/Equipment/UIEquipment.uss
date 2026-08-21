@@ -33,7 +33,16 @@
    PANEL ROOT
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the screen, so a
+    root with a size but no position resolves to the top-left corner — with the uGUI layer
+    gone, every one of these panels stacked there on top of each other. The values restore
+    where the panel sat in the uGUI scene, expressed as percentages so they hold at any
+    aspect ratio. Dragging overwrites left/top, which is why position is absolute here.
+*/
 .eq-panel {
+    position: absolute;
+    right: 4%; top: 12%;
     width: 520px;
     flex-direction: column;
     flex-shrink: 0;

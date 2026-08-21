@@ -2,14 +2,25 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIFriendList.uss" />
     <ui:VisualElement name="friend-root" class="fish-panel friend-panel">
-        <ui:VisualElement name="friend-header" class="fish-panel__header friend-header">
-            <ui:Label text="FRIENDS" class="fish-panel__title" />
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header friend-header">
+            <ui:VisualElement class="fish-panel__icon friend-header__icon" />
+            <ui:VisualElement class="friend-header__titles">
+                <ui:Label text="FRIENDS" class="fish-panel__title" />
+                <ui:Label name="friend-subtitle" text="No friends added" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="friend-online-count" text="0" class="fish-badge friend-online-count" />
         </ui:VisualElement>
+
         <ui:ScrollView name="friend-scroll" class="fish-scroll friend-scroll">
             <ui:VisualElement name="friend-list" class="friend-list" />
+            <ui:Label name="friend-empty" text="Your friend list is empty."
+                      class="fish-empty friend-empty" />
         </ui:ScrollView>
-        <ui:VisualElement name="friend-footer" class="fish-panel__footer friend-footer">
-            <ui:Button name="friend-add" text="Add Friend" class="fish-close-btn friend-action" />
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer friend-footer">
+            <ui:Button name="friend-add" text="Add Friend" class="fish-button fish-button--primary friend-action" />
         </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

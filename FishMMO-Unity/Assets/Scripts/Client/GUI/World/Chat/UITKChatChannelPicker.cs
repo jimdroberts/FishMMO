@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -8,10 +8,13 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit chat channel picker. Lets the player toggle which chat channels a tab listens to
-	/// and rename the current tab. Mirrors the legacy UGUI <c>UIChatChannelPicker</c>.
+	/// and rename the current tab.
 	/// </summary>
 	public class UITKChatChannelPicker : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Popup;
+
 		private const string PANEL_NAME = "channel-picker-panel";
 		private const string CHANNEL_LIST_NAME = "channel-list";
 		private const string NAME_INPUT_NAME = "channel-name-input";
@@ -38,6 +41,10 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnStarting()
 		{
+			/* The picker dismisses itself when the pointer moves off it — no click required. */
+			OnLoseFocus -= Hide;
+			OnLoseFocus += Hide;
+
 			if (Root == null)
 			{
 				return;
@@ -83,6 +90,14 @@ namespace FishMMO.Client
 			}
 
 			Root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
+		}
+
+		/// <summary>
+		/// Drops the lose-focus subscription on teardown.
+		/// </summary>
+		public override void OnDestroying()
+		{
+			OnLoseFocus -= Hide;
 		}
 
 		/// <summary>

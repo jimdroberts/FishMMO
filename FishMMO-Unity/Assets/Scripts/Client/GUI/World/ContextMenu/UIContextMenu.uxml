@@ -1,0 +1,9 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIContextMenu.uss" />
+    <ui:VisualElement name="context-root" class="context-root" picking-mode="Ignore">
+        <ui:VisualElement name="context-menu" class="fish-panel context-menu">
+            <ui:VisualElement name="context-entry-list" class="context-entry-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -8,12 +8,14 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Abstract UI Toolkit container that renders a horizontal strip of buff or debuff icons,
-	/// each with a depleting duration fill. Replaces the legacy UGUI <see cref="UIBuff"/> /
-	/// <see cref="UIDebuff"/> which instantiated <c>UIBuffGroup</c> prefabs. Buff groups are
-	/// built dynamically as VisualElements, so no prefab reference is required.
+	/// each with a depleting duration fill. Buff groups are built dynamically as VisualElements,
+	/// so no prefab reference is required.
 	/// </summary>
 	public abstract class UITKBuffContainer : UITKCharacterControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Hud;
+
 		/// <summary>Name of the container element that holds the buff/debuff icons.</summary>
 		private const string LIST_NAME = "buff-list";
 

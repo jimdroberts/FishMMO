@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 using FishMMO.Logging;
@@ -7,10 +7,13 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// UI Toolkit drag object. Displays a dragged icon that follows the cursor and handles
-	/// drop logic for items. Mirrors the legacy UGUI <c>UIDragObject</c> API.
+	/// drop logic for items.
 	/// </summary>
 	public class UITKDragObject : UITKControl
 	{
+		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
+		protected override UITKPanelLayer Layer => UITKPanelLayer.Drag;
+
 		/// <summary>
 		/// Constant representing a null reference ID for drag objects.
 		/// </summary>

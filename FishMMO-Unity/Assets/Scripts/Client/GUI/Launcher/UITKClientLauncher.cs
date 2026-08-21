@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -38,6 +38,7 @@ namespace FishMMO.Client
 		private const string PROGRESS_TEXT_NAME = "launcher-progress-text";
 		private const string PLAY_BUTTON_NAME = "launcher-play-btn";
 		private const string QUIT_BUTTON_NAME = "launcher-quit-btn";
+		private const string HERO_NAME = "launcher-hero";
 		private const string SETTINGS_BUTTON_NAME = "launcher-settings-btn";
 		private const string SETTINGS_PANEL_NAME = "launcher-settings";
 		private const string SETTING_AUTOUPDATE_NAME = "launcher-setting-autoupdate";
@@ -70,6 +71,9 @@ namespace FishMMO.Client
 		private Label progressTextLabel;
 		private Button playButton;
 		private Button quitButton;
+		/// <summary>Brand banner across the top of the panel.</summary>
+		private VisualElement hero;
+
 		private Button settingsButton;
 		private VisualElement settingsPanel;
 		private Toggle autoUpdateToggle;
@@ -85,6 +89,17 @@ namespace FishMMO.Client
 
 		private bool elementsResolved;
 		private bool settingsOpen;
+		/// <summary>
+		/// Latched once the launcher has handed off to the game scene. One-way: nothing may put
+		/// the launcher back on screen afterwards.
+		/// </summary>
+		/// <remarks>
+		/// The handoff is not a state the launcher can usefully return from — the scene it lives
+		/// in is being unloaded — so anything that re-shows it is a bug rather than a feature.
+		/// Making that explicit is what lets <see cref="OnEnable"/> and <see cref="Update"/> stop
+		/// re-applying recorded state into a panel the login screen now owns.
+		/// </remarks>
+		private bool dismissed;
 		/// <summary>Frames spent waiting for the visual tree before giving up.</summary>
 		private int resolveAttempts;
 		/// <summary>Set once resolution has been abandoned, so the error is logged only once.</summary>
@@ -117,10 +132,90 @@ namespace FishMMO.Client
 
 		private void OnEnable()
 		{
+			/* A re-enable after the handoff must not rebuild anything. UIDocument re-inserts its
+			 * root into the shared panel whenever it is enabled, and ApplyAll would repopulate a
+			 * tree that is now sitting on top of the login screen — so the teardown is simply run
+			 * again rather than the view coming back to life. */
+			if (this.dismissed)
+			{
+				DetachFromPanel();
+				return;
+			}
+
 			if (TryResolveElements())
 			{
 				ApplyAll();
 			}
+
+			UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnAnySceneLoaded;
+			UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnAnySceneLoaded;
+		}
+
+		private void OnDisable()
+		{
+			UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnAnySceneLoaded;
+		}
+
+		/// <summary>
+		/// Last-resort detach, so a destroyed launcher can never leave a tree behind on screen.
+		/// </summary>
+		/// <remarks>
+		/// Unloading the launcher scene destroys this component and its GameObject, but not the
+		/// <see cref="VisualElement"/>s it inserted: those are managed objects held by reference
+		/// from a panel that belongs to a PanelSettings asset, and the asset outlives the scene.
+		/// Without this the only thing between a mis-sequenced teardown and a launcher frozen
+		/// over the login screen is UIDocument's own cleanup, which is exactly the assumption
+		/// that failed here.
+		/// </remarks>
+		private void OnDestroy()
+		{
+			DetachFromPanel();
+		}
+
+		/// <summary>
+		/// Dismisses the launcher as soon as the game scene arrives, whoever loaded it.
+		/// </summary>
+		/// <param name="scene">The scene that finished loading.</param>
+		/// <param name="mode">How it was loaded.</param>
+		/// <remarks>
+		/// The controller already hides this view when its own load callback runs, and that is
+		/// the path a shipped build takes. This is a second, independent guarantee, because the
+		/// callback chain has several ways to be skipped: AddressableLoadProcessor returns early
+		/// from EnqueueLoad for a scene it already tracks, an editor session may have the postboot
+		/// scene open before Play is ever pressed, and a scene loaded outside Addressables never
+		/// enters its bookkeeping at all. Any of those leaves the launcher drawing over the login
+		/// screen for the rest of the session.
+		///
+		/// Watching for the scene itself does not care how it got there. The launcher's own UI is
+		/// the right place for the rule "stop drawing once the game is up", since it is the thing
+		/// that suffers when the rule is missed.
+		/// </remarks>
+		private void OnAnySceneLoaded(UnityEngine.SceneManagement.Scene scene,
+			UnityEngine.SceneManagement.LoadSceneMode mode)
+		{
+			if (scene.name != ClientLauncher.PostbootSceneName)
+			{
+				return;
+			}
+
+			/* Only a usable scene ends the launcher.
+			 *
+			 * ClientLauncher treats a postboot scene that reports as loaded but is not valid as a
+			 * launch failure and deliberately keeps the launcher up to show it. This handler runs
+			 * first — it is driven from SceneManager.sceneLoaded, ahead of the Addressables
+			 * completion callback — so dismissing unconditionally took the UI away before that
+			 * error could be drawn, leaving the player with a blank screen and no way to retry.
+			 * The guard here mirrors the one in ClientLauncher.OnPostbootSceneLoaded. */
+			if (!scene.IsValid() || !scene.isLoaded)
+			{
+				Debug.LogWarning($"[UITKClientLauncher] {ClientLauncher.PostbootSceneName} reported as loaded but is not usable; keeping the launcher up so the failure can be shown.");
+				return;
+			}
+
+			/* See ClientLauncher for why this uses UnityEngine.Debug: FishMMO.Logging is not
+			 * initialised when the editor opens the launcher scene directly. */
+			Debug.Log($"[UITKClientLauncher] {ClientLauncher.PostbootSceneName} loaded; dismissing the launcher UI.");
+			SetVisible(false);
 		}
 
 		/// <summary>
@@ -138,7 +233,9 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void Update()
 		{
-			if (this.elementsResolved || this.resolveFailed)
+			// Resolving after the handoff would clone a fresh tree straight back into the panel
+			// the login screen is now drawing into.
+			if (this.dismissed || this.elementsResolved || this.resolveFailed)
 			{
 				return;
 			}
@@ -213,7 +310,9 @@ namespace FishMMO.Client
 			this.progressTextLabel = this.root.Q<Label>(PROGRESS_TEXT_NAME);
 			this.playButton = this.root.Q<Button>(PLAY_BUTTON_NAME);
 			this.quitButton = this.root.Q<Button>(QUIT_BUTTON_NAME);
+			this.hero = this.root.Q<VisualElement>(HERO_NAME);
 			this.settingsButton = this.root.Q<Button>(SETTINGS_BUTTON_NAME);
+			AttachHeroAspect();
 			this.settingsPanel = this.root.Q<VisualElement>(SETTINGS_PANEL_NAME);
 			this.autoUpdateToggle = this.root.Q<Toggle>(SETTING_AUTOUPDATE_NAME);
 			this.timeoutSlider = this.root.Q<SliderInt>(SETTING_TIMEOUT_NAME);
@@ -305,6 +404,15 @@ namespace FishMMO.Client
 
 			if (this.timeoutSlider != null)
 			{
+				/* Range driven from the same constants LauncherSettings clamps against, rather
+				 * than the literals in the UXML. Two copies of a bound drift: raise the cap in
+				 * code and the slider silently keeps refusing the values the setting now accepts.
+				 * The label carries the range too, so the player can see what is allowed instead
+				 * of discovering it by dragging into a wall. */
+				this.timeoutSlider.lowValue = LauncherSettings.MinRequestTimeout;
+				this.timeoutSlider.highValue = LauncherSettings.MaxRequestTimeout;
+				this.timeoutSlider.label =
+					$"Request timeout ({LauncherSettings.MinRequestTimeout}-{LauncherSettings.MaxRequestTimeout}s)";
 				this.timeoutSlider.SetValueWithoutNotify(LauncherSettings.GetRequestTimeout(10));
 				this.timeoutSlider.RegisterValueChangedCallback(evt =>
 				{
@@ -315,6 +423,10 @@ namespace FishMMO.Client
 
 			if (this.retriesSlider != null)
 			{
+				this.retriesSlider.lowValue = LauncherSettings.MinRetries;
+				this.retriesSlider.highValue = LauncherSettings.MaxRetriesLimit;
+				this.retriesSlider.label =
+					$"Retry attempts ({LauncherSettings.MinRetries}-{LauncherSettings.MaxRetriesLimit})";
 				this.retriesSlider.SetValueWithoutNotify(LauncherSettings.GetMaxRetries(3));
 				this.retriesSlider.RegisterValueChangedCallback(evt =>
 				{
@@ -325,6 +437,10 @@ namespace FishMMO.Client
 
 			if (this.retryDelaySlider != null)
 			{
+				this.retryDelaySlider.lowValue = LauncherSettings.MinRetryDelay;
+				this.retryDelaySlider.highValue = LauncherSettings.MaxRetryDelay;
+				this.retryDelaySlider.label =
+					$"Retry delay ({LauncherSettings.MinRetryDelay:0}-{LauncherSettings.MaxRetryDelay:0}s)";
 				this.retryDelaySlider.SetValueWithoutNotify(LauncherSettings.GetRetryDelay(1.0f));
 				this.retryDelaySlider.RegisterValueChangedCallback(evt =>
 				{
@@ -482,6 +598,137 @@ namespace FishMMO.Client
 		#region ILauncherView
 
 		/// <inheritdoc />
+		public void SetVisible(bool visible)
+		{
+			if (!visible)
+			{
+				Dismiss();
+				return;
+			}
+
+			/* Refused after the handoff. See <see cref="dismissed"/>: the launcher scene is being
+			 * unloaded by the time anything could ask for this, so honouring it would put a tree
+			 * with no GameObject behind it back over the login screen. */
+			if (this.dismissed)
+			{
+				return;
+			}
+
+			if (this.Document != null)
+			{
+				this.Document.enabled = true;
+			}
+
+			/* Re-enabling a UIDocument makes it clone a *new* tree, so every cached element the
+			 * setters write through belongs to the discarded one. Dropping the resolved flag
+			 * sends Update round again to re-cache against the tree that is actually on screen. */
+			this.elementsResolved = false;
+			this.resolveAttempts = 0;
+			this.root = null;
+		}
+
+		/// <summary>
+		/// Takes the launcher off screen for good and unhooks it from the shared UI panel.
+		/// </summary>
+		/// <remarks>
+		/// Disabling the <see cref="UIDocument"/> is not sufficient on its own, which is what this
+		/// used to rely on. A <see cref="VisualElement"/> is a plain managed object living in a
+		/// runtime panel owned by <c>Assets/UI Toolkit/PanelSettings.asset</c> — an asset shared
+		/// with ClientPreboot, ClientLoginGUI and ClientWorldGUI, so the panel outlives the
+		/// launcher scene entirely. Unloading that scene destroys GameObjects, not the tree they
+		/// inserted; anything the panel still references keeps drawing with nothing behind it,
+		/// and the launcher root is a full-screen element with a full-screen backdrop.
+		/// <para>
+		/// The tree can also be put back. Every <c>UITKControl</c> writes
+		/// <c>UIDocument.sortingOrder</c> on Show and on focus, and PanelSettings answers a
+		/// sorting-order change by re-seating the roots of the documents attached to it — so the
+		/// first login panel to appear is enough to re-insert a launcher document that was only
+		/// disabled. That is the "launcher over the login screen" symptom.
+		/// </para>
+		/// <para>
+		/// So the root is detached explicitly, the document is unhooked from the shared
+		/// PanelSettings so nothing can re-seat it, and <see cref="dismissed"/> latches.
+		/// </para>
+		/// </remarks>
+		private void Dismiss()
+		{
+			if (this.dismissed)
+			{
+				return;
+			}
+			this.dismissed = true;
+
+			// Nothing left to watch for; the scene this lives in is on its way out.
+			UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnAnySceneLoaded;
+
+			bool stillAttached = DetachFromPanel();
+
+			/* Kept permanently, and on UnityEngine.Debug for the reason given in
+			 * OnAnySceneLoaded. Whether the launcher actually left the panel is not otherwise
+			 * observable from the console — the previous logs only proved the dismissal was
+			 * *asked for*, which was never the part in doubt. */
+			Debug.Log($"[UITKClientLauncher] Launcher dismissed and detached from the shared UI panel. stillAttached={stillAttached}");
+		}
+
+		/// <summary>
+		/// Removes the launcher's visual tree from whatever panel holds it and stops the document
+		/// from re-attaching.
+		/// </summary>
+		/// <returns>True if any tree is still attached to a panel afterwards, which is a bug.</returns>
+		private bool DetachFromPanel()
+		{
+			/* Read live, and read it before the document is disabled. UIDocument drops its
+			 * rootVisualElement in OnDisable, so afterwards there is nothing left to detach; and
+			 * the cached copy is not necessarily the tree the panel holds, because a document
+			 * that has been disabled and re-enabled clones a new one. Both are handled. */
+			VisualElement live = this.Document != null ? this.Document.rootVisualElement : null;
+
+			DetachTree(live);
+			DetachTree(this.root);
+
+			if (this.Document != null)
+			{
+				this.Document.enabled = false;
+
+				/* Cleared so a later sorting-order change cannot re-seat this document into the
+				 * shared panel. Guarded because assigning the value it already holds is the one
+				 * branch of UIDocument.panelSettings that re-attaches rather than detaches. */
+				if (this.Document.panelSettings != null)
+				{
+					this.Document.panelSettings = null;
+				}
+			}
+
+			return (live != null && live.panel != null) ||
+			       (this.root != null && this.root.panel != null);
+		}
+
+		/// <summary>
+		/// Makes one visual tree inert and removes it from its panel.
+		/// </summary>
+		/// <param name="element">The tree root, or null.</param>
+		/// <remarks>
+		/// <c>RemoveFromHierarchy</c> is the line that matters — everything before it is a
+		/// property of an element the panel still owns, and a full-screen root left in a panel
+		/// draws and picks regardless of how the component that created it is configured. The
+		/// display, picking and enabled writes are belt and braces for the case where the element
+		/// is somehow re-parented: a panel that still receives pointer events swallows the clicks
+		/// meant for the login screen underneath, which is a worse failure than a stale image
+		/// because it looks like the game has hung.
+		/// </remarks>
+		private static void DetachTree(VisualElement element)
+		{
+			if (element == null)
+			{
+				return;
+			}
+
+			element.style.display = DisplayStyle.None;
+			element.pickingMode = PickingMode.Ignore;
+			element.SetEnabled(false);
+			element.RemoveFromHierarchy();
+		}
+
 		public void SetTitle(string title)
 		{
 			this.pendingTitle = title;
@@ -675,6 +922,93 @@ namespace FishMMO.Client
 			}
 
 			UITKHtmlContentRenderer.Render(this.pendingNewsContent, this.newsContainer, LauncherLinkPolicy.OpenIfSafe);
+		}
+
+		/// <summary>
+		/// Keeps the banner's height matched to its own aspect ratio as the panel resizes.
+		/// </summary>
+		/// <remarks>
+		/// USS has no aspect-ratio property, so a fixed height on a full-width element can only be
+		/// wrong: <c>scale-and-crop</c> fills the strip but slices the top and bottom off the
+		/// artwork, and <c>scale-to-fit</c> keeps it whole but leaves the panel background showing
+		/// down both sides. The banner is 3.2:1 against a panel that is nowhere near that shape,
+		/// so either choice was visible.
+		///
+		/// Driving the height from the resolved width removes the tradeoff — the strip is exactly
+		/// as tall as the art needs, so it spans the full width, is never cropped and is never
+		/// stretched, at any panel size.
+		///
+		/// The ratio is read from the assigned image rather than hardcoded, so replacing the
+		/// artwork with a differently proportioned banner needs no code change.
+		/// </remarks>
+		private void AttachHeroAspect()
+		{
+			if (this.hero == null)
+			{
+				return;
+			}
+			this.hero.UnregisterCallback<GeometryChangedEvent>(OnHeroGeometryChanged);
+			this.hero.RegisterCallback<GeometryChangedEvent>(OnHeroGeometryChanged);
+		}
+
+		/// <summary>
+		/// Recomputes the banner height when its width changes.
+		/// </summary>
+		/// <param name="evt">The geometry change.</param>
+		private void OnHeroGeometryChanged(GeometryChangedEvent evt)
+		{
+			if (this.hero == null)
+			{
+				return;
+			}
+
+			float width = this.hero.resolvedStyle.width;
+			if (float.IsNaN(width) || width <= 1.0f)
+			{
+				return;
+			}
+
+			float aspect = ResolveHeroAspect();
+			if (aspect <= 0.0f)
+			{
+				return;
+			}
+
+			float height = width / aspect;
+
+			/* Guarded against re-entry. Writing a height triggers another GeometryChangedEvent,
+			 * and an unconditional write would bounce between two rounding neighbours forever. */
+			float current = this.hero.resolvedStyle.height;
+			if (!float.IsNaN(current) && Mathf.Abs(current - height) < 0.5f)
+			{
+				return;
+			}
+
+			this.hero.style.height = height;
+		}
+
+		/// <summary>
+		/// Width-over-height of the banner image currently assigned to the hero element.
+		/// </summary>
+		/// <returns>The aspect ratio, or a fallback when the image cannot be measured.</returns>
+		private float ResolveHeroAspect()
+		{
+			Background background = this.hero.resolvedStyle.backgroundImage;
+
+			if (background.sprite != null && background.sprite.rect.height > 0.0f)
+			{
+				return background.sprite.rect.width / background.sprite.rect.height;
+			}
+			if (background.texture != null && background.texture.height > 0)
+			{
+				return (float)background.texture.width / background.texture.height;
+			}
+			/* No image resolved yet — the stylesheet may not have applied on the first layout
+			 * pass. Collapsing to zero would make the banner vanish, so hold the authored height
+			 * by reporting the ratio it already has. */
+			float width = this.hero.resolvedStyle.width;
+			float height = this.hero.resolvedStyle.height;
+			return (!float.IsNaN(width) && !float.IsNaN(height) && height > 0.0f) ? width / height : 0.0f;
 		}
 
 		/// <summary>
