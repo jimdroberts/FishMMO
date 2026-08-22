@@ -443,7 +443,21 @@ namespace FishMMO.Shared
 				int factionID = reader.ReadInt32();
 				int value = reader.ReadInt32();
 
-				SetFaction(factionID, value);
+				/* Silent. This is a spawn payload, not a standing that just changed, and it runs on
+				 * every client for every character that comes into observer range — so the default
+				 * skipEvent:false fired the STATIC OnUpdateFaction once per faction per stranger
+				 * walking past, and invoked that character's onFactionChangeTriggers on the
+				 * observer's machine as well. UITKFactions has since been taught to ignore rows for
+				 * anyone but its own character, but a panel filtering out a flood is a patch over
+				 * the flood; the events should never have been raised. The live update path already
+				 * agrees — OnClientCharacterObserverFactionUpdateBroadcastReceived passes
+				 * skipEvent:true for exactly the same reason.
+				 *
+				 * The owner's own panel is unaffected: UITKFactions.OnPostSetCharacter rebuilds
+				 * every row by walking the controller's Factions dictionary, and it is handed its
+				 * character from OnStartLocalClient, which runs after the spawn payload has been
+				 * read. It reads the state this loop just installed rather than listening for it. */
+				SetFaction(factionID, value, skipEvent: true);
 			}
 		}
 

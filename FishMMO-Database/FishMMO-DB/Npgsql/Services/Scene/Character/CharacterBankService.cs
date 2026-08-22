@@ -155,7 +155,13 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 						dbContext,
 						sql,
-						new object[] { item.CharacterID, item.Slot, item.Version, item.TemplateID, item.Seed, item.Amount, now },
+						// Amount is projected to long for the same reason the batched path does it: Npgsql
+						// cannot bind System.UInt32 at all ("The CLR type System.UInt32 isn't natively
+						// supported"), and it throws on the scalar just as it does on the array. The column
+						// is bigint, so long binds exactly. This is the live equip/unequip path —
+						// CharacterInventorySystem calls this overload once per item — so leaving it
+						// unprojected kept every runtime item write failing after the batch path was fixed.
+						new object[] { item.CharacterID, item.Slot, item.Version, item.TemplateID, item.Seed, (long)item.Amount, now },
 						cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)

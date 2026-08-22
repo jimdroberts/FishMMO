@@ -134,6 +134,28 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Unsubscribes from the outgoing character's resource attribute before it is cleared.
+		/// </summary>
+		/// <remarks>
+		/// This override was missing, and <see cref="OnPreSetCharacter"/> could not cover for it:
+		/// that one unsubscribes from whatever <c>Character</c> still holds, so once the unset path
+		/// had nulled the field the old attribute's subscription was unreachable and stayed live
+		/// forever. One more leaked handler per logout, each of them still writing the previous
+		/// character's health into a bar the next character is looking at.
+		/// </remarks>
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			if (Character != null &&
+				Character.TryGet(out ICharacterAttributeController attributeController) &&
+				attributeController.TryGetResourceAttribute(TemplateID, out CharacterResourceAttribute attribute))
+			{
+				attribute.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
+			}
+		}
+
+		/// <summary>
 		/// Updates the target fraction and the value label when the resource attribute changes.
 		/// </summary>
 		/// <param name="attribute">The updated character attribute.</param>

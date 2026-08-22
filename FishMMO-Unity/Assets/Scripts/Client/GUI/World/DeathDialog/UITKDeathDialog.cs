@@ -54,7 +54,20 @@ namespace FishMMO.Client
 		private Button resurrectButton;
 
 		/// <summary>True once the UXML elements have been resolved and wired.</summary>
-		private bool elementsBound;
+		/// <summary>
+		/// The visual tree the current element references were resolved against.
+		/// </summary>
+		/// <remarks>
+		/// Identity, not a bool. This used to be a plain <c>elementsBound</c> latch that was set
+		/// once and never cleared — but <see cref="UITKControl.ReinitializeIfTreeReplaced"/> re-runs
+		/// <see cref="OnStarting"/> every time the <c>UIDocument</c> is disabled and re-enabled,
+		/// which is exactly what Hide/Show do here. So on the SECOND death the dialog was re-cloned
+		/// from UXML while the latch still read "bound": the cached label and buttons pointed into
+		/// the discarded tree, the live Respawn and Accept-Resurrect buttons had no click handlers
+		/// at all, and <see cref="SetResurrectVisible"/> wrote into the dead tree. With no close
+		/// button by design, the player stayed a corpse until they relogged.
+		/// </remarks>
+		private VisualElement boundTreeRoot;
 
 		/// <summary>The ID of the player attempting to resurrect, or 0 if none.</summary>
 		private long currentResurrectorID;
@@ -108,21 +121,22 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void EnsureElementsBound()
 		{
-			if (elementsBound || Root == null)
+			VisualElement root = Root;
+			if (root == null || ReferenceEquals(boundTreeRoot, root))
 			{
 				return;
 			}
 
-			messageLabel = Root.Q<Label>(MESSAGE_LABEL_NAME);
-			respawnButton = Root.Q<Button>(RESPAWN_BTN_NAME);
-			resurrectButton = Root.Q<Button>(RESURRECT_BTN_NAME);
+			messageLabel = root.Q<Label>(MESSAGE_LABEL_NAME);
+			respawnButton = root.Q<Button>(RESPAWN_BTN_NAME);
+			resurrectButton = root.Q<Button>(RESURRECT_BTN_NAME);
 
 			if (respawnButton != null)
 				respawnButton.clicked += OnClickRespawn;
 			if (resurrectButton != null)
 				resurrectButton.clicked += OnClickAcceptResurrect;
 
-			elementsBound = true;
+			boundTreeRoot = root;
 		}
 
 		/// <summary>

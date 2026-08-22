@@ -242,8 +242,8 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 		}
 
 		/// <summary>
-		/// Copies the standalone Updater executable and its runtime dependencies into a
-		/// standalone client build.
+		/// Copies the standalone Updater executable into a standalone client build,
+		/// publishing it for the target platform first if that has not already been done.
 		/// </summary>
 		/// <remarks>
 		/// <para>The launcher resolves the updater as
@@ -266,7 +266,13 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			}
 
 			string updaterProject = Path.Combine(root, "FishMMO-Patcher", "Updater");
-			string binRoot = Path.Combine(updaterProject, "bin");
+			string projectFile = Path.Combine(updaterProject, "Updater.csproj");
+			if (!File.Exists(projectFile))
+			{
+				Log.Error("BuildExecutor",
+					$"The Updater project was not found at '{projectFile}'. The client will NOT be able to apply patches.");
+				return;
+			}
 
 			/* Derive the executable name from the build target rather than from
 			 * Constants.Configuration.UpdaterExecutable. That constant is resolved by the
@@ -274,46 +280,70 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			 * i.e. the editor's current build target, which is not necessarily the target
 			 * being built here. Getting this wrong copies a Linux apphost into a Windows
 			 * build (or vice versa) and the mismatch only surfaces when a player tries to
-			 * patch. The .NET apphost is platform-specific, so the Updater must have been
-			 * published for this target. */
+			 * patch. */
 			bool targetIsWindows = buildTarget == BuildTarget.StandaloneWindows ||
 								   buildTarget == BuildTarget.StandaloneWindows64;
 			string executableName = targetIsWindows ? "Updater.exe" : "Updater";
 
-			// Runtime-identifier publish output first, then plain build output (which only
-			// carries a native apphost for the machine that produced it).
-			List<string> candidateDirectories = new List<string>();
-			foreach (string configuration in new[] { "Release", "Debug" })
+			string[] runtimeIdentifiers = GetRuntimeIdentifiers(buildTarget);
+			if (runtimeIdentifiers.Length == 0)
 			{
-				string frameworkDir = Path.Combine(binRoot, configuration, "net8.0");
-				foreach (string rid in GetRuntimeIdentifiers(buildTarget))
-				{
-					candidateDirectories.Add(Path.Combine(frameworkDir, rid, "publish"));
-					candidateDirectories.Add(Path.Combine(frameworkDir, rid));
-				}
-				candidateDirectories.Add(Path.Combine(frameworkDir, "publish"));
-				candidateDirectories.Add(frameworkDir);
+				Log.Error("BuildExecutor",
+					$"No .NET runtime identifier is known for build target '{buildTarget}', so the Updater cannot be " +
+					"published for it. The client will NOT be able to apply patches.");
+				return;
 			}
 
-			// The updater ships framework-dependent: the apphost plus its managed
-			// dependencies and runtime config must travel together, so we copy the whole
-			// output directory rather than just the executable.
-			string sourceDirectory = candidateDirectories.FirstOrDefault(
-				dir => Directory.Exists(dir) && File.Exists(Path.Combine(dir, executableName)));
+			/* Only ever accept a per-RID publish directory.
+			 *
+			 * The RID-less output (bin/<config>/net8.0[/publish]) carries a native apphost
+			 * built for whatever machine produced it. Accepting it as a fallback is how a
+			 * Linux editor host ends up shipping its own apphost inside a macOS client, or
+			 * an Arch host ships an 'arch-x64' apphost that only resolves against a locally
+			 * installed runtime. Both look like a successful build and fail on the player's
+			 * machine, at the one moment the client has already shut itself down. A
+			 * RID-tagged directory is the only output whose target platform is knowable. */
+			string sourceDirectory = FindUpdaterPublishDirectory(updaterProject, runtimeIdentifiers, executableName);
+
+			// Publish on demand when nothing usable is present, or when the Updater sources
+			// have moved on since the last publish — a client that ships a stale updater is
+			// the same class of bug as one that ships none, just harder to spot.
+			if (sourceDirectory == null || IsUpdaterPublishStale(updaterProject, sourceDirectory, executableName))
+			{
+				string reason = sourceDirectory == null ? "no publish output was found" : "the publish output is older than the Updater sources";
+				Log.Info("BuildExecutor", $"Publishing the Updater for '{runtimeIdentifiers[0]}' ({reason}).");
+
+				if (TryPublishUpdater(projectFile, runtimeIdentifiers[0]))
+				{
+					sourceDirectory = FindUpdaterPublishDirectory(updaterProject, runtimeIdentifiers, executableName)
+									  ?? sourceDirectory;
+				}
+				else if (sourceDirectory != null)
+				{
+					// Publishing failed but a previous output is still on disk. Shipping the
+					// stale one beats shipping nothing — a client with no updater cannot patch
+					// at all — but it must not pass silently, because the updater that ends up
+					// in this build is not the one in the working tree.
+					Log.Warning("BuildExecutor",
+						$"Publishing the Updater failed; falling back to the existing output in '{sourceDirectory}'. " +
+						"It may not match the current Updater sources.");
+				}
+			}
 
 			if (sourceDirectory == null)
 			{
 				Log.Error("BuildExecutor",
-					$"No Updater build output containing '{executableName}' was found under '{binRoot}'. " +
-					"The client will NOT be able to apply patches. Publish the Updater for this target, e.g.: " +
-					$"dotnet publish -c Release -r {GetRuntimeIdentifiers(buildTarget).FirstOrDefault() ?? "<rid>"} FishMMO-Patcher/Updater");
+					$"No Updater build output containing '{executableName}' was found for {buildTarget}, and publishing one failed. " +
+					"The client will NOT be able to apply patches. Publish it manually with: " +
+					$"dotnet publish -c Release -r {runtimeIdentifiers[0]} FishMMO-Patcher/Updater/Updater.csproj " +
+					"(or run FishMMO-Patcher/publish-updater.sh).");
 				return;
 			}
 
 			try
 			{
-				CopyDirectoryRecursive(sourceDirectory, buildPath);
-				Log.Info("BuildExecutor", $"Copied Updater from '{sourceDirectory}' to '{buildPath}'.");
+				int copiedCount = CopyUpdaterFiles(sourceDirectory, buildPath);
+				Log.Info("BuildExecutor", $"Copied Updater ({copiedCount} file(s), '{executableName}') from '{sourceDirectory}' to '{buildPath}'.");
 
 				// Mark the updater executable runnable. File.Copy does not preserve the
 				// executable bit, and a non-executable updater fails at launch with a
@@ -333,10 +363,207 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 		}
 
 		/// <summary>
-		/// Returns the .NET runtime identifiers that match a Unity standalone build target,
-		/// most likely first. Used to locate a per-RID Updater publish directory.
+		/// Returns the first per-RID publish directory that actually contains
+		/// <paramref name="executableName"/>, or null when there is none.
 		/// </summary>
-		private static IEnumerable<string> GetRuntimeIdentifiers(BuildTarget buildTarget)
+		/// <remarks>
+		/// Release is preferred over Debug, and the RIDs are tried in the order
+		/// <see cref="GetRuntimeIdentifiers"/> returns them (most likely first).
+		/// </remarks>
+		private static string FindUpdaterPublishDirectory(string updaterProject, string[] runtimeIdentifiers, string executableName)
+		{
+			string binRoot = Path.Combine(updaterProject, "bin");
+
+			foreach (string configuration in new[] { "Release", "Debug" })
+			{
+				string frameworkDir = Path.Combine(binRoot, configuration, "net8.0");
+				foreach (string rid in runtimeIdentifiers)
+				{
+					// publish/ first: that is the self-contained single-file output the
+					// updater ships as. The sibling build directory is accepted as a
+					// fallback because it is still RID-correct, just framework-dependent.
+					foreach (string candidate in new[]
+					{
+						Path.Combine(frameworkDir, rid, "publish"),
+						Path.Combine(frameworkDir, rid),
+					})
+					{
+						if (File.Exists(Path.Combine(candidate, executableName)))
+						{
+							return candidate;
+						}
+					}
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// True when any Updater source file is newer than the published executable.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately coarse — a timestamp comparison, not a real dependency graph. Its
+		/// job is to catch the common case of editing the Updater and then building a
+		/// client without republishing; MSBuild does the accurate incremental work once we
+		/// decide to invoke it. Errors resolve to "not stale" so an unreadable directory
+		/// cannot wedge the build in a publish loop.
+		/// </remarks>
+		private static bool IsUpdaterPublishStale(string updaterProject, string publishDirectory, string executableName)
+		{
+			try
+			{
+				DateTime publishedAt = File.GetLastWriteTimeUtc(Path.Combine(publishDirectory, executableName));
+
+				foreach (string sourceFile in Directory.EnumerateFiles(updaterProject, "*.*", SearchOption.AllDirectories))
+				{
+					// bin/ and obj/ are outputs, not sources; including them would compare
+					// the publish output against itself.
+					string relative = sourceFile.Substring(updaterProject.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+					if (relative.StartsWith("bin" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+						relative.StartsWith("obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
+					string extension = Path.GetExtension(sourceFile);
+					if (!extension.Equals(".cs", StringComparison.OrdinalIgnoreCase) &&
+						!extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
+					if (File.GetLastWriteTimeUtc(sourceFile) > publishedAt)
+					{
+						return true;
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildExecutor", $"Could not determine whether the published Updater is up to date: {ex.Message}. Using the existing publish output.");
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Runs <c>dotnet publish</c> for the Updater against a single runtime identifier.
+		/// </summary>
+		/// <remarks>
+		/// Self-contained, single-file and compression settings all live in Updater.csproj
+		/// under a <c>RuntimeIdentifier != ''</c> condition, so passing <c>-r</c> is enough
+		/// to get the shipping shape and there is no second copy of those settings to drift.
+		/// </remarks>
+		/// <returns>True when publish exited 0.</returns>
+		private static bool TryPublishUpdater(string projectFile, string runtimeIdentifier)
+		{
+			try
+			{
+				System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo("dotnet")
+				{
+					UseShellExecute = false,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+					CreateNoWindow = true,
+					WorkingDirectory = Path.GetDirectoryName(projectFile),
+				};
+				startInfo.ArgumentList.Add("publish");
+				startInfo.ArgumentList.Add(projectFile);
+				startInfo.ArgumentList.Add("-c");
+				startInfo.ArgumentList.Add("Release");
+				startInfo.ArgumentList.Add("-r");
+				startInfo.ArgumentList.Add(runtimeIdentifier);
+				startInfo.ArgumentList.Add("--nologo");
+
+				using (System.Diagnostics.Process publish = System.Diagnostics.Process.Start(startInfo))
+				{
+					if (publish == null)
+					{
+						Log.Error("BuildExecutor", "Could not start 'dotnet publish' for the Updater.");
+						return false;
+					}
+
+					/* Read both pipes to completion before waiting on the process. A publish
+					 * writes more than a pipe buffer holds, and a process blocked writing to
+					 * a full pipe never exits — waiting first would deadlock the editor. */
+					string standardOutput = publish.StandardOutput.ReadToEnd();
+					string standardError = publish.StandardError.ReadToEnd();
+
+					const int PublishTimeoutMs = 300000;
+					if (!publish.WaitForExit(PublishTimeoutMs))
+					{
+						Log.Error("BuildExecutor", $"'dotnet publish' for the Updater did not finish within {PublishTimeoutMs / 1000}s; giving up.");
+						try { publish.Kill(); } catch { /* already gone */ }
+						return false;
+					}
+
+					if (publish.ExitCode != 0)
+					{
+						Log.Error("BuildExecutor",
+							$"'dotnet publish -r {runtimeIdentifier}' failed with exit code {publish.ExitCode}.\n{standardOutput}\n{standardError}");
+						return false;
+					}
+
+					Log.Debug("BuildExecutor", $"Published the Updater for '{runtimeIdentifier}'.\n{standardOutput}");
+					return true;
+				}
+			}
+			catch (Exception ex)
+			{
+				// Most often: dotnet is not on PATH. Unity launched from a desktop shell
+				// does not always inherit the shell's PATH, so this is a normal-enough
+				// outcome to explain rather than just report.
+				Log.Error("BuildExecutor",
+					$"Could not run 'dotnet publish' for the Updater: {ex.Message}. " +
+					"Ensure the .NET 8 SDK is installed and 'dotnet' is on the PATH Unity was launched with, " +
+					"or publish it ahead of time with FishMMO-Patcher/publish-updater.sh.");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Copies the Updater publish output into the build root, skipping debug symbols.
+		/// </summary>
+		/// <remarks>
+		/// The updater ships as a self-contained single file, but the framework-dependent
+		/// fallback needs its managed dependencies and runtime config alongside it, so the
+		/// whole directory is copied rather than just the executable. <c>.pdb</c> files are
+		/// excluded: they are build artefacts of no use to a player, and every byte here is
+		/// also a byte the patch generator has to diff.
+		/// </remarks>
+		/// <returns>The number of files copied.</returns>
+		private static int CopyUpdaterFiles(string sourceDirectory, string destinationDirectory)
+		{
+			Directory.CreateDirectory(destinationDirectory);
+
+			int copiedCount = 0;
+			foreach (string filePath in Directory.GetFiles(sourceDirectory))
+			{
+				if (Path.GetExtension(filePath).Equals(".pdb", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+				File.Copy(filePath, Path.Combine(destinationDirectory, Path.GetFileName(filePath)), true);
+				++copiedCount;
+			}
+
+			foreach (string subDirectory in Directory.GetDirectories(sourceDirectory))
+			{
+				copiedCount += CopyUpdaterFiles(subDirectory, Path.Combine(destinationDirectory, Path.GetFileName(subDirectory)));
+			}
+			return copiedCount;
+		}
+
+		/// <summary>
+		/// Returns the .NET runtime identifiers that match a Unity standalone build target,
+		/// most likely first. Used to locate — or publish — a per-RID Updater output.
+		/// </summary>
+		/// <remarks>
+		/// Portable RIDs only. A distro-specific RID (an Arch/CachyOS SDK reports its own
+		/// as <c>arch-x64</c>) has no runtime pack on nuget.org and would pin the output to
+		/// that distro; <c>linux-x64</c> runs on Arch and every other glibc distro because
+		/// it is not distro-specific. Every RID listed here is declared in Updater.csproj.
+		/// </remarks>
+		private static string[] GetRuntimeIdentifiers(BuildTarget buildTarget)
 		{
 			switch (buildTarget)
 			{
@@ -347,7 +574,12 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 				case BuildTarget.StandaloneLinux64:
 					return new[] { "linux-x64" };
 				case BuildTarget.StandaloneOSX:
-					return new[] { "osx-arm64", "osx-x64" };
+					// Unity's macOS player is a universal binary; the updater is not, so the
+					// architecture the editor host runs on is the best available guess at the
+					// one the build is meant for.
+					return UnityEngine.SystemInfo.processorType.IndexOf("Apple", StringComparison.OrdinalIgnoreCase) >= 0
+						? new[] { "osx-arm64", "osx-x64" }
+						: new[] { "osx-x64", "osx-arm64" };
 				default:
 					return Array.Empty<string>();
 			}

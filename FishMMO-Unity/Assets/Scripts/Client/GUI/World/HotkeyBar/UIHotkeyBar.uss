@@ -9,6 +9,14 @@
     collapses to the height of its contents, and a zero-height element sits at the top of
     the screen — which is where the bar was appearing. justify-content places it along the
     vertical axis, so flex-end is what puts it at the bottom rather than centred.
+
+    Being full-viewport is also why it must never be picked. picking-mode="Ignore" is set on it
+    in the UXML (it is a UXML attribute, not a USS property). Without that, this root is the
+    topmost pickable element over the whole screen for every HUD panel at the same sorting order,
+    and UITKControl.HasFocus — which asks the panel what is under the cursor — answers true
+    everywhere. Everything gated on UIManager.ControlHasFocus() then stops: world/target clicks,
+    the Interact action, hotkey ability activation and dropping a dragged item into the world.
+    Children stay pickable; picking is not inherited.
 */
 .hotkey-bar {
     flex-grow: 1;

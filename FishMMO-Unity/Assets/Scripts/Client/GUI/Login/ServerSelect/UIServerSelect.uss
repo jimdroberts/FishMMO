@@ -53,7 +53,11 @@
 
 .server-row__status {
     font-size: 12px;
-    color: var(--abyss-300);
+    /* --abyss-200 ("secondary text"), not --abyss-300 ("muted text"): against the
+       .fish-panel background --abyss-300 measures 3.36:1, under the 4.5:1 needed for
+       12px body text, while --abyss-200 measures 7.01:1. This line carries whether the
+       world is actually joinable, so it has to be read, not merely noticed. */
+    color: var(--abyss-200);
 }
 
 .server-buttons {

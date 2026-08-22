@@ -562,6 +562,23 @@ failed", and left the character-select deadline armed underneath it. The refusal
 enough for a player to hit by picking a different character straight after an
 `OtherCharacterInWorld` refusal.
 
+**The character list and the selection hold separate gates.** Both are per-connection
+in-flight/cooldown pairs, and they used to be *one* pair, shared. The client requests the
+character list automatically on arrival and the player clicks Play immediately afterwards —
+well inside the two seconds the list request had just armed — so the selection was refused by
+the list's cooldown and reached the player as "Character selection failed. Please try again."
+Waiting a moment and clicking again worked, which is exactly what made it look intermittent
+rather than systematic: the selection failed *because* it followed the list promptly, which is
+the normal way to arrive at it.
+
+They are different operations and are rate-limited separately. The list is worth throttling —
+a player can hold down Refresh — whereas a selection is a single deliberate act that follows
+the list immediately by design. `TryBeginListRequest`/`EndListRequest` own
+`InFlightListRequests` and `NextAllowedListRequestUtc`; `TryBeginInFlightRequest`/
+`EndInFlightRequest` continue to own `InFlightRequests` and `NextAllowedRequestUtc` for select
+and delete. Both pairs are released when the connection drops, since either leaks the same way
+if it is not.
+
 ### Phase 8: World Server Connection
 
 ```mermaid

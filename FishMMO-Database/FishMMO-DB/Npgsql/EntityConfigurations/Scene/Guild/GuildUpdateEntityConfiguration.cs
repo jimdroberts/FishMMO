@@ -31,11 +31,25 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.GuildID)
 				.IsUnique();
 
-			// Composite index for guild update fetch queries (FetchAsync hot path)
-			// Optimizes WHERE last_update >= @lastFetch AND guild_id IN (@guildIds)
-			// Using (last_update, guild_id) allows efficient range scan on last_update
-			// followed by guild_id filtering without additional lookups
-			builder.HasIndex(e => new { e.LastUpdate, e.GuildID });
+			/* Composite index for the FetchAsync hot path:
+			 *   WHERE last_update >= @lastFetch AND guild_id = ANY(@guildIds)
+			 *
+			 * guild_id leads. The equality/ANY predicate is the selective one and must come
+			 * first so the planner can seek once per id and then range-scan last_update within
+			 * it. Ordered (last_update, guild_id) the leading predicate is an open-ended range
+			 * matching most of the table, the id filter cannot seek at all, and the planner
+			 * falls back to the unique guild_id index — leaving this one dead weight. */
+			builder.HasIndex(e => new { e.GuildID, e.LastUpdate });
+
+			/* Foreign key to the guild, cascading.
+			 *
+			 * There was no relationship here at all, so guild_id was a bare bigint with no
+			 * referential integrity: an update row outlived the guild it described, and cleanup
+			 * depended on a manual best-effort delete that is only logged on failure. */
+			builder.HasOne<GuildEntity>()
+				.WithMany()
+				.HasForeignKey(e => e.GuildID)
+				.OnDelete(DeleteBehavior.Cascade);
 		}
 	}
 }

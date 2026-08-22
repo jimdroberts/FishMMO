@@ -339,6 +339,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetSingle, out long guardKey))
 			{
+				/* A refusal is still an answer. The client applies a binding locally the instant
+				 * the player drops an icon on a slot, so returning in silence leaves the two sides
+				 * permanently disagreeing: the bar shows a binding the server never took, and it is
+				 * simply gone at the next login. This is the COMMON case, not an edge one —
+				 * clearing a slot with right-click and setting it with left-click sends two
+				 * requests a few milliseconds apart, comfortably inside the 75ms window, so the one
+				 * the debounce drops is the set. Echoing the authoritative slot repaints the bar
+				 * with whatever the server actually holds, which is the correct answer either way. */
+				AcknowledgeHotkey(conn, playerCharacter, msg.HotkeyData.Slot);
 				return;
 			}
 
@@ -388,6 +397,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.SetMultiple, out long guardKey))
 			{
+				// Same reasoning as the single-slot handler: a refused request must still leave the
+				// client holding the server's version of the bar rather than its own optimistic one.
+				AcknowledgeAllHotkeys(conn, playerCharacter);
 				return;
 			}
 

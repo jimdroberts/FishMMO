@@ -125,7 +125,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, itemAttachmentAmount, 0, false, incomingVersion, now },
+					// itemAttachmentAmount is a uint, and Npgsql cannot bind System.UInt32 — the boxed
+					// parameter throws NotSupportedException whether or not mail carries an attachment,
+					// because the declared type is what gets boxed. item_attachment_amount is bigint, so
+					// long binds exactly. Same defect as the item services' Amount.
+					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, (long)itemAttachmentAmount, 0, false, incomingVersion, now },
 					cancellationToken)
 					.ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);

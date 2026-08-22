@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,6 +15,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKCharacterCreate : UITKControl
 	{
+		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
 		/// <summary>
 		/// The name of the create-submit button in the UI.
 		/// </summary>
@@ -143,10 +150,20 @@ namespace FishMMO.Client
 				createButton.clicked += OnClick_CreateCharacter;
 			}
 
+			/* Back, not quit-to-login. This button is labelled "Back" and sits beside a separate
+			 * "Quit" — and Escape on this same screen has always gone to the character list, with
+			 * a comment below saying that is what Back means here. The two disagreed: the button
+			 * called Client.QuitToLogin(), which tears the whole session down, so a player who
+			 * changed their mind about creating a character was logged out and landed back on the
+			 * sign-in screen. They now share one handler, so they cannot drift apart again.
+			 *
+			 * This is the one place the UI Toolkit panels deliberately do NOT reproduce the UGUI
+			 * behaviour: the old CharacterCreate "Back" button was wired to OnClick_QuitToLogin in
+			 * the scene. Point this at OnClick_QuitToLogin to restore that exactly. */
 			Button quitToLoginButton = Root.Q<Button>(QUIT_LOGIN_BUTTON_NAME);
 			if (quitToLoginButton != null)
 			{
-				quitToLoginButton.clicked += OnClick_QuitToLogin;
+				quitToLoginButton.clicked += OnClick_Back;
 			}
 
 			Button quitButton = Root.Q<Button>(QUIT_BUTTON_NAME);
@@ -156,16 +173,27 @@ namespace FishMMO.Client
 			}
 
 			// Enter creates, Escape goes back to the character list rather than to login — Back
-			// on this screen means "I changed my mind about creating", not "log me out".
-			LoginKeys.Attach(Root, OnClick_CreateCharacter, OnEscape_BackToCharacterSelect);
+			// on this screen means "I changed my mind about creating", not "log me out". Escape
+			// and the Back button share OnClick_Back for exactly that reason.
+			// Enter observes the same lock as the Create button it mirrors; see LoginKeys.Attach.
+			LoginKeys.Attach(this, Root, OnClick_CreateCharacter, OnClick_Back, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, nameField, raceDropdown, modelDropdown, locationDropdown, createButton, quitToLoginButton, quitButton);
 		}
 
 		/// <summary>
-		/// Returns to the character list without tearing the session down.
+		/// Returns to the character list without tearing the session down. Bound to both the Back
+		/// button and Escape.
 		/// </summary>
-		private void OnEscape_BackToCharacterSelect()
+		/// <remarks>
+		/// Unlocking is not cosmetic here. Leaving while a creation was in flight left the reply
+		/// guard armed, and the guard's expiry calls <see cref="UITKControl.Show"/> on this panel —
+		/// so half a minute after the player had moved on, the character-create form reappeared
+		/// over the character list, the world list, or the game itself.
+		/// </remarks>
+		public void OnClick_Back()
 		{
+			SetCreateButtonLocked(false);
+
 			if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect characterSelect))
 			{
 				Hide();
@@ -226,6 +254,8 @@ namespace FishMMO.Client
 			{
 				resultLabel.text = this.pendingResult ?? string.Empty;
 			}
+
+			ReapplyCreateLock();
 		}
 
 		/// <inheritdoc cref="OnAfterStarting"/>
@@ -235,7 +265,25 @@ namespace FishMMO.Client
 			PopulateDropdowns();
 
 			SetResult(null);
+			ReapplyCreateLock();
 			LoginKeys.FocusFirst(Root, nameField);
+		}
+
+		/// <summary>
+		/// Puts the Create button back into the state the outstanding request implies.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="SetCreateButtonLocked"/> writes into a button that the next hide/show
+		/// replaces, so the panel could come back offering Create while the creation it had
+		/// already sent was still unanswered — and a second click creates a second character.
+		/// Driven off the guard so the button cannot disagree with the wait it represents.
+		/// </remarks>
+		private void ReapplyCreateLock()
+		{
+			if (createButton != null)
+			{
+				createButton.SetEnabled(!replyGuard.IsPending);
+			}
 		}
 
 		/// <summary>
@@ -471,6 +519,12 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
+				/* Disarm before hiding. The connection is gone, so the create request this guard
+				 * was waiting on can never be answered — and an armed guard that expires calls
+				 * Show() on this panel, putting a dead character-create form back on top of the
+				 * login screen the teardown had just restored. */
+				SetCreateButtonLocked(false);
+
 				Hide();
 			}
 		}
@@ -599,9 +653,15 @@ namespace FishMMO.Client
 
 			if (!Authentication.IsAllowedCharacterName(CharacterName))
 			{
+				/* The rule quoted here was wrong in both directions — the maximum is 24, not 32,
+				 * and single interior spaces are allowed, so a player typing "Aragorn of Arnor"
+				 * was told letters only while a 30-character name was refused by a screen that had
+				 * just said 32 was fine. Authentication owns the constraint and builds the
+				 * sentence from the same constants the validator uses, so the two cannot drift
+				 * apart again. */
 				SetResult(string.IsNullOrWhiteSpace(CharacterName)
 					? "Please enter a character name."
-					: "That name cannot be used. Names are 3-32 characters, letters only.");
+					: Authentication.InvalidCharacterNameError);
 				return;
 			}
 
@@ -706,7 +766,8 @@ namespace FishMMO.Client
 				case CharacterCreateResult.TooMany:
 					return "You already have the maximum number of characters on this account.";
 				case CharacterCreateResult.InvalidCharacterName:
-					return "That name cannot be used. Names are 3-32 characters, letters only.";
+					// The shared rule, for the same reason as in OnClick_CreateCharacter.
+					return Authentication.InvalidCharacterNameError;
 				case CharacterCreateResult.CharacterNameTaken:
 					return "That name is already taken. Please choose another.";
 				case CharacterCreateResult.InvalidSpawn:

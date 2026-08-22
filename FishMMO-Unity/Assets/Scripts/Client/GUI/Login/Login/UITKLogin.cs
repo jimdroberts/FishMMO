@@ -23,6 +23,13 @@ namespace FishMMO.Client
 	public class UITKLogin : UITKControl
 	{
 		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
+		/// <summary>
 		/// The name of the identifier TextField in the UI — a username <b>or</b> an email address.
 		/// </summary>
 		/// <remarks>
@@ -168,7 +175,8 @@ namespace FishMMO.Client
 			 * the mouse. Enter signs in from any field; Escape clears the form rather than doing
 			 * something destructive, because this is the screen the rest of the flow escapes back
 			 * TO and there is nothing above it to close. */
-			LoginKeys.Attach(Root, OnClick_Login, OnEscape_ClearForm);
+			// Enter observes the same lock as the Sign In button it mirrors; see LoginKeys.Attach.
+			LoginKeys.Attach(this, Root, OnClick_Login, OnEscape_ClearForm, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, username, password, signInButton, registerButton, optionsButton, quitButton);
 		}
 
@@ -188,16 +196,36 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Puts the caret where the player is going to type.
+		/// Puts the caret where the player is going to type, on controls whose lock state matches
+		/// the request that is actually outstanding.
 		/// </summary>
 		protected override void OnAfterShow()
 		{
 			base.OnAfterShow();
 
+			ReleaseControls(!replyGuard.IsPending);
+
 			// Empty username means a fresh sign-in; otherwise they are most likely back here after
 			// a rejected password and the username is already right.
 			LoginKeys.FocusFirst(Root,
 				username != null && string.IsNullOrEmpty(username.value) ? username : password);
+		}
+
+		/// <summary>
+		/// Re-applies the sign-in lock after the visual tree was rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="SetSignInLocked"/> writes into elements that the next hide/show replaces, so
+		/// a panel that came back during a login still in flight — which is exactly what the
+		/// verification and TOTP flows do, and what the reply timeout does — presented an enabled
+		/// Sign In button over a request the client was still waiting on. Driven off the guard
+		/// rather than off a second copy of the flag, so the two cannot disagree.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+
+			ReleaseControls(!replyGuard.IsPending);
 		}
 
 		/// <summary>
@@ -647,6 +675,17 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Login()
 		{
+			/* Refuse re-entry while a sign-in is already outstanding. The button is disabled for
+			 * the whole of that wait, but Enter does not go through the button — see
+			 * LoginKeys.Attach — so a second press ran this method again, fell down a validation
+			 * path (the identifier and password having been taken already), and unlocked the form.
+			 * Unlocking clears isAuthFlowActive, which is what gates the auth-result handler, so
+			 * the answer to the login that was genuinely in flight was then dropped. */
+			if (replyGuard.IsPending)
+			{
+				return;
+			}
+
 			string identifier = username != null ? username.value : null;
 
 			if (string.IsNullOrWhiteSpace(identifier))
@@ -718,6 +757,20 @@ namespace FishMMO.Client
 			 * strings cannot be zeroed, so releasing the last reference as early as possible is the
 			 * whole of the available mitigation. */
 			PendingCredentials credentials = new PendingCredentials(identifier, passwordText);
+			passwordText = null;
+
+			/* And out of the field, which is the copy the holder above cannot reach. A TextField
+			 * keeps whatever was typed into it for as long as the tree lives, so the plaintext
+			 * password sat there for the whole session — and was still there, pre-filled, whenever
+			 * this panel was shown again, which is every rejected sign-in and every quit to login.
+			 * That defeats the point of the holder: the password was handed to the authenticator
+			 * on the line below and this panel has no further use for it. The identifier is
+			 * deliberately left alone — OnAfterShow relies on it to decide where the caret goes,
+			 * and it is not a secret. */
+			if (password != null)
+			{
+				password.value = string.Empty;
+			}
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
 			{

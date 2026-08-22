@@ -1,12 +1,17 @@
-/*
+﻿/*
     UIInspect.uss
     Layout for the character inspect panel. Colours come from FishMMO-Theme.uss; the equipment
     slots reuse the shared .fish-slot classes so inspected gear reads the same as your own.
 */
 
 /*
-    Each panel is its own UIDocument whose root fills the screen, so a panel with a size but no
-    alignment resolves to the top-left corner. Centring is what puts it where a modal belongs.
+    Transparent, full-viewport wrapper that centres the window. It must never be picked:
+    picking-mode="Ignore" is set on it in the UXML (a UXML attribute, not a USS property).
+    Inspect is an ordinary window, not a modal — it has no scrim — so a pickable root here is an
+    invisible click blocker over the whole screen: every other window and the entire HUD stop
+    responding while it is open, and UIManager.ControlHasFocus() reports true everywhere, which
+    also kills world/target clicks and the Interact action. Children stay pickable; picking is not
+    inherited.
 */
 .inspect-root {
     position: absolute;

@@ -15,6 +15,31 @@
     padding: 16px;
 }
 
+/*
+    Matches .dialog-header. The negative margins pull the bar back out through the
+    panel's own 16px padding so it sits flush against the frame the way an authored
+    header does, rather than floating as an inset strip.
+*/
+.colorpicker-header {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+    margin-left: -16px;
+    margin-right: -16px;
+    margin-top: -16px;
+    margin-bottom: 12px;
+}
+
+.colorpicker-header__icon {
+    width: 11px;
+    height: 11px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
 .colorpicker-top {
     flex-direction: row;
     margin-bottom: 12px;

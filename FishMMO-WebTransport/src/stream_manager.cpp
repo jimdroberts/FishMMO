@@ -125,8 +125,8 @@ static void sm_send_req_free(void* client_ctx, const char* reason)
     }
     req->freed = 1;
     req->magic = 0;
-    WT_LOG_INFO("SEND_COMPLETE free ok len=%u (%s)",
-                req->length, reason ? reason : "complete");
+    // WT_LOG_INFO("SEND_COMPLETE free ok len=%u (%s)",
+    //             req->length, reason ? reason : "complete");
     free(req);
 }
 
@@ -412,11 +412,11 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                     sctx->recv_offset = (uint32_t)remaining;
                     atomic_fetch_sub(&sctx->mgr->total_recv_bytes,
                                      (uint32_t)skip);
-                    WT_LOG_INFO(
-                        "Stream %llu: stripped WEBTRANSPORT_STREAM header "
-                        "(%zu bytes, session_id=%llu)",
-                        (unsigned long long)sctx->stream_id, skip,
-                        (unsigned long long)sctx->mgr->wt_session_id);
+                    // WT_LOG_INFO(
+                    //     "Stream %llu: stripped WEBTRANSPORT_STREAM header "
+                    //     "(%zu bytes, session_id=%llu)",
+                    //     (unsigned long long)sctx->stream_id, skip,
+                    //     (unsigned long long)sctx->mgr->wt_session_id);
                 }
             }
             sctx->header_checked = true;
@@ -520,9 +520,9 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         sm_send_req_t* req = sctx->pending_send;
         if (!req) {
-            WT_LOG_INFO(
-                "Stream START_COMPLETE stream_id=%llu (no pending send)",
-                (unsigned long long)sctx->stream_id);
+            // WT_LOG_INFO(
+            //     "Stream START_COMPLETE stream_id=%llu (no pending send)",
+            //     (unsigned long long)sctx->stream_id);
             return QUIC_STATUS_SUCCESS;
         }
         /* Transfer ownership to StreamSend ClientContext before call. */
@@ -562,12 +562,12 @@ stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             return QUIC_STATUS_SUCCESS;
         }
 
-        WT_LOG_INFO(
-            "StreamSend queued after START_COMPLETE stream_id=%llu len=%u "
-            "fin=%d stamp=SEND_AFTER_START_V2 (free only on SEND_COMPLETE)",
-            (unsigned long long)sctx->stream_id,
-            req_length,
-            sctx->pending_send_fin ? 1 : 0);
+        // WT_LOG_INFO(
+        //     "StreamSend queued after START_COMPLETE stream_id=%llu len=%u "
+        //     "fin=%d stamp=SEND_AFTER_START_V2 (free only on SEND_COMPLETE)",
+        //     (unsigned long long)sctx->stream_id,
+        //     req_length,
+        //     sctx->pending_send_fin ? 1 : 0);
         return QUIC_STATUS_SUCCESS;
     }
 
@@ -919,12 +919,12 @@ static int32_t sm_send_on_open_stream(
         return WT_ERR_SEND_FAILED;
     }
 
-    WT_LOG_INFO(
-        "SAME_STREAM_REPLY ok conn=%llu stream_id=%llu app_len=%d "
-        "stamp=SAME_STREAM_REPLY_V2 (no new StreamOpen; no FIN)",
-        (unsigned long long)mgr->conn_id,
-        (unsigned long long)stream_id,
-        length);
+    // WT_LOG_INFO(
+    //     "SAME_STREAM_REPLY ok conn=%llu stream_id=%llu app_len=%d "
+    //     "stamp=SAME_STREAM_REPLY_V2 (no new StreamOpen; no FIN)",
+    //     (unsigned long long)mgr->conn_id,
+    //     (unsigned long long)stream_id,
+    //     length);
     return WT_OK;
 }
 
@@ -1104,10 +1104,10 @@ int32_t wt_stream_manager_send(
          * it properly: 0x41 becomes the two bytes 0x40 0x41. */
         header_len = sm_varint_encode(WT_STREAM_CAPSULE_TYPE, header);
         header_len += sm_varint_encode(mgr->wt_session_id, header + header_len);
-        WT_LOG_INFO(
-            "Stream send: WEBTRANSPORT_STREAM session_id=%llu header_len=%zu "
-            "app_len=%d",
-            (unsigned long long)mgr->wt_session_id, header_len, length);
+        // WT_LOG_INFO(
+        //     "Stream send: WEBTRANSPORT_STREAM session_id=%llu header_len=%zu "
+        //     "app_len=%d",
+        //     (unsigned long long)mgr->wt_session_id, header_len, length);
     }
     header_len += sm_varint_encode((uint64_t)length, header + header_len);
 
@@ -1145,17 +1145,17 @@ int32_t wt_stream_manager_send(
         return WT_ERR_SEND_FAILED;
     }
 
-    WT_LOG_INFO(
-        "StreamOpen+Start OK conn=%llu stream_id=%llu app_len=%d "
-        "wire_len=%u header_len=%zu pending_send=1 fin=%d "
-        "stamp=LOCAL_STREAM_OPEN_V2 is_server=%d",
-        (unsigned long long)mgr->conn_id,
-        (unsigned long long)stream_id,
-        length,
-        (unsigned)req->length,
-        header_len,
-        sctx->pending_send_fin ? 1 : 0,
-        mgr->is_server ? 1 : 0);
+    // WT_LOG_INFO(
+    //     "StreamOpen+Start OK conn=%llu stream_id=%llu app_len=%d "
+    //     "wire_len=%u header_len=%zu pending_send=1 fin=%d "
+    //     "stamp=LOCAL_STREAM_OPEN_V2 is_server=%d",
+    //     (unsigned long long)mgr->conn_id,
+    //     (unsigned long long)stream_id,
+    //     length,
+    //     (unsigned)req->length,
+    //     header_len,
+    //     sctx->pending_send_fin ? 1 : 0,
+    //     mgr->is_server ? 1 : 0);
 
     /* pending_send_fin is always 0 now, so the send side stays open and the
      * slot remains eligible for reuse. Kept as a conditional because the flag
@@ -1261,12 +1261,12 @@ void wt_stream_manager_accept_stream_prefill(
         }
     }
 
-    WT_LOG_INFO(
-        "Accept peer stream conn=%llu stream_id=%llu peer_initiated=1 "
-        "prefill=%u",
-        (unsigned long long)mgr->conn_id,
-        (unsigned long long)stream_id,
-        (unsigned)sctx->recv_offset);
+    // WT_LOG_INFO(
+    //     "Accept peer stream conn=%llu stream_id=%llu peer_initiated=1 "
+    //     "prefill=%u",
+    //     (unsigned long long)mgr->conn_id,
+    //     (unsigned long long)stream_id,
+    //     (unsigned)sctx->recv_offset);
 
     /* SetCallbackHandler outside lock — safe because the slot is already
      * registered above. If SHUTDOWN_COMPLETE fires synchronously it will

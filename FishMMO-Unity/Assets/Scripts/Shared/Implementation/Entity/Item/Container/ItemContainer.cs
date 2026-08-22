@@ -325,11 +325,25 @@ namespace FishMMO.Shared
 						// Set the remaining amount to the item's stack size.
 						amount = item.Stackable.Amount;
 
-						// Add the modified items to the list.
+						// The slot that actually changed is the one holding the merged stack.
 						modifiedItems.Add(Items[i]);
-						modifiedItems.Add(item);
 
-						OnSlotUpdated?.Invoke(this, item, i);
+						/* The donor only belongs in the modified list while it still HAS a stack.
+						 * Once AddToStack has consumed it entirely its Amount is 0 and its Slot is
+						 * still -1 (it never entered this container), and every caller turns this
+						 * list straight into persistence DTOs and set-slot broadcasts — so a fully
+						 * merged donor was writing a (character_id, slot = -1, amount = 0) row on
+						 * the very common "loot one potion onto an existing stack" path, and
+						 * broadcasting a slot the client discards. */
+						if (amount > 0)
+						{
+							modifiedItems.Add(item);
+						}
+
+						/* Report the item that is now IN the slot, not the donor. Subscribers repaint
+						 * slot i from this argument, so passing the donor painted the leftover — or,
+						 * once the donor is empty, nothing at all. */
+						OnSlotUpdated?.Invoke(this, Items[i], i);
 					}
 
 					// We added the item to the container.

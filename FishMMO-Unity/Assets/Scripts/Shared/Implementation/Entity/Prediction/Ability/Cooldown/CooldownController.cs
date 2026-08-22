@@ -37,6 +37,23 @@ namespace FishMMO.Shared
 		private List<long> keysToRemove = new List<long>();
 
 		/// <summary>
+		/// Reusable ability-ID sets for <see cref="RestoreFromReconcile"/>.
+		/// </summary>
+		/// <remarks>
+		/// Preallocated because reconcile runs on every differing tick — every corrected tick of
+		/// combat — and a fresh <see cref="HashSet{T}"/> per call is garbage generated at tick rate
+		/// on the client's hottest path. Cleared on entry rather than on exit so neither can hold a
+		/// reference to an ID after the call.
+		/// </remarks>
+		private readonly HashSet<long> reconcileIDs = new HashSet<long>();
+
+		/// <summary>
+		/// Ability IDs present before a reconcile replaced them, used to tell an updated cooldown
+		/// from a newly added one. Reused for the same reason as <see cref="reconcileIDs"/>.
+		/// </summary>
+		private readonly HashSet<long> preReconcileIDs = new HashSet<long>();
+
+		/// <summary>
 		/// Cached reconcile snapshot, reused across ticks when cooldowns haven't changed.
 		/// Invalidated by <see cref="AddCooldown"/>, <see cref="RemoveCooldown"/>,
 		/// <see cref="Clear"/>, and <see cref="RestoreFromReconcile"/>.
@@ -314,6 +331,29 @@ namespace FishMMO.Shared
 
 				CooldownInstance cooldown = new CooldownInstance(startTick, durationTicks, td);
 				cooldowns[abilityID] = cooldown;
+			}
+
+			snapshotDirty = true;
+
+			/* Restored cooldowns are ANNOUNCED, not just stored. This is the relog / zone-change
+			 * path: the server hands back the bar's live cooldowns in the spawn payload, and
+			 * writing them straight into the dictionary meant nothing downstream ever heard about
+			 * them. The hotkey bar only starts its sweep when an add or update event arrives, so
+			 * after every relog the player saw no cooldown overlay at all while the server went on
+			 * refusing the casts — the worst shape this can take, because the UI actively says the
+			 * ability is ready.
+			 *
+			 * Fired after the loop so a handler cannot observe a half-filled dictionary, and gated
+			 * on ownership exactly as AddCooldown is: these events drive the LOCAL player's UI, and
+			 * every remote character's payload comes through here too. */
+			if (!base.IsOwner || ICooldownController.OnAddCooldown == null)
+			{
+				return;
+			}
+
+			foreach (KeyValuePair<long, CooldownInstance> restored in cooldowns)
+			{
+				ICooldownController.OnAddCooldown.Invoke(restored.Key, restored.Value);
 			}
 		}
 
@@ -637,23 +677,29 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Fire OnRemoveCooldown for cooldowns being removed by this reconcile.
 			// Build a set of ability IDs that exist in the reconcile snapshot;
 			// any current cooldown NOT in this set is being removed.
-			HashSet<long> reconcileIDs = null;
-			if (entries != null && entries.Length > 0)
+			reconcileIDs.Clear();
+			if (entries != null)
 			{
-				reconcileIDs = new HashSet<long>();
 				for (int i = 0; i < entries.Length; i++)
 				{
 					reconcileIDs.Add(entries[i].AbilityID);
 				}
 			}
 
+			/* What was on cooldown BEFORE this reconcile, so a restored entry can be announced as
+			 * an update rather than an add when the bar was already sweeping it. Without the
+			 * distinction a correction that merely nudges a start tick would re-fire an add on
+			 * every reconcile. */
+			preReconcileIDs.Clear();
+
 			// Fire removal events for entries being removed (before clearing)
 			foreach (long existingID in cooldowns.Keys)
 			{
-				if (reconcileIDs == null || !reconcileIDs.Contains(existingID))
+				preReconcileIDs.Add(existingID);
+
+				if (!reconcileIDs.Contains(existingID))
 				{
 					ICooldownController.OnRemoveCooldown?.Invoke(existingID);
 				}
@@ -673,6 +719,28 @@ namespace FishMMO.Shared
 					entries[i].StartTick,
 					entries[i].DurationTicks,
 					td);
+			}
+
+			/* Restored cooldowns are announced for the same reason as in Read: a reconcile that
+			 * hands back a cooldown the client had dropped left the dictionary correct and the UI
+			 * silent, because the hotkey bar's sweep is started by these events and by nothing
+			 * else. Fired after the dictionary is whole, and gated on ownership like AddCooldown —
+			 * reconcile also runs for predicted objects the local player does not own. */
+			if (!base.IsOwner)
+			{
+				return;
+			}
+
+			foreach (KeyValuePair<long, CooldownInstance> restored in cooldowns)
+			{
+				if (preReconcileIDs.Contains(restored.Key))
+				{
+					ICooldownController.OnUpdateCooldown?.Invoke(restored.Key, restored.Value);
+				}
+				else
+				{
+					ICooldownController.OnAddCooldown?.Invoke(restored.Key, restored.Value);
+				}
 			}
 		}
 	}

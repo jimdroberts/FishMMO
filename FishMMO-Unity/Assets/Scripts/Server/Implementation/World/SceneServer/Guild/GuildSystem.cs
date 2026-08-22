@@ -1067,10 +1067,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Create the guild — PersistAsync returns the new guild ID
+				/* Create the guild. PersistAsync now REPORTS a name collision rather than handing
+				 * back the id of the guild that already owns the name, so this is the authoritative
+				 * uniqueness check; the ExistsAsync above only saves a doomed insert in the common
+				 * case and cannot be relied on, being a separate round trip. */
 				DatabaseResult<long?> createResult = await guildService.PersistAsync(guildName);
 				if (!createResult.IsSuccess || !createResult.Data.HasValue)
 				{
+					GuildResultType failure = createResult.ErrorCode == DatabaseErrorCodes.AlreadyExists
+						? GuildResultType.NameAlreadyExists
+						: GuildResultType.Failed;
+
+					TryEnqueueMainThread(() =>
+					{
+						if (conn == null || !conn.IsActive) return;
+						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+						{
+							Result = failure,
+						}, true, Channel.Reliable);
+					});
 					return;
 				}
 
@@ -1085,6 +1100,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!leaderResult.IsSuccess)
 				{
 					await Log.Warning("GuildSystem", $"CreateGuildAsync leader membership persist failed (CharID={characterID}, GuildID={newGuildID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
+
+					/* Compensate. The guild row and the leader row are two independent commits —
+					 * ExecuteWriteAsync opens no transaction — so returning here left a guild with
+					 * zero members that nothing sweeps, holding its name against the unique index
+					 * for the life of the deployment. Deleting it is the only way that name ever
+					 * becomes available again. */
+					DatabaseResult cleanupResult = await guildService.DeleteAsync(newGuildID);
+					if (!cleanupResult.IsSuccess)
+					{
+						await Log.Error("GuildSystem", $"CreateGuildAsync could not remove the orphaned guild {newGuildID}; its name stays reserved: {cleanupResult.ErrorCode} - {cleanupResult.ErrorMessage}");
+					}
+
+					TryEnqueueMainThread(() =>
+					{
+						if (conn == null || !conn.IsActive) return;
+						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+						{
+							Result = GuildResultType.Failed,
+						}, true, Channel.Reliable);
+					});
 					return;
 				}
 

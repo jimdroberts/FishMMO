@@ -1,9 +1,9 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../../FishMMO-Theme.uss" />
     <Style src="UIAbilityCraft.uss" />
-    <ui:VisualElement name="craft-root" class="craft-root">
+    <ui:VisualElement name="craft-root" class="craft-root" picking-mode="Ignore">
         <ui:VisualElement name="craft-panel" class="fish-panel craft-panel">
-            <ui:VisualElement name="craft-header" class="craft-header">
+            <ui:VisualElement name="panel-header" class="craft-header">
                 <ui:Label text="Ability Crafting" class="fish-label craft-title" />
                 <ui:Button name="craft-close-btn" text="X" class="fish-button craft-close-btn" />
             </ui:VisualElement>

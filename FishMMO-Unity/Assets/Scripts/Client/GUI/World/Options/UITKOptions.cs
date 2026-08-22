@@ -85,6 +85,12 @@ namespace FishMMO.Client
 		private const string SCREEN_KEEP_NAME = "options-screen-keep-btn";
 		/// <summary>Name of the display-settings status line.</summary>
 		private const string SCREEN_STATUS_NAME = "options-screen-status";
+		/// <summary>Name of the window-snap-grid slider element in the UXML.</summary>
+		private const string SNAP_SLIDER_NAME = "ui-snap-slider";
+		/// <summary>Name of the label showing the snap grid's current value.</summary>
+		private const string SNAP_VALUE_NAME = "ui-snap-value";
+		/// <summary>Name of the button that returns every panel to its authored position.</summary>
+		private const string RESET_LAYOUT_NAME = "options-reset-layout-btn";
 
 		/// <summary>Configuration key for the VSync setting.</summary>
 		private const string VSyncKey = "VSync";
@@ -265,6 +271,12 @@ namespace FishMMO.Client
 		/// <summary>The button that started the active rebind, so it can be restored.</summary>
 		private Button activeRebindButton;
 
+		/// <summary>Slider setting the grid dragged panels snap to.</summary>
+		private Slider snapSlider;
+
+		/// <summary>Label showing the snap grid in points, or "Off".</summary>
+		private Label snapValueLabel;
+
 		/// <summary>
 		/// Ensures configuration is loaded, resolves all controls, populates choices and binds callbacks.
 		/// </summary>
@@ -292,10 +304,13 @@ namespace FishMMO.Client
 			screenRevertButton = Root.Q<Button>(SCREEN_REVERT_NAME);
 			screenKeepButton = Root.Q<Button>(SCREEN_KEEP_NAME);
 			screenStatus = Root.Q<Label>(SCREEN_STATUS_NAME);
+			snapSlider = Root.Q<Slider>(SNAP_SLIDER_NAME);
+			snapValueLabel = Root.Q<Label>(SNAP_VALUE_NAME);
 
 			InitializeVSync();
 			InitializeBrightness();
 			InitializeDisplaySettings();
+			InitializeInterfaceSettings();
 			InitializeGameplayToggles();
 			InitializeColorSettings();
 			InitializeControlsSection();
@@ -326,6 +341,12 @@ namespace FishMMO.Client
 			if (resetControlsButton != null)
 			{
 				resetControlsButton.clicked += ResetAllBindings;
+			}
+
+			Button resetLayoutButton = Root.Q<Button>(RESET_LAYOUT_NAME);
+			if (resetLayoutButton != null)
+			{
+				resetLayoutButton.clicked += ResetPanelPositions;
 			}
 		}
 
@@ -431,6 +452,12 @@ namespace FishMMO.Client
 					Configuration.GlobalSettings.Save();
 #endif
 				}
+
+				/* The configuration this panel just created is the first one to exist, and panels
+				 * can be dragged before the options screen has ever been opened — so the snap grid
+				 * may already have been read, and cached, from nothing. Drop that cache so the
+				 * next read sees the player's saved value. */
+				UITKPanelPositions.InvalidateSnapGrid();
 			}
 		}
 
@@ -488,6 +515,73 @@ namespace FishMMO.Client
 			 * duplicate that mapping. */
 			UITKThemeManager.Reload();
 			RefreshSwatches();
+		}
+
+		// ── Interface ───────────────────────────────────────────────
+
+		/// <summary>
+		/// Binds the window snap grid and the layout reset.
+		/// </summary>
+		/// <remarks>
+		/// Both settings describe the panels themselves rather than anything in the world, which
+		/// is why they are here rather than under Gameplay. The reset is the only way back from an
+		/// arrangement the player cannot fix by dragging — a panel left in a corner of a monitor
+		/// they no longer have, most obviously — so it is deliberately a plain, always-available
+		/// button rather than something that only appears when a saved layout exists.
+		/// </remarks>
+		private void InitializeInterfaceSettings()
+		{
+			if (snapSlider != null)
+			{
+				snapSlider.lowValue = 0.0f;
+				snapSlider.highValue = UITKPanelPositions.MaxSnapGridSize;
+
+				/* SetValueWithoutNotify, because assigning `value` raises the change callback —
+				 * and the callback writes to the configuration and requests a disk write. Seeding
+				 * a control from the file it writes back to is how a settings panel rewrites the
+				 * whole file every time it is opened. */
+				snapSlider.SetValueWithoutNotify(UITKPanelPositions.SnapGridSize);
+				UpdateSnapValueLabel(UITKPanelPositions.SnapGridSize);
+
+				snapSlider.RegisterValueChangedCallback((evt) =>
+				{
+					/* Whole points. A grid of 6.37 is not an alignment aid, and the value is
+					 * shown to the player as a number of points. */
+					float snapped = Mathf.Round(evt.newValue);
+
+					UITKPanelPositions.SnapGridSize = snapped;
+					UpdateSnapValueLabel(snapped);
+
+					if (!Mathf.Approximately(snapped, evt.newValue))
+					{
+						// Put the rounded value back under the handle so it cannot drift.
+						snapSlider.SetValueWithoutNotify(snapped);
+					}
+				});
+			}
+		}
+
+		/// <summary>
+		/// Writes the snap grid's value beside its slider.
+		/// </summary>
+		/// <param name="size">Grid size in panel points; zero means snapping is off.</param>
+		private void UpdateSnapValueLabel(float size)
+		{
+			if (snapValueLabel == null)
+			{
+				return;
+			}
+
+			snapValueLabel.text = size <= 0.0f ? "Off" : $"{Mathf.RoundToInt(size)} px";
+		}
+
+		/// <summary>
+		/// Returns every panel to the position its stylesheet gives it.
+		/// </summary>
+		private void ResetPanelPositions()
+		{
+			UIManager.ResetAllPanelPositions();
+			RequestSave();
 		}
 
 		// ── Gameplay ────────────────────────────────────────────────

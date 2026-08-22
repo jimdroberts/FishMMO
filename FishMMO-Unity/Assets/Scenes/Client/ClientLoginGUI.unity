@@ -797,7 +797,7 @@ MonoBehaviour:
   Document: {fileID: 685493132}
   StartOpen: 0
   IsAlwaysOpen: 0
-  CloseOnQuitToMenu: 0
+  CloseOnQuitToMenu: 1
   ReleasesCursor: 1
   CloseOnEscape: 0
   CanDrag: 0

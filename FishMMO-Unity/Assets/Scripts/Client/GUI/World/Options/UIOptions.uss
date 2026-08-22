@@ -1,4 +1,4 @@
-/*
+﻿/*
     UIOptions.uss
     Layout for the settings panel.
 */
@@ -45,6 +45,17 @@
 .options-row-field {
     flex-grow: 1;
     margin-left: 12px;
+}
+
+/*
+    Read-out beside a slider that has no numeric field of its own. Fixed width and right-aligned so
+    the slider does not resize as the number goes from "Off" to "32 px" under the player's hand.
+*/
+.options-row-value {
+    flex-shrink: 0;
+    width: 48px;
+    margin-left: 8px;
+    -unity-text-align: middle-right;
 }
 
 .options-footer {

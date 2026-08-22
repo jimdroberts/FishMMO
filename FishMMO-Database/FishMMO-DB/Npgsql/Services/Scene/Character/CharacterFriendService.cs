@@ -75,6 +75,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid Version. Version must be greater than 0.");
 			}
 
+			/* Reclaiming a soft-deleted row is unconditional, matching CharacterInventoryService:
+			 * a deleted row holds no friendship, so there is no concurrent state for the version
+			 * comparison to protect.
+			 *
+			 * Without that, re-adding a removed friend was IMPOSSIBLE, permanently. Removal writes
+			 * version = long.MaxValue (FriendSystem.RemoveFriendAsync), and every add writes the
+			 * literal 1 (FriendSystem.AddFriendAsync) — so the resurrect gate asked
+			 * `1 > long.MaxValue`, matched nothing, and the caller saw a silent failure with no
+			 * result channel to report it. The pair was dead for the life of the account. */
 			var insertResult = await ExecuteWriteAsync(async dbContext =>
 			{
 				var isActiveCharacter = await dbContext.Characters
@@ -100,7 +109,8 @@ namespace FishMMO.Database.Npgsql.Services
 						time_deleted = NULL,
 						version = EXCLUDED.version
 					WHERE
-						EXCLUDED.version > {TableName}.version";
+						{TableName}.deleted = TRUE
+						OR EXCLUDED.version > {TableName}.version";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,

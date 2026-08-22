@@ -350,6 +350,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
+			/* A caching template promises that each of its choices can be taken once, and the
+			 * promise is kept by a bit in a short — sixteen bits, and no more. An author who adds a
+			 * seventeenth choice gets no warning: GetChoiceBitIndex simply returns -1 for it and
+			 * every choice after it, so there is no bit to set and no bit to test, and the choice's
+			 * OnSelectActions — the ones that hand out items and currency — run again on every
+			 * click for the rest of time. The per-choice handler now refuses an untrackable choice,
+			 * but refusing them one at a time turns a content bug into a dialogue that silently
+			 * does nothing halfway through. Refuse the whole conversation instead, loudly, so the
+			 * template gets split or the tracking limit gets raised rather than quietly leaking. */
+			if (template.CacheDialogueChoices &&
+				template.GetTotalChoiceCount() > DialogueTemplate.MaxTrackedChoices)
+			{
+				Log.Error("InteractableSystem", $"Dialogue '{template.Name}' caches choices but has {template.GetTotalChoiceCount()} of them, and only the first {DialogueTemplate.MaxTrackedChoices} can be tracked. Every choice past that limit would be repeatable without end, so the dialogue is refused. Split the template or reduce its choice count.");
+				return;
+			}
+
 			// End any existing session for this character
 			EndDialogueSession(character);
 
@@ -534,6 +550,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				int bitIndex = template.GetChoiceBitIndex(session.CurrentNodeId, msg.ChoiceIndex);
 
+				/* An untrackable choice on a caching template is refused outright.
+				 *
+				 * GetChoiceBitIndex returns -1 both for a choice that does not exist and for one
+				 * that sits past the sixteenth in the template, where the short mask has run out of
+				 * bits. The old code read that -1 as permission: the already-taken test was skipped
+				 * because bitIndex was negative, and the bit-recording block below was skipped for
+				 * the same reason, so nothing was ever written and nothing was ever checked. Every
+				 * choice past the sixteenth on a caching template was therefore repeatable as fast
+				 * as the one-second interaction debounce allowed, granting its OnSelectActions —
+				 * items, currency — on each pass. StartDialogueSessionInternal now refuses such a
+				 * template before the conversation opens; this is the second gate, for a template
+				 * edited while a session was already live. */
+				if (template.CacheDialogueChoices && bitIndex < 0)
+				{
+					Log.Warning("InteractableSystem", $"CharID={character.ID} selected choice {msg.ChoiceIndex} at node {session.CurrentNodeId} of caching dialogue '{template.Name}', which has no trackable bit. Refused — an untracked choice on a caching template can be repeated without limit.");
+					EndDialogueSessionWithBroadcast(character);
+					return;
+				}
+
+				bool alreadyTaken = bitIndex >= 0 &&
+					(((ushort)session.ChoicesMade) & (ushort)(1 << bitIndex)) != 0;
+
 				/* A one-time choice that has already been taken is refused HERE, on the server.
 				 *
 				 * This was the hole the persistence work did not actually close. The "already
@@ -551,11 +589,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				 * tell the player, and the session is left intact so a benign race (the player
 				 * clicking twice before DialogueChoiceResultBroadcast lands) does not tear their
 				 * conversation down. */
-				if (template.CacheDialogueChoices &&
-					bitIndex >= 0 && bitIndex < DialogueTemplate.MaxTrackedChoices &&
-					(((ushort)session.ChoicesMade) & (ushort)(1 << bitIndex)) != 0)
+				if (template.CacheDialogueChoices && alreadyTaken)
 				{
 					Log.Debug("InteractableSystem", $"CharID={character.ID} re-selected an already-taken one-time choice ({msg.ChoiceIndex}) at node {session.CurrentNodeId} of '{template.Name}'. Refused.");
+					return;
+				}
+
+				/* A choice that leads back to the node it was offered on is refused a second time
+				 * within the same conversation, even when the template does not cache choices.
+				 *
+				 * CacheDialogueChoices defaults to false, and every repeat guard above is written
+				 * against it, so a non-caching template had no repeat guard at all. That is fine
+				 * for a choice that moves the conversation somewhere else — the player has to walk
+				 * the tree back round to reach it again — but a choice whose NextNodeId is its own
+				 * node redraws the same buttons the instant its actions finish. Clicking it in
+				 * place re-ran OnExitActions, OnSelectActions and the node's OnEnterActions on
+				 * every press, so a reward hung on any of the three became a faucet limited only by
+				 * how fast the player could click.
+				 *
+				 * Scoped to the session mask rather than to persistence, because a non-caching
+				 * template is explicitly saying its choices are not one-time. Leaving and
+				 * re-entering the dialogue starts a fresh mask and offers the choice again, which
+				 * is the authored behaviour; what is refused is only the unbounded loop inside one
+				 * sitting. */
+				if (!template.CacheDialogueChoices &&
+					alreadyTaken &&
+					choice.NextNodeId == session.CurrentNodeId)
+				{
+					Log.Debug("InteractableSystem", $"CharID={character.ID} re-selected self-referential choice ({msg.ChoiceIndex}) at node {session.CurrentNodeId} of '{template.Name}'. Refused for the remainder of this session.");
 					return;
 				}
 
