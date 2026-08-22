@@ -1,7 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIChatChannelPicker.uss" />
-    <ui:VisualElement name="channel-picker-root" class="channel-picker-root">
+    <ui:VisualElement name="channel-picker-root" class="channel-picker-root" picking-mode="Ignore">
         <ui:VisualElement name="channel-picker-panel" class="fish-panel channel-picker-panel">
             <ui:TextField name="channel-name-input" label="Tab Name" class="fish-input channel-name-input" />
             <ui:VisualElement name="channel-list" class="channel-list" />

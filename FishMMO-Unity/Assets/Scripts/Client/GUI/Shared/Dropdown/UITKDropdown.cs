@@ -111,13 +111,23 @@ namespace FishMMO.Client
 				dropdownMenu.style.position = Position.Absolute;
 			}
 
-			/* The root fills the panel, so leaving it pickable made UITKControl.HasFocus — which
-			 * asks the panel what is under the cursor — answer true wherever the pointer was.
-			 * OnLoseFocus is driven off that, so the "closes when the pointer moves off it"
-			 * behaviour this menu documents could never fire. Ignoring picking on the root
-			 * narrows the question to "is the pointer over the menu itself", which is the one
-			 * being asked. */
-			Root.pickingMode = PickingMode.Ignore;
+			/* The authored root fills the panel, so leaving it pickable made UITKControl.HasFocus
+			 * — which asks the panel what is under the cursor — answer true wherever the pointer
+			 * was. OnLoseFocus is driven off that, so the "closes when the pointer moves off it"
+			 * behaviour this menu documents could never fire. Ignoring picking on it narrows the
+			 * question to "is the pointer over the menu itself", which is the one being asked.
+			 *
+			 * The element is `dropdown-root`, which is Root's FIRST CHILD, not Root. Root is the
+			 * UIDocumentRootElement that UIDocument creates and clones the UXML into, and
+			 * UIDocument already sets that one to Ignore — so writing this onto Root was a no-op
+			 * against an element that was never the one being picked, and the dropdown went on
+			 * reporting focus over the whole screen. Declared in the UXML as picking-mode="Ignore"
+			 * (see UIDropdown.uxml, matching UICrosshair and UITooltip); this is the belt-and-braces
+			 * copy for a tree built some other way. */
+			if (Root.childCount > 0)
+			{
+				Root[0].pickingMode = PickingMode.Ignore;
+			}
 
 			Root.UnregisterCallback<KeyDownEvent>(OnMenuKeyDown, TrickleDown.TrickleDown);
 			Root.RegisterCallback<KeyDownEvent>(OnMenuKeyDown, TrickleDown.TrickleDown);

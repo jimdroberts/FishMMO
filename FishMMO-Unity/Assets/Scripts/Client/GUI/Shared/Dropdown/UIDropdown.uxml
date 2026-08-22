@@ -1,7 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIDropdown.uss" />
-    <ui:VisualElement name="dropdown-root" class="dropdown-root">
+    <ui:VisualElement name="dropdown-root" class="dropdown-root" picking-mode="Ignore">
         <ui:VisualElement name="dropdown-menu" class="fish-panel dropdown-menu" />
     </ui:VisualElement>
 </ui:UXML>

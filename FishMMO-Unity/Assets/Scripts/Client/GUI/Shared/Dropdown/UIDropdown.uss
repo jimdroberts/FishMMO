@@ -1,8 +1,15 @@
-/*
+﻿/*
     UIDropdown.uss
     Layout for the cursor-anchored context menu.
 */
 
+/*
+    Transparent, full-viewport wrapper around the floating menu, so it must never be picked.
+    picking-mode="Ignore" is set on it in the UXML (it is a UXML attribute, not a USS property).
+    A pickable root here reports focus wherever the pointer is, which both kills the
+    close-when-the-pointer-leaves behaviour driven off UITKControl.OnLoseFocus and swallows every
+    click meant for the panels underneath. Children stay pickable; picking is not inherited.
+*/
 .dropdown-root {
     flex-grow: 1;
 }

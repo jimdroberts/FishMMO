@@ -143,6 +143,15 @@ namespace FishMMO.Client
 			SetStatus(null);
 			ApplyEscapeHatch();
 
+			/* Unsubscribe first. OnStarting runs again on every visual tree rebuild — see the
+			 * button wiring above, which is written as an assignment for the same reason — and
+			 * this is a STATIC event, so unlike the elements it does not get thrown away with the
+			 * tree. A bare += therefore added one more handler per hide/show, and this overlay is
+			 * hidden and re-shown on every scene transition and every reconnect. OnDestroying
+			 * removes exactly one, so the rest outlive the panel: each surviving copy re-runs
+			 * RefreshVisibility and SetProgress on every progress tick for the rest of the
+			 * session. The handler is a method group rather than a lambda so the -= matches. */
+			AddressableLoadProcessor.OnProgressUpdate -= OnProgressUpdate;
 			AddressableLoadProcessor.OnProgressUpdate += OnProgressUpdate;
 
 			SetLoadingImage(DefaultLoadingScreenSprite);

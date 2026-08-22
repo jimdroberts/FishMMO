@@ -1,8 +1,17 @@
-/*
+﻿/*
     UIMinimap.uss
     Anchors the minimap to the top-right corner of the screen.
 */
 
+/*
+    Transparent, full-viewport wrapper: it exists only to anchor the frame to the corner, so it must
+    never be picked. picking-mode="Ignore" is set on it in the UXML (it is a UXML attribute, not a
+    USS property). Without that, this root is the topmost pickable element over the whole screen for
+    every HUD panel at the same sorting order, and UITKControl.HasFocus — which asks the panel what
+    is under the cursor — answers true everywhere. Everything gated on UIManager.ControlHasFocus()
+    then stops: world/target clicks, the Interact action, hotkey ability activation and dropping a
+    dragged item into the world. Children stay pickable; picking is not inherited.
+*/
 .minimap-root {
     flex-grow: 1;
     align-items: flex-end;
