@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -15,6 +15,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKCharacterSelect : UITKControl
 	{
+		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
 		/// <summary>
 		/// The name of the connect button in the UI.
 		/// </summary>
@@ -195,7 +202,7 @@ namespace FishMMO.Client
 
 			// Enter plays the highlighted character, Escape goes back to the login screen.
 			// Enter observes the same lock as the Connect button it mirrors; see LoginKeys.Attach.
-			LoginKeys.Attach(Root, OnClick_SelectCharacter, OnClick_QuitToLogin, () => !replyGuard.IsPending);
+			LoginKeys.Attach(this, Root, OnClick_SelectCharacter, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, connectButton, createButton, deleteButton, refreshButton, quitToLoginButton, quitButton);
 		}
 

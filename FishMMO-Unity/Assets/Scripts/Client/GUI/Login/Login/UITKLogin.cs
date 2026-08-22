@@ -23,6 +23,13 @@ namespace FishMMO.Client
 	public class UITKLogin : UITKControl
 	{
 		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
+		/// <summary>
 		/// The name of the identifier TextField in the UI — a username <b>or</b> an email address.
 		/// </summary>
 		/// <remarks>
@@ -169,7 +176,7 @@ namespace FishMMO.Client
 			 * something destructive, because this is the screen the rest of the flow escapes back
 			 * TO and there is nothing above it to close. */
 			// Enter observes the same lock as the Sign In button it mirrors; see LoginKeys.Attach.
-			LoginKeys.Attach(Root, OnClick_Login, OnEscape_ClearForm, () => !replyGuard.IsPending);
+			LoginKeys.Attach(this, Root, OnClick_Login, OnEscape_ClearForm, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, username, password, signInButton, registerButton, optionsButton, quitButton);
 		}
 

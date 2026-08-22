@@ -51,7 +51,7 @@ namespace FishMMO.Client
 			 * because UIManager.CloseNext would only Hide() it and leave the reconnect running
 			 * behind a screen the player can no longer see — so the key is wired here instead and
 			 * routed through the same handler the button uses. */
-			LoginKeys.Attach(Root, onSubmit: null, onCancel: OnCancelClicked);
+			LoginKeys.Attach(this, Root, onSubmit: null, onCancel: OnCancelClicked);
 		}
 
 		/// <summary>

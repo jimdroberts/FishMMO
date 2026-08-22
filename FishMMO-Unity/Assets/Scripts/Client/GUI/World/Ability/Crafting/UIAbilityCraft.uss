@@ -1,8 +1,16 @@
-/*
+﻿/*
     UIAbilityCraft.uss
     Layout only — colours come from FishMMO-Theme.uss (.fish-panel, .fish-label, .fish-button, .fish-slot).
 */
 
+/*
+    Transparent, full-viewport wrapper that centres the window. It must never be picked:
+    picking-mode="Ignore" is set on it in the UXML (a UXML attribute, not a USS property).
+    This panel has no scrim, so a pickable root here is an invisible click blocker over the whole
+    screen — every other window and the entire HUD stop responding while the craft window is open,
+    and UIManager.ControlHasFocus() reports true everywhere, which also kills world/target clicks
+    and the Interact action. Children stay pickable; picking is not inherited.
+*/
 .craft-root {
     flex-grow: 1;
     align-items: center;

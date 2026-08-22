@@ -57,6 +57,24 @@
                                class="fish-button options-reset-btn" />
                 </ui:VisualElement>
 
+                <!-- ── Interface ────────────────────────────────── -->
+                <!--
+                    Window layout. The snap grid rounds a dragged panel onto a lattice so two
+                    windows placed side by side actually line up; Reset returns every panel to the
+                    position its stylesheet gives it, which is the only way back from a panel left
+                    on a monitor that is no longer attached.
+                -->
+                <ui:Label text="INTERFACE" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Window Snap Grid" class="fish-label options-row-label" />
+                    <ui:Slider name="ui-snap-slider" low-value="0" high-value="32" class="options-row-field" />
+                    <ui:Label name="ui-snap-value" text="8 px" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="options-reset-layout-btn" text="Reset Window Positions"
+                               class="fish-button options-reset-btn" />
+                </ui:VisualElement>
+
                 <!-- ── Gameplay ─────────────────────────────────── -->
                 <!-- Rows are built by UITKOptions from its GameplayToggles table. -->
                 <ui:Label text="GAMEPLAY" class="fish-attr-category options-section" />

@@ -1,7 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIInspect.uss" />
-    <ui:VisualElement name="inspect-root" class="inspect-root">
+    <ui:VisualElement name="inspect-root" class="inspect-root" picking-mode="Ignore">
         <ui:VisualElement name="inspect-panel" class="fish-panel inspect-panel">
             <ui:VisualElement name="panel-header" class="fish-panel__header inspect-header">
                 <ui:VisualElement class="fish-panel__icon inspect-header__icon" />

@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -13,6 +13,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKServerSelect : UITKControl
 	{
+		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
 		/// <summary>
 		/// The name of the connect button in the UI.
 		/// </summary>
@@ -172,7 +179,7 @@ namespace FishMMO.Client
 
 			// Enter connects to the highlighted world, Escape goes back to the login screen.
 			// Enter observes the same lock as the Connect button it mirrors; see LoginKeys.Attach.
-			LoginKeys.Attach(Root, OnClick_ConnectToServer, OnClick_QuitToLogin, () => !replyGuard.IsPending);
+			LoginKeys.Attach(this, Root, OnClick_ConnectToServer, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, connectButton, refreshButton, quitToLoginButton, quitButton);
 		}
 

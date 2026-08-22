@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,6 +15,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UITKCharacterCreate : UITKControl
 	{
+		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
 		/// <summary>
 		/// The name of the create-submit button in the UI.
 		/// </summary>
@@ -143,10 +150,20 @@ namespace FishMMO.Client
 				createButton.clicked += OnClick_CreateCharacter;
 			}
 
+			/* Back, not quit-to-login. This button is labelled "Back" and sits beside a separate
+			 * "Quit" — and Escape on this same screen has always gone to the character list, with
+			 * a comment below saying that is what Back means here. The two disagreed: the button
+			 * called Client.QuitToLogin(), which tears the whole session down, so a player who
+			 * changed their mind about creating a character was logged out and landed back on the
+			 * sign-in screen. They now share one handler, so they cannot drift apart again.
+			 *
+			 * This is the one place the UI Toolkit panels deliberately do NOT reproduce the UGUI
+			 * behaviour: the old CharacterCreate "Back" button was wired to OnClick_QuitToLogin in
+			 * the scene. Point this at OnClick_QuitToLogin to restore that exactly. */
 			Button quitToLoginButton = Root.Q<Button>(QUIT_LOGIN_BUTTON_NAME);
 			if (quitToLoginButton != null)
 			{
-				quitToLoginButton.clicked += OnClick_QuitToLogin;
+				quitToLoginButton.clicked += OnClick_Back;
 			}
 
 			Button quitButton = Root.Q<Button>(QUIT_BUTTON_NAME);
@@ -156,22 +173,24 @@ namespace FishMMO.Client
 			}
 
 			// Enter creates, Escape goes back to the character list rather than to login — Back
-			// on this screen means "I changed my mind about creating", not "log me out".
+			// on this screen means "I changed my mind about creating", not "log me out". Escape
+			// and the Back button share OnClick_Back for exactly that reason.
 			// Enter observes the same lock as the Create button it mirrors; see LoginKeys.Attach.
-			LoginKeys.Attach(Root, OnClick_CreateCharacter, OnEscape_BackToCharacterSelect, () => !replyGuard.IsPending);
+			LoginKeys.Attach(this, Root, OnClick_CreateCharacter, OnClick_Back, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, nameField, raceDropdown, modelDropdown, locationDropdown, createButton, quitToLoginButton, quitButton);
 		}
 
 		/// <summary>
-		/// Returns to the character list without tearing the session down.
+		/// Returns to the character list without tearing the session down. Bound to both the Back
+		/// button and Escape.
 		/// </summary>
 		/// <remarks>
-		/// Unlocking is not cosmetic here. Leaving on Escape while a creation was in flight left
-		/// the reply guard armed, and the guard's expiry calls <see cref="UITKControl.Show"/> on
-		/// this panel — so half a minute after the player had moved on, the character-create form
-		/// reappeared over the character list, the world list, or the game itself.
+		/// Unlocking is not cosmetic here. Leaving while a creation was in flight left the reply
+		/// guard armed, and the guard's expiry calls <see cref="UITKControl.Show"/> on this panel —
+		/// so half a minute after the player had moved on, the character-create form reappeared
+		/// over the character list, the world list, or the game itself.
 		/// </remarks>
-		private void OnEscape_BackToCharacterSelect()
+		public void OnClick_Back()
 		{
 			SetCreateButtonLocked(false);
 

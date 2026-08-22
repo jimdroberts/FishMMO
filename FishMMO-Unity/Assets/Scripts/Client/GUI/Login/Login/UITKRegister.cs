@@ -22,6 +22,13 @@ namespace FishMMO.Client
 	public class UITKRegister : UITKControl
 	{
 		/// <summary>
+		/// Full-screen forms are not windows: there is nowhere to drag them to.
+		/// </summary>
+		/// <remarks>See <see cref="UITKControl.CanDrag"/>, which defaults every
+		/// <see cref="UITKPanelLayer.Window"/> panel to draggable.</remarks>
+		protected override bool CanDrag => false;
+
+		/// <summary>
 		/// The name of the username TextField in the UI.
 		/// </summary>
 		private const string USERNAME_NAME = "register-username";
@@ -152,7 +159,7 @@ namespace FishMMO.Client
 
 			// Enter registers, Escape goes back to the sign-in screen. Enter observes the same
 			// lock as the Register button it mirrors; see LoginKeys.Attach.
-			LoginKeys.Attach(Root, OnClick_Register, OnClick_QuitToLogin, () => !replyGuard.IsPending);
+			LoginKeys.Attach(this, Root, OnClick_Register, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, registerButton, quitToLoginButton);
 		}
 

@@ -346,6 +346,37 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Puts every panel back where its stylesheet places it and forgets the player's saved
+		/// arrangement.
+		/// </summary>
+		/// <remarks>
+		/// The escape hatch for a layout the player cannot fix by dragging — a panel moved to a
+		/// corner of a monitor they no longer have, or an arrangement they simply want back.
+		/// Offered from the options screen.
+		/// <para>
+		/// Isolated per panel for the reason <see cref="SetCharacter"/> documents: this is a
+		/// recovery action, and one panel that throws on the way must not stop the rest from
+		/// being recovered.
+		/// </para>
+		/// </remarks>
+		public static void ResetAllPanelPositions()
+		{
+			foreach (KeyValuePair<string, UITKControl> kvp in controls)
+			{
+				try
+				{
+					kvp.Value.ResetPosition();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"ResetPosition failed for control '{kvp.Key}'.", ex);
+				}
+			}
+
+			UITKPanelPositions.Flush();
+		}
+
+		/// <summary>
 		/// Checks if any control has focus, optionally ignoring a specific control.
 		/// </summary>
 		/// <param name="ignore">An optional control to ignore in the check.</param>
@@ -414,6 +445,53 @@ namespace FishMMO.Client
 					return true;
 				}
 			}
+			return false;
+		}
+
+		/// <summary>
+		/// True when another visible, input-accepting panel is drawn above <paramref name="control"/>.
+		/// </summary>
+		/// <param name="control">The panel asking whether it is still the one in front.</param>
+		/// <returns>True when something covers it.</returns>
+		/// <remarks>
+		/// This is the guard the login-flow keyboard shortcuts sit behind. UI Toolkit routes a key
+		/// press to the focused element and up its own ancestors only, so a panel normally cannot
+		/// see keys meant for another one — but nothing moves focus when a panel opens <i>over</i>
+		/// another. Opening Options from the sign-in screen is the case that bit: Options draws on
+		/// top and takes no focus, so the caret stayed in the password field behind it and pressing
+		/// Enter signed the player in through a panel they could no longer see.
+		/// <para>
+		/// Decided on draw order rather than on layer so that two panels sharing a layer — which
+		/// <see cref="UITKControl.BringToFront"/> separates by a focus offset — still resolve to
+		/// exactly one front-most panel. Panels that do not accept pointer input are ignored; see
+		/// <see cref="UITKControl.AcceptsPointerInput"/>.
+		/// </para>
+		/// </remarks>
+		public static bool IsCoveredByHigherPanel(UITKControl control)
+		{
+			if (control == null || control.Document == null)
+			{
+				return false;
+			}
+
+			float order = control.SortingOrder;
+
+			foreach (UITKControl other in controls.Values)
+			{
+				if (other == null || ReferenceEquals(other, control))
+				{
+					continue;
+				}
+				if (!other.Visible || other.Document == null)
+				{
+					continue;
+				}
+				if (other.SortingOrder > order && other.AcceptsPointerInput)
+				{
+					return true;
+				}
+			}
+
 			return false;
 		}
 

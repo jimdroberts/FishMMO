@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -34,6 +34,8 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Wires Enter and Escape onto a panel root.
 		/// </summary>
+		/// <param name="owner">The panel these keys belong to, used to tell whether it is still the
+		/// front-most thing on screen. Null disables that check.</param>
 		/// <param name="root">The panel root to capture on. Null is tolerated.</param>
 		/// <param name="onSubmit">Invoked on Return/KeypadEnter. May be null.</param>
 		/// <param name="onCancel">Invoked on Escape. May be null.</param>
@@ -50,7 +52,7 @@ namespace FishMMO.Client
 		/// message about it was dropped on the floor. Escape is deliberately not gated: backing
 		/// out of a request that is in flight is the one thing that must always work.
 		/// </remarks>
-		public static void Attach(VisualElement root, Action onSubmit, Action onCancel, Func<bool> canSubmit = null)
+		public static void Attach(UITKControl owner, VisualElement root, Action onSubmit, Action onCancel, Func<bool> canSubmit = null)
 		{
 			if (root == null)
 			{
@@ -64,7 +66,7 @@ namespace FishMMO.Client
 			// Replacing rather than accumulating: this is re-attached on every tree rebuild.
 			root.UnregisterCallback<KeyDownEvent>(Dispatch, TrickleDown.TrickleDown);
 			handlers.Remove(root);
-			handlers.Add(root, new Binding(onSubmit, onCancel, canSubmit));
+			handlers.Add(root, new Binding(owner, onSubmit, onCancel, canSubmit));
 			root.RegisterCallback<KeyDownEvent>(Dispatch, TrickleDown.TrickleDown);
 		}
 
@@ -126,12 +128,16 @@ namespace FishMMO.Client
 		/// </summary>
 		private sealed class Binding
 		{
-			public Binding(Action submit, Action cancel, Func<bool> canSubmit)
+			public Binding(UITKControl owner, Action submit, Action cancel, Func<bool> canSubmit)
 			{
+				Owner = owner;
 				Submit = submit;
 				Cancel = cancel;
 				CanSubmit = canSubmit;
 			}
+
+			/// <summary>The panel these keys belong to. May be null.</summary>
+			public readonly UITKControl Owner;
 
 			public readonly Action Submit;
 			public readonly Action Cancel;
@@ -168,6 +174,20 @@ namespace FishMMO.Client
 			if (!(evt.currentTarget is VisualElement root) ||
 				!handlers.TryGetValue(root, out Binding binding) ||
 				binding == null)
+			{
+				return;
+			}
+
+			/* Refuse while something is drawn over this panel. UI Toolkit dispatches a key press to
+			 * the focused element and up ITS ancestors, so a panel normally only sees its own keys
+			 * — but opening a panel over another one does not move focus, and Options in particular
+			 * takes none at all. The caret therefore stayed in the sign-in form behind it, and
+			 * Enter signed the player in through a screen they could no longer see. Escape is
+			 * refused for the same reason: it would clear the form behind the panel the player
+			 * actually meant to close, and UIManager.CloseNext already owns Escape for the panel
+			 * on top. */
+			if (binding.Owner != null &&
+				(!binding.Owner.Visible || UIManager.IsCoveredByHigherPanel(binding.Owner)))
 			{
 				return;
 			}
