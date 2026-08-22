@@ -38,5 +38,13 @@ namespace FishMMO.Client.Security
 		/// manifests from the API. Empty string disables runtime updates.
 		/// </summary>
 		public const string ManifestPublicKeyBase64 = "";
+
+		/// <summary>
+		/// Ed25519 public key (base64) for verifying the signed version manifest
+		/// served by /latest_version. Empty string means signing is not deployed:
+		/// the patch SHA-256 is then only as trustworthy as the API gateway, which
+		/// HttpPatchServerService reports at Error level in a release build.
+		/// </summary>
+		public const string VersionManifestPublicKeyBase64 = "";
 	}
 }
