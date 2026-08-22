@@ -119,10 +119,8 @@ namespace FishMMO.Client
 				Show();
 
 				// Already visible: Show() is a no-op and would not have called OnAfterShow.
+				// ApplyState is also what claims the cursor for the Cancel button.
 				ApplyState();
-
-				// Enable mouse mode for user interaction during reconnect.
-				PlayerInputController.MouseMode = true;
 			}
 			else
 			{
@@ -164,6 +162,49 @@ namespace FishMMO.Client
 			{
 				cancelButton.style.display = DisplayStyle.Flex;
 			}
+
+			/* Claim the cursor for as long as this panel is up, rather than merely switching
+			 * MouseMode on. The panel is authored ReleasesCursor: 0 and setting the mode directly
+			 * did not survive a frame: PlayerInputController.HandleAutoDismiss recaptures the
+			 * cursor whenever no VISIBLE panel claims it through ReleasesCursor, so a reconnect
+			 * that began during gameplay — where the cursor is locked — put a Cancel button on
+			 * screen that the player could not reach, on the one panel whose entire purpose is to
+			 * offer a way out. Cleared again in Hide(). */
+			if (!ReleasesCursor)
+			{
+				ReleasesCursor = true;
+			}
+
+			if (!PlayerInputController.MouseMode)
+			{
+				PlayerInputController.MouseMode = true;
+			}
+		}
+
+		/// <summary>
+		/// Hides the panel and hands the cursor back.
+		/// </summary>
+		/// <remarks>
+		/// Overrides <c>Hide(bool)</c>, not <c>Hide()</c>. <c>Hide()</c> is non-virtual and only
+		/// forwards here, so this is the one place the cursor claim can be released where every
+		/// caller — the cancel button, the reconnect outcome handlers and the quit-to-login
+		/// teardown, which calls the bool form directly — reaches it. Leaving the claim set would
+		/// hold the cursor released for the rest of the session, because
+		/// <c>HandleAutoDismiss</c> asks whether any panel still wants it and this one would keep
+		/// saying yes.
+		/// </remarks>
+		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
+		public override void Hide(bool overrideIsAlwaysOpen)
+		{
+			base.Hide(overrideIsAlwaysOpen);
+
+			if (overrideIsAlwaysOpen || Document == null)
+			{
+				// The base refused the hide; the panel is still up and still needs the cursor.
+				return;
+			}
+
+			ReleasesCursor = false;
 		}
 
 		/// <inheritdoc/>

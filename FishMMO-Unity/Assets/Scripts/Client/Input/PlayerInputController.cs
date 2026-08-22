@@ -739,9 +739,34 @@ namespace FishMMO.Client
 		private static void LoadBindingOverrides()
 		{
 			if (Configuration.GlobalSettings == null || Controls == null) return;
-			if (Configuration.GlobalSettings.TryGetString("InputBindingOverrides", out string json)
-				&& !string.IsNullOrEmpty(json))
+			if (!Configuration.GlobalSettings.TryGetString("InputBindingOverrides", out string json)
+				|| string.IsNullOrEmpty(json))
+			{
+				return;
+			}
+
+			/* The overrides live as one value in a plain-text config file the player can edit and
+			 * that a crash can truncate mid-write. LoadBindingOverridesFromJson throws on anything
+			 * malformed, and this runs unguarded from Initialize() during world entry — so a
+			 * single corrupt character aborted input initialisation entirely, leaving the player
+			 * in the world with no controls at all. Worse, the only route to "Reset All Keys" is
+			 * the Options panel, which needs working input to reach: the failure was
+			 * unrecoverable in-game and could only be fixed by hand-editing the file.
+			 *
+			 * Dropping the key and continuing costs the player their rebinds once. That is a far
+			 * better outcome than a session that cannot be played, and it is self-correcting —
+			 * the next rebind writes a clean value back. */
+			try
+			{
 				Controls.LoadBindingOverridesFromJson(json);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("PlayerInputController",
+					"Saved keybinding overrides could not be parsed and have been discarded; " +
+					"the default bindings are in effect.", ex);
+				Configuration.GlobalSettings.Set("InputBindingOverrides", string.Empty);
+			}
 		}
 	}
 }

@@ -3,6 +3,20 @@
     <Style src="UIColorPicker.uss" />
     <ui:VisualElement name="colorpicker-root" class="colorpicker-root">
         <ui:VisualElement name="colorpicker-panel" class="fish-panel colorpicker-panel">
+
+            <!--
+                A drag handle, for the same reason UIDialogBox has one. This panel is authored
+                CanDrag, and with no header UITKControl falls back to making the WHOLE panel the
+                handle - so a press anywhere started a window drag, and the seven sliders, seven
+                integer fields and the hue-picking square all moved the window instead of doing
+                their own job. Confining the handle to a header gives the controls their presses
+                back.
+            -->
+            <ui:VisualElement name="panel-header" class="fish-panel__header colorpicker-header">
+                <ui:VisualElement class="fish-panel__icon colorpicker-header__icon" />
+                <ui:Label name="colorpicker-title" text="COLOR" class="fish-panel__title" />
+            </ui:VisualElement>
+
             <ui:VisualElement name="colorpicker-top" class="colorpicker-top">
                 <ui:VisualElement name="hsv-texture" class="colorpicker-hsv">
                     <ui:VisualElement name="hsv-cursor" class="colorpicker-cursor" picking-mode="Ignore" />

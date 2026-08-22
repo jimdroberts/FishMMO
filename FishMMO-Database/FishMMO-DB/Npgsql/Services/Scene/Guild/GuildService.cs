@@ -100,10 +100,7 @@ namespace FishMMO.Database.Npgsql.Services
 						DO NOTHING
 						RETURNING id
 					)
-					SELECT COALESCE(
-						(SELECT id FROM inserted),
-						(SELECT id FROM {TableName} WHERE name_lowercase = {{2}})
-					)::bigint AS value";
+					SELECT COALESCE((SELECT id FROM inserted), 0)::bigint AS value";
 
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
@@ -111,8 +108,29 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { name, now, nameLowercase },
 					cancellationToken).ConfigureAwait(false);
 
+				/* Zero means ON CONFLICT DO NOTHING matched — the name is taken and this call
+				 * inserted nothing.
+				 *
+				 * This used to COALESCE to the id of the guild that already owned the name, and
+				 * hand it back as though it had just been created. The caller's only protection
+				 * was a separate ExistsAsync round trip, which is a plain time-of-check /
+				 * time-of-use window: two founders racing on the same name both passed the
+				 * check, and the loser was then written into the WINNER'S guild at the default
+				 * leader rank order — full leader permissions over a guild they had never seen.
+				 * Reporting the conflict is what makes that unrepresentable. */
+				if (id <= 0)
+				{
+					return null;
+				}
+
 				return (long?)id;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			// A successful call that inserted nothing is a name collision, not a success.
+			if (result.IsSuccess && !result.Data.HasValue)
+			{
+				return DatabaseResult<long?>.Failure(DatabaseErrorCodes.AlreadyExists, "A guild with that name already exists.");
+			}
 			return result;
 		}
 

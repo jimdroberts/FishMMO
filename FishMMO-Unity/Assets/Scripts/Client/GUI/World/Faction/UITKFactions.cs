@@ -204,6 +204,16 @@ namespace FishMMO.Client
 		/// <param name="faction">The faction data.</param>
 		public void FactionController_OnUpdateFaction(ICharacter character, Faction faction)
 		{
+			/* This is a STATIC event: it fires for every character whose faction state changes,
+			 * including every remote player whose FactionController reads its spawn payload as
+			 * they come into observer range. Rows are keyed by faction template ID, so without
+			 * this test walking past a stranger overwrote the local player's standings with
+			 * theirs — a visible corruption of your own panel, and a disclosure of another
+			 * player's exact reputation numbers through your own UI. */
+			if (character == null || !ReferenceEquals(character, Character))
+			{
+				return;
+			}
 			if (faction == null || faction.Template == null || list == null)
 			{
 				return;

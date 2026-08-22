@@ -121,6 +121,31 @@ namespace FishMMO.Client
 		private CharacterRow selectedCharacter;
 
 		/// <summary>
+		/// The account's characters as the server last described them.
+		/// </summary>
+		/// <remarks>
+		/// The rows used to be the only record of what the server had sent, and rows do not
+		/// survive this panel. It is authored <c>StartOpen: 0</c>, so on the first login it has no
+		/// visual tree at all when the list arrives and <see cref="CreateCharacterRow"/> dropped
+		/// every character on the floor — the player reached an empty character screen with a
+		/// Create button and no explanation. On later arrivals the handler hid the panel first,
+		/// which disables the UIDocument and discards the tree, built the rows into that discarded
+		/// tree, and then showed the panel again — re-cloning the UXML and its empty list.
+		/// <para>
+		/// Holding the characters here makes the rows a rendering of state rather than the state
+		/// itself, so <see cref="RebuildCharacterRows"/> can run from
+		/// <see cref="OnAfterShow"/>/<see cref="OnAfterStarting"/> against whatever tree is
+		/// actually on screen. See <see cref="UITKControl.OnAfterShow"/>.
+		/// </para>
+		/// </remarks>
+		private readonly List<CharacterDetails> characters = new List<CharacterDetails>();
+
+		/// <summary>
+		/// Name of the character the player had highlighted, so the highlight survives a rebuild.
+		/// </summary>
+		private string selectedCharacterName;
+
+		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -169,7 +194,8 @@ namespace FishMMO.Client
 			}
 
 			// Enter plays the highlighted character, Escape goes back to the login screen.
-			LoginKeys.Attach(Root, OnClick_SelectCharacter, OnClick_QuitToLogin);
+			// Enter observes the same lock as the Connect button it mirrors; see LoginKeys.Attach.
+			LoginKeys.Attach(Root, OnClick_SelectCharacter, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, connectButton, createButton, deleteButton, refreshButton, quitToLoginButton, quitButton);
 		}
 
@@ -275,9 +301,23 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Removes all character rows and clears the character list.
+		/// Forgets the account's characters and removes every row.
 		/// </summary>
 		public void DestroyCharacterList()
+		{
+			ClearCharacterRows();
+			characters.Clear();
+			selectedCharacterName = null;
+		}
+
+		/// <summary>
+		/// Removes the row elements without forgetting the characters they describe.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="DestroyCharacterList"/> because a tree rebuild throws the rows
+		/// away and must not throw the account's characters away with them.
+		/// </remarks>
+		private void ClearCharacterRows()
 		{
 			for (int i = 0; i < characterList.Count; ++i)
 			{
@@ -285,6 +325,54 @@ namespace FishMMO.Client
 			}
 			characterList.Clear();
 			selectedCharacter = null;
+		}
+
+		/// <summary>
+		/// Renders <see cref="characters"/> into whatever visual tree is currently on screen.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent, and a no-op while there is no tree to build into — the panel is shown
+		/// later and this runs again from <see cref="OnAfterStarting"/>.
+		/// </remarks>
+		private void RebuildCharacterRows()
+		{
+			if (characterListContainer == null)
+			{
+				return;
+			}
+
+			ClearCharacterRows();
+
+			for (int i = 0; i < characters.Count; ++i)
+			{
+				CreateCharacterRow(characters[i]);
+			}
+
+			RestoreSelection();
+		}
+
+		/// <summary>
+		/// Re-highlights the row the player had chosen, if it is still in the list.
+		/// </summary>
+		private void RestoreSelection()
+		{
+			if (string.IsNullOrEmpty(selectedCharacterName))
+			{
+				return;
+			}
+
+			for (int i = 0; i < characterList.Count; ++i)
+			{
+				if (characterList[i].Details != null &&
+					characterList[i].Details.CharacterName == selectedCharacterName)
+				{
+					OnCharacterSelected(characterList[i]);
+					return;
+				}
+			}
+
+			// The character it named is gone — deleted, or absent from a fresher list.
+			selectedCharacterName = null;
 		}
 
 		/// <summary>
@@ -299,24 +387,21 @@ namespace FishMMO.Client
 			SetStatus(null);
 			SetRefreshLocked(false);
 
-			Hide();
+			/* State first, rows second, and no Hide() in between. This handler used to hide the
+			 * panel, build the rows, and let the post-processing coroutine show it again — which
+			 * built every row into a visual tree that Hide() had already discarded, so the player
+			 * was shown a freshly cloned, empty list. See the remarks on `characters`. */
+			DestroyCharacterList();
 
 			if (msg.Characters != null)
 			{
-				DestroyCharacterList();
-
-				// No characters were sent.
-				if (msg.Characters.Length < 1)
-				{
-					OnCharacterListReady();
-					return;
-				}
-
 				for (int i = 0; i < msg.Characters.Length; ++i)
 				{
-					CreateCharacterRow(msg.Characters[i]);
+					characters.Add(msg.Characters[i]);
 				}
 			}
+
+			RebuildCharacterRows();
 
 			OnCharacterListReady();
 		}
@@ -375,7 +460,30 @@ namespace FishMMO.Client
 			processCharacterListRoutine = null;
 
 			OnCharacterListEnd?.Invoke();
-			Show();
+
+			/* Only if this screen is still the one the player is on. A list can arrive at any
+			 * time — the refresh button, a second push from the server, a reply that overtook a
+			 * quit — and showing unconditionally put the character list on top of the character
+			 * the player was in the middle of creating. The rows are already built, so the list
+			 * is correct whenever this panel does come back. */
+			if (!AnotherPanelOwnsTheScreen())
+			{
+				Show();
+			}
+		}
+
+		/// <summary>
+		/// Whether a panel downstream of this one currently owns the screen.
+		/// </summary>
+		/// <remarks>
+		/// Both of these are reached <i>from</i> this screen and replace it: character creation is
+		/// a form the player is filling in, and the world list is the next step after a selection
+		/// that has already succeeded. Neither should be covered by a list arriving behind it.
+		/// </remarks>
+		private bool AnotherPanelOwnsTheScreen()
+		{
+			return (UIManager.TryGetTK("UICharacterCreate", out UITKControl characterCreate) && characterCreate.Visible) ||
+				(UIManager.TryGetTK("UIServerSelect", out UITKControl serverSelect) && serverSelect.Visible);
 		}
 
 		/// <summary>
@@ -392,7 +500,13 @@ namespace FishMMO.Client
 				SceneName = msg.SceneName,
 				RaceTemplateID = msg.RaceTemplateID,
 			};
-			CreateCharacterRow(details);
+
+			/* Into the model, not straight into the tree. This broadcast arrives while the
+			 * character-create panel is the one on screen, so the row would be built into a tree
+			 * this panel discards on its way back — and then rebuilt from a model that had never
+			 * heard of the new character. */
+			characters.Add(details);
+			RebuildCharacterRows();
 		}
 
 		/// <summary>
@@ -443,21 +557,35 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterDeleteBroadcastReceived(CharacterDeleteBroadcast msg, Channel channel)
 		{
-			// Remove the character from our characters list.
-			for (int i = characterList.Count - 1; i >= 0; --i)
+			SetDeleteButtonLocked(false);
+
+			/* An empty name is how the server reports a delete that failed — see
+			 * CharacterSelectSystem.SendDeleteFailure. It matches no row, so the loop below simply
+			 * found nothing and the panel said nothing at all: the character stayed in the list,
+			 * the button came back, and the player was left to guess whether the click had
+			 * registered. */
+			if (string.IsNullOrEmpty(msg.CharacterName))
 			{
-				if (characterList[i].Details.CharacterName == msg.CharacterName)
+				LoginNotice.Show("The character could not be deleted. Please try again.");
+				return;
+			}
+
+			// Remove the character from our characters list.
+			for (int i = characters.Count - 1; i >= 0; --i)
+			{
+				if (characters[i] != null &&
+					characters[i].CharacterName == msg.CharacterName)
 				{
-					if (selectedCharacter == characterList[i])
-					{
-						selectedCharacter = null;
-					}
-					characterList[i].Root.RemoveFromHierarchy();
-					characterList.RemoveAt(i);
+					characters.RemoveAt(i);
 				}
 			}
 
-			SetDeleteButtonLocked(false);
+			if (selectedCharacterName == msg.CharacterName)
+			{
+				selectedCharacterName = null;
+			}
+
+			RebuildCharacterRows();
 		}
 
 		/// <summary>
@@ -518,6 +646,9 @@ namespace FishMMO.Client
 			{
 				selectedCharacter.Root.AddToClassList(CHARACTER_ROW_SELECTED_CLASS);
 			}
+
+			// By name, because the row object does not survive a tree rebuild. See RestoreSelection.
+			selectedCharacterName = selectedCharacter?.Details?.CharacterName;
 		}
 
 		/// <summary>
@@ -549,16 +680,27 @@ namespace FishMMO.Client
 				selectedCharacter != null &&
 				selectedCharacter.Details != null)
 			{
+				/* Captured now, read later. The confirmation callback used to reach back into
+				 * `selectedCharacter`, which is a live reference to a row — and rows are rebuilt
+				 * whenever a list arrives or the visual tree is replaced. A refresh, a fresh push
+				 * from the server or a hide/show between opening the dialog and pressing Confirm
+				 * therefore either nulled it (a NullReferenceException inside the callback, with
+				 * the delete button left locked) or pointed it at whichever character now occupies
+				 * that slot — deleting the wrong one, irrecoverably, on a Yes the player gave for
+				 * a different question. */
+				string characterName = selectedCharacter.Details.CharacterName;
+
 				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox tooltip))
 				{
 					SetDeleteButtonLocked(true);
 
-					tooltip.Open("Are you sure you would like to delete this character?", () =>
+					// Naming the character is also what makes the confirmation answerable.
+					tooltip.Open($"Are you sure you would like to delete '{characterName}'?", () =>
 					{
 						// Delete character.
 						Client.Broadcast(new CharacterDeleteBroadcast()
 						{
-							CharacterName = selectedCharacter.Details.CharacterName,
+							CharacterName = characterName,
 						}, Channel.Reliable);
 						SetDeleteButtonLocked(false);
 					}, () =>
@@ -680,10 +822,15 @@ namespace FishMMO.Client
 			characterListGuard.Clear();
 			SetRefreshLocked(false);
 
-			/* Show, unconditionally. This message is the only thing standing between the player
-			 * and an empty screen: whatever hid the panel — login success, or this panel's own
-			 * handler for a previous list — has already run. */
-			Show();
+			/* Show, unless something downstream of this screen is already up. This message is
+			 * otherwise the only thing standing between the player and an empty screen: whatever
+			 * hid the panel — login success, or this panel's own handler for a previous list —
+			 * has already run. The status line below is held as state, so it is still there when
+			 * the player comes back. */
+			if (!AnotherPanelOwnsTheScreen())
+			{
+				Show();
+			}
 
 			SetStatus(msg.Result == CharacterListResult.Busy
 				? "The server is busy. Press Refresh to try again."
@@ -772,8 +919,7 @@ namespace FishMMO.Client
 		{
 			base.OnAfterStarting();
 
-			SetStatus(this.pendingStatus);
-			SetRefreshLocked(characterListGuard.IsPending);
+			ReapplyPanelState();
 		}
 
 		/// <inheritdoc/>
@@ -781,8 +927,29 @@ namespace FishMMO.Client
 		{
 			base.OnAfterShow();
 
+			ReapplyPanelState();
+		}
+
+		/// <summary>
+		/// Writes everything this panel holds as state into the tree that is on screen now.
+		/// </summary>
+		/// <remarks>
+		/// The rows, the status line and the two button locks are all written into elements that
+		/// a later hide/show replaces. The locks matter as much as the rows: Connect came back
+		/// enabled after a rebuild while the reply guard was still pending, so a second click sent
+		/// a second selection for a request that was already in flight.
+		/// </remarks>
+		private void ReapplyPanelState()
+		{
+			RebuildCharacterRows();
+
 			SetStatus(this.pendingStatus);
 			SetRefreshLocked(characterListGuard.IsPending);
+
+			if (connectButton != null)
+			{
+				connectButton.SetEnabled(!replyGuard.IsPending);
+			}
 		}
 
 		/// <summary>The status message this panel wants displayed, held across tree rebuilds.</summary>

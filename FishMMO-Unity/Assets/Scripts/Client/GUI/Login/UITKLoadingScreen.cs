@@ -401,6 +401,12 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void ApplyEscapeHatch()
 		{
+			if (!this.authoredReleasesCursorCaptured)
+			{
+				this.authoredReleasesCursorCaptured = true;
+				this.authoredReleasesCursor = ReleasesCursor;
+			}
+
 			if (loadingActions != null)
 			{
 				loadingActions.style.display = this.escapeHatchOffered ? DisplayStyle.Flex : DisplayStyle.None;
@@ -414,15 +420,44 @@ namespace FishMMO.Client
 			}
 
 			/* A button nobody can click is not an escape hatch. The overlay is normally shown over
-			 * gameplay with the cursor locked, and the panel does not declare ReleasesCursor
-			 * because doing so would release the cursor on every routine scene load. Releasing it
-			 * at the point the button appears gives the player a pointer exactly when there is
-			 * finally something to point at. */
+			 * gameplay with the cursor locked, and the panel is authored ReleasesCursor: 0 because
+			 * declaring it statically would release the cursor on every routine scene load.
+			 *
+			 * Setting MouseMode alone was not enough, and produced exactly the dead end the hatch
+			 * exists to prevent: PlayerInputController.HandleAutoDismiss runs every frame and
+			 * takes the cursor straight back whenever no VISIBLE panel claims it through
+			 * ReleasesCursor. This overlay did not claim it, so the cursor was released here and
+			 * recaptured on the very next frame, leaving a Return to Login button on screen that
+			 * could never be clicked. Claiming the cursor for exactly as long as the hatch is
+			 * offered resolves both halves; it is handed back in Hide(), which clears the flag
+			 * along with the offer. UITKChat claims the cursor the same way while its input has
+			 * focus. */
+			bool wantsCursor = this.authoredReleasesCursor || this.escapeHatchOffered;
+			if (ReleasesCursor != wantsCursor)
+			{
+				ReleasesCursor = wantsCursor;
+			}
+
 			if (this.escapeHatchOffered)
 			{
 				PlayerInputController.MouseMode = true;
 			}
 		}
+
+		/// <summary>
+		/// The <see cref="UITKControl.ReleasesCursor"/> value the scene authored, before the
+		/// escape hatch started borrowing it.
+		/// </summary>
+		/// <remarks>
+		/// Captured rather than assumed false, so a scene that deliberately gives this overlay the
+		/// cursor keeps it once the hatch is withdrawn. Read on the first
+		/// <see cref="ApplyEscapeHatch"/>, which runs from <see cref="OnStarting"/> before
+		/// anything here has written to the flag.
+		/// </remarks>
+		private bool authoredReleasesCursor;
+
+		/// <summary>True once <see cref="authoredReleasesCursor"/> holds the authored value.</summary>
+		private bool authoredReleasesCursorCaptured;
 
 		/// <summary>
 		/// Abandons whatever the overlay was waiting for and returns the player to the login screen.

@@ -144,7 +144,21 @@ namespace FishMMO.Client
 				 * everywhere and would report every panel as hovered at once. Pick returns the
 				 * topmost element that actually accepts the pointer, which is the real question:
 				 * is the cursor over this panel's content, or over the world behind it. */
-				VisualElement picked = root.panel.Pick(PointerPanelPosition(root.panel));
+				/* No pointer device, no pointer focus. Falling back to Vector2.zero when
+				 * Mouse.current is null asked "what is under the top-left corner of the screen",
+				 * so on a gamepad- or touch-only machine whichever panel happened to cover that
+				 * corner reported focus for the entire session — and everything that gates on
+				 * UIManager.ControlHasFocus() (world interaction, target clicks, drag drops, the
+				 * dropdown's auto-close) silently stopped working with nothing on screen to
+				 * explain why. UITKScreenSpace already answers this correctly for the tooltip,
+				 * the dropdown and the context menu; reuse it rather than keeping a second,
+				 * subtly different copy. */
+				if (!UITKScreenSpace.TryGetPointerPanelPosition(root.panel, out Vector2 pointerPosition))
+				{
+					return false;
+				}
+
+				VisualElement picked = root.panel.Pick(pointerPosition);
 				while (picked != null)
 				{
 					if (ReferenceEquals(picked, root))
@@ -224,22 +238,6 @@ namespace FishMMO.Client
 				}
 				return false;
 			}
-		}
-
-		/// <summary>
-		/// Reads the pointer position in panel coordinates.
-		/// </summary>
-		/// <param name="panel">The panel to convert into.</param>
-		/// <returns>The pointer position in panel points.</returns>
-		private static Vector2 PointerPanelPosition(IPanel panel)
-		{
-			Vector2 screenPosition = UnityEngine.InputSystem.Mouse.current != null
-				? UnityEngine.InputSystem.Mouse.current.position.ReadValue()
-				: Vector2.zero;
-			// Input System reports Y from the bottom; UI Toolkit lays out from the top.
-			return RuntimePanelUtils.ScreenToPanel(
-				panel,
-				new Vector2(screenPosition.x, Screen.height - screenPosition.y));
 		}
 
 		/// <summary>
@@ -491,6 +489,20 @@ namespace FishMMO.Client
 			{
 				Hide();
 			}
+			else if (Document == null)
+			{
+				/* Visible, MouseMode and the Escape registration in the branch below all describe
+				 * a panel the player is LOOKING AT, and a control with no UIDocument never puts
+				 * anything on screen. Applying them anyway wedged the panel permanently: Show()
+				 * and Hide() both return early on a null Document, so nothing could ever correct
+				 * Visible back to false, and every one of the ~18 places that tests it got the
+				 * wrong answer for the rest of the session. With ReleasesCursor also set it pinned
+				 * MouseMode on for good — AnyCursorReleasingVisible keeps reporting true — so the
+				 * cursor could never be recaptured and the player could not turn the camera. */
+				Log.Error("UITKControl",
+					$"[{Name}] StartOpen is set but no UIDocument is assigned; the panel cannot be shown. " +
+					$"Assign the Document field on GameObject '{gameObject.name}'.");
+			}
 			else
 			{
 				/* A StartOpen panel never passes through Show(), because there is nothing to
@@ -661,7 +673,15 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static void OnListGeometryChanged(GeometryChangedEvent evt)
 		{
-			if (evt.target is VisualElement element && element.userData is Action refresh)
+			/* currentTarget, not target. GeometryChangedEvent bubbles, so when a ROW inside the
+			 * bound container resizes the event arrives here with target set to that row — whose
+			 * userData is not an Action, so the refresh silently did not run. That is the common
+			 * case, not the rare one: a list whose own rect is pinned by USS (flex-grow inside a
+			 * fixed-height panel) never changes size itself, only its rows do, so adding and
+			 * removing rows left the count badge, the subtitle and the empty placeholder stale —
+			 * exactly what BindListChrome exists to keep in step. currentTarget is always the
+			 * element the handler was registered on. */
+			if (evt.currentTarget is VisualElement element && element.userData is Action refresh)
 			{
 				refresh();
 			}
@@ -828,6 +848,16 @@ namespace FishMMO.Client
 				UIManager.RegisterCloseOnEscapeTK(this);
 			}
 
+			/* Initialisation, for the first open of a panel that starts hidden. Such a panel has
+			 * its UIDocument disabled and therefore no visual tree at Awake, so OnStarting could
+			 * not run there; enabling the document above is what clones the tree, and running the
+			 * initialisation here rather than leaving it to the retry coroutine's next frame is
+			 * what keeps OnStarting ahead of OnAfterShow. The other order is silently broken:
+			 * OnAfterShow writes per-open content into element references that OnStarting has not
+			 * cached yet, so the first opening of every start-hidden panel showed whatever the
+			 * UXML declares. Cheap and idempotent once started. */
+			TryStart();
+
 			ReinitializeIfTreeReplaced();
 
 			/* Last, and only once the tree above is guaranteed current. Anything a caller writes
@@ -938,6 +968,9 @@ namespace FishMMO.Client
 		/// <summary>USS class marking a header element, used when the name lookup misses.</summary>
 		private const string DragHandleClass = "fish-panel__header";
 
+		/// <summary>USS class every authored window carries on the element that IS the window.</summary>
+		private const string PanelClass = "fish-panel";
+
 		/// <summary>The element the pointer grabs, or null when this panel is not draggable.</summary>
 		private VisualElement dragHandle;
 
@@ -976,23 +1009,63 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// The panel root belongs to the UIDocument and fills the screen; moving it would
-			// move nothing visible. What the player drags is the content root the UXML declares.
-			this.dragTarget = root[0];
+			VisualElement contentRoot = root[0];
 
 			/* Prefer a header. Dragging from anywhere on the panel means a press that begins on
 			 * a button and moves a few pixels drags the window instead of pressing it. UI
 			 * Toolkit events bubble to the root, so the panel would receive the press either
 			 * way. A panel with no header still drags from anywhere rather than becoming
 			 * immovable. */
-			this.dragHandle = this.dragTarget.Q(DragHandleName)
-				?? this.dragTarget.Q(className: DragHandleClass)
-				?? this.dragTarget;
+			this.dragHandle = contentRoot.Q(DragHandleName)
+				?? contentRoot.Q(className: DragHandleClass);
+
+			if (this.dragHandle != null)
+			{
+				/* The moved element is resolved FROM the handle rather than assumed to be
+				 * root[0]. Every panel that actually opts into dragging wraps its window in a
+				 * full-bleed backdrop — .dialog-root and .colorpicker-root both stretch to fill
+				 * the screen — so root[0] is the backdrop, not the window. Moving it moved
+				 * nothing the player could see, and the clamp below then measured a target the
+				 * size of the viewport and collapsed its travel to zero, so dragging was a hard
+				 * no-op that still swallowed the press on the header. The window is the nearest
+				 * .fish-panel above the handle; the handle's own parent covers an authored panel
+				 * that does not carry that class. */
+				this.dragTarget = FindPanelAncestor(this.dragHandle, root)
+					?? this.dragHandle.parent
+					?? contentRoot;
+			}
+			else
+			{
+				// No header anywhere in the tree: the content root is both handle and window.
+				this.dragTarget = contentRoot;
+				this.dragHandle = contentRoot;
+			}
 
 			this.dragHandle.RegisterCallback<PointerDownEvent>(OnDragPointerDown);
 			this.dragHandle.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
 			this.dragHandle.RegisterCallback<PointerUpEvent>(OnDragPointerUp);
 			this.dragHandle.RegisterCallback<PointerCaptureOutEvent>(OnDragPointerCaptureOut);
+		}
+
+		/// <summary>
+		/// Walks up from <paramref name="element"/> for the nearest element carrying
+		/// <see cref="PanelClass"/>, stopping at <paramref name="stopAt"/>.
+		/// </summary>
+		/// <param name="element">Element to start from; itself included in the search.</param>
+		/// <param name="stopAt">Exclusive upper bound, normally the document's panel root.</param>
+		/// <returns>The window element, or null when the handle is not inside one.</returns>
+		private static VisualElement FindPanelAncestor(VisualElement element, VisualElement stopAt)
+		{
+			VisualElement current = element;
+			while (current != null && !ReferenceEquals(current, stopAt))
+			{
+				if (current.ClassListContains(PanelClass))
+				{
+					return current;
+				}
+				current = current.parent;
+			}
+			return null;
 		}
 
 		/// <summary>
@@ -1023,6 +1096,15 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void OnDragPointerDown(PointerDownEvent evt)
 		{
+			/* One drag at a time. Without this, a second finger or pen on the header overwrites
+			 * dragPointerId and captures on top of the first pointer's still-live capture; when the
+			 * first pointer lifts, OnDragPointerUp sees a mismatched id and returns WITHOUT
+			 * releasing it, so the handle keeps that pointer id for the rest of the session and
+			 * every later event for it is routed into a hidden panel's header. */
+			if (this.dragPointerId != -1)
+			{
+				return;
+			}
 			if (!CanDrag || this.dragTarget == null || evt.button != 0)
 			{
 				return;
@@ -1082,6 +1164,17 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void OnDragPointerCaptureOut(PointerCaptureOutEvent evt)
 		{
+			/* Only the pointer that owns the drag may end it. Untested, a capture-out raised for
+			 * ANY other pointer id — a second finger brushing the header, a pen entering range —
+			 * cleared dragPointerId while the first pointer's capture was still live: the window
+			 * stopped following the mouse mid-drag, and OnDragPointerUp then saw a mismatched id
+			 * and returned WITHOUT releasing the capture, so the handle kept that pointer for the
+			 * rest of the session. */
+			if (this.dragPointerId != evt.pointerId)
+			{
+				return;
+			}
+
 			this.dragPointerId = -1;
 		}
 
@@ -1099,16 +1192,49 @@ namespace FishMMO.Client
 
 			if (ClampToScreen)
 			{
-				/* Clamped by the panel's own resolved size, so the whole window stays on
-				 * screen rather than only its top-left corner. contentRect is the panel root's
-				 * size in UI Toolkit's coordinate space, which is what a panel-space position
-				 * is measured against — Screen.width/height would be wrong under any
-				 * PanelSettings scale mode that is not one-to-one with the display. */
-				float maxX = Mathf.Max(0.0f, root.contentRect.width - this.dragTarget.layout.width);
-				float maxY = Mathf.Max(0.0f, root.contentRect.height - this.dragTarget.layout.height);
+				/* Measured through worldBound, not layout. layout is the box Yoga solved and
+				 * excludes transforms, and most authored windows are centred with
+				 * `translate: -50% -50%` — so the box the player sees sits half its own width and
+				 * height up and to the left of the box being clamped, and the clamp happily let
+				 * that visible box go half off-screen while believing it was inside. worldBound is
+				 * the painted rectangle, transforms included.
+				 *
+				 * contentRect is the panel root's size in UI Toolkit's coordinate space, which is
+				 * what a panel-space position is measured against — Screen.width/height would be
+				 * wrong under any PanelSettings scale mode that is not one-to-one with the
+				 * display. */
+				Rect bounds = this.dragTarget.worldBound;
+				Rect viewport = root.contentRect;
 
-				position.x = Mathf.Clamp(position.x, 0.0f, maxX);
-				position.y = Mathf.Clamp(position.y, 0.0f, maxY);
+				if (!float.IsNaN(bounds.width) && !float.IsNaN(bounds.height) &&
+					!float.IsNaN(viewport.width) && !float.IsNaN(viewport.height))
+				{
+					/* The constant difference between "where the box is painted" and "what
+					 * left/top say", i.e. the parent's origin plus whatever the transform
+					 * contributes. Resolved from the live element rather than derived from the
+					 * style, because translate can be a percentage of the element's own size. */
+					Vector2 visualOffset = new Vector2(
+						bounds.x - this.dragTarget.layout.x,
+						bounds.y - this.dragTarget.layout.y);
+
+					/* A panel LARGER than the viewport has a negative limit, and the old
+					 * Mathf.Max(0, ...) flattened that to zero — pinning the window to the top-left
+					 * corner with the overflowing side permanently unreachable, which for a tall
+					 * window on a short screen means its buttons can never be brought into view.
+					 * Clamping into [viewport - size, 0] instead lets the player slide the panel to
+					 * reach either edge. Ordering the bounds by Min/Max covers both cases with one
+					 * expression. */
+					float limitX = viewport.width - bounds.width;
+					float limitY = viewport.height - bounds.height;
+
+					float visualX = Mathf.Clamp(position.x + visualOffset.x,
+						Mathf.Min(0.0f, limitX), Mathf.Max(0.0f, limitX));
+					float visualY = Mathf.Clamp(position.y + visualOffset.y,
+						Mathf.Min(0.0f, limitY), Mathf.Max(0.0f, limitY));
+
+					position.x = visualX - visualOffset.x;
+					position.y = visualY - visualOffset.y;
+				}
 			}
 
 			/* Absolute, so left/top mean what is written here. A panel laid out by its parent
@@ -1206,6 +1332,12 @@ namespace FishMMO.Client
 				UITKThemeManager.Unregister(this.registeredThemeRoot);
 				this.registeredThemeRoot = null;
 			}
+			/* The Escape list is STATIC and keyed by nothing — a destroyed panel that is still in
+			 * it is a dangling entry that CloseNext has to walk past on every press, and the list
+			 * grows by every registered panel on every quit-to-login cycle. Hide() removes the
+			 * entry, but a panel destroyed while open never goes through Hide(). */
+			UIManager.UnregisterCloseOnEscapeTK(this);
+
 			UIManager.UnregisterTK(this);
 		}
 	}

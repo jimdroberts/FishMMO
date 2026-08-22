@@ -1453,6 +1453,18 @@ namespace FishMMO.Client
 			{
 				OnDiscordChat(msg);
 			}
+			else if (msg.Channel == ChatChannel.System)
+			{
+				/* System has no slash command, so it has no entry in ChatHelper.ChannelCommandMap —
+				 * and InitializeOnce builds the channel->handler table by iterating exactly that
+				 * map. ParseChatChannel therefore returned null for System and the message was
+				 * dropped on the floor, even though GetChannelCommand maps it to OnSystemChat.
+				 * That silently swallowed every server-authored message the player relies on:
+				 * shutdown countdowns, admin command acknowledgements, quest and achievement
+				 * notices, boss emotes. Dispatched directly, the way Discord already is, because
+				 * both are channels the player can never send to. */
+				OnSystemChat(localCharacter, msg);
+			}
 			else
 			{
 				ChatCommand command = ChatHelper.ParseChatChannel(msg.Channel);

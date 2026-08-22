@@ -27,11 +27,23 @@ namespace FishMMO.Client
 		public IPlayerCharacter Character { get; private set; }
 
 		/// <summary>
-		/// Clears the character reference when this control is destroyed.
+		/// Runs the character-unset path when this control is destroyed.
 		/// </summary>
+		/// <remarks>
+		/// The unset path, not a bare null assignment. Panels drop their subscriptions to the
+		/// character's events in <see cref="OnPreUnsetCharacter"/>, and clearing the field behind
+		/// their back skipped every one of them. The character outlives the panel — it is the panel
+		/// that is destroyed on a scene change, not the character — so those still-live events kept
+		/// invoking handlers on a destroyed MonoBehaviour: the panel is leaked by its own
+		/// subscriptions, and the first handler to touch a Unity object throws
+		/// MissingReferenceException from inside the character's event dispatch.
+		/// </remarks>
 		public override void OnDestroying()
 		{
-			Character = null;
+			if (Character != null)
+			{
+				UnsetCharacter();
+			}
 		}
 
 		/// <summary>

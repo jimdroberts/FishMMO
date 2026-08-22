@@ -50,10 +50,16 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.GuildID);
 
 			// Foreign key relationship to Guild
+			/* Cascade, because GuildService.DeleteAsync issues a bare
+			 * `DELETE FROM guilds WHERE id = X` and its own doc-comment states it relies on
+			 * CASCADE to clear membership. With NoAction that delete raised a foreign-key
+			 * violation for any guild holding at least one member — which is every guild that
+			 * can be disbanded, since disbanding requires being in it. The violation was logged
+			 * as a warning and swallowed, so guild disband silently never worked at all. */
 			builder.HasOne(e => e.Guild)
 				.WithMany(g => g.Characters)
 				.HasForeignKey(e => e.GuildID)
-				.OnDelete(DeleteBehavior.NoAction);
+				.OnDelete(DeleteBehavior.Cascade);
 
 			// Foreign key relationship to Character
 			// Deleting a character must remove the character's guild membership row.

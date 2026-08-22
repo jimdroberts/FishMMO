@@ -907,6 +907,9 @@ namespace FishMMO.Client
 				case GuildResultType.InsufficientRank:
 					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild rank does not allow that.");
 					break;
+				case GuildResultType.Failed:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild request could not be completed.");
+					break;
 				default:
 					return;
 			}

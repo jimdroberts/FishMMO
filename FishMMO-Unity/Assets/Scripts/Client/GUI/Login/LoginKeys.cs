@@ -37,7 +37,20 @@ namespace FishMMO.Client
 		/// <param name="root">The panel root to capture on. Null is tolerated.</param>
 		/// <param name="onSubmit">Invoked on Return/KeypadEnter. May be null.</param>
 		/// <param name="onCancel">Invoked on Escape. May be null.</param>
-		public static void Attach(VisualElement root, Action onSubmit, Action onCancel)
+		/// <param name="canSubmit">
+		/// Consulted before <paramref name="onSubmit"/> runs. Null means always.
+		/// </param>
+		/// <remarks>
+		/// <paramref name="canSubmit"/> exists because Enter here does not go through the button
+		/// it mirrors, and so never saw that the button was disabled. A player who pressed Enter
+		/// while a registration or a sign-in was already in flight re-entered the submit handler,
+		/// which fell down its validation path — the fields having been cleared on the first
+		/// press — and unlocked the form, clearing the flag that gates the panel's own auth-result
+		/// handler and disarming its watchdog. The server then created the account and every
+		/// message about it was dropped on the floor. Escape is deliberately not gated: backing
+		/// out of a request that is in flight is the one thing that must always work.
+		/// </remarks>
+		public static void Attach(VisualElement root, Action onSubmit, Action onCancel, Func<bool> canSubmit = null)
 		{
 			if (root == null)
 			{
@@ -51,7 +64,7 @@ namespace FishMMO.Client
 			// Replacing rather than accumulating: this is re-attached on every tree rebuild.
 			root.UnregisterCallback<KeyDownEvent>(Dispatch, TrickleDown.TrickleDown);
 			handlers.Remove(root);
-			handlers.Add(root, new Binding(onSubmit, onCancel));
+			handlers.Add(root, new Binding(onSubmit, onCancel, canSubmit));
 			root.RegisterCallback<KeyDownEvent>(Dispatch, TrickleDown.TrickleDown);
 		}
 
@@ -113,14 +126,18 @@ namespace FishMMO.Client
 		/// </summary>
 		private sealed class Binding
 		{
-			public Binding(Action submit, Action cancel)
+			public Binding(Action submit, Action cancel, Func<bool> canSubmit)
 			{
 				Submit = submit;
 				Cancel = cancel;
+				CanSubmit = canSubmit;
 			}
 
 			public readonly Action Submit;
 			public readonly Action Cancel;
+
+			/// <summary>Whether the panel is currently willing to accept a submit. May be null.</summary>
+			public readonly Func<bool> CanSubmit;
 		}
 
 		/// <summary>
@@ -159,7 +176,8 @@ namespace FishMMO.Client
 			{
 				case KeyCode.Return:
 				case KeyCode.KeypadEnter:
-					if (binding.Submit != null)
+					if (binding.Submit != null &&
+						(binding.CanSubmit == null || binding.CanSubmit()))
 					{
 						evt.StopPropagation();
 						binding.Submit.Invoke();

@@ -42,11 +42,17 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.HasIndex(e => e.PartyID);
 
-			// Foreign key relationship to Party
+			/* Foreign key relationship to Party.
+			 *
+			 * Cascade for the same reason as guild membership: PartyService.DeleteAsync
+			 * documents itself as relying on CASCADE to clear both membership and the update
+			 * watermark, and neither cascade existed. LeavePartyAsync only WARNS when the
+			 * member delete fails and then deletes the party anyway, so the missing cascade
+			 * turned into a foreign-key violation on the party delete instead. */
 			builder.HasOne(e => e.Party)
 				.WithMany(p => p.Characters)
 				.HasForeignKey(e => e.PartyID)
-				.OnDelete(DeleteBehavior.NoAction);
+				.OnDelete(DeleteBehavior.Cascade);
 
 			// Foreign key relationship to Character
 			// Deleting a character must remove the character's party membership row.

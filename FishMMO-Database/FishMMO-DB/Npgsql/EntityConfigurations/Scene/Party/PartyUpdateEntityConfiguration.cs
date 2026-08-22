@@ -35,7 +35,17 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Optimizes WHERE last_update >= @lastFetch AND party_id IN (@partyIds)
 			// Using (last_update, party_id) allows efficient range scan on last_update
 			// followed by party_id filtering without additional lookups
-			builder.HasIndex(e => new { e.LastUpdate, e.PartyID });
+			/* party_id leads, for the same reason as guild_updates: the ANY() predicate is the
+			 * selective one and a leading open-ended range on last_update cannot seek. */
+			builder.HasIndex(e => new { e.PartyID, e.LastUpdate });
+
+			/* Foreign key to the party, cascading — previously absent entirely, so an update
+			 * row could outlive its party and PartyService.DeleteAsync's documented reliance on
+			 * CASCADE had nothing to cascade through. */
+			builder.HasOne<PartyEntity>()
+				.WithMany()
+				.HasForeignKey(e => e.PartyID)
+				.OnDelete(DeleteBehavior.Cascade);
 		}
 	}
 }

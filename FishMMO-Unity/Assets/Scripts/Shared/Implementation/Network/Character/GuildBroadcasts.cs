@@ -196,6 +196,16 @@ namespace FishMMO.Shared
 		/// and it was still refused — to stop the guild soft-locking itself.
 		/// </remarks>
 		WouldOrphanGuild = 19,
+
+		/// <summary>
+		/// The request failed for a reason with no more specific code.
+		/// </summary>
+		/// <remarks>
+		/// Appended, never inserted — the values are on the wire. Exists so that server-side
+		/// failures which are real but uncategorised (a persist that was refused, a compensating
+		/// rollback) reach the player as something rather than as silence.
+		/// </remarks>
+		Failed = 20,
 	}
 
 	/// <summary>

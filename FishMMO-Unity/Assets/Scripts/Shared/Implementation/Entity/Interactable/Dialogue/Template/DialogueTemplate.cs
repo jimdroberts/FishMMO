@@ -63,6 +63,11 @@ namespace FishMMO.Shared
 		private Dictionary<int, DialogueNode> nodeMap;
 
 		/// <summary>
+		/// Lazily-counted total number of authored choices across every node. -1 until counted.
+		/// </summary>
+		private int totalChoiceCount = -1;
+
+		/// <summary>
 		/// The name of the dialogue template (from the ScriptableObject asset name).
 		/// </summary>
 		public string Name { get { return this.name; } }
@@ -165,12 +170,51 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Counts every authored choice across every node, using the same enumeration order
+		/// <see cref="GetChoiceBitIndex"/> uses to assign bits.
+		/// </summary>
+		/// <returns>The total number of choices in this template.</returns>
+		/// <remarks>
+		/// A template with <see cref="CacheDialogueChoices"/> enabled and more choices than
+		/// <see cref="MaxTrackedChoices"/> cannot express "already taken" for the choices past the
+		/// sixteenth — <see cref="GetChoiceBitIndex"/> returns -1 for them and there is no bit to
+		/// set. Every one of those choices, and the rewards its OnSelectActions grant, is then
+		/// repeatable forever. The server uses this count to refuse such a template outright
+		/// rather than serve a conversation whose one-time promises it cannot keep.
+		/// </remarks>
+		public int GetTotalChoiceCount()
+		{
+			if (totalChoiceCount < 0)
+			{
+				int count = 0;
+				for (int i = 0; i < Nodes.Count; i++)
+				{
+					if (Nodes[i] == null || Nodes[i].Choices == null)
+					{
+						continue;
+					}
+					count += Nodes[i].Choices.Count;
+				}
+				totalChoiceCount = count;
+			}
+			return totalChoiceCount;
+		}
+
+		/// <summary>
 		/// Computes the flat bit index for a specific choice within this template.
 		/// Iterates all nodes and their choices in order to produce a deterministic index.
 		/// </summary>
 		/// <param name="nodeId">The node containing the choice.</param>
 		/// <param name="choiceIndex">The index of the choice within the node's Choices list.</param>
 		/// <returns>The bit position (0–15), or -1 if not found or exceeds <see cref="MaxTrackedChoices"/>.</returns>
+		/// <remarks>
+		/// -1 means "this choice cannot be tracked", and it is returned for two very different
+		/// reasons: the choice does not exist, or it exists but falls past the sixteenth choice in
+		/// the template and has no bit left in the <see cref="short"/> mask. Callers must treat
+		/// both as a refusal. Treating -1 as "not yet taken" is what made every choice past the
+		/// sixteenth infinitely repeatable — the caller skipped the already-taken test AND the
+		/// bit-recording, so the choice's rewards were granted again on every click.
+		/// </remarks>
 		public int GetChoiceBitIndex(int nodeId, int choiceIndex)
 		{
 			int bitIndex = 0;

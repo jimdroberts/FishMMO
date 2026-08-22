@@ -412,6 +412,29 @@ namespace FishMMO.Client
 					PushBlock(work, node, childStyle, item.Depth);
 					return;
 
+				/* Elements whose CONTENT is not prose and must never be emitted as visible text.
+				 *
+				 * The default branch below recurses into anything it does not recognise, so a
+				 * <script> or <style> body would be rendered to the player as news copy. Nothing
+				 * here executes it — UI Toolkit has no script host — but showing a page's script
+				 * source in the news panel is both nonsense and an information leak, and <iframe>
+				 * / <object> / <embed> imply an external fetch this renderer must never imply.
+				 *
+				 * Today the only caller is safe because UnityHtmlContentFetcher.ExtractDivNode
+				 * strips these first. That is exactly why the check belongs here as well: Render
+				 * and RenderIncremental are public and their own remarks invite other callers,
+				 * and a second caller has no reason to know the sanitising lives in a different
+				 * file. Skipped entirely — children are not queued. */
+				case "script":
+				case "style":
+				case "iframe":
+				case "object":
+				case "embed":
+				case "form":
+				case "noscript":
+				case "template":
+					return;
+
 				default:
 					PushChildren(work, node, childStyle, item.Depth + 1);
 					return;

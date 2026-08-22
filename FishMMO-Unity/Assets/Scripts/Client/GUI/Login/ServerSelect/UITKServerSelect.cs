@@ -100,6 +100,30 @@ namespace FishMMO.Client
 		private ServerRow selectedServer;
 
 		/// <summary>
+		/// The worlds as the server last described them.
+		/// </summary>
+		/// <remarks>
+		/// The rows used to be the only record of the list, and rows do not survive this panel.
+		/// It is authored <c>StartOpen: 0</c>, so the very first world list a client ever
+		/// receives arrives while there is no visual tree: row construction was gated on
+		/// <c>serverListContainer != null</c>, that gate was false, and the <see cref="Show"/> on
+		/// the line below it then presented an empty world list to a player who had just
+		/// successfully selected a character. The same happens on every later arrival that lands
+		/// while the panel is hidden, because showing it re-clones the UXML.
+		/// <para>
+		/// Holding the details here makes the rows a rendering of state, which
+		/// <see cref="RebuildServerRows"/> re-runs against whatever tree is on screen. See
+		/// <see cref="UITKControl.OnAfterShow"/>.
+		/// </para>
+		/// </remarks>
+		private readonly List<WorldServerDetails> servers = new List<WorldServerDetails>();
+
+		/// <summary>
+		/// Name of the world the player had highlighted, so the highlight survives a rebuild.
+		/// </summary>
+		private string selectedServerName;
+
+		/// <summary>
 		/// How often the server list can be refreshed (seconds).
 		/// </summary>
 		public float RefreshRate = 5.0f;
@@ -147,7 +171,8 @@ namespace FishMMO.Client
 			}
 
 			// Enter connects to the highlighted world, Escape goes back to the login screen.
-			LoginKeys.Attach(Root, OnClick_ConnectToServer, OnClick_QuitToLogin);
+			// Enter observes the same lock as the Connect button it mirrors; see LoginKeys.Attach.
+			LoginKeys.Attach(Root, OnClick_ConnectToServer, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, connectButton, refreshButton, quitToLoginButton, quitButton);
 		}
 
@@ -341,9 +366,23 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Removes all server rows and clears the server list.
+		/// Forgets the world list and removes every row.
 		/// </summary>
 		public void DestroyServerList()
+		{
+			ClearServerRows();
+			servers.Clear();
+			selectedServerName = null;
+		}
+
+		/// <summary>
+		/// Removes the row elements without forgetting the worlds they describe.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="DestroyServerList"/> because a tree rebuild throws the rows
+		/// away and must not throw the world list away with them.
+		/// </remarks>
+		private void ClearServerRows()
 		{
 			for (int i = 0; i < serverList.Count; ++i)
 			{
@@ -354,23 +393,96 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Renders <see cref="servers"/> into whatever visual tree is currently on screen.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent, and a no-op while there is no tree to build into — the panel is shown
+		/// later and this runs again from <see cref="OnAfterStarting"/>.
+		/// </remarks>
+		private void RebuildServerRows()
+		{
+			if (serverListContainer == null)
+			{
+				return;
+			}
+
+			ClearServerRows();
+
+			for (int i = 0; i < servers.Count; ++i)
+			{
+				CreateServerRow(servers[i]);
+			}
+
+			RestoreSelection();
+		}
+
+		/// <summary>
+		/// Re-highlights the world the player had chosen, if it is still in the list.
+		/// </summary>
+		private void RestoreSelection()
+		{
+			if (string.IsNullOrEmpty(selectedServerName))
+			{
+				return;
+			}
+
+			for (int i = 0; i < serverList.Count; ++i)
+			{
+				if (serverList[i].Details != null &&
+					serverList[i].Details.Name == selectedServerName)
+				{
+					OnServerSelected(serverList[i]);
+					return;
+				}
+			}
+
+			// That world is no longer being advertised.
+			selectedServerName = null;
+		}
+
+		/// <summary>
 		/// Handles an incoming server list broadcast and populates the server rows.
 		/// </summary>
 		/// <param name="msg">The broadcast message containing server details.</param>
 		/// <param name="channel">The network channel used.</param>
 		private void OnClientServerListBroadcastReceived(ServerListBroadcast msg, Channel channel)
 		{
-			if (msg.Servers != null && serverListContainer != null)
+			/* State first, rows second, and no gate on the container existing. See the remarks on
+			 * `servers` for what that gate cost: the first world list of every session was
+			 * discarded before it could be drawn. */
+			if (msg.Servers != null)
 			{
-				DestroyServerList();
+				servers.Clear();
 
 				for (int i = 0; i < msg.Servers.Length; ++i)
 				{
-					CreateServerRow(msg.Servers[i]);
+					servers.Add(msg.Servers[i]);
 				}
 			}
 
-			Show();
+			RebuildServerRows();
+
+			/* Only if the player is still somewhere this list belongs. A world list is pushed
+			 * after a character selection and again on every refresh, so one can arrive just
+			 * after a quit to login — and showing unconditionally put the world list on top of
+			 * the sign-in form of an account that had already logged out. */
+			if (!LoginScreenOwnsTheScreen())
+			{
+				Show();
+			}
+		}
+
+		/// <summary>
+		/// Whether the player has gone back to the sign-in screen.
+		/// </summary>
+		/// <remarks>
+		/// The login and registration panels are upstream of this one: reaching either means the
+		/// session this list describes is over, or was never entered.
+		/// </remarks>
+		private bool LoginScreenOwnsTheScreen()
+		{
+			return (UIManager.TryGetTK("UILogin", out UITKControl login) && login.Visible) ||
+				(UIManager.TryGetTK("UIRegister", out UITKControl register) && register.Visible);
 		}
 
 		/// <summary>
@@ -421,6 +533,9 @@ namespace FishMMO.Client
 			{
 				selectedServer.Root.AddToClassList(SERVER_ROW_SELECTED_CLASS);
 			}
+
+			// By name, because the row object does not survive a tree rebuild. See RestoreSelection.
+			selectedServerName = selectedServer?.Details?.Name;
 		}
 
 		/// <summary>
@@ -460,12 +575,59 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Unlocks the connect button when quitting to login.
+		/// Unlocks the connect button and forgets the world list when quitting to login.
 		/// </summary>
+		/// <remarks>
+		/// The list belongs to the account that just logged out — it is sent in answer to that
+		/// account's character selection. Leaving it behind meant the next account to sign in saw
+		/// the previous one's worlds, with the previous one's row still highlighted, until its own
+		/// list arrived; and saw them indefinitely if it never did. UITKCharacterSelect has
+		/// cleared its list here for the same reason.
+		/// </remarks>
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
 			SetConnectToServerLocked(false);
+			DestroyServerList();
+		}
+
+		/// <summary>
+		/// Re-renders the world list and the control states after the visual tree was rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// Every element this panel writes to is replaced on each hide/show. The connect lock
+		/// matters as much as the rows do: it came back enabled while the hop-token request it
+		/// was guarding was still outstanding, so a second click started a second handoff.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+			ReapplyPanelState();
+		}
+
+		/// <inheritdoc cref="OnAfterStarting"/>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+			ReapplyPanelState();
+		}
+
+		/// <summary>
+		/// Writes everything this panel holds as state into the tree that is on screen now.
+		/// </summary>
+		private void ReapplyPanelState()
+		{
+			RebuildServerRows();
+
+			if (connectButton != null)
+			{
+				connectButton.SetEnabled(!replyGuard.IsPending);
+			}
+
+			// The countdown is written only when the displayed second changes, so a new button
+			// element needs the cached value invalidated or it would keep the UXML's bare text.
+			lastShownCooldownSeconds = -1;
+			UpdateRefreshButton();
 		}
 
 		/// <summary>

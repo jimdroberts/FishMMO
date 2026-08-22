@@ -84,7 +84,16 @@ namespace FishMMO.Shared
 		{
 			StartTick = startTick;
 			this.tickDelta = tickDelta;
-			DurationTicks = tickDelta > 0f ? (uint)System.Math.Ceiling(durationSeconds / tickDelta) : 0u;
+
+			/* A non-positive duration means "no cooldown", and it has to be spelt out because the
+			 * cast does the opposite. Math.Ceiling of a negative quotient is a negative double, and
+			 * (uint) of that wraps: -1 second at a 1/60s tick becomes 4294967236 ticks — roughly
+			 * 2.7 years — so the ability is permanently un-castable with nothing in the UI to
+			 * explain it. Reachable from ordinary data: a cooldown-reduction modifier above 100%,
+			 * or a template authored with a negative cooldown. */
+			DurationTicks = (tickDelta > 0f && durationSeconds > 0f)
+				? (uint)System.Math.Ceiling(durationSeconds / tickDelta)
+				: 0u;
 		}
 
 		/// <summary>
@@ -114,8 +123,14 @@ namespace FishMMO.Shared
 		/// <returns>A cooldown instance with <see cref="StartTick"/> derived so remaining time is correct.</returns>
 		public static CooldownInstance FromRemainingSeconds(uint currentTick, float totalDurationSeconds, float remainingDurationSeconds, float tickDelta)
 		{
-			uint durationTicks = tickDelta > 0f ? (uint)System.Math.Ceiling(totalDurationSeconds / tickDelta) : 0u;
-			uint remainingTicks = tickDelta > 0f ? (uint)System.Math.Ceiling(remainingDurationSeconds / tickDelta) : 0u;
+			// Same unsigned-wrap trap as the seconds constructor: a negative duration coming out of
+			// the database or a stale payload would otherwise become a multi-year cooldown.
+			uint durationTicks = (tickDelta > 0f && totalDurationSeconds > 0f)
+				? (uint)System.Math.Ceiling(totalDurationSeconds / tickDelta)
+				: 0u;
+			uint remainingTicks = (tickDelta > 0f && remainingDurationSeconds > 0f)
+				? (uint)System.Math.Ceiling(remainingDurationSeconds / tickDelta)
+				: 0u;
 			uint elapsed = durationTicks > remainingTicks ? durationTicks - remainingTicks : 0u;
 			uint startTick = currentTick - elapsed;
 			return new CooldownInstance(startTick, durationTicks, tickDelta);

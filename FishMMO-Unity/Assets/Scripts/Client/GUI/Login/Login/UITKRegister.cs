@@ -150,8 +150,9 @@ namespace FishMMO.Client
 				quitToLoginButton.clicked += OnClick_QuitToLogin;
 			}
 
-			// Enter registers, Escape goes back to the sign-in screen.
-			LoginKeys.Attach(Root, OnClick_Register, OnClick_QuitToLogin);
+			// Enter registers, Escape goes back to the sign-in screen. Enter observes the same
+			// lock as the Register button it mirrors; see LoginKeys.Attach.
+			LoginKeys.Attach(Root, OnClick_Register, OnClick_QuitToLogin, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, username, email, password, ageSelect, registerButton, quitToLoginButton);
 		}
 
@@ -386,8 +387,15 @@ namespace FishMMO.Client
 		private string pendingStatus;
 
 		/// <summary>
-		/// Re-applies the status line after the visual tree was rebuilt.
+		/// Re-applies the status line and the form lock after the visual tree was rebuilt.
 		/// </summary>
+		/// <remarks>
+		/// <see cref="SetFormLocked"/> writes into elements that the next hide/show replaces, so a
+		/// panel that came back mid-registration — which is what the drop handler and the reply
+		/// timeout both do — offered an enabled Register button over a request that was still
+		/// outstanding. Driven off the guard rather than off a second copy of the flag, so the two
+		/// cannot disagree.
+		/// </remarks>
 		protected override void OnAfterStarting()
 		{
 			base.OnAfterStarting();
@@ -396,6 +404,8 @@ namespace FishMMO.Client
 			{
 				statusMessage.text = this.pendingStatus ?? string.Empty;
 			}
+
+			ReleaseControls(!replyGuard.IsPending);
 		}
 
 		/// <inheritdoc/>
@@ -407,6 +417,9 @@ namespace FishMMO.Client
 			{
 				statusMessage.text = this.pendingStatus ?? string.Empty;
 			}
+
+			ReleaseControls(!replyGuard.IsPending);
+
 			LoginKeys.FocusFirst(Root, username);
 
 			OfferLeftoverRecovery();
@@ -525,17 +538,7 @@ namespace FishMMO.Client
 					{
 						OpenVerifyCodeDialog();
 					},
-					() =>
-					{
-						pendingVerifyUsername = null;
-						DeleteSavedTwoFactorSetupFile();
-						Client.ForceDisconnect();
-						SetFormLocked(false);
-						if (UIManager.TryGetTK("UILogin", out UITKLogin uiLogin))
-						{
-							uiLogin.Show();
-						}
-					});
+					AbandonFlowAndReturnToLogin);
 			}
 		}
 
@@ -561,17 +564,7 @@ namespace FishMMO.Client
 							replyGuard.Begin();
 						}
 					},
-					() =>
-					{
-						pendingVerifyUsername = null;
-						DeleteSavedTwoFactorSetupFile();
-						Client.ForceDisconnect();
-						SetFormLocked(false);
-						if (UIManager.TryGetTK("UILogin", out UITKLogin uiLogin))
-						{
-							uiLogin.Show();
-						}
-					});
+					AbandonFlowAndReturnToLogin);
 			}
 		}
 
@@ -830,6 +823,20 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Register()
 		{
+			/* Refuse re-entry while a registration is already outstanding. The button is disabled
+			 * for the whole of that wait, but Enter does not go through the button — see
+			 * LoginKeys.Attach — so a second press ran this method again against fields the first
+			 * press had already cleared, hit the "invalid username" path, and called
+			 * ShowValidationError -> SetFormLocked(false). That unlocks the form, clears
+			 * isAuthFlowActive and disarms the watchdog, after which every result belonging to the
+			 * registration that was genuinely in flight was dropped by the `if (!isAuthFlowActive)
+			 * return` gate at the top of the auth handler. The account was created on the server
+			 * and the client never said a word about it. */
+			if (replyGuard.IsPending)
+			{
+				return;
+			}
+
 			string usernameText = username != null ? username.value : null;
 			string emailText = email != null ? email.value : null;
 			string passwordText = password != null ? password.value : null;
@@ -892,11 +899,47 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Hides this panel and shows the login panel.
+		/// Abandons whatever this panel had in flight and hands the screen back to sign-in.
 		/// </summary>
+		/// <remarks>
+		/// Back — and the Escape key that mirrors it — used to do nothing but clear the fields and
+		/// swap the panels, which is correct only for a player who has not pressed Register yet.
+		/// Pressed during a registration it left the connection open, <c>isAuthFlowActive</c> set,
+		/// the plaintext account password resident in <c>pendingAccountPassword</c> for the rest
+		/// of the session, and the 2FA setup file on disk — and because the flow was still
+		/// nominally live, the dialogs it goes on to open (the recovery-code display, the
+		/// verification prompt) appeared over the login screen the player had just returned to.
+		/// This is the same teardown the dialog cancel callbacks perform.
+		/// </remarks>
 		public void OnClick_QuitToLogin()
 		{
 			ClearAllFields();
+			AbandonFlowAndReturnToLogin();
+		}
+
+		/// <summary>
+		/// Ends the registration flow, drops everything it was holding, and shows the login panel.
+		/// </summary>
+		/// <remarks>
+		/// The single exit used by Back, by the recovery-code dialog's cancel and by the
+		/// verification prompt's cancel. Those three had three copies of it, which is how Back
+		/// came to be missing most of it.
+		/// </remarks>
+		private void AbandonFlowAndReturnToLogin()
+		{
+			pendingVerifyUsername = null;
+			this.accountCreated = false;
+
+			// Drops the in-flight account password as well as the on-disk envelope.
+			DeleteSavedTwoFactorSetupFile();
+
+			if (Client != null)
+			{
+				Client.ForceDisconnect();
+			}
+
+			SetFormLocked(false);
+			SetStatus(null);
 			Hide();
 
 			if (UIManager.TryGetTK("UILogin", out UITKLogin uiLogin))
@@ -1007,6 +1050,13 @@ namespace FishMMO.Client
 		private void OnReplyTimedOut()
 		{
 			ReleaseControls(true);
+
+			/* The password's documented lifetime is "until the 2FA payload has been encrypted with
+			 * it". This is the path on which that payload never arrives, so nothing else was ever
+			 * going to drop it: the flow continues into email verification and can sit on that
+			 * dialog indefinitely, with the plaintext password held in a field the whole time. It
+			 * has no remaining use — the envelope it existed to encrypt is not coming. */
+			pendingAccountPassword = null;
 
 			/* Cancel any prompt still on screen first. Under the shared dialog contract a Hide()
 			 * on an armed dialog resolves it down its cancel path, so this cannot strand a

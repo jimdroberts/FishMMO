@@ -1273,13 +1273,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>True if swap succeeded, false otherwise.</returns>
 		public bool SwapContainerItems(IItemContainer container, int fromIndex, int toIndex, out List<Item> affectedItems)
 		{
+			return SwapContainerItems(container, fromIndex, toIndex, out affectedItems, out int _);
+		}
+
+		/// <summary>
+		/// Swaps two items within the same container, reporting both the affected items and any
+		/// slot the swap left empty.
+		/// </summary>
+		/// <remarks>
+		/// The vacated slot is the whole reason this overload exists. Item rows are keyed
+		/// <c>(character_id, slot)</c>, so a move onto an EMPTY slot writes the item at its new
+		/// index and leaves the row at the old index untouched — the same item persisted twice.
+		/// Only the write side was emitted here before, because <paramref name="affectedItems"/>
+		/// collects non-null items and a move-to-empty produces exactly one of them, which reads
+		/// like a complete description of the change and is not.
+		/// <para>
+		/// The 60-second snapshot prunes the stale row, so this never survived a clean shutdown —
+		/// but "duplicated until the next snapshot, permanently if the scene server dies first" is
+		/// not a guarantee worth relying on when the delete costs one list entry.
+		/// </para>
+		/// </remarks>
+		/// <param name="container">Item container to swap items in.</param>
+		/// <param name="fromIndex">Source slot index.</param>
+		/// <param name="toIndex">Target slot index.</param>
+		/// <param name="affectedItems">Out: list of items whose slots changed.</param>
+		/// <param name="vacatedSlot">Out: slot the swap emptied, or -1 when both slots stay filled.</param>
+		/// <returns>True if swap succeeded, false otherwise.</returns>
+		public bool SwapContainerItems(IItemContainer container, int fromIndex, int toIndex, out List<Item> affectedItems, out int vacatedSlot)
+		{
 			affectedItems = null;
+			vacatedSlot = -1;
 			if (container != null &&
 				container.SwapItemSlots(fromIndex, toIndex, out Item fromItem, out Item toItem))
 			{
 				affectedItems = new List<Item>(2);
 				if (fromItem != null) affectedItems.Add(fromItem);
 				if (toItem != null) affectedItems.Add(toItem);
+
+				// Exactly one of the two can be empty: SwapItemSlots refuses only on invalid or
+				// locked slots, and a swap of two empty slots is a no-op the handlers reject by
+				// requiring From != To. Whichever side had no item is now the vacated one.
+				if (toItem == null)
+				{
+					vacatedSlot = fromIndex;
+				}
+				else if (fromItem == null)
+				{
+					vacatedSlot = toIndex;
+				}
 				return true;
 			}
 			return false;
@@ -1506,10 +1547,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						// swap the items in the inventory
 						if (msg.To != msg.From &&
-							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected))
+							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected, out int invVacated))
 						{
 							ItemWriteBatch batch = BeginItemBatch(characterID, "InventorySwap");
 							batch.AddInventoryWrites(BuildInventoryItemDataList(characterID, invAffected));
+							// A move onto an empty slot writes the item at its new index and would
+							// otherwise leave the old row behind — the same item in two slots.
+							if (invVacated >= 0)
+							{
+								batch.AddInventoryDelete(invVacated, long.MaxValue);
+							}
 							if (EnqueueItemBatch(batch))
 							{
 								// tell the client we succeeded
@@ -2111,10 +2158,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						// swap the items in the bank
 						if (msg.To != msg.From &&
-							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected))
+							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected, out int bankVacated))
 						{
 							ItemWriteBatch batch = BeginItemBatch(characterID, "BankSwap");
 							batch.AddBankWrites(BuildBankItemDataList(characterID, bankAffected));
+							// Same reasoning as the inventory swap above.
+							if (bankVacated >= 0)
+							{
+								batch.AddBankDelete(bankVacated, long.MaxValue);
+							}
 							if (EnqueueItemBatch(batch))
 							{
 								// tell the client we succeeded

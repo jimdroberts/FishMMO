@@ -1305,7 +1305,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Item item = new Item(inv.ID, inv.Seed, inv.TemplateID, inv.Amount);
 					item.Version = inv.Version;
-					inventoryController.SetItemSlot(item, inv.Slot);
+					/* The return value is not a formality. SetItemSlot refuses any slot outside the
+					 * container, and a refusal here means the item is in no container at all — at
+					 * which point memory is authoritative, the next snapshot prunes the row it came
+					 * from, and the item is destroyed for good. Relocating a row we cannot place
+					 * where it claims to belong is strictly better than dropping it silently. */
+					if (!inventoryController.SetItemSlot(item, inv.Slot))
+					{
+						if (inventoryController.TryAddItem(item, out _))
+						{
+							Log.Warning("CharacterSystem", $"Character {character.ID}: inventory slot {inv.Slot} is out of range; relocated item {inv.ID} to the first free slot.");
+						}
+						else
+						{
+							Log.Error("CharacterSystem", $"Character {character.ID}: could not place inventory item {inv.ID} from slot {inv.Slot}; it will be pruned by the next snapshot.");
+						}
+					}
 				}
 			}
 
@@ -1317,7 +1332,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Item item = new Item(bank.ID, bank.Seed, bank.TemplateID, bank.Amount);
 					item.Version = bank.Version;
-					bankController.SetItemSlot(item, bank.Slot);
+					// Same reasoning as the inventory load above.
+					if (!bankController.SetItemSlot(item, bank.Slot))
+					{
+						if (bankController.TryAddItem(item, out _))
+						{
+							Log.Warning("CharacterSystem", $"Character {character.ID}: bank slot {bank.Slot} is out of range; relocated item {bank.ID} to the first free slot.");
+						}
+						else
+						{
+							Log.Error("CharacterSystem", $"Character {character.ID}: could not place bank item {bank.ID} from slot {bank.Slot}; it will be pruned by the next snapshot.");
+						}
+					}
 				}
 			}
 
@@ -1329,7 +1355,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Item item = new Item(equip.ID, equip.Seed, equip.TemplateID, equip.Amount);
 					item.Version = equip.Version;
-					equipmentController.SetItemSlot(item, equip.Slot);
+					/* Equipment sockets are typed, so an out-of-range slot is corrupt data rather
+					 * than a resizing artefact and there is no sensible slot to relocate to. Report
+					 * it loudly — silently dropping it lets the next snapshot delete the row. */
+					if (!equipmentController.SetItemSlot(item, equip.Slot))
+					{
+						Log.Error("CharacterSystem", $"Character {character.ID}: equipment slot {equip.Slot} is not a valid socket; item {equip.ID} could not be loaded and will be pruned by the next snapshot.");
+						continue;
+					}
 
 					// Apply equipment attribute modifiers via externalModifier
 					if (item.IsEquippable)

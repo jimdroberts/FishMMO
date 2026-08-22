@@ -70,9 +70,27 @@ namespace FishMMO.Client
 		{
 			client = value;
 
-			foreach (UITKControl control in controls.Values)
+			/* Each control is isolated, for exactly the reason SetCharacter documents. This runs
+			 * on the connection path and injects into every registered panel; an override of
+			 * OnClientSet that throws — a broadcast registration against a half-built network
+			 * manager is the usual way — aborted the loop, so every panel after the failing one in
+			 * dictionary order silently never received the client and none of them could send or
+			 * receive anything for the rest of the session. A misconfigured panel must cost only
+			 * that panel.
+			 *
+			 * The dictionary key is used for the log label rather than control.Name, which reads
+			 * gameObject.name and throws MissingReferenceException on a destroyed control — a
+			 * throw from inside the handler meant to contain throws. */
+			foreach (KeyValuePair<string, UITKControl> kvp in controls)
 			{
-				control.SetClient(client);
+				try
+				{
+					kvp.Value.SetClient(client);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetClient failed for control '{kvp.Key}'.", ex);
+				}
 			}
 		}
 
@@ -157,8 +175,25 @@ namespace FishMMO.Client
 				characterControls.Add(characterControl.Name, characterControl);
 			}
 
-			control.SetClient(client);
+			/* Both indexes are populated BEFORE any control code runs. SetClient calls the panel's
+			 * own OnClientSet, which can throw, and with the injection sitting between the two Adds
+			 * a throw left the panel present in characterControls and absent from controls — so
+			 * world entry still handed it a character while every lookup by name missed it, and
+			 * InputControlHasFocus stopped seeing it, which is the one that hurts: typing in that
+			 * panel's text field starts driving the character.
+			 *
+			 * Isolated as well as reordered, because a panel that fails to take the client is still
+			 * a registered panel and Awake must not be aborted for it. */
 			controls.Add(control.Name, control);
+
+			try
+			{
+				control.SetClient(client);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("UIManager", $"SetClient failed while registering control '{control.Name}'.", ex);
+			}
 		}
 
 		/// <summary>
@@ -171,8 +206,23 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			controls.Remove(control.Name);
-			characterControls.Remove(control.Name);
+
+			/* Identity, not just name. RegisterTK deliberately REFUSES a second control sharing a
+			 * name and returns without adding it — so the rejected duplicate is not in either
+			 * dictionary, and removing by name alone evicts the registered, working panel when the
+			 * duplicate is destroyed. Everything downstream then fails silently: TryGetTK misses,
+			 * SetCharacter skips it, and InputControlHasFocus stops seeing it, which is the one
+			 * that hurts — typing in that panel's text field starts driving the character. */
+			if (controls.TryGetValue(control.Name, out UITKControl registered) &&
+				ReferenceEquals(registered, control))
+			{
+				controls.Remove(control.Name);
+			}
+			if (characterControls.TryGetValue(control.Name, out UITKCharacterControl registeredCharacter) &&
+				ReferenceEquals(registeredCharacter, control))
+			{
+				characterControls.Remove(control.Name);
+			}
 		}
 
 		/// <summary>
@@ -410,6 +460,18 @@ namespace FishMMO.Client
 				{
 					// Destroyed, or hidden by something other than Escape.
 					closeOnEscapeControls.RemoveAt(i);
+					continue;
+				}
+
+				/* An always-open panel cannot be closed, so it is not a candidate — but it used to
+				 * be treated as one: the entry was removed, Hide() no-opped against IsAlwaysOpen,
+				 * and lastCloseFrame was stamped anyway. The press was therefore consumed with
+				 * nothing closing, ClosedThisFrame suppressed the menu toggle that would otherwise
+				 * have handled it, and the panel the player actually wanted closed stayed up while
+				 * appearing to have been dealt with. Left in the list, because it is still visible
+				 * and still Escape-registered; skipping simply moves on to the next candidate. */
+				if (control.IsAlwaysOpen)
+				{
 					continue;
 				}
 
