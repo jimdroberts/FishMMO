@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -84,6 +84,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		[Tooltip("Max invitation entries removed per sweep")]
 		[SerializeField] private int invitationSweepMaxRemove = 128;
+
+		/// <summary>
+		/// Minimum seconds between invitations from the same inviter to the same target.
+		/// </summary>
+		/// <remarks>
+		/// The pending-invitation slot is not a rate limit — declining clears it instantly — and
+		/// the ingress debounce is per connection rather than per target. Neither stops one player
+		/// from keeping a modal permanently on another player's screen. This does.
+		/// </remarks>
+		[Tooltip("Minimum seconds between party invitations to the same target from the same inviter")]
+		[SerializeField] private float perTargetInviteCooldownSeconds = 60.0f;
 
 		/// <summary>
 		/// Debounce window in milliseconds for party ingress operations.
@@ -222,6 +233,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			invitationSweepIntervalSeconds = Mathf.Max(0.1f, invitationSweepIntervalSeconds);
 			invitationSweepMaxScan = Mathf.Max(1, invitationSweepMaxScan);
 			invitationSweepMaxRemove = Mathf.Max(1, invitationSweepMaxRemove);
+			perTargetInviteCooldownSeconds = Mathf.Max(0.0f, perTargetInviteCooldownSeconds);
 			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
@@ -359,6 +371,95 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				TimeSpan.FromSeconds(invitationTtlSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
+
+			/* Cooldown entries are pure memory and nothing else removes them, so they get the
+			 * same bounded sweep. Their TTL is the cooldown itself: past it the entry can no
+			 * longer refuse anything. */
+			runtimeData.SweepInviteCooldowns(
+				nowUtc,
+				TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
+				invitationSweepMaxScan,
+				invitationSweepMaxRemove);
+		}
+
+		/// <summary>
+		/// Pushes live health for every party member this scene server hosts.
+		/// </summary>
+		/// <remarks>
+		/// The roster payload carries a health figure, but it reads it from the party database
+		/// row — and that row is written on connect and on disconnect and at no other time. Every
+		/// party health bar therefore sat frozen at the value its owner logged in with, for the
+		/// whole session, which made the field actively misleading rather than merely stale.
+		///
+		/// Fixing it by persisting health on a timer would be a database write per member per
+		/// tick for a value nobody needs durably. Instead this reads the in-memory attribute
+		/// controllers, which are already authoritative and already here, and sends one message
+		/// per party rather than one per member per party.
+		///
+		/// Only members on THIS scene server appear. A member in another zone keeps whatever the
+		/// last roster payload said; a stale bar for someone you cannot see is a far smaller
+		/// problem than a stale bar for the person fighting beside you, and closing the remaining
+		/// gap would mean routing vitals through the database this method exists to avoid.
+		/// </remarks>
+		private void BroadcastLivePartyHealth()
+		{
+			if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData) ||
+				mappingData.PartyCharacterTracker.Count == 0 ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+			{
+				return;
+			}
+
+			foreach (KeyValuePair<long, HashSet<long>> kvp in mappingData.PartyCharacterTracker)
+			{
+				HashSet<long> memberIDs = kvp.Value;
+				if (memberIDs == null || memberIDs.Count < 1)
+				{
+					continue;
+				}
+
+				// Built once per party and sent to each of its local members.
+				List<PartyMemberHealthEntry> entries = new List<PartyMemberHealthEntry>(memberIDs.Count);
+				List<IPlayerCharacter> recipients = new List<IPlayerCharacter>(memberIDs.Count);
+
+				foreach (long memberID in memberIDs)
+				{
+					if (!characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) ||
+						member == null ||
+						member.Owner == null)
+					{
+						continue;
+					}
+
+					recipients.Add(member);
+
+					if (!member.TryGet(out ICharacterAttributeController attributeController))
+					{
+						continue;
+					}
+
+					entries.Add(new PartyMemberHealthEntry()
+					{
+						CharacterID = memberID,
+						HealthPCT = attributeController.GetHealthResourceAttributeCurrentPercentage(),
+					});
+				}
+
+				if (entries.Count < 1 || recipients.Count < 1)
+				{
+					continue;
+				}
+
+				PartyMemberHealthUpdateBroadcast broadcast = new PartyMemberHealthUpdateBroadcast()
+				{
+					Members = entries.ToArray(),
+				};
+
+				for (int i = 0; i < recipients.Count; ++i)
+				{
+					Server.NetworkWrapper.Broadcast(recipients[i].Owner, broadcast, true, Channel.Reliable);
+				}
+			}
 		}
 
 		/// <summary>
@@ -371,6 +472,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			/* Runs on every tick, independently of the database pump below and of whether that
+			 * pump is already in flight. Health is the one roster field that changes constantly,
+			 * and it is the one field that never needed a database round trip to read — the
+			 * attribute controllers are right here in memory. */
+			BroadcastLivePartyHealth();
 
 			if (!Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var runtimeData))
 			{
@@ -653,7 +760,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+			IPartySystemRuntimeData runtimeData = null;
+			if (character != null && Server.DataContainerRegistry.TryGet(out runtimeData))
 			{
 				runtimeData.RemovePendingInvitation(character.ID);
 			}
@@ -676,6 +784,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			RemovePartyCharacterTracker(partyController.ID, character.ID);
+
+			/* A kick or a leave deletes the membership row from a background task, and this
+			 * character's controller still carries the old party ID until that delete lands.
+			 * Persisting from it here would UPSERT the row straight back — putting the player
+			 * into the party they had just left. Disconnecting inside that window is the whole
+			 * exploit, and it is a window a player can aim for. */
+			if (runtimeData != null && runtimeData.IsMembershipRemovalInFlight(character.ID))
+			{
+				return;
+			}
 
 			// Fire-and-forget async DB persist
 			long partyID = partyController.ID;
@@ -984,6 +1102,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				/* Blocking has existed in the friend table since it was written and nothing has
+				 * ever read the column. Asked about the TARGET, not the inviter: the question is
+				 * whether the person about to receive a modal has refused contact from the
+				 * sender. */
+				if (Server.Database.ServiceRegistry.TryGet<ICharacterFriendService>(out var friendService))
+				{
+					DatabaseResult<bool> blockedResult = await friendService.IsBlockedAsync(targetCharacterID, inviterCharacterID);
+					if (blockedResult.IsSuccess && blockedResult.Data)
+					{
+						return;
+					}
+				}
+
 				// Marshal the invitation logic back to the main thread
 				TryEnqueueMainThread(() =>
 				{
@@ -997,8 +1128,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
+					DateTime nowUtc = DateTime.UtcNow;
+
+					/* Per (inviter, target), not per connection. Recorded before the pending slot
+					 * is taken so a target who declines instantly still cannot be re-invited
+					 * until the cooldown elapses. */
+					if (perTargetInviteCooldownSeconds > 0.0f &&
+						!runtimeData.TryBeginInviteCooldown(
+							inviterCharacterID,
+							targetCharacterID,
+							TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
+							nowUtc))
+					{
+						return;
+					}
+
+					PendingPartyInvitation invitation = new PendingPartyInvitation(inviterPartyID, inviterCharacterID, nowUtc);
+
 					// if the target doesn't already have a pending invite
-					if (runtimeData.TryAddPendingInvitation(targetCharacterID, inviterPartyID, DateTime.UtcNow) &&
+					if (runtimeData.TryAddPendingInvitation(targetCharacterID, invitation) &&
 						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
 						characterMappingData.CharactersByID.TryGetValue(targetCharacterID, out IPlayerCharacter targetCharacter) &&
 						targetCharacter.TryGet(out IPartyController targetPartyController))
@@ -1070,21 +1218,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// validate party invite
-				if (runtimeData.TryGetPendingInvitation(partyController.Character.ID, out long pendingPartyID))
+				if (!runtimeData.TryGetPendingInvitation(partyController.Character.ID, out PendingPartyInvitation invitation))
 				{
-					if (Server?.Database?.ServiceRegistry == null)
-					{
-						return;
-					}
-
-					// Capture immutable data for the async path
-					long characterID = partyController.Character.ID;
-					bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
-					float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
-
-					deferGuardRelease = TryEnqueueIngressWork(() => AcceptPartyInviteAsync(conn, characterID, pendingPartyID, healthPCT), guardKey, characterID);
-					if (!deferGuardRelease) SendServerBusy(conn);
+					return;
 				}
+
+				/* The client names the invitation it is answering. It used to send an empty
+				 * struct, so the server could only resolve "whatever is pending" — and a dialog
+				 * left open past the TTL joined whichever party invited the player NEXT. This is
+				 * a claim being CHECKED against the server's own pending record, never trusted. */
+				if (msg.InviterCharacterID != invitation.InviterCharacterID)
+				{
+					return;
+				}
+
+				/* Expiry re-tested here against the issue time rather than left to the sweep. The
+				 * sweep is bounded and periodic, so an invitation can outlive its TTL by up to a
+				 * sweep interval — and reading the entry refreshes the queue's clock. */
+				if (DateTime.UtcNow - invitation.IssuedUtc > TimeSpan.FromSeconds(invitationTtlSeconds))
+				{
+					runtimeData.RemovePendingInvitation(partyController.Character.ID);
+					return;
+				}
+
+				if (Server?.Database?.ServiceRegistry == null)
+				{
+					return;
+				}
+
+				// Capture immutable data for the async path
+				long characterID = partyController.Character.ID;
+				bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
+				float healthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f;
+
+				deferGuardRelease = TryEnqueueIngressWork(() => AcceptPartyInviteAsync(conn, characterID, invitation.PartyID, healthPCT), guardKey, characterID);
+				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
 			{
@@ -1219,7 +1387,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 				{
-					runtimeData.RemovePendingInvitation(character.ID);
+					/* Only clear the invitation the client actually declined. A decline that
+					 * arrives after the slot has been refilled would otherwise silently throw
+					 * away an invitation the player has not been shown yet. */
+					if (runtimeData.TryGetPendingInvitation(character.ID, out PendingPartyInvitation invitation) &&
+						msg.InviterCharacterID == invitation.InviterCharacterID)
+					{
+						runtimeData.RemovePendingInvitation(character.ID);
+					}
 				}
 			}
 			finally
@@ -1271,7 +1446,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long characterID = partyController.Character.ID;
 				PartyRank rank = partyController.Rank;
 
+				/* Marked BEFORE the async hop. The membership row is deleted on a background task
+				 * while this character still carries a live party ID, and disconnecting in that
+				 * window would run the ordinary disconnect persist and write the row back in. */
+				BeginMembershipRemoval(characterID);
+
 				deferGuardRelease = TryEnqueueIngressWork(() => LeavePartyAsync(conn, characterID, partyID, rank), guardKey, characterID);
+				if (!deferGuardRelease)
+				{
+					EndMembershipRemoval(characterID);
+				}
 				if (!deferGuardRelease)
 				{
 					SendServerBusy(conn);
@@ -1414,6 +1598,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("PartySystem", $"Error leaving party (CharID={characterID}, PartyID={partyID}): {ex}");
 			}
+			finally
+			{
+				// Released on EVERY exit; a marker left set silences this character's persist.
+				EndMembershipRemoval(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Marks a character's party membership as being removed.
+		/// </summary>
+		/// <param name="characterID">The character leaving or being kicked.</param>
+		private void BeginMembershipRemoval(long characterID)
+		{
+			if (Server?.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData) == true)
+			{
+				runtimeData.BeginMembershipRemoval(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Clears the membership-removal marker for a character.
+		/// </summary>
+		/// <param name="characterID">The character whose removal has finished.</param>
+		/// <remarks>
+		/// Marshalled to the main thread: the marker is main-thread state and the callers that
+		/// release it are background tasks. The disconnect handler that reads it also runs on the
+		/// main thread, so the two can never interleave.
+		/// </remarks>
+		private void EndMembershipRemoval(long characterID)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				if (Server?.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData) == true)
+				{
+					runtimeData.EndMembershipRemoval(characterID);
+				}
+			});
 		}
 
 		/// <summary>
@@ -1472,8 +1693,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long memberID = msg.CharacterID;
 				long characterID = partyController.Character.ID;
 
+				/* Marked for the TARGET, not the requester: it is the target's membership row
+				 * being deleted, and it is the target who could disconnect mid-delete and have
+				 * the disconnect persist write it straight back. */
+				BeginMembershipRemoval(memberID);
+
 				deferGuardRelease = TryEnqueueIngressWork(() => RemovePartyMemberAsync(partyID, memberID, characterID), guardKey, characterID);
-				if (!deferGuardRelease) SendServerBusy(conn);
+				if (!deferGuardRelease)
+				{
+					EndMembershipRemoval(memberID);
+					SendServerBusy(conn);
+				}
 			}
 			finally
 			{
@@ -1527,6 +1757,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					TryEnqueueMainThread(() =>
 					{
 						RemovePartyCharacterTracker(partyID, memberID);
+
+						/* Tell the kicked member immediately if they are on this scene server.
+						 * Nothing used to: their controller kept a live party ID until the next
+						 * periodic pump noticed the row was gone, so for up to a pump interval
+						 * they were still in a party they had been removed from — and any party
+						 * action they took was authorised against that stale ID. Clearing the
+						 * controller here also closes the disconnect-resurrection window, since
+						 * the disconnect persist reads that same ID. */
+						if (Server != null &&
+							Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
+							characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter targetCharacter) &&
+							targetCharacter != null &&
+							targetCharacter.TryGet(out IPartyController targetPartyController) &&
+							targetPartyController.ID == partyID)
+						{
+							targetPartyController.ID = 0;
+							targetPartyController.Rank = PartyRank.None;
+
+							if (targetCharacter.Owner != null)
+							{
+								Server.NetworkWrapper.Broadcast(targetCharacter.Owner, new PartyLeaveBroadcast(), true, Channel.Reliable);
+							}
+						}
 					});
 
 					// Tell the other servers to update their party lists.
@@ -1544,6 +1797,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("PartySystem", $"Error removing party member (PartyID={partyID}, MemberID={memberID}): {ex}");
+			}
+			finally
+			{
+				EndMembershipRemoval(memberID);
 			}
 		}
 

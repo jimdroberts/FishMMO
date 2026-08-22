@@ -27,6 +27,7 @@ namespace FishMMO.DiscordBot.Services
 		private readonly BridgeBanService bridgeBanService;
 		private readonly AccountLinkingService accountLinkingService;
 		private readonly BotConfigurationService botConfigService;
+		private readonly ChatRelayPolicy relayPolicy;
 		private readonly SemaphoreSlim pollLock = new SemaphoreSlim(1, 1);
 		private Timer? timer;
 		private readonly int pollingIntervalSeconds;
@@ -42,6 +43,7 @@ namespace FishMMO.DiscordBot.Services
 		/// <param name="logger">Logger instance.</param>
 		/// <param name="configuration">Application configuration.</param>
 		/// <param name="dynamicChannelManager">Service managing dynamic Discord channels.</param>
+		/// <param name="relayPolicy">Allowlist deciding which game channels may reach Discord.</param>
 		public ChatPollingService(
 			DiscordSocketClient discordClient,
 			NpgsqlDbContextFactory dbContextFactory,
@@ -50,7 +52,8 @@ namespace FishMMO.DiscordBot.Services
 			DynamicChannelManagerService dynamicChannelManager,
 			BridgeBanService bridgeBanService,
 			AccountLinkingService accountLinkingService,
-			BotConfigurationService botConfigService)
+			BotConfigurationService botConfigService,
+			ChatRelayPolicy relayPolicy)
 		{
 			this.discordClient = discordClient;
 			this.dbContextFactory = dbContextFactory;
@@ -59,6 +62,7 @@ namespace FishMMO.DiscordBot.Services
 			this.bridgeBanService = bridgeBanService;
 			this.accountLinkingService = accountLinkingService;
 			this.botConfigService = botConfigService;
+			this.relayPolicy = relayPolicy;
 
 			if (!int.TryParse(configuration["ChatPollingIntervalSeconds"], out int parsedInterval) || parsedInterval <= 0)
 			{
@@ -150,6 +154,9 @@ namespace FishMMO.DiscordBot.Services
 			var newChatMessages = await dbContext.Chat
 				.AsQueryable()
 				.Where(c => c.ID > lastProcessedChatId)
+				// Bridged Discord messages are excluded here so the relay cannot echo its own
+				// traffic back. Everything else is fetched so the cursor advances and so link
+				// verification can scan it; what is actually SENT is decided by relayPolicy below.
 				.Where(c => c.Channel != (byte)ChatChannel.Discord)
 				.OrderBy(c => c.ID)
 				.ToListAsync();
@@ -255,6 +262,23 @@ namespace FishMMO.DiscordBot.Services
 
 			foreach (var chatMessage in newChatMessages)
 			{
+				/* THE relay gate. Nothing reaches Discord without passing an explicit allowlist.
+				 *
+				 * This check used to be the `Channel != Discord` filter on the query above and
+				 * nothing else, which meant every channel the game has — including whispers,
+				 * guild chat and party chat — was published to a public Discord channel. See
+				 * ChatRelayPolicy for what the allowlist contains and why private channels cannot
+				 * be added to it from configuration.
+				 *
+				 * The gate is here rather than in the query on purpose: the query still has to
+				 * see every row so the cursor advances past channels we do not relay, and so the
+				 * account-link verification pass below can spot a verification code wherever a
+				 * player typed it. Neither of those republishes anything. */
+				if (!relayPolicy.IsRelayable(chatMessage.Channel))
+				{
+					continue;
+				}
+
 				// Skip bridge-banned characters/accounts
 				if (bridgeBanService.IsBridgeBanned(chatMessage.CharacterName, chatMessage.AccountName))
 				{

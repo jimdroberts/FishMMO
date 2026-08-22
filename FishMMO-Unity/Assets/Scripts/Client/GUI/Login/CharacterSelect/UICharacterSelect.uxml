@@ -9,10 +9,16 @@
             <ui:ScrollView name="character-scroll" class="fish-scroll character-scroll">
                 <ui:VisualElement name="character-list" class="character-list" />
             </ui:ScrollView>
+            <!--
+                Status line for a list that did not arrive. The screen had no way at all to say
+                "the server refused this request", and no way to ask again — see H2.
+            -->
+            <ui:Label name="character-status" text="" class="fish-label fish-label--muted character-status" />
             <ui:VisualElement name="character-buttons" class="character-buttons">
                 <ui:Button name="character-connect-btn" text="Play" class="fish-button character-btn fish-button--primary" />
                 <ui:Button name="character-create-btn" text="Create" class="fish-button character-btn" />
                 <ui:Button name="character-delete-btn" text="Delete" class="fish-button character-btn fish-button--danger" />
+                <ui:Button name="character-refresh-btn" text="Refresh" class="fish-button character-btn" />
             </ui:VisualElement>
             <ui:VisualElement name="character-buttons-secondary" class="character-buttons">
                 <ui:Button name="character-quit-login-btn" text="Back" class="fish-button character-btn" />

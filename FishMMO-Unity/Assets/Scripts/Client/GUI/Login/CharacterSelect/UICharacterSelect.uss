@@ -58,3 +58,15 @@
     margin-right: 4px;
     height: 32px;
 }
+
+/*
+    Status line under the list. Used only when there is something to say — a refused or failed
+    character-list request — and collapsed from C# otherwise, so the ordinary case still shows
+    just the list and the buttons.
+*/
+.character-status {
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}

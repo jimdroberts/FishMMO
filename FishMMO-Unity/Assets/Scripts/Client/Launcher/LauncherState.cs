@@ -77,5 +77,16 @@ namespace FishMMO.Client
 		/// the server's expected version. The client must be updated (or downgraded).
 		/// </summary>
 		ServerRejectedVersion,
+		/// <summary>
+		/// The player cancelled a version check or a patch download.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from the failure states even though the recovery is identical, because the
+		/// launcher logs error states at <c>Error</c> and reports them as something that went
+		/// wrong. A cancellation is neither — treating it as a failure would fill the log with
+		/// errors describing the player doing exactly what the button offered, and tell them
+		/// something had gone wrong when nothing had.
+		/// </remarks>
+		Cancelled,
 	}
 }

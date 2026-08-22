@@ -33,6 +33,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.Location)
 				.HasMaxLength(200);
 
+			builder.Property(e => e.PublicNote)
+				.HasMaxLength(128)
+				.HasDefaultValue(string.Empty);
+
+			builder.Property(e => e.OfficerNote)
+				.HasMaxLength(128)
+				.HasDefaultValue(string.Empty);
+
 			// Unique constraint: one character can only be in one guild
 			builder.HasIndex(e => e.CharacterID)
 				.IsUnique();

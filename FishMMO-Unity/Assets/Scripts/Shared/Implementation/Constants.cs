@@ -68,16 +68,93 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Characters a version string may contribute to a patch file name.
+		/// </summary>
+		/// <remarks>
+		/// An allowlist, not a denylist. The set is exactly what
+		/// <see cref="VersionConfig.Parse"/> can produce — digits, dots, alphanumerics and
+		/// hyphens — so a name built from two parsed versions always passes, and anything else
+		/// is by definition not a version.
+		/// </remarks>
+		private static bool IsPatchNameSafeChar(char c)
+		{
+			return (c >= '0' && c <= '9') ||
+				   (c >= 'a' && c <= 'z') ||
+				   (c >= 'A' && c <= 'Z') ||
+				   c == '.' || c == '-' || c == '_';
+		}
+
+		/// <summary>
 		/// Builds the patch archive file name for an upgrade from
 		/// <paramref name="fromVersion"/> to <paramref name="toVersion"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// This naming scheme is a three-way contract between the patch generator, the
 		/// patcher web server's index regex, and the Updater's lookup. Changing it
 		/// requires changing all three.
+		/// </para>
+		/// <para>
+		/// <b>Security:</b> <paramref name="toVersion"/> comes from the update server, and the
+		/// result is fed straight to <c>Path.Combine</c> by the launcher's download path. A bare
+		/// interpolation therefore made the server the author of a filesystem path — a version
+		/// carrying <c>../</c> put the downloaded archive wherever the server liked, and since
+		/// the same response supplies the expected SHA-256, the integrity check passed and the
+		/// file was kept.
+		/// </para>
+		/// <para>
+		/// <see cref="VersionConfig.Parse"/> now rejects those version strings at the grammar
+		/// level, which is the first line of defence. This is the second, and it is here rather
+		/// than only there because the two are separated by several call frames and a serialized
+		/// field: this function's contract is "produce a file name", and a file name containing
+		/// a separator is not one. It returns null rather than throwing so the caller can report
+		/// a normal update failure; a null is a programming-visible refusal, not a crash in front
+		/// of the player.
+		/// </para>
 		/// </remarks>
+		/// <returns>
+		/// The archive file name, or <c>null</c> when either version is missing or contains
+		/// anything that is not a version character. Callers MUST null-check.
+		/// </returns>
 		public static string GetPatchFileName(string fromVersion, string toVersion)
 		{
+			if (string.IsNullOrWhiteSpace(fromVersion) || string.IsNullOrWhiteSpace(toVersion))
+			{
+				Debug.LogError("Constants.GetPatchFileName: refusing to build a patch file name from an empty version.");
+				return null;
+			}
+
+			// Generous, but bounded: two 64-character versions plus a separator and ".zip" is
+			// already far longer than any real name, and an unbounded one is a path-length
+			// denial of service on Windows.
+			const int MaxVersionLength = 64;
+			if (fromVersion.Length > MaxVersionLength || toVersion.Length > MaxVersionLength)
+			{
+				Debug.LogError("Constants.GetPatchFileName: refusing to build a patch file name from an over-long version string.");
+				return null;
+			}
+
+			foreach (string version in new[] { fromVersion, toVersion })
+			{
+				for (int i = 0; i < version.Length; ++i)
+				{
+					if (!IsPatchNameSafeChar(version[i]))
+					{
+						Debug.LogError($"Constants.GetPatchFileName: refusing version '{version}' — character at index {i} is not permitted in a patch file name.");
+						return null;
+					}
+				}
+
+				// A run of dots is the traversal primitive even without a separator: combined
+				// with the caller's directory, ".." IS the parent. The allowlist above cannot
+				// see it because '.' is legitimately a version separator.
+				if (version.Contains("..") || version == "." || version == "..")
+				{
+					Debug.LogError($"Constants.GetPatchFileName: refusing version '{version}' — it contains a '..' sequence.");
+					return null;
+				}
+			}
+
 			return $"{fromVersion}-{toVersion}.zip";
 		}
 

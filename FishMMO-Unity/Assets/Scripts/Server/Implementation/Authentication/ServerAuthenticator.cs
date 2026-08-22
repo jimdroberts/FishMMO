@@ -297,24 +297,48 @@ namespace FishMMO.Server.Implementation
 			};
 		}
 
-		/// <summary>Returns <c>true</c> if the account has any online characters in the database.</summary>
+		/// <summary>
+		/// Returns <c>true</c> if the account has any online characters in the database.
+		/// Fails closed: a database error returns <c>true</c> (treat as online), so an outage
+		/// cannot be used to slip a second session past the duplicate-login gate.
+		/// </summary>
 		private async Task<bool> CheckIsOnlineCoreAsync(string username)
 		{
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var svc))
+			{
+				await Log.Warning(LogPrefix, $"ICharacterService unavailable; the duplicate-session gate cannot be evaluated for '{username}'.");
 				return false;
+			}
 			var r = await svc.AnyOnlineAsync(username);
-			return r.IsSuccess && r.Data;
+			if (!r.IsSuccess)
+			{
+				await Log.Error(LogPrefix, $"AnyOnlineAsync DB error for '{username}': [{r.ErrorCode}] {r.ErrorMessage}. Treating the account as online (fail-closed).");
+				return true;
+			}
+			return r.Data;
 		}
 
-		/// <summary>Returns <c>true</c> if the account has a pending kick request in the database.</summary>
+		/// <summary>
+		/// Returns <c>true</c> if the account has a pending kick request in the database.
+		/// Fails closed: a database error returns <c>true</c> (treat as kicked), so an outage
+		/// cannot be used to log straight back in past a pending kick.
+		/// </summary>
 		private async Task<bool> CheckHasPendingKickCoreAsync(string username)
 		{
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var svc))
+			{
+				await Log.Warning(LogPrefix, $"IKickRequestService unavailable; the pending-kick gate cannot be evaluated for '{username}'.");
 				return false;
+			}
 			var r = await svc.HasPendingAsync(username);
-			return r.IsSuccess && r.Data;
+			if (!r.IsSuccess)
+			{
+				await Log.Error(LogPrefix, $"HasPendingAsync DB error for '{username}': [{r.ErrorCode}] {r.ErrorMessage}. Treating the account as kicked (fail-closed).");
+				return true;
+			}
+			return r.Data;
 		}
 
 		/// <summary>Persists a kick request for the account so the game server can disconnect the online session.</summary>

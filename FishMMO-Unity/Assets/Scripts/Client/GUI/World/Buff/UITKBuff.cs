@@ -1,4 +1,4 @@
-using FishMMO.Shared.Core;
+﻿using FishMMO.Shared.Core;
 
 namespace FishMMO.Client
 {

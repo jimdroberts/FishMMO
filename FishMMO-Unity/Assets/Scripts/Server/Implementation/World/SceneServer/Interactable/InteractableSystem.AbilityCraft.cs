@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Server.Core.World.SceneServer;
@@ -102,7 +102,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						return;
 					}
 
+					/* SERVER-AUTHORITATIVE SLOT LIMIT.
+					 *
+					 * The per-ability limit lives on the template as AdditionalEventSlots, and it
+					 * was applied ONLY by the client (UITKAbilityCraft renders exactly that many
+					 * event slots). The server checked nothing but the global payload cap, so a
+					 * crafted AbilityCraftBroadcast could attach up to maxAbilityCraftEvents (32)
+					 * events to an ability whose template allows zero — a permanent, persisted
+					 * ability with 32 events' worth of aggregated damage, range and lifetime for
+					 * the price of the events alone.
+					 *
+					 * maxAbilityCraftEvents stays as the payload cap; this is the game rule. */
+					if (msg.Events.Length > mainAbility.AdditionalEventSlots)
+					{
+						Log.Debug("InteractableSystem",
+							$"AbilityCraft: rejected {msg.Events.Length} events for template {mainAbility.ID} which allows {mainAbility.AdditionalEventSlots}.");
+						return;
+					}
+
 					HashSet<int> validatedEvents = new HashSet<int>();
+					bool hasTypeOverride = false;
 					for (int i = 0; i < msg.Events.Length; ++i)
 					{
 						int id = msg.Events[i];
@@ -112,20 +131,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							return;
 						}
 						validatedEvents.Add(id);
+
+						/* The character must know the entry regardless of which cache it lives
+						 * in. This check is what keeps the branch below from becoming a way to
+						 * inject templates the player never learned. */
+						if (!abilityController.KnowsAbilityEvent(id))
+						{
+							return;
+						}
+
 						AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
-						if (abilityEvent == null)
+						if (abilityEvent != null)
 						{
-							// unknown ability event
-							return;
+							price += abilityEvent.Price;
+							continue;
 						}
 
-						// validate that the character knows the ability event
-						if (!abilityController.KnowsAbilityEvent(abilityEvent.ID))
+						/* Ability.Initialize also accepts an AbilityTypeOverrideEventType id here.
+						 * It extends BaseAbilityTemplate rather than AbilityEvent, so it lives in
+						 * a different cache and AbilityEvent.Get returns null for it. Resolve it
+						 * explicitly, and allow AT MOST ONE: Ability.TypeOverride is a single
+						 * field, so a second one silently wins and which one wins depends on
+						 * payload order — a request the server should refuse outright rather than
+						 * resolve arbitrarily. */
+						BaseAbilityTemplate baseTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(id);
+						if (baseTemplate is AbilityTypeOverrideEventType typeOverride)
 						{
-							return;
+							if (hasTypeOverride)
+							{
+								Log.Debug("InteractableSystem", "AbilityCraft: rejected multiple ability-type override events.");
+								return;
+							}
+							hasTypeOverride = true;
+							price += typeOverride.Price;
+							continue;
 						}
 
-						price += abilityEvent.Price;
+						// unknown ability event
+						return;
 					}
 				}
 

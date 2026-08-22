@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -1295,10 +1295,39 @@ namespace FishMMO.Shared
 			}
 			loadedScenes.Clear();
 
-			foreach (var assetList in loadedAssets.Values)
+			/* Logged per key to mirror the "Loading:"/"Loaded:" pair, and logged on BOTH branches.
+			 *
+			 * Release used to be silent, which made a correct shutdown indistinguishable from a
+			 * leak: every label showed a load with no counterpart. Logging only the valid branch
+			 * was not enough either, because in the editor that branch is never taken — see
+			 * AddressablesPlayModeSceneHandleFix for the ordering. Addressables subscribes its own
+			 * PlayModeStateChangedCleanup at domain load, playModeStateChanged dispatches in
+			 * subscription order, and this system's MonoBehaviour subscribes far later, so
+			 * AddressablesImpl.Dispose has already released every handle by the time we look. The
+			 * handles are invalid, the loop body is skipped, and the console stays empty — which
+			 * reads exactly like a leak while actually being correct teardown.
+			 *
+			 * In a standalone build there is no playModeStateChanged, so Application.wantsToQuit
+			 * reaches this first and the valid branch is the one that runs. */
+			int releasedCount = 0;
+			int alreadyInvalidCount = 0;
+
+			foreach (var loadedAsset in loadedAssets)
 			{
-				if (assetList.IsValid())
+				AddressableAssetKey releasedKey = loadedAsset.Key;
+				AsyncOperationHandle<IList<UnityEngine.Object>> assetList = loadedAsset.Value;
+
+				if (!assetList.IsValid())
 				{
+					++alreadyInvalidCount;
+					Log.Debug("AddressableLoadProcessor",
+						$"Already released by Addressables, nothing to do: {releasedKey}");
+					continue;
+				}
+
+				{
+					Log.Debug("AddressableLoadProcessor", $"Releasing: {releasedKey}");
+
 					if (assetList.Result != null)
 					{
 						foreach (var asset in assetList.Result)
@@ -1318,8 +1347,18 @@ namespace FishMMO.Shared
 						}
 					}
 					Addressables.Release(assetList);
+					++releasedCount;
+					Log.Debug("AddressableLoadProcessor", $"Released: {releasedKey}");
 				}
 			}
+
+			/* Always emitted, even when both counts are zero. A summary that appears
+			 * unconditionally is what distinguishes "the release pass ran and had nothing to do"
+			 * from "the release pass never ran", and those two look identical otherwise. */
+			Log.Debug("AddressableLoadProcessor",
+				$"Asset release pass complete: {releasedCount} released, {alreadyInvalidCount} already invalid, " +
+				$"{loadedAssets.Count} tracked.");
+
 			loadedAssets.Clear();
 
 			foreach (var prefabHandle in loadedPrefabs.Values)

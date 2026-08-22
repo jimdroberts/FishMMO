@@ -89,6 +89,56 @@ namespace FishMMO.Shared
 		public int Index;
 		/// <summary>Type of merchant tab (e.g., buy, sell).</summary>
 		public MerchantTabType Type;
+		/// <summary>
+		/// How many of the item to buy. Clamped server-side; only ever a quantity, never a price.
+		/// </summary>
+		/// <remarks>
+		/// The unit price is looked up from the merchant's own template on the server and the
+		/// total is multiplied there. Nothing about cost travels on this message — a client that
+		/// asks for a thousand of something simply gets its request clamped to what the stack and
+		/// its purse allow.
+		/// </remarks>
+		public int Quantity;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast to sell an inventory item to a merchant.
+	/// </summary>
+	/// <remarks>
+	/// Carries a slot index and a quantity and nothing else. The server resolves the item in that
+	/// slot itself, takes the price from that item's template, and applies the merchant template's
+	/// own multiplier — so neither the item's identity nor its value is ever taken from the
+	/// client. This mirrors how the rest of the item trust boundary works: client to server
+	/// carries slot indices and enums, never IDs or values.
+	/// </remarks>
+	public struct MerchantSellBroadcast : IBroadcast
+	{
+		/// <summary>ID of the merchant object.</summary>
+		public long InteractableID;
+		/// <summary>Inventory slot index holding the item being sold.</summary>
+		public int Slot;
+		/// <summary>How many to sell out of that slot. Clamped server-side to the stack size.</summary>
+		public int Quantity;
+	}
+
+	/// <summary>
+	/// Server → Client broadcast acknowledging or refusing a merchant sale.
+	/// </summary>
+	/// <remarks>
+	/// The sell path needs an explicit reply for the same reason every other item operation does:
+	/// the client holds a pending lock on the slot it submitted, and a handler that simply returns
+	/// leaves that lock held forever. Every exit from the sell handler sends one of these.
+	/// </remarks>
+	public struct MerchantSellResultBroadcast : IBroadcast
+	{
+		/// <summary>The inventory slot the request named.</summary>
+		public int Slot;
+		/// <summary>True when the sale went through.</summary>
+		public bool Success;
+		/// <summary>Quantity actually sold, after server-side clamping.</summary>
+		public int Quantity;
+		/// <summary>Currency actually paid out.</summary>
+		public int Payout;
 	}
 
 	/// <summary>

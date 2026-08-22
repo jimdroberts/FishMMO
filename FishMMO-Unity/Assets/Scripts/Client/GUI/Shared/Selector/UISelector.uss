@@ -90,3 +90,18 @@
     margin-left: 6px;
     flex-shrink: 0;
 }
+
+/*
+    Keyboard focus. The selector can be driven entirely from the keyboard — arrows to move,
+    Enter to accept, Escape to cancel — and without a visible focus state there is no way to
+    tell which option those keys are about to act on. Uses the same accent the selected row
+    does so the two read as one highlight rather than two competing ones.
+*/
+.selector-entry:focus {
+    background-color: var(--brand-hover);
+    border-left-color: var(--brand-300);
+}
+
+.selector-action:focus {
+    border-color: var(--brand-300);
+}

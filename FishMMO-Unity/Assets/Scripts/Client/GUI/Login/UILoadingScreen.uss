@@ -1,4 +1,4 @@
-/*
+﻿/*
     UILoadingScreen.uss
     Layout for the full-screen loading overlay. Colours come from FishMMO-Theme.uss.
 
@@ -57,7 +57,7 @@
     white-space: normal;
     font-size: 15px;
     color: var(--text-bright);
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+    text-shadow: 0 2px 4px var(--shadow-text-hard);
     margin-bottom: 10px;
     flex-shrink: 0;
 }
@@ -97,6 +97,41 @@
     -unity-text-align: middle-center;
     white-space: normal;
     color: var(--abyss-100);
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+    text-shadow: 0 2px 4px var(--shadow-text-hard);
     flex-shrink: 0;
+}
+
+/*
+    ── The escape hatch ────────────────────────────────────────
+
+    The overlay used to have no button of any kind, and it is raised by four independent drivers
+    of which two (world entry and the armed reconnect) are cleared only by Hide(). Anything that
+    left one of those set held the screen indefinitely with nothing on it to press: the loading
+    overlay covers every other panel, so this was Alt+F4 territory.
+
+    Collapsed rather than merely transparent so it takes no vertical space at all while hidden —
+    the loading block is centred on itself, and an empty row would shift the bar off-centre on
+    every ordinary scene load. Revealed from C# only after the overlay has outlasted any honest
+    transition; see UITKLoadingScreen.
+*/
+.loading-actions {
+    display: none;
+    margin-top: 16px;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/*
+    Says why the button has appeared. Carries .loading-status as well, which is where the colour
+    and the shadow come from — repeating them here would mean a second colour literal in a panel
+    stylesheet, and the palette is FishMMO-Theme.uss's job.
+*/
+.loading-stuck {
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.loading-return-btn {
+    min-width: 180px;
 }

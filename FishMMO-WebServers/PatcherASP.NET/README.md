@@ -185,6 +185,81 @@ Examples:
 - `1.0.0-1.0.1.zip`
 - `1.0.0.alpha-1.0.0.beta.zip`
 
+## Release Signing (Ed25519)
+
+Every JSON payload `/latest_version` returns carries a `signature` field, and the client verifies
+it before reading any other field — the version, the patch name and the SHA-256 it will check the
+download against all come from this document, so an unsigned one is an instruction to the launcher
+from whoever answered the request.
+
+**This is a two-part deployment. The client half ships already; until the server is given a key,
+nothing is signed.** That state is deliberate rather than fail-closed: making an unkeyed server
+refuse to serve would have bricked every existing deployment the moment this shipped. It logs
+loudly on every release build instead, and the build validator warns.
+
+### 1. Generate a keypair
+
+```bash
+dotnet run --project Tools/ManifestSigner -- keygen --out-dir ./keys
+```
+
+Writes `./keys/version-manifest-signing.key` (base64 private seed, mode 600 where supported) and
+`./keys/version-manifest-signing.pub`. With no `--out-dir` the keys are printed to stdout and
+**nothing is written**. The private key belongs only on the patch server; it is never committed,
+never logged, and never leaves the release host.
+
+### 2. Configure the server
+
+One of, in order of preference:
+
+| Setting | Notes |
+|---|---|
+| `Signing:VersionManifestPrivateKeyFile` | **Preferred.** Path to a file holding the base64 key. |
+| `FISHMMO_VERSION_MANIFEST_SIGNING_KEY` | Environment variable. |
+| `Signing:VersionManifestPrivateKeyBase64` | Least preferred — the key ends up in configuration. |
+
+A configured-but-unreadable or malformed key **throws** rather than quietly downgrading to
+unsigned.
+
+### 3. Ship the public half to clients
+
+Put the public key in `GeneratedPinSet.VersionManifestPublicKeyBase64`
+(`Assets/Scripts/Client/Security/CertificatePins.generated.cs`). It is a **separate** key from the
+certificate-pin manifest key; do not reuse one for both.
+
+### Rollout order
+
+1. Deploy the signing server first, with the key configured.
+2. Then ship clients carrying the public key.
+
+Clients without the public key configured do not verify, so the reverse order — clients first —
+means every one of them fails closed against a server that is not yet signing. To check a document
+the server produced, save the response and verify it locally:
+
+```bash
+curl -s https://your-host/latest_version > latest.json
+dotnet run --project Tools/ManifestSigner -- verify --public-file ./keys/version-manifest-signing.pub --in latest.json
+# exit code 0 = valid, 1 = invalid
+```
+
+To sign a manifest offline, note that the **output** is the signed artifact — `sign` re-serialises
+into the canonical spacing, so deploy the file it writes, not the one you fed it:
+
+```bash
+dotnet run --project Tools/ManifestSigner -- sign --key ./keys/version-manifest-signing.key --in manifest.json --out manifest.signed.json
+```
+
+> **Why this exists.** The verifier previously appended the signature to the message being signed,
+> which requires solving `sig = Sign(sk, stripped ‖ base64(sig))` — a fixed point of a hash-driven
+> function over a 64-byte value, roughly 2^256 work. It was unsatisfiable, and went unnoticed
+> because nothing had ever signed a manifest, so the verifier had never been handed a document that
+> was supposed to pass. `ApiPinUpdateSidecar` used the identical construction, so certificate pin
+> updates could not have verified either. Both now share the corrected canonical form: the document
+> with its `signature` value blanked, compared **as received** rather than re-serialised, so signer
+> and verifier cannot disagree about key order or spacing.
+
+---
+
 ## Configuration
 
 `appsettings.json`:

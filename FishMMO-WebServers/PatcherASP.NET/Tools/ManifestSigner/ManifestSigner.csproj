@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Operator tool: generate the release keypair, sign an offline manifest, verify one.
+
+    Deliberately NOT a member of PatcherASP.sln. It is not part of the deployed server and a
+    build of the shipping solution should not be able to break because of it, which is the same
+    reasoning that keeps FishMMO-Patcher/Updater.Tests out of Updater.sln.
+
+    The signing rules are compiled from the SHIPPING SOURCE by <Compile Include> link, not copied.
+    A tool that reimplements the canonical form is a tool that will eventually disagree with the
+    server about what a signature covers.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FishMMO.WebServers.Tools</RootNamespace>
+    <AssemblyName>ManifestSigner</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Patcher\Signing\ManifestSigning.cs">
+      <Link>Linked\ManifestSigning.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Patcher\Signing\ManifestJsonWriter.cs">
+      <Link>Linked\ManifestJsonWriter.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

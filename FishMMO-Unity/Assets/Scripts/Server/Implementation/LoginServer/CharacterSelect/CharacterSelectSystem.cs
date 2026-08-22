@@ -131,8 +131,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 				}
 			else if (conn.IsActive)
 			{
+				/* Every refusal answers. This used to be a bare `return`, and it is reached by the
+				 * two most ordinary refusals there are: the 2000ms per-connection cooldown, and a
+				 * request arriving while one is still in flight. The client sends this request one
+				 * second after login success, at the exact moment the login panel hides itself, so
+				 * a silent refusal left the player looking at an empty scene with no panel, no
+				 * button and no error — the client had nothing armed that would ever notice. */
 				if (!TryBeginInFlightRequest(conn))
 				{
+					SendCharacterListResult(conn, CharacterListResult.Busy);
 					return;
 				}
 
@@ -140,6 +147,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				{
 					EndInFlightRequest(conn);
 					SendServerBusy(conn);
+					SendCharacterListResult(conn, CharacterListResult.Busy);
 				}
 			}
 		}
@@ -197,6 +205,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSelectSystem", $"Error processing character list request: {ex}");
+
+				/* The catch-all answers too. Anything thrown between the service lookup and the
+				 * enqueued broadcast above — a mapping fault on one row, a cancelled task during
+				 * shutdown — used to be logged and swallowed, and the client was left waiting for
+				 * a list that no longer had anything producing it. No exception detail goes on the
+				 * wire; the result code says only that the list could not be produced. */
+				FailCharacterListRequest(conn);
 			}
 			finally
 			{
@@ -498,8 +513,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 					 * Re-selecting the SAME character is allowed: that is exactly the path a
 					 * player takes to rejoin the body they left behind. */
 					DatabaseResult<CharacterData?> inWorldResult = await characterService.FetchInWorldCharacterAsync(accountName);
-					if (inWorldResult.IsSuccess &&
-						inWorldResult.Data.HasValue &&
+					if (!inWorldResult.IsSuccess)
+					{
+						/* Fail closed. This read is the only thing standing between a stale claim
+						 * and a second character entering the world, so a failed read has to refuse
+						 * the selection rather than fall through it. The player can retry. */
+						await Log.Error("CharacterSelectSystem",
+							$"FetchInWorldCharacterAsync DB error for account '{accountName}': [{inWorldResult.ErrorCode}] {inWorldResult.ErrorMessage}. Refusing selection (fail-closed).");
+						SendSelectFailure(conn);
+						return;
+					}
+					if (inWorldResult.Data.HasValue &&
 						inWorldResult.Data.Value.ID != character.ID)
 					{
 						CharacterData inWorld = inWorldResult.Data.Value;
@@ -744,13 +768,44 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="conn">Network connection whose request could not be answered.</param>
 		private void FailCharacterListRequest(NetworkConnection conn)
 		{
-			TryEnqueueMainThread(() =>
+			SendCharacterListResult(conn, CharacterListResult.Failed);
+		}
+
+		/// <summary>
+		/// Tells the client its character-list request will not be answered with a list, and why.
+		/// </summary>
+		/// <remarks>
+		/// This replaced a <c>DisconnectWithNotice(conn, ServerError)</c>. Dropping the connection
+		/// did end the wait, but it ended it in the worst available state: the disconnect defaults
+		/// to <c>terminal: false</c>, and on the client every login panel had already hidden itself
+		/// by that point, so a transient database fault took the player to a screen with nothing on
+		/// it at all. Answering on the channel the request arrived on leaves the connection up and
+		/// the player on a screen with a Retry button.
+		/// <para>
+		/// Nothing about the underlying failure goes on the wire — no exception text, no error
+		/// code from the database. The result enum distinguishes only "busy, try again" from
+		/// "could not be produced", which is all the client can usefully act on.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">Network connection to answer.</param>
+		/// <param name="result">Why the list could not be sent.</param>
+		private void SendCharacterListResult(NetworkConnection conn, CharacterListResult result)
+		{
+			if (!TryEnqueueMainThread(() =>
 			{
 				if (conn != null && conn.IsActive)
 				{
-					DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
+					Server.NetworkWrapper.Broadcast(conn, new CharacterListResultBroadcast()
+					{
+						Result = result,
+					}, true, Channel.Reliable);
 				}
-			});
+			}))
+			{
+				// The main-thread queue is itself at capacity. Nothing further can be sent this
+				// frame; the client's own reply deadline is what covers this residual case.
+				Log.Warning("CharacterSelectSystem", $"Could not queue a {result} character-list result for client {conn?.ClientId}.");
+			}
 		}
 
 		/// <summary>

@@ -1,4 +1,4 @@
-/*
+﻿/*
     UILogin.uss
     Layout for the login screen. Colours come from FishMMO-Theme.uss.
 */
@@ -31,10 +31,6 @@
 }
 
 .login-input {
-    margin-bottom: 4px;
-}
-
-.login-dropdown {
     margin-bottom: 4px;
 }
 

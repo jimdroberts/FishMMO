@@ -1,4 +1,4 @@
-/*
+﻿/*
     UIHotkeyBar.uss
     Layout for the hotkey bar. Colours/borders for the slot come from FishMMO-Theme.uss
     (slots reuse the .fish-slot look where useful; cooldown/label are bar-specific).
@@ -71,5 +71,5 @@
     -unity-font-style: bold;
     -unity-text-align: lower-right;
     color: var(--abyss-100);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
+    text-shadow: 0 1px 1px var(--edge-dark);
 }

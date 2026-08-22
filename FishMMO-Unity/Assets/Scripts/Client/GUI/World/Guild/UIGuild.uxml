@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIGuild.uss" />
     <ui:VisualElement name="guild-root" class="fish-panel guild-panel">
@@ -12,17 +12,96 @@
             <ui:Label name="guild-count" text="0" class="fish-badge guild-count" />
         </ui:VisualElement>
 
-        <ui:VisualElement name="guild-columns" class="guild-columns">
-            <ui:Label text="MEMBER" class="fish-col-head guild-column guild-column--name" />
-            <ui:Label text="RANK" class="fish-col-head guild-column guild-column--rank" />
-            <ui:Label text="LOCATION" class="fish-col-head guild-column guild-column--location" />
+        <!--
+            Tabs. The panel now carries more than a roster, and stacking the notice, the message
+            of the day and a hundred members in one column would bury the roster under text the
+            player reads once a day.
+        -->
+        <ui:VisualElement name="guild-tabs" class="guild-tabs">
+            <ui:Button name="guild-tab-roster" text="Roster" class="fish-tab guild-tab" />
+            <ui:Button name="guild-tab-info" text="Info" class="fish-tab guild-tab" />
+            <ui:Button name="guild-tab-log" text="Log" class="fish-tab guild-tab" />
         </ui:VisualElement>
 
-        <ui:ScrollView name="guild-scroll" class="fish-scroll guild-scroll">
-            <ui:VisualElement name="guild-member-list" class="guild-member-list" />
-            <ui:Label name="guild-empty" text="You are not in a guild."
-                      class="fish-empty guild-empty" />
-        </ui:ScrollView>
+        <!--
+            The notice band sits above the roster on the Roster tab, not only on Info: a notice
+            nobody passes is a notice nobody reads. It hides itself when empty so a guild that
+            has never set one loses no space to it.
+        -->
+        <ui:VisualElement name="guild-notice-band" class="guild-notice-band">
+            <ui:Label name="guild-notice-band-label" text="" class="guild-notice-band__text" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="guild-roster-tab" class="guild-tab-page">
+
+            <ui:VisualElement name="guild-filter-bar" class="guild-filter-bar">
+                <ui:TextField name="guild-search" class="fish-input guild-search" />
+                <ui:Button name="guild-sort" text="Rank" class="fish-button guild-filter-button" />
+                <ui:Button name="guild-online-filter" text="All" class="fish-button guild-filter-button" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="guild-columns" class="guild-columns">
+                <ui:Label text="MEMBER" class="fish-col-head guild-column guild-column--name" />
+                <ui:Label text="LVL" class="fish-col-head guild-column guild-column--level" />
+                <ui:Label text="RANK" class="fish-col-head guild-column guild-column--rank" />
+                <ui:Label text="CLASS" class="fish-col-head guild-column guild-column--class" />
+                <ui:Label text="LOCATION" class="fish-col-head guild-column guild-column--location" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="guild-scroll" class="fish-scroll guild-scroll">
+                <ui:VisualElement name="guild-member-list" class="guild-member-list" />
+                <ui:Label name="guild-empty" text="You are not in a guild."
+                          class="fish-empty guild-empty" />
+            </ui:ScrollView>
+
+        </ui:VisualElement>
+
+        <ui:VisualElement name="guild-info-tab" class="guild-tab-page">
+            <ui:ScrollView name="guild-info-scroll" class="fish-scroll guild-info-scroll">
+
+                <ui:Label text="MESSAGE OF THE DAY" class="fish-col-head guild-info-caption" />
+                <ui:Label name="guild-motd" text="" class="guild-info-text" />
+                <ui:Button name="guild-edit-motd" text="Edit Message of the Day"
+                           class="fish-button guild-info-action" />
+
+                <ui:Label text="NOTICE" class="fish-col-head guild-info-caption" />
+                <ui:Label name="guild-notice" text="" class="guild-info-text" />
+                <ui:Button name="guild-edit-notice" text="Edit Notice"
+                           class="fish-button guild-info-action" />
+
+                <ui:Label text="LEADERSHIP" class="fish-col-head guild-info-caption" />
+                <ui:Button name="guild-disband" text="Disband Guild"
+                           class="fish-button fish-button--danger guild-info-action" />
+
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="guild-log-tab" class="guild-tab-page">
+            <ui:ScrollView name="guild-log-scroll" class="fish-scroll guild-log-scroll">
+                <ui:VisualElement name="guild-log-list" class="guild-log-list" />
+                <ui:Label name="guild-log-empty" text="No guild activity recorded yet."
+                          class="fish-empty guild-log-empty" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <!--
+            Hover card. One element reused for every row rather than one per member: a hundred
+            member rows would otherwise carry a hundred hidden cards, all of them laid out.
+        -->
+        <ui:VisualElement name="guild-hover-card" class="guild-hover-card">
+            <ui:Label name="guild-hover-name" text="" class="guild-hover-card__name" />
+            <ui:Label name="guild-hover-rank" text="" class="guild-hover-card__line" />
+            <ui:Label name="guild-hover-class" text="" class="guild-hover-card__line" />
+            <ui:Label name="guild-hover-location" text="" class="guild-hover-card__line" />
+            <ui:Label name="guild-hover-seen" text="" class="guild-hover-card__line" />
+            <!--
+                The two member notes. The officer note is only ever populated when the SERVER
+                sent it, which it does not do for a rank without ViewOfficerNotes — so this
+                element being empty is the filter working, not a rendering gap.
+            -->
+            <ui:Label name="guild-hover-note" text="" class="guild-hover-card__line" />
+            <ui:Label name="guild-hover-officer-note" text="" class="guild-hover-card__line" />
+        </ui:VisualElement>
 
         <ui:VisualElement name="panel-footer" class="fish-panel__footer guild-footer">
             <ui:Button name="guild-create" text="Create" class="fish-button guild-action" />

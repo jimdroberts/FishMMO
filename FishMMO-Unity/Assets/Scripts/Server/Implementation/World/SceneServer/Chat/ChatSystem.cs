@@ -220,6 +220,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(outboundBatchIntervalSeconds, OnPeriodicOutboundFlush);
 			}
 
+			/* Clamp the inspector value to the wire contract.
+			 *
+			 * ChatBroadcast.MaxTextLength is the length the broadcast documents itself as
+			 * carrying, and until now nothing read it — it was a constant with no callers while
+			 * the real limit was whatever this serialized field happened to say. Raising the
+			 * field above the constant would have let messages through that the client's own
+			 * ParseLocalMessage silently discards, which looks exactly like the server dropping
+			 * chat at random. */
+			maxMessageLength = Mathf.Clamp(maxMessageLength, 1, ChatBroadcast.MaxTextLength);
+
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			maxIncomingChatsPerFrame = Mathf.Max(1, maxIncomingChatsPerFrame);
 			maxIncomingQueueSize = Mathf.Max(100, maxIncomingQueueSize);
@@ -631,12 +641,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="msg">Chat broadcast message (ReceivedUtcTicks already stamped at the network boundary).</param>
 		private void ProcessNewChatMessage(NetworkConnection conn, IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			// validate message length
-			if (sender == null ||
-				string.IsNullOrWhiteSpace(msg.Text) ||
-				msg.Text.Length > maxMessageLength)
+			if (sender == null || msg.Text == null)
 			{
-				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
+				return;
+			}
+
+			/* Length is enforced HERE, at the network boundary, and by truncation rather than by
+			 * disconnecting.
+			 *
+			 * ChatBroadcast.MaxTextLength was the documented limit and nothing ever read it — the
+			 * only length test in the pipeline was the kick this replaces, and the client's own
+			 * cap is advisory because a client is free not to apply it. maxMessageLength is now
+			 * clamped to MaxTextLength at initialisation, so this is the single authoritative cap.
+			 *
+			 * Capping BEFORE sanitising also bounds the work the regex passes can be made to do:
+			 * a hostile client cannot hand the sanitiser a megabyte to chew through on the main
+			 * thread.
+			 *
+			 * That kick was also a live false positive. The client sanitises before
+			 * sending, so a player typing "<b>" sent an empty string — and empty text hit
+			 * `IsNullOrWhiteSpace` here and disconnected them with ExploitExcessiveData for
+			 * typing three ordinary characters. Nothing is gained by kicking for either case:
+			 * an over-long message is truncated and an empty one is dropped, which refuses the
+			 * exploit just as completely without punishing the honest client that triggers the
+			 * same condition. Flood protection, which is the case a kick is actually right for,
+			 * is unchanged and lives in OnServerChatBroadcastReceived. */
+			if (msg.Text.Length > maxMessageLength)
+			{
+				msg.Text = msg.Text.Substring(0, maxMessageLength);
+			}
+
+			/* Sanitise everything, unconditionally.
+			 *
+			 * This used to run only when the text contained '<', which covered rich-text tags and
+			 * nothing else. Three things get through a '<' test:
+			 *   - FISHMMO_ control codes. The client matches these on the first word of a message
+			 *     and renders them specially, so "/tell Bob FISHMMO_TELL_RELAYED you owe me gold"
+			 *     appeared in Bob's log as a whisper Bob had apparently sent to someone else.
+			 *   - Newlines, which turn one chat row into as many lines as the sender likes.
+			 *   - U+202E and friends, which reverse the rendering of the rest of the line.
+			 * See ChatSanitizer for what each pass does and why the order is what it is. */
+			msg.Text = ChatHelper.SanitizeIncoming(msg.Text, maxMessageLength);
+
+			if (string.IsNullOrWhiteSpace(msg.Text))
+			{
+				// Nothing survived cleaning (or nothing was sent). Drop it silently.
 				return;
 			}
 
@@ -710,11 +759,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				sender.LastChatMessage = msg.Text;
 			}
 
-			// Remove Rich Text Tags only if any might exist (avoids allocation when text is clean).
-			if (msg.Text.IndexOf('<') >= 0)
-			{
-				msg.Text = ChatHelper.Sanitize(msg.Text);
-			}
+			// Text was sanitised at the top of this method, before the rate limit and the
+			// duplicate filter, so both of those now compare the text that will actually be sent.
 
 			string cmd = ChatHelper.GetCommandAndTrim(ref msg.Text);
 
@@ -900,11 +946,90 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("ChatSystem", $"FlushPersistQueueAsync DB error ({batch.Count} messages): {result.ErrorCode} - {result.ErrorMessage}");
+
+					/* One unwritable row used to cost the whole batch — up to
+					 * maxPersistBatchSize (2000) messages, because PersistBatchAsync is a single
+					 * AddRange + SaveChanges and the entries were already dequeued by the time it
+					 * failed. The chat log is kept for audit, so a single malformed row silently
+					 * erasing two thousand others is the worst possible failure mode.
+					 *
+					 * Retry by bisection: halve the batch until the failing rows are isolated,
+					 * and lose only those. A transient failure (database down) fails every half,
+					 * which is why the recursion is depth-capped — see
+					 * PersistWithIsolationAsync. */
+					var isolation = new List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)>(batch);
+					await PersistWithIsolationAsync(chatService, isolation, 0);
 				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("ChatSystem", $"Error in FlushPersistQueueAsync: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Maximum bisection depth used to isolate a failing row inside a persist batch.
+		/// </summary>
+		/// <remarks>
+		/// Bounds the error path. A row-specific failure is found in log2(batch) halvings, but a
+		/// database that is simply unavailable fails every half, and without a cap that turns one
+		/// failed flush into 2 * batchSize more doomed round-trips. At depth 6 a 2000-message
+		/// batch is narrowed to blocks of about 32 and the remainder is dropped with a log line —
+		/// enough granularity that a poison row costs tens of messages rather than thousands,
+		/// while a dead database costs at most 126 extra attempts before the flush gives up.
+		/// </remarks>
+		private const int maxPersistIsolationDepth = 6;
+
+		/// <summary>
+		/// Re-attempts a failed persist batch by halving it, so that only the entries that
+		/// genuinely cannot be written are lost.
+		/// </summary>
+		/// <param name="chatService">Chat persistence service.</param>
+		/// <param name="entries">Entries from a batch whose write failed.</param>
+		/// <param name="depth">Current bisection depth; recursion stops at <see cref="maxPersistIsolationDepth"/>.</param>
+		private async Task PersistWithIsolationAsync(
+			IChatService chatService,
+			List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)> entries,
+			int depth)
+		{
+			if (entries == null || entries.Count < 1)
+			{
+				return;
+			}
+
+			// Shutdown takes priority over salvaging the log.
+			if (Server == null ||
+				Server.ServerState != ConnectionState.Started ||
+				(Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) && runtimeData.IsShuttingDown))
+			{
+				return;
+			}
+
+			if (entries.Count == 1 || depth >= maxPersistIsolationDepth)
+			{
+				DatabaseResult leaf = await chatService.PersistBatchAsync(entries);
+				if (!leaf.IsSuccess)
+				{
+					await Log.Warning("ChatSystem",
+						$"Discarding {entries.Count} chat message(s) that could not be persisted: {leaf.ErrorCode} - {leaf.ErrorMessage}");
+				}
+				return;
+			}
+
+			int half = entries.Count / 2;
+			var first = entries.GetRange(0, half);
+			var second = entries.GetRange(half, entries.Count - half);
+
+			DatabaseResult firstResult = await chatService.PersistBatchAsync(first);
+			if (!firstResult.IsSuccess)
+			{
+				await PersistWithIsolationAsync(chatService, first, depth + 1);
+			}
+
+			DatabaseResult secondResult = await chatService.PersistBatchAsync(second);
+			if (!secondResult.IsSuccess)
+			{
+				await PersistWithIsolationAsync(chatService, second, depth + 1);
 			}
 		}
 
@@ -1110,11 +1235,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="message">Discord message text.</param>
 		public void OnSendDiscordMessage(long worldServerID, long sceneServerID, string message)
 		{
+			/* Discord is an untrusted source and this is the boundary it crosses into the game.
+			 *
+			 * The row this came from was written by the Discord bot straight from a Discord
+			 * message: the author's display name — which that user chooses, and which can be
+			 * changed to anything at any time — followed by whatever they typed. It was
+			 * broadcast from here verbatim, arrived at a client that renders it into a Label,
+			 * and (in the client) was explicitly exempted from tab filtering, so no player could
+			 * turn it off. A Discord display name of "<size=500>" was therefore a remote
+			 * client-side attack on every player in the world, launched from outside the game
+			 * with no account needed.
+			 *
+			 * The bot now sanitises on the way in as well. This is not redundant with that: the
+			 * chat table is shared state that other tools write to, and the server must not
+			 * assume a row in it came from a version of the bot that cleans. Sanitising on both
+			 * sides of the database is the whole point of a trust boundary.
+			 *
+			 * The cap also matters. The bridge's own limit was 500 characters while the client
+			 * discards anything over ChatBroadcast.MaxTextLength, so long Discord messages
+			 * vanished silently instead of arriving truncated. */
+			string relayText = ChatHelper.SanitizeIncoming(message, maxMessageLength);
+			if (string.IsNullOrWhiteSpace(relayText))
+			{
+				return;
+			}
+
 			ChatBroadcast newMsg = new ChatBroadcast()
 			{
 				Channel = ChatChannel.Discord,
 				SenderID = 0,
-				Text = message,
+				Text = relayText,
 			};
 
 			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&

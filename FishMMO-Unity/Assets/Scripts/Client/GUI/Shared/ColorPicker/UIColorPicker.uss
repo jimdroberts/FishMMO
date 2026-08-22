@@ -98,3 +98,11 @@
 .colorpicker-action {
     min-width: 96px;
 }
+
+/*
+    Keyboard focus on the close action, so a picker reached by keyboard shows a way out.
+*/
+.colorpicker-action:focus {
+    background-color: var(--brand-press);
+    border-color: var(--brand-300);
+}

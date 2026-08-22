@@ -66,6 +66,23 @@ namespace FishMMO.Shared
 		public bool IsDebuff;
 
 		/// <summary>
+		/// True if this buff must never be shown to anyone but the character carrying it.
+		/// </summary>
+		/// <remarks>
+		/// The target frame shows other players' and NPCs' buffs, and the list it shows is built
+		/// on the SERVER — the client is never sent, and therefore cannot reveal, anything marked
+		/// here. Internal bookkeeping buffs (combat-logout markers, scripted boss-phase state,
+		/// quest gates, GM effects) exist to drive logic, not to be read off an enemy's nameplate,
+		/// and several of them would tell an observer something the game deliberately does not:
+		/// which phase a boss is in, or whether a player is flagged for something.
+		/// <para>
+		/// Defaults to false so existing content is unchanged. Set it on the template.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Hide this buff from other players' target frames. Use for internal/bookkeeping buffs.")]
+		public bool HiddenFromOthers;
+
+		/// <summary>
 		/// The name of this buff template (from the ScriptableObject's name).
 		/// </summary>
 		public string Name { get { return this.name; } }

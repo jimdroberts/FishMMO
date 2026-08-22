@@ -78,23 +78,41 @@ namespace FishMMO.Shared
 		public bool IsStackable { get { return Stackable != null; } }
 
 		/// <summary>
-		/// Constructs an item from a template and amount, initializing stackable logic if needed.
+		/// Constructs an item from a template and amount, initializing all components.
 		/// <para>
-		/// IMPORTANT: This constructor creates items with ID=0. It must only be used for
-		/// temporary or display-only items. For gameplay items that will be persisted, use
-		/// <see cref="Item(long, int, BaseItemTemplate, uint)"/> instead to ensure a unique
-		/// database-safe ID is assigned.
+		/// IMPORTANT: This constructor creates items with ID=0. The ID is assigned by the database
+		/// on first persist, so an item built here is not yet a database row. It is still a fully
+		/// formed gameplay item: every server-side grant path (merchant purchase, quest and
+		/// achievement rewards, gathering nodes, world pickups, <c>GiveItemAction</c>) builds items
+		/// through here.
 		/// </para>
 		/// </summary>
+		/// <remarks>
+		/// This used to construct only the stackable component, leaving <see cref="Equippable"/> and
+		/// <see cref="Generator"/> null. <see cref="EquipmentController"/> refuses any item whose
+		/// <see cref="IsEquippable"/> is false, so a sword you had just bought or looted could not be
+		/// equipped at all until you relogged and the item came back through
+		/// <see cref="Item(long, int, int, uint)"/>, which does call <see cref="Initialize"/>. Both
+		/// constructors now go through the same initialization; there is no second, weaker kind of Item.
+		/// <para>
+		/// The seed is passed as 0 deliberately. <see cref="Initialize"/> derives a seed from the item
+		/// ID, and the ID is not known until the row is written, so a generated item created here gets
+		/// its seed on the round trip through the database — which is the behaviour the persistence
+		/// layer already assumed (<c>seed: item.IsGenerated ? item.Generator.Seed : 0</c>).
+		/// </para>
+		/// </remarks>
 		/// <param name="template">The item template.</param>
 		/// <param name="amount">The stack amount.</param>
 		public Item(BaseItemTemplate template, uint amount)
 		{
 			Slot = -1;
 			Template = template;
-			if (template != null && template.MaxStackSize > 1 && amount > 0)
+
+			// Initialize dereferences Template unconditionally; a null template is a caller error
+			// elsewhere, but it must not become a NullReferenceException inside a constructor.
+			if (template != null)
 			{
-				Stackable = new ItemStackable(this, amount.Clamp(1, template.MaxStackSize));
+				Initialize(0, amount, 0);
 			}
 		}
 
@@ -229,10 +247,16 @@ namespace FishMMO.Shared
 
 				Equippable.Destroy();
 			}
-			/*if (Stackable != null)
+			// Zeroing the stack is part of destruction, not an optimisation. Destroy() used to
+			// detach the components and raise OnDestroy while leaving Stackable.Amount intact, so
+			// anything that re-read the item afterwards still saw a live stack. The visible symptom
+			// was infinite consumables: ConsumableTemplate.Invoke destroyed the item on its last
+			// charge without decrementing, and CanConsume then kept reporting enough charges for
+			// the rest of the session.
+			if (Stackable != null)
 			{
-				Stackable.OnDestroy();
-			}*/
+				Stackable.Amount = 0;
+			}
 			OnDestroy?.Invoke();
 		}
 

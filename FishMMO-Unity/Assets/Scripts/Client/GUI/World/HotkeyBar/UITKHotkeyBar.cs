@@ -16,6 +16,25 @@ namespace FishMMO.Client
 	/// cooldown sweeps via <see cref="ICooldownController"/>, drag-assign / drag-clear via the
 	/// shared <see cref="UITKDragObject"/> overlay, and Input System activation.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Model / view split.</b> <see cref="bindings"/> is plain data describing what is bound to
+	/// each slot and belongs to the character; <see cref="slots"/> holds the elements currently
+	/// rendering it and belongs to ONE visual tree. <c>UIDocument</c> re-clones the UXML on every
+	/// enable, so any element cached across a hide/show is a pointer into a discarded tree — the
+	/// old code kept its slot state exclusively in those elements and rebuilt them by APPENDING to
+	/// a list it never cleared, so a rebuilt tree produced twelve more orphaned slots and a bar
+	/// whose bindings had quietly detached from what the player could see.
+	/// </para>
+	/// <para>
+	/// <b>Change-driven, not per-frame.</b> This panel used to rewrite all twelve slots' icons and
+	/// display styles on every single frame from <c>Update</c> — twelve <c>TryGet</c> calls,
+	/// twelve dictionary probes and up to twenty-four inline style writes at frame rate for a bar
+	/// that changes a handful of times per session. Refreshes are now driven by the events that
+	/// can actually invalidate a binding (container slot updates, equip/unequip, ability learned,
+	/// hotkey broadcast) and coalesced to at most one sweep per frame.
+	/// </para>
+	/// </remarks>
 	public class UITKHotkeyBar : UITKCharacterControl
 	{
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
@@ -43,7 +62,20 @@ namespace FishMMO.Client
 		private const string TOOLTIP_NAME = "UITooltip";
 
 		/// <summary>
-		/// Runtime state and visual elements for a single hotkey slot.
+		/// What a single hotkey slot is bound to. Plain data — no <see cref="VisualElement"/> —
+		/// so it survives every rebuild of the visual tree.
+		/// </summary>
+		private struct HotkeyBinding
+		{
+			/// <summary>The reference type currently assigned to the slot.</summary>
+			public ReferenceButtonType Type;
+			/// <summary>The reference ID currently assigned to the slot.</summary>
+			public long ReferenceID;
+		}
+
+		/// <summary>
+		/// Visual elements rendering a single hotkey slot, plus the state needed to avoid
+		/// rewriting them when nothing changed.
 		/// </summary>
 		private sealed class HotkeySlot
 		{
@@ -57,22 +89,70 @@ namespace FishMMO.Client
 			public Label Label;
 			/// <summary>The fixed hotkey slot index.</summary>
 			public int Index;
-			/// <summary>The reference type currently assigned to the slot.</summary>
-			public ReferenceButtonType Type = ReferenceButtonType.None;
-			/// <summary>The reference ID currently assigned to the slot.</summary>
-			public long ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
+
+			/// <summary>
+			/// The sprite currently written into <see cref="Icon"/>.
+			/// </summary>
+			/// <remarks>
+			/// Kept so the refresh sweep can skip the inline style write when the icon has not
+			/// actually changed. Writing an identical <c>StyleBackground</c> still dirties the
+			/// element and costs a repaint, which is most of what made the old per-frame refresh
+			/// expensive.
+			/// </remarks>
+			public Sprite AppliedSprite;
+
+			/// <summary>The cooldown sweep fraction currently written into <see cref="Cooldown"/>.</summary>
+			public float AppliedCooldownFraction = -1.0f;
+
+			/// <summary>True while this slot's input is held down.</summary>
+			public bool IsPressed;
+
+			/// <summary>True when the held activation still owes the controller a Release().</summary>
+			public bool AwaitingRelease;
 		}
 
-		/// <summary>All created hotkey slots in index order.</summary>
+		/// <summary>What each slot is bound to. Index-aligned with <see cref="slots"/>.</summary>
+		private HotkeyBinding[] bindings;
+
+		/// <summary>All created hotkey slots in index order. Belongs to the current visual tree.</summary>
 		private readonly List<HotkeySlot> slots = new List<HotkeySlot>();
+
 		/// <summary>The container element that holds the generated hotkey slot roots.</summary>
 		private VisualElement list;
 
 		/// <summary>
+		/// Set when something happened that could have invalidated a binding or an icon.
+		/// Consumed by the next <see cref="OnTick"/>.
+		/// </summary>
+		/// <remarks>
+		/// Coalescing matters more than it looks: the server delivers a full bar as one
+		/// <see cref="HotkeySetMultipleBroadcast"/> which is unpacked into one set per slot, and
+		/// loading a character's inventory raises one slot-updated event per occupied slot. Doing
+		/// the sweep inline would run it dozens of times for a single logical change.
+		/// </remarks>
+		private bool bindingsDirty = true;
+
+		/// <summary>True while at least one slot is showing a cooldown sweep.</summary>
+		private bool anyCooldownActive;
+
+		/// <summary>
 		/// Queries the list container, builds the hotkey slots and subscribes to cooldown events.
 		/// </summary>
+		/// <remarks>
+		/// Runs again on every tree rebuild, so everything here is written to be idempotent: the
+		/// slot list is cleared before it is rebuilt, and the static cooldown subscriptions are
+		/// removed before they are added. A bare <c>+=</c> on a static event from a hook that can
+		/// re-run is an unbounded handler leak.
+		/// </remarks>
 		public override void OnStarting()
 		{
+			EnsureBindings();
+
+			/* The elements in `slots` belong to the tree that was just replaced. Dropping them
+			 * first is what stops BuildSlots appending a second set of twelve. */
+			slots.Clear();
+			list = null;
+
 			VisualElement root = Root;
 			if (root != null)
 			{
@@ -81,9 +161,25 @@ namespace FishMMO.Client
 
 			BuildSlots(Constants.Configuration.MaximumPlayerHotkeys);
 
+			ICooldownController.OnAddCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnAddCooldown += CooldownController_OnAddOrUpdateCooldown;
+			ICooldownController.OnUpdateCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnUpdateCooldown += CooldownController_OnAddOrUpdateCooldown;
+			ICooldownController.OnRemoveCooldown -= CooldownController_OnRemoveCooldown;
 			ICooldownController.OnRemoveCooldown += CooldownController_OnRemoveCooldown;
+
+			bindingsDirty = true;
+		}
+
+		/// <summary>
+		/// Re-renders the bar from the binding model after the visual tree was rebuilt.
+		/// </summary>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+
+			bindingsDirty = true;
+			RefreshAllSlots();
 		}
 
 		/// <summary>
@@ -94,6 +190,10 @@ namespace FishMMO.Client
 			ICooldownController.OnAddCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnUpdateCooldown -= CooldownController_OnAddOrUpdateCooldown;
 			ICooldownController.OnRemoveCooldown -= CooldownController_OnRemoveCooldown;
+
+			UnsubscribeCharacterEvents();
+
+			base.OnDestroying();
 		}
 
 		/// <summary>
@@ -113,6 +213,174 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<HotkeySetBroadcast>(OnClientHotkeySetBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnClientHotkeySetMultipleBroadcastReceived);
 		}
+
+		/// <summary>
+		/// Drops the previous character's subscriptions before a new character is applied.
+		/// </summary>
+		public override void OnPreSetCharacter()
+		{
+			UnsubscribeCharacterEvents();
+		}
+
+		/// <summary>
+		/// Subscribes to the events that can invalidate a hotkey binding.
+		/// </summary>
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			SubscribeCharacterEvents();
+
+			bindingsDirty = true;
+			RefreshAllSlots();
+		}
+
+		/// <summary>
+		/// Drops this character's subscriptions before it is cleared.
+		/// </summary>
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			UnsubscribeCharacterEvents();
+		}
+
+		/// <summary>
+		/// Clears the binding model so one character's bar cannot appear on the next one's.
+		/// </summary>
+		/// <remarks>
+		/// The model deliberately outlives the visual tree, which means it also outlives the
+		/// character unless it is cleared here. A newly selected character with an empty bar
+		/// generates no hotkey traffic at all, so nothing would ever overwrite the previous
+		/// character's bindings.
+		/// </remarks>
+		public override void OnPostUnsetCharacter()
+		{
+			ClearAllBindings();
+		}
+
+		/// <inheritdoc />
+		public override void OnQuitToLogin()
+		{
+			ClearAllBindings();
+
+			base.OnQuitToLogin();
+		}
+
+		/// <summary>
+		/// Allocates the binding model if it does not exist yet.
+		/// </summary>
+		private void EnsureBindings()
+		{
+			int count = Constants.Configuration.MaximumPlayerHotkeys;
+			if (bindings != null && bindings.Length == count)
+			{
+				return;
+			}
+
+			bindings = new HotkeyBinding[count];
+			for (int i = 0; i < count; ++i)
+			{
+				bindings[i].Type = ReferenceButtonType.None;
+				bindings[i].ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
+			}
+		}
+
+		/// <summary>
+		/// Empties every binding and repaints the bar.
+		/// </summary>
+		private void ClearAllBindings()
+		{
+			EnsureBindings();
+
+			for (int i = 0; i < bindings.Length; ++i)
+			{
+				bindings[i].Type = ReferenceButtonType.None;
+				bindings[i].ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
+			}
+
+			for (int i = 0; i < slots.Count; ++i)
+			{
+				ApplySlotSprite(slots[i], null);
+				ApplyCooldownFraction(slots[i], 0.0f);
+				slots[i].IsPressed = false;
+				slots[i].AwaitingRelease = false;
+			}
+
+			anyCooldownActive = false;
+			bindingsDirty = false;
+		}
+
+		/// <summary>
+		/// Subscribes to the container and ability events that can invalidate a binding.
+		/// </summary>
+		private void SubscribeCharacterEvents()
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			if (Character.TryGet(out IInventoryController inventoryController))
+			{
+				inventoryController.OnSlotUpdated += Container_OnSlotUpdated;
+			}
+			if (Character.TryGet(out IEquipmentController equipmentController))
+			{
+				equipmentController.OnSlotUpdated += Container_OnSlotUpdated;
+				equipmentController.OnItemEquipped += Equipment_OnItemChanged;
+				equipmentController.OnItemUnequipped += Equipment_OnItemChanged;
+			}
+			if (Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.OnAddAbility += Ability_OnAddAbility;
+				abilityController.OnRemoveAbility += Ability_OnRemoveAbility;
+				abilityController.OnReset += Ability_OnReset;
+			}
+		}
+
+		/// <summary>
+		/// Drops every character-scoped subscription this panel holds.
+		/// </summary>
+		private void UnsubscribeCharacterEvents()
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			if (Character.TryGet(out IInventoryController inventoryController))
+			{
+				inventoryController.OnSlotUpdated -= Container_OnSlotUpdated;
+			}
+			if (Character.TryGet(out IEquipmentController equipmentController))
+			{
+				equipmentController.OnSlotUpdated -= Container_OnSlotUpdated;
+				equipmentController.OnItemEquipped -= Equipment_OnItemChanged;
+				equipmentController.OnItemUnequipped -= Equipment_OnItemChanged;
+			}
+			if (Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.OnAddAbility -= Ability_OnAddAbility;
+				abilityController.OnRemoveAbility -= Ability_OnRemoveAbility;
+				abilityController.OnReset -= Ability_OnReset;
+			}
+		}
+
+		/// <summary>Marks the bar for a refresh when a container slot changed.</summary>
+		private void Container_OnSlotUpdated(IItemContainer container, Item item, int slotIndex) => bindingsDirty = true;
+
+		/// <summary>Marks the bar for a refresh when equipment changed.</summary>
+		private void Equipment_OnItemChanged(Item item, ItemSlot slot) => bindingsDirty = true;
+
+		/// <summary>Marks the bar for a refresh when an ability was learned.</summary>
+		private void Ability_OnAddAbility(Ability ability) => bindingsDirty = true;
+
+		/// <summary>Marks the bar for a refresh when an ability was forgotten.</summary>
+		private void Ability_OnRemoveAbility(long referenceID) => bindingsDirty = true;
+
+		/// <summary>Marks the bar for a refresh when the ability set was replaced wholesale.</summary>
+		private void Ability_OnReset() => bindingsDirty = true;
 
 		/// <summary>
 		/// Builds the requested number of hotkey slots, capped to the configured maximum.
@@ -183,22 +451,26 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel.</param>
 		private void OnClientHotkeySetBroadcastReceived(HotkeySetBroadcast msg, Channel channel)
 		{
-			if (msg.HotkeyData.Slot < 0 || msg.HotkeyData.Slot >= slots.Count)
+			EnsureBindings();
+
+			int index = msg.HotkeyData.Slot;
+			if (index < 0 || index >= bindings.Length)
 			{
 				return;
 			}
 
-			HotkeySlot slot = slots[msg.HotkeyData.Slot];
 			if (msg.HotkeyData.Type == 0)
 			{
-				ClearSlot(slot);
+				bindings[index].Type = ReferenceButtonType.None;
+				bindings[index].ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
 			}
 			else
 			{
-				slot.Type = (ReferenceButtonType)msg.HotkeyData.Type;
-				slot.ReferenceID = msg.HotkeyData.ReferenceID;
-				RefreshSlotIcon(slot);
+				bindings[index].Type = (ReferenceButtonType)msg.HotkeyData.Type;
+				bindings[index].ReferenceID = msg.HotkeyData.ReferenceID;
 			}
+
+			bindingsDirty = true;
 		}
 
 		/// <summary>
@@ -208,6 +480,11 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel.</param>
 		private void OnClientHotkeySetMultipleBroadcastReceived(HotkeySetMultipleBroadcast msg, Channel channel)
 		{
+			if (msg.Hotkeys == null)
+			{
+				return;
+			}
+
 			foreach (HotkeySetBroadcast subMsg in msg.Hotkeys)
 			{
 				OnClientHotkeySetBroadcastReceived(subMsg, channel);
@@ -215,92 +492,159 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Called every frame. Validates hotkey assignments and polls the Input System for activation.
+		/// Per-frame hook. Consumes a pending refresh, animates cooldown sweeps and polls input.
 		/// </summary>
-		private void Update()
+		/// <remarks>
+		/// This used to be <c>private void Update()</c>. <see cref="UITKControl"/> declares its own
+		/// <c>Update</c> and Unity binds only the MOST DERIVED one, so declaring a second in a
+		/// subclass silently killed <c>PollLoseFocus</c> and <c>OnTick</c> for this panel — the
+		/// exact failure the base class's own comment warns about.
+		/// </remarks>
+		protected override void OnTick()
 		{
-			ValidateHotkeys();
+			if (bindingsDirty)
+			{
+				RefreshAllSlots();
+			}
+
+			UpdateCooldownSweeps();
 			UpdateInput();
 		}
 
 		/// <summary>
-		/// Clears hotkeys whose referenced item/ability no longer exists and refreshes icons.
+		/// Validates every binding and repaints any slot whose icon actually changed.
 		/// </summary>
-		private void ValidateHotkeys()
+		/// <remarks>
+		/// A binding whose referenced item or ability no longer exists is dropped here rather than
+		/// left pointing at nothing — including on the login path, where the server replays the
+		/// stored bar before the client necessarily has the referenced item.
+		/// </remarks>
+		private void RefreshAllSlots()
 		{
+			bindingsDirty = false;
+
+			EnsureBindings();
+
 			if (Character == null)
 			{
+				for (int i = 0; i < slots.Count; ++i)
+				{
+					ApplySlotSprite(slots[i], null);
+				}
 				return;
 			}
 
-			for (int i = 0; i < slots.Count; ++i)
+			for (int i = 0; i < slots.Count && i < bindings.Length; ++i)
 			{
 				HotkeySlot slot = slots[i];
 
-				switch (slot.Type)
+				if (!TryResolveSlotSprite(i, out Sprite sprite))
 				{
-					case ReferenceButtonType.None:
-						break;
-					case ReferenceButtonType.Inventory:
-						if (!Character.TryGet(out IInventoryController inventoryController) ||
-							inventoryController.IsSlotEmpty((int)slot.ReferenceID))
-						{
-							ClearSlot(slot);
-						}
-						else
-						{
-							RefreshSlotIcon(slot);
-						}
-						break;
-					case ReferenceButtonType.Equipment:
-						if (!Character.TryGet(out IEquipmentController equipmentController) ||
-							equipmentController.IsSlotEmpty((int)slot.ReferenceID))
-						{
-							ClearSlot(slot);
-						}
-						else
-						{
-							RefreshSlotIcon(slot);
-						}
-						break;
-					case ReferenceButtonType.Ability:
-						if (!Character.TryGet(out IAbilityController abilityController) ||
-							!abilityController.KnownAbilities.ContainsKey(slot.ReferenceID))
-						{
-							ClearSlot(slot);
-						}
-						else
-						{
-							RefreshSlotIcon(slot);
-						}
-						break;
-					default:
-						break;
+					// The referenced item or ability is gone; drop the binding rather than
+					// leaving a slot that would activate nothing.
+					ClearBinding(i, broadcast: false);
+					ApplySlotSprite(slot, null);
+					ApplyCooldownFraction(slot, 0.0f);
+					continue;
 				}
+
+				ApplySlotSprite(slot, sprite);
 			}
 		}
 
 		/// <summary>
-		/// Polls the Input System and activates the first pressed hotkey slot.
+		/// Resolves the icon for a binding, reporting whether the binding is still valid.
 		/// </summary>
+		/// <param name="index">The hotkey slot index.</param>
+		/// <param name="sprite">The resolved icon, or null when the slot is empty.</param>
+		/// <returns>False when the binding references something that no longer exists.</returns>
+		private bool TryResolveSlotSprite(int index, out Sprite sprite)
+		{
+			sprite = null;
+
+			ref HotkeyBinding binding = ref bindings[index];
+			switch (binding.Type)
+			{
+				case ReferenceButtonType.None:
+					return true;
+				case ReferenceButtonType.Inventory:
+					if (!Character.TryGet(out IInventoryController inventoryController) ||
+						!inventoryController.TryGetItem((int)binding.ReferenceID, out Item inventoryItem))
+					{
+						return false;
+					}
+					sprite = inventoryItem.Template != null ? inventoryItem.Template.Icon : null;
+					return true;
+				case ReferenceButtonType.Equipment:
+					if (!Character.TryGet(out IEquipmentController equipmentController) ||
+						!equipmentController.TryGetItem((int)binding.ReferenceID, out Item equippedItem))
+					{
+						return false;
+					}
+					sprite = equippedItem.Template != null ? equippedItem.Template.Icon : null;
+					return true;
+				case ReferenceButtonType.Ability:
+					if (!Character.TryGet(out IAbilityController abilityController) ||
+						!abilityController.KnownAbilities.TryGetValue(binding.ReferenceID, out Ability ability))
+					{
+						return false;
+					}
+					sprite = ability.Template != null ? ability.Template.Icon : null;
+					return true;
+				default:
+					// Bank and anything else has no meaning on the bar.
+					return false;
+			}
+		}
+
+		/// <summary>
+		/// Polls the Input System and drives press / release for every hotkey slot.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Two bugs lived here. First, the poll tested <c>isPressed</c> — a LEVEL, not an edge —
+		/// and activated on every frame the key was down, so holding a hotkey re-queued the
+		/// ability at frame rate. Second, nothing on the client ever called
+		/// <see cref="IAbilityController.Release"/> and the bar hard-coded <c>isHeld: true</c>, so
+		/// a charged ability could never fire (the controller waits for the held flag to clear,
+		/// then cancels it at the hold cap) and a channel could never be stopped early.
+		/// </para>
+		/// <para>
+		/// <c>isHeld</c> now comes from <see cref="IAbilityController.RequiresHeld"/> — the method
+		/// the controller provides for exactly this and which the AI path already used — and the
+		/// release edge calls <c>Release()</c>.
+		/// </para>
+		/// </remarks>
 		private void UpdateInput()
 		{
-			if (Character == null || slots.Count < 1)
+			if (slots.Count < 1)
 			{
 				return;
 			}
 
-			if (PlayerInputController.MouseMode || UIManager.InputControlHasFocus())
-			{
-				return;
-			}
+			bool inputBlocked = Character == null ||
+				PlayerInputController.MouseMode ||
+				UIManager.InputControlHasFocus();
 
 			for (int i = 0; i < slots.Count; ++i)
 			{
-				if (IsHotkeyPressed(i))
+				HotkeySlot slot = slots[i];
+				bool pressed = !inputBlocked && IsHotkeyPressed(i);
+
+				if (pressed == slot.IsPressed)
 				{
-					ActivateSlot(slots[i]);
-					return;
+					continue;
+				}
+
+				slot.IsPressed = pressed;
+
+				if (pressed)
+				{
+					ActivateSlot(slot);
+				}
+				else
+				{
+					ReleaseSlot(slot);
 				}
 			}
 		}
@@ -331,22 +675,29 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.Visible)
 			{
-				if (dragObject.Type != ReferenceButtonType.Bank)
+				if (dragObject.Type != ReferenceButtonType.Bank &&
+					dragObject.Type != ReferenceButtonType.None)
 				{
-					slot.Type = dragObject.Type;
-					slot.ReferenceID = dragObject.ReferenceID;
+					EnsureBindings();
+					bindings[slot.Index].Type = dragObject.Type;
+					bindings[slot.Index].ReferenceID = dragObject.ReferenceID;
+
 					if (dragObject.IconSprite != null)
 					{
-						SetSlotIconSprite(slot, dragObject.IconSprite);
+						ApplySlotSprite(slot, dragObject.IconSprite);
+					}
+					else
+					{
+						bindingsDirty = true;
 					}
 
 					Client.Broadcast(new HotkeySetBroadcast()
 					{
 						HotkeyData = new HotkeyData()
 						{
-							Type = (byte)slot.Type,
+							Type = (byte)dragObject.Type,
 							Slot = slot.Index,
-							ReferenceID = slot.ReferenceID,
+							ReferenceID = dragObject.ReferenceID,
 						}
 					}, Channel.Reliable);
 				}
@@ -355,7 +706,11 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				/* A click activates and immediately releases: there is no pointer-up path that
+				 * could deliver the release, and leaving a charged ability holding forever is
+				 * what the hold cap exists to clean up — badly. */
 				ActivateSlot(slot);
+				ReleaseSlot(slot);
 			}
 		}
 
@@ -365,25 +720,45 @@ namespace FishMMO.Client
 		/// <param name="slot">The slot that was right-clicked.</param>
 		private void HandleSlotRightClick(HotkeySlot slot)
 		{
-			if (slot.ReferenceID == ReferenceButton.NULL_REFERENCE_ID)
+			EnsureBindings();
+
+			if (bindings[slot.Index].ReferenceID == ReferenceButton.NULL_REFERENCE_ID)
 			{
 				return;
 			}
 
 			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject))
 			{
-				Sprite sprite = slot.Icon.style.backgroundImage.value.sprite;
-				dragObject.SetReference(sprite, slot.ReferenceID, slot.Type);
+				Sprite sprite = slot.AppliedSprite;
+				dragObject.SetReference(sprite, bindings[slot.Index].ReferenceID, bindings[slot.Index].Type);
 
-				ClearSlot(slot);
+				ClearBinding(slot.Index, broadcast: true);
+				ApplySlotSprite(slot, null);
+				ApplyCooldownFraction(slot, 0.0f);
+			}
+		}
 
+		/// <summary>
+		/// Empties a binding, optionally telling the server about it.
+		/// </summary>
+		/// <param name="index">The hotkey slot index.</param>
+		/// <param name="broadcast">True to send the clear to the server.</param>
+		private void ClearBinding(int index, bool broadcast)
+		{
+			EnsureBindings();
+
+			bindings[index].Type = ReferenceButtonType.None;
+			bindings[index].ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
+
+			if (broadcast && Client != null)
+			{
 				Client.Broadcast(new HotkeySetBroadcast()
 				{
 					HotkeyData = new HotkeyData()
 					{
 						Type = 0,
-						Slot = slot.Index,
-						ReferenceID = ReferenceButton.NULL_REFERENCE_ID,
+						Slot = index,
+						ReferenceID = HotkeyData.UnsetReferenceID,
 					}
 				}, Channel.Reliable);
 			}
@@ -395,7 +770,9 @@ namespace FishMMO.Client
 		/// <param name="slot">The hovered slot.</param>
 		private void OnSlotPointerEnter(HotkeySlot slot)
 		{
-			if (Character == null || slot.ReferenceID < 0)
+			EnsureBindings();
+
+			if (Character == null || bindings[slot.Index].ReferenceID < 0)
 			{
 				return;
 			}
@@ -405,27 +782,28 @@ namespace FishMMO.Client
 				return;
 			}
 
-			switch (slot.Type)
+			long referenceID = bindings[slot.Index].ReferenceID;
+			switch (bindings[slot.Index].Type)
 			{
 				case ReferenceButtonType.Inventory:
 					if (Character.TryGet(out IInventoryController inventoryController) &&
-						inventoryController.TryGetItem((int)slot.ReferenceID, out Item inventoryItem))
+						inventoryController.TryGetItem((int)referenceID, out Item inventoryItem))
 					{
-						tooltip.Open(inventoryItem.Tooltip());
+						tooltip.Open(inventoryItem.Tooltip(), slot.Root);
 					}
 					break;
 				case ReferenceButtonType.Equipment:
 					if (Character.TryGet(out IEquipmentController equipmentController) &&
-						equipmentController.TryGetItem((int)slot.ReferenceID, out Item equippedItem))
+						equipmentController.TryGetItem((int)referenceID, out Item equippedItem))
 					{
-						tooltip.Open(equippedItem.Tooltip());
+						tooltip.Open(equippedItem.Tooltip(), slot.Root);
 					}
 					break;
 				case ReferenceButtonType.Ability:
 					if (Character.TryGet(out IAbilityController abilityController) &&
-						abilityController.KnownAbilities.TryGetValue(slot.ReferenceID, out Ability ability))
+						abilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability))
 					{
-						tooltip.Open(ability.Tooltip());
+						tooltip.Open(ability.Tooltip(), slot.Root);
 					}
 					break;
 				default:
@@ -450,30 +828,38 @@ namespace FishMMO.Client
 		/// <param name="slot">The slot to activate.</param>
 		private void ActivateSlot(HotkeySlot slot)
 		{
+			EnsureBindings();
+
 			if (Character == null)
 			{
 				return;
 			}
 
-			switch (slot.Type)
+			long referenceID = bindings[slot.Index].ReferenceID;
+			switch (bindings[slot.Index].Type)
 			{
 				case ReferenceButtonType.Inventory:
 					if (Character.TryGet(out IInventoryController inventoryController))
 					{
-						inventoryController.Activate((int)slot.ReferenceID);
+						inventoryController.Activate((int)referenceID);
 					}
 					break;
 				case ReferenceButtonType.Equipment:
 					if (Character.TryGet(out IEquipmentController equipmentController))
 					{
-						equipmentController.Activate((int)slot.ReferenceID);
+						equipmentController.Activate((int)referenceID);
 					}
 					break;
 				case ReferenceButtonType.Ability:
 					if (!UIManager.ControlHasFocus() &&
 						Character.TryGet(out IAbilityController abilityController))
 					{
-						abilityController.Activate(slot.ReferenceID, true);
+						/* The controller knows whether this ability is charged or channeled;
+						 * the bar does not, and hard-coding true meant a charged ability sat at
+						 * full charge until the hold cap cancelled it. */
+						bool isHeld = abilityController.RequiresHeld(referenceID);
+						abilityController.Activate(referenceID, isHeld);
+						slot.AwaitingRelease = isHeld;
 					}
 					break;
 				default:
@@ -482,60 +868,50 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Refreshes a slot's icon from its currently assigned reference.
+		/// Releases a held activation started from this slot.
 		/// </summary>
-		/// <param name="slot">The slot to refresh.</param>
-		private void RefreshSlotIcon(HotkeySlot slot)
+		/// <param name="slot">The slot whose input was released.</param>
+		/// <remarks>
+		/// For a charged ability this is what fires it; for a channel it is what stops it early.
+		/// Guarded by <see cref="HotkeySlot.AwaitingRelease"/> so releasing a slot that started a
+		/// non-held ability cannot clear the held flag of a DIFFERENT ability that has since
+		/// started casting.
+		/// </remarks>
+		private void ReleaseSlot(HotkeySlot slot)
 		{
-			if (Character == null)
+			if (!slot.AwaitingRelease)
 			{
 				return;
 			}
 
-			Sprite sprite = null;
-			switch (slot.Type)
-			{
-				case ReferenceButtonType.Inventory:
-					if (Character.TryGet(out IInventoryController inventoryController) &&
-						inventoryController.TryGetItem((int)slot.ReferenceID, out Item inventoryItem) &&
-						inventoryItem.Template != null)
-					{
-						sprite = inventoryItem.Template.Icon;
-					}
-					break;
-				case ReferenceButtonType.Equipment:
-					if (Character.TryGet(out IEquipmentController equipmentController) &&
-						equipmentController.TryGetItem((int)slot.ReferenceID, out Item equippedItem) &&
-						equippedItem.Template != null)
-					{
-						sprite = equippedItem.Template.Icon;
-					}
-					break;
-				case ReferenceButtonType.Ability:
-					if (Character.TryGet(out IAbilityController abilityController) &&
-						abilityController.KnownAbilities.TryGetValue(slot.ReferenceID, out Ability ability) &&
-						ability.Template != null)
-					{
-						sprite = ability.Template.Icon;
-					}
-					break;
-				default:
-					break;
-			}
+			slot.AwaitingRelease = false;
 
-			if (sprite != null)
+			if (Character != null &&
+				Character.TryGet(out IAbilityController abilityController))
 			{
-				SetSlotIconSprite(slot, sprite);
+				abilityController.Release();
 			}
 		}
 
 		/// <summary>
-		/// Sets a slot's icon sprite, showing or hiding the icon as appropriate.
+		/// Writes a slot's icon sprite, skipping the write when it has not changed.
 		/// </summary>
 		/// <param name="slot">The slot to update.</param>
 		/// <param name="sprite">The sprite to display, or null to clear.</param>
-		private void SetSlotIconSprite(HotkeySlot slot, Sprite sprite)
+		private void ApplySlotSprite(HotkeySlot slot, Sprite sprite)
 		{
+			if (ReferenceEquals(slot.AppliedSprite, sprite))
+			{
+				return;
+			}
+
+			slot.AppliedSprite = sprite;
+
+			if (slot.Icon == null)
+			{
+				return;
+			}
+
 			if (sprite != null)
 			{
 				slot.Icon.style.backgroundImage = new StyleBackground(sprite);
@@ -549,38 +925,88 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Clears a slot's assignment, icon and cooldown sweep.
+		/// Writes a slot's cooldown sweep height, skipping the write when it has not changed.
 		/// </summary>
-		/// <param name="slot">The slot to clear.</param>
-		private void ClearSlot(HotkeySlot slot)
+		/// <param name="slot">The slot to update.</param>
+		/// <param name="fraction">The remaining cooldown fraction (0-1).</param>
+		private void ApplyCooldownFraction(HotkeySlot slot, float fraction)
 		{
-			slot.Type = ReferenceButtonType.None;
-			slot.ReferenceID = ReferenceButton.NULL_REFERENCE_ID;
-			SetSlotIconSprite(slot, null);
-			slot.Cooldown.style.height = Length.Percent(0.0f);
+			fraction = Mathf.Clamp01(fraction);
+
+			// Quantised to whole percent: the sweep is 48px tall, so anything finer is not a
+			// visible change and would repaint the element every frame for nothing.
+			if (Mathf.Abs(slot.AppliedCooldownFraction - fraction) < 0.005f)
+			{
+				return;
+			}
+
+			slot.AppliedCooldownFraction = fraction;
+
+			if (slot.Cooldown != null)
+			{
+				slot.Cooldown.style.height = Length.Percent(fraction * 100.0f);
+			}
 		}
 
 		/// <summary>
-		/// Updates the cooldown sweep for whichever slot references the cooled-down entry.
+		/// Resolves the cooldown key a binding is tracked under, if it has one.
+		/// </summary>
+		/// <param name="index">The hotkey slot index.</param>
+		/// <param name="key">The cooldown key.</param>
+		/// <returns>True when this binding can be on cooldown.</returns>
+		/// <remarks>
+		/// Slot type matters and the old code ignored it: an ability's cooldown is keyed by the
+		/// ability's INSTANCE ID while an inventory binding's reference is a SLOT INDEX, so
+		/// matching a raw ID against every slot let a cooldown on ability 3 paint the sweep over
+		/// whatever was sitting in inventory slot 3. Consumable cooldowns are keyed by the
+		/// consumable's TEMPLATE ID, which is what an item binding has to resolve to.
+		/// </remarks>
+		private bool TryGetSlotCooldownKey(int index, out long key)
+		{
+			key = 0;
+
+			if (Character == null)
+			{
+				return false;
+			}
+
+			switch (bindings[index].Type)
+			{
+				case ReferenceButtonType.Ability:
+					key = bindings[index].ReferenceID;
+					return key != ReferenceButton.NULL_REFERENCE_ID;
+				case ReferenceButtonType.Inventory:
+					if (Character.TryGet(out IInventoryController inventoryController) &&
+						inventoryController.TryGetItem((int)bindings[index].ReferenceID, out Item inventoryItem) &&
+						inventoryItem.Template != null)
+					{
+						key = inventoryItem.Template.ID;
+						return true;
+					}
+					return false;
+				case ReferenceButtonType.Equipment:
+					if (Character.TryGet(out IEquipmentController equipmentController) &&
+						equipmentController.TryGetItem((int)bindings[index].ReferenceID, out Item equippedItem) &&
+						equippedItem.Template != null)
+					{
+						key = equippedItem.Template.ID;
+						return true;
+					}
+					return false;
+				default:
+					return false;
+			}
+		}
+
+		/// <summary>
+		/// Flags a cooldown sweep refresh for whichever slot references the cooled-down entry.
 		/// </summary>
 		/// <param name="referenceID">The reference ID on cooldown.</param>
 		/// <param name="cooldown">The cooldown instance.</param>
 		private void CooldownController_OnAddOrUpdateCooldown(long referenceID, CooldownInstance cooldown)
 		{
-			uint currentTick = GetCurrentCooldownTick();
-			float remaining = cooldown.RemainingTime(currentTick);
-			float fraction = remaining > 0.0f && cooldown.TotalTime > 0.0f
-				? remaining / cooldown.TotalTime
-				: 0.0f;
-
-			for (int i = 0; i < slots.Count; ++i)
-			{
-				HotkeySlot slot = slots[i];
-				if (slot.ReferenceID == referenceID)
-				{
-					slot.Cooldown.style.height = Length.Percent(Mathf.Clamp01(fraction) * 100.0f);
-				}
-			}
+			anyCooldownActive = true;
+			UpdateCooldownSweeps();
 		}
 
 		/// <summary>
@@ -589,14 +1015,69 @@ namespace FishMMO.Client
 		/// <param name="referenceID">The reference ID whose cooldown ended.</param>
 		private void CooldownController_OnRemoveCooldown(long referenceID)
 		{
-			for (int i = 0; i < slots.Count; ++i)
+			UpdateCooldownSweeps();
+		}
+
+		/// <summary>
+		/// Recomputes every slot's cooldown sweep from the live cooldown controller.
+		/// </summary>
+		/// <remarks>
+		/// Driven per frame rather than from the cooldown events alone. <c>OnUpdateCooldown</c>
+		/// only fires when a cooldown is RE-ADDED, so the previous event-only sweep was binary —
+		/// it snapped to the starting fraction and stayed there until removal, never animating
+		/// down. The loop is skipped entirely once nothing is on cooldown.
+		/// </remarks>
+		private void UpdateCooldownSweeps()
+		{
+			if (!anyCooldownActive || Character == null || slots.Count < 1)
 			{
-				HotkeySlot slot = slots[i];
-				if (slot.ReferenceID == referenceID)
-				{
-					slot.Cooldown.style.height = Length.Percent(0.0f);
-				}
+				return;
 			}
+
+			if (!Character.TryGet(out ICooldownController cooldownController))
+			{
+				anyCooldownActive = false;
+				return;
+			}
+
+			uint currentTick = GetCurrentCooldownTick();
+			bool stillActive = false;
+
+			for (int i = 0; i < slots.Count && i < bindings.Length; ++i)
+			{
+				float fraction = 0.0f;
+
+				if (TryGetSlotCooldownKey(i, out long key) &&
+					cooldownController.TryGetCooldown(key, currentTick, out float remaining) &&
+					remaining > 0.0f)
+				{
+					float total = ResolveCooldownTotal(cooldownController, key, remaining);
+					fraction = total > 0.0f ? remaining / total : 0.0f;
+					stillActive = true;
+				}
+
+				ApplyCooldownFraction(slots[i], fraction);
+			}
+
+			anyCooldownActive = stillActive;
+		}
+
+		/// <summary>
+		/// Resolves the total duration a cooldown started from, falling back to the remaining
+		/// time when the controller cannot report it.
+		/// </summary>
+		/// <param name="cooldownController">The character's cooldown controller.</param>
+		/// <param name="key">The cooldown key.</param>
+		/// <param name="remaining">The remaining seconds.</param>
+		/// <returns>The total cooldown duration in seconds.</returns>
+		private static float ResolveCooldownTotal(ICooldownController cooldownController, long key, float remaining)
+		{
+			if (cooldownController.TryGetCooldownInstance(key, out CooldownInstance instance) &&
+				instance.TotalTime > 0.0f)
+			{
+				return instance.TotalTime;
+			}
+			return remaining;
 		}
 
 		/// <summary>

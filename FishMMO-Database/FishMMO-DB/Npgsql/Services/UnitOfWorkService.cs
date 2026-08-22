@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -137,6 +137,8 @@ namespace FishMMO.Database.Npgsql.Services
 			/// If neither <see cref="CommitAsync"/> nor <see cref="RollbackAsync"/> has been called,
 			/// the transaction is rolled back as a safety measure.
 			/// </remarks>
+			public DatabaseResult? DisposeFault { get; private set; }
+
 			public void Dispose()
 			{
 				if (isDisposed)
@@ -148,7 +150,21 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					if (!isCompleted)
 					{
-						try { transaction.Rollback(); } catch { }
+						try
+						{
+							transaction.Rollback();
+						}
+						catch (Exception ex)
+						{
+							// Dispose must not throw, so this is recorded rather than raised.
+							// Left unrecorded it vanished entirely: a transaction abandoned
+							// because the rollback itself failed, with no return value and no
+							// logger to say so.
+							DisposeFault = DatabaseResult.Failure(
+								DatabaseErrorCodes.RollbackFailed,
+								"Implicit rollback during disposal failed. Rollback error: " +
+								$"{ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)} ({ex.GetType().Name})");
+						}
 						isCompleted = true;
 					}
 				}
@@ -179,7 +195,18 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					if (!isCompleted)
 					{
-						try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+						try
+						{
+							await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+						}
+						catch (Exception ex)
+						{
+							// See Dispose: recorded rather than raised, for the same reason.
+							DisposeFault = DatabaseResult.Failure(
+								DatabaseErrorCodes.RollbackFailed,
+								"Implicit rollback during disposal failed. Rollback error: " +
+								$"{ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)} ({ex.GetType().Name})");
+						}
 						isCompleted = true;
 					}
 				}
@@ -208,16 +235,37 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		/// <remarks>
+		/// <para>
 		/// BeginAsync must be the outermost database scope for the logical operation.
 		/// Once started, service methods called within the scope will reuse the ambient context/transaction.
+		/// </para>
+		/// <para>
+		/// THIS METHOD IS DELIBERATELY NOT <c>async</c>. <see cref="DatabaseExecutionScope"/> stores the
+		/// ambient context in an <see cref="AsyncLocal{T}"/>, and the async state machine RESTORES the
+		/// execution context when the synchronous part of an <c>async</c> method finishes — so a write
+		/// to an <c>AsyncLocal</c> made inside an <c>async</c> method is invisible to its caller. While
+		/// this method was <c>async</c> the scope it entered was therefore never seen by anyone: every
+		/// service call made "inside" the unit of work found no ambient context, created its own, and
+		/// committed on its own. The unit of work rolled back an empty transaction and reported
+		/// success. Nothing was atomic and nothing said so. (Reproduced against PostgreSQL 18.6: an
+		/// ownership assertion issued immediately after <c>BeginAsync</c> could not see the
+		/// transaction at all.)
+		/// </para>
+		/// <para>
+		/// Splitting the method in two fixes it: everything up to and including
+		/// <see cref="DatabaseExecutionScope.Enter"/> runs synchronously on the caller's execution
+		/// context, so the ambient scope is established for the caller, and only the transaction
+		/// begin — which sets no ambient state — is awaited. Any future edit that merges these two
+		/// halves back into one <c>async</c> method silently reintroduces the bug, so do not.
+		/// </para>
 		/// </remarks>
-		public async Task<DatabaseResult<IUnitOfWork>> BeginAsync(CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<IUnitOfWork>> BeginAsync(CancellationToken cancellationToken = default)
 		{
 			if (DatabaseExecutionScope.IsActive)
 			{
-				return DatabaseResult<IUnitOfWork>.Failure(
+				return Task.FromResult(DatabaseResult<IUnitOfWork>.Failure(
 					DatabaseErrorCodes.InvalidOperation,
-					"A unit of work cannot be started inside an ambient database execution scope.");
+					"A unit of work cannot be started inside an ambient database execution scope."));
 			}
 
 			NpgsqlDbContext context;
@@ -227,11 +275,27 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 			catch (Exception ex)
 			{
-				return DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to create database context ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true);
+				return Task.FromResult(DatabaseResult<IUnitOfWork>.Failure(DatabaseErrorCodes.DatabaseError, $"Failed to create database context ({ExceptionDiagnosticHelper.SanitizeExceptionMessage(ex.Message)}) ({ExceptionDiagnosticHelper.BuildSafeExceptionDiagnostic(ex)}).", isTransient: true));
 			}
 
+			// Must happen here, in the caller's execution context. See the remarks above.
 			var scopeToken = DatabaseExecutionScope.Enter(context, isTransactionScope: true);
 
+			return BeginTransactionAsync(context, scopeToken, cancellationToken);
+		}
+
+		/// <summary>
+		/// Awaits the transaction begin for a scope that has already been entered.
+		/// </summary>
+		/// <remarks>
+		/// Sets no ambient state, which is the only reason it is safe for this half to be
+		/// <c>async</c>. See the remarks on <see cref="BeginAsync"/>.
+		/// </remarks>
+		private static async Task<DatabaseResult<IUnitOfWork>> BeginTransactionAsync(
+			NpgsqlDbContext context,
+			DatabaseExecutionScope.ScopeToken scopeToken,
+			CancellationToken cancellationToken)
+		{
 			IDbContextTransaction transaction;
 			try
 			{

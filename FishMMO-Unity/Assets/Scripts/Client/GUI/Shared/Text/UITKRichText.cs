@@ -134,6 +134,13 @@ namespace FishMMO.Client
 				return text;
 			}
 
+			/* One scan for the last '>', instead of one forward scan per '<'. A tooltip is a few
+			 * hundred characters, but chat lines and world labels come through here too and a
+			 * message that is all '<' turned this into an O(n^2) walk on the game loop — which
+			 * is exactly the shape of input an attacker sends. A '>' exists after position i if
+			 * and only if the last one in the string is after position i. */
+			int lastClose = text.LastIndexOf('>');
+
 			StringBuilder sb = new StringBuilder(text.Length);
 			bool inTag = false;
 			for (int i = 0; i < text.Length; ++i)
@@ -142,7 +149,7 @@ namespace FishMMO.Client
 				if (c == '<')
 				{
 					// A '<' with no closing '>' after it is literal text, not an unterminated tag.
-					if (text.IndexOf('>', i) < 0)
+					if (lastClose <= i)
 					{
 						sb.Append(c);
 						continue;

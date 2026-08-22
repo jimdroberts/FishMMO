@@ -127,3 +127,117 @@
     height: 12px;
     flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ENTRY PRICE AND SELECTION
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    The price sits at the trailing edge of a row rather than only in the tooltip, because the
+    purchase flow now asks for a quantity and a player choosing one wants the unit price in
+    front of them while they do it.
+*/
+.merchant-entry__price {
+    flex-shrink: 0;
+    margin-left: 8px;
+    font-size: 11px;
+    -unity-text-align: middle-right;
+    color: var(--gold);
+}
+
+/*
+    Selection is a visible state because it is now load-bearing: the footer acts on the
+    selected row, and a footer that says "Buy" with no indication of what would be bought is
+    how a player buys the wrong thing.
+*/
+.merchant-entry--selected {
+    background-color: var(--brand-mid);
+    border-width: 1px;
+    border-color: var(--brand-border);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TRANSACTION FOOTER
+   Quantity selector plus an explicit confirm. Hidden until a row is selected.
+   ═══════════════════════════════════════════════════════════ */
+
+.merchant-transaction {
+    flex-direction: column;
+    flex-shrink: 0;
+    padding: 6px;
+    border-top-width: 1px;
+    border-top-color: var(--edge-light);
+    background-color: var(--abyss-800);
+}
+
+.merchant-transaction__name {
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    height: 16px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.merchant-quantity-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.merchant-qty-btn {
+    width: 26px;
+    height: 22px;
+    margin-right: 3px;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.merchant-qty-btn--max {
+    width: 38px;
+}
+
+.merchant-qty-field {
+    width: 54px;
+    height: 22px;
+    margin-right: 3px;
+    flex-shrink: 0;
+}
+
+.merchant-transaction__total {
+    flex-grow: 1;
+    font-size: 12px;
+    -unity-text-align: middle-right;
+    color: var(--gold);
+}
+
+.merchant-transaction__actions {
+    flex-direction: row;
+    margin-top: 5px;
+    flex-shrink: 0;
+}
+
+.merchant-transaction__confirm {
+    flex-grow: 1;
+    height: 24px;
+    margin-right: 4px;
+}
+
+.merchant-transaction__cancel {
+    width: 74px;
+    height: 24px;
+}
+
+/*
+    One status line, used for both the "waiting for the server" state and the result. It keeps
+    its height when empty so the footer does not jump every time a sale completes.
+*/
+.merchant-status {
+    margin-top: 4px;
+    height: 13px;
+    font-size: 10px;
+    flex-shrink: 0;
+    overflow: hidden;
+}

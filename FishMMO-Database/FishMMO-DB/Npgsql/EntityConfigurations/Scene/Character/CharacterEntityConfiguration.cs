@@ -52,6 +52,12 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(name)", stored: true);
 
+			// Defaulted to 1 rather than 0 so every character that predates the column reads back
+			// as a level-1 character rather than a level-0 one, which no game means.
+			builder.Property(e => e.Level)
+				.IsRequired()
+				.HasDefaultValue(1);
+
 			// Foreign key relationship to Account
 			// Account property is the account name (string) which is the PK of AccountEntity
 			// Restrict delete behavior prevents orphaned characters

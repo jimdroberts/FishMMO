@@ -33,21 +33,37 @@ namespace FishMMO.Database.Npgsql
 		/// </summary>
 		public string? UnavailableReason { get; }
 
-		/// <summary>True when the check ran and found nothing wrong.</summary>
+		/// <summary>
+		/// True when the check ran, every part of it was evaluated, and it found nothing wrong.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="DriftCheckFailed"/> is part of this deliberately. A drift check that could
+		/// not run has not established that the schema matches — reporting that state as
+		/// up-to-date turns "unknown" into a positive all-clear, which is the one answer worse
+		/// than saying nothing.
+		/// </remarks>
 		public bool IsUpToDate =>
 			UnavailableReason == null &&
+			!DriftCheckFailed &&
 			PendingMigrations.Length == 0 &&
 			!ModelChangedSinceLastMigration;
 
 		/// <summary>
+		/// Why the drift check could not be evaluated, or null. Only meaningful when
+		/// <see cref="DriftCheckFailed"/> is set.
+		/// </summary>
+		public string? DriftCheckFailureReason { get; }
+
+		/// <summary>
 		/// Creates a result.
 		/// </summary>
-		public SchemaValidationResult(string[] pendingMigrations, bool modelChangedSinceLastMigration, bool driftCheckFailed, string? unavailableReason)
+		public SchemaValidationResult(string[] pendingMigrations, bool modelChangedSinceLastMigration, bool driftCheckFailed, string? unavailableReason, string? driftCheckFailureReason = null)
 		{
 			PendingMigrations = pendingMigrations ?? Array.Empty<string>();
 			ModelChangedSinceLastMigration = modelChangedSinceLastMigration;
 			DriftCheckFailed = driftCheckFailed;
 			UnavailableReason = unavailableReason;
+			DriftCheckFailureReason = driftCheckFailureReason;
 		}
 
 		/// <summary>
@@ -72,6 +88,17 @@ namespace FishMMO.Database.Npgsql
 			{
 				return $"Database schema check could not run ({UnavailableReason}). " +
 					"Proceeding, but a schema mismatch would not be detected.";
+			}
+
+			if (DriftCheckFailed && PendingMigrations.Length == 0 && !ModelChangedSinceLastMigration)
+			{
+				string why = string.IsNullOrWhiteSpace(DriftCheckFailureReason)
+					? string.Empty
+					: $" ({DriftCheckFailureReason})";
+
+				return $"Database schema drift check could not be evaluated{why}, so a mismatch between " +
+					"the entity model and the database would not be detected. No migrations are pending. " +
+					"Treat this as an unverified schema rather than a clean one.";
 			}
 
 			if (IsUpToDate)

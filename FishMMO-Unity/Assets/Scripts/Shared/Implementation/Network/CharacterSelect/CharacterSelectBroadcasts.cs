@@ -21,6 +21,48 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Why a character-list request could not be answered with a list.
+	/// </summary>
+	public enum CharacterListResult : byte
+	{
+		/// <summary>
+		/// The server is refusing the request for now — a per-connection cooldown, another
+		/// request for the same connection still in flight, or a saturated worker pool. Nothing
+		/// is wrong with the account and retrying shortly will work.
+		/// </summary>
+		Busy = 0,
+		/// <summary>
+		/// The list could not be produced: the character service was unavailable, or the fetch
+		/// itself failed. Not the same as an account with no characters.
+		/// </summary>
+		Failed = 1,
+	}
+
+	/// <summary>
+	/// Broadcast sent when a <see cref="CharacterRequestListBroadcast"/> cannot be answered with
+	/// a <see cref="CharacterListBroadcast"/>.
+	/// </summary>
+	/// <remarks>
+	/// The request had three silent-return paths on the server — the per-connection cooldown, the
+	/// in-flight refusal, and the async handler's catch-all — and the client armed nothing when it
+	/// sent the request. Between them that is a permanent hang on the one screen with no panel
+	/// behind it: the login panel has already hidden itself by the time the request goes out, so
+	/// the player was left with an empty scene.
+	/// <para>
+	/// An empty <see cref="CharacterListBroadcast"/> is deliberately <b>not</b> used to unblock
+	/// these cases. It does unblock the client, but it is indistinguishable from "this account has
+	/// no characters", so a database outage reached the player as their characters having been
+	/// deleted — and nothing is logged client-side, because from the client's point of view the
+	/// request succeeded.
+	/// </para>
+	/// </remarks>
+	public struct CharacterListResultBroadcast : IBroadcast
+	{
+		/// <summary>Why the list could not be sent.</summary>
+		public CharacterListResult Result;
+	}
+
+	/// <summary>
 	/// Broadcast for deleting a character from the account.
 	/// Contains the name of the character to delete.
 	/// </summary>

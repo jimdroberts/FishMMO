@@ -90,7 +90,12 @@ namespace FishMMO.Client
 				"faction",
 				"factions");
 
-			OnSetCharacter += CharacterControl_OnSetCharacter;
+			/* Unsubscribe first. OnStarting is re-run by ReinitializeIfTreeReplaced every time the
+			 * visual tree is rebuilt — which is every reopen, because hiding the panel disables
+			 * its UIDocument and re-enabling it clones the UXML afresh. A bare += here therefore
+			 * stacked one more subscription per reopen. Removing a handler that is not subscribed
+			 * is a no-op, so this is safe on the first pass. */
+			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;
 		}
 
@@ -100,21 +105,56 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
-			OnSetCharacter -= CharacterControl_OnSetCharacter;
+			UnsubscribeFactions();
 
+			ClearAll();
+			base.OnDestroying();
+		}
+
+		/// <summary>
+		/// Drops the faction subscription and the rows built against the previous tree.
+		/// </summary>
+		/// <remarks>
+		/// The Pre half is what makes re-initialisation idempotent. <c>OnAfterStarting</c> runs
+		/// <c>OnPreSetCharacter</c> then <c>OnPostSetCharacter</c> on every tree rebuild, and this
+		/// panel's unsubscribe used to live in <see cref="OnPreUnsetCharacter"/> instead — a
+		/// method that path never calls. The result was one extra subscription to a static event
+		/// per reopen.
+		/// <para>
+		/// The rows go too: they belong to the tree that has just been replaced, and keeping them
+		/// would leave the panel correctly wired and completely empty.
+		/// </para>
+		/// </remarks>
+		public override void OnPreSetCharacter()
+		{
+			UnsubscribeFactions();
 			ClearAll();
 		}
 
 		/// <summary>
-		/// Subscribes to faction update events after the character is set.
+		/// Subscribes to faction updates and rebuilds every row from the character's data.
 		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out IFactionController factionController))
+			if (Character == null || !Character.TryGet(out IFactionController factionController))
 			{
-				IFactionController.OnUpdateFaction += FactionController_OnUpdateFaction;
+				return;
+			}
+
+			IFactionController.OnUpdateFaction += FactionController_OnUpdateFaction;
+
+			/* Rebuilt from the controller — the model — rather than from whatever this panel was
+			 * told while it was closed. The controller owns the standings as plain data; the rows
+			 * are this panel's, and are disposable. */
+			if (factionController.Factions == null)
+			{
+				return;
+			}
+			foreach (Faction faction in factionController.Factions.Values)
+			{
+				FactionController_OnUpdateFaction(Character, faction);
 			}
 		}
 
@@ -123,11 +163,21 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
-			if (Character.TryGet(out IFactionController factionController))
-			{
-				IFactionController.OnUpdateFaction -= FactionController_OnUpdateFaction;
-			}
+			UnsubscribeFactions();
 			ClearAll();
+		}
+
+		/// <summary>
+		/// Removes the faction handler from the static event.
+		/// </summary>
+		/// <remarks>
+		/// The event is static, so the unsubscribe must not be guarded by the character still
+		/// being resolvable — the old code was, and silently skipped the unsubscribe whenever the
+		/// character had already gone.
+		/// </remarks>
+		private void UnsubscribeFactions()
+		{
+			IFactionController.OnUpdateFaction -= FactionController_OnUpdateFaction;
 		}
 
 		/// <summary>
@@ -148,32 +198,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Populates faction rows for all of the character's known factions.
-		/// </summary>
-		/// <param name="character">The player character.</param>
-		private void CharacterControl_OnSetCharacter(IPlayerCharacter character)
-		{
-			if (character.TryGet(out IFactionController factionController))
-			{
-				if (factionController.Factions == null)
-				{
-					return;
-				}
-				foreach (Faction faction in factionController.Factions.Values)
-				{
-					FactionController_OnUpdateFaction(character, faction);
-				}
-			}
-		}
-
-		/// <summary>
 		/// Creates or updates the row for a faction whose standing changed.
 		/// </summary>
 		/// <param name="character">The character whose faction changed.</param>
 		/// <param name="faction">The faction data.</param>
 		public void FactionController_OnUpdateFaction(ICharacter character, Faction faction)
 		{
-			if (faction == null || list == null)
+			if (faction == null || faction.Template == null || list == null)
 			{
 				return;
 			}
@@ -272,10 +303,30 @@ namespace FishMMO.Client
 		/// <param name="x">The value to normalize.</param>
 		/// <param name="min">The minimum bound.</param>
 		/// <param name="max">The maximum bound.</param>
-		/// <returns>The normalized value.</returns>
+		/// <returns>The normalized value, or 0 when the bounds carry no range.</returns>
+		/// <remarks>
+		/// <para>The degenerate bound is not hypothetical. <c>FactionTemplate.Minimum</c> and
+		/// <c>Maximum</c> are authored on a ScriptableObject, and a template saved with them equal
+		/// — or simply left at their defaults — made this a division by zero. In float arithmetic
+		/// that does not throw: it produces NaN (for <c>x == min</c>) or an infinity, and
+		/// <c>Mathf.Clamp01</c> passes NaN straight through, because NaN compares false against
+		/// both bounds. The NaN then reached <c>Length.Percent</c> and poisoned the layout of the
+		/// whole faction list, not just the one bar — a single mis-authored template blanked the
+		/// panel.</para>
+		/// <para>Zero rather than one for the degenerate case: an unauthored range is not evidence
+		/// the player has maxed the faction, and an empty bar reads as "no information" where a
+		/// full one would be an outright lie about their standing.</para>
+		/// </remarks>
 		private float Normalize(float x, float min, float max)
 		{
-			return (x - min) / (max - min);
+			float range = max - min;
+			if (range <= 0.0f || float.IsNaN(range) || float.IsInfinity(range))
+			{
+				return 0.0f;
+			}
+
+			float normalized = (x - min) / range;
+			return float.IsNaN(normalized) ? 0.0f : normalized;
 		}
 
 		/// <summary>

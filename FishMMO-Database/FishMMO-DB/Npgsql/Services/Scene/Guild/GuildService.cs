@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -187,7 +187,66 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>Guild data DTO.</returns>
 		private GuildData MapEntityToDto(GuildEntity entity)
 		{
-			return new GuildData(entity.ID, entity.Name, entity.Notice, entity.MessageOfTheDay ?? string.Empty);
+			return new GuildData(
+				entity.ID,
+				entity.Name,
+				entity.Notice,
+				entity.MessageOfTheDay ?? string.Empty,
+				entity.Blurb ?? string.Empty,
+				entity.Tags ?? string.Empty,
+				entity.IsRecruiting);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistRecruitmentAsync(long guildId, string blurb, string tags, bool isRecruiting, CancellationToken cancellationToken = default)
+		{
+			if (guildId <= 0)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
+
+			string body = blurb ?? string.Empty;
+			if (body.Length > 500)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Blurb must not exceed 500 characters.");
+
+			string tagList = tags ?? string.Empty;
+			if (tagList.Length > 200)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Tags must not exceed 200 characters.");
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// Stored already lower-cased so directory search never needs a per-row LOWER().
+				var sql = $@"UPDATE {TableName} SET blurb = {{0}}, tags = {{1}}, is_recruiting = {{2}} WHERE id = {{3}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { body, tagList.ToLowerInvariant(), isRecruiting, guildId }, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Guild", guildId.ToString());
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> PersistNoticeAsync(long guildId, string notice, CancellationToken cancellationToken = default)
+		{
+			if (guildId <= 0)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
+
+			if (notice != null && notice.Length > 500)
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Notice must not exceed 500 characters.");
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName} SET notice = {{0}} WHERE id = {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { notice ?? string.Empty, guildId }, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Guild", guildId.ToString());
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

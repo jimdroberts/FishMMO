@@ -33,6 +33,19 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// The character's current location within the guild context.
 		/// </summary>
 		public string Location { get; set; }
+		/// <summary>
+		/// A note about this member visible to every member of the guild.
+		/// </summary>
+		public string PublicNote { get; set; }
+		/// <summary>
+		/// A note about this member visible only to ranks holding <c>ViewOfficerNotes</c>.
+		/// </summary>
+		/// <remarks>
+		/// The filtering happens on the SERVER, in the roster projection: this column is never put
+		/// on the wire for a client whose rank does not hold the permission. Sending it and hiding
+		/// it client-side would put the text one packet inspector away from every member.
+		/// </remarks>
+		public string OfficerNote { get; set; }
 		public DateTime TimeCreated { get; set; }
 	}
 }

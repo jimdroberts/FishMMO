@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
@@ -21,7 +21,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 			if (character == null) return false;
 			if (character.IsFlagged(CharacterFlags.IsDead)) return false;
 			if (character.IsTeleporting) return false;
-			if (character.IsFlagged(CharacterFlags.IsFrozen)) return false;
+			/* Frozen, stunned and mesmerized all mean "cannot act". Only IsFrozen was tested
+			 * here; the other two were set by the crowd-control buff templates and read by no
+			 * code anywhere, so a stunned player could still craft, trade, use hotkeys and
+			 * activate abilities through every broadcast handler that funnels through CanAct. */
+			if (CharacterIncapacitation.IsIncapacitated(character)) return false;
 			if (!character.IsFlagged(CharacterFlags.IsLoaded)) return false;
 			return true;
 		}

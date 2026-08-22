@@ -1,3 +1,4 @@
+using UnityEngine;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -32,6 +33,15 @@ namespace FishMMO.Client
 
 		/// <summary>The interactable ID of the current dungeon entrance.</summary>
 		private long currentInteractableID;
+
+		/// <summary>
+		/// Dungeon preview image last received, held as data rather than written straight to the
+		/// element. See <see cref="ApplyDungeon"/>.
+		/// </summary>
+		private Sprite currentImage;
+
+		/// <summary>Dungeon name last received.</summary>
+		private string currentName;
 
 		/// <summary>
 		/// Queries the dungeon finder elements and wires the start and close buttons.
@@ -105,23 +115,82 @@ namespace FishMMO.Client
 			if (sceneObject is DungeonEntrance dungeonEntrance)
 			{
 				currentInteractableID = msg.InteractableID;
+				currentImage = dungeonEntrance.DungeonImage;
+				currentName = dungeonEntrance.DungeonName;
 
-				if (dungeonImage != null && dungeonEntrance.DungeonImage != null)
-				{
-					dungeonImage.style.backgroundImage = new StyleBackground(dungeonEntrance.DungeonImage);
-				}
-				if (dungeonDescriptionLabel != null)
-				{
-					dungeonDescriptionLabel.text = dungeonEntrance.DungeonName;
-				}
-
+				/* Show first, then render. Enabling the document re-clones the UXML, so the image
+				 * and the name written before this line belonged to a tree that was discarded
+				 * microseconds later and the panel opened blank. Show() calls OnAfterShow, which
+				 * does the writing. */
 				Show();
+
+				// Already visible: Show is a no-op and OnAfterShow never ran, so render directly.
+				ApplyDungeon();
 			}
 		}
 
 		/// <summary>
-		/// Broadcasts a request to start the current dungeon.
+		/// Writes the pending dungeon into the tree the player will actually see.
 		/// </summary>
+		protected override void OnAfterShow()
+		{
+			ApplyDungeon();
+		}
+
+		/// <summary>
+		/// Writes the pending dungeon again after the visual tree has been rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// Both hooks are needed: on a panel's first open <c>hasStarted</c> is still false and the
+		/// tree-replacement check bails out before <c>OnAfterShow</c> would help, while
+		/// <c>OnAfterStarting</c> alone misses every later reopen.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+			ApplyDungeon();
+		}
+
+		/// <summary>
+		/// Pushes the stored dungeon image and name onto the live elements.
+		/// </summary>
+		private void ApplyDungeon()
+		{
+			if (dungeonImage != null)
+			{
+				/* The null case writes an empty background rather than skipping the assignment.
+				 * Leaving the previous sprite in place is what made a cleared panel still show the
+				 * last dungeon's artwork under a blank name, and it also held a reference to that
+				 * sprite for as long as the element lived. */
+				dungeonImage.style.backgroundImage = currentImage != null
+					? new StyleBackground(currentImage)
+					: new StyleBackground();
+			}
+			if (dungeonDescriptionLabel != null)
+			{
+				dungeonDescriptionLabel.text = currentName ?? string.Empty;
+			}
+		}
+
+		/// <summary>
+		/// Broadcasts a request to start the current dungeon and closes the panel.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>One request per opening.</b> The panel used to stay open with a live Start
+		/// button after the request went out, and the request is answered by a disconnect-and-
+		/// reroute that takes a database round trip to arrange — so there was a window, seconds
+		/// long on a loaded server, in which the player saw nothing happen and clicked again. The
+		/// server's ingress guard debounces those, but it debounces them into
+		/// <c>SceneTransferRefusalReason.OnCooldown</c>, so the reward for an impatient second
+		/// click was "You are travelling too often" on top of a request that was already
+		/// succeeding. Clearing the ID and closing removes the second click rather than punishing
+		/// it.</para>
+		/// <para>Closing loses nothing: the entrance re-sends <see cref="DungeonFinderBroadcast"/>
+		/// on the next interaction, which reopens the panel with fresh data. Nothing is armed
+		/// server-side by having the panel open, and nothing is left armed by closing it — the
+		/// request only exists once this method has sent it, and from that point it is the
+		/// server's, cancelled only by its own refusal.</para>
+		/// </remarks>
 		public void OnClick_Start()
 		{
 			if (currentInteractableID == 0)
@@ -129,10 +198,42 @@ namespace FishMMO.Client
 				return;
 			}
 
+			long requestedID = currentInteractableID;
+			ClearDungeon();
+			Hide();
+
 			Client.Broadcast(new DungeonFinderBroadcast()
 			{
-				InteractableID = currentInteractableID,
+				InteractableID = requestedID,
 			});
+		}
+
+		/// <summary>
+		/// Drops the pending dungeon so a stale entrance cannot be re-sent.
+		/// </summary>
+		private void ClearDungeon()
+		{
+			currentInteractableID = 0;
+			currentImage = null;
+			currentName = null;
+		}
+
+		/// <summary>
+		/// Drops the pending dungeon when the character goes away.
+		/// </summary>
+		/// <remarks>
+		/// <c>currentInteractableID</c> is a scene-object handle belonging to the scene the
+		/// previous character was standing in. Carrying it across a character switch or a scene
+		/// transfer meant a reopened panel showed the old dungeon and Start sent an ID that means
+		/// something different — or nothing — on the new server. The server validates the handle
+		/// against the character's own scene and refuses, so this was never exploitable; it was a
+		/// panel showing one dungeon and a button asking for another.
+		/// </remarks>
+		public override void OnPostUnsetCharacter()
+		{
+			base.OnPostUnsetCharacter();
+			ClearDungeon();
+			ApplyDungeon();
 		}
 	}
 }

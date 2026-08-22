@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
@@ -22,6 +22,17 @@ namespace FishMMO.Shared.Core
 		/// Event triggered when a party member is added. Provides member ID, rank, and health percent.
 		/// </summary>
 		event Action<long, PartyRank, float> OnAddPartyMember;
+
+		/// <summary>
+		/// Event triggered when a party member's live health changes. Provides member ID and
+		/// health fraction (0-1).
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="OnAddPartyMember"/>, which also carries a health figure but
+		/// gets it from the party database row — a row written only on connect and disconnect.
+		/// This event is the live value, pushed by the scene server hosting the member.
+		/// </remarks>
+		event Action<long, float> OnUpdatePartyMemberHealth;
 
 		/// <summary>
 		/// Event triggered to validate the current set of party members.

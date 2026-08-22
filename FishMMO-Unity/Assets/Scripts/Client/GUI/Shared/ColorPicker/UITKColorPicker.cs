@@ -82,11 +82,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private const string H_BACKGROUND_NAME = "h-background";
 		/// <summary>
-		/// Name of the hue slider spectrum texture element.
-		/// </summary>
-		private const string H_TEXTURE_NAME = "hsv-texture";
-
-		/// <summary>
 		/// Name of the saturation slider element.
 		/// </summary>
 		private const string S_SLIDER_NAME = "s-slider";
@@ -176,9 +171,87 @@ namespace FishMMO.Client
 		public Action<Color> OnColorChanged;
 
 		/// <summary>
-		/// Cached HSV textures for each hue value.
+		/// A one-pixel-tall spectrum strip and the pixel buffer it is refilled from.
 		/// </summary>
-		private readonly Texture2D[] cachedHSVTextures = new Texture2D[NUM_HUES];
+		/// <remarks>
+		/// Every slider background used to be a brand new <see cref="Texture2D"/> built by
+		/// <c>TinyColor.Generate*Spectrum</c>, and five of them were rebuilt on every value
+		/// change — so dragging a slider allocated five textures a frame and dropped the
+		/// previous five, which are native allocations the garbage collector does not hurry to
+		/// reclaim. The strip is allocated once per channel and its pixels are rewritten in
+		/// place instead.
+		/// </remarks>
+		private sealed class Strip
+		{
+			/// <summary>The texture bound to the element's background.</summary>
+			public readonly Texture2D Texture;
+
+			/// <summary>Scratch pixels, exactly one row wide.</summary>
+			public readonly Color[] Pixels;
+
+			/// <summary>Creates a strip of the given width.</summary>
+			/// <param name="width">Number of horizontal samples.</param>
+			public Strip(int width)
+			{
+				Pixels = new Color[width];
+				Texture = new Texture2D(width, SLIDER_BACKGROUND_HEIGHT, TextureFormat.ARGB32, false)
+				{
+					filterMode = FilterMode.Bilinear,
+					wrapMode = TextureWrapMode.Clamp,
+					// Nothing else may free this; it is owned by the picker and destroyed with it.
+					hideFlags = HideFlags.HideAndDontSave,
+				};
+			}
+
+			/// <summary>Uploads the current pixel buffer.</summary>
+			public void Apply()
+			{
+				Texture.SetPixels(Pixels);
+				Texture.Apply(false);
+			}
+		}
+
+		/// <summary>Hue spectrum behind the H slider.</summary>
+		private Strip hStrip;
+		/// <summary>Saturation spectrum behind the S slider.</summary>
+		private Strip sStrip;
+		/// <summary>Brightness spectrum behind the V slider. Static once built.</summary>
+		private Strip vStrip;
+		/// <summary>Red spectrum behind the R slider.</summary>
+		private Strip rStrip;
+		/// <summary>Green spectrum behind the G slider.</summary>
+		private Strip gStrip;
+		/// <summary>Blue spectrum behind the B slider.</summary>
+		private Strip bStrip;
+		/// <summary>Alpha spectrum behind the A slider. Static once built.</summary>
+		private Strip aStrip;
+
+		/// <summary>
+		/// The saturation/value square, regenerated in place whenever the hue changes.
+		/// </summary>
+		/// <remarks>
+		/// This replaces a 360-entry array of 192x192 textures. Fully populated that cache held
+		/// 360 * 192 * 192 * 4 bytes — a little over 50 MB of texture memory that was never
+		/// released, on a panel most players open once to pick a UI colour. One texture is
+		/// enough: the hue only changes when the player moves the hue slider, and refilling
+		/// 36,864 pixels costs less than the allocation it replaces.
+		/// </remarks>
+		private Texture2D hsvSurface;
+
+		/// <summary>Scratch pixels for <see cref="hsvSurface"/>.</summary>
+		private Color[] hsvPixels;
+
+		/// <summary>Hue <see cref="hsvSurface"/> currently holds, or -1 when it is unbuilt.</summary>
+		private int hsvSurfaceHue = -1;
+
+		/// <summary>Pointer id captured by a drag on the saturation/value square, or -1.</summary>
+		/// <remarks>
+		/// A capture that is never released blocks every other element in the panel from
+		/// receiving pointer events, which presents as the whole UI freezing, so every exit —
+		/// pointer up, pointer cancel, losing the capture to something else, hiding the panel
+		/// and destroying it — releases it.
+		/// </remarks>
+		private int hsvPointerId = -1;
 
 		/// <summary>
 		/// The currently selected color.
@@ -189,6 +262,16 @@ namespace FishMMO.Client
 		/// When true, value-changed callbacks are ignored to prevent feedback loops during programmatic updates.
 		/// </summary>
 		private bool suppressCallbacks;
+
+		/// <summary>
+		/// When true, <see cref="OnColorChanged"/> is not raised.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="suppressCallbacks"/>, which is about the picker's own
+		/// elements talking to each other. This one is about the picker talking to whoever
+		/// opened it, and it is set while the picker is being seeded rather than driven.
+		/// </remarks>
+		private bool suppressNotify;
 
 		/// <summary>
 		/// The current color swatch element.
@@ -355,20 +438,89 @@ namespace FishMMO.Client
 
 			if (hsvTexture != null)
 			{
+				/* Down, move, up and the two capture-loss events. A picker that only listened
+				 * for PointerDown could be clicked but not dragged, which is the one thing a
+				 * saturation/value square is for. */
 				hsvTexture.RegisterCallback<PointerDownEvent>(OnHSVPointerDown);
+				hsvTexture.RegisterCallback<PointerMoveEvent>(OnHSVPointerMove);
+				hsvTexture.RegisterCallback<PointerUpEvent>(OnHSVPointerUp);
+				hsvTexture.RegisterCallback<PointerCancelEvent>(OnHSVPointerUp);
+				hsvTexture.RegisterCallback<PointerCaptureOutEvent>(OnHSVPointerCaptureOut);
 			}
 
 			Button closeButton = Root.Q<Button>(CLOSE_BUTTON_NAME);
 			if (closeButton != null)
 			{
-				closeButton.clicked += Hide;
+				closeButton.clicked += OnClick_Close;
 			}
 
+			Root.UnregisterCallback<KeyDownEvent>(OnPickerKeyDown, TrickleDown.TrickleDown);
+			Root.RegisterCallback<KeyDownEvent>(OnPickerKeyDown, TrickleDown.TrickleDown);
+
 			// Static spectrum backgrounds that never change.
-			SetBackground(vBackground, TinyColor.GenerateBrightnessSpectrum(HSV_TEXTURE_WIDTH, SLIDER_BACKGROUND_HEIGHT));
-			SetBackground(aBackground, TinyColor.GenerateAlphaSpectrum(HSV_TEXTURE_WIDTH, SLIDER_BACKGROUND_HEIGHT));
+			BuildStaticStrips();
 
 			SetColor(InitialColor);
+		}
+
+		/// <summary>
+		/// Re-binds the textures and re-applies the colour after a visual tree rebuild.
+		/// </summary>
+		/// <remarks>
+		/// The strips survive the rebuild but the elements they were bound to do not, so a
+		/// re-shown picker came back with no spectrum behind any of its sliders.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			BuildStaticStrips();
+			ApplyColor(current, notify: false);
+		}
+
+		/// <summary>
+		/// Re-applies the picker's colour to the tree the player will actually see.
+		/// </summary>
+		protected override void OnAfterShow()
+		{
+			BuildStaticStrips();
+			ApplyColor(current, notify: false);
+		}
+
+		/// <summary>
+		/// Closes the picker from the close button.
+		/// </summary>
+		private void OnClick_Close()
+		{
+			Hide();
+		}
+
+		/// <summary>
+		/// Escape closes the picker; Enter commits whatever is typed in the hex field.
+		/// </summary>
+		private void OnPickerKeyDown(KeyDownEvent evt)
+		{
+			if (!Visible)
+			{
+				return;
+			}
+
+			switch (evt.keyCode)
+			{
+				case KeyCode.Escape:
+					evt.StopPropagation();
+					Hide();
+					return;
+				case KeyCode.Return:
+				case KeyCode.KeypadEnter:
+					/* Only when the caret is in the hex field. Enter anywhere else in the picker
+					 * belongs to whatever is focused there, and stealing it would stop the
+					 * numeric fields committing what was typed into them. */
+					if (hexInput != null && evt.target is VisualElement target && hexInput.Contains(target))
+					{
+						evt.StopPropagation();
+						UpdateHexValue(hexInput.value);
+					}
+					return;
+			}
 		}
 
 		/// <summary>
@@ -427,18 +579,193 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Retrieves (and lazily generates) the HSV texture for the given hue index.
+		/// Returns the saturation/value square for a hue, refilling it only when the hue moved.
 		/// </summary>
+		/// <param name="hueIndex">Hue in degrees, 0-359.</param>
+		/// <returns>The shared surface, or null if it could not be created.</returns>
 		private Texture2D GetHSVTexture(int hueIndex)
 		{
 			hueIndex = Mathf.Clamp(hueIndex, 0, HUE_MAX);
-			Texture2D texture = cachedHSVTextures[hueIndex];
-			if (texture == null)
+
+			if (hsvSurface == null)
 			{
-				texture = TinyColor.GenerateHSVTexture(hueIndex, HSV_TEXTURE_WIDTH, HSV_TEXTURE_HEIGHT);
-				cachedHSVTextures[hueIndex] = texture;
+				hsvPixels = new Color[HSV_TEXTURE_WIDTH * HSV_TEXTURE_HEIGHT];
+				hsvSurface = new Texture2D(HSV_TEXTURE_WIDTH, HSV_TEXTURE_HEIGHT, TextureFormat.ARGB32, false)
+				{
+					filterMode = FilterMode.Bilinear,
+					wrapMode = TextureWrapMode.Clamp,
+					hideFlags = HideFlags.HideAndDontSave,
+				};
+				hsvSurfaceHue = -1;
 			}
-			return texture;
+
+			if (hsvSurfaceHue == hueIndex)
+			{
+				return hsvSurface;
+			}
+
+			/* Same mapping the old generator used: X is value, Y is saturation, with Y counted
+			 * from the bottom of the texture. The picking code below relies on it. */
+			float dValue = 1.0f / (HSV_TEXTURE_WIDTH - 1);
+			float dSaturation = 1.0f / (HSV_TEXTURE_HEIGHT - 1);
+
+			for (int y = 0; y < HSV_TEXTURE_HEIGHT; ++y)
+			{
+				float saturation = dSaturation * y;
+				int row = y * HSV_TEXTURE_WIDTH;
+				for (int x = 0; x < HSV_TEXTURE_WIDTH; ++x)
+				{
+					hsvPixels[row + x] = TinyColor.HSVToRGB(hueIndex, saturation, dValue * x, 1.0f);
+				}
+			}
+
+			hsvSurface.SetPixels(hsvPixels);
+			hsvSurface.Apply(false);
+			hsvSurfaceHue = hueIndex;
+			return hsvSurface;
+		}
+
+		/// <summary>
+		/// Creates a strip on first use.
+		/// </summary>
+		/// <param name="strip">The strip field to fill in.</param>
+		/// <param name="width">Number of horizontal samples.</param>
+		/// <returns>The strip.</returns>
+		private static Strip EnsureStrip(ref Strip strip, int width)
+		{
+			if (strip == null)
+			{
+				strip = new Strip(width);
+			}
+			return strip;
+		}
+
+		/// <summary>
+		/// Rewrites the hue spectrum in place and binds it to its element.
+		/// </summary>
+		private void FillHueStrip(float alpha)
+		{
+			Strip strip = EnsureStrip(ref hStrip, NUM_HUES);
+			float d = 360.0f / strip.Pixels.Length;
+			for (int x = 0; x < strip.Pixels.Length; ++x)
+			{
+				strip.Pixels[x] = TinyColor.HSVToRGB(d * x, 1.0f, 1.0f, alpha);
+			}
+			strip.Apply();
+			SetBackground(hBackground, strip.Texture);
+		}
+
+		/// <summary>
+		/// Rewrites the saturation spectrum in place and binds it to its element.
+		/// </summary>
+		private void FillSaturationStrip(float hue, float value, float alpha)
+		{
+			Strip strip = EnsureStrip(ref sStrip, SLIDER_BACKGROUND_WIDTH);
+			float d = 1.0f / strip.Pixels.Length;
+			for (int x = 0; x < strip.Pixels.Length; ++x)
+			{
+				strip.Pixels[x] = TinyColor.HSVToRGB(hue, d * x, value, alpha);
+			}
+			strip.Apply();
+			SetBackground(sBackground, strip.Texture);
+		}
+
+		/// <summary>
+		/// Rewrites one RGB channel spectrum in place and binds it to its element.
+		/// </summary>
+		/// <param name="strip">The strip field for this channel.</param>
+		/// <param name="element">The element to bind the texture to.</param>
+		/// <param name="channel">0 = red, 1 = green, 2 = blue.</param>
+		/// <param name="colour">The colour the other two channels are read from.</param>
+		private void FillChannelStrip(ref Strip strip, VisualElement element, int channel, Color colour)
+		{
+			Strip s = EnsureStrip(ref strip, SLIDER_BACKGROUND_WIDTH);
+			float d = 1.0f / s.Pixels.Length;
+			for (int x = 0; x < s.Pixels.Length; ++x)
+			{
+				float ramp = d * x;
+				s.Pixels[x] = channel == 0 ? new Color(ramp, colour.g, colour.b, colour.a)
+					: channel == 1 ? new Color(colour.r, ramp, colour.b, colour.a)
+					: new Color(colour.r, colour.g, ramp, colour.a);
+			}
+			s.Apply();
+			SetBackground(element, s.Texture);
+		}
+
+		/// <summary>
+		/// Builds the two spectra that never change, once.
+		/// </summary>
+		private void BuildStaticStrips()
+		{
+			if (vStrip == null)
+			{
+				Strip strip = EnsureStrip(ref vStrip, HSV_TEXTURE_WIDTH);
+				float d = 1.0f / strip.Pixels.Length;
+				for (int x = 0; x < strip.Pixels.Length; ++x)
+				{
+					float brightness = d * x;
+					strip.Pixels[x] = new Color(brightness, brightness, brightness, 1.0f);
+				}
+				strip.Apply();
+			}
+			SetBackground(vBackground, vStrip.Texture);
+
+			if (aStrip == null)
+			{
+				Strip strip = EnsureStrip(ref aStrip, HSV_TEXTURE_WIDTH);
+				int width = strip.Pixels.Length;
+				float d = 1.0f / width;
+				for (int x = 0; x < width; ++x)
+				{
+					// RGB fades from white down to black as alpha rises, as it always has.
+					float rgb = d * (width - x);
+					strip.Pixels[x] = new Color(rgb, rgb, rgb, d * x);
+				}
+				strip.Apply();
+			}
+			SetBackground(aBackground, aStrip.Texture);
+		}
+
+		/// <summary>
+		/// Destroys every texture this picker owns.
+		/// </summary>
+		/// <remarks>
+		/// Textures created from script are native objects; letting the managed references go
+		/// does not free them, so a panel that is destroyed without this leaks the lot.
+		/// </remarks>
+		private void ReleaseTextures()
+		{
+			DestroyStrip(ref hStrip);
+			DestroyStrip(ref sStrip);
+			DestroyStrip(ref vStrip);
+			DestroyStrip(ref rStrip);
+			DestroyStrip(ref gStrip);
+			DestroyStrip(ref bStrip);
+			DestroyStrip(ref aStrip);
+
+			if (hsvSurface != null)
+			{
+				Destroy(hsvSurface);
+				hsvSurface = null;
+			}
+			hsvPixels = null;
+			hsvSurfaceHue = -1;
+		}
+
+		/// <summary>
+		/// Destroys one strip's texture and forgets it.
+		/// </summary>
+		private void DestroyStrip(ref Strip strip)
+		{
+			if (strip == null)
+			{
+				return;
+			}
+			if (strip.Texture != null)
+			{
+				Destroy(strip.Texture);
+			}
+			strip = null;
 		}
 
 		/// <summary>
@@ -457,21 +784,49 @@ namespace FishMMO.Client
 			OnColorChanged = onChanged;
 			InitialColor = initial;
 
+			/* The colour is set as state before Show, and written into the tree by OnAfterShow.
+			 * Writing it into the elements here would be lost — enabling the document re-clones
+			 * the UXML — and letting OnAfterShow run against the previous colour would report
+			 * that stale colour to the caller that has only just subscribed. */
+			current = initial;
+
 			Show();
 
-			/* Seeded after Show, not before: a panel that has never been shown has no visual tree,
-			 * so SetColor would have no sliders or inputs to write into and the picker would open
-			 * on its previous colour. */
-			SetColor(initial);
+			// Already visible: Show is a no-op, so seed the live tree directly.
+			ApplyColor(initial, notify: false);
 		}
 
 		/// <summary>
 		/// Hides the picker and stops reporting changes to whoever opened it.
 		/// </summary>
-		public override void Hide()
+		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
+		/// <remarks>
+		/// The override is on <c>Hide(bool)</c>, not on <c>Hide()</c>. <c>Hide()</c> forwards
+		/// here, but quit-to-login calls <c>Hide(false)</c> directly — so an override on the
+		/// parameterless form alone left the Options panel still subscribed to colour changes
+		/// after the player had returned to the login screen.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
 		{
+			base.Hide(overrideIsAlwaysOpen);
+
+			if (overrideIsAlwaysOpen || Document == null)
+			{
+				// The base refused the hide; the picker is still up and still in use.
+				return;
+			}
+
+			ReleaseHSVPointer();
 			OnColorChanged = null;
-			base.Hide();
+		}
+
+		/// <summary>
+		/// Releases every texture and any outstanding pointer capture.
+		/// </summary>
+		public override void OnDestroying()
+		{
+			ReleaseHSVPointer();
+			ReleaseTextures();
 		}
 
 		/// <summary>
@@ -480,16 +835,40 @@ namespace FishMMO.Client
 		/// <param name="color">The color to set.</param>
 		public void SetColor(Color color)
 		{
+			ApplyColor(color, notify: true);
+		}
+
+		/// <summary>
+		/// Sets the picker colour, optionally without telling the subscriber about it.
+		/// </summary>
+		/// <param name="color">The colour to set.</param>
+		/// <param name="notify">
+		/// False while seeding the picker from a caller's current colour. Reporting a colour the
+		/// caller already has looks to it like the player changed something — and its handler is
+		/// free to be expensive, which is exactly what the Options panel's is.
+		/// </param>
+		private void ApplyColor(Color color, bool notify)
+		{
 			current = color;
 			if (currentSwatch != null)
 			{
 				currentSwatch.style.backgroundColor = current;
 			}
-			SetHSV(TinyColor.RGBToHSV(current.r, current.g, current.b));
-			SetRGB(current);
-			SetSliderValue(aSlider, current.a * RGBA_MAX);
-			SetInputValue(aInput, Mathf.RoundToInt(current.a * RGBA_MAX));
-			UpdateBackgroundSprites();
+
+			bool previous = suppressNotify;
+			suppressNotify = !notify;
+			try
+			{
+				SetHSV(TinyColor.RGBToHSV(current.r, current.g, current.b));
+				SetRGB(current);
+				SetSliderValue(aSlider, current.a * RGBA_MAX);
+				SetInputValue(aInput, Mathf.RoundToInt(current.a * RGBA_MAX));
+				UpdateBackgroundSprites();
+			}
+			finally
+			{
+				suppressNotify = previous;
+			}
 		}
 
 		/// <summary>
@@ -601,14 +980,13 @@ namespace FishMMO.Client
 		/// </summary>
 		private void UpdateBackgroundSprites()
 		{
-			Texture2D hsv = GetHSVTexture((int)SliderValue(hSlider));
-			SetBackground(hsvTexture, hsv);
+			SetBackground(hsvTexture, GetHSVTexture((int)SliderValue(hSlider)));
 
-			SetBackground(hBackground, TinyColor.GenerateColorSpectrum(current.a, NUM_HUES, SLIDER_BACKGROUND_HEIGHT));
-			SetBackground(sBackground, TinyColor.GenerateSaturationSpectrum(SliderValue(hSlider), SliderValue(vSlider) * 0.01f, current.a, SLIDER_BACKGROUND_WIDTH, SLIDER_BACKGROUND_HEIGHT));
-			SetBackground(rBackground, TinyColor.GenerateRedSpectrum(current.g, current.b, current.a, SLIDER_BACKGROUND_WIDTH, SLIDER_BACKGROUND_HEIGHT));
-			SetBackground(gBackground, TinyColor.GenerateGreenSpectrum(current.r, current.b, current.a, SLIDER_BACKGROUND_WIDTH, SLIDER_BACKGROUND_HEIGHT));
-			SetBackground(bBackground, TinyColor.GenerateBlueSpectrum(current.r, current.g, current.a, SLIDER_BACKGROUND_WIDTH, SLIDER_BACKGROUND_HEIGHT));
+			FillHueStrip(current.a);
+			FillSaturationStrip(SliderValue(hSlider), SliderValue(vSlider) * 0.01f, current.a);
+			FillChannelStrip(ref rStrip, rBackground, 0, current);
+			FillChannelStrip(ref gStrip, gBackground, 1, current);
+			FillChannelStrip(ref bStrip, bBackground, 2, current);
 
 			if (currentSwatch != null)
 			{
@@ -616,11 +994,14 @@ namespace FishMMO.Client
 			}
 			SetCursor();
 
-			OnColorChanged?.Invoke(current);
+			if (!suppressNotify)
+			{
+				OnColorChanged?.Invoke(current);
+			}
 		}
 
 		/// <summary>
-		/// Picks a color from the HSV texture based on a pointer-down within the picking area.
+		/// Begins a pick on the saturation/value square and captures the pointer for the drag.
 		/// </summary>
 		private void OnHSVPointerDown(PointerDownEvent evt)
 		{
@@ -629,8 +1010,106 @@ namespace FishMMO.Client
 				return;
 			}
 
-			Texture2D texture = GetHSVTexture((int)SliderValue(hSlider));
-			if (texture == null)
+			hsvTexture.CapturePointer(evt.pointerId);
+			hsvPointerId = evt.pointerId;
+
+			PickFromSquare(evt.localPosition);
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Continues a pick while the pointer is held down.
+		/// </summary>
+		private void OnHSVPointerMove(PointerMoveEvent evt)
+		{
+			if (hsvPointerId == -1 || evt.pointerId != hsvPointerId)
+			{
+				return;
+			}
+
+			PickFromSquare(evt.localPosition);
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Ends a pick and gives the pointer back.
+		/// </summary>
+		private void OnHSVPointerUp(PointerUpEvent evt)
+		{
+			if (hsvPointerId == -1 || evt.pointerId != hsvPointerId)
+			{
+				return;
+			}
+
+			ReleaseHSVPointer();
+			evt.StopPropagation();
+		}
+
+		/// <summary>
+		/// Ends a pick that was cancelled rather than completed.
+		/// </summary>
+		private void OnHSVPointerUp(PointerCancelEvent evt)
+		{
+			if (hsvPointerId == -1 || evt.pointerId != hsvPointerId)
+			{
+				return;
+			}
+
+			ReleaseHSVPointer();
+		}
+
+		/// <summary>
+		/// Forgets the capture when something else takes it.
+		/// </summary>
+		/// <remarks>
+		/// Without this the picker would still believe it owns a pointer it has lost, and would
+		/// keep tracking a drag that belongs to another element.
+		/// </remarks>
+		private void OnHSVPointerCaptureOut(PointerCaptureOutEvent evt)
+		{
+			if (evt.pointerId == hsvPointerId)
+			{
+				hsvPointerId = -1;
+			}
+		}
+
+		/// <summary>
+		/// Releases the pointer captured by a square drag, if there is one.
+		/// </summary>
+		/// <remarks>
+		/// A capture that outlives its drag silently swallows every pointer event in the panel —
+		/// buttons stop responding, sliders stop moving, and the only symptom is that the UI has
+		/// stopped working. Every path out of a drag comes through here.
+		/// </remarks>
+		private void ReleaseHSVPointer()
+		{
+			if (hsvPointerId == -1)
+			{
+				return;
+			}
+
+			int pointerId = hsvPointerId;
+			hsvPointerId = -1;
+
+			if (hsvTexture != null && hsvTexture.HasPointerCapture(pointerId))
+			{
+				hsvTexture.ReleasePointer(pointerId);
+			}
+		}
+
+		/// <summary>
+		/// Sets the colour from a position inside the saturation/value square.
+		/// </summary>
+		/// <param name="localPosition">Pointer position in the square's local space.</param>
+		/// <remarks>
+		/// The colour is computed from the axes rather than read back out of the texture. Reading
+		/// a pixel and converting it back to HSV throws the hue away wherever the square is grey
+		/// — the whole left edge and the whole bottom edge — so clicking there reset the hue
+		/// slider to red and repainted the square, which is not what the player asked for.
+		/// </remarks>
+		private void PickFromSquare(Vector3 localPosition)
+		{
+			if (hsvTexture == null)
 			{
 				return;
 			}
@@ -641,18 +1120,25 @@ namespace FishMMO.Client
 				return;
 			}
 
-			float nx = Mathf.Clamp01(evt.localPosition.x / content.width);
-			float ny = Mathf.Clamp01(evt.localPosition.y / content.height);
-
-			int texX = Mathf.Clamp(Mathf.RoundToInt(nx * (texture.width - 1)), 0, texture.width - 1);
-			int texY = Mathf.Clamp(Mathf.RoundToInt((1f - ny) * (texture.height - 1)), 0, texture.height - 1);
+			float nx = Mathf.Clamp01(localPosition.x / content.width);
+			float ny = Mathf.Clamp01(localPosition.y / content.height);
 
 			PositionCursor(nx, ny);
 
-			current = texture.GetPixel(texX, texY);
-			current.a = SliderValue(aSlider) / RGBA_MAX;
+			// X is value, Y is saturation counted from the bottom. Hue stays where it was.
+			float hue = SliderValue(hSlider);
+			float value = nx;
+			float saturation = 1.0f - ny;
+
+			SetSliderValue(sSlider, saturation * SV_MAX);
+			SetSliderValue(vSlider, value * SV_MAX);
+			SetInputValue(sInput, Mathf.RoundToInt(saturation * SV_MAX));
+			SetInputValue(vInput, Mathf.RoundToInt(value * SV_MAX));
+
+			Color rgb = TinyColor.HSVToRGB(hue, saturation, value);
+			current = new Color(rgb.r, rgb.g, rgb.b, SliderValue(aSlider) / RGBA_MAX);
 			SetRGB(current);
-			UpdateHSVFromRGB();
+			UpdateBackgroundSprites();
 		}
 
 		/// <summary>
@@ -685,8 +1171,74 @@ namespace FishMMO.Client
 		/// <param name="value">The hexadecimal color string.</param>
 		public void UpdateHexValue(string value)
 		{
-			Color newColor = Hex.ToColor(value);
+			if (!TryParseHex(value, out Color newColor))
+			{
+				/* Malformed input is put back rather than applied. Hex.ToColor treats any
+				 * unparseable pair as zero and anything shorter than six characters as white, so
+				 * a half-typed or mistyped code used to silently repaint the colour — and, worse,
+				 * report that colour to whoever opened the picker. */
+				SetHexText(current.ToHex());
+				return;
+			}
+
 			SetColor(newColor);
+		}
+
+		/// <summary>
+		/// Parses a hex colour, accepting RGB, RGBA, RRGGBB and RRGGBBAA with an optional '#'.
+		/// </summary>
+		/// <param name="value">The text the player typed.</param>
+		/// <param name="color">The parsed colour.</param>
+		/// <returns>False when the text is not a complete, valid hex colour.</returns>
+		private static bool TryParseHex(string value, out Color color)
+		{
+			color = Color.white;
+
+			if (string.IsNullOrWhiteSpace(value))
+			{
+				return false;
+			}
+
+			string text = value.Trim();
+			if (text.Length > 0 && text[0] == '#')
+			{
+				text = text.Substring(1);
+			}
+
+			// Short forms are expanded by doubling each digit, the way CSS does.
+			bool shortForm = text.Length == 3 || text.Length == 4;
+			if (!shortForm && text.Length != 6 && text.Length != 8)
+			{
+				return false;
+			}
+
+			for (int i = 0; i < text.Length; ++i)
+			{
+				char c = text[i];
+				bool isHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+				if (!isHex)
+				{
+					return false;
+				}
+			}
+
+			if (shortForm)
+			{
+				System.Text.StringBuilder expanded = new System.Text.StringBuilder(text.Length * 2);
+				for (int i = 0; i < text.Length; ++i)
+				{
+					expanded.Append(text[i]).Append(text[i]);
+				}
+				text = expanded.ToString();
+			}
+
+			float r = Hex.ToInt(text.Substring(0, 2));
+			float g = Hex.ToInt(text.Substring(2, 2));
+			float b = Hex.ToInt(text.Substring(4, 2));
+			float a = text.Length == 8 ? Hex.ToInt(text.Substring(6, 2)) : RGBA_MAX;
+
+			color = new Color(r / RGBA_MAX, g / RGBA_MAX, b / RGBA_MAX, a / RGBA_MAX);
+			return true;
 		}
 
 		/// <summary>

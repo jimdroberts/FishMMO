@@ -13,7 +13,16 @@
 		/// </summary>
 		public override void OnStarting()
 		{
+			/* Static event, and OnStarting re-runs every time the visual tree is rebuilt
+			 * (UITKControl.ReinitializeIfTreeReplaced). A bare += therefore added one more handler
+			 * per rebuild, and each of them called Show/Hide on this panel. Removing first makes
+			 * the pair idempotent. */
+			PlayerInputController.OnToggleMouseMode -= OnToggleMouseMode;
 			PlayerInputController.OnToggleMouseMode += OnToggleMouseMode;
+
+			// The crosshair's whole state is "is mouse mode on", which is known right now — the
+			// toggle event only fires on a CHANGE, so a panel that waits for one starts out wrong.
+			OnToggleMouseMode(PlayerInputController.MouseMode);
 		}
 
 		/// <summary>

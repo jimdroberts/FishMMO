@@ -215,11 +215,49 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			// Exited within the grace window. WaitForExit ensures the process handle is
-			// fully updated before reading ExitCode; without it, reading ExitCode can
-			// throw InvalidOperationException even on the normal exit path.
-			process.WaitForExit();
-			int exitCode = process.ExitCode;
+			/* H5: bounded WaitForExit, not the parameterless one.
+			 *
+			 * The parameterless overload does more than wait for the process: with redirected
+			 * output it also waits for the asynchronous readers to reach end-of-stream. That is
+			 * exactly what makes it the right call for flushing the last lines of output — and
+			 * exactly what makes it able to block forever, because a grandchild process that
+			 * inherited the updater's stdout handle keeps the pipe open after the updater itself
+			 * has exited. HasExited is already true at this point; there is nothing left to wait
+			 * FOR except the pipe. On the main thread, in a coroutine, that is a hung launcher
+			 * with no error and no timeout — during an update, with the client already shut
+			 * down.
+			 *
+			 * A bounded wait keeps the reason the call is here (the handle is fully updated
+			 * before ExitCode is read, which otherwise throws InvalidOperationException even on
+			 * the normal path) and gives up the part that cannot be relied on. Losing the last
+			 * few lines of a failing updater's output is a far smaller loss than never returning.
+			 */
+			const int ExitFlushTimeoutMs = 2000;
+			bool flushed = process.WaitForExit(ExitFlushTimeoutMs);
+			if (!flushed)
+			{
+				Log.Warning("Updater", $"Updater output streams did not close within {ExitFlushTimeoutMs}ms; continuing without them. Some updater output may be missing from the log.");
+			}
+
+			int exitCode;
+			try
+			{
+				exitCode = process.ExitCode;
+			}
+			catch (Exception ex)
+			{
+				/* Only reachable when the wait above timed out, since ExitCode on an exited
+				 * process is otherwise safe. Reported as a failure rather than assumed to be
+				 * zero: "we could not find out whether the updater succeeded" must not be
+				 * presented to the player as "it succeeded". */
+				Log.Error("Updater", $"Could not read the updater's exit code: {ex.Message}");
+				process.OutputDataReceived -= outputHandler;
+				process.ErrorDataReceived -= errorHandler;
+				process.Dispose();
+				onError?.Invoke("The updater exited but its result could not be read. Please try again.");
+				yield break;
+			}
+
 			process.OutputDataReceived -= outputHandler;
 			process.ErrorDataReceived -= errorHandler;
 			process.Dispose();

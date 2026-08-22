@@ -35,6 +35,26 @@ namespace FishMMO.Client
 		private bool manualCache;
 
 		/// <summary>
+		/// True while this label is sitting in the pool rather than displayed.
+		/// </summary>
+		/// <remarks>
+		/// The flag exists so caching is idempotent. Without it a label cached twice — the expiry
+		/// path returning it, and a caller that still holds the reference returning it again — was
+		/// enqueued twice and subsequently handed to two callers at once.
+		/// </remarks>
+		public bool IsPooled { get; private set; } = true;
+
+		/// <summary>
+		/// True when the owner is responsible for returning this label to the pool.
+		/// </summary>
+		/// <remarks>
+		/// Read by <see cref="UITKLabelMaker"/> so that the live cap never recycles a label a
+		/// caller is still holding — a nameplate or target frame would otherwise find its label
+		/// silently reused as somebody else's damage number.
+		/// </remarks>
+		public bool IsManuallyCached => manualCache;
+
+		/// <summary>
 		/// Remaining time in seconds before the label is automatically cached.
 		/// </summary>
 		private float remainingTime;
@@ -141,32 +161,61 @@ namespace FishMMO.Client
 		// ── Update ──────────────────────────────────────────────────
 
 		/// <summary>
-		/// Processes the persist timer and all active visual effects each frame.
+		/// Marks this label as parked in the pool.
 		/// </summary>
-		private void Update()
+		/// <remarks>
+		/// Called by <see cref="UITKLabelMaker"/> only. The flag is what makes caching idempotent;
+		/// see <see cref="IsPooled"/>.
+		/// </remarks>
+		internal void MarkPooled()
 		{
-			if (manualCache)
+			IsPooled = true;
+		}
+
+		/// <summary>
+		/// Advances the persist timer and every active visual effect by one frame.
+		/// </summary>
+		/// <param name="dt">Seconds elapsed since the previous tick.</param>
+		/// <returns>True when the label's lifetime has run out and it should be returned to the pool.</returns>
+		/// <remarks>
+		/// Driven by <see cref="UITKLabelMaker"/> rather than by a <c>MonoBehaviour.Update</c> of
+		/// its own. Unity dispatches Update per component through the scripting bridge, so a
+		/// screen full of damage numbers paid that cost hundreds of times a frame for a few lines
+		/// of arithmetic each. The pool already tracks exactly which labels are live, so one loop
+		/// there replaces all of them.
+		/// <para>
+		/// Returning the expiry decision to the caller — rather than the label caching itself, as
+		/// it used to — also keeps a component from mutating the pool from inside the pool's own
+		/// iteration.
+		/// </para>
+		/// </remarks>
+		internal bool Tick(float dt)
+		{
+			if (IsPooled)
 			{
-				return;
+				return false;
 			}
 
-			float dt = Time.deltaTime;
+			if (manualCache)
+			{
+				return false;
+			}
+
 			remainingTime -= dt;
 			if (remainingTime <= 0.0f)
 			{
-				UITKLabelMaker.Cache(this);
-				return;
+				return true;
 			}
 
 			if (effectFlags == 0)
 			{
-				return;
+				return false;
 			}
 
 			WorldLabel target = Label;
 			if (target == null)
 			{
-				return;
+				return false;
 			}
 
 			// Normalized progress 0 → 1 over the label's lifetime.
@@ -234,6 +283,7 @@ namespace FishMMO.Client
 			target.WorldOffset = baseOffset + moveOffset;
 			target.fontSize = fontSize;
 			target.color = color;
+			return false;
 		}
 
 		// ── Public API ──────────────────────────────────────────────
@@ -309,6 +359,11 @@ namespace FishMMO.Client
 			{
 				target.fontSize = 0.0f;
 			}
+
+			/* Cleared before the object is activated, because activating it registers the
+			 * WorldLabel with the render layer — from that moment the label is live and a
+			 * subsequent Cache must be allowed to take effect. */
+			IsPooled = false;
 
 			gameObject.SetActive(true);
 		}

@@ -15,10 +15,16 @@ namespace FishMMO.Client
 	/// Entries are plain <c>Button</c> elements built here rather than instantiated from a prefab
 	/// into a layout-group parent, so the panel has no scene dependencies that can go missing.
 	///
-	/// Placement is the fiddly part. The pointer arrives in screen pixels and the panel is laid
-	/// out in points, so the position is divided by the panel scale before it is applied — and
-	/// then clamped, because a menu opened near the right or bottom edge would otherwise render
-	/// partly off-screen with its last entries unreachable.
+	/// The entries a caller passes to <see cref="Open"/> are recorded rather than built on the
+	/// spot. Enabling the document re-clones the UXML, and on the very first open the visual tree
+	/// does not exist at all — so building at call time filled a tree that was either discarded a
+	/// moment later or was never there. <see cref="OnAfterShow"/> and
+	/// <see cref="OnAfterStarting"/> build them into whichever tree is actually live.
+	///
+	/// Placement goes through <see cref="UITKScreenSpace"/>: the pointer arrives in screen pixels
+	/// with Y measured from the bottom, the panel is laid out in points with Y from the top, and a
+	/// menu opened near an edge has to be flipped to the other side of the cursor rather than
+	/// sliding back over it.
 	/// </remarks>
 	public class UITKContextMenu : UITKControl
 	{
@@ -40,6 +46,9 @@ namespace FishMMO.Client
 		/// <summary>The element that gets moved to the pointer.</summary>
 		private VisualElement menu;
 
+		/// <summary>The entries the current menu was opened with.</summary>
+		private readonly List<(string label, Action callback)> entries = new List<(string label, Action callback)>();
+
 		/// <summary>
 		/// Frame the menu was opened on.
 		/// </summary>
@@ -59,6 +68,11 @@ namespace FishMMO.Client
 		/// root fills the screen, so the pointer is always inside it.
 		/// </remarks>
 		private bool pointerInside;
+
+		/// <summary>
+		/// Index of the keyboard-highlighted entry, or -1.
+		/// </summary>
+		private int focusedIndex = -1;
 
 		/// <summary>
 		/// Resolves elements and wires the hover tracking used by the outside-click check.
@@ -85,6 +99,21 @@ namespace FishMMO.Client
 				menu.RegisterCallback<PointerEnterEvent>(OnPointerEnter);
 				menu.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
 			}
+
+			Root.UnregisterCallback<KeyDownEvent>(OnMenuKeyDown, TrickleDown.TrickleDown);
+			Root.RegisterCallback<KeyDownEvent>(OnMenuKeyDown, TrickleDown.TrickleDown);
+		}
+
+		/// <summary>
+		/// Rebuilds the recorded entries after the visual tree was replaced.
+		/// </summary>
+		protected override void OnAfterStarting()
+		{
+			if (!Visible)
+			{
+				return;
+			}
+			BuildEntries();
 		}
 
 		/// <summary>
@@ -97,6 +126,11 @@ namespace FishMMO.Client
 				menu.UnregisterCallback<PointerEnterEvent>(OnPointerEnter);
 				menu.UnregisterCallback<PointerLeaveEvent>(OnPointerLeave);
 			}
+			if (Root != null)
+			{
+				Root.UnregisterCallback<KeyDownEvent>(OnMenuKeyDown, TrickleDown.TrickleDown);
+			}
+			entries.Clear();
 			ClearEntries();
 		}
 
@@ -121,17 +155,50 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Shown before the entries are built and positioned: a panel that has never been
-			 * shown has no visual tree, so entryList would still be null and the menu would open
-			 * empty the very first time it is used. */
+			/* Copied, not held by reference: callers build these lists per right-click and are
+			 * free to reuse or clear them the moment Open returns, and the menu still has to be
+			 * able to rebuild itself from them after a tree rebuild. */
+			this.entries.Clear();
+			this.entries.AddRange(entries);
+
+			openedFrame = Time.frameCount;
+			pointerInside = true;
+
+			/* Show, then build. The document re-clones the UXML on enable, so anything added to
+			 * entryList before this call goes into a tree that is discarded — and on the first
+			 * ever open there is no tree to add to in the first place. */
 			Show();
 
+			// Already visible: Show is a no-op, so replace the contents directly.
+			BuildEntries();
+			PositionAtPointer();
+		}
+
+		/// <summary>
+		/// Builds the recorded entries into the live menu element and positions it.
+		/// </summary>
+		protected override void OnAfterShow()
+		{
+			BuildEntries();
+			PositionAtPointer();
+		}
+
+		/// <summary>
+		/// Builds every recorded entry into the live entry list.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent — it clears first — so it is safe to run from both the show path and a
+		/// tree rebuild.
+		/// </remarks>
+		private void BuildEntries()
+		{
 			if (entryList == null)
 			{
 				return;
 			}
 
-			ClearEntries();
+			entryList.Clear();
+			focusedIndex = -1;
 
 			for (int i = 0; i < entries.Count; ++i)
 			{
@@ -145,17 +212,14 @@ namespace FishMMO.Client
 				Action action = callback;
 				button.clicked += () =>
 				{
-					action?.Invoke();
+					/* Closed before the action runs. These actions open dialogs and other
+					 * panels, and closing afterwards would tear down what they just put up. */
 					Hide();
+					action?.Invoke();
 				};
 
 				entryList.Add(button);
 			}
-
-			PositionAtPointer();
-
-			openedFrame = Time.frameCount;
-			pointerInside = true;
 		}
 
 		/// <summary>
@@ -163,63 +227,17 @@ namespace FishMMO.Client
 		/// </summary>
 		private void PositionAtPointer()
 		{
-			if (menu == null || Root == null)
+			if (menu == null || Root == null || Root.panel == null)
 			{
 				return;
 			}
 
-			Vector2 screenPosition = Mouse.current != null
-				? Mouse.current.position.ReadValue()
-				: Vector2.zero;
-
-			/* Screen pixels to panel points. PanelSettings scales the panel against a reference
-			 * resolution, so at anything other than that resolution the two spaces differ and
-			 * using raw pixels puts the menu progressively further from the cursor. */
-			float panelWidth = Root.resolvedStyle.width;
-			float panelHeight = Root.resolvedStyle.height;
-			if (float.IsNaN(panelWidth) || panelWidth <= 0.0f || Screen.width <= 0)
+			if (!UITKScreenSpace.TryGetPointerPanelPosition(Root.panel, out Vector2 position))
 			{
 				return;
 			}
 
-			float scaleX = panelWidth / Screen.width;
-			float scaleY = panelHeight / Screen.height;
-
-			// Input System reports Y from the bottom; UI Toolkit lays out from the top.
-			float x = screenPosition.x * scaleX;
-			float y = (Screen.height - screenPosition.y) * scaleY;
-
-			menu.style.left = x;
-			menu.style.top = y;
-
-			/* The menu's own size is not resolved until after layout runs, so the clamp is
-			 * deferred a frame rather than computed from a width that is still NaN. */
-			menu.RegisterCallbackOnce<GeometryChangedEvent>(_ => ClampToPanel(x, y, panelWidth, panelHeight));
-		}
-
-		/// <summary>
-		/// Nudges the menu back inside the panel when it would overhang an edge.
-		/// </summary>
-		/// <param name="x">Desired left position in panel points.</param>
-		/// <param name="y">Desired top position in panel points.</param>
-		/// <param name="panelWidth">Panel width in points.</param>
-		/// <param name="panelHeight">Panel height in points.</param>
-		private void ClampToPanel(float x, float y, float panelWidth, float panelHeight)
-		{
-			if (menu == null)
-			{
-				return;
-			}
-
-			float width = menu.resolvedStyle.width;
-			float height = menu.resolvedStyle.height;
-			if (float.IsNaN(width) || float.IsNaN(height))
-			{
-				return;
-			}
-
-			menu.style.left = Mathf.Clamp(x, 0.0f, Mathf.Max(0.0f, panelWidth - width));
-			menu.style.top = Mathf.Clamp(y, 0.0f, Mathf.Max(0.0f, panelHeight - height));
+			UITKScreenSpace.PlaceClamped(Root, menu, position, flip: true);
 		}
 
 		/// <summary>
@@ -228,6 +246,7 @@ namespace FishMMO.Client
 		private void ClearEntries()
 		{
 			entryList?.Clear();
+			focusedIndex = -1;
 		}
 
 		/// <summary>
@@ -255,13 +274,75 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Escape closes the menu and the arrow keys walk its entries.
+		/// </summary>
+		private void OnMenuKeyDown(KeyDownEvent evt)
+		{
+			if (!Visible || entryList == null)
+			{
+				return;
+			}
+
+			switch (evt.keyCode)
+			{
+				case KeyCode.Escape:
+					evt.StopPropagation();
+					Hide();
+					return;
+				case KeyCode.UpArrow:
+					evt.StopPropagation();
+					MoveFocus(-1);
+					return;
+				case KeyCode.DownArrow:
+					evt.StopPropagation();
+					MoveFocus(1);
+					return;
+			}
+		}
+
+		/// <summary>
+		/// Moves keyboard focus through the menu entries.
+		/// </summary>
+		/// <param name="direction">-1 for up, 1 for down.</param>
+		private void MoveFocus(int direction)
+		{
+			int count = entryList.childCount;
+			if (count < 1)
+			{
+				return;
+			}
+
+			// Stops at the ends rather than wrapping, so a held key cannot cycle forever.
+			focusedIndex = focusedIndex < 0
+				? (direction > 0 ? 0 : count - 1)
+				: Mathf.Clamp(focusedIndex + direction, 0, count - 1);
+
+			entryList[focusedIndex].Focus();
+		}
+
+		/// <summary>
 		/// Hides the menu and drops its entries so stale callbacks cannot be invoked.
 		/// </summary>
-		public override void Hide()
+		/// <param name="overrideIsAlwaysOpen">When true, the call is a no-op.</param>
+		/// <remarks>
+		/// The override is on <c>Hide(bool)</c>. <c>Hide()</c> forwards here, but quit-to-login
+		/// calls <c>Hide(false)</c> directly — so an override on the parameterless form alone
+		/// left a menu's captured callbacks, which reference the character that has just gone
+		/// away, alive across a return to the login screen.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
 		{
-			ClearEntries();
+			base.Hide(overrideIsAlwaysOpen);
+
+			if (overrideIsAlwaysOpen || Document == null)
+			{
+				// The base refused the hide; the menu is still up, so keep its entries.
+				return;
+			}
+
+			entries.Clear();
 			pointerInside = false;
-			base.Hide();
+			ClearEntries();
 		}
 	}
 }

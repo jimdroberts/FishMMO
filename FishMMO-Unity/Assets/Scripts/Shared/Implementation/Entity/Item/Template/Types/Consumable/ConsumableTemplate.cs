@@ -64,18 +64,21 @@ namespace FishMMO.Shared
 				{
 					cooldownController.AddCooldown(ID, new CooldownInstance(currentTick, Cooldown, (float)character.NetworkObject.TimeManager.TickDelta));
 				}
-				if (item.IsStackable && item.Stackable.Amount > ChargeCost)
+				if (item.IsStackable)
 				{
-					// Consume charges from the item.
+					// One path for every charge, including the last. ItemStackable.Remove is
+					// saturating and destroys the item itself once the stack empties, so there is
+					// nothing for a "this is the final charge" special case to do.
+					//
+					// That special case is what made consumables infinite: when Amount was exactly
+					// ChargeCost the old code called Destroy() WITHOUT decrementing, and Destroy()
+					// did not zero the stack, so CanConsume kept seeing a full charge and the item
+					// could be used forever until the character relogged.
 					item.Stackable.Remove(ChargeCost);
-
-					if (item.Stackable.Amount < 1)
-					{
-						item.Destroy();
-					}
 				}
 				else
 				{
+					// A non-stackable consumable has exactly one use.
 					item.Destroy();
 				}
 				return true;

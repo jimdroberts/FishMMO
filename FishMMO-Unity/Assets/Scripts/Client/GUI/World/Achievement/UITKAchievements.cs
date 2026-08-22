@@ -91,7 +91,13 @@ namespace FishMMO.Client
 				"achievement",
 				"achievements");
 
-			OnSetCharacter += CharacterControl_OnSetCharacter;
+			/* Unsubscribe first. OnStarting is re-run by ReinitializeIfTreeReplaced every time
+			 * the visual tree is rebuilt — which is every reopen, because hiding the panel
+			 * disables its UIDocument and re-enabling it clones the UXML afresh. A bare += here
+			 * therefore stacked one more subscription per reopen, and the handler ran once more
+			 * each time. Removing a handler that is not subscribed is a no-op, so this is safe on
+			 * the first pass. */
+			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;
 		}
 
@@ -101,22 +107,61 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
-			OnSetCharacter -= CharacterControl_OnSetCharacter;
+			UnsubscribeAchievements();
 
+			ClearAll();
+			base.OnDestroying();
+		}
+
+		/// <summary>
+		/// Drops the achievement subscription and the rows built against the previous tree.
+		/// </summary>
+		/// <remarks>
+		/// The Pre half is what makes re-initialisation idempotent. <c>OnAfterStarting</c> runs
+		/// <c>OnPreSetCharacter</c> then <c>OnPostSetCharacter</c> on every tree rebuild, and this
+		/// panel's unsubscribe used to live in <see cref="OnPreUnsetCharacter"/> instead — a
+		/// method that path never calls. The result was one extra static subscription per reopen,
+		/// on a static event, so the handler ran N times for a panel opened N times.
+		/// <para>
+		/// The rows are cleared here as well. They are <c>VisualElement</c>s belonging to the tree
+		/// that has just been replaced; keeping them would leave the dictionary full of elements
+		/// nothing paints, and the panel would come back correctly wired and completely empty.
+		/// </para>
+		/// </remarks>
+		public override void OnPreSetCharacter()
+		{
+			UnsubscribeAchievements();
 			ClearAll();
 		}
 
 		/// <summary>
-		/// Subscribes to achievement update events after the character is set.
+		/// Subscribes to achievement updates and rebuilds every row from the character's data.
 		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out IAchievementController achievementController))
+			if (Character == null || !Character.TryGet(out IAchievementController achievementController))
 			{
-				IAchievementController.OnUpdateAchievement += AchievementController_OnUpdateAchievement;
+				return;
 			}
+
+			IAchievementController.OnUpdateAchievement += AchievementController_OnUpdateAchievement;
+
+			/* Rebuilt from the controller — the model — rather than from whatever this panel
+			 * happened to be told while it was closed. The controller owns the achievements as
+			 * plain data; the elements are this panel's, and are disposable. */
+			if (achievementController.Achievements == null)
+			{
+				return;
+			}
+			foreach (Achievement achievement in achievementController.Achievements.Values)
+			{
+				AchievementController_OnUpdateAchievement(Character, achievement);
+			}
+
+			// Re-apply the category the player had selected, so a reopen does not reset the tab.
+			Category_OnClick(currentCategory);
 		}
 
 		/// <summary>
@@ -124,10 +169,21 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
-			if (Character.TryGet(out IAchievementController achievementController))
-			{
-				IAchievementController.OnUpdateAchievement -= AchievementController_OnUpdateAchievement;
-			}
+			UnsubscribeAchievements();
+		}
+
+		/// <summary>
+		/// Removes the achievement handler from the static event.
+		/// </summary>
+		/// <remarks>
+		/// The event is static, so the unsubscribe does not depend on the character still being
+		/// resolvable — which matters, because the old code guarded it with
+		/// <c>Character.TryGet(...)</c> and would silently skip the unsubscribe whenever the
+		/// character had already gone.
+		/// </remarks>
+		private void UnsubscribeAchievements()
+		{
+			IAchievementController.OnUpdateAchievement -= AchievementController_OnUpdateAchievement;
 		}
 
 		/// <summary>
@@ -148,32 +204,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Populates achievement UI for all of the character's achievements.
-		/// </summary>
-		/// <param name="character">The player character.</param>
-		private void CharacterControl_OnSetCharacter(IPlayerCharacter character)
-		{
-			if (character.TryGet(out IAchievementController achievementController))
-			{
-				if (achievementController.Achievements == null)
-				{
-					return;
-				}
-				foreach (Achievement achievement in achievementController.Achievements.Values)
-				{
-					AchievementController_OnUpdateAchievement(character, achievement);
-				}
-			}
-		}
-
-		/// <summary>
 		/// Creates or updates the row (and category button) for an achievement.
 		/// </summary>
 		/// <param name="character">The character associated with the achievement.</param>
 		/// <param name="achievement">The achievement to update.</param>
 		public void AchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
 		{
-			if (achievement == null || categoryList == null || descriptionList == null)
+			if (achievement == null || achievement.Template == null ||
+				categoryList == null || descriptionList == null)
 			{
 				return;
 			}
@@ -207,8 +245,13 @@ namespace FishMMO.Client
 
 			uint nextTierValue = achievement.NextTierValue;
 
-			float progress = nextTierValue > 0 && achievement.CurrentValue > 0
-				? (float)nextTierValue / achievement.CurrentValue
+			/* Progress is how far the current value has come towards the next tier. The ratio was
+			 * the wrong way up — next-tier over current — so a freshly started achievement showed
+			 * a full bar that shrank as the player made progress, and one at 1 of 100 rendered
+			 * 100%. NextTierValue returns 0 once every tier is complete, which is the one case
+			 * that really is a full bar. */
+			float progress = nextTierValue > 0
+				? (float)achievement.CurrentValue / nextTierValue
 				: 1.0f;
 			row.Fill.style.width = Length.Percent(Mathf.Clamp01(progress) * 100.0f);
 

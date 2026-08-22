@@ -40,6 +40,28 @@ namespace FishMMO.Shared
 		public List<BaseItemTemplate> Items;
 
 		/// <summary>
+		/// Whether this merchant buys items from the player.
+		/// </summary>
+		/// <remarks>
+		/// Off by default so adding the sell path does not silently turn every existing merchant —
+		/// including quest givers and trainers that happen to use a merchant template — into a
+		/// general fence. Content opts in.
+		/// </remarks>
+		public bool BuysItems = false;
+
+		/// <summary>
+		/// Fraction of an item's template price the merchant pays for it.
+		/// </summary>
+		/// <remarks>
+		/// Lives on the template, and therefore on the server, because it is half of the sale
+		/// price and the client is never allowed to contribute to a price. The payout is
+		/// <c>floor(Template.Price * SellPriceMultiplier) * quantity</c>, computed server-side from
+		/// the item actually found in the named slot.
+		/// </remarks>
+		[Range(0.0f, 1.0f)]
+		public float SellPriceMultiplier = 0.25f;
+
+		/// <summary>
 		/// The display name of the merchant (from the ScriptableObject's name).
 		/// </summary>
 		public string Name { get { return this.name; } }

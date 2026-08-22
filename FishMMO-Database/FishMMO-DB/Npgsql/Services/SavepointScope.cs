@@ -64,6 +64,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Rolls back to the savepoint, discarding any changes made after the savepoint.
 		/// </summary>
+		/// <remarks>
+		/// Failures propagate deliberately. <see cref="BaseService{TEntity}"/> already wraps every
+		/// call to this method in a handler that folds a rollback failure into
+		/// <see cref="DatabaseErrorCodes.RollbackFailed"/>, and swallowing here made that handler
+		/// unreachable for every savepoint-based rollback — the caller was handed the benign
+		/// business error that triggered the rollback while the transaction stayed aborted, and
+		/// every statement it issued afterwards failed for a reason nothing reported.
+		/// </remarks>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		public async Task RollbackAsync(CancellationToken cancellationToken)
 		{
@@ -72,14 +80,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return;
 			}
 
-			try
-			{
-				await transaction.RollbackToSavepointAsync(savepointName, cancellationToken).ConfigureAwait(false);
-			}
-			catch
-			{
-				// Ignore rollback failures - connection may be broken
-			}
+			await transaction.RollbackToSavepointAsync(savepointName, cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

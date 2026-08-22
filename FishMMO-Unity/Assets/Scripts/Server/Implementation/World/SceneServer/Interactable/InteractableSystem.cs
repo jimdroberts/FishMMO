@@ -114,6 +114,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<MerchantSellBroadcast>(OnServerMerchantSellBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived, true);
@@ -123,6 +124,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
 
 			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
+
+			/* The dialogue choice cache is memory-only and keyed by character ID. Without these
+			 * two hooks it has no idea who is still playing, which is what made its capacity
+			 * sweep evict a connected player's one-time choices; and nothing ever removed an
+			 * entry, so it filled up with characters who had long since logged out. */
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> dialogueCharacterSystem) &&
+				dialogueCharacterSystem != null)
+			{
+				dialogueCharacterSystem.OnAfterLoadCharacter += CharacterSystem_OnDialogueCharacterLoaded;
+				dialogueCharacterSystem.OnDisconnect += CharacterSystem_OnDialogueCharacterDisconnected;
+			}
+			else
+			{
+				Log.Warning("InteractableSystem", "InitializeOnce: ICharacterSystem not found; cached dialogue choices will not be released on disconnect.");
+			}
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			interactionDebounceMilliseconds = Mathf.Max(0, interactionDebounceMilliseconds);
@@ -158,6 +174,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<MerchantSellBroadcast>(OnServerMerchantSellBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived);
@@ -168,9 +185,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
 
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> dialogueCharacterSystem) &&
+				dialogueCharacterSystem != null)
+			{
+				dialogueCharacterSystem.OnAfterLoadCharacter -= CharacterSystem_OnDialogueCharacterLoaded;
+				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnDialogueCharacterDisconnected;
+			}
+
 			// Dialogue session cleanup
 			activeDialogueSessions.Clear();
 			characterDialogueChoices.Clear();
+			connectedDialogueCharacters.Clear();
 		}
 
 		/// <summary>

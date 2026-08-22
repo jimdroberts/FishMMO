@@ -364,10 +364,18 @@ namespace FishMMO.Server.Implementation
 		/// mismatch only surfaces later as a query failing on a column that does not exist —
 		/// which typically reaches a player as missing data rather than as a schema problem.
 		/// <para>
-		/// Deliberately neither awaited nor fatal. This is a diagnostic: a server whose schema is
-		/// stale still serves everything that does not touch the changed tables, and refusing to
-		/// start would be a worse outcome than a loud log line. It costs one query and reports
-		/// within a second or so of startup.
+		/// Pending migrations are fatal. A server running against a database that is behind the
+		/// migration set does not fail loudly — it fails as missing player data, and every write
+		/// it accepts meanwhile is made against a schema the model does not agree with. Refusing
+		/// to open the transport stops that damage before it starts.
+		/// </para>
+		/// <para>
+		/// Every other outcome stays non-fatal and is only reported. A drift check that could not
+		/// run, or a check that could not run at all, leaves the schema unverified rather than
+		/// known-bad: a server whose schema is merely unconfirmed still serves everything that
+		/// does not touch the changed tables, and refusing to start on a failed *diagnostic*
+		/// would be the worse outcome. The check runs concurrently with behaviour initialization
+		/// and is joined just before the transport opens, so it costs no startup latency.
 		/// </para>
 		/// </remarks>
 		private void VerifyDatabaseSchema()
@@ -378,31 +386,61 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			_ = Task.Run(async () =>
+			schemaValidationTask = Task.Run(() => factory.ValidateSchemaAsync());
+		}
+
+		/// <summary>
+		/// The in-flight startup schema check, joined by
+		/// <see cref="InitializeBehavioursThenStartServer"/> before the transport is opened.
+		/// Null when no database factory is configured.
+		/// </summary>
+		private Task<SchemaValidationResult> schemaValidationTask;
+
+		/// <summary>
+		/// Reports the outcome of the startup schema check and decides whether the server may
+		/// open its transport.
+		/// </summary>
+		/// <returns><c>true</c> when startup may proceed; <c>false</c> when it must not.</returns>
+		private bool DatabaseSchemaPermitsStartup()
+		{
+			if (schemaValidationTask == null)
 			{
-				try
-				{
-					SchemaValidationResult result = await factory.ValidateSchemaAsync();
-					string problem = result.DescribeProblem();
-					if (problem == null)
-					{
-						_ = Log.Debug("Server", "Database schema matches the entity model.");
-					}
-					else if (result.UnavailableReason != null)
-					{
-						_ = Log.Warning("Server", problem);
-					}
-					else
-					{
-						_ = Log.Error("Server", problem);
-					}
-				}
-				catch (Exception ex)
-				{
-					// A diagnostic must never be the thing that takes a server down.
-					_ = Log.Warning("Server", $"Database schema check threw and was skipped: {ex.Message}");
-				}
-			});
+				return true;
+			}
+
+			if (schemaValidationTask.IsFaulted)
+			{
+				// A diagnostic must never be the thing that takes a server down.
+				Exception ex = schemaValidationTask.Exception?.GetBaseException();
+				Log.Warning("Server", $"Database schema check threw and was skipped: {ex?.Message}");
+				return true;
+			}
+
+			SchemaValidationResult result = schemaValidationTask.Result;
+			string problem = result.DescribeProblem();
+
+			if (problem == null)
+			{
+				Log.Debug("Server", "Database schema matches the entity model.");
+				return true;
+			}
+
+			if (result.PendingMigrations.Length > 0)
+			{
+				Log.Error("Server", problem + " Refusing to start: serving players against a database " +
+					"that is behind the migration set corrupts their data rather than failing cleanly.");
+				return false;
+			}
+
+			if (result.UnavailableReason != null)
+			{
+				Log.Warning("Server", problem);
+			}
+			else
+			{
+				Log.Error("Server", problem);
+			}
+			return true;
 		}
 
 		/// <summary>
@@ -479,6 +517,24 @@ namespace FishMMO.Server.Implementation
 				}
 				else if (initTask.Result.Count == 0)
 				{
+					// Join the schema check before binding the port, so a database that is behind
+					// the migration set stops the server here rather than after players connect.
+					while (schemaValidationTask != null && !schemaValidationTask.IsCompleted)
+					{
+						if (hasShutdownFlag != 0)
+						{
+							yield break;
+						}
+						yield return null;
+					}
+
+					if (!DatabaseSchemaPermitsStartup())
+					{
+						behaviourInitCoroutine = null;
+						QuitWithFailure();
+						yield break;
+					}
+
 					KinematicCharacterSystem.EnsureCreation();
 					KinematicCharacterSystem.Settings.AutoSimulation = false;
 

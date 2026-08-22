@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -11,6 +12,13 @@ namespace FishMMO.Client
 	/// remove button, and handles the add and remove actions. Rows are built at runtime rather than
 	/// cloned from a per-entry control, and the shared dialog panels are reused for the prompts.
 	/// </summary>
+	/// <remarks>
+	/// The list is split into a MODEL (<see cref="friends"/>, plain data, owned by the character)
+	/// and a VIEW (<see cref="rows"/>, elements owned by one visual tree). <c>UIDocument</c>
+	/// re-clones the UXML on every enable, so the view is destroyed on each hide/show; keeping
+	/// only the view left the panel permanently empty after the first close, because the data that
+	/// would have redrawn it was inside the discarded elements. See <see cref="OnAfterStarting"/>.
+	/// </remarks>
 	public class UITKFriendList : UITKCharacterControl
 	{
 		/// <summary>Name of the container that holds the generated friend rows.</summary>
@@ -40,7 +48,23 @@ namespace FishMMO.Client
 		private const string EMPTY_NAME = "friend-empty";
 
 		/// <summary>
-		/// Visual elements and state backing a single friend row.
+		/// One friend's data. Holds no <c>VisualElement</c> — see the class remarks.
+		/// </summary>
+		private sealed class FriendModel
+		{
+			/// <summary>The friend's character ID. The ONLY identity any action may use.</summary>
+			public long FriendID;
+			/// <summary>Whether the friend is online.</summary>
+			public bool Online;
+			/// <summary>
+			/// Last resolved character name, cached so a rebuilt row renders without flashing
+			/// blank. Display only — nothing resolves a target from it.
+			/// </summary>
+			public string Name = string.Empty;
+		}
+
+		/// <summary>
+		/// Visual elements backing a single friend row.
 		/// </summary>
 		private sealed class FriendRow
 		{
@@ -52,14 +76,14 @@ namespace FishMMO.Client
 			public Label Status;
 			/// <summary>Presence dot leading the row.</summary>
 			public VisualElement Dot;
-			/// <summary>Last known online state, so the header count can be recomputed.</summary>
-			public bool Online;
-			/// <summary>The friend's character ID.</summary>
-			public long FriendID;
 		}
 
-		/// <summary>All created friend rows keyed by character ID.</summary>
-		private readonly Dictionary<long, FriendRow> friends = new Dictionary<long, FriendRow>();
+		/// <summary>The friend list MODEL, keyed by character ID. Survives tree rebuilds.</summary>
+		private readonly Dictionary<long, FriendModel> friends = new Dictionary<long, FriendModel>();
+
+		/// <summary>The friend list VIEW, keyed by character ID. Belongs to one visual tree.</summary>
+		private readonly Dictionary<long, FriendRow> rows = new Dictionary<long, FriendRow>();
+
 		/// <summary>The container element that holds the generated friend rows.</summary>
 		private VisualElement friendList;
 		/// <summary>Header label describing list state.</summary>
@@ -72,8 +96,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Queries the friend list and wires up the add-friend button.
 		/// </summary>
+		/// <remarks>
+		/// Runs against a fresh tree every time, so it drops the old view first — those elements
+		/// belong to a tree that no longer exists.
+		/// </remarks>
 		public override void OnStarting()
 		{
+			rows.Clear();
+
 			VisualElement root = Root;
 			if (root == null)
 			{
@@ -84,7 +114,6 @@ namespace FishMMO.Client
 			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
 			onlineCountLabel = root.Q<Label>(COUNT_NAME);
 			emptyLabel = root.Q<Label>(EMPTY_NAME);
-			RefreshHeader();
 
 			Button add = root.Q<Button>(ADD_BUTTON_NAME);
 			if (add != null)
@@ -94,11 +123,43 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Re-applies the friend list after the visual tree was rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// The base implementation re-runs the character pre/post pair, which is what
+		/// re-subscribes this panel to the friend controller; the rebuild below then redraws
+		/// whatever the model already holds.
+		/// </remarks>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+
+			RebuildListView();
+		}
+
+		/// <summary>
 		/// Clears all friend rows when the control is destroyed.
 		/// </summary>
 		public override void OnDestroying()
 		{
 			ClearAll();
+
+			base.OnDestroying();
+		}
+
+		/// <summary>
+		/// Unsubscribes from the outgoing character's friend controller.
+		/// </summary>
+		/// <remarks>
+		/// <c>UITKCharacterControl.OnAfterStarting</c> calls Pre then Post on every tree rebuild
+		/// so the pair cancels out. Leaving this un-overridden made the Pre call a no-op, so every
+		/// reopen stacked another subscription onto the same controller.
+		/// </remarks>
+		public override void OnPreSetCharacter()
+		{
+			base.OnPreSetCharacter();
+
+			UnsubscribeFriendEvents();
 		}
 
 		/// <summary>
@@ -108,7 +169,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out IFriendController friendController))
+			if (Character != null && Character.TryGet(out IFriendController friendController))
 			{
 				friendController.OnAddFriend += FriendController_OnAddFriend;
 				friendController.OnRemoveFriend += FriendController_OnRemoveFriend;
@@ -122,43 +183,90 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			if (Character.TryGet(out IFriendController friendController))
-			{
-				friendController.OnAddFriend -= FriendController_OnAddFriend;
-				friendController.OnRemoveFriend -= FriendController_OnRemoveFriend;
-			}
+			UnsubscribeFriendEvents();
 		}
 
 		/// <summary>
-		/// Adds or updates a friend row with the latest name and online status.
+		/// Drops the friend list once the character is gone.
+		/// </summary>
+		/// <remarks>
+		/// The model outlives the visual tree on purpose, so nothing else would clear it — and a
+		/// character with no friends generates no list traffic to overwrite it, which is what left
+		/// the previous character's friends on screen after a character switch.
+		/// </remarks>
+		public override void OnPostUnsetCharacter()
+		{
+			base.OnPostUnsetCharacter();
+
+			ClearAll();
+		}
+
+		/// <summary>
+		/// Removes this panel's handlers from the current character's friend controller.
+		/// </summary>
+		private void UnsubscribeFriendEvents()
+		{
+			if (Character == null || !Character.TryGet(out IFriendController friendController))
+			{
+				return;
+			}
+
+			friendController.OnAddFriend -= FriendController_OnAddFriend;
+			friendController.OnRemoveFriend -= FriendController_OnRemoveFriend;
+		}
+
+		/// <summary>
+		/// Adds or updates a friend with the latest name and online status.
 		/// </summary>
 		/// <param name="friendID">The friend's character ID.</param>
 		/// <param name="online">Whether the friend is online.</param>
 		public void FriendController_OnAddFriend(long friendID, bool online)
 		{
-			if (friendList == null)
+			if (!friends.TryGetValue(friendID, out FriendModel model))
 			{
-				return;
+				model = new FriendModel
+				{
+					FriendID = friendID,
+				};
+				friends.Add(friendID, model);
 			}
 
-			FriendRow row = GetOrCreateRow(friendID);
+			model.Online = online;
 
+			/* The name lookup may complete after the tree has been replaced, so the callback
+			 * writes into the MODEL and re-reads the view rather than closing over an element. */
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, friendID, (n) =>
 			{
-				row.Name.text = n;
+				if (friends.TryGetValue(friendID, out FriendModel target))
+				{
+					target.Name = n;
+					ApplyModelToRow(target);
+				}
 			});
 
-			row.Online = online;
-			row.Status.text = online ? "Online" : "Offline";
-			row.Status.EnableInClassList("friend-row__status--online", online);
-			if (row.Dot != null)
-			{
-				row.Dot.EnableInClassList("fish-dot--online", online);
-				row.Dot.EnableInClassList("fish-dot--offline", !online);
-			}
-			// Offline friends recede so the online ones read first.
-			row.Root.EnableInClassList("fish-row--dim", !online);
+			GetOrCreateRow(model);
+			ApplyModelToRow(model);
 			RefreshHeader();
+		}
+
+		/// <summary>
+		/// Removes a friend.
+		/// </summary>
+		/// <param name="friendID">The friend's character ID.</param>
+		public void FriendController_OnRemoveFriend(long friendID)
+		{
+			bool removed = friends.Remove(friendID);
+
+			if (rows.TryGetValue(friendID, out FriendRow row))
+			{
+				row.Root?.RemoveFromHierarchy();
+				rows.Remove(friendID);
+			}
+
+			if (removed)
+			{
+				RefreshHeader();
+			}
 		}
 
 		/// <summary>
@@ -172,7 +280,7 @@ namespace FishMMO.Client
 		{
 			int total = friends.Count;
 			int online = 0;
-			foreach (KeyValuePair<long, FriendRow> kvp in friends)
+			foreach (KeyValuePair<long, FriendModel> kvp in friends)
 			{
 				if (kvp.Value.Online)
 				{
@@ -196,20 +304,6 @@ namespace FishMMO.Client
 			if (emptyLabel != null)
 			{
 				emptyLabel.style.display = total == 0 ? DisplayStyle.Flex : DisplayStyle.None;
-			}
-		}
-
-		/// <summary>
-		/// Removes a friend row.
-		/// </summary>
-		/// <param name="friendID">The friend's character ID.</param>
-		public void FriendController_OnRemoveFriend(long friendID)
-		{
-			if (friends.TryGetValue(friendID, out FriendRow row))
-			{
-				row.Root?.RemoveFromHierarchy();
-				friends.Remove(friendID);
-				RefreshHeader();
 			}
 		}
 
@@ -246,7 +340,7 @@ namespace FishMMO.Client
 						{
 							if (id != 0)
 							{
-								if (Character.ID != id)
+								if (Character != null && Character.ID != id)
 								{
 									Client.Broadcast(new FriendAddNewBroadcast()
 									{
@@ -269,16 +363,25 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Returns the existing friend row for the given character, or creates and registers a new one.
+		/// Returns the existing row for a friend, or builds one into the current tree.
 		/// </summary>
-		/// <param name="friendID">The friend's character ID.</param>
-		/// <returns>The friend row.</returns>
-		private FriendRow GetOrCreateRow(long friendID)
+		/// <param name="model">The friend the row renders.</param>
+		/// <returns>The friend row, or null when there is no tree to build into.</returns>
+		private FriendRow GetOrCreateRow(FriendModel model)
 		{
-			if (friends.TryGetValue(friendID, out FriendRow existing))
+			if (rows.TryGetValue(model.FriendID, out FriendRow existing))
 			{
 				return existing;
 			}
+
+			if (friendList == null)
+			{
+				/* No tree yet — the panel has never been shown. The model still holds the friend,
+				 * and OnAfterStarting builds the row as soon as there is somewhere to put it. */
+				return null;
+			}
+
+			long friendID = model.FriendID;
 
 			VisualElement rowRoot = new VisualElement();
 			/* The theme class supplies the hover state and leading accent rail shared by every
@@ -318,26 +421,145 @@ namespace FishMMO.Client
 				Name = name,
 				Status = status,
 				Dot = dot,
-				FriendID = friendID,
 			};
 
+			// Captured by ID, never by element — the elements are replaced on every rebuild.
+			rowRoot.RegisterCallback<PointerDownEvent>(evt => OnRowPointerDown(evt, friendID));
+
 			friendList.Add(rowRoot);
-			friends.Add(friendID, row);
-			RefreshHeader();
+			rows.Add(friendID, row);
 			return row;
 		}
 
 		/// <summary>
-		/// Removes all friend rows.
+		/// Writes one friend's model values into its row, if the row currently exists.
+		/// </summary>
+		/// <param name="model">The friend to render.</param>
+		private void ApplyModelToRow(FriendModel model)
+		{
+			if (!rows.TryGetValue(model.FriendID, out FriendRow row))
+			{
+				return;
+			}
+
+			row.Name.text = model.Name;
+			row.Status.text = model.Online ? "Online" : "Offline";
+			row.Status.EnableInClassList("friend-row__status--online", model.Online);
+
+			if (row.Dot != null)
+			{
+				row.Dot.EnableInClassList("fish-dot--online", model.Online);
+				row.Dot.EnableInClassList("fish-dot--offline", !model.Online);
+			}
+
+			// Offline friends recede so the online ones read first.
+			row.Root.EnableInClassList("fish-row--dim", !model.Online);
+		}
+
+		/// <summary>
+		/// Rebuilds every row from the model into the current visual tree.
+		/// </summary>
+		private void RebuildListView()
+		{
+			rows.Clear();
+
+			if (friendList != null)
+			{
+				friendList.Clear();
+			}
+
+			foreach (FriendModel model in friends.Values)
+			{
+				GetOrCreateRow(model);
+				ApplyModelToRow(model);
+			}
+
+			RefreshHeader();
+		}
+
+		/// <summary>
+		/// Drops both the model and the view.
 		/// </summary>
 		private void ClearAll()
 		{
-			foreach (FriendRow row in friends.Values)
+			foreach (FriendRow row in rows.Values)
 			{
 				row.Root?.RemoveFromHierarchy();
 			}
+			rows.Clear();
 			friends.Clear();
 			RefreshHeader();
+		}
+
+		/// <summary>
+		/// Opens the per-friend context menu on right-click.
+		/// </summary>
+		/// <param name="evt">The pointer-down event.</param>
+		/// <param name="friendID">The friend's character ID.</param>
+		private void OnRowPointerDown(PointerDownEvent evt, long friendID)
+		{
+			// 1 is the right button. Left-click is left free for selection.
+			if (evt.button != 1)
+			{
+				return;
+			}
+
+			evt.StopPropagation();
+
+			OpenFriendContextMenu(friendID);
+		}
+
+		/// <summary>
+		/// Builds and opens the context menu for one friend.
+		/// </summary>
+		/// <param name="friendID">The friend's character ID.</param>
+		/// <remarks>
+		/// Every entry closes over <paramref name="friendID"/>, never over the row's name label.
+		/// </remarks>
+		private void OpenFriendContextMenu(long friendID)
+		{
+			if (!UIManager.TryGetTK("UIContextMenu", out UITKContextMenu contextMenu) ||
+				!friends.TryGetValue(friendID, out FriendModel model))
+			{
+				return;
+			}
+
+			List<(string label, Action callback)> entries = new List<(string, Action)>();
+
+			string displayName = model.Name;
+			if (!string.IsNullOrEmpty(displayName))
+			{
+				entries.Add(("Message", () =>
+				{
+					if (UIManager.TryGetTK("UIChat", out UITKChat uiChat))
+					{
+						uiChat.SetInputText($"/tell {displayName} ");
+					}
+				}
+				));
+			}
+
+			entries.Add(("Invite to Party", () =>
+			{
+				Client.Broadcast(new PartyInviteBroadcast()
+				{
+					TargetCharacterID = friendID,
+				}, Channel.Reliable);
+			}
+			));
+
+			entries.Add(("Invite to Guild", () =>
+			{
+				Client.Broadcast(new GuildInviteBroadcast()
+				{
+					TargetCharacterID = friendID,
+				}, Channel.Reliable);
+			}
+			));
+
+			entries.Add(("Remove Friend", () => OnButtonRemoveFriend(friendID)));
+
+			contextMenu.Open(entries);
 		}
 	}
 }

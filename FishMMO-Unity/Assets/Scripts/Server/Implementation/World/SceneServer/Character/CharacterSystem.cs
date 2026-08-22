@@ -326,7 +326,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// paired with the claim held for each so the shutdown write can prove
 					// ownership. A server that lost a claim before shutting down must not use
 					// its final flush to overwrite the state of whichever server owns it now.
-					var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership)>();
+					var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership, List<CharacterBuffData> Buffs, List<CharacterAttributeData> Attributes, List<CharacterAbilityData> Abilities)>();
 					foreach (var character in data.CharactersByID.Values)
 					{
 						try
@@ -334,7 +334,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							CharacterSessionInfo? ownership = sessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
 								? held
 								: (CharacterSessionInfo?)null;
-							characterDataList.Add((BuildCharacterData(character), ownership));
+
+							// Buffs, attributes and abilities are snapshotted alongside the row
+							// because reading them requires the Unity main thread. Only the writes
+							// below are allowed to run off it.
+							var buffs = new List<CharacterBuffData>(8);
+							var attributes = new List<CharacterAttributeData>(16);
+							var abilities = new List<CharacterAbilityData>(8);
+							AppendBuffData(character, buffs);
+							AppendAttributeData(character, attributes);
+							AppendAbilityData(character, abilities);
+
+							characterDataList.Add((BuildCharacterData(character), ownership, buffs, attributes, abilities));
 						}
 						catch (Exception ex)
 						{
@@ -361,13 +372,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 										cancellationToken)
 									: await characterService.PersistAsync(charData, cancellationToken);
 
+								bool ownershipLost = !result.IsSuccess && result.ErrorCode == DatabaseErrorCodes.Forbidden;
+
 								if (!result.IsSuccess)
 								{
 									// Forbidden is not a transient failure: the claim is gone and
 									// the snapshot is unpersistable by design. Name it plainly so
 									// a shutdown after a lease lapse is not mistaken for data loss
 									// caused by the shutdown itself.
-									if (result.ErrorCode == DatabaseErrorCodes.Forbidden)
+									if (ownershipLost)
 									{
 										await Log.Error("CharacterSystem",
 											$"OnDeinitialize: character {charData.ID} is no longer claimed by this server; " +
@@ -376,6 +389,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									else
 									{
 										await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
+									}
+								}
+
+								/* Persist this character's buffs, attributes and abilities before
+								 * moving on to the next one. Interleaving rather than batching is
+								 * deliberate: when the shutdown deadline expires early, this leaves
+								 * whole characters saved instead of every character holding a row
+								 * with none of the state that row implies.
+								 *
+								 * Skipped once the claim is gone. The row write was refused for
+								 * exactly that reason, and these tables carry no ownership check of
+								 * their own — writing them anyway would overwrite the state of
+								 * whichever server owns the character now. */
+								if (!ownershipLost)
+								{
+									if (entry.Buffs.Count > 0)
+									{
+										await SaveBuffsAsync(entry.Buffs);
+									}
+									if (entry.Attributes.Count > 0)
+									{
+										await SaveAttributesAsync(entry.Attributes);
+									}
+									if (entry.Abilities.Count > 0)
+									{
+										await SaveAbilitiesAsync(entry.Abilities);
 									}
 								}
 							}

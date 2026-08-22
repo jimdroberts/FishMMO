@@ -28,17 +28,31 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for accepting a party invitation.
-	/// No additional data required.
 	/// </summary>
+	/// <remarks>
+	/// Carries the identity of the invitation being answered. This used to be an empty struct,
+	/// which left the server resolving "whatever invitation is pending for this character" — so a
+	/// dialog the player left open past the invitation TTL joined whoever invited them NEXT. The
+	/// server re-verifies this against its own pending record and refuses a mismatch; the field is
+	/// a claim to be checked, never a value to be trusted.
+	/// </remarks>
 	public struct PartyAcceptInviteBroadcast : IBroadcast
 	{
+		/// <summary>Character ID of the player whose invitation is being accepted.</summary>
+		public long InviterCharacterID;
 	}
 	/// <summary>
 	/// Broadcast for declining a party invitation.
-	/// No additional data required.
 	/// </summary>
+	/// <remarks>
+	/// Carries the same identity as the accept broadcast for the same reason: a decline that
+	/// arrives after the pending slot has been refilled would otherwise throw away an invitation
+	/// the player has not seen yet.
+	/// </remarks>
 	public struct PartyDeclineInviteBroadcast : IBroadcast
 	{
+		/// <summary>Character ID of the player whose invitation is being declined.</summary>
+		public long InviterCharacterID;
 	}
 
 	/// <summary>
@@ -95,5 +109,37 @@ namespace FishMMO.Shared
 		public long CharacterID;
 		/// <summary>New rank to assign to the member.</summary>
 		public PartyRank Rank;
+	}
+
+	/// <summary>
+	/// One party member's live health, as observed on a scene server.
+	/// </summary>
+	public struct PartyMemberHealthEntry
+	{
+		/// <summary>Character ID of the member.</summary>
+		public long CharacterID;
+		/// <summary>The member's health fraction, 0-1.</summary>
+		public float HealthPCT;
+	}
+
+	/// <summary>
+	/// Broadcast carrying live health for the party members visible to one scene server.
+	/// </summary>
+	/// <remarks>
+	/// The roster payload gets its health figure from the party database row, and that row is
+	/// written on connect and on disconnect and at no other time — so every party health bar sat
+	/// frozen at the value its owner logged in with, for the whole session. This message is sent
+	/// on the party update pump from the in-memory attribute controllers of the members the scene
+	/// server actually hosts, which is the only place a current value exists without adding a
+	/// database write per member per second.
+	///
+	/// Members on OTHER scene servers are not in this payload. Their bars keep the last figure the
+	/// roster carried; a stale bar for someone in a different zone is a far smaller problem than
+	/// a stale bar for the person standing next to you.
+	/// </remarks>
+	public struct PartyMemberHealthUpdateBroadcast : IBroadcast
+	{
+		/// <summary>Live health for each locally-visible party member.</summary>
+		public PartyMemberHealthEntry[] Members;
 	}
 }

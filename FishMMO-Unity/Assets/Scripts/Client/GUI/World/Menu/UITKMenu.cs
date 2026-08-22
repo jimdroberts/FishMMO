@@ -6,8 +6,17 @@ namespace FishMMO.Client
 	/// UI Toolkit main menu control. Provides access to the options panel, returning to the
 	/// login screen, and quitting the game.
 	/// </summary>
+	/// <remarks>
+	/// Both destructive actions ask first. They sit directly under Resume and Options in a panel
+	/// the Escape key opens mid-combat, so a single mis-aimed click used to drop the player to the
+	/// login screen or close the client outright — with a character still in the world, and no way
+	/// to take it back.
+	/// </remarks>
 	public class UITKMenu : UITKControl
 	{
+		/// <summary>Name of the shared confirmation dialog.</summary>
+		private const string DIALOG_NAME = "UIDialogBox";
+
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Menu;
 
@@ -67,19 +76,52 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Returns the player to the login screen.
+		/// Asks for confirmation, then returns the player to the login screen.
 		/// </summary>
 		public void OnButtonQuitToLogin()
 		{
-			Client.QuitToLogin();
+			Confirm("Return to the login screen?", () => Client.QuitToLogin());
 		}
 
 		/// <summary>
-		/// Exits the game client.
+		/// Asks for confirmation, then exits the game client.
 		/// </summary>
 		public void OnButtonQuit()
 		{
-			Client.Quit();
+			Confirm("Quit to desktop?", () => Client.Quit());
+		}
+
+		/// <summary>
+		/// Runs an action behind a confirmation dialog.
+		/// </summary>
+		/// <param name="question">The question to put to the player.</param>
+		/// <param name="onAccept">What to do if they agree.</param>
+		/// <remarks>
+		/// <para>Three outcomes, and the middle one was being handled as the wrong one. If the
+		/// dialog panel does not exist at all the action still runs — refusing to quit because a
+		/// confirmation panel could not be found would leave the player with a menu whose exit
+		/// buttons do nothing, which is a worse failure than the one being guarded against.</para>
+		/// <para>But <c>UITKDialogBox.Open</c> now <b>refuses rather than replaces</b> when another
+		/// question is already on screen, and a refusal returns exactly the same <c>false</c> as
+		/// "no dialog panel". The combined test therefore fell through to <c>onAccept</c> and
+		/// quit to desktop — or dropped the character to the login screen — <b>without asking</b>,
+		/// while a dialog the player was in the middle of answering sat on top of it. That is the
+		/// precise failure the confirmation exists to prevent, reached by the guard itself.</para>
+		/// <para>A busy dialog is now a no-op. The player is already being asked something; the
+		/// menu is still open behind it, and the button is still there when they are done.</para>
+		/// </remarks>
+		private void Confirm(string question, System.Action onAccept)
+		{
+			if (!UIManager.TryGetTK(DIALOG_NAME, out UITKDialogBox dialog))
+			{
+				// No confirmation panel in this scene at all — proceed rather than dead-end.
+				onAccept?.Invoke();
+				return;
+			}
+
+			// Busy: another question owns the dialog. Do nothing at all, and above all do not run
+			// a destructive action the player has not confirmed.
+			dialog.Open(question, onAccept);
 		}
 	}
 }

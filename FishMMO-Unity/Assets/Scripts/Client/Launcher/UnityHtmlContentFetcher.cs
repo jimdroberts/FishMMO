@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using HtmlAgilityPack;
 using FishMMO.Logging;
 using UnityEngine;
@@ -90,6 +91,32 @@ namespace FishMMO.Client
 		public float HtmlPxToTmpSizeFactor => htmlPxToTmpSizeFactor;
 
 		/// <summary>
+		/// Maximum accepted size of the news document, in bytes.
+		/// </summary>
+		/// <remarks>
+		/// <b>H1.</b> The response had no size limit whatsoever. It is buffered whole in memory
+		/// and then handed to an HTML parser that builds a node per tag, so the peak cost is
+		/// several times the wire size — which for an unbounded response is an out-of-memory
+		/// kill of the launcher, from a decorative pane, triggered by a host the player has no
+		/// relationship with. 2 MiB is a very large news page and a very small allocation.
+		/// </remarks>
+		[Tooltip("Maximum accepted size of the news document in bytes. Larger responses are refused.")]
+		[SerializeField]
+		private long maxNewsBytes = 2L * 1024L * 1024L;
+
+		/// <summary>
+		/// Seconds the news fetch may stall with no data before it is abandoned.
+		/// </summary>
+		/// <remarks>
+		/// The news fetch keeps a whole-request timeout as well — it is a small document, so
+		/// "took too long overall" really is a fault there, unlike a patch download. This is the
+		/// second bound, for a host that dribbles bytes slowly enough to stay under the total.
+		/// </remarks>
+		[Tooltip("Seconds the news fetch may stall with no data before it is abandoned.")]
+		[SerializeField]
+		private int newsIdleTimeoutSeconds = 10;
+
+		/// <summary>
 		/// Unity Awake method. Validates dependencies and disables script if missing.
 		/// </summary>
 		private void Awake()
@@ -122,6 +149,10 @@ namespace FishMMO.Client
 				yield break;
 			}
 
+			// Set by OnComplete, read after the request coroutine returns. Null means the
+			// request failed and OnFailure has already reported it.
+			string responseHtml = null;
+
 			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
 				URL = url,
@@ -132,26 +163,18 @@ namespace FishMMO.Client
 				Headers = new Dictionary<string, string>(),
 				CertificateHandlerFactory = () => new ClientSSLCertificateHandler(),
 				Timeout = WebRequestTimeout,
+				IdleTimeout = Mathf.Max(1, this.newsIdleTimeoutSeconds),
+				// H1: the transfer is aborted the moment it goes past the cap, rather than
+				// buffered to completion and only then measured.
+				MaxResponseBytes = Mathf.Max(1024, (int)Mathf.Min(this.maxNewsBytes, int.MaxValue)),
 				MaxRetries = MaxRetries,
 				RetryDelay = RetryDelay,
 				OnProgress = null,
 				OnComplete = (request) =>
 				{
-					try
-					{
-						HtmlNode extracted = ExtractDivNode(request.downloadHandler.text, divClass);
-						if (extracted == null)
-						{
-							onError?.Invoke($"No element with class '{divClass}' was found in the news page.");
-							return;
-						}
-						onContentReady?.Invoke(extracted);
-					}
-					catch (Exception ex)
-					{
-						Log.Error("UnityHtmlContentFetcher", $"Error processing HTML content: {ex.Message}");
-						onError?.Invoke($"Error processing HTML content: {ex.Message}");
-					}
+					// Captured here; parsed after the request coroutine returns, where this can
+					// hand the work to a thread. See below.
+					responseHtml = request.downloadHandler.text;
 				},
 				// request is null when the service rejected the config outright (bad URL),
 				// so it must not be dereferenced unguarded.
@@ -166,6 +189,62 @@ namespace FishMMO.Client
 
 			// Delegate web request execution to the service
 			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
+
+			if (responseHtml == null)
+			{
+				// OnFailure has already reported. Nothing further to do.
+				yield break;
+			}
+
+			/* Second size check, on the decoded string.
+			 *
+			 * MaxResponseBytes bounds the wire bytes; this bounds the characters the parser will
+			 * see, which is what the allocation actually scales with. They differ by the
+			 * encoding, and a multi-byte-hostile response can put more characters through than
+			 * the byte count suggests it should.
+			 */
+			if (responseHtml.Length > this.maxNewsBytes)
+			{
+				Log.Warning("UnityHtmlContentFetcher", $"News document is {responseHtml.Length} characters, over the {this.maxNewsBytes} limit; refusing to parse it.");
+				onError?.Invoke("The news page was too large to display.");
+				yield break;
+			}
+
+			/* H1: parsed OFF the main thread.
+			 *
+			 * HtmlDocument.LoadHtml is the expensive half of this — it allocates a node per tag
+			 * over a document whose shape the operator's CMS decides — and it ran inside the
+			 * completion callback, i.e. synchronously on the main thread, i.e. as a frame-time
+			 * spike proportional to a stranger's HTML. HtmlAgilityPack is plain .NET with no
+			 * Unity API in it, so the parse is safe on a worker; only the resulting node crosses
+			 * back, and it crosses back into a coroutine, so the callback below still runs on the
+			 * main thread and may touch UI freely.
+			 */
+			string html = responseHtml;
+			string divClassCapture = divClass;
+			Task<HtmlNode> parseTask = Task.Run(() => ExtractDivNode(html, divClassCapture));
+
+			while (!parseTask.IsCompleted)
+			{
+				yield return null;
+			}
+
+			if (parseTask.IsFaulted)
+			{
+				string reason = parseTask.Exception?.GetBaseException().Message ?? "unknown error";
+				Log.Error("UnityHtmlContentFetcher", $"Error processing HTML content: {reason}");
+				onError?.Invoke($"Error processing HTML content: {reason}");
+				yield break;
+			}
+
+			HtmlNode extracted = parseTask.Result;
+			if (extracted == null)
+			{
+				onError?.Invoke($"No element with class '{divClass}' was found in the news page.");
+				yield break;
+			}
+
+			onContentReady?.Invoke(extracted);
 		}
 
 		/// <summary>

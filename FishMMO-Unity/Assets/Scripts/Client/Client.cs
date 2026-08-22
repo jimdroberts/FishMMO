@@ -1081,7 +1081,18 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="msg">The server busy message.</param>
 		/// <param name="ch">The network channel.</param>
-		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch) { if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox d)) d.Open("Server is busy. Please try again."); }
+		/// <remarks>
+		/// Routed through <see cref="LoginNotice"/> rather than calling <c>UITKDialogBox.Open</c>
+		/// directly. The shared dialog now refuses a second <c>Open</c> while a request is on
+		/// screen instead of overwriting it — that change exists to stop a timed party invite
+		/// hijacking an open confirm dialog — so a direct call here would simply be dropped
+		/// whenever anything else happened to be asking a question. A busy server is precisely
+		/// the moment several notices arrive at once, so this one needs the queue.
+		/// </remarks>
+		private void OnServerBusy(ServerBusyBroadcast msg, Channel ch)
+		{
+			LoginNotice.Show("Server is busy. Please try again.");
+		}
 
 		/// <summary>
 		/// Handles a <see cref="SceneTransferRefusedBroadcast"/> — the server declined a channel
@@ -1096,10 +1107,11 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void OnSceneTransferRefused(SceneTransferRefusedBroadcast msg, Channel ch)
 		{
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox d))
-			{
-				d.Open(DescribeTransferRefusal(msg.Reason));
-			}
+			/* Queued rather than opened directly: the shared dialog refuses rather than replaces
+			 * while another request is on screen, and a refusal that is silently dropped leaves
+			 * exactly the "nothing on screen, nothing happening" state this handler exists to
+			 * prevent. */
+			LoginNotice.Show(DescribeTransferRefusal(msg.Reason));
 		}
 
 		/// <summary>

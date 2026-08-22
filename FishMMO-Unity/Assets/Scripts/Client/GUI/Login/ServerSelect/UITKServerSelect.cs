@@ -145,6 +145,10 @@ namespace FishMMO.Client
 			{
 				quitButton.clicked += OnClick_Quit;
 			}
+
+			// Enter connects to the highlighted world, Escape goes back to the login screen.
+			LoginKeys.Attach(Root, OnClick_ConnectToServer, OnClick_QuitToLogin);
+			LoginKeys.SetTabOrder(Root, connectButton, refreshButton, quitToLoginButton, quitButton);
 		}
 
 		/// <summary>
@@ -189,13 +193,34 @@ namespace FishMMO.Client
 		{
 			base.OnTick();
 
+			// Login-flow notices are refused while another dialog is up; see LoginNotice.
+			LoginNotice.Pump();
 
 			if (nextRefresh > 0.0f)
 			{
 				nextRefresh -= Time.deltaTime;
 				UpdateRefreshButton();
 			}
+
+			if (replyGuard.HasExpired())
+			{
+				/* Connect disables its own button and then waits for a hop token, a world-server
+				 * connection and a SceneLoginSuccess — three separate things, any of which can
+				 * simply not happen. This was the one login lock in the whole flow with no
+				 * deadline behind it, so a token request the login server never answered left the
+				 * player looking at a world list whose only useful button was permanently
+				 * greyed out. */
+				SetConnectToServerLocked(false);
+				Show();
+				LoginNotice.Show("The server did not respond to the connection request. Please try again.");
+			}
 		}
+
+		/// <summary>
+		/// Guards the connect button while the world-server handoff is outstanding.
+		/// </summary>
+		/// <remarks>See <see cref="PendingReplyGuard"/>.</remarks>
+		private readonly PendingReplyGuard replyGuard = new PendingReplyGuard();
 
 		/// <summary>
 		/// Keeps the refresh button's enabled state and text in step with the cooldown.
@@ -239,6 +264,12 @@ namespace FishMMO.Client
 		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
+			/* Any result is the server still working this handoff — the world connection
+			 * re-runs the SRP exchange, which reports progress before it finishes — so each one
+			 * buys the reply deadline again rather than counting against it. Before the panel
+			 * visibility check, because the panel hides itself on SceneLoginSuccess. */
+			replyGuard.Refresh();
+
 			// Only react while this panel is shown. ClientLoginAuthenticator raises this
 			// event to every subscriber, so without the guard a result belonging to another
 			// panel's flow (e.g. a wrong password on the login screen) is handled here too,
@@ -303,10 +334,7 @@ namespace FishMMO.Client
 		/// <param name="errorMsg">The error message to display.</param>
 		private void OnLoginAuthenticationDialog(string errorMsg)
 		{
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open(errorMsg);
-			}
+			LoginNotice.Show(errorMsg);
 			SetConnectToServerLocked(false);
 
 			OnClick_QuitToLogin();
@@ -466,6 +494,10 @@ namespace FishMMO.Client
 		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
 		private void SetConnectToServerLocked(bool locked)
 		{
+			// Locking means a request is outstanding; unlocking means it is not.
+			// See PendingReplyGuard for why the wait needs a deadline.
+			if (locked) { replyGuard.Begin(); } else { replyGuard.Clear(); }
+
 			if (connectButton != null)
 			{
 				connectButton.SetEnabled(!locked);

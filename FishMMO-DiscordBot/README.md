@@ -163,7 +163,11 @@ directory by the build (`<CopyToOutputDirectory>PreserveNewest</CopyToOutputDire
   "Linking": {
     "CodeLengthChars": 8,
     "CodeTtlSeconds": 300
-  }
+  },
+  "ChatRelay": {
+    "GameToDiscordChannels": [ "Say", "World", "Trade", "Region" ]
+  },
+  "BridgeMessageMaxLength": 128
 }
 ```
 
@@ -176,6 +180,17 @@ directory by the build (`<CopyToOutputDirectory>PreserveNewest</CopyToOutputDire
 | `DynamicChannels` | Configures `DynamicChannelManagerService`. |
 | `RateLimits` | Sliding-window settings for `RateLimiterService`. |
 | `Linking` | Controls `/link` codes (length and TTL). |
+| `ChatRelay.GameToDiscordChannels` | **Allowlist** of in-game channels the bot may republish to Discord. Omit for the default (`Say`, `World`, `Trade`, `Region`). See the warning below. |
+| `BridgeMessageMaxLength` | Caps a Discord message bridged into the game. Keep at or below the game's `ChatBroadcast.MaxTextLength` (**128**) — clients discard anything longer, so a larger value makes long messages vanish rather than arrive truncated. |
+
+> **The relay is an allowlist, and private channels are not configurable.**
+> The bot used to select every chat row *except* Discord's own and forward it, which meant
+> **`[Tell]` whispers were republished to a public Discord channel** — full message body, both
+> character names. Relaying is now opt-in per channel. `Tell`, `Guild`, `Party`, `Discord` and
+> `Command` are on a `NeverRelayable` set and are refused **even if you name them here**, with an
+> error logged; making a private channel relayable is a deliberate code change, not a config edit.
+> Inbound Discord messages are sanitised at the bridge and again server-side, and are no longer
+> exempt from in-game tab filtering.
 
 > **Production:** override `Discord.Token`, `FishMMO.ApiKey`, and any SMTP-like
 > secrets through environment variables (e.g. `Discord__Token=…`) rather than

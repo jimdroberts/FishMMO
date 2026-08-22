@@ -29,16 +29,35 @@
 }
 
 /*
-    Each label is absolutely positioned from C# and translated up and left by its own size, so it
-    hangs above its anchor point and stays centred as the text changes width. white-space: nowrap
-    keeps a two-line nameplate breaking only where the generator put a newline, never on width.
+    Each projected label is two elements, and the split is a performance decision rather than a
+    stylistic one.
+
+    The anchor is pinned to the container's origin and moved every frame by writing `translate`
+    from C#. `translate` is a transform: it changes where the element is painted and never marks
+    layout dirty. Writing `left`/`top` instead — which is what this did originally — dirties the
+    element's layout, and Yoga then re-solves the entire container once per frame per label.
+
+    The centring offset still has to be a percentage of the label's own size, because the text
+    width is not known until it has been laid out, and one element only gets one `translate`.
+    So the offset lives on the text child, where it is written once from USS and never touched
+    again, leaving the anchor's translate free for the position.
+*/
+.world-label-anchor {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+/*
+    white-space: nowrap keeps a two-line nameplate breaking only where the generator put a
+    newline, never on width.
 */
 .world-label {
-    position: absolute;
     -unity-text-align: middle-center;
     -unity-font-style: bold;
     white-space: nowrap;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+    translate: -50% -100%;
+    text-shadow: 0 1px 2px var(--shadow-text-hard);
 }
 
 /*
@@ -57,5 +76,5 @@
     position: absolute;
     -unity-text-align: middle-center;
     white-space: nowrap;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+    text-shadow: 0 2px 4px var(--shadow-text-soft);
 }

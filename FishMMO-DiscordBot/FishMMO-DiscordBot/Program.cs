@@ -106,6 +106,7 @@ namespace FishMMO.DiscordBot
 					});
 
 					services.AddSingleton<BotConfigurationService>();
+					services.AddSingleton<ChatRelayPolicy>();
 					services.AddSingleton<RateLimiterService>();
 					services.AddSingleton<AccountLinkingService>();
 					services.AddSingleton<BridgeBanService>();

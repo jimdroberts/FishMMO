@@ -14,12 +14,36 @@
             <ui:Button name="merchant-tab-items" text="Items" class="fish-tab merchant-tab" />
             <ui:Button name="merchant-tab-abilities" text="Abilities" class="fish-tab merchant-tab" />
             <ui:Button name="merchant-tab-events" text="Effects" class="fish-tab merchant-tab" />
+            <ui:Button name="merchant-tab-sell" text="Sell" class="fish-tab merchant-tab" />
         </ui:VisualElement>
         <ui:ScrollView name="merchant-scroll" class="fish-scroll merchant-scroll">
             <ui:VisualElement name="merchant-items" class="merchant-list" />
             <ui:VisualElement name="merchant-abilities" class="merchant-list" />
             <ui:VisualElement name="merchant-events" class="merchant-list" />
+            <ui:VisualElement name="merchant-sell" class="merchant-list" />
             <ui:Label name="merchant-empty" text="Nothing for sale." class="fish-empty merchant-empty" />
         </ui:ScrollView>
+
+        <!--
+            Transaction footer. Hidden until an entry is selected; it is the only route to a
+            purchase or a sale, so a single click can no longer commit one. See UITKMerchant.
+        -->
+        <ui:VisualElement name="merchant-transaction" class="merchant-transaction">
+            <ui:Label name="merchant-transaction-name" text="" class="fish-label merchant-transaction__name" />
+            <ui:VisualElement name="merchant-quantity-row" class="merchant-quantity-row">
+                <ui:Button name="merchant-qty-less" text="−" class="fish-button merchant-qty-btn" />
+                <ui:IntegerField name="merchant-qty-field" value="1" class="merchant-qty-field" />
+                <ui:Button name="merchant-qty-more" text="+" class="fish-button merchant-qty-btn" />
+                <ui:Button name="merchant-qty-max" text="Max" class="fish-button merchant-qty-btn merchant-qty-btn--max" />
+                <ui:Label name="merchant-transaction-total" text="" class="fish-label merchant-transaction__total" />
+            </ui:VisualElement>
+            <ui:VisualElement name="merchant-transaction-actions" class="merchant-transaction__actions">
+                <ui:Button name="merchant-confirm-btn" text="Buy"
+                           class="fish-button fish-button--primary merchant-transaction__confirm" />
+                <ui:Button name="merchant-cancel-btn" text="Cancel"
+                           class="fish-button merchant-transaction__cancel" />
+            </ui:VisualElement>
+            <ui:Label name="merchant-status" text="" class="fish-hint merchant-status" />
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

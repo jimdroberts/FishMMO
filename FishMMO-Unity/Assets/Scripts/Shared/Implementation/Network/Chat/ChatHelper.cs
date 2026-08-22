@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using FishMMO.Auth.Core;
@@ -70,52 +69,14 @@ namespace FishMMO.Shared
 		/// <summary>Error code for when the target is offline.</summary>
 		public const string TARGET_OFFLINE = ChatCodePrefix + "TARGET_OFFLINE";
 
-		#region Regex
-		// Regex patterns for Unity Rich Text tags. Used to sanitize chat messages by removing formatting.
-		private const string AlignPattern = @"<align=[^>]+?>|<\/align>";
-		private const string AllCapsPattern = @"<allcaps>|<\/allcaps>";
-		private const string AlphaPattern = @"<alpha=[^>]+?>|<\/alpha>";
-		private const string BoldPattern = @"<b>|<\/b>";
-		private const string BrPattern = @"<br>|<\/br>";
-		private const string ColorPattern = @"<color=[^>]+?>|<\/color>";
-		private const string CspacePattern = @"<cspace=[^>]+?>|<\/cspace>";
-		private const string FontPattern = @"<font=[^>]+?>|<\/font>";
-		private const string FontWeightPattern = @"<font-weight=[^>]+?>|<\/font-weight>";
-		private const string GradientPattern = @"<gradient=[^>]+?>|<\/gradient>";
-		private const string ItalicPattern = @"<i>|<\/i>";
-		private const string IndentPattern = @"<indent=[^>]+?>|<\/indent>";
-		private const string LineHeightPattern = @"<line-height=[^>]+?>|<\/line-height>";
-		private const string LineIndentPattern = @"<line-indent=[^>]+?>|<\/line-indent>";
-		private const string LinkPattern = @"<link=[^>]+?>|<\/link>";
-		private const string LowercasePattern = @"<lowercase>|<\/lowercase>";
-		private const string MarginPattern = @"<margin=[^>]+?>|<\/margin>";
-		private const string MarkPattern = @"<mark=[^>]+?>|<\/mark>";
-		private const string MspacePattern = @"<mspace=[^>]+?>|<\/mspace>";
-		private const string NobrPattern = @"<nobr>|<\/nobr>";
-		private const string NoparsePattern = @"<noparse>|<\/noparse>";
-		private const string PagePattern = @"<page=[^>]+?>|<\/page>";
-		private const string PosPattern = @"<pos=[^>]+?>|<\/pos>";
-		private const string RotatePattern = @"<rotate=[^>]+?>|<\/rotate>";
-		private const string SPattern = @"<s>|<\/s>";
-		private const string SizePattern = @"<size=[^>]+?>|<\/size>";
-		private const string SmallcapsPattern = @"<smallcaps>|<\/smallcaps>";
-		private const string SpacePattern = @"<space=[^>]+?>|<\/space>";
-		private const string SpritePattern = @"<sprite=[^>]+?\/>";
-		private const string StrikethroughPattern = @"<strikethrough>|<\/strikethrough>";
-		private const string StylePattern = @"<style=[^>]+?>|<\/style>";
-		private const string SubPattern = @"<sub>|<\/sub>";
-		private const string SupPattern = @"<sup>|<\/sup>";
-		private const string UPattern = @"<u>|<\/u>";
-		private const string UppercasePattern = @"<uppercase>|<\/uppercase>";
-		private const string VoffsetPattern = @"<voffset=[^>]+?>|<\/voffset>";
-		private const string WidthPattern = @"<width=[^>]+?>|<\/width>";
+		/* The Unity Rich Text tag patterns that used to live here now live in
+		 * ChatSanitizer.CombinedRichTextPattern.
+		 *
+		 * They moved so the sanitiser could be compiled and tested on its own. This class pulls in
+		 * FishMMO.Logging, IPlayerCharacter and AccessLevel, none of which a text filter needs, and
+		 * all of which have to be stood up before a test can call a single method on it. The filter
+		 * is security code and is cheap to test; nothing about it should be hard to reach. */
 
-		/// <summary>
-		/// Combined regex pattern for all supported Unity Rich Text tags.
-		/// Used to sanitize chat messages by removing formatting tags.
-		/// </summary>
-		private static readonly string CombinedRTTPattern = $"{AlignPattern}|{AllCapsPattern}|{AlphaPattern}|{BoldPattern}|{BrPattern}|{ColorPattern}|{CspacePattern}|{FontPattern}|{FontWeightPattern}|{GradientPattern}|{ItalicPattern}|{IndentPattern}|{LineHeightPattern}|{LineIndentPattern}|{LinkPattern}|{LowercasePattern}|{MarginPattern}|{MarkPattern}|{MspacePattern}|{NobrPattern}|{NoparsePattern}|{PagePattern}|{PosPattern}|{RotatePattern}|{SPattern}|{SizePattern}|{SmallcapsPattern}|{SpacePattern}|{SpritePattern}|{StrikethroughPattern}|{StylePattern}|{SubPattern}|{SupPattern}|{UPattern}|{UppercasePattern}|{VoffsetPattern}|{WidthPattern}";
-		#endregion
 
 		private static bool initialized = false;
 
@@ -432,25 +393,41 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Attempts to sanitize a chat message by removing any Unity Rich Text formatting tags.
+		/// Removes every Unity Rich Text formatting tag from a chat message.
 		/// </summary>
+		/// <remarks>
+		/// Delegates to <see cref="ChatSanitizer.StripRichText"/>, which loops to a fixed point,
+		/// matches case-insensitively and <em>fails closed</em>. The implementation this replaced did
+		/// none of those three things and could be bypassed by any of them; see that method for the
+		/// detail. Kept as a member of this class because a good deal of code already calls it.
+		/// <para>
+		/// This strips markup only. Untrusted text arriving at the network boundary should go through
+		/// <see cref="SanitizeIncoming"/> instead, which also deals with line breaks, bidirectional
+		/// overrides, in-band control codes and length.
+		/// </para>
+		/// </remarks>
 		/// <param name="message">Input chat message.</param>
-		/// <returns>Sanitized message with formatting removed.</returns>
+		/// <returns>Sanitized message with formatting removed, or empty if it could not be cleaned.</returns>
 		public static string Sanitize(string message)
 		{
-			try
-			{
-				return Regex.Replace(message, CombinedRTTPattern, "", RegexOptions.None, TimeSpan.FromSeconds(1));
-			}
-			catch (RegexMatchTimeoutException)
-			{
-				// On timeout, return a truncated plain-text fallback to avoid
-				// blocking the chat pipeline on pathological input.
-				const int MaxSafeLength = 256;
-				return message != null && message.Length > MaxSafeLength
-					? message.Substring(0, MaxSafeLength) + "..."
-					: message ?? "";
-			}
+			return ChatSanitizer.StripRichText(message);
+		}
+
+		/// <summary>
+		/// Full cleaning pipeline for untrusted chat text: control characters, rich text,
+		/// <c>FISHMMO_</c> control codes, then a hard length cap.
+		/// </summary>
+		/// <remarks>
+		/// This is what the server runs on everything a client sends, and what the Discord bridge
+		/// runs on everything Discord sends. See <see cref="ChatSanitizer.SanitizeIncoming"/> for
+		/// why the order of the passes matters.
+		/// </remarks>
+		/// <param name="message">Untrusted text.</param>
+		/// <param name="maxLength">Hard cap applied after cleaning; values below one disable it.</param>
+		/// <returns>Clean single-line text, or empty if nothing survived.</returns>
+		public static string SanitizeIncoming(string message, int maxLength)
+		{
+			return ChatSanitizer.SanitizeIncoming(message, maxLength);
 		}
 	}
 }

@@ -116,8 +116,19 @@
             </ui:VisualElement>
             <!-- /column-left -->
 
-            <!-- CENTER : preview viewport + Neck / Back / Ring -->
+            <!-- CENTER : preview viewport + Back / Accessory   -->
             <!-- eq-center → flex-direction column, flex:1      -->
+            <!--
+                SLOT NAMES ARE A CONTRACT WITH ItemSlot, NOT A LAYOUT CHOICE.
+                UITKEquipment.SlotElementNames indexes this file by (int)ItemSlot, and
+                EquipmentController sizes its container from Enum.GetNames(typeof(ItemSlot)).
+                There are therefore exactly ten equipment slots and each one may appear here
+                exactly once. This block used to declare "slot-neck" and "slot-ring", neither of
+                which is an ItemSlot value, while ItemSlot.Accessory had no element at all — so
+                the accessory slot could never be rendered and two elements were competing to
+                represent it. If neck and ring are ever wanted as separate slots, that starts with
+                new ItemSlot values and a schema change, not with extra elements here.
+            -->
             <ui:VisualElement name="equipment-center" class="eq-center">
 
                 <!-- fish-preview → bg color, border, radius    -->
@@ -140,30 +151,27 @@
                 <!-- eq-center-slots → flex-direction row, height -->
                 <ui:VisualElement name="center-slots" class="eq-center-slots">
 
-                    <ui:VisualElement name="slot-neck" class="fish-slot eq-slot">
-                        <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
-                        <ui:Label         class="fish-slot__label eq-slot__label" text="Neck" />
-                        <ui:Label         name="amount-neck"
-                                          class="fish-slot__amount eq-slot__amount eq-hidden" />
-                        <ui:VisualElement name="lock-neck"
-                                          class="fish-slot__lock eq-slot__lock eq-hidden" />
-                    </ui:VisualElement>
-
+                    <!-- ItemSlot.Back = 6 -->
                     <ui:VisualElement name="slot-back" class="fish-slot eq-slot">
                         <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
                         <ui:Label         class="fish-slot__label eq-slot__label" text="Back" />
                         <ui:Label         name="amount-back"
                                           class="fish-slot__amount eq-slot__amount eq-hidden" />
+                        <ui:Label         name="cooldown-back"
+                                          class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
                         <ui:VisualElement name="lock-back"
                                           class="fish-slot__lock eq-slot__lock eq-hidden" />
                     </ui:VisualElement>
 
-                    <ui:VisualElement name="slot-ring" class="fish-slot eq-slot">
+                    <!-- ItemSlot.Accessory = 9 — rings, amulets and trinkets all land here. -->
+                    <ui:VisualElement name="slot-accessory" class="fish-slot eq-slot">
                         <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
-                        <ui:Label         class="fish-slot__label eq-slot__label" text="Ring" />
-                        <ui:Label         name="amount-ring"
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Acc" />
+                        <ui:Label         name="amount-accessory"
                                           class="fish-slot__amount eq-slot__amount eq-hidden" />
-                        <ui:VisualElement name="lock-ring"
+                        <ui:Label         name="cooldown-accessory"
+                                          class="fish-slot__cooldown eq-slot__cooldown eq-hidden" />
+                        <ui:VisualElement name="lock-accessory"
                                           class="fish-slot__lock eq-slot__lock eq-hidden" />
                     </ui:VisualElement>
 

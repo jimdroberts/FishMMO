@@ -1,11 +1,8 @@
 using System;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Logging;
 using FishMMO.Shared;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
 using UnityEngine.Networking;
 
 namespace FishMMO.Client.Security
@@ -36,21 +33,10 @@ namespace FishMMO.Client.Security
 				return null; // feature disabled — no public key configured
 			}
 
-			byte[] publicKey;
-			try
+			// Decoding and length-checking live in Ed25519ManifestVerifier now: the version
+			// manifest needs the identical treatment, and two copies of a signature check drift.
+			if (!Ed25519ManifestVerifier.TryDecodePublicKey(publicKeyBase64, out byte[] publicKey))
 			{
-				publicKey = Convert.FromBase64String(publicKeyBase64);
-			}
-			catch (Exception ex)
-			{
-				_ = Log.Warning(logChannel, $"Manifest public key is not valid base64: {ex.Message}");
-				return null;
-			}
-
-			if (publicKey.Length != 32) // Ed25519 public key is exactly 32 bytes
-			{
-				_ = Log.Warning(logChannel,
-					$"Manifest public key is {publicKey.Length} bytes (expected 32 for Ed25519).");
 				return null;
 			}
 
@@ -126,18 +112,7 @@ namespace FishMMO.Client.Security
 			}
 
 			// Verify Ed25519 signature.
-			byte[] signature;
-			try
-			{
-				signature = Convert.FromBase64String(payload.signature ?? string.Empty);
-			}
-			catch
-			{
-				_ = Log.Warning(logChannel, "Pin manifest signature is not valid base64.");
-				return null;
-			}
-
-			if (!VerifyEd25519(publicKey, responseJson, payload.signature, signature))
+			if (!Ed25519ManifestVerifier.Verify(publicKey, responseJson, payload.signature))
 			{
 				_ = Log.Warning(logChannel, "Pin manifest signature verification FAILED — discarding update.");
 				return null;
@@ -186,88 +161,6 @@ namespace FishMMO.Client.Security
 
 				return request.downloadHandler.text;
 			}
-		}
-
-		/// <summary>
-		/// Verifies an Ed25519 signature over a JSON payload using
-		/// the canonical signed-data format:
-		/// <c>payload_without_signature_field || payload.signature</c>
-		/// where the signature field is stripped before verification.
-		///
-		/// This uses BouncyCastle's Ed25519Signer which is already
-		/// available (preserved in link.xml for X509 parsing).
-		/// </summary>
-		/// <param name="publicKey">32-byte Ed25519 public key.</param>
-		/// <param name="fullJson">The raw JSON response including the signature field.</param>
-		/// <param name="signatureBase64">The base64 signature string from the JSON.</param>
-		/// <param name="signatureBytes">Pre-decoded signature bytes.</param>
-		private static bool VerifyEd25519(
-			byte[] publicKey,
-			string fullJson,
-			string signatureBase64,
-			byte[] signatureBytes)
-		{
-			if (signatureBytes.Length != 64) // Ed25519 signature is exactly 64 bytes
-			{
-				Log.Warning(logChannel,
-					$"Signature is {signatureBytes.Length} bytes (expected 64 for Ed25519).");
-				return false;
-			}
-
-			// Build the canonical signed message: the JSON with the signature
-			// field zeroed out, then the signature appended.
-			string message = BuildCanonicalSignedMessage(fullJson, signatureBase64);
-			byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-
-			try
-			{
-				var signer = new Ed25519Signer();
-				signer.Init(false, new Ed25519PublicKeyParameters(publicKey, 0));
-				signer.BlockUpdate(messageBytes, 0, messageBytes.Length);
-				return signer.VerifySignature(signatureBytes);
-			}
-			catch (Exception ex)
-			{
-				Log.Warning(logChannel, $"Ed25519 verification error: {ex.Message}");
-				return false;
-			}
-		}
-
-		/// <summary>
-		/// Produces the canonical signed message from the raw JSON response.
-		/// The canonical form is: the full JSON string with the value of the
-		/// <c>"signature"</c> field replaced by an empty string, followed by
-		/// the raw base64 signature value itself.
-		///
-		/// This is a simple, deterministic construction: find the last
-		/// occurrence of the signature value (which appears exactly once as a
-		/// JSON string value), replace it with <c>""</c>, and append the
-		/// signature.
-		/// </summary>
-		private static string BuildCanonicalSignedMessage(string json, string signatureBase64)
-		{
-			// Find: "signature": "<sig_value>"
-			// Replace: "signature": ""
-			string search = "\"signature\": \"" + signatureBase64 + "\"";
-			int idx = json.LastIndexOf(search, StringComparison.Ordinal);
-			if (idx < 0)
-			{
-				// Try without spaces.
-				search = "\"signature\":\"" + signatureBase64 + "\"";
-				idx = json.LastIndexOf(search, StringComparison.Ordinal);
-			}
-			if (idx >= 0)
-			{
-				string stripped = json.Substring(0, idx) + "\"signature\": \"\"" +
-					json.Substring(idx + search.Length);
-				return stripped + signatureBase64;
-			}
-
-			// Fallback: if we can't find the signature field, sign the whole
-			// JSON plus the signature (this is wrong but better than crashing).
-			Log.Warning(logChannel,
-				"Could not locate signature field in manifest JSON; using raw JSON as canonical message.");
-			return json + signatureBase64;
 		}
 
 		/* Every field is populated by JsonUtility through reflection, which the compiler

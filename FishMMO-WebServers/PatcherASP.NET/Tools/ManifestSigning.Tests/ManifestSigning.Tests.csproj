@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Round-trip harness: documents produced by the SHIPPING SERVER signer are verified by the
+    SHIPPING CLIENT verifier.
+
+    Both sides are compiled from their real source files by <Compile Include> link, never copied.
+    A harness that tests a transcription of the canonical form proves only that the transcription
+    is self-consistent, which is exactly the failure this exists to catch — the client half had
+    never been handed a signed document, and the canonical forms genuinely disagreed.
+
+    Deliberately NOT in PatcherASP.sln, mirroring FishMMO-Patcher/Updater.Tests: the shipping
+    solution build must not be able to break because of a test project.
+
+    Run it from PatcherASP.NET with: dotnet run —project Tools/ManifestSigning.Tests
+    (XML comments cannot contain a double dash, so the flag is written with an em dash here.)
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- 'annotations': the linked server sources use nullable annotations, the linked Unity
+         client source does not. Annotations on, warnings off, so neither side is noisy here. -->
+    <Nullable>annotations</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FishMMO.WebServers.Tools.Tests</RootNamespace>
+    <AssemblyName>ManifestSigning.Tests</AssemblyName>
+    <!-- The linked client file is written for Unity's C# and is not warning-clean here. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+  </ItemGroup>
+
+  <!-- IHostEnvironment / IConfiguration, needed to exercise VersionManifestSigner's key-loading
+       and fail-closed policy for real rather than by inspection. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- SERVER side, shipping source. -->
+    <Compile Include="..\..\Patcher\Signing\ManifestSigning.cs">
+      <Link>Linked\Server\ManifestSigning.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Patcher\Signing\ManifestJsonWriter.cs">
+      <Link>Linked\Server\ManifestJsonWriter.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Patcher\Services\VersionManifestSigner.cs">
+      <Link>Linked\Server\VersionManifestSigner.cs</Link>
+    </Compile>
+
+    <!-- CLIENT side, shipping source. This is the whole point of the harness. -->
+    <Compile Include="..\..\..\..\FishMMO-Unity\Assets\Scripts\Client\Security\Ed25519ManifestVerifier.cs">
+      <Link>Linked\Client\Ed25519ManifestVerifier.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

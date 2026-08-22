@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -10,7 +10,7 @@ using System.Collections;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit implementation of the login control providing username/email/password input,
+	/// UI Toolkit implementation of the login control providing identifier/password input,
 	/// registration access, sign-in and the full authentication-result handling flow.
 	/// </summary>
 	/// <remarks>
@@ -23,21 +23,21 @@ namespace FishMMO.Client
 	public class UITKLogin : UITKControl
 	{
 		/// <summary>
-		/// The name of the username TextField in the UI.
+		/// The name of the identifier TextField in the UI — a username <b>or</b> an email address.
 		/// </summary>
+		/// <remarks>
+		/// One field, not two. The panel used to carry a separate Email input beside Username and
+		/// pick whichever was filled, which asked the player to classify their own credential
+		/// before typing it; the submit path already decides that from the text itself. It also
+		/// carried an Age dropdown that was never populated and never read — an empty control that
+		/// looked broken and collected nothing. Age belongs to registration, where it is gated.
+		/// </remarks>
 		private const string USERNAME_NAME = "login-username";
-		/// <summary>
-		/// The name of the email TextField in the UI.
-		/// </summary>
-		private const string EMAIL_NAME = "login-email";
 		/// <summary>
 		/// The name of the password TextField in the UI.
 		/// </summary>
 		private const string PASSWORD_NAME = "login-password";
 		/// <summary>
-		/// The name of the age DropdownField in the UI.
-		/// </summary>
-		private const string AGE_SELECT_NAME = "login-age";
 		/// <summary>
 		/// The name of the register button in the UI.
 		/// </summary>
@@ -60,9 +60,7 @@ namespace FishMMO.Client
 		private const string HANDSHAKE_NAME = "login-handshake";
 
 		private TextField username;
-		private TextField email;
 		private TextField password;
-		private DropdownField ageSelect;
 		private Button registerButton;
 		private Button signInButton;
 		private Label handshakeMessage;
@@ -134,9 +132,7 @@ namespace FishMMO.Client
 			}
 
 			username = Root.Q<TextField>(USERNAME_NAME);
-			email = Root.Q<TextField>(EMAIL_NAME);
 			password = Root.Q<TextField>(PASSWORD_NAME);
-			ageSelect = Root.Q<DropdownField>(AGE_SELECT_NAME);
 			registerButton = Root.Q<Button>(REGISTER_BUTTON_NAME);
 			signInButton = Root.Q<Button>(SIGN_IN_BUTTON_NAME);
 			handshakeMessage = Root.Q<Label>(HANDSHAKE_NAME);
@@ -166,6 +162,42 @@ namespace FishMMO.Client
 			{
 				quitButton.clicked += OnClick_Quit;
 			}
+
+			/* Keyboard. There was none anywhere in the login tree, so the first thing a player
+			 * does in this game — type a username and a password — ended with them reaching for
+			 * the mouse. Enter signs in from any field; Escape clears the form rather than doing
+			 * something destructive, because this is the screen the rest of the flow escapes back
+			 * TO and there is nothing above it to close. */
+			LoginKeys.Attach(Root, OnClick_Login, OnEscape_ClearForm);
+			LoginKeys.SetTabOrder(Root, username, password, signInButton, registerButton, optionsButton, quitButton);
+		}
+
+		/// <summary>
+		/// Empties the credential fields.
+		/// </summary>
+		/// <remarks>
+		/// Escape's job on the one screen with no screen behind it. Doubles as the fastest way to
+		/// clear a password off a shared machine, which is why it clears rather than merely
+		/// dropping focus.
+		/// </remarks>
+		private void OnEscape_ClearForm()
+		{
+			if (username != null) username.value = string.Empty;
+			if (password != null) password.value = string.Empty;
+			LoginKeys.FocusFirst(Root, username);
+		}
+
+		/// <summary>
+		/// Puts the caret where the player is going to type.
+		/// </summary>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+
+			// Empty username means a fresh sign-in; otherwise they are most likely back here after
+			// a rejected password and the username is already right.
+			LoginKeys.FocusFirst(Root,
+				username != null && string.IsNullOrEmpty(username.value) ? username : password);
 		}
 
 		/// <summary>
@@ -234,11 +266,22 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Hides the login panel and resets the handshake message.
 		/// </summary>
-		public override void Hide()
+		/// <remarks>
+		/// Overrides <c>Hide(bool)</c>, not <c>Hide()</c>. <c>Hide()</c> is non-virtual and only
+		/// forwards here, so this is the one place teardown can live where every caller reaches
+		/// it — quit-to-login calls the bool form directly.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
 		{
-			base.Hide();
+			base.Hide(overrideIsAlwaysOpen);
 
-			// Reset handshake message and hide the panel.
+			if (overrideIsAlwaysOpen || Document == null)
+			{
+				// The base refused the hide; the panel is still up, so keep what it is showing.
+				return;
+			}
+
+			// A handshake message describes one attempt and must not greet the next one.
 			if (handshakeMessage != null)
 			{
 				handshakeMessage.text = "";
@@ -285,14 +328,11 @@ namespace FishMMO.Client
 				handshakeMessage.text = "Sign-in failed. The server closed the connection.";
 			}
 
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open(message);
-			}
-			else
-			{
-				Log.Warning("UITKLogin", message);
-			}
+			/* Through the queue, not straight at the dialog. The shared dialog now refuses an
+			 * Open while another question is on screen rather than hijacking it, and this message
+			 * is raised on a path that has already disconnected — there is no second chance to
+			 * say it. See LoginNotice. */
+			LoginNotice.Show(message);
 		}
 
 		/// <summary>
@@ -403,6 +443,13 @@ namespace FishMMO.Client
 			SetSignInLocked(true);
 			Hide();
 
+			/* Stop the reply clock. SetSignInLocked arms it, but from here the client is waiting
+			 * on a person going to fetch a code out of their email — which routinely takes longer
+			 * than the thirty seconds the watchdog allows. Leaving it running meant the watchdog
+			 * fired mid-typing and, before this, wrote its explanation into the panel it had just
+			 * hidden. It is re-armed the instant a code is actually sent. */
+			replyGuard.Clear();
+
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
 				uiDialogInputBox.Open(
@@ -412,6 +459,9 @@ namespace FishMMO.Client
 						if (!string.IsNullOrWhiteSpace(pendingVerifyUsername) && !string.IsNullOrWhiteSpace(code))
 						{
 							Client.LoginAuthenticator.SendVerifyCode(pendingVerifyUsername, code.Trim());
+
+							// A request is outstanding again; restart the clock.
+							replyGuard.Begin();
 						}
 					},
 					() =>
@@ -433,10 +483,7 @@ namespace FishMMO.Client
 			Client.ForceDisconnect();
 			SetSignInLocked(false);
 
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open("Your account has been verified! You may now log in.");
-			}
+			LoginNotice.Show("Your account has been verified! You may now log in.");
 			Show();
 		}
 
@@ -464,6 +511,10 @@ namespace FishMMO.Client
 		/// <param name="message">The prompt to display.</param>
 		private void OpenTotpDialog(string message)
 		{
+			// Waiting on the player and their authenticator app, not on the server.
+			// See OnAccountUnverified.
+			replyGuard.Clear();
+
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
 				uiDialogInputBox.Open(
@@ -473,6 +524,9 @@ namespace FishMMO.Client
 						if (!string.IsNullOrWhiteSpace(code))
 						{
 							Client.LoginAuthenticator.SendTotpCode(code.Trim());
+
+							// A request is outstanding again; restart the clock.
+							replyGuard.Begin();
 						}
 					},
 					() =>
@@ -495,12 +549,10 @@ namespace FishMMO.Client
 			// Report the mismatch before forcing the disconnect. A bare disconnect here leaves
 			// the player staring at a login screen with no indication of why they were rejected,
 			// which is how this presented when the dialog lookup was silently failing.
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
-			}
+			LoginNotice.Show($"Game version mismatch.\n\nYour client is version {myVersion}.\nThe server expects a different version.\n\nPlease update your client to match the server.");
 			Client.ForceDisconnect();
 			SetSignInLocked(false);
+			Show();
 		}
 
 		/// <summary>
@@ -509,12 +561,15 @@ namespace FishMMO.Client
 			/// <param name="errorMsg">The error message to display.</param>
 			private void OnLoginAuthenticationDialog(string errorMsg)
 		{
-			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-			{
-				uiDialogBox.Open(errorMsg);
-			}
+			LoginNotice.Show(errorMsg);
 			Client.ForceDisconnect();
 			SetSignInLocked(false);
+
+			/* Put the panel back. Every caller of this method has already hidden something —
+			 * either this panel (the TOTP and verification flows) or, on a refusal that arrives
+			 * after login success, everything — and a dismissed dialog would otherwise leave the
+			 * player looking at an empty scene. */
+			Show();
 		}
 
 		/// <summary>
@@ -543,9 +598,20 @@ namespace FishMMO.Client
 
 			Hide();
 
-			// Request the character list after login is successfully finished.
-			CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
-			Client.Broadcast(requestCharacterList, Channel.Reliable);
+			/* Through the character-select panel, which arms a reply deadline and knows how to ask
+			 * again. Broadcasting bare from here is what made this the worst moment in the whole
+			 * flow to lose a message: this panel has just hidden itself on the line above and the
+			 * character-select panel only shows when a list arrives, so an unanswered request left
+			 * the player with no panel on screen at all. */
+			if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect characterSelect))
+			{
+				characterSelect.RequestCharacterList();
+			}
+			else
+			{
+				// No character-select panel in this scene; the request is still worth making.
+				Client.Broadcast(new CharacterRequestListBroadcast(), Channel.Reliable);
+			}
 
 			OnLoginSuccessEnd?.Invoke();
 
@@ -581,35 +647,39 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClick_Login()
 		{
-			string usernameText = username != null ? username.value : null;
-			string emailText = email != null ? email.value : null;
+			string identifier = username != null ? username.value : null;
 
-			// Determine which identifier to use: prefer email if filled, otherwise username.
-			string identifier;
-			if (!string.IsNullOrWhiteSpace(emailText) && Authentication.IsAllowedEmailUsername(emailText))
+			if (string.IsNullOrWhiteSpace(identifier))
 			{
-				identifier = emailText;
-			}
-			else if (!string.IsNullOrWhiteSpace(usernameText) && Authentication.IsAllowedUsername(usernameText))
-			{
-				identifier = usernameText;
-			}
-			else
-			{
-				// Provide user-facing feedback so the player knows why the button did nothing.
-				if (!string.IsNullOrWhiteSpace(emailText) || !string.IsNullOrWhiteSpace(usernameText))
+				// Say which of the two things is missing rather than that "login failed".
+				if (handshakeMessage != null)
 				{
-					if (handshakeMessage != null)
-					{
-						handshakeMessage.text = "Invalid username or email format. Use 3-32 characters (letters, numbers, underscores).";
-					}
+					handshakeMessage.text = "Please enter your username or email address.";
 				}
-				else
+				Log.Warning("UITKLogin", "Login validation failed: no identifier entered.");
+				return;
+			}
+
+			/* One field, so the text decides which kind of credential it holds. The two regexes
+			 * behind these validators are disjoint — a username is `^[a-zA-Z0-9_]+$` and cannot
+			 * contain '@', while an email address must — so testing for '@' picks exactly the
+			 * validator that could match, and the same split is what AccountService uses to choose
+			 * between its by-email and by-name lookups. Classifying first is what lets the failure
+			 * message describe what the player actually typed: validating an address as a username
+			 * would reject it for containing the one character that makes it an address, and then
+			 * complain about username format. */
+			bool looksLikeEmail = identifier.IndexOf('@') >= 0;
+			bool identifierValid = looksLikeEmail
+				? Authentication.IsAllowedEmailUsername(identifier)
+				: Authentication.IsAllowedUsername(identifier);
+
+			if (!identifierValid)
+			{
+				if (handshakeMessage != null)
 				{
-					if (handshakeMessage != null)
-					{
-						handshakeMessage.text = "Please enter a username or email address.";
-					}
+					handshakeMessage.text = looksLikeEmail
+						? "That does not look like a valid email address."
+						: "Invalid username format. Use 3-32 characters (letters, numbers, underscores).";
 				}
 				Log.Warning("UITKLogin", "Login validation failed: invalid identifier.");
 				return;
@@ -639,20 +709,65 @@ namespace FishMMO.Client
 			authResultSeen = false;
 			SetSignInLocked(true);
 
+			/* The credentials are handed over in a holder the closures below can empty, rather
+			 * than captured directly. A lambda that closes over the password string keeps that
+			 * string reachable for the whole lifetime of the coroutine — the HTTP round trip to
+			 * the login-server list, which is seconds, plus however long the coroutine object
+			 * itself survives — and nothing ever dropped the reference afterwards, so the plaintext
+			 * password sat in the managed heap until an unrelated GC happened to reclaim it. .NET
+			 * strings cannot be zeroed, so releasing the last reference as early as possible is the
+			 * whole of the available mitigation. */
+			PendingCredentials credentials = new PendingCredentials(identifier, passwordText);
+
 			StartCoroutine(Client.GetLoginServerList((e) =>
 			{
-				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiDialogBox))
-				{
-					uiDialogBox.Open(e);
-				}
+				credentials.Clear();
+				LoginNotice.Show(e);
 				Log.Warning("UITKLogin", e);
 				SetSignInLocked(false);
 			},
 			(servers, token) =>
 			{
-					if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
-				Connect("Connecting...", identifier, passwordText);
+				if (!string.IsNullOrEmpty(token)) Client.LoginAuthenticator.ConnectionToken = token;
+				try
+				{
+					Connect("Connecting...", credentials.Identifier, credentials.Password);
+				}
+				finally
+				{
+					// Either way. The authenticator owns the credentials from here.
+					credentials.Clear();
+				}
 			}));
+		}
+
+		/// <summary>
+		/// Carries one login attempt's credentials across the login-server-list round trip.
+		/// </summary>
+		/// <remarks>
+		/// A mutable holder rather than captured locals, so both continuations can drop the
+		/// references. See the call site for why that matters.
+		/// </remarks>
+		private sealed class PendingCredentials
+		{
+			public PendingCredentials(string identifier, string password)
+			{
+				Identifier = identifier;
+				Password = password;
+			}
+
+			/// <summary>The username or email the attempt was made with.</summary>
+			public string Identifier { get; private set; }
+
+			/// <summary>The password the attempt was made with.</summary>
+			public string Password { get; private set; }
+
+			/// <summary>Releases both references.</summary>
+			public void Clear()
+			{
+				Identifier = null;
+				Password = null;
+			}
 		}
 
 		/// <summary>
@@ -739,12 +854,172 @@ namespace FishMMO.Client
 		{
 			base.OnTick();
 
+			// Login-flow notices are refused while another dialog is up; see LoginNotice.
+			LoginNotice.Pump();
+
 			if (replyGuard.HasExpired())
 			{
-				ReleaseControls(true);
-				if (handshakeMessage != null) handshakeMessage.text = "The server did not respond. Please try again.";
+				OnReplyTimedOut();
+			}
+
+			TickVisiblePanelInvariant();
+		}
+
+		/// <summary>
+		/// Hands the controls back when the server stops answering, and puts them somewhere the
+		/// player can see them.
+		/// </summary>
+		/// <remarks>
+		/// The timeout used to write "the server did not respond" into <c>handshakeMessage</c> and
+		/// stop there. That is a label on this panel, and both multi-step flows — account
+		/// verification and TOTP — <see cref="Hide"/> this panel before opening their modal
+		/// prompt. So the one case the watchdog exists for, a server that goes silent while a code
+		/// dialog is on screen, wrote its explanation into a tree nobody was looking at and left
+		/// the player on a prompt whose answer would never be acted on.
+		/// <para>
+		/// Cancelling the prompt is what makes this recoverable: the input dialog's cancel
+		/// callback force-disconnects, unlocks sign-in and shows this panel, which is exactly the
+		/// state a timed-out login should end in. Under the shared dialog contract a
+		/// <c>Hide()</c> on an armed dialog resolves it down its cancel path, so one call does it.
+		/// </para>
+		/// </remarks>
+		private void OnReplyTimedOut()
+		{
+			ReleaseControls(true);
+
+			/* Cancel first. Its callback shows this panel and unlocks sign-in, and doing it before
+			 * the message below means the message lands on a panel that is already on screen. */
+			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox inputBox) && inputBox.Visible)
+			{
+				inputBox.Hide();
+			}
+
+			Show();
+
+			if (handshakeMessage != null)
+			{
+				handshakeMessage.text = "The server did not respond. Please try again.";
 			}
 		}
+
+		/// <summary>
+		/// Unscaled time from which no login-flow panel has been visible, or -1 when one is.
+		/// </summary>
+		private float noPanelSinceUnscaled = -1.0f;
+
+		/// <summary>
+		/// How long the client may sit with nothing on screen before this panel asserts itself.
+		/// </summary>
+		/// <remarks>
+		/// Long enough to cover the handful of frames where one panel has hidden and the next has
+		/// not shown yet, which is normal for every transition in this flow. Short enough that a
+		/// player never has time to conclude the client has died.
+		/// </remarks>
+		private const float NoVisiblePanelGraceSeconds = 2.0f;
+
+		/// <summary>
+		/// Enforces the invariant that no reachable state leaves the player with no visible,
+		/// actionable UI.
+		/// </summary>
+		/// <remarks>
+		/// The login flow is six panels that hand off to one another by hiding themselves and
+		/// showing the next, and every handoff is conditional on a message arriving. Any message
+		/// that does not arrive leaves nothing on screen at all: this panel hides itself a second
+		/// after login success, character select hides on <c>Stopped</c> and on receiving a list,
+		/// character create and server select hide on <c>Stopped</c> — and the overlay that used
+		/// to cover for that has no panel underneath it either. Alt+F4 was the only exit.
+		/// <para>
+		/// Individual paths have been closed (the reply guards, the loading overlay's escape
+		/// hatch, <c>Client.OnConnectionAttemptFailed -> QuitToLogin</c>), but enumerating paths is
+		/// exactly the approach that produced the bug. This is the backstop that makes the
+		/// invariant true by construction instead: it does not care <i>why</i> the screen is empty.
+		/// </para>
+		/// <para>
+		/// Deliberately narrow about when it fires. It requires a stopped connection — a live one
+		/// means a transition is genuinely in flight and interrupting it would be the fault, not
+		/// the fix — and it defers to any panel that is up, including the full-screen overlays and
+		/// the shared modals, since those are visible actionable UI in their own right.
+		/// </para>
+		/// </remarks>
+		private void TickVisiblePanelInvariant()
+		{
+			/* Connection state first, and not only for cost. Anything other than Stopped is a
+			 * transition in progress: its own panel is expected to be silent until the server
+			 * answers, and that wait is what the reply guards are for, so this must not race them.
+			 * It also short-circuits the panel sweep below for the whole time the player is in the
+			 * world, which is the overwhelming majority of a session. */
+			if (Client == null || !Client.IsConnectionReady(LocalConnectionState.Stopped))
+			{
+				this.noPanelSinceUnscaled = -1.0f;
+				return;
+			}
+
+			if (AnyLoginFlowUIVisible())
+			{
+				this.noPanelSinceUnscaled = -1.0f;
+				return;
+			}
+
+			if (this.noPanelSinceUnscaled < 0.0f)
+			{
+				this.noPanelSinceUnscaled = Time.unscaledTime;
+				return;
+			}
+
+			if (Time.unscaledTime - this.noPanelSinceUnscaled < NoVisiblePanelGraceSeconds)
+			{
+				return;
+			}
+
+			this.noPanelSinceUnscaled = -1.0f;
+
+			Log.Warning("UITKLogin", "No login-flow panel was visible on a stopped connection; restoring the login screen.");
+
+			SetSignInLocked(false);
+			Show();
+		}
+
+		/// <summary>
+		/// Whether anything the player could act on is currently on screen.
+		/// </summary>
+		/// <remarks>
+		/// Named panels rather than a sweep of every registered control: the HUD panels are
+		/// present and visible for a while after a world session ends, and counting those would
+		/// make the invariant above unable to fire in the one situation it matters most.
+		/// </remarks>
+		private bool AnyLoginFlowUIVisible()
+		{
+			if (Visible)
+			{
+				return true;
+			}
+
+			foreach (string name in LoginFlowPanelNames)
+			{
+				if (UIManager.TryGetTK(name, out UITKControl control) && control.Visible)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// The panels that count as "the player has something to look at" during the login flow.
+		/// </summary>
+		private static readonly string[] LoginFlowPanelNames =
+		{
+			"UIRegister",
+			"UIServerSelect",
+			"UICharacterSelect",
+			"UICharacterCreate",
+			"UILoadingScreen",
+			"UIReconnectDisplay",
+			"UIDialogBox",
+			"UIDialogInputBox",
+			"UIOptions",
+		};
 
 		/// <summary>
 		/// Sets the locked state for signing in (enables/disables controls).
@@ -789,17 +1064,9 @@ namespace FishMMO.Client
 			{
 				username.SetEnabled(interactable);
 			}
-			if (email != null)
-			{
-				email.SetEnabled(interactable);
-			}
 			if (password != null)
 			{
 				password.SetEnabled(interactable);
-			}
-			if (ageSelect != null)
-			{
-				ageSelect.SetEnabled(interactable);
 			}
 		}
 	}

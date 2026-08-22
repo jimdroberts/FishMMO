@@ -432,8 +432,8 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   CloseOnQuitToMenu: 1
-  ReleasesCursor: 0
-  CloseOnEscape: 0
+  ReleasesCursor: 1
+  CloseOnEscape: 1
 --- !u!114 &585356002
 MonoBehaviour:
   m_ObjectHideFlags: 0

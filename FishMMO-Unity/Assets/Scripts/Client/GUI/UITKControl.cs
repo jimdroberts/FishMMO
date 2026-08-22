@@ -170,6 +170,13 @@ namespace FishMMO.Client
 		/// <see cref="UIManager.InputControlHasFocus(UITKControl)"/> before reading movement input,
 		/// so without this a player typing "west" into chat walks off in three directions.
 		/// </remarks>
+		/// <summary>
+		/// USS class shared by every UI Toolkit text input, from
+		/// <c>TextInputBaseField&lt;T&gt;.ussClassName</c>. Used instead of a type test so new
+		/// field types are covered automatically.
+		/// </summary>
+		private const string TextInputFieldClass = "unity-base-text-field";
+
 		public bool IsInputFieldFocused
 		{
 			get
@@ -189,12 +196,23 @@ namespace FishMMO.Client
 				/* A TextField delegates focus to its inner #unity-text-input, so the focused
 				 * element is usually that child rather than the field itself. Walking up to the
 				 * root is what catches both, and confirms the field belongs to this panel and
-				 * not to some other document that happens to be focused. */
+				 * not to some other document that happens to be focused.
+				 *
+				 * The test is deliberately NOT `is TextElement`. Button and Label both derive
+				 * from TextElement (verified against this project's 6000.3.2f1 UIElementsModule:
+				 * Button -> TextElement -> BindableElement -> VisualElement), and Button is
+				 * focusable by default — so matching TextElement meant that clicking any button
+				 * left this reporting text-input focus forever, permanently killing movement,
+				 * camera and hotkeys with no way to recover.
+				 *
+				 * Matching the USS class instead of a type covers every text input UI Toolkit
+				 * has (TextField, IntegerField, FloatField, ...) without naming them: they all
+				 * derive from TextInputBaseField<T>, whose ussClassName is this literal. */
 				VisualElement element = focused as VisualElement;
 				bool sawTextInput = false;
 				while (element != null)
 				{
-					if (element is TextField || element is TextElement)
+					if (element is TextField || element.ClassListContains(TextInputFieldClass))
 					{
 						sawTextInput = true;
 					}
@@ -433,6 +451,13 @@ namespace FishMMO.Client
 		private bool hasStarted;
 
 		/// <summary>
+		/// The root currently held by <see cref="UITKThemeManager"/> on this panel's behalf.
+		/// Tracked separately from <see cref="Root"/> because the document hands out a new root
+		/// on every enable, and unregistering the wrong one leaks the old tree.
+		/// </summary>
+		private VisualElement registeredThemeRoot;
+
+		/// <summary>
 		/// The first child of the visual tree <see cref="OnStarting"/> last ran against, used to
 		/// notice when the tree has been replaced underneath us.
 		/// </summary>
@@ -459,12 +484,44 @@ namespace FishMMO.Client
 			ApplySortingOrder();
 			UIManager.RegisterTK(this);
 
-			// Applied before OnStarting, and independently of it. A panel's initial visibility
-			// must not wait on the visual tree, and a hidden panel disables its UIDocument —
-			// which is precisely why OnStarting cannot run here for every control.
+			/* Applied before OnStarting, and independently of it. A panel's initial visibility
+			 * must not wait on the visual tree, and a hidden panel disables its UIDocument —
+			 * which is precisely why OnStarting cannot run here for every control. */
 			if (!StartOpen)
 			{
 				Hide();
+			}
+			else
+			{
+				/* A StartOpen panel never passes through Show(), because there is nothing to
+				 * show — the UIDocument is already enabled and the player can see it. But
+				 * Visible is only ever assigned inside Show()/Hide(), so left alone it reports
+				 * FALSE for a panel that is on screen, and every one of the ~18 places that
+				 * tests it gets the wrong answer for the whole of startup.
+				 *
+				 * Two panels ship with StartOpen set — UITKLogin and UITKLoadingScreen — which
+				 * are exactly the two at the centre of the startup and stuck-overlay paths.
+				 * Observed consequences: UITKLogin's stopped-connection invariant reported "no
+				 * login-flow panel was visible" two seconds into a cold boot and restored a
+				 * screen that was already up, and UIManager.Hide — which no-ops unless the
+				 * panel reports visible — could decline to hide the loading overlay and so skip
+				 * clearing the driver flags that hold it, which is the documented
+				 * "overlay reappears with nothing to take it down" failure.
+				 *
+				 * The cursor and Escape registration are applied here for the same reason: they
+				 * are the parts of Show() that describe an on-screen panel's state rather than
+				 * the act of revealing one, and a panel the player is looking at should own them. */
+				Visible = true;
+
+				if (ReleasesCursor)
+				{
+					PlayerInputController.MouseMode = true;
+				}
+
+				if (CloseOnEscape)
+				{
+					UIManager.RegisterCloseOnEscapeTK(this);
+				}
 			}
 
 			if (!TryStart())
@@ -528,10 +585,16 @@ namespace FishMMO.Client
 			OnAfterStarting();
 			AttachDragHandlers();
 
+			/* Paired with AttachDragHandlers, and for the same reason. This used to run only from
+			 * ReinitializeIfTreeReplaced, so click-to-front and click-to-refocus worked on a panel
+			 * only after it had been hidden and shown once — never on a panel opened for the
+			 * first time. */
+			AttachFocusHandler();
+
 			/* Registered here rather than in Awake because the theme is applied by querying the
 			 * visual tree for USS classes, and until the tree is cloned there is nothing to
 			 * query. ReinitializeIfTreeReplaced re-registers if the tree is later rebuilt. */
-			UITKThemeManager.Register(root);
+			RegisterThemeRoot(root);
 			return true;
 		}
 
@@ -766,7 +829,30 @@ namespace FishMMO.Client
 			}
 
 			ReinitializeIfTreeReplaced();
+
+			/* Last, and only once the tree above is guaranteed current. Anything a caller writes
+			 * into its elements BEFORE Show() is lost: enabling the document makes UIDocument
+			 * clone the UXML afresh, so the elements that were just written to belong to a tree
+			 * that has already been discarded. Per-open content therefore belongs here. */
+			OnAfterShow();
 		}
+
+		/// <summary>
+		/// Called at the end of <see cref="Show()"/>, against the tree the player will actually
+		/// see. Override to write content that changes from one opening to the next.
+		/// </summary>
+		/// <remarks>
+		/// This exists because "set the text, then Show" does not work and fails silently.
+		/// <see cref="UIDocument"/> clones the UXML on enable, so a panel that fills in its
+		/// message, list rows or icon before calling <see cref="Show()"/> writes into a tree that
+		/// is thrown away microseconds later, and the player sees whatever the UXML declares —
+		/// an empty dialog, a blank tooltip, a selector with no rows.
+		/// <para>
+		/// Distinct from <see cref="OnAfterStarting"/>, which re-applies state after the tree is
+		/// rebuilt. This one runs on every show, rebuilt tree or not.
+		/// </para>
+		/// </remarks>
+		protected virtual void OnAfterShow() { }
 
 		/// <summary>
 		/// Re-runs initialisation when the visual tree has been rebuilt since it last ran.
@@ -813,8 +899,35 @@ namespace FishMMO.Client
 			AttachDragHandlers();
 			AttachFocusHandler();
 
+			/* Re-register before repainting. UIDocument.OnDisable drops rootVisualElement and
+			 * OnEnable builds a new one, so after a hide/show the theme registry still holds the
+			 * old detached root: it leaks, and ApplyToAll — which is what an Options colour change
+			 * goes through — repaints the tree nobody can see while the live one keeps the old
+			 * palette. */
+			RegisterThemeRoot(root);
+
 			// The rebuilt tree carries none of the inline overrides the old one was painted with.
 			UITKThemeManager.Apply(root);
+		}
+
+		/// <summary>
+		/// Points the theme registry at <paramref name="root"/>, releasing whichever root was
+		/// registered before. Safe to call repeatedly with the same root.
+		/// </summary>
+		private void RegisterThemeRoot(VisualElement root)
+		{
+			if (ReferenceEquals(this.registeredThemeRoot, root))
+			{
+				return;
+			}
+
+			if (this.registeredThemeRoot != null)
+			{
+				UITKThemeManager.Unregister(this.registeredThemeRoot);
+			}
+
+			UITKThemeManager.Register(root);
+			this.registeredThemeRoot = root;
 		}
 
 		#region Drag
@@ -1037,7 +1150,20 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Hides the panel unless <see cref="IsAlwaysOpen"/> is true.
 		/// </summary>
-		public virtual void Hide()
+		/// <remarks>
+		/// Deliberately NOT virtual. This overload only forwards to <see cref="Hide(bool)"/>, so
+		/// an override here would be bypassed entirely by every caller that uses the bool form —
+		/// and quit-to-login is one of them. That trap cost a CRITICAL bug: <c>UITKLoadingScreen</c>
+		/// overrode this method, its teardown never ran on quit-to-login, and the overlay stayed
+		/// over the login screen forever with no way out but Alt+F4. The colour picker, the
+		/// dropdown and the drag object each silently lost their cleanup the same way.
+		/// <para>
+		/// With only <see cref="Hide(bool)"/> overridable there is exactly one method to override
+		/// and no wrong choice to make. Panels needing teardown override that one and check
+		/// <paramref name="overrideIsAlwaysOpen"/> to tell a real hide from a refused one.
+		/// </para>
+		/// </remarks>
+		public void Hide()
 		{
 			Hide(IsAlwaysOpen);
 		}
@@ -1073,7 +1199,13 @@ namespace FishMMO.Client
 			}
 			Client = null;
 
-			UITKThemeManager.Unregister(Root);
+			/* Root, not registeredThemeRoot, would unregister whichever root the document happens
+			 * to be holding now — which is not necessarily the one this panel registered. */
+			if (this.registeredThemeRoot != null)
+			{
+				UITKThemeManager.Unregister(this.registeredThemeRoot);
+				this.registeredThemeRoot = null;
+			}
 			UIManager.UnregisterTK(this);
 		}
 	}
