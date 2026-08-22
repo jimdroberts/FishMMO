@@ -137,7 +137,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				 * second after login success, at the exact moment the login panel hides itself, so
 				 * a silent refusal left the player looking at an empty scene with no panel, no
 				 * button and no error — the client had nothing armed that would ever notice. */
-				if (!TryBeginInFlightRequest(conn))
+				if (!TryBeginListRequest(conn))
 				{
 					// Logged because it is otherwise invisible: the client shows "the server is
 					// busy" and the server records nothing, so a stuck cooldown or a leaked
@@ -149,7 +149,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (!TryEnqueueAsyncWork(() => ProcessCharacterListRequestAsync(conn, accountName)))
 				{
-					EndInFlightRequest(conn);
+					EndListRequest(conn);
 					SendServerBusy(conn);
 					SendCharacterListResult(conn, CharacterListResult.Busy);
 				}
@@ -228,7 +228,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 			finally
 			{
-				EndInFlightRequest(conn);
+				EndListRequest(conn);
 			}
 		}
 
@@ -431,14 +431,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 				 * refusal ("that character is still in the world") and pick another one. A
 				 * silent return left that click unanswered, so the panel sat locked until the
 				 * deadline expired and then told the player the server had not responded. */
+				/* Both of these refusals were silent, and both reach the player as the same
+				 * "Character selection failed. Please try again." — so from the outside a
+				 * cooldown, a rejected name and a full work queue are indistinguishable, and
+				 * the server records nothing to tell them apart. */
 				if (!TryBeginInFlightRequest(conn))
 				{
+					Log.Warning("CharacterSelectSystem", $"Refused character select for '{accountName}' ('{msg.CharacterName}'): cooldown or request already in flight.");
 					SendSelectFailure(conn);
 					return;
 				}
 
 				if (!Authentication.IsAllowedCharacterName(msg.CharacterName))
 				{
+					Log.Warning("CharacterSelectSystem", $"Refused character select for '{accountName}': name '{msg.CharacterName}' failed validation.");
 					EndInFlightRequest(conn);
 					SendSelectFailure(conn);
 					return;
@@ -721,6 +727,53 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
+		/// In-flight gate for character LIST requests, held separately from select/delete.
+		/// </summary>
+		/// <remarks>
+		/// See <see cref="CharacterSelectSystemRuntimeData.InFlightListRequests"/> for why these
+		/// cannot share one gate: the list is requested automatically on arrival, and the player
+		/// clicks Play immediately afterwards, so a shared cooldown made selection fail for the
+		/// two seconds when the player is most likely to attempt it.
+		/// </remarks>
+		/// <param name="conn">Connection making the request.</param>
+		/// <returns>True when the request may proceed.</returns>
+		private bool TryBeginListRequest(NetworkConnection conn)
+		{
+			if (conn == null)
+			{
+				return false;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
+			{
+				return false;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			if (runtimeData.NextAllowedListRequestUtc.TryGetValue(conn.ClientId, out DateTime nextAllowed) &&
+				nowUtc < nextAllowed)
+			{
+				return false;
+			}
+
+			return runtimeData.InFlightListRequests.TryAdd(conn.ClientId, 0);
+		}
+
+		/// <summary>
+		/// Releases the per-connection LIST request slot and records its cooldown timestamp.
+		/// </summary>
+		/// <param name="conn">Connection to release.</param>
+		private void EndListRequest(NetworkConnection conn)
+		{
+			if (conn != null &&
+				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.InFlightListRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedListRequestUtc[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(RequestCooldownMilliseconds);
+			}
+		}
+
+		/// <summary>
 		/// Releases per-connection in-flight request state when a client disconnects.
 		/// </summary>
 		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
@@ -729,6 +782,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
 				runtimeData.NextAllowedRequestUtc.TryRemove(conn.ClientId, out _);
+
+				// The list gate is per-connection too, so it leaks the same way if not released.
+				runtimeData.InFlightListRequests.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedListRequestUtc.TryRemove(conn.ClientId, out _);
 			}
 		}
 
