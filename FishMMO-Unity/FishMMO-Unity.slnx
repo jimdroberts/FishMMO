@@ -10,18 +10,17 @@
   <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="FishMMO.UnitTests.csproj" />
-  <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="WebTransport.csproj" />
-  <Project Path="FishNet.Demos.csproj" />
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
   <Project Path="QuickOutline.csproj" />
+  <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="FishMMO.Client.Security.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="FishMMO.GeneratedFiles.Editor.csproj" />
+  <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
 </Solution>

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Stamina Regeneration
   m_EditorClassIdentifier: 
   Description: 
-  InitialValue: 1
+  InitialValue: 20
   MinValue: 0
   MaxValue: 100
   IsResourceAttribute: 0

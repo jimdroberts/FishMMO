@@ -2092,6 +2092,69 @@ void h3_server_poll_deferred(h3_session_t* h3)
         /* Allow a later retry if peer traffic arrives again. */
         if (!h3->server_settings_sent)
             h3->settings_bootstrap_pending = 1;
+        return;
+    }
+
+    /* ── Reprocess streams deferred while waiting for SETTINGS ──
+     * h3_server_process_data's "first bidi before SETTINGS" branch
+     * (see its "Wait for poll to send SETTINGS before classifying
+     * CONNECT" comment) parks the stream with stream_type == -1 and
+     * returns without re-arming anything — MsQuic only re-invokes the
+     * RECEIVE callback when NEW data arrives, so a stream whose sole
+     * chunk landed before SETTINGS was sent would otherwise never get
+     * reclassified and would sit until the H3 handshake timeout fires.
+     * Now that SETTINGS has just been sent, give any such streams a
+     * chance to be classified (CONNECT vs native fallback).
+     *
+     * Collect under lock, process outside — h3_server_process_data can
+     * reach h3_fallback_to_native_protocol -> on_ready, which calls
+     * wt_stream_manager_accept_stream (MsQuic->SetCallbackHandler);
+     * matches the "collect under lock, process outside" pattern used
+     * for the same reason in server.cpp's deferred-stream replay. */
+    h3_stream_ctx_t* pending_list = NULL;
+    H3_LOCK(h3);
+    {
+        h3_stream_ctx_t* ds = h3->stream_ctx_list;
+        h3_stream_ctx_t* pending_tail = NULL;
+        while (ds) {
+            h3_stream_ctx_t* next = ds->next;
+            if (ds->stream_type == -1 && ds->quic_stream &&
+                ds->recv_offset > 0) {
+                /* Unlink from the session's tracking list. */
+                if (h3->stream_ctx_list == ds) {
+                    h3->stream_ctx_list = ds->next;
+                } else {
+                    h3_stream_ctx_t* prev = h3->stream_ctx_list;
+                    while (prev && prev->next != ds) prev = prev->next;
+                    if (prev) prev->next = ds->next;
+                }
+                /* Re-link onto our own local pending list. */
+                ds->next = NULL;
+                if (pending_tail) pending_tail->next = ds;
+                else pending_list = ds;
+                pending_tail = ds;
+            }
+            ds = next;
+        }
+    }
+    H3_UNLOCK(h3);
+
+    h3_stream_ctx_t* p = pending_list;
+    while (p) {
+        h3_stream_ctx_t* next = p->next;
+        p->next = NULL;
+        WT_LOG_INFO("H3: reprocessing stream deferred pre-SETTINGS "
+                    "stream=%p len=%u", (void*)p->quic_stream, p->recv_offset);
+        /* Re-link into the session list — h3_server_process_data's
+         * success paths (native fallback / CONNECT accept) expect the
+         * sctx to still be reachable via h3->stream_ctx_list for the
+         * same unlink-and-free bookkeeping used on the non-deferred path. */
+        H3_LOCK(h3);
+        p->next = h3->stream_ctx_list;
+        h3->stream_ctx_list = p;
+        H3_UNLOCK(h3);
+        h3_server_process_data(h3, p);
+        p = next;
     }
 }
 
@@ -2442,6 +2505,9 @@ int32_t h3_client_connect(h3_session_t* h3,
         int req_len = h3_write_headers(req_data, sizeof(req_data),
                                         0, "CONNECT", path, authority,
                                         origin_buf[0] ? origin_buf : NULL);
+        WT_LOG_INFO("H3-DEBUG: client built CONNECT request, req_len=%d path=%s authority=%s",
+                    req_len, path ? path : "(null)", authority ? authority : "(null)");
+        h3_hex_dump("H3-DEBUG: raw CONNECT request bytes", req_data, req_len > 0 ? (size_t)req_len : 0);
         if (req_len <= 0) {
             MsQuic->StreamShutdown(req_stream,
                                     QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
@@ -2563,6 +2629,81 @@ int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx)
 {
     if (!h3 || !sctx) return -1;
 
+    /* Raw/native protocol.
+     * When allowed_origins is configured (non-empty, not "*"),
+     * native clients cannot perform CORS validation and are
+     * rejected by default.  Operators must explicitly enable
+     * allow_native_clients if they need both browser CORS and
+     * native client access on the same server. */
+    {
+        const char* allowed = h3->allowed_origins;
+        const bool origins_configured =
+            (allowed != NULL && allowed[0] != '\0' &&
+             strcmp(allowed, "*") != 0);
+        if (origins_configured && !h3->allow_native_clients) {
+            WT_LOG_WARN("Rejected native client: allowed_origins is "
+                        "configured and allow_native_clients is disabled. "
+                        "Set allow_native_clients=true to permit native "
+                        "clients alongside browser CORS enforcement.");
+            if (h3->on_error) {
+                h3->on_error(h3->callback_ctx, -1,
+                             "Native clients not allowed");
+            }
+            return -1;
+        }
+    }
+
+    /* ── CRITICAL: Save stream context for data replay ──
+     * The buffered data in sctx->recv_buf was received before
+     * the wt_session was created. Store the sctx so
+     * on_h3_session_ready (in server.cpp) can accept this
+     * stream into the stream_manager and replay the data.
+     * Without this, the first stream's data is silently lost. */
+    h3->native_stream_ctx = sctx;
+
+    /* Mark sctx as raw BEFORE calling on_ready.  on_h3_session_ready
+     * (server.cpp) calls h3_stream_ctx_unlink + free(nsctx) for the
+     * native_stream_ctx — after on_ready returns, sctx may be freed.
+     * All sctx writes MUST happen before the on_ready call. */
+    sctx->stream_type = -2; /* mark as raw */
+
+    /* Set handshake_complete and ESTABLISHED AFTER on_ready so
+     * that the wt_session is fully created (atomic_ptr_store'd
+     * into sconn->session) before any concurrent PEER_STREAM_STARTED
+     * sees handshake_complete==true and routes directly to
+     * the stream_manager.  Otherwise a QUIC worker thread could
+     * observe handshake_complete==true but sconn->session==NULL
+     * and abort the stream. */
+    if (h3->on_ready) {
+        h3->on_ready(h3->callback_ctx, h3->quic_conn, "/", "");
+        /* IMPORTANT: on_ready may have freed sctx via
+         * on_h3_session_ready -> h3_stream_ctx_unlink -> free.
+         * Do NOT access sctx after this point. */
+    }
+    h3->handshake_complete = true;
+    h3->server_state = H3_SRV_ESTABLISHED;
+    /* native_stream_ctx consumed (or NULLed) by on_h3_session_ready.
+     * If it was consumed, the stream and data are now managed by
+     * the stream_manager. If on_ready failed, the data is lost
+     * (acceptable — connection is shutting down anyway). */
+    return 1;
+}
+
+/**
+ * Falls back to treating the connection as a raw/native (non-H3) client.
+ * Used both when the first byte of the first bidi stream is not
+ * H3_FRAME_HEADERS, AND when it IS H3_FRAME_HEADERS but the bytes that
+ * follow fail to parse as a genuine HTTP/3 CONNECT request — this second
+ * case covers native FishMMO clients whose own raw packet protocol
+ * coincidentally starts a packet with the same byte value as H3's HEADERS
+ * frame type (0x01), which would otherwise be misrouted into HTTP/3
+ * CONNECT parsing and rejected as an invalid handshake.
+ *
+ * Returns: -1 if native clients are administratively disallowed,
+ *           1 on success (handshake complete, caller should create wt_session).
+ */
+int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx)
+{
     /* Raw/native protocol.
      * When allowed_origins is configured (non-empty, not "*"),
      * native clients cannot perform CORS validation and are
@@ -2784,6 +2925,10 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
 
             h3_parsed_headers_t phdr;
             memset(&phdr, 0, sizeof(phdr));
+
+            WT_LOG_INFO("H3-DEBUG: server received %u bytes on CONNECT candidate stream, state=%d",
+                        (unsigned)sctx->recv_offset, (int)h3->server_state);
+            h3_hex_dump("H3-DEBUG: raw received CONNECT bytes", sctx->recv_buf, sctx->recv_offset);
 
             if (h3_parse_frames(sctx->recv_buf, sctx->recv_offset,
                                 &offset, NULL, NULL) == 0) {
@@ -3144,7 +3289,23 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                  *   - :method != "CONNECT" or :protocol != "webtransport"
                  *   - h3_parse_frames or varint_decode failed
                  *
-                 * Log what we decoded (if anything) so ops can tell QPACK decode
+                 * When no genuine H3 protocol evidence has been observed for
+                 * this connection (no control stream, no QPACK uni streams),
+                 * this is most likely a native FishMMO client whose own raw
+                 * packet protocol happened to start with byte value
+                 * H3_FRAME_HEADERS (0x01) — e.g. FishNet's Broadcast PacketId
+                 * — and got misrouted into CONNECT parsing above. Fall back to
+                 * native handling and replay the buffered bytes instead of
+                 * failing the handshake. If real H3 evidence WAS seen, this
+                 * is a genuine invalid CONNECT from a browser/H3 peer and
+                 * should still be rejected below. */
+                if (!h3->peer_h3_seen) {
+                    WT_LOG_INFO("H3: CONNECT parse failed with no prior H3 evidence — "
+                                "falling back to native protocol detection");
+                    return h3_fallback_to_native_protocol(h3, sctx);
+                }
+
+                /* Log what we decoded (if anything) so ops can tell QPACK decode
                  * failures apart from genuine invalid CONNECT fields. */
                 if (phdr.method[0] == '\0' && phdr.protocol[0] == '\0') {
                     WT_LOG_ERROR("H3: CONNECT handshake failed — QPACK decode error "

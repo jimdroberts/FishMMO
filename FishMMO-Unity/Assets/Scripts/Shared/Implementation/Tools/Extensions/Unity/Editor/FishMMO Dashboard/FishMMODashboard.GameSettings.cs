@@ -1080,6 +1080,12 @@ namespace FishMMO.Shared
 				sb.AppendLine("\t\t/// manifests from the API. Empty string disables runtime updates.");
 				sb.AppendLine("\t\t/// </summary>");
 				sb.AppendLine("\t\tpublic const string ManifestPublicKeyBase64 = \"\";");
+				sb.AppendLine();
+				sb.AppendLine("\t\t/// <summary>");
+				sb.AppendLine("\t\t/// Ed25519 public key (base64) for verifying the signed version manifest");
+				sb.AppendLine("\t\t/// served by /latest_version. Empty string means signing is not deployed.");
+				sb.AppendLine("\t\t/// </summary>");
+				sb.AppendLine("\t\tpublic const string VersionManifestPublicKeyBase64 = \"\";");
 				sb.AppendLine("\t}");
 				sb.AppendLine("}");
 

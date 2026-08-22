@@ -352,11 +352,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7d40862968a2aed4f859067648b24444
-    m_Address: Assets/DefaultPrefabObjects.asset
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
     m_Address: Self Minor Armor
     m_ReadOnly: 0

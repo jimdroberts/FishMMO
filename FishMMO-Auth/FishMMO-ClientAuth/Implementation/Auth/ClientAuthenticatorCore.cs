@@ -358,7 +358,11 @@ namespace FishMMO.Auth.Implementation
 			// Credential pre-validation
 			if (string.IsNullOrEmpty(this.username) || this.username.Length < UsernameMinLength || this.username.Length > UsernameMaxLength)
 			{
-				_ = Log.Warning(LogPrefix, $"Username is empty or outside allowed length ({UsernameMinLength}-{UsernameMaxLength} characters).");
+				/* Reaching the credential path at all is the real problem on a World/Scene hop:
+				 * those connections are supposed to authenticate with the stored token, and the
+				 * credentials are deliberately nulled after login. Say so, rather than reporting
+				 * an empty username as though the player had mistyped it. */
+				_ = Log.Warning(LogPrefix, $"Username is empty or outside allowed length ({UsernameMinLength}-{UsernameMaxLength} characters). No stored auth token was available, so this connection fell back to the credential path.");
 				ClearKeyMaterial();
 				Disconnect();
 				return;
@@ -755,6 +759,13 @@ namespace FishMMO.Auth.Implementation
 		{
 			if (storedAuthToken != null)
 			{
+				/* Logged with a stack because losing this token mid-session is indistinguishable
+				 * from never having had one: the next hop falls through to the credential path,
+				 * finds the username already nulled after login, and disconnects with only
+				 * "Username is empty" to show for it. Knowing which caller cleared it is the
+				 * whole diagnosis. */
+				_ = Log.Debug(LogPrefix, $"Auth token cleared. Caller: {System.Environment.StackTrace}");
+
 				CryptographicOperations.ZeroMemory(storedAuthToken);
 				storedAuthToken = null;
 			}

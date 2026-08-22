@@ -100,6 +100,16 @@ namespace FishMMO.Client
 		private ServerRow selectedServer;
 
 		/// <summary>
+		/// The servers the server last sent, kept separately from the rows built from them.
+		/// </summary>
+		/// <remarks>
+		/// Same reasoning as UITKCharacterSelect: rows may only be built against the tree the
+		/// player will actually see, and Show() replaces that tree, so the list has to survive
+		/// as plain data. See <see cref="OnAfterShow"/>.
+		/// </remarks>
+		private readonly List<WorldServerDetails> serverDetails = new List<WorldServerDetails>();
+
+		/// <summary>
 		/// How often the server list can be refreshed (seconds).
 		/// </summary>
 		public float RefreshRate = 5.0f;
@@ -183,6 +193,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
+			serverDetails.Clear();
 			DestroyServerList();
 		}
 
@@ -360,17 +371,69 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel used.</param>
 		private void OnClientServerListBroadcastReceived(ServerListBroadcast msg, Channel channel)
 		{
-			if (msg.Servers != null && serverListContainer != null)
+			/* Record and let OnAfterShow build. Building here put the rows in whatever tree was
+			 * live at this instant, and the Show() below makes UIDocument clone the UXML afresh
+			 * and throw that tree away — so on the first arrival the list came up empty, and
+			 * only a Refresh (which finds the panel already visible, so Show() does not rebuild)
+			 * appeared to work. The serverListContainer null-check went too: it tested the
+			 * container that was about to be replaced. */
+			if (msg.Servers != null)
 			{
 				DestroyServerList();
-
-				for (int i = 0; i < msg.Servers.Length; ++i)
-				{
-					CreateServerRow(msg.Servers[i]);
-				}
+				serverDetails.Clear();
+				serverDetails.AddRange(msg.Servers);
 			}
 
 			Show();
+
+			/* Show() only rebuilds when it actually re-clones the tree; when the panel is already
+			 * visible it returns early and OnAfterShow never runs. Rebuilding here as well covers
+			 * both, and a rebuild is idempotent. */
+			RebuildServerRows();
+		}
+
+		/// <inheritdoc/>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+			RebuildServerRows();
+		}
+
+		/// <inheritdoc/>
+		protected override void OnAfterStarting()
+		{
+			base.OnAfterStarting();
+			RebuildServerRows();
+		}
+
+		/// <summary>
+		/// Rebuilds every row from <see cref="serverDetails"/> against the current tree.
+		/// </summary>
+		private void RebuildServerRows()
+		{
+			string previouslySelected = selectedServer?.Details.Name;
+
+			DestroyServerList();
+
+			for (int i = 0; i < serverDetails.Count; ++i)
+			{
+				CreateServerRow(serverDetails[i]);
+			}
+
+			// A rebuild is not a deselection; the player's choice outlives the elements.
+			if (!string.IsNullOrEmpty(previouslySelected))
+			{
+				for (int i = 0; i < serverList.Count; ++i)
+				{
+					if (serverList[i].Details.Name == previouslySelected)
+					{
+						OnServerSelected(serverList[i]);
+						break;
+					}
+				}
+			}
+
+			FishMMO.Logging.Log.Debug("UITKServerSelect", $"Rebuilt server rows: {serverDetails.Count} detail(s) -> {serverList.Count} row(s), container={(serverListContainer == null ? "null" : "ok")}.");
 		}
 
 		/// <summary>
@@ -466,6 +529,12 @@ namespace FishMMO.Client
 		{
 			base.OnQuitToLogin();
 			SetConnectToServerLocked(false);
+
+			/* The list belongs to the session that just ended. Details as well as rows, since
+			 * the details are what a rebuild restores from — leaving them would put the previous
+			 * session's servers back on screen at the next show, before any fresh list arrives. */
+			serverDetails.Clear();
+			DestroyServerList();
 		}
 
 		/// <summary>

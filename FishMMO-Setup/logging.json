@@ -1,6 +1,6 @@
 {
   "LoggingManager": {
-    "ConsoleAllowedLevels": ["Info", "Warning", "Error", "Critical"],
+    "ConsoleAllowedLevels": ["Debug", "Info", "Warning", "Error", "Critical"],
     "FileSink": {
       "Description": "File logging enabled for production. Disable in development if console output is sufficient. Production-ready: enabled by default with 100MB rolling files. Adjust Path as needed for deployment. Log rotation: FileSizeLimitMb caps individual log files at 100MB; MaxFileCount=10 keeps at most 10 rotated files. For centralized log aggregation in production, configure a log shipper (Fluentd, Logstash, Vector) tailing /var/log/fishmmo/*.log and forwarding to an external store (Elasticsearch, Loki, Grafana Cloud).",
       "_enabled": true,

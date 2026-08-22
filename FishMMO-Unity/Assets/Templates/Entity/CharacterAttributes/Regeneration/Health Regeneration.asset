@@ -15,7 +15,7 @@ MonoBehaviour:
   Description: 
   InitialValue: 0
   MinValue: 0
-  MaxValue: 0
+  MaxValue: 100
   IsResourceAttribute: 0
   ClampFinalValue: 0
   ParentTypes:
