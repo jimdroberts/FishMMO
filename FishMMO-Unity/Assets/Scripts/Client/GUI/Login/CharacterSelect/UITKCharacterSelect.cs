@@ -319,6 +319,8 @@ namespace FishMMO.Client
 			 * be discarded microseconds after being built, and the player would be handed an
 			 * empty list with no error anywhere to explain it. The refusal handler below gets
 			 * away with the opposite order only because it calls Show() before SetStatus. */
+			FishMMO.Logging.Log.Debug("UITKCharacterSelect", $"Character list received: {(msg.Characters == null ? "null" : msg.Characters.Length.ToString())} character(s).");
+
 			if (msg.Characters != null)
 			{
 				DestroyCharacterList();
@@ -342,6 +344,12 @@ namespace FishMMO.Client
 			{
 				CreateCharacterRow(characterDetails[i]);
 			}
+
+			/* Reports both numbers because they answer different questions: details is what the
+			 * server sent and survived, rows is what actually reached the tree. A container that
+			 * has gone stale shows up here as details > 0 with rows 0, which is otherwise silent —
+			 * CreateCharacterRow returns without a word when the container is null. */
+			FishMMO.Logging.Log.Debug("UITKCharacterSelect", $"Rebuilt character rows: {characterDetails.Count} detail(s) -> {characterList.Count} row(s), container={(characterListContainer == null ? "null" : "ok")}.");
 
 			// A rebuild is not a deselection; the player's choice outlives the elements.
 			if (!string.IsNullOrEmpty(previouslySelected))

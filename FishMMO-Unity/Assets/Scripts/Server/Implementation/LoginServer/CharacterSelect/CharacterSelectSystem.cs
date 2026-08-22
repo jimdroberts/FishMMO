@@ -139,6 +139,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 				 * button and no error — the client had nothing armed that would ever notice. */
 				if (!TryBeginInFlightRequest(conn))
 				{
+					// Logged because it is otherwise invisible: the client shows "the server is
+					// busy" and the server records nothing, so a stuck cooldown or a leaked
+					// in-flight slot looks exactly like a client that never asked.
+					Log.Debug("CharacterSelectSystem", $"Refused character list for '{accountName}': cooldown or request already in flight.");
 					SendCharacterListResult(conn, CharacterListResult.Busy);
 					return;
 				}
@@ -190,6 +194,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 					});
 				}
 
+				/* The success path used to say nothing at all, which made "the server sent no
+				 * characters" and "the client dropped them" indistinguishable from the logs —
+				 * and cost a long hunt through the wrong half of the system. */
+				await Log.Debug("CharacterSelectSystem", $"Sending {characterList.Count} character(s) to account '{accountName}'.");
+
 				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
 				TryEnqueueMainThread(() =>
 				{
@@ -199,6 +208,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 						{
 							Characters = characterList.ToArray(),
 						}, true, Channel.Reliable);
+					}
+					else
+					{
+						Log.Debug("CharacterSelectSystem", $"Dropped character list for '{accountName}': connection is no longer active.");
 					}
 				});
 			}

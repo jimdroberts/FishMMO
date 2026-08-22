@@ -40,12 +40,20 @@
     background-color: var(--teal-mid);
 }
 
+/*
+    Same reason as the character rows: these labels are built in C# rather than declared in the
+    UXML, so they never get the .fish-label class that carries text colour, and nothing in the
+    theme colours a bare Label. Without an explicit colour they render near-black on a dark
+    panel — the server list looks empty rather than mis-styled.
+*/
 .server-row__name {
     font-size: 13px;
+    color: var(--abyss-100);
 }
 
 .server-row__status {
     font-size: 12px;
+    color: var(--abyss-300);
 }
 
 .server-buttons {

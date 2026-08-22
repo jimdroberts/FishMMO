@@ -40,12 +40,21 @@
     background-color: var(--teal-mid);
 }
 
+/*
+    Colour is set here because these two labels are built in C# by CreateCharacterRow, not
+    declared in the UXML, so they never receive the .fish-label class that carries text colour
+    everywhere else. Nothing in the theme colours a bare Label, so without this they render in
+    UI Toolkit's default near-black — on this panel that is invisible rather than merely wrong,
+    and the rows read as an empty list with no error anywhere to explain it.
+*/
 .character-row__name {
     font-size: 13px;
+    color: var(--abyss-100);
 }
 
 .character-row__scene {
     font-size: 12px;
+    color: var(--abyss-300);
 }
 
 .character-buttons {
