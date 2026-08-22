@@ -1038,6 +1038,27 @@ TextField.fish-input:disabled > #unity-text-input {
     background-color: var(--brand-400);
 }
 
+/*
+    The value box a slider draws when show-input-field is set. Unity's default theme
+    assumes a light panel — pale fill, pale text — which is close to unreadable on this
+    one. Both the field wrapper and its inner input are restyled: the wrapper is what
+    the layout sees, but the input element is what actually paints the background, and
+    styling only one leaves a pale ring around the box.
+
+    Sits a step darker than the panels these sliders appear on, so the box reads as
+    recessed. min-width keeps three digits from clipping.
+*/
+.fish-slider .unity-base-slider__text-field,
+.fish-slider .unity-base-slider__text-field > .unity-base-text-field__input {
+    background-color: var(--abyss-850);
+    border-color: var(--abyss-500);
+    color: var(--abyss-100);
+}
+
+.fish-slider .unity-base-slider__text-field {
+    min-width: 46px;
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    15. SECTIONS AND EMPTY STATES

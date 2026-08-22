@@ -2092,6 +2092,69 @@ void h3_server_poll_deferred(h3_session_t* h3)
         /* Allow a later retry if peer traffic arrives again. */
         if (!h3->server_settings_sent)
             h3->settings_bootstrap_pending = 1;
+        return;
+    }
+
+    /* ── Reprocess streams deferred while waiting for SETTINGS ──
+     * h3_server_process_data's "first bidi before SETTINGS" branch
+     * (see its "Wait for poll to send SETTINGS before classifying
+     * CONNECT" comment) parks the stream with stream_type == -1 and
+     * returns without re-arming anything — MsQuic only re-invokes the
+     * RECEIVE callback when NEW data arrives, so a stream whose sole
+     * chunk landed before SETTINGS was sent would otherwise never get
+     * reclassified and would sit until the H3 handshake timeout fires.
+     * Now that SETTINGS has just been sent, give any such streams a
+     * chance to be classified (CONNECT vs native fallback).
+     *
+     * Collect under lock, process outside — h3_server_process_data can
+     * reach h3_fallback_to_native_protocol -> on_ready, which calls
+     * wt_stream_manager_accept_stream (MsQuic->SetCallbackHandler);
+     * matches the "collect under lock, process outside" pattern used
+     * for the same reason in server.cpp's deferred-stream replay. */
+    h3_stream_ctx_t* pending_list = NULL;
+    H3_LOCK(h3);
+    {
+        h3_stream_ctx_t* ds = h3->stream_ctx_list;
+        h3_stream_ctx_t* pending_tail = NULL;
+        while (ds) {
+            h3_stream_ctx_t* next = ds->next;
+            if (ds->stream_type == -1 && ds->quic_stream &&
+                ds->recv_offset > 0) {
+                /* Unlink from the session's tracking list. */
+                if (h3->stream_ctx_list == ds) {
+                    h3->stream_ctx_list = ds->next;
+                } else {
+                    h3_stream_ctx_t* prev = h3->stream_ctx_list;
+                    while (prev && prev->next != ds) prev = prev->next;
+                    if (prev) prev->next = ds->next;
+                }
+                /* Re-link onto our own local pending list. */
+                ds->next = NULL;
+                if (pending_tail) pending_tail->next = ds;
+                else pending_list = ds;
+                pending_tail = ds;
+            }
+            ds = next;
+        }
+    }
+    H3_UNLOCK(h3);
+
+    h3_stream_ctx_t* p = pending_list;
+    while (p) {
+        h3_stream_ctx_t* next = p->next;
+        p->next = NULL;
+        WT_LOG_INFO("H3: reprocessing stream deferred pre-SETTINGS "
+                    "stream=%p len=%u", (void*)p->quic_stream, p->recv_offset);
+        /* Re-link into the session list — h3_server_process_data's
+         * success paths (native fallback / CONNECT accept) expect the
+         * sctx to still be reachable via h3->stream_ctx_list for the
+         * same unlink-and-free bookkeeping used on the non-deferred path. */
+        H3_LOCK(h3);
+        p->next = h3->stream_ctx_list;
+        h3->stream_ctx_list = p;
+        H3_UNLOCK(h3);
+        h3_server_process_data(h3, p);
+        p = next;
     }
 }
 
@@ -3144,7 +3207,23 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                  *   - :method != "CONNECT" or :protocol != "webtransport"
                  *   - h3_parse_frames or varint_decode failed
                  *
-                 * Log what we decoded (if anything) so ops can tell QPACK decode
+                 * When no genuine H3 protocol evidence has been observed for
+                 * this connection (no control stream, no QPACK uni streams),
+                 * this is most likely a native FishMMO client whose own raw
+                 * packet protocol happened to start with byte value
+                 * H3_FRAME_HEADERS (0x01) — e.g. FishNet's Broadcast PacketId
+                 * — and got misrouted into CONNECT parsing above. Fall back to
+                 * native handling and replay the buffered bytes instead of
+                 * failing the handshake. If real H3 evidence WAS seen, this
+                 * is a genuine invalid CONNECT from a browser/H3 peer and
+                 * should still be rejected below. */
+                if (!h3->peer_h3_seen) {
+                    WT_LOG_INFO("H3: CONNECT parse failed with no prior H3 evidence — "
+                                "falling back to native protocol detection");
+                    return h3_fallback_to_native_protocol(h3, sctx);
+                }
+
+                /* Log what we decoded (if anything) so ops can tell QPACK decode
                  * failures apart from genuine invalid CONNECT fields. */
                 if (phdr.method[0] == '\0' && phdr.protocol[0] == '\0') {
                     WT_LOG_ERROR("H3: CONNECT handshake failed — QPACK decode error "

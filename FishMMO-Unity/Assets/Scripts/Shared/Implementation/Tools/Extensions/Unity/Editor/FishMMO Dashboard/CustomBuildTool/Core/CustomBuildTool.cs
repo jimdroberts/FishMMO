@@ -135,7 +135,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		/// <summary>
 		/// Builds the game executable using the current Build Environment Options (Build Type and OS Target).
 		/// </summary>
-		public static void BuildGameWithEnvironmentOptions()
+		/// <param name="rootPath">
+		/// Output directory to build into. When null/empty, BuildExecutor falls back to an
+		/// interactive folder picker (EditorUtility.SaveFolderPanel), which returns nothing
+		/// under -batchmode and cancels the build. CLI callers must supply this explicitly.
+		/// </param>
+		public static void BuildGameWithEnvironmentOptions(string rootPath = null)
 		{
 			// Check if scripts are currently compiling
 			if (BuildEnvironmentOptions.IsCompiling())
@@ -167,7 +172,8 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				customBuildType,
 				GetBuildOptions(buildTarget),
 				buildSubtarget,
-				buildTarget);
+				buildTarget,
+				rootPath);
 		}
 
 		/// <summary>
@@ -291,7 +297,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 		}
 
-		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
+		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget, string rootPath = null)
 		{
 			InitializeLogger();
 
@@ -305,7 +311,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				buildTool.RunBuild(
 					linkerRootPath: assets,
 					linkerDirectoryPath: Path.Combine(assets, "Dependencies"),
-					rootPath: string.Empty,
+					rootPath: rootPath ?? string.Empty,
 					executableName: executableName,
 					bootstrapScenes: bootstrapScenes,
 					excludedAddressableGroups: customBuildType == CustomBuildType.Server ? clientAddressableGroups : serverAddressableGroups,
@@ -443,7 +449,18 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				if (!addressablesOnly)
 				{
-					BuildGameWithEnvironmentOptions();
+					/* An output path must be resolved here. BuildExecutor falls back to
+					 * EditorUtility.SaveFolderPanel when it is not given one, and under
+					 * -batchmode that returns empty and cancels the player build — while
+					 * Addressables has already succeeded and the process still exits 0.
+					 * The result is a build that reports success and produces nothing. */
+					if (!TryGetArg("-fishmmoOutputPath", out string outputPath) || string.IsNullOrWhiteSpace(outputPath))
+					{
+						string projectRoot = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+						string subFolder = buildType == BuildTypeEnvironment.Server ? "Server" : "Client";
+						outputPath = Path.Combine(projectRoot, "Builds", subFolder);
+					}
+					BuildGameWithEnvironmentOptions(outputPath);
 				}
 
 				if (Application.isBatchMode)

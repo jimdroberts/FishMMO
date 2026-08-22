@@ -17,6 +17,12 @@ MonoBehaviour:
   createRequestCooldownMilliseconds: 2000
   worldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
-  startingAbilities: []
-  startingInventoryItems: []
-  startingEquipment: []
+  startingAbilityIDs: []
+  startingInventoryItemIDs: []
+  startingEquipmentIDs:
+  - -523909364
+  - -450748893
+  - 1324506654
+  - -1956810487
+  - -1491658691
+  - 478237920

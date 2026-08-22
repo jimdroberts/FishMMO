@@ -45,7 +45,11 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.4" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />  </ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
+    <!-- Force the patched Npgsql driver — the EF provider above transitively pulls the
+         vulnerable 5.0.10 (CVE-2024-32655, SQL injection via protocol message size overflow). -->
+    <PackageReference Include="Npgsql" Version="5.0.18" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\FishMMO-SharedUtility\FishMMO-SharedUtility\FishMMO-SharedUtility.csproj" />
   </ItemGroup>

@@ -690,6 +690,16 @@ The build process copies the appropriate `.cfg` and `appsettings.json` files fro
 
 **Headless builds and the build-target switch.** A CLI build (`-batchmode -executeMethod`) that has to switch build target used to be rejected for running while scripts were compiling, producing no artifact — and re-running the identical command immediately afterwards succeeded, because by then the target already matched and no switch happened. `SwitchActiveBuildTarget` is synchronous and already recompiles for the new target, and the `AssetDatabase.Refresh(ForceUpdate)` that follows settles the define symbols; the extra `ForceEditorScriptRecompile` on top of that queued a *further* compile, and under `-executeMethod` nothing turns the editor loop over until the method returns, so it stayed pending for the rest of the invocation. That recompile is now skipped in batch mode — interactive Dashboard builds keep it, where the editor loop can service it. `RunCliBuild` also fails fast, naming the reason, if scripts somehow are still compiling: nothing on that thread can advance a pending compile in batch mode, so waiting cannot help and sleeping would block the very thread that runs compilation.
 
+**Headless builds need an explicit output path.** `BuildExecutor` falls back to `EditorUtility.SaveFolderPanel` when it is not given a root path, and under `-batchmode` that returns an empty string and cancels the player build — while Addressables has *already* run and written real bundles, and the process still exits `0`. The result is a build that reports success and produces no player. `RunCliBuild` therefore resolves an output path before building: `-fishmmoOutputPath <dir>` when supplied, otherwise `Builds/Server` or `Builds/Client` (chosen by the entry point invoked) in the **parent of the editor's working directory** — the repository root when Unity is launched from `FishMMO-Unity/`. Because that default depends on the working directory, CI should pass the path explicitly.
+
+The CLI entry points are `BuildClientCLI`, `BuildServerCLI`, `BuildAddressablesCLI`, `BuildClientWithAddressablesCLI` and `BuildServerWithAddressablesCLI` on `FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool`. OS target is read from `-fishmmoOSTarget`; `-fishmmoBuildType` applies only to `BuildAddressablesCLI`, which otherwise defaults to Client.
+
+```bash
+Unity -batchmode -quit -projectPath FishMMO-Unity \
+      -executeMethod FishMMO.Shared.CustomBuildTool.Core.CustomBuildTool.BuildServerWithAddressablesCLI \
+      -fishmmoOSTarget Linux -fishmmoOutputPath /srv/fishmmo/Builds/Server
+```
+
 ### Patching — PatchGenerator and Updater
 
 #### PatchGenerator
