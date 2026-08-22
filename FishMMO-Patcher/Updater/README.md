@@ -254,15 +254,56 @@ diagnosing a failed update.
 
 ## Build
 
+The .NET apphost is platform- **and** architecture-specific, so there is no single
+binary that serves both a Windows and a Linux client — each target needs its own
+publish. All targets cross-publish from any host, so one machine produces the whole
+set.
+
 ```bash
-dotnet build Updater.sln -c Release
-# Or publish a self-contained single-file binary for shipping:
-dotnet publish Updater/Updater.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true
-dotnet publish Updater/Updater.csproj -c Release -r win-x64   --self-contained true -p:PublishSingleFile=true
+# From FishMMO-Patcher/ — publishes win-x64 and linux-x64, the two targets Unity
+# builds a standalone client for.
+./publish-updater.sh
+
+./publish-updater.sh --all              # every RID in Updater.csproj
+./publish-updater.sh linux-arm64        # an explicit list
 ```
 
-Ship the resulting binary alongside the launcher, plus the `Patches/` directory
-populated by the patch generator.
+`publish-updater.ps1` is the same script for Windows hosts.
+
+Under the hood that is one `dotnet publish` per RID:
+
+```bash
+dotnet publish Updater/Updater.csproj -c Release -r win-x64
+dotnet publish Updater/Updater.csproj -c Release -r linux-x64
+```
+
+No `--self-contained` / `-p:PublishSingleFile` flags are needed: `Updater.csproj`
+applies the shipping shape (self-contained, single-file, compressed, invariant
+globalization) automatically whenever a RuntimeIdentifier is set. A plain
+`dotnet build Updater.sln -c Release` still produces a framework-dependent build for
+local development.
+
+Output lands in `Updater/bin/Release/net8.0/<rid>/publish/Updater[.exe]`.
+
+**Self-contained is a requirement, not an optimisation.** The updater runs on player
+machines with no .NET runtime installed, at the one moment the client cannot report an
+error — the launcher has already shut itself down. A framework-dependent updater fails
+there with a bare "you must install .NET" on a stdout nobody is reading.
+
+**Portable RIDs only.** A distro-specific RID — an Arch/CachyOS SDK reports its own as
+`arch-x64` — has no runtime pack on nuget.org and would pin the output to that distro.
+`linux-x64` runs on Arch and every other glibc distro precisely because it is not
+distro-specific.
+
+### Shipping
+
+The FishMMO Dashboard does this for you: a Client build copies the matching per-RID
+publish output into the build root (and publishes it on demand if it is missing or
+older than the Updater sources). See
+`BuildExecutor.CopyUpdaterToBuild` in the Unity project.
+
+Shipping by hand: put the binary alongside the client executable, plus the `Patches/`
+directory populated by the patch generator.
 
 ---
 

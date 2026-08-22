@@ -55,7 +55,7 @@ bool wt_datagram_queue_push(
     uint32_t next = (w + 1) % WT_DGRAM_QUEUE_CAPACITY;
 
     if (next == q->read_idx) {
-        WT_LOG_WARN("Datagram queue full, dropping (%d bytes)", length);
+        // WT_LOG_WARN("Datagram queue full, dropping (%d bytes)", length);
         wt_mutex_unlock(&q->mutex);
         return false;
     }

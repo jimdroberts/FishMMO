@@ -289,16 +289,16 @@ bool wt_session_datagram_payload(
     uint64_t quarter = 0;
     size_t n = wt_dgram_varint_decode(data, length, &quarter);
     if (n == 0) {
-        WT_LOG_WARN("Datagram dropped: truncated Quarter Stream ID (len=%u)",
-                    length);
+        // WT_LOG_WARN("Datagram dropped: truncated Quarter Stream ID (len=%u)",
+        //             length);
         return false;
     }
     if (quarter != (session->wt_session_id / 4)) {
-        WT_LOG_WARN(
-            "Datagram dropped: Quarter Stream ID %llu is not this session's "
-            "(%llu)",
-            (unsigned long long)quarter,
-            (unsigned long long)(session->wt_session_id / 4));
+        // WT_LOG_WARN(
+        //     "Datagram dropped: Quarter Stream ID %llu is not this session's "
+        //     "(%llu)",
+        //     (unsigned long long)quarter,
+        //     (unsigned long long)(session->wt_session_id / 4));
         return false;
     }
 
@@ -380,8 +380,8 @@ int32_t wt_session_send_datagram(
         return WT_ERR_SEND_FAILED;
     }
 
-    WT_LOG_INFO(
-        "DatagramSend queued len=%d conn=%llu stamp=SAFE_SHUTDOWN_V4",
-        length, (unsigned long long)session->conn_id);
+    // WT_LOG_INFO(
+    //     "DatagramSend queued len=%d conn=%llu stamp=SAFE_SHUTDOWN_V4",
+    //     length, (unsigned long long)session->conn_id);
     return WT_OK;
 }

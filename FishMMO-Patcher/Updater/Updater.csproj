@@ -6,6 +6,55 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);CS8618;CS8600;CS8602;CS8603</NoWarn>
+
+    <!--
+      Every RID the updater is shipped for. The .NET apphost is platform- AND
+      architecture-specific, so a Windows client needs a win-* build and a Linux client
+      needs a linux-* build; there is no single binary that serves both. All of these
+      cross-publish from any host, so one machine can produce the full set.
+
+      Portable RIDs only. A distro-specific RID (the Arch/CachyOS SDK reports its own
+      RID as 'arch-x64') resolves to a runtime pack that does not exist on nuget.org,
+      and it would also pin the output to that distro. 'linux-x64' runs on Arch — and
+      on every other glibc distro — precisely because it is not distro-specific.
+      UseCurrentRuntimeIdentifier is left off so nothing silently substitutes the host RID.
+    -->
+    <RuntimeIdentifiers>win-x64;win-x86;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+
+    <!--
+      Invariant globalization drops the ICU dependency. Two reasons, both about shipping:
+      it removes ~30MB of ICU data from every self-contained build, and it means the
+      updater does not need libicu present on the player's machine — a real failure mode
+      on minimal and rolling-release distros where the ICU soname moves.
+
+      Safe here: the updater's only string comparisons are ordinal or
+      OrdinalIgnoreCase (see PathContainment.PathComparison); it formats no
+      culture-sensitive output and parses no culture-sensitive input.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!--
+    Shipping shape, applied whenever a RID is selected (i.e. `dotnet publish -r <rid>`).
+
+    Self-contained is not an optimisation, it is a requirement: the updater runs on
+    player machines that have no .NET runtime installed, and it runs at the one moment
+    the client cannot report an error — after the launcher has already shut itself down.
+    A framework-dependent updater fails there with a bare "you must install .NET" on a
+    stdout nobody is reading, leaving the install stranded on an old version.
+
+    Single-file keeps that self-contained payload to one file next to the client
+    executable, which is also what the patch generator diffs; compression halves it
+    (~66MB -> ~36MB) at a negligible one-time startup cost.
+
+    A plain `dotnet build` / `dotnet publish` with no RID is deliberately left alone, so
+    Updater.sln still builds framework-dependent for local development.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
 	<ItemGroup>
