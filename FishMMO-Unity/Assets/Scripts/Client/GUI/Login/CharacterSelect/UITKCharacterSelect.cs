@@ -121,6 +121,17 @@ namespace FishMMO.Client
 		private CharacterRow selectedCharacter;
 
 		/// <summary>
+		/// The characters the server last sent, kept separately from the rows built from them.
+		/// </summary>
+		/// <remarks>
+		/// The rows are a view of this, not the record of it. Rebuilding them is only safe
+		/// against the tree the player will actually see, and that tree does not exist until
+		/// <see cref="UITKControl.Show"/> has run — so the details have to survive in plain
+		/// data across the hide/show the list arrival performs. See <see cref="OnAfterShow"/>.
+		/// </remarks>
+		private readonly List<CharacterDetails> characterDetails = new List<CharacterDetails>();
+
+		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -211,6 +222,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
+			characterDetails.Clear();
 			DestroyCharacterList();
 		}
 
@@ -301,24 +313,48 @@ namespace FishMMO.Client
 
 			Hide();
 
+			/* Record the details and let OnAfterShow build the rows. Creating them here would
+			 * put them in the tree that is live at this instant, and the Show() at the end of
+			 * OnCharacterListReady makes UIDocument clone the UXML afresh — so every row would
+			 * be discarded microseconds after being built, and the player would be handed an
+			 * empty list with no error anywhere to explain it. The refusal handler below gets
+			 * away with the opposite order only because it calls Show() before SetStatus. */
 			if (msg.Characters != null)
 			{
 				DestroyCharacterList();
-
-				// No characters were sent.
-				if (msg.Characters.Length < 1)
-				{
-					OnCharacterListReady();
-					return;
-				}
-
-				for (int i = 0; i < msg.Characters.Length; ++i)
-				{
-					CreateCharacterRow(msg.Characters[i]);
-				}
+				characterDetails.Clear();
+				characterDetails.AddRange(msg.Characters);
 			}
 
 			OnCharacterListReady();
+		}
+
+		/// <summary>
+		/// Rebuilds every row from <see cref="characterDetails"/> against the current tree.
+		/// </summary>
+		private void RebuildCharacterRows()
+		{
+			string previouslySelected = selectedCharacter?.Details.CharacterName;
+
+			DestroyCharacterList();
+
+			for (int i = 0; i < characterDetails.Count; ++i)
+			{
+				CreateCharacterRow(characterDetails[i]);
+			}
+
+			// A rebuild is not a deselection; the player's choice outlives the elements.
+			if (!string.IsNullOrEmpty(previouslySelected))
+			{
+				for (int i = 0; i < characterList.Count; ++i)
+				{
+					if (characterList[i].Details.CharacterName == previouslySelected)
+					{
+						OnCharacterSelected(characterList[i]);
+						break;
+					}
+				}
+			}
 		}
 
 		/// <summary>
@@ -392,7 +428,16 @@ namespace FishMMO.Client
 				SceneName = msg.SceneName,
 				RaceTemplateID = msg.RaceTemplateID,
 			};
-			CreateCharacterRow(details);
+
+			characterDetails.Add(details);
+
+			/* Only build the row now if the panel is already up. While it is hidden the tree
+			 * this would add to is about to be replaced by Show(), and OnAfterShow rebuilds
+			 * from the details anyway — adding it here as well would duplicate the row. */
+			if (Visible)
+			{
+				CreateCharacterRow(details);
+			}
 		}
 
 		/// <summary>
@@ -443,6 +488,16 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterDeleteBroadcastReceived(CharacterDeleteBroadcast msg, Channel channel)
 		{
+			// Drop it from the details first — they are what a rebuild restores from, so a row
+			// removed only from the view would come back the next time the panel is shown.
+			for (int i = characterDetails.Count - 1; i >= 0; --i)
+			{
+				if (characterDetails[i].CharacterName == msg.CharacterName)
+				{
+					characterDetails.RemoveAt(i);
+				}
+			}
+
 			// Remove the character from our characters list.
 			for (int i = characterList.Count - 1; i >= 0; --i)
 			{
@@ -595,7 +650,10 @@ namespace FishMMO.Client
 
 			/* The list belongs to the account that just logged out. Leaving the rows behind meant
 			 * the next account to sign in saw the previous one's characters until its own list
-			 * arrived — and saw them again, indefinitely, if it never did. */
+			 * arrived — and saw them again, indefinitely, if it never did. The details go with
+			 * them: they are what OnAfterShow rebuilds from, so leaving them would put the
+			 * previous account's characters straight back on screen at the next Show. */
+			characterDetails.Clear();
 			DestroyCharacterList();
 			characterListGuard.Clear();
 			SetRefreshLocked(false);
@@ -723,6 +781,9 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void OnClick_Refresh()
 		{
+			// Details too, so a refresh that never gets answered does not leave the previous
+			// list to be rebuilt the next time the panel is shown.
+			characterDetails.Clear();
 			DestroyCharacterList();
 			RequestCharacterList();
 		}
@@ -774,6 +835,10 @@ namespace FishMMO.Client
 
 			SetStatus(this.pendingStatus);
 			SetRefreshLocked(characterListGuard.IsPending);
+
+			// The rows lived in the tree that was just replaced; rebuild them for the same
+			// reason the status is re-applied here.
+			RebuildCharacterRows();
 		}
 
 		/// <inheritdoc/>
@@ -783,6 +848,12 @@ namespace FishMMO.Client
 
 			SetStatus(this.pendingStatus);
 			SetRefreshLocked(characterListGuard.IsPending);
+
+			/* Rows are built here rather than where the list arrives. Show() makes UIDocument
+			 * clone the UXML afresh, so anything added beforehand belongs to a discarded tree —
+			 * which is precisely why the status above is re-applied on every show rather than
+			 * set once. The character rows need the same treatment and were not getting it. */
+			RebuildCharacterRows();
 		}
 
 		/// <summary>The status message this panel wants displayed, held across tree rebuilds.</summary>
