@@ -109,9 +109,11 @@ namespace FishMMO.Shared
 			ICharacter character = Transform.GetComponent<ICharacter>();
 			/* CharacterGuildLabel is optional — it is assigned from a prefab's label object and a
 			 * character without one leaves it null. PlayerCharacter.SetGuildName already tests for
-			 * that; this did not, so any titled interactable lacking the label threw out of Awake.
-			 * The throw aborts the rest of this method, which is how walking into a zone produced
-			 * a NullReferenceException per NPC. */
+			 * that; this did not, so any titled interactable lacking the label threw out of Awake,
+			 * which is how walking into a zone produced a NullReferenceException per titled NPC.
+			 * Nothing was lost besides the label itself: this block is the last statement in the
+			 * client arm, and registration happens in ReadPayload here and in the server arm's
+			 * own SceneObject.Register — so the cost was log noise and a missing title. */
 			if (character != null &&
 				character.CharacterGuildLabel != null &&
 				!string.IsNullOrWhiteSpace(Title))

@@ -698,9 +698,21 @@ namespace FishMMO.Client
 				leaveButton.style.display = inParty ? DisplayStyle.Flex : DisplayStyle.None;
 			}
 
+			/* Invite answers to rank as well as to membership, because the server does:
+			 * PartySystem.OnServerPartyInviteBroadcastReceived drops the request unless the
+			 * inviter is the Leader, and drops it *silently* — so a member offered this button
+			 * gets a prompt, sends a broadcast and sees nothing happen, which is the exact class
+			 * of dead control the rest of this block removes. The guild panel gates its own
+			 * Invite on GuildPermissions.Invite for the same reason. Rank is kept current on
+			 * create, on add (which is also how a promotion arrives) and on leave. */
 			if (inviteButton != null)
 			{
-				inviteButton.style.display = inParty ? DisplayStyle.Flex : DisplayStyle.None;
+				bool canInvite = inParty &&
+								 Character != null &&
+								 Character.TryGet(out IPartyController inviteController) &&
+								 inviteController.Rank == PartyRank.Leader;
+
+				inviteButton.style.display = canInvite ? DisplayStyle.Flex : DisplayStyle.None;
 			}
 		}
 

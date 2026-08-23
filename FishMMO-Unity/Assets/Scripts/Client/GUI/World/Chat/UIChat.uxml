@@ -1,4 +1,4 @@
-﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIChat.uss" />
     <ui:VisualElement name="chat-root" class="fish-panel chat-panel">

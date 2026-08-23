@@ -86,7 +86,7 @@ PartyRank : byte
 |----------------------------------|-----------------|--------------------------------------------------|
 | `PartyCreateBroadcast`           | Client → Server | Request to create a new party                    |
 | `PartyCreateBroadcast`           | Server → Client | Confirmation of party creation (with ID)         |
-| `PartyInviteBroadcast`           | Client → Server | Invite a target character to the party           |
+| `PartyInviteBroadcast`           | Client → Server | Invite a target character to the party — **leader only**; a non-leader's invite is dropped without a reply |
 | `PartyInviteBroadcast`           | Server → Client | Notify target of incoming invitation             |
 | `PartyAcceptInviteBroadcast`     | Client → Server | Accept a pending party invitation                |
 | `PartyDeclineInviteBroadcast`    | Client → Server | Decline a pending party invitation               |

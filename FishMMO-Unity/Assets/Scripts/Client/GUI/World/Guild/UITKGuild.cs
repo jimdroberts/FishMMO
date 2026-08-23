@@ -1485,8 +1485,10 @@ namespace FishMMO.Client
 			 * therefore inseparable; a guild can now hand out one without the other, and the panel
 			 * has to be able to draw that. */
 			GuildPermissions permissions = GuildPermissions.None;
+			bool inGuild = false;
 			if (Character != null && Character.TryGet(out IGuildController guildController) && guildController.ID > 0)
 			{
+				inGuild = true;
 				permissions = guildController.Permissions;
 			}
 
@@ -1516,11 +1518,11 @@ namespace FishMMO.Client
 			/* The footer used to show Create, Invite and Leave at all times, so a player with no
 			 * guild was offered two actions that cannot do anything — there is nothing to invite
 			 * anyone to and nothing to leave. Membership decides which of the three can apply,
-			 * and Invite additionally answers to the same permission the server enforces. */
-			bool inGuild = Character != null &&
-						   Character.TryGet(out IGuildController membership) &&
-						   membership.ID > 0;
-
+			 * and Invite additionally answers to the same permission the server enforces.
+			 *
+			 * Membership is the flag resolved with the permissions above rather than a second
+			 * lookup: it is not the same question as "holds any permission", since a member can
+			 * hold none, but it is answered by the same controller read. */
 			if (createButton != null)
 			{
 				createButton.style.display = inGuild ? DisplayStyle.None : DisplayStyle.Flex;

@@ -42,6 +42,18 @@ namespace FishMMO.Client
 		private Vector3 requestedPosition;
 
 		/// <summary>
+		/// The tab name as the field was last known to agree with it.
+		/// </summary>
+		/// <remarks>
+		/// Committing on focus-out means every way of leaving the field is a commit, so there has
+		/// to be something to compare against: without it an untouched field re-submits its own
+		/// name on the way out, and there is no gesture left that abandons an edit. This records
+		/// what the field started at and what it holds after a successful rename, so an unchanged
+		/// value is left alone and Escape has something to revert to.
+		/// </remarks>
+		private string committedTabName = string.Empty;
+
+		/// <summary>
 		/// Builds a toggle per chat channel (except Command) and wires the rename input.
 		/// </summary>
 		public override void OnStarting()
@@ -97,13 +109,30 @@ namespace FishMMO.Client
 						ChangeTabName();
 						evt.StopPropagation();
 					}
+					else if (evt.keyCode == KeyCode.Escape)
+					{
+						/* Committing on focus-out otherwise leaves no way to abandon an edit —
+						 * even backing out of the panel would save the half-typed name. Escape
+						 * puts the field back and releases it; the focus-out that follows then
+						 * sees an unchanged value and does nothing. */
+						nameInput.SetValueWithoutNotify(committedTabName);
+						nameInput.Blur();
+						evt.StopPropagation();
+					}
 				}, TrickleDown.TrickleDown);
 
 				/* Enter was also the ONLY thing that committed. This panel dismisses itself as
 				 * soon as the pointer leaves it, so typing a name and clicking a channel — or
 				 * simply moving away — threw the edit away with no indication it had been
-				 * ignored. Commit on losing the field instead. */
-				nameInput.RegisterCallback<FocusOutEvent>((evt) => ChangeTabName());
+				 * ignored. Commit on losing the field instead — but only a real change, so that
+				 * merely passing through the field is not a rename. */
+				nameInput.RegisterCallback<FocusOutEvent>((evt) =>
+				{
+					if (nameInput.value != committedTabName)
+					{
+						ChangeTabName();
+					}
+				});
 			}
 
 			Root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
@@ -173,6 +202,10 @@ namespace FishMMO.Client
 				nameInput.value = name;
 			}
 
+			/* The picker is shared across tabs, so this has to be re-established per activation
+			 * rather than only when the field is edited. */
+			committedTabName = name ?? string.Empty;
+
 			if (panel != null)
 			{
 				panel.style.position = Position.Absolute;
@@ -235,6 +268,11 @@ namespace FishMMO.Client
 				{
 					nameInput.value = currentName;
 				}
+
+				/* Either branch leaves the field holding the tab's actual name — the new one on
+				 * success, the reverted one on failure — so this is the value a later focus-out
+				 * must treat as "nothing to do". */
+				committedTabName = nameInput.value;
 			}
 		}
 

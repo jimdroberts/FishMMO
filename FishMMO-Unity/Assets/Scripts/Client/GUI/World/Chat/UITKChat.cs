@@ -233,6 +233,22 @@ namespace FishMMO.Client
 		private Button channelSelectorButton;
 
 		/// <summary>
+		/// Frame on which submitting deliberately released the input field, or -1.
+		/// </summary>
+		/// <remarks>
+		/// Enter is bound to BOTH the send handled here and the <c>Chat</c> action that focuses
+		/// this field (<c>PlayerControls.inputactions</c> binds <c>&lt;Keyboard&gt;/enter</c>), and
+		/// <c>InputAction.triggered</c> stays true for the whole frame rather than just for the
+		/// callback. <see cref="EnableChatInput"/> is polled from <see cref="OnTick"/>, so if that
+		/// poll happens to run after the key event was dispatched — the two are ordinary
+		/// MonoBehaviour updates at the same execution order, and Unity does not define which goes
+		/// first — it would see a released field and a still-true trigger and immediately focus it
+		/// again, undoing the release and forcing mouse mode back on. Stamping the frame makes the
+		/// outcome deterministic instead of dependent on that ordering.
+		/// </remarks>
+		private int inputReleasedOnFrame = -1;
+
+		/// <summary>
 		/// Channels a player can actually send on, in selector order. Tell is excluded because it
 		/// needs a recipient typed with it, and System and Discord are not player-sendable.
 		/// </summary>
@@ -490,6 +506,13 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Enter both sends and focuses; see inputReleasedOnFrame. Without this, whether the
+			 * send released the field at all comes down to undefined script execution order. */
+			if (inputReleasedOnFrame == Time.frameCount)
+			{
+				return;
+			}
+
 			// If the input already has focus, skip to avoid interfering with typing.
 			if (IsInputFocused)
 			{
@@ -604,6 +627,7 @@ namespace FishMMO.Client
 					 * after Enter leaves the player unable to move or press E until they think to
 					 * hit Escape or click the world. Escape was given this treatment and Enter was
 					 * not, which is why sending one chat line silently disabled the game. */
+					inputReleasedOnFrame = Time.frameCount;
 					inputField.Blur();
 					evt.StopPropagation();
 					break;
@@ -770,9 +794,11 @@ namespace FishMMO.Client
 			/* The selector names where a plain line goes. Anything already carrying a slash
 			 * command states its own destination and is left exactly as typed — that includes
 			 * non-channel commands like /leaveinstance, which must not be prefixed into chat. */
+			bool channelPrefixApplied = false;
 			if (!input.StartsWith("/") && sendChannel != ChatChannel.Say)
 			{
 				input = $"{ChatHelper.ChannelCommandMap[sendChannel][0]} {input}";
+				channelPrefixApplied = true;
 			}
 
 			/* Clean locally before sending.
@@ -818,8 +844,14 @@ namespace FishMMO.Client
 					 * response to one that appears to have done nothing — and commands often
 					 * are refused the first time for a reason that then clears, such as
 					 * /leaveinstance while still in combat. Dropped here, the second attempt
-					 * never even reaches the server. The server applies the same exemption. */
-					if (!AllowRepeatMessages && !input.StartsWith("/"))
+					 * never even reaches the server. The server applies the same exemption.
+					 *
+					 * A prefix the SELECTOR added is not a command the player typed, so it must
+					 * not claim that exemption — testing the prefixed text alone would leave the
+					 * duplicate filter applying to Say and to nothing else. Comparing the
+					 * prefixed form is still right: the same words sent to a different channel
+					 * are a different message and should go through. */
+					if (!AllowRepeatMessages && (channelPrefixApplied || !input.StartsWith("/")))
 					{
 						if (!string.IsNullOrWhiteSpace(Character.LastChatMessage) &&
 							Character.LastChatMessage.Equals(input))
@@ -848,6 +880,11 @@ namespace FishMMO.Client
 			int index = System.Array.IndexOf(SelectableChannels, sendChannel);
 			sendChannel = SelectableChannels[(index + 1) % SelectableChannels.Length];
 			RefreshChannelSelector();
+
+			/* Clicking a UITK Button leaves it focused, and a focused Button answers submit
+			 * navigation — so the next Enter would be ambiguous between "start typing" and
+			 * "cycle again". Releasing it makes Enter mean what it means everywhere else. */
+			channelSelectorButton?.Blur();
 		}
 
 		/// <summary>
