@@ -18,7 +18,7 @@ MonoBehaviour:
   Price: 0
   IconPools: 
   icon: {fileID: 21300000, guid: e04e6c970b950d946a782ea08e5f971d, type: 3}
-  Slot: 5
+  Slot: 7
   MaxItemAttributes: 0
   AttributeDatabases: []
   ModelSeed: 0
