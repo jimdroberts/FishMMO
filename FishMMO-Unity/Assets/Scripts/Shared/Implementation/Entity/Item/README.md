@@ -80,7 +80,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Slot` | `ItemSlot` | Equipment slot (Head, Chest, Legs, etc.) |
+| `Slot` | `ItemSlot` | Equipment slot (Head, Chest, Legs, etc.) — see [ItemSlot is numbered by contract](#itemslot-is-numbered-by-contract) |
 | `MaxItemAttributes` | `int` | Max random attributes on generation |
 | `RandomAttributeDatabases` | `ItemAttributeTemplateDatabase[]` | Pools for random attribute selection |
 | `ModelSeed` | `uint` | Seed for model randomization |
@@ -94,6 +94,45 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `ChargeCost` | `uint` | 1 | Charges consumed per use |
 | `Cooldown` | `float` | 0 | Seconds of cooldown after use |
 
+### ItemSlot is numbered by contract
+
+**Every member of `ItemSlot` is explicitly numbered, and must stay that way.**
+
+Item templates are ScriptableObjects and serialize this enum as its **integer**, so the number
+is the contract — not the name and not the position in the declaration.
+
+Inserting `Shoulders` at index 2 once shifted every slot below `Hands` in every already-authored
+asset: leggings became shoulders, boots became legs, a sword became feet and a shield became
+back. Nothing errored, because each value was still a valid slot — the items simply equipped to
+the wrong part of the body, and the only symptom was a sword on someone's feet.
+
+| Slot | Value |
+|------|-------|
+| `Head` | 0 |
+| `Chest` | 1 |
+| `Shoulders` | 2 |
+| `Hands` | 3 |
+| `Legs` | 4 |
+| `Feet` | 5 |
+| `Back` | 6 |
+| `Primary` | 7 |
+| `Secondary` | 8 |
+| `Accessory` | 9 |
+
+Add new slots at the **end** with the next free number. Never insert, never reorder, and never
+reuse the number of a slot that has been removed.
+
+Two consequences worth knowing:
+
+- **Renumbering does not migrate saved data.** A character's equipment is persisted with
+  whatever integer the template held when it was saved, so correcting a template does not
+  correct rows already written against the old numbering.
+- **`FishMMO > Validate > Equipment Item Slots`** cross-checks every equippable template's
+  `Slot` against the folder it is filed under, because the folder independently records what a
+  human meant when they filed the asset. It reports mismatches rather than correcting them: a
+  template deliberately filed somewhere that does not match its slot is legitimate, and the tool
+  cannot tell that apart from a mistake.
+
 ### Container Sizes
 
 | Container | Default Slots | Notes |
@@ -101,6 +140,12 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `InventoryController` | 32 | Main character inventory |
 | `EquipmentController` | `ItemSlot` enum count (10) | One slot per equipment type |
 | `BankController` | 100 | Persistent bank storage with currency |
+
+Containers are pre-sized with empty slots at `OnAwake` (`AddSlots(null, count)`), so
+`Items.Count` **is** the capacity and an empty slot is a `null` entry rather than a missing one.
+The inventory and bank panels size their grids from that count rather than from how many slots
+hold something: an empty slot is what a player drops an item onto, and what shows them the room
+they have.
 
 ## Usage Examples
 
