@@ -972,7 +972,20 @@ namespace FishMMO.Client
 					statusMessage.text = "Creating account...";
 				}
 					Log.Debug("UITKRegister", "Submitting account creation.");
-				Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age);
+				/* See the matching check in UITKLogin.Connect: credentials the authenticator
+				 * refused leave the connection to fail its own pre-validation and disconnect
+				 * itself, which this panel can only report as an unexplained drop. */
+				if (!Client.LoginAuthenticator.SetLoginCredentials(usernameText, passwordText, true, emailText, age))
+				{
+					if (statusMessage != null)
+					{
+						statusMessage.text = "Those account details were rejected. Please check them and try again.";
+					}
+					Log.Warning("UITKRegister", "Create account failed: the authenticator rejected the credentials.");
+					SetFormLocked(false);
+					return;
+				}
+
 				Client.ConnectToServer(serverPort);
 			}
 			else

@@ -591,6 +591,23 @@ namespace FishMMO.Client
 		{
 			LoginNotice.Show(errorMsg);
 			Client.ForceDisconnect();
+
+			/* Drop any session token before handing the form back.
+			 *
+			 * Showing the sign-in form means the next thing this client does is authenticate from
+			 * scratch, so a token is meaningless here — and worse than meaningless, because the
+			 * authenticator used to choose the token path over the credential path whenever one was
+			 * held, aiming a TokenAuthBroadcast at a Login Server that has no handler for it. That
+			 * reply never comes, and it never came on any retry either.
+			 *
+			 * This method is reachable while a token is held: LoginSuccess stores one, and the
+			 * panel keeps ownership of the flow for the whole of OnProcessLoginSuccess's one-second
+			 * wait, so a refusal arriving in that window lands here rather than in
+			 * Client.QuitToLogin, which is what normally clears it. The core no longer depends on
+			 * this being tidy, but leaving a dead token in memory on the way back to a sign-in form
+			 * is not something to rely on being harmless. */
+			Client.LoginAuthenticator?.ClearAuthToken();
+
 			SetSignInLocked(false);
 
 			/* Put the panel back. Every caller of this method has already hidden something —
@@ -883,7 +900,24 @@ namespace FishMMO.Client
 			{
 				handshakeMessage.text = handshakeMsg;
 			}
-			Client.LoginAuthenticator.SetLoginCredentials(identifier, passwordText);
+			/* Connecting with credentials the authenticator refused is a guaranteed dead
+			 * connection: it leaves the previous values in place — null, because a disconnect
+			 * clears them — and the handshake then fails its own credential pre-validation and
+			 * drops the connection from the inside. The panel can only report that as a
+			 * disconnection with no reason given. The checks above use the same rules, so this
+			 * should be unreachable; it exists so that if the two ever disagree the answer is a
+			 * message rather than a sign-in that quietly does nothing. */
+			if (!Client.LoginAuthenticator.SetLoginCredentials(identifier, passwordText))
+			{
+				if (handshakeMessage != null)
+				{
+					handshakeMessage.text = "Invalid username or password format.";
+				}
+				Log.Warning("UITKLogin", "Connect failed: the authenticator rejected the credentials.");
+				SetSignInLocked(false);
+				return;
+			}
+
 			Client.ConnectToServer(serverPort);
 		}
 

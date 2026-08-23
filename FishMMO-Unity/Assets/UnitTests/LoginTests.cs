@@ -371,5 +371,73 @@ namespace FishMMO.UnitTests
 				await AuthTestTrace.LogTestEnd(nameof(Login_CorrectPasswordBeforeThreshold_ClearsTheFailureCount));
 			}
 		}
+
+		/// <summary>
+		/// Regression test for issue #118 — "incorrect login blocks future login until the
+		/// client is restarted".
+		/// </summary>
+		/// <remarks>
+		/// The handshake used to choose the token path whenever a token happened to be held,
+		/// without asking what the connection was for. A token outlives a disconnect by design
+		/// (World and Scene hops need it), so any return to the sign-in form that did not go
+		/// through <c>Client.QuitToLogin</c> left one behind — and the next sign-in then aimed a
+		/// <c>TokenAuthBroadcast</c> at a Login Server, which registers no handler for it. The
+		/// broadcast is dropped, no reply is ever sent, and every retry does the same thing,
+		/// because nothing on that path clears the token.
+		/// <para>
+		/// Credentials are the discriminator: they are set immediately before a Login Server
+		/// connect and nulled the moment the SRP proof is sent, so a hop or a reconnect never
+		/// has them and a sign-in always does.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public async Task Login_WithStaleTokenHeld_AuthenticatesWithCredentials()
+		{
+			try
+			{
+				await AuthTestTrace.LogTestStart(nameof(Login_WithStaleTokenHeld_AuthenticatesWithCredentials),
+					"Test: sign in while a token from an earlier session is still held.\n"
+					+ "Procedure: stage a token, then set credentials and connect as the login panel does.\n"
+					+ "Expected: LoginSuccess, reached over SRP — a verify message must go out.\n"
+					+ "Failure: no SRP verify means the client took the token path, which a Login "
+					+ "Server never answers; that is issue #118.");
+				using AuthTestHarness h = new AuthTestHarness();
+				h.Store.SeedAccount("carol", "correct horse battery staple");
+
+				/* Exactly what a previous successful login leaves behind. It does not need to be
+				 * a valid token — holding one at all is the condition that used to divert the
+				 * flow, and a stale one is the realistic case. */
+				LogAssert.IsTrue(h.Client.SetToken("stale-token-from-a-previous-session"),
+					"SetToken refused to stage the stale token.");
+
+				int srpVerifyBefore = h.Client.SrpVerifySends.Count;
+
+				LogAssert.IsTrue(h.Client.SetLoginCredentials("carol", "correct horse battery staple", register: false),
+					"SetLoginCredentials returned false for valid credentials.");
+				h.Client.OnConnected();
+
+				Task<ClientAuthenticationResult> resultTask = h.Client.AuthResultTcs.Task;
+				Task completed = await Task.WhenAny(resultTask, Task.Delay(AwaitTimeoutMs));
+				LogAssert.IsTrue(object.ReferenceEquals(resultTask, completed),
+					"Login did not complete within timeout while a stale token was held.");
+				ClientAuthenticationResult result = await resultTask;
+
+				LogAssert.IsTrue(h.Client.SrpVerifySends.Count > srpVerifyBefore,
+					"No SRP verify was sent: the client took the token path even though credentials were supplied.");
+				LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, result,
+					$"Expected LoginSuccess while holding a stale token, got {result}.");
+
+				await AuthTestTrace.Log("LoginTests", "SUCCESS", nameof(Login_WithStaleTokenHeld_AuthenticatesWithCredentials));
+			}
+			catch (Exception ex)
+			{
+				await AuthTestTrace.Log("LoginTests", "FAILURE", $"{nameof(Login_WithStaleTokenHeld_AuthenticatesWithCredentials)}: {ex.Message}\n{ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				await AuthTestTrace.LogTestEnd(nameof(Login_WithStaleTokenHeld_AuthenticatesWithCredentials));
+			}
+		}
 	}
 }

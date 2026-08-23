@@ -340,7 +340,34 @@ namespace FishMMO.Auth.Implementation
 			 * player back to login, and nothing recorded it: the token path is silent on
 			 * success, and the credential path only reports the empty username it was never
 			 * going to be able to use. */
-			_ = Log.Debug(LogPrefix, $"Handshake complete; auth token {(storedAuthToken != null ? "held" : "NOT held")}.");
+			bool haveCredentials = !string.IsNullOrEmpty(this.username) && !string.IsNullOrEmpty(this.password);
+			_ = Log.Debug(LogPrefix, $"Handshake complete; auth token {(storedAuthToken != null ? "held" : "NOT held")}, credentials {(haveCredentials ? "supplied" : "NOT supplied")}.");
+
+			/* Credentials win over a held token.
+			 *
+			 * This used to branch on the token alone, which asks "do I happen to have a token?"
+			 * when the question is "what is this connection FOR". Credentials are set immediately
+			 * before connecting to a Login Server and are nulled the moment the SRP proof is sent,
+			 * so their presence is an exact statement of intent: a World/Scene hop and a reconnect
+			 * never have them, and a sign-in always does.
+			 *
+			 * Branching on the token meant any stale token turned every later sign-in into a
+			 * TokenAuthBroadcast aimed at a Login Server — which registers no handler for it, so
+			 * FishNet drops it and no reply is ever sent. The player got a sign-in that hangs
+			 * until the reply deadline and then fails the same way on every retry, because
+			 * nothing on that path clears the token: "incorrect login blocks future login until
+			 * the client is restarted". A token can be left behind by any return to the sign-in
+			 * form that does not go through Client.QuitToLogin — the refusal dialog is one, and
+			 * it is reachable for a full second after LoginSuccess while the panel still owns
+			 * the flow. */
+			if (storedAuthToken != null && haveCredentials)
+			{
+				/* And the token is dead either way. The player is authenticating from scratch;
+				 * a successful SRP exchange mints a fresh one a few messages from here. Leaving
+				 * the old bytes in place would just re-arm the same trap for the next connect. */
+				_ = Log.Debug(LogPrefix, "Discarding a held auth token: this connection is authenticating with credentials.");
+				ClearAuthToken();
+			}
 
 			// Token auth path (World/Scene server)
 			if (storedAuthToken != null)
