@@ -1,7 +1,7 @@
 ﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIChat.uss" />
-    <ui:VisualElement name="chat-root" class="fish-panel chat-panel" picking-mode="Ignore">
+    <ui:VisualElement name="chat-root" class="fish-panel chat-panel">
         <ui:VisualElement name="chat-tabs-bar" class="chat-tabs-bar">
             <ui:VisualElement name="chat-tabs" class="chat-tabs" />
             <ui:Button name="chat-add-tab" text="+" class="fish-tab chat-add-tab" />

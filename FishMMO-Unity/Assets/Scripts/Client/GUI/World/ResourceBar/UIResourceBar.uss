@@ -1,4 +1,4 @@
-﻿/*
+/*
     UIResourceBar.uss
     Layout only — colours come from FishMMO-Theme.uss (.fish-bar, .fish-bar__fill--*).
 */
@@ -17,10 +17,18 @@
     height: 20px;
 }
 
-/* Stacked bottom-left, clear of the hotkey bar along the bottom centre. */
-.res-bar--hp   { bottom: 96px; }
-.res-bar--mp   { bottom: 68px; }
-.res-bar--stam { bottom: 40px; }
+/*
+    Top-left, not bottom-left. They were at bottom 96/68/40 with left:24 — which is inside the
+    chat panel, authored at left:24 bottom:40 with a 420x280 body and an opaque .fish-panel
+    background. All three bars were laid out correctly the whole time and drawn underneath it.
+    Measured: the health bar resolved to 160x20 at (24, 652) on a 768-tall screen, squarely
+    within chat's rectangle.
+
+    The top-left corner is free, and is where a player looks for their own resources anyway.
+*/
+.res-bar--hp   { top: 24px; }
+.res-bar--mp   { top: 52px; }
+.res-bar--stam { top: 80px; }
 
 /* The fill grows left-to-right; width is driven from C# as a percentage. */
 .res-bar__fill {

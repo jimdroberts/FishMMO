@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -83,6 +83,18 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Make the document root fill the panel. Every bar in this UXML is position:absolute
+			 * (see .res-bar), and an absolutely-positioned child contributes nothing to its
+			 * parent's content size — so the root, which has no size of its own, collapsed to
+			 * nothing and the bar was then positioned against a zero-sized containing block.
+			 * Measured: root resolved to NaN x NaN while the panel itself was 1024x768. Panels
+			 * whose content is an ordinary flex child (chat, factions) never hit this. */
+			root.style.position = Position.Absolute;
+			root.style.left = 0;
+			root.style.top = 0;
+			root.style.right = 0;
+			root.style.bottom = 0;
+
 			fill = root.Q(FILL_NAME);
 			label = root.Q<Label>(LABEL_NAME);
 
@@ -97,6 +109,47 @@ namespace FishMMO.Client
 			if (barRoot != null && !string.IsNullOrEmpty(RootModifierClass))
 			{
 				barRoot.AddToClassList(RootModifierClass);
+			}
+
+			/* These three panels render nothing while every static check on them passes: they are
+			 * in the scene, active, registered under the names Show() asks for, wired to the same
+			 * PanelSettings as panels that do appear, and carrying valid TemplateIDs. Reporting
+			 * what the panel resolved is the only way left to tell a bar that was never built
+			 * from one that was built and then laid out somewhere invisible. */
+			/* Deferred a frame: resolvedStyle and worldBound are meaningless until layout has
+			 * run, and at OnStarting it has not. The element lookups all reported ok while the
+			 * bars stayed invisible, so what is needed is where layout actually put them and
+			 * whether the stylesheets reached them — a bar with no size, or one parked off
+			 * screen, or one whose USS never loaded all look identical from here. */
+			if (barRoot != null)
+			{
+				barRoot.schedule.Execute(() =>
+				{
+					/* panel and styleSheets are the two things that separate the remaining
+					 * explanations. NaN size means layout never ran on this element, which
+					 * happens either because the tree is detached from a live panel or because
+					 * nothing gave it a size — and a stylesheet that never attached would do the
+					 * latter while looking identical from the outside. */
+					FishMMO.Logging.Log.Debug("UITKResourceBar",
+						$"[{Name}] panel={(barRoot.panel == null ? "DETACHED" : "attached")} " +
+						$"rootSheets={root.styleSheets.count} barSheets={barRoot.styleSheets.count} " +
+						$"docEnabled={(Document == null ? "no doc" : Document.enabled.ToString())} " +
+						$"goActive={(Document == null ? "?" : Document.gameObject.activeInHierarchy.ToString())} " +
+						$"layout: worldBound={barRoot.worldBound} " +
+						$"resolved w={barRoot.resolvedStyle.width} h={barRoot.resolvedStyle.height} " +
+						$"bottom={barRoot.resolvedStyle.bottom} left={barRoot.resolvedStyle.left} " +
+						$"display={barRoot.resolvedStyle.display} opacity={barRoot.resolvedStyle.opacity} " +
+						$"bg={barRoot.resolvedStyle.backgroundColor} " +
+						$"classes=[{string.Join(",", barRoot.GetClasses())}] " +
+						$"panelVisible={Visible} " +
+						/* The document root, not just the bar. A bar with a correct size inside a
+						 * root that has none is invisible for a reason that has nothing to do
+						 * with the bar — and every probe so far has only looked at the bar. */
+						$"|| ROOT: size={root.resolvedStyle.width}x{root.resolvedStyle.height} " +
+						$"wb={root.worldBound} display={root.resolvedStyle.display} " +
+						$"flexDir={root.resolvedStyle.flexDirection} " +
+						$"panelSize={(root.panel == null ? "no panel" : root.panel.visualTree.layout.size.ToString())}.");
+				}).ExecuteLater(2000);
 			}
 		}
 
