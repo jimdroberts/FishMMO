@@ -116,6 +116,12 @@ namespace FishMMO.Client
 		private Label emptyLabel;
 		/// <summary>Column caption strip, hidden while the roster is empty.</summary>
 		private VisualElement columns;
+		/// <summary>Create-party button.</summary>
+		private Button createButton;
+		/// <summary>Invite-to-party button.</summary>
+		private Button inviteButton;
+		/// <summary>Leave-party button.</summary>
+		private Button leaveButton;
 
 		/// <summary>
 		/// Queries the member list and wires up the action buttons.
@@ -141,22 +147,22 @@ namespace FishMMO.Client
 			emptyLabel = root.Q<Label>(EMPTY_NAME);
 			columns = root.Q(COLUMNS_NAME);
 
-			Button create = root.Q<Button>(CREATE_BUTTON_NAME);
-			if (create != null)
+			createButton = root.Q<Button>(CREATE_BUTTON_NAME);
+			if (createButton != null)
 			{
-				create.clicked += OnButtonCreateParty;
+				createButton.clicked += OnButtonCreateParty;
 			}
 
-			Button leave = root.Q<Button>(LEAVE_BUTTON_NAME);
-			if (leave != null)
+			leaveButton = root.Q<Button>(LEAVE_BUTTON_NAME);
+			if (leaveButton != null)
 			{
-				leave.clicked += OnButtonLeaveParty;
+				leaveButton.clicked += OnButtonLeaveParty;
 			}
 
-			Button invite = root.Q<Button>(INVITE_BUTTON_NAME);
-			if (invite != null)
+			inviteButton = root.Q<Button>(INVITE_BUTTON_NAME);
+			if (inviteButton != null)
 			{
-				invite.clicked += OnButtonInviteToParty;
+				inviteButton.clicked += OnButtonInviteToParty;
 			}
 		}
 
@@ -676,6 +682,25 @@ namespace FishMMO.Client
 			{
 				// Column captions over an empty list name fields that are not there.
 				columns.style.display = inParty ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
+			/* Same argument as the columns above, applied to the footer. OnButtonCreateParty
+			 * already refuses unless ID < 1, and Leave and Invite unless ID > 0, so showing all
+			 * three at once offers two buttons that are guaranteed no-ops. Draw what membership
+			 * actually permits instead. */
+			if (createButton != null)
+			{
+				createButton.style.display = inParty ? DisplayStyle.None : DisplayStyle.Flex;
+			}
+
+			if (leaveButton != null)
+			{
+				leaveButton.style.display = inParty ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
+			if (inviteButton != null)
+			{
+				inviteButton.style.display = inParty ? DisplayStyle.Flex : DisplayStyle.None;
 			}
 		}
 

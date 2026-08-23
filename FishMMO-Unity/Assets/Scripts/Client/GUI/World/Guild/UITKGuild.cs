@@ -393,6 +393,12 @@ namespace FishMMO.Client
 		private Button editNoticeButton;
 		/// <summary>Disband button.</summary>
 		private Button disbandButton;
+		/// <summary>Create-guild button.</summary>
+		private Button createButton;
+		/// <summary>Invite-to-guild button.</summary>
+		private Button inviteButton;
+		/// <summary>Leave-guild button.</summary>
+		private Button leaveButton;
 
 		/// <summary>Roster search field.</summary>
 		private TextField searchField;
@@ -499,22 +505,22 @@ namespace FishMMO.Client
 				hoverCard.pickingMode = PickingMode.Ignore;
 			}
 
-			Button create = root.Q<Button>(CREATE_BUTTON_NAME);
-			if (create != null)
+			createButton = root.Q<Button>(CREATE_BUTTON_NAME);
+			if (createButton != null)
 			{
-				create.clicked += OnButtonCreateGuild;
+				createButton.clicked += OnButtonCreateGuild;
 			}
 
-			Button leave = root.Q<Button>(LEAVE_BUTTON_NAME);
-			if (leave != null)
+			leaveButton = root.Q<Button>(LEAVE_BUTTON_NAME);
+			if (leaveButton != null)
 			{
-				leave.clicked += OnButtonLeaveGuild;
+				leaveButton.clicked += OnButtonLeaveGuild;
 			}
 
-			Button invite = root.Q<Button>(INVITE_BUTTON_NAME);
-			if (invite != null)
+			inviteButton = root.Q<Button>(INVITE_BUTTON_NAME);
+			if (inviteButton != null)
 			{
-				invite.clicked += OnButtonInviteToGuild;
+				inviteButton.clicked += OnButtonInviteToGuild;
 			}
 
 			if (rosterTabButton != null)
@@ -1505,6 +1511,31 @@ namespace FishMMO.Client
 			if (disbandButton != null)
 			{
 				disbandButton.style.display = leaderDisplay;
+			}
+
+			/* The footer used to show Create, Invite and Leave at all times, so a player with no
+			 * guild was offered two actions that cannot do anything — there is nothing to invite
+			 * anyone to and nothing to leave. Membership decides which of the three can apply,
+			 * and Invite additionally answers to the same permission the server enforces. */
+			bool inGuild = Character != null &&
+						   Character.TryGet(out IGuildController membership) &&
+						   membership.ID > 0;
+
+			if (createButton != null)
+			{
+				createButton.style.display = inGuild ? DisplayStyle.None : DisplayStyle.Flex;
+			}
+
+			if (leaveButton != null)
+			{
+				leaveButton.style.display = inGuild ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
+			if (inviteButton != null)
+			{
+				inviteButton.style.display = inGuild && (permissions & GuildPermissions.Invite) == GuildPermissions.Invite
+					? DisplayStyle.Flex
+					: DisplayStyle.None;
 			}
 		}
 
