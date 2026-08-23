@@ -18,6 +18,9 @@
     position: absolute;
     min-width: 160px;
     padding: 8px;
+    /* The panel is placed at the click point, so without a ceiling a list this tall simply
+       runs off the bottom of the screen. Cap it against the viewport and let the list scroll. */
+    max-height: 90%;
 }
 
 .channel-name-input {
@@ -26,8 +29,21 @@
 
 .channel-list {
     flex-direction: column;
+    /* UITK defaults flex-shrink to 0, so without these the ScrollView refuses to give up
+       height and overflows the capped panel instead of scrolling inside it. */
+    flex-shrink: 1;
+    min-height: 0;
 }
 
 .channel-toggle {
     margin: 1px 0;
+}
+
+/*
+    The channel names are this menu's actual content — the list of things being chosen — rather
+    than captions for some other control, so they carry primary text weight instead of the
+    --abyss-200 the theme gives a BaseField label by default.
+*/
+.channel-toggle > .unity-base-field__label {
+    color: var(--abyss-100);
 }

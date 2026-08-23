@@ -37,6 +37,11 @@ namespace FishMMO.Client
 		private bool suppressCallbacks;
 
 		/// <summary>
+		/// The position Activate asked for, before clamping it into view.
+		/// </summary>
+		private Vector3 requestedPosition;
+
+		/// <summary>
 		/// Builds a toggle per chat channel (except Command) and wires the rename input.
 		/// </summary>
 		public override void OnStarting()
@@ -71,6 +76,7 @@ namespace FishMMO.Client
 					{
 						name = $"channel-toggle-{channelName}",
 					};
+					toggle.AddToClassList("fish-toggle");
 					toggle.AddToClassList("channel-toggle");
 					toggle.RegisterValueChangedCallback((evt) => OnToggleChannel(channel, evt.newValue));
 					channelList.Add(toggle);
@@ -80,13 +86,24 @@ namespace FishMMO.Client
 
 			if (nameInput != null)
 			{
+				/* Trickle-down for the same reason the chat input uses it: a TextField handles
+				 * Return itself, and on the bubble phase that handling consumes the event before
+				 * this callback is reached — so the one gesture that committed a rename never
+				 * actually ran. */
 				nameInput.RegisterCallback<KeyDownEvent>((evt) =>
 				{
 					if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
 					{
 						ChangeTabName();
+						evt.StopPropagation();
 					}
-				});
+				}, TrickleDown.TrickleDown);
+
+				/* Enter was also the ONLY thing that committed. This panel dismisses itself as
+				 * soon as the pointer leaves it, so typing a name and clicking a channel — or
+				 * simply moving away — threw the edit away with no indication it had been
+				 * ignored. Commit on losing the field instead. */
+				nameInput.RegisterCallback<FocusOutEvent>((evt) => ChangeTabName());
 			}
 
 			Root.RegisterCallback<PointerDownEvent>(OnRootPointerDown, TrickleDown.TrickleDown);
@@ -161,7 +178,44 @@ namespace FishMMO.Client
 				panel.style.position = Position.Absolute;
 				panel.style.left = position.x;
 				panel.style.top = position.y;
+
+				/* The panel is as tall as the channel list makes it, and Activate runs before
+				 * layout, so its height cannot be measured here — resolvedStyle reports NaN
+				 * until a layout pass has run. Clamp on the first geometry pass instead, once
+				 * both the panel and its container have real sizes. */
+				requestedPosition = position;
+				panel.UnregisterCallback<GeometryChangedEvent>(OnPanelGeometryChanged);
+				panel.RegisterCallback<GeometryChangedEvent>(OnPanelGeometryChanged);
 			}
+		}
+
+		/// <summary>
+		/// Keeps the panel fully on screen once its size is known.
+		/// </summary>
+		private void OnPanelGeometryChanged(GeometryChangedEvent evt)
+		{
+			if (panel == null || panel.parent == null)
+			{
+				return;
+			}
+
+			float containerWidth = panel.parent.contentRect.width;
+			float containerHeight = panel.parent.contentRect.height;
+			float panelWidth = panel.resolvedStyle.width;
+			float panelHeight = panel.resolvedStyle.height;
+
+			if (float.IsNaN(containerWidth) || float.IsNaN(containerHeight) ||
+				float.IsNaN(panelWidth) || float.IsNaN(panelHeight) ||
+				containerWidth <= 0.0f || containerHeight <= 0.0f)
+			{
+				return;
+			}
+
+			float left = Mathf.Clamp(requestedPosition.x, 0.0f, Mathf.Max(0.0f, containerWidth - panelWidth));
+			float top = Mathf.Clamp(requestedPosition.y, 0.0f, Mathf.Max(0.0f, containerHeight - panelHeight));
+
+			panel.style.left = left;
+			panel.style.top = top;
 		}
 
 		/// <summary>

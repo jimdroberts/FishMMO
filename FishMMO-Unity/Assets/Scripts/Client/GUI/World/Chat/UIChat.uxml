@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+﻿<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIChat.uss" />
     <ui:VisualElement name="chat-root" class="fish-panel chat-panel">
@@ -10,6 +10,7 @@
             <ui:VisualElement name="chat-messages" class="chat-messages" />
         </ui:ScrollView>
         <ui:VisualElement name="chat-input-row" class="chat-input-row">
+            <ui:Button name="chat-channel-selector" text="Say" class="fish-button chat-channel-selector" />
             <ui:TextField name="chat-input" class="fish-input chat-input" />
         </ui:VisualElement>
     </ui:VisualElement>

@@ -80,8 +80,28 @@
     min-height: 26px;
     padding: 2px 4px;
     flex-shrink: 0;
+    /* UITK defaults flex-direction to column, not row as CSS does. With a single child that was
+       invisible; the moment the channel selector joined the field it stacked above it instead of
+       sitting beside it. */
+    flex-direction: row;
+    align-items: center;
 }
 
 .chat-input {
     flex-grow: 1;
+}
+
+/*
+    Channel selector sitting to the left of the input. It names the channel a plain line will be
+    sent on, so it has to hold its width rather than be squeezed by the field beside it — the
+    input carries flex-grow, and without flex-shrink: 0 here the label collapses as soon as the
+    panel narrows.
+*/
+.chat-channel-selector {
+    flex-shrink: 0;
+    min-width: 54px;
+    height: 20px;
+    margin-right: 4px;
+    padding: 0 6px;
+    font-size: 10px;
 }

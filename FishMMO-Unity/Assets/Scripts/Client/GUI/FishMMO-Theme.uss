@@ -995,6 +995,20 @@ TextField.fish-input > #unity-text-input .unity-text-element {
     flex-grow: 1;
 }
 
+/*
+    A BaseField's own label: the `label` attribute on a TextField, or the text passed to
+    `new Toggle("Say")`. The rule above deliberately scopes through #unity-text-input to keep
+    flex-grow off these labels, which leaves their colour unset, so they fall back to UITK's
+    near-black default and vanish against a dark panel. The chat channel picker showed both
+    halves of it at once: "Tab Name" and every channel name rendered as black-on-black.
+
+    Colour only, so none of the layout the scoping was protecting comes back with it.
+*/
+.fish-input > .unity-base-field__label,
+.fish-toggle > .unity-base-field__label {
+    color: var(--abyss-200);
+}
+
 .fish-input > #unity-text-input,
 TextField.fish-input > #unity-text-input {
     background-color: var(--abyss-900);

@@ -75,6 +75,8 @@ namespace FishMMO.Client
 		private const string CHAT_MESSAGES_NAME = "chat-messages";
 		/// <summary>Name of the chat input field.</summary>
 		private const string CHAT_INPUT_NAME = "chat-input";
+		/// <summary>Name of the channel selector button beside the input.</summary>
+		private const string CHAT_CHANNEL_SELECTOR_NAME = "chat-channel-selector";
 
 		/// <summary>Theme class giving a chat tab its shared tab appearance.</summary>
 		/// <remarks>
@@ -113,16 +115,20 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Colour mapping for each chat channel.
+		///
+		/// These are drawn on the dark chat panel, so a channel colour has to carry enough
+		/// lightness to be read there. Trade was Color.black and Region was Color.blue; both
+		/// are near-invisible against that background rather than merely dim.
 		/// </summary>
 		public Dictionary<ChatChannel, Color> ChannelColors = new Dictionary<ChatChannel, Color>()
 		{
 			{ ChatChannel.Say,      Color.white },
 			{ ChatChannel.World,    Color.cyan },
-			{ ChatChannel.Region,   Color.blue },
+			{ ChatChannel.Region,   new Color(0.45f, 0.65f, 1f) },
 			{ ChatChannel.Party,    Color.red },
 			{ ChatChannel.Guild,    Color.green},
 			{ ChatChannel.Tell,     Color.magenta },
-			{ ChatChannel.Trade,    Color.black },
+			{ ChatChannel.Trade,    new Color(0.98f, 0.68f, 0.34f) },
 			{ ChatChannel.System,   Color.yellow },
 			{ ChatChannel.Discord,  TinyColor.turquoise.ToUnityColor() },
 		};
@@ -223,6 +229,27 @@ namespace FishMMO.Client
 		private VisualElement messagesContainer;
 		/// <summary>Chat text input field.</summary>
 		private TextField inputField;
+		/// <summary>Button naming the channel a plain line is sent on.</summary>
+		private Button channelSelectorButton;
+
+		/// <summary>
+		/// Channels a player can actually send on, in selector order. Tell is excluded because it
+		/// needs a recipient typed with it, and System and Discord are not player-sendable.
+		/// </summary>
+		private static readonly ChatChannel[] SelectableChannels = new ChatChannel[]
+		{
+			ChatChannel.Say,
+			ChatChannel.World,
+			ChatChannel.Region,
+			ChatChannel.Party,
+			ChatChannel.Guild,
+			ChatChannel.Trade,
+		};
+
+		/// <summary>
+		/// The channel a line with no leading slash command is sent on.
+		/// </summary>
+		private ChatChannel sendChannel = ChatChannel.Say;
 
 		/// <summary>Chat tabs keyed by display name. Configuration survives a tree rebuild.</summary>
 		private readonly Dictionary<string, ChatTabView> tabs = new Dictionary<string, ChatTabView>();
@@ -329,6 +356,13 @@ namespace FishMMO.Client
 			scrollView = Root.Q<ScrollView>(CHAT_SCROLL_NAME);
 			messagesContainer = Root.Q<VisualElement>(CHAT_MESSAGES_NAME);
 			inputField = Root.Q<TextField>(CHAT_INPUT_NAME);
+
+			channelSelectorButton = Root.Q<Button>(CHAT_CHANNEL_SELECTOR_NAME);
+			if (channelSelectorButton != null)
+			{
+				channelSelectorButton.clicked += CycleSendChannel;
+				RefreshChannelSelector();
+			}
 
 			Button addTabButton = Root.Q<Button>(CHAT_ADD_TAB_NAME);
 			if (addTabButton != null)
@@ -564,6 +598,13 @@ namespace FishMMO.Client
 				case KeyCode.Return:
 				case KeyCode.KeypadEnter:
 					OnSubmit(inputField.value);
+					/* Sending has to release the field for the same reason Escape does. A focused
+					 * text field is what UIManager.InputControlHasFocus gates ALL player input on
+					 * — movement, hotkeys and interaction alike — so a field that keeps focus
+					 * after Enter leaves the player unable to move or press E until they think to
+					 * hit Escape or click the world. Escape was given this treatment and Enter was
+					 * not, which is why sending one chat line silently disabled the game. */
+					inputField.Blur();
 					evt.StopPropagation();
 					break;
 
@@ -726,6 +767,14 @@ namespace FishMMO.Client
 
 			PushInputHistory(input);
 
+			/* The selector names where a plain line goes. Anything already carrying a slash
+			 * command states its own destination and is left exactly as typed — that includes
+			 * non-channel commands like /leaveinstance, which must not be prefixed into chat. */
+			if (!input.StartsWith("/") && sendChannel != ChatChannel.Say)
+			{
+				input = $"{ChatHelper.ChannelCommandMap[sendChannel][0]} {input}";
+			}
+
 			/* Clean locally before sending.
 			 *
 			 * The server does this again and does not trust this — a client is free to skip it —
@@ -788,6 +837,36 @@ namespace FishMMO.Client
 			if (inputField != null)
 			{
 				inputField.value = "";
+			}
+		}
+
+		/// <summary>
+		/// Advances the selector to the next sendable channel.
+		/// </summary>
+		private void CycleSendChannel()
+		{
+			int index = System.Array.IndexOf(SelectableChannels, sendChannel);
+			sendChannel = SelectableChannels[(index + 1) % SelectableChannels.Length];
+			RefreshChannelSelector();
+		}
+
+		/// <summary>
+		/// Repaints the selector to match the current send channel.
+		/// </summary>
+		private void RefreshChannelSelector()
+		{
+			if (channelSelectorButton == null)
+			{
+				return;
+			}
+
+			channelSelectorButton.text = sendChannel.ToString();
+
+			/* Tinting the button with the channel colour means the destination is readable at a
+			 * glance without reading the word — the same cue the messages themselves use. */
+			if (ChannelColors.TryGetValue(sendChannel, out Color channelColor))
+			{
+				channelSelectorButton.style.color = channelColor;
 			}
 		}
 
