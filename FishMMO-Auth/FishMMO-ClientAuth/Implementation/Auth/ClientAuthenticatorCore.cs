@@ -336,6 +336,12 @@ namespace FishMMO.Auth.Implementation
 
 			srpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
 
+			/* Which arm this takes is the whole question when a World/Scene hop bounces the
+			 * player back to login, and nothing recorded it: the token path is silent on
+			 * success, and the credential path only reports the empty username it was never
+			 * going to be able to use. */
+			_ = Log.Debug(LogPrefix, $"Handshake complete; auth token {(storedAuthToken != null ? "held" : "NOT held")}.");
+
 			// Token auth path (World/Scene server)
 			if (storedAuthToken != null)
 			{
@@ -576,12 +582,18 @@ namespace FishMMO.Auth.Implementation
 					}
 				}
 
-				OnAuthResultCallback(
+				ClientAuthenticationResult effectiveResult =
 					result == ClientAuthenticationResult.LoginSuccess && storedAuthToken == null
 						? ClientAuthenticationResult.TokenDecryptFailed
-						: result);
+						: result;
 
-				_ = Log.Debug(LogPrefix, result.ToString());
+				OnAuthResultCallback(effectiveResult);
+
+				/* The effective result, not the raw one. Logging `result` reported LoginSuccess
+				 * even when the token had failed to decrypt and TokenDecryptFailed was what the
+				 * client actually acted on — so the log positively asserted the opposite of what
+				 * happened, in exactly the case someone would be reading it to diagnose. */
+				_ = Log.Debug(LogPrefix, effectiveResult.ToString());
 
 				srpData.Clear();
 				srpData = null;

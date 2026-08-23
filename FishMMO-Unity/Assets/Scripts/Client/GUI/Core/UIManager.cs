@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared.Core;
@@ -305,7 +305,15 @@ namespace FishMMO.Client
 			if (controls.TryGetValue(name, out UITKControl result))
 			{
 				result.Show();
+				return;
 			}
+
+			/* A miss here is how a panel goes missing without anything reporting it: the caller
+			 * asked for a HUD element by name, no control answered to that name, and the method
+			 * returned as though it had worked. The name is authored in a scene and the string
+			 * is authored in code, so the two drift apart silently — which looks identical to a
+			 * panel that rendered nothing. */
+			Log.Warning("UIManager", $"Show('{name}') found no registered control with that name. Registered: {string.Join(", ", controls.Keys)}");
 		}
 
 		/// <summary>

@@ -251,19 +251,30 @@ namespace FishMMO.Client
 			DestroySlots();
 
 			if (Character == null ||
-				slotGrid == null ||
 				!Character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}
 
+			/* Subscribed before the grid is considered, and no longer behind a slotGrid check.
+			 * The character is set on world entry, which is usually before this panel has ever
+			 * been opened — so its UXML has not been cloned and slotGrid is still null. Bailing
+			 * out here used to skip the subscriptions as well as the build, and nothing else
+			 * subscribes, so the panel spent the rest of the session deaf to slot updates: it
+			 * drew whatever the container held at the moment it was opened and never changed
+			 * again. Only the grid needs the tree. */
 			inventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
 			inventoryController.OnSlotLockChanged -= OnInventorySlotLockChanged;
-
-			BuildSlots(inventoryController);
-
 			inventoryController.OnSlotUpdated += OnInventorySlotUpdated;
 			inventoryController.OnSlotLockChanged += OnInventorySlotLockChanged;
+
+			if (slotGrid == null)
+			{
+				// Built on the first open instead — see ApplyPerOpenContent.
+				return;
+			}
+
+			BuildSlots(inventoryController);
 		}
 
 		/// <summary>
@@ -307,9 +318,24 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void OnInventorySlotUpdated(IItemContainer container, Item item, int inventoryIndex)
 		{
-			if (container == null || inventoryIndex < 0 || inventoryIndex >= slotViews.Count)
+			if (container == null || inventoryIndex < 0)
 			{
 				return;
+			}
+
+			/* An index the grid does not have means the grid is smaller than the container —
+			 * built before the container was sized, or against a tree that has been replaced.
+			 * Rebuilding is the recovery; dropping the update silently is what left a panel
+			 * showing fewer slots than the character actually has. */
+			if (inventoryIndex >= slotViews.Count)
+			{
+				if (Character == null ||
+					!Character.TryGet(out IInventoryController rebuildIInventoryController) ||
+					!EnsureSlots(rebuildIInventoryController) ||
+					inventoryIndex >= slotViews.Count)
+				{
+					return;
+				}
 			}
 
 			ItemOperationTracker.Release(ReferenceButtonType.Inventory, inventoryIndex);
@@ -410,28 +436,59 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ApplyPerOpenContent()
 		{
-			if (slotGrid == null ||
-				Character == null ||
+			if (Character == null ||
 				!Character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}
 
-			/* Two ways the grid can be stale: the container changed size, or the elements belong
-			 * to a tree that has been replaced since. The second is the one that matters — a slot
-			 * whose parent is not the current grid is drawn nowhere and clicking where it used to
-			 * be does nothing. */
-			bool stale = slotViews.Count != inventoryController.Items.Count ||
-						 (slotViews.Count > 0 && slotViews[0].Root != null && slotViews[0].Root.parent != slotGrid);
-
-			if (stale)
+			if (EnsureSlots(inventoryController))
 			{
-				DestroySlots();
-				BuildSlots(inventoryController);
+				// Rebuilt, which repaints every slot on the way out.
 				return;
 			}
 
 			RefreshAllSlots(inventoryController);
+		}
+
+		/// <summary>
+		/// Guarantees the grid holds one element per container slot, rebuilding it when it does
+		/// not. Returns true if it rebuilt, in which case every slot has already been repainted.
+		/// </summary>
+		/// <remarks>
+		/// The grid is sized from the container's slot COUNT, never from how many of those slots
+		/// hold something. Inventory capacity is 32 slots whether it is full or empty, and all 32
+		/// frames are drawn either way — an empty slot is the thing the player drops an item onto
+		/// and the thing that shows them the space they have, so a grid that renders only
+		/// occupied slots has nothing to aim at and no way to convey that it is empty rather than
+		/// broken.
+		/// <para>
+		/// Two ways the grid goes stale. The container changed size — including the case that
+		/// matters most here, a grid built at zero because the panel was opened before the
+		/// character had one, which nothing else would ever correct. And the elements belong to a
+		/// tree that has since been replaced: <c>UIDocument</c> re-clones the UXML on every
+		/// enable, and a slot whose parent is not the current grid is drawn nowhere at all while
+		/// still looking perfectly valid from C#.
+		/// </para>
+		/// </remarks>
+		private bool EnsureSlots(IInventoryController inventoryController)
+		{
+			if (slotGrid == null || inventoryController == null)
+			{
+				return false;
+			}
+
+			bool stale = slotViews.Count != inventoryController.Items.Count ||
+						 (slotViews.Count > 0 && slotViews[0].Root != null && slotViews[0].Root.parent != slotGrid);
+
+			if (!stale)
+			{
+				return false;
+			}
+
+			DestroySlots();
+			BuildSlots(inventoryController);
+			return true;
 		}
 
 		/// <summary>
@@ -507,6 +564,7 @@ namespace FishMMO.Client
 
 			int captured = slotIndex;
 			slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, captured));
+			slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, captured));
 			slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(captured, slotRoot));
 			slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(slotRoot));
 
@@ -563,12 +621,8 @@ namespace FishMMO.Client
 			slotSprites[slotIndex] = sprite;
 			RefreshCapacity();
 
-			if (view.Icon != null)
-			{
-				view.Icon.style.backgroundImage = sprite != null
-					? new StyleBackground(sprite)
-					: StyleKeyword.None;
-			}
+			// Placeholder when the template has no icon: an occupied slot must look occupied.
+			UITKItemIcon.Apply(view.Icon, sprite);
 
 			if (view.Amount != null)
 			{
@@ -589,21 +643,29 @@ namespace FishMMO.Client
 		/// Recomputes the header subtitle, footer counts and capacity bar.
 		/// </summary>
 		/// <remarks>
-		/// Occupancy is read from <c>slotSprites</c> rather than from the controller: this runs
-		/// on every slot write, and the sprite array is already the view's own record of which
-		/// slots are filled. Asking the controller would re-derive a fact the view just set.
+		/// Occupancy comes from the controller, which is the only thing that knows it. It used to
+		/// be counted from <c>slotSprites</c> on the reasoning that the sprite array is the view's
+		/// own record of which slots are filled — but a sprite records whether an item has an
+		/// ICON, not whether a slot holds an item. Every item whose template has no icon assigned,
+		/// or whose icon has not finished loading, left a null in that array and was counted as an
+		/// empty slot, so the totals read low and drifted as icons resolved.
 		/// </remarks>
 		private void RefreshCapacity()
 		{
 			int total = slotSprites.Count;
 			int used = 0;
-			for (int i = 0; i < total; ++i)
+
+			if (Character != null && Character.TryGet(out IInventoryController inventoryController))
 			{
-				if (slotSprites[i] != null)
+				for (int i = 0; i < total; ++i)
 				{
-					++used;
+					if (!inventoryController.IsSlotEmpty(i))
+					{
+						++used;
+					}
 				}
 			}
+
 			int free = total - used;
 
 			if (subtitleLabel != null)
@@ -650,10 +712,7 @@ namespace FishMMO.Client
 			slotSprites[slotIndex] = null;
 			RefreshCapacity();
 
-			if (view.Icon != null)
-			{
-				view.Icon.style.backgroundImage = StyleKeyword.None;
-			}
+			UITKItemIcon.Clear(view.Icon);
 			if (view.Amount != null)
 			{
 				view.Amount.text = "";
@@ -707,6 +766,46 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Routes pointer-down events on a slot to left- or right-click handlers.
 		/// </summary>
+		/// <summary>
+		/// Completes a press-and-drag when the pointer is released over a different slot.
+		/// </summary>
+		/// <remarks>
+		/// The panel's drag has always been click-to-pick-up then click-to-drop, which works but
+		/// is not what a player tries first — pressing on an item and dragging it did nothing at
+		/// all, because nothing was listening for the release. PointerDown already starts the
+		/// drag, so a release is the only missing half.
+		/// <para>
+		/// Releasing over the slot the drag started from deliberately does NOT drop: that is an
+		/// ordinary click, and completing there would make click-to-pick-up impossible.
+		/// </para>
+		/// </remarks>
+		private void OnSlotPointerUp(PointerUpEvent evt, int slotIndex)
+		{
+			if (Character == null || Client == null || evt.button != 0)
+			{
+				return;
+			}
+
+			bool draggingNow = UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging;
+
+			if (!draggingNow)
+			{
+				return;
+			}
+
+			// Same slot the drag came from: this is a click, not a drag. Leave it armed.
+			if (dragObject.Type == ReferenceButtonType.Inventory &&
+				(int)dragObject.ReferenceID == slotIndex)
+			{
+				return;
+			}
+
+			if (Character.TryGet(out IInventoryController inventoryController))
+			{
+				CompleteDropOntoSlot(dragObject, inventoryController, slotIndex);
+			}
+		}
+
 		private void OnSlotPointerDown(PointerDownEvent evt, int slotIndex)
 		{
 			if (Character == null || Client == null)
@@ -861,18 +960,30 @@ namespace FishMMO.Client
 		/// </summary>
 		private void BeginDragFromSlot(UITKDragObject dragObject, IInventoryController inventoryController, int slotIndex)
 		{
-			if (IsSlotBlocked(slotIndex) ||
-				!inventoryController.TryGetItem(slotIndex, out Item item) ||
-				item == null)
+			bool blocked = IsSlotBlocked(slotIndex);
+			bool gotItem = inventoryController.TryGetItem(slotIndex, out Item item);
+
+			/* All three of these returned silently, so a drag that never starts is
+			 * indistinguishable from one that started and was dropped. Pending marks in
+			 * particular never expire — they are cleared only by an explicit ack — so a slot
+			 * whose acknowledgement never arrived stays undraggable for the rest of the session
+			 * with nothing to say so. */
+			if (blocked || !gotItem || item == null)
 			{
+				FishMMO.Logging.Log.Debug("UITKInventory",
+					$"BeginDrag REFUSED slot {slotIndex}: blocked={blocked} " +
+					$"(pending={ItemOperationTracker.IsPending(ReferenceButtonType.Inventory, slotIndex)}) " +
+					$"gotItem={gotItem} itemNull={item == null}.");
 				return;
 			}
 
+			/* An item with no icon is still an item. This used to refuse the drag outright when
+			 * Template.Icon was null, which meant that on a project whose item art is not in yet
+			 * — every icon unassigned — picking anything up was impossible, and so was every
+			 * interaction built on it: click-to-pick-up, click-to-drop, and press-and-drag all
+			 * dead, with no error to say why. The icon is decoration on the cursor; whether the
+			 * player may move the item is not its business. */
 			Sprite sprite = item.Template != null ? item.Template.Icon : null;
-			if (sprite == null)
-			{
-				return;
-			}
 
 			/* Carry the item, not just the slot number. A slot index is only true while nothing
 			 * writes to that slot, and the server can write to it between the pick-up and the
@@ -897,10 +1008,51 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (Character.TryGet(out IInventoryController inventoryController))
+			if (!Character.TryGet(out IInventoryController inventoryController))
 			{
-				inventoryController.Activate(slotIndex);
+				return;
 			}
+
+			/* Equip, if the item can be worn. InventoryController.Activate is the "use this item"
+			 * path and it does nothing at all today — its body is a log line and a commented-out
+			 * OnUseItem, and the server has no matching handler — so right-clicking an item was
+			 * silently doing nothing. Equipping is the behaviour the slot actually needs, and the
+			 * broadcast for it already exists and is already handled server-side; the equipment
+			 * panel has been sending it for click-to-drop all along. The destination slot comes
+			 * from the item's own template, which is what makes a single right-click meaningful:
+			 * a breastplate has exactly one slot it can go to. */
+			if (inventoryController.TryGetItem(slotIndex, out Item item) &&
+				item.Template is EquippableItemTemplate equippable)
+			{
+				/* The same pre-flight CompleteDropOntoSlot runs. The server re-validates and
+				 * remains the only authority, but a request it is certain to reject costs a
+				 * round trip and leaves both slots marked pending until the refusal arrives. */
+				if (!inventoryController.CanManipulate() ||
+					inventoryController.IsSlotLocked(slotIndex))
+				{
+					return;
+				}
+
+				if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Inventory, slotIndex))
+				{
+					return;
+				}
+				if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Equipment, (int)equippable.Slot))
+				{
+					ItemOperationTracker.Release(ReferenceButtonType.Inventory, slotIndex);
+					return;
+				}
+
+				Client.Broadcast(new EquipmentEquipItemBroadcast()
+				{
+					InventoryIndex = slotIndex,
+					Slot           = (byte)equippable.Slot,
+					FromInventory  = InventoryType.Inventory,
+				}, Channel.Reliable);
+				return;
+			}
+
+			inventoryController.Activate(slotIndex);
 		}
 
 		/// <summary>

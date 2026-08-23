@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -82,6 +82,18 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			/* Make the document root fill the panel. Every bar in this UXML is position:absolute
+			 * (see .res-bar), and an absolutely-positioned child contributes nothing to its
+			 * parent's content size — so the root, which has no size of its own, collapsed to
+			 * nothing and the bar was then positioned against a zero-sized containing block.
+			 * Measured: root resolved to NaN x NaN while the panel itself was 1024x768. Panels
+			 * whose content is an ordinary flex child (chat, factions) never hit this. */
+			root.style.position = Position.Absolute;
+			root.style.left = 0;
+			root.style.top = 0;
+			root.style.right = 0;
+			root.style.bottom = 0;
 
 			fill = root.Q(FILL_NAME);
 			label = root.Q<Label>(LABEL_NAME);

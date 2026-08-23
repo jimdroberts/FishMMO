@@ -1,4 +1,4 @@
-﻿/*
+/*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     FishMMO-Theme.uss
     Abyss / Signal Blue  —  Shared Visual Theme
@@ -424,6 +424,32 @@
 /* Icon image — layout (position/inset) set in panel USS. */
 .fish-slot__icon {
     -unity-background-scale-mode: scale-to-fit;
+}
+
+/*
+    Stand-in for an item whose template has no icon assigned.
+
+    "No icon" and "no item" used to draw identically — an empty background either way — so an
+    item with no art occupied a slot that looked empty, and nothing on screen invited the player
+    to press, drag or right-click it. This fills the icon element it is put on, at whatever size
+    that element already has: 48x48 on the drag ghost, the slot inset everywhere else. Nothing
+    here sets a size, so a surface that resizes its slots keeps working without touching this.
+
+    Deliberately reads as a blank plate rather than an error state. A project whose art is not in
+    yet would be covered in warning markers, and a missing icon is not a fault the player can do
+    anything about — it needs to be visible and identifiable as an item, not alarming.
+*/
+.fish-icon--placeholder {
+    background-color: var(--abyss-500);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: var(--brand-border);
+    border-right-color: var(--brand-border);
+    border-top-color: var(--brand-border);
+    border-bottom-color: var(--brand-border);
+    border-radius: 2px;
 }
 
 /* Slot name label, for sockets that show what belongs in them. */
@@ -940,6 +966,33 @@ Label.fish-label {
 .fish-input,
 TextField.fish-input {
     font-size: 11px;
+}
+
+/*
+    The glyph renderer inside a text input.
+
+    flex-grow is the load-bearing half. Measured on a chat field with a character already typed,
+    the element resolved to the right colour and the right font size and still reported a size of
+    380x0 — no height at all, so nothing could be drawn in it. Chat pins its input row to a fixed
+    26px and gives the field flex-grow, which leaves this element with nothing to derive a height
+    from; the login fields size to their own content and never hit it, which is why typing there
+    always looked fine. Filling the input is what the element does by default anyway, so this is
+    restoring that under a constrained parent rather than imposing a new layout.
+
+    The colour is kept because it is correct — Unity's default theme colours this element
+    directly and a direct rule beats the inherited one — but it was never the reason the text
+    was invisible.
+
+    Scoped through #unity-text-input rather than matching any .unity-text-element under
+    .fish-input. A TextField's own label is a .unity-text-element too, and .fish-input is used on
+    labelled fields — "Tab Name" in the chat channel picker, "Patch download folder" in the
+    launcher, "Hex" in the colour picker. An unscoped rule would recolour those labels and, worse,
+    give them flex-grow: 1, so the label would expand and squeeze the field it belongs to.
+*/
+.fish-input > #unity-text-input .unity-text-element,
+TextField.fish-input > #unity-text-input .unity-text-element {
+    color: var(--abyss-100);
+    flex-grow: 1;
 }
 
 .fish-input > #unity-text-input,

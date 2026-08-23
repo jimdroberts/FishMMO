@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -585,6 +585,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnInteractPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			if (!CanUpdateInput() || UIManager.ControlHasFocus()) return;
 
 			if (Character.TryGet(out ITargetController targetController))
@@ -673,6 +674,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			if (UIManager.TryGetTK("UIEquipment", out UITKEquipment equipment))
 			{
 				equipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
@@ -682,43 +684,65 @@ namespace FishMMO.Client
 
 		// --- UI Toggle Callbacks ---
 
+		/// <summary>
+		/// True when a panel toggle bound to a letter key must be ignored because the player is
+		/// typing into a text field.
+		/// </summary>
+		/// <remarks>
+		/// Movement already gates on this (see the CanReadInput path) and so does the hotkey bar,
+		/// but the window toggles did not — so typing an ordinary sentence into chat opened the
+		/// inventory on "i", the guild panel on "g", and so on. The panel that opened then took
+		/// focus off the chat field, which is why the rest of the sentence went nowhere: the two
+		/// symptoms are one bug.
+		/// </remarks>
+		private static bool TypingIntoField => UIManager.InputControlHasFocus();
+
+
 		private void OnInventoryPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIInventory");
 		}
 
 		private void OnAbilitiesPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIAbilities");
 		}
 
 		private void OnGuildPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIGuild");
 		}
 
 		private void OnPartyPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIParty");
 		}
 
 		private void OnFriendsPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIFriendList");
 		}
 
 		private void OnAchievementsPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIAchievements");
 		}
 
 		private void OnFactionsPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIFactions");
 		}
 
 		private void OnMinimapPerformed(InputAction.CallbackContext context)
 		{
+			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIMinimap");
 		}
 

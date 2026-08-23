@@ -68,9 +68,18 @@
     flex-shrink: 1;
 }
 
+/*
+    No fixed height. The row used to be pinned to 26px with the field given flex-grow, and under
+    that constraint the TextField's inner text element resolved to 380x0 — correct colour, correct
+    font size, no height, so nothing was drawn and every keystroke went in invisibly. The login
+    fields differ only in this: they size to their own content and have always rendered normally.
+    Letting the row do the same is the shape that is known to work, rather than another attempt to
+    force the inner element to fill a box it will not fill.
+*/
 .chat-input-row {
-    height: 26px;
+    min-height: 26px;
     padding: 2px 4px;
+    flex-shrink: 0;
 }
 
 .chat-input {

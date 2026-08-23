@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -100,6 +100,17 @@ namespace FishMMO.Client
 			/// expensive.
 			/// </remarks>
 			public Sprite AppliedSprite;
+
+			/// <summary>
+			/// Whether <see cref="Icon"/> was last written for a slot holding something.
+			/// </summary>
+			/// <remarks>
+			/// Part of the change detection, because the sprite alone cannot carry it. A slot
+			/// going from empty to bound-but-iconless has a null sprite on both sides, so a
+			/// comparison of sprites alone reports "unchanged" and the placeholder is never
+			/// drawn — the exact case this field exists to catch.
+			/// </remarks>
+			public bool AppliedOccupied;
 
 			/// <summary>The cooldown sweep fraction currently written into <see cref="Cooldown"/>.</summary>
 			public float AppliedCooldownFraction = -1.0f;
@@ -301,7 +312,7 @@ namespace FishMMO.Client
 
 			for (int i = 0; i < slots.Count; ++i)
 			{
-				ApplySlotSprite(slots[i], null);
+				ApplySlotSprite(slots[i], null, occupied: false);
 				ApplyCooldownFraction(slots[i], 0.0f);
 				slots[i].IsPressed = false;
 				slots[i].AwaitingRelease = false;
@@ -438,6 +449,7 @@ namespace FishMMO.Client
 			};
 
 			slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, slot));
+			slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, slot));
 			slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(slot));
 			slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave());
 
@@ -529,7 +541,7 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < slots.Count; ++i)
 				{
-					ApplySlotSprite(slots[i], null);
+					ApplySlotSprite(slots[i], null, occupied: false);
 				}
 				return;
 			}
@@ -543,12 +555,12 @@ namespace FishMMO.Client
 					// The referenced item or ability is gone; drop the binding rather than
 					// leaving a slot that would activate nothing.
 					ClearBinding(i, broadcast: false);
-					ApplySlotSprite(slot, null);
+					ApplySlotSprite(slot, null, occupied: false);
 					ApplyCooldownFraction(slot, 0.0f);
 					continue;
 				}
 
-				ApplySlotSprite(slot, sprite);
+				ApplySlotSprite(slot, sprite, bindings[i].Type != ReferenceButtonType.None);
 			}
 		}
 
@@ -655,6 +667,38 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="evt">The pointer-down event.</param>
 		/// <param name="slot">The slot that was pressed.</param>
+		/// <summary>
+		/// Assigns a dragged ability or item when the pointer is released over a hotkey slot.
+		/// </summary>
+		/// <remarks>
+		/// Same missing half as the inventory and equipment panels: the bar accepted a drop from
+		/// a completed click-to-pick-up, but dragging something onto it and letting go did
+		/// nothing, because no release was being listened for. Dragging an ability from the
+		/// abilities panel onto a hotkey is the ordinary way a player expects to bind one.
+		/// </remarks>
+		private void OnSlotPointerUp(PointerUpEvent evt, HotkeySlot slot)
+		{
+			if (Client == null || evt.button != 0)
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) ||
+				!dragObject.IsDragging)
+			{
+				return;
+			}
+
+			/* No same-slot guard here, unlike the inventory and equipment panels: a drag never
+			 * originates from a hotkey slot — ReferenceButtonType has no Hotkey member, the bar
+			 * only ever holds a reference to something in another panel — so there is no
+			 * "released where it started" case to exclude.
+			 *
+			 * A plain click is already safe without one: PointerDown assigns and clears the drag,
+			 * so by the time this runs IsDragging is false and the guard above has returned. */
+			HandleSlotLeftClick(slot);
+		}
+
 		private void OnSlotPointerDown(PointerDownEvent evt, HotkeySlot slot)
 		{
 			if (evt.button == 0)
@@ -682,14 +726,12 @@ namespace FishMMO.Client
 					bindings[slot.Index].Type = dragObject.Type;
 					bindings[slot.Index].ReferenceID = dragObject.ReferenceID;
 
-					if (dragObject.IconSprite != null)
-					{
-						ApplySlotSprite(slot, dragObject.IconSprite);
-					}
-					else
-					{
-						bindingsDirty = true;
-					}
+					/* Applied whether or not the drag carried art. This used to skip the write
+					 * on a null sprite and defer to the refresh sweep, which resolved the same
+					 * null and hid the icon — so binding an item with no icon left a slot that
+					 * looked empty while being bound, and clicking it activated something the
+					 * player could not see. */
+					ApplySlotSprite(slot, dragObject.IconSprite, occupied: true);
 
 					Client.Broadcast(new HotkeySetBroadcast()
 					{
@@ -733,7 +775,7 @@ namespace FishMMO.Client
 				dragObject.SetReference(sprite, bindings[slot.Index].ReferenceID, bindings[slot.Index].Type);
 
 				ClearBinding(slot.Index, broadcast: true);
-				ApplySlotSprite(slot, null);
+				ApplySlotSprite(slot, null, occupied: false);
 				ApplyCooldownFraction(slot, 0.0f);
 			}
 		}
@@ -894,34 +936,43 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Writes a slot's icon sprite, skipping the write when it has not changed.
+		/// Writes a slot's icon sprite, skipping the write when nothing has changed.
 		/// </summary>
 		/// <param name="slot">The slot to update.</param>
-		/// <param name="sprite">The sprite to display, or null to clear.</param>
-		private void ApplySlotSprite(HotkeySlot slot, Sprite sprite)
+		/// <param name="sprite">The sprite to display, or null if there is none to show.</param>
+		/// <param name="occupied">
+		/// True when the slot holds a binding. A null <paramref name="sprite"/> means two
+		/// different things — an empty slot, and a slot bound to something whose template has no
+		/// icon — and only the first should draw nothing. Without this the bar was the one item
+		/// surface where binding an art-less item produced a slot that looked unbound, so the
+		/// player would bind it again and again.
+		/// </param>
+		private void ApplySlotSprite(HotkeySlot slot, Sprite sprite, bool occupied)
 		{
-			if (ReferenceEquals(slot.AppliedSprite, sprite))
+			if (ReferenceEquals(slot.AppliedSprite, sprite) &&
+				slot.AppliedOccupied == occupied)
 			{
 				return;
 			}
 
 			slot.AppliedSprite = sprite;
+			slot.AppliedOccupied = occupied;
 
 			if (slot.Icon == null)
 			{
 				return;
 			}
 
-			if (sprite != null)
+			if (!occupied)
 			{
-				slot.Icon.style.backgroundImage = new StyleBackground(sprite);
-				slot.Icon.style.display = DisplayStyle.Flex;
-			}
-			else
-			{
-				slot.Icon.style.backgroundImage = new StyleBackground();
+				UITKItemIcon.Clear(slot.Icon);
 				slot.Icon.style.display = DisplayStyle.None;
+				return;
 			}
+
+			// Occupied: the icon if there is one, the placeholder if there is not.
+			UITKItemIcon.Apply(slot.Icon, sprite);
+			slot.Icon.style.display = DisplayStyle.Flex;
 		}
 
 		/// <summary>

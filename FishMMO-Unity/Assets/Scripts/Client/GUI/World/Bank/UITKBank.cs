@@ -248,19 +248,30 @@ namespace FishMMO.Client
 			DestroySlots();
 
 			if (Character == null ||
-				slotGrid == null ||
 				!Character.TryGet(out IBankController bankController))
 			{
 				return;
 			}
 
+			/* Subscribed before the grid is considered, and no longer behind a slotGrid check.
+			 * The character is set on world entry, which is usually before this panel has ever
+			 * been opened — so its UXML has not been cloned and slotGrid is still null. Bailing
+			 * out here used to skip the subscriptions as well as the build, and nothing else
+			 * subscribes, so the panel spent the rest of the session deaf to slot updates: it
+			 * drew whatever the container held at the moment it was opened and never changed
+			 * again. Only the grid needs the tree. */
 			bankController.OnSlotUpdated -= OnBankSlotUpdated;
 			bankController.OnSlotLockChanged -= OnBankSlotLockChanged;
-
-			BuildSlots(bankController);
-
 			bankController.OnSlotUpdated += OnBankSlotUpdated;
 			bankController.OnSlotLockChanged += OnBankSlotLockChanged;
+
+			if (slotGrid == null)
+			{
+				// Built on the first open instead — see ApplyPerOpenContent.
+				return;
+			}
+
+			BuildSlots(bankController);
 		}
 
 		/// <summary>
@@ -299,9 +310,24 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void OnBankSlotUpdated(IItemContainer container, Item item, int bankIndex)
 		{
-			if (container == null || bankIndex < 0 || bankIndex >= slotViews.Count)
+			if (container == null || bankIndex < 0)
 			{
 				return;
+			}
+
+			/* An index the grid does not have means the grid is smaller than the container —
+			 * built before the container was sized, or against a tree that has been replaced.
+			 * Rebuilding is the recovery; dropping the update silently is what left a panel
+			 * showing fewer slots than the character actually has. */
+			if (bankIndex >= slotViews.Count)
+			{
+				if (Character == null ||
+					!Character.TryGet(out IBankController rebuildIBankController) ||
+					!EnsureSlots(rebuildIBankController) ||
+					bankIndex >= slotViews.Count)
+				{
+					return;
+				}
 			}
 
 			ItemOperationTracker.Release(ReferenceButtonType.Bank, bankIndex);
@@ -397,27 +423,59 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ApplyPerOpenContent()
 		{
-			if (slotGrid == null ||
-				Character == null ||
+			if (Character == null ||
 				!Character.TryGet(out IBankController bankController))
 			{
 				return;
 			}
 
-			/* Stale means either the container changed size or the elements belong to a tree that
-			 * has since been replaced. The second is the one that matters: a slot whose parent is
-			 * not the current grid is drawn nowhere at all. */
-			bool stale = slotViews.Count != bankController.Items.Count ||
-						 (slotViews.Count > 0 && slotViews[0].Root != null && slotViews[0].Root.parent != slotGrid);
-
-			if (stale)
+			if (EnsureSlots(bankController))
 			{
-				DestroySlots();
-				BuildSlots(bankController);
+				// Rebuilt, which repaints every slot on the way out.
 				return;
 			}
 
 			RefreshAllSlots(bankController);
+		}
+
+		/// <summary>
+		/// Guarantees the grid holds one element per container slot, rebuilding it when it does
+		/// not. Returns true if it rebuilt, in which case every slot has already been repainted.
+		/// </summary>
+		/// <remarks>
+		/// The grid is sized from the container's slot COUNT, never from how many of those slots
+		/// hold something. Bank capacity is 100 slots whether it is full or empty, and all 100
+		/// frames are drawn either way — an empty slot is the thing the player drops an item onto
+		/// and the thing that shows them the space they have, so a grid that renders only
+		/// occupied slots has nothing to aim at and no way to convey that it is empty rather than
+		/// broken.
+		/// <para>
+		/// Two ways the grid goes stale. The container changed size — including the case that
+		/// matters most here, a grid built at zero because the panel was opened before the
+		/// character had one, which nothing else would ever correct. And the elements belong to a
+		/// tree that has since been replaced: <c>UIDocument</c> re-clones the UXML on every
+		/// enable, and a slot whose parent is not the current grid is drawn nowhere at all while
+		/// still looking perfectly valid from C#.
+		/// </para>
+		/// </remarks>
+		private bool EnsureSlots(IBankController bankController)
+		{
+			if (slotGrid == null || bankController == null)
+			{
+				return false;
+			}
+
+			bool stale = slotViews.Count != bankController.Items.Count ||
+						 (slotViews.Count > 0 && slotViews[0].Root != null && slotViews[0].Root.parent != slotGrid);
+
+			if (!stale)
+			{
+				return false;
+			}
+
+			DestroySlots();
+			BuildSlots(bankController);
+			return true;
 		}
 
 		/// <summary>
@@ -547,12 +605,8 @@ namespace FishMMO.Client
 			slotSprites[slotIndex] = sprite;
 			RefreshCapacity();
 
-			if (view.Icon != null)
-			{
-				view.Icon.style.backgroundImage = sprite != null
-					? new StyleBackground(sprite)
-					: StyleKeyword.None;
-			}
+			// Placeholder when the template has no icon: an occupied slot must look occupied.
+			UITKItemIcon.Apply(view.Icon, sprite);
 
 			if (view.Amount != null)
 			{
@@ -634,10 +688,7 @@ namespace FishMMO.Client
 			slotSprites[slotIndex] = null;
 			RefreshCapacity();
 
-			if (view.Icon != null)
-			{
-				view.Icon.style.backgroundImage = StyleKeyword.None;
-			}
+			UITKItemIcon.Clear(view.Icon);
 			if (view.Amount != null)
 			{
 				view.Amount.text = "";
@@ -842,11 +893,8 @@ namespace FishMMO.Client
 				return;
 			}
 
+			// Same as the inventory: a missing icon must not prevent the item being moved.
 			Sprite sprite = item.Template != null ? item.Template.Icon : null;
-			if (sprite == null)
-			{
-				return;
-			}
 
 			/* Carry the item, not just the slot number: the slot index stops being true the moment
 			 * anything else writes to that slot, and the drop would then move the wrong item. */

@@ -196,7 +196,15 @@ namespace FishMMO.Shared
 
 			AssetReference assetRef = SelectEquipmentMesh(template, item)
 				?? template.MeshReference;
-			if (assetRef == null)
+
+			/* RuntimeKeyIsValid as well as null. A template that simply has no model assigned
+			 * still serializes an AssetReference — an object with an empty m_AssetGUID — so it
+			 * passes a null check and then throws InvalidKeyException out of LoadAssetAsync
+			 * ("No MergeMode is set to merge the multiple keys requested. Keys=", with nothing
+			 * after the equals because the key is empty). That surfaces as an unhandled
+			 * exception in the player's console on equipping an ordinary item, rather than as
+			 * the "no mesh configured" case this warning already exists to describe. */
+			if (assetRef == null || !assetRef.RuntimeKeyIsValid())
 			{
 				Debug.LogWarning($"[EquipmentVisualController] No mesh for '{item.Name}' slot {slot}.");
 				return;

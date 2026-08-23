@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 using UnityEditor;
 using UnityEditorInternal;
 using System.IO;
@@ -145,6 +145,19 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			// Check if scripts are currently compiling
 			if (BuildEnvironmentOptions.IsCompiling())
 			{
+				/* Non-zero in batch mode. Returning here skips the player build while Addressables
+				 * has already run and written real bundles, so without this the process exits 0
+				 * having produced no player at all — the caller sees a success, the output
+				 * directory still holds the previous build, and the only way to notice is to
+				 * check a timestamp. Adding one editor script is enough to trigger it: the
+				 * recompile outlives the Addressables step and this guard then fires. */
+				if (UnityEngine.Application.isBatchMode)
+				{
+					UnityEngine.Debug.LogError("[CustomBuildTool] Scripts were still compiling when the player build was due to start; no player was produced.");
+					EditorApplication.Exit(1);
+					return;
+				}
+
 				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start build while scripts are compiling. Please wait for compilation to finish.");
 				if (CanShowDialog())
 				{

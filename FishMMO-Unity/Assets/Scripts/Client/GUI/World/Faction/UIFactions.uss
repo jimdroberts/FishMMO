@@ -69,9 +69,16 @@
     margin-bottom: 4px;
 }
 
+/*
+    Centres the value label as a normal flex child so it sizes to its text. The fill stays
+    absolute underneath it, so the bar still fills left-to-right behind the number.
+*/
 .faction-row__bar {
     height: 14px;
     position: relative;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
 }
 
 .faction-row__fill {
@@ -83,16 +90,30 @@
     border-radius: 3px;
 }
 
+/*
+    Outlined rather than tinted, because this label has no single background to contrast
+    against. It spans the whole bar (left:0 right:0) while the fill behind it covers only the
+    standing's share, so at any standing part of the text sits on the coloured fill and part on
+    the dark empty track. White measured against each: 1.37:1 on the positive green, 1.72:1 on
+    the neutral sky blue, 4.00:1 on the negative red — all under the 4.5:1 needed — and 18.8:1
+    on the track. Darkening the text would simply invert which half is unreadable, and tinting
+    it per standing cannot fix a label that crosses two backgrounds at once.
+
+    Two attempts at fixing this by styling the text itself — recolouring, then outlining — both
+    failed, because no treatment of a glyph survives 1.37:1. The label now carries its own dark
+    background instead, sized to the number rather than stretched across the bar, so the fill
+    colour behind it stops mattering entirely: white on this scrim measures 4.6:1 over the
+    brightest bar and better over every other. The bar keeps its full colour either side of it.
+*/
 .faction-row__value {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
     font-size: 9px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
     color: var(--white);
+    background-color: rgba(0, 0, 0, 0.75);
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 2px;
 }
 
 

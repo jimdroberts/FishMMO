@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using FishNet.Broadcast;
 using FishNet.Managing;
 
@@ -1183,7 +1183,11 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) && dialogBox.Visible)
 			{
-				dialogBox.Hide();
+				/* Not Hide(). The queue dialog is armed with onLeave: QuitToLogin, and Hide() on
+				 * an armed request answers it down the cancel path — so taking the dialog down
+				 * because the player reached the front of the queue ran the same code as the
+				 * player abandoning it. */
+				dialogBox.DismissWithoutAnswer();
 			}
 		}
 
