@@ -107,7 +107,13 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			GameObject.name = GameObject.name.Replace("(Clone)", "");
 			ICharacter character = Transform.GetComponent<ICharacter>();
+			/* CharacterGuildLabel is optional — it is assigned from a prefab's label object and a
+			 * character without one leaves it null. PlayerCharacter.SetGuildName already tests for
+			 * that; this did not, so any titled interactable lacking the label threw out of Awake.
+			 * The throw aborts the rest of this method, which is how walking into a zone produced
+			 * a NullReferenceException per NPC. */
 			if (character != null &&
+				character.CharacterGuildLabel != null &&
 				!string.IsNullOrWhiteSpace(Title))
 			{
 				string hex = TitleColor.ToHex();
