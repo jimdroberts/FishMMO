@@ -162,12 +162,18 @@ namespace FishMMO.Client
 		/// </summary>
 		public void Deinitialize()
 		{
-			if (Character == null)
-			{
-				return;
-			}
-
-			if (Character.KCCPlayer != null)
+			/* Unsubscribing is NOT conditional on Character.
+			 *
+			 * PlayerControls is static and outlives this component, but the handlers registered
+			 * against it are instance methods — so a teardown that skips the unsubscribe leaves
+			 * the static action holding a delegate over a component that is destroyed moments
+			 * later. Returning early on a null Character, which a despawn or scene transfer can
+			 * produce, therefore leaks one dead subscriber per character for the session.
+			 *
+			 * The failure this produces is easy to misread: movement is polled through
+			 * ReadValue and keeps working, while everything routed through a "performed"
+			 * callback — interact, jump, crouch, sprint — is the half that suffers. */
+			if (Character != null && Character.KCCPlayer != null)
 			{
 				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
 			}
