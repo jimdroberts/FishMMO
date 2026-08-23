@@ -119,6 +119,40 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Takes the dialog down because the thing it was asking about has resolved itself,
+		/// without answering it on the player's behalf.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Hide()"/> means "the player dismissed this", and an armed request turns
+		/// that into a cancel — which is correct for Escape or a click away, and wrong for a
+		/// caller whose wait simply ended. The world-scene queue hit this: being successfully
+		/// routed calls HideQueueDialog, the armed request answered down its cancel path, and
+		/// the cancel callback was <c>QuitToLogin</c>. Arriving at the front of the queue was
+		/// therefore indistinguishable from choosing to leave it — and quitting to login revokes
+		/// the auth token, so the scene connection already in flight arrived with nothing to
+		/// authenticate with and the player was returned to the login screen.
+		/// </remarks>
+		public void DismissWithoutAnswer()
+		{
+			if (this.resolving)
+			{
+				return;
+			}
+
+			this.resolving = true;
+			try
+			{
+				RequestArmed = false;
+				ClearRequest();
+				Hide();
+			}
+			finally
+			{
+				this.resolving = false;
+			}
+		}
+
+		/// <summary>
 		/// Drops every callback and every piece of per-open state the subclass is holding.
 		/// </summary>
 		/// <remarks>

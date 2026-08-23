@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using FishNet.Broadcast;
 using FishNet.Managing;
 
@@ -544,6 +544,14 @@ namespace FishMMO.Client
 		/// <param name="forceDisconnect">If true, forces an immediate disconnection.</param>
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
+			/* Logged with a stack because this is the only thing that revokes the auth token
+			 * without going through ClearAuthToken, so it is invisible in the auth log — and it
+			 * is what strands the scene hop: the token is consumed here, the scene connect that
+			 * was already in flight arrives with nothing to authenticate with, and the player is
+			 * returned to login having done nothing wrong. Nine callers can reach it and none of
+			 * them say so. */
+			Log.Debug("Client", $"QuitToLogin(forceDisconnect: {forceDisconnect}). Caller: {System.Environment.StackTrace}");
+
 			// Leaving the world: re-arm the incidental loading overlay that world entry
 			// latched off, so the next login/world-entry cycle shows loading progress again.
 			RestoreLoadingScreen();
@@ -1183,7 +1191,11 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialogBox) && dialogBox.Visible)
 			{
-				dialogBox.Hide();
+				/* Not Hide(). The queue dialog is armed with onLeave: QuitToLogin, and Hide() on
+				 * an armed request answers it down the cancel path — so taking the dialog down
+				 * because the player reached the front of the queue ran the same code as the
+				 * player abandoning it. */
+				dialogBox.DismissWithoutAnswer();
 			}
 		}
 

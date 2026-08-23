@@ -1002,7 +1002,18 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (ex is InvalidOperationException invEx)
 			{
-				return (DatabaseErrorCodes.InvalidOperation, SanitizeExceptionMessage(invEx.Message), false);
+				/* Carry the inner exception through. EF's LINQ failures say only "An exception was
+				 * thrown while attempting to evaluate a LINQ query parameter expression. See the
+				 * inner exception for more information." — and the inner exception was being
+				 * dropped here, so the one sentence that names the actual fault never reached the
+				 * log. An item snapshot rolling back on every save reported exactly that and
+				 * nothing else, which is unactionable. */
+				string invMessage = SanitizeExceptionMessage(invEx.Message);
+				for (Exception inner = invEx.InnerException; inner != null; inner = inner.InnerException)
+				{
+					invMessage += $" -> [{inner.GetType().Name}] {SanitizeExceptionMessage(inner.Message)}";
+				}
+				return (DatabaseErrorCodes.InvalidOperation, invMessage, false);
 			}
 
 			// Sanitize the outermost exception message to strip .NET parameter-name annotations
