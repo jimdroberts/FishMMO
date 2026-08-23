@@ -241,6 +241,7 @@ namespace FishMMO.Client
 
 				int slotIndex = i;
 				slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, slotIndex));
+				slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, slotIndex));
 				slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(slotIndex, slotRoot));
 				slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(slotRoot));
 			}
@@ -885,6 +886,49 @@ namespace FishMMO.Client
 		/// Left button: drag-and-drop equip or start drag.
 		/// Right button: unequip.
 		/// </summary>
+		/// <summary>
+		/// Completes a press-and-drag when the pointer is released over an equipment slot.
+		/// </summary>
+		/// <remarks>
+		/// See UITKInventory.OnSlotPointerUp — the same missing half. Releasing over the slot the
+		/// drag started from is a click, not a drop, and is left alone so click-to-pick-up from
+		/// an equipment slot still works.
+		/// </remarks>
+		private void OnSlotPointerUp(PointerUpEvent evt, int slotIndex)
+		{
+			if (Character == null || Client == null || evt.button != 0)
+			{
+				return;
+			}
+
+			bool draggingNow = UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging;
+
+			/* Which element receives the release is the whole question. Press-and-drag does
+			 * nothing today, and the two explanations — the release never reaching the slot under
+			 * the cursor, or reaching it and being refused — are indistinguishable without
+			 * seeing it. */
+			FishMMO.Logging.Log.Debug("UITKEquipment",
+				$"PointerUp on slot {slotIndex}: dragging={draggingNow} " +
+				$"dragType={(dragObject == null ? "none" : dragObject.Type.ToString())} " +
+				$"dragSource={(dragObject == null ? -1 : (int)dragObject.ReferenceID)}.");
+
+			if (!draggingNow)
+			{
+				return;
+			}
+
+			if (dragObject.Type == ReferenceButtonType.Equipment &&
+				(int)dragObject.ReferenceID == slotIndex)
+			{
+				return;
+			}
+
+			if (Character.TryGet(out IEquipmentController equipmentController))
+			{
+				CompleteDropOntoSlot(dragObject, equipmentController, slotIndex);
+			}
+		}
+
 		private void OnSlotPointerDown(PointerDownEvent evt, int slotIndex)
 		{
 			if (Character == null || Client == null)
@@ -1036,18 +1080,22 @@ namespace FishMMO.Client
 		/// </summary>
 		private void BeginDragFromSlot(UITKDragObject dragObject, IEquipmentController equipmentController, int slotIndex)
 		{
-			if (IsSlotBlocked(slotIndex) ||
-				!equipmentController.TryGetItem(slotIndex, out Item item) ||
-				item == null)
+			bool blocked = IsSlotBlocked(slotIndex);
+			bool gotItem = equipmentController.TryGetItem(slotIndex, out Item item);
+
+			// Report the refusal, not just the success — see UITKInventory.BeginDragFromSlot.
+			if (blocked || !gotItem || item == null)
 			{
+				FishMMO.Logging.Log.Debug("UITKEquipment",
+					$"BeginDrag REFUSED slot {slotIndex}: blocked={blocked} " +
+					$"(pending={ItemOperationTracker.IsPending(ReferenceButtonType.Equipment, slotIndex)}) " +
+					$"gotItem={gotItem} itemNull={item == null}.");
 				return;
 			}
 
+			FishMMO.Logging.Log.Debug("UITKEquipment", $"BeginDrag OK slot {slotIndex}.");
+			// Same as the inventory: a missing icon must not prevent the item being unequipped.
 			Sprite icon = item.Template != null ? item.Template.Icon : null;
-			if (icon == null)
-			{
-				return;
-			}
 
 			/* The item, not just the slot index. A slot index alone is only true for as long as
 			 * nothing writes to that slot, and the server can write to it at any moment. */

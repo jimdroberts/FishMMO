@@ -218,7 +218,16 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (iconSprite == null || ReferenceID == NULL_REFERENCE_ID)
+			/* The reference decides whether anything is being carried — not the icon. This used to
+			 * cancel on a null sprite too, which meant an item whose template has no icon armed a
+			 * drag on PointerDown and had it torn down on the very next frame: the panels reported
+			 * a clean start and the release then found nothing, so dragging appeared simply not to
+			 * be implemented. A project whose item art is not in yet has no icons at all, so this
+			 * cancelled every drag it was ever asked to carry.
+			 *
+			 * An item with no art is still an item. It drags without a ghost, which is a cosmetic
+			 * loss; refusing to move it is a functional one. */
+			if (ReferenceID == NULL_REFERENCE_ID)
 			{
 				// Visible with nothing to carry. Whatever left it in that state, do not stay in it.
 				Clear();

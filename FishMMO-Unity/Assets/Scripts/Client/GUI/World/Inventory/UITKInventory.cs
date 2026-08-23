@@ -507,6 +507,7 @@ namespace FishMMO.Client
 
 			int captured = slotIndex;
 			slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, captured));
+			slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, captured));
 			slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(captured, slotRoot));
 			slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave(slotRoot));
 
@@ -589,21 +590,29 @@ namespace FishMMO.Client
 		/// Recomputes the header subtitle, footer counts and capacity bar.
 		/// </summary>
 		/// <remarks>
-		/// Occupancy is read from <c>slotSprites</c> rather than from the controller: this runs
-		/// on every slot write, and the sprite array is already the view's own record of which
-		/// slots are filled. Asking the controller would re-derive a fact the view just set.
+		/// Occupancy comes from the controller, which is the only thing that knows it. It used to
+		/// be counted from <c>slotSprites</c> on the reasoning that the sprite array is the view's
+		/// own record of which slots are filled — but a sprite records whether an item has an
+		/// ICON, not whether a slot holds an item. Every item whose template has no icon assigned,
+		/// or whose icon has not finished loading, left a null in that array and was counted as an
+		/// empty slot, so the totals read low and drifted as icons resolved.
 		/// </remarks>
 		private void RefreshCapacity()
 		{
 			int total = slotSprites.Count;
 			int used = 0;
-			for (int i = 0; i < total; ++i)
+
+			if (Character != null && Character.TryGet(out IInventoryController inventoryController))
 			{
-				if (slotSprites[i] != null)
+				for (int i = 0; i < total; ++i)
 				{
-					++used;
+					if (!inventoryController.IsSlotEmpty(i))
+					{
+						++used;
+					}
 				}
 			}
+
 			int free = total - used;
 
 			if (subtitleLabel != null)
@@ -707,6 +716,55 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Routes pointer-down events on a slot to left- or right-click handlers.
 		/// </summary>
+		/// <summary>
+		/// Completes a press-and-drag when the pointer is released over a different slot.
+		/// </summary>
+		/// <remarks>
+		/// The panel's drag has always been click-to-pick-up then click-to-drop, which works but
+		/// is not what a player tries first — pressing on an item and dragging it did nothing at
+		/// all, because nothing was listening for the release. PointerDown already starts the
+		/// drag, so a release is the only missing half.
+		/// <para>
+		/// Releasing over the slot the drag started from deliberately does NOT drop: that is an
+		/// ordinary click, and completing there would make click-to-pick-up impossible.
+		/// </para>
+		/// </remarks>
+		private void OnSlotPointerUp(PointerUpEvent evt, int slotIndex)
+		{
+			if (Character == null || Client == null || evt.button != 0)
+			{
+				return;
+			}
+
+			bool draggingNow = UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging;
+
+			/* Which element receives the release is the whole question. Press-and-drag does
+			 * nothing today, and the two explanations — the release never reaching the slot under
+			 * the cursor, or reaching it and being refused — are indistinguishable without
+			 * seeing it. */
+			FishMMO.Logging.Log.Debug("UITKInventory",
+				$"PointerUp on slot {slotIndex}: dragging={draggingNow} " +
+				$"dragType={(dragObject == null ? "none" : dragObject.Type.ToString())} " +
+				$"dragSource={(dragObject == null ? -1 : (int)dragObject.ReferenceID)}.");
+
+			if (!draggingNow)
+			{
+				return;
+			}
+
+			// Same slot the drag came from: this is a click, not a drag. Leave it armed.
+			if (dragObject.Type == ReferenceButtonType.Inventory &&
+				(int)dragObject.ReferenceID == slotIndex)
+			{
+				return;
+			}
+
+			if (Character.TryGet(out IInventoryController inventoryController))
+			{
+				CompleteDropOntoSlot(dragObject, inventoryController, slotIndex);
+			}
+		}
+
 		private void OnSlotPointerDown(PointerDownEvent evt, int slotIndex)
 		{
 			if (Character == null || Client == null)
@@ -861,18 +919,32 @@ namespace FishMMO.Client
 		/// </summary>
 		private void BeginDragFromSlot(UITKDragObject dragObject, IInventoryController inventoryController, int slotIndex)
 		{
-			if (IsSlotBlocked(slotIndex) ||
-				!inventoryController.TryGetItem(slotIndex, out Item item) ||
-				item == null)
+			bool blocked = IsSlotBlocked(slotIndex);
+			bool gotItem = inventoryController.TryGetItem(slotIndex, out Item item);
+
+			/* All three of these returned silently, so a drag that never starts is
+			 * indistinguishable from one that started and was dropped. Pending marks in
+			 * particular never expire — they are cleared only by an explicit ack — so a slot
+			 * whose acknowledgement never arrived stays undraggable for the rest of the session
+			 * with nothing to say so. */
+			if (blocked || !gotItem || item == null)
 			{
+				FishMMO.Logging.Log.Debug("UITKInventory",
+					$"BeginDrag REFUSED slot {slotIndex}: blocked={blocked} " +
+					$"(pending={ItemOperationTracker.IsPending(ReferenceButtonType.Inventory, slotIndex)}) " +
+					$"gotItem={gotItem} itemNull={item == null}.");
 				return;
 			}
 
+			FishMMO.Logging.Log.Debug("UITKInventory", $"BeginDrag OK slot {slotIndex}.");
+
+			/* An item with no icon is still an item. This used to refuse the drag outright when
+			 * Template.Icon was null, which meant that on a project whose item art is not in yet
+			 * — every icon unassigned — picking anything up was impossible, and so was every
+			 * interaction built on it: click-to-pick-up, click-to-drop, and press-and-drag all
+			 * dead, with no error to say why. The icon is decoration on the cursor; whether the
+			 * player may move the item is not its business. */
 			Sprite sprite = item.Template != null ? item.Template.Icon : null;
-			if (sprite == null)
-			{
-				return;
-			}
 
 			/* Carry the item, not just the slot number. A slot index is only true while nothing
 			 * writes to that slot, and the server can write to it between the pick-up and the
@@ -897,10 +969,42 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (Character.TryGet(out IInventoryController inventoryController))
+			if (!Character.TryGet(out IInventoryController inventoryController))
 			{
-				inventoryController.Activate(slotIndex);
+				return;
 			}
+
+			/* Equip, if the item can be worn. InventoryController.Activate is the "use this item"
+			 * path and it does nothing at all today — its body is a log line and a commented-out
+			 * OnUseItem, and the server has no matching handler — so right-clicking an item was
+			 * silently doing nothing. Equipping is the behaviour the slot actually needs, and the
+			 * broadcast for it already exists and is already handled server-side; the equipment
+			 * panel has been sending it for click-to-drop all along. The destination slot comes
+			 * from the item's own template, which is what makes a single right-click meaningful:
+			 * a breastplate has exactly one slot it can go to. */
+			if (inventoryController.TryGetItem(slotIndex, out Item item) &&
+				item.Template is EquippableItemTemplate equippable)
+			{
+				if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Inventory, slotIndex))
+				{
+					return;
+				}
+				if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Equipment, (int)equippable.Slot))
+				{
+					ItemOperationTracker.Release(ReferenceButtonType.Inventory, slotIndex);
+					return;
+				}
+
+				Client.Broadcast(new EquipmentEquipItemBroadcast()
+				{
+					InventoryIndex = slotIndex,
+					Slot           = (byte)equippable.Slot,
+					FromInventory  = InventoryType.Inventory,
+				}, Channel.Reliable);
+				return;
+			}
+
+			inventoryController.Activate(slotIndex);
 		}
 
 		/// <summary>

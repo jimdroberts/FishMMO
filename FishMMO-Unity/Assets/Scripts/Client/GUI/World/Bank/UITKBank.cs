@@ -842,11 +842,8 @@ namespace FishMMO.Client
 				return;
 			}
 
+			// Same as the inventory: a missing icon must not prevent the item being moved.
 			Sprite sprite = item.Template != null ? item.Template.Icon : null;
-			if (sprite == null)
-			{
-				return;
-			}
 
 			/* Carry the item, not just the slot number: the slot index stops being true the moment
 			 * anything else writes to that slot, and the drop would then move the wrong item. */

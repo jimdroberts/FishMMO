@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -438,6 +438,7 @@ namespace FishMMO.Client
 			};
 
 			slotRoot.RegisterCallback<PointerDownEvent>(evt => OnSlotPointerDown(evt, slot));
+			slotRoot.RegisterCallback<PointerUpEvent>(evt => OnSlotPointerUp(evt, slot));
 			slotRoot.RegisterCallback<PointerEnterEvent>(evt => OnSlotPointerEnter(slot));
 			slotRoot.RegisterCallback<PointerLeaveEvent>(evt => OnSlotPointerLeave());
 
@@ -655,6 +656,38 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="evt">The pointer-down event.</param>
 		/// <param name="slot">The slot that was pressed.</param>
+		/// <summary>
+		/// Assigns a dragged ability or item when the pointer is released over a hotkey slot.
+		/// </summary>
+		/// <remarks>
+		/// Same missing half as the inventory and equipment panels: the bar accepted a drop from
+		/// a completed click-to-pick-up, but dragging something onto it and letting go did
+		/// nothing, because no release was being listened for. Dragging an ability from the
+		/// abilities panel onto a hotkey is the ordinary way a player expects to bind one.
+		/// </remarks>
+		private void OnSlotPointerUp(PointerUpEvent evt, HotkeySlot slot)
+		{
+			if (Client == null || evt.button != 0)
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) ||
+				!dragObject.IsDragging)
+			{
+				return;
+			}
+
+			/* No same-slot guard here, unlike the inventory and equipment panels: a drag never
+			 * originates from a hotkey slot — ReferenceButtonType has no Hotkey member, the bar
+			 * only ever holds a reference to something in another panel — so there is no
+			 * "released where it started" case to exclude.
+			 *
+			 * A plain click is already safe without one: PointerDown assigns and clears the drag,
+			 * so by the time this runs IsDragging is false and the guard above has returned. */
+			HandleSlotLeftClick(slot);
+		}
+
 		private void OnSlotPointerDown(PointerDownEvent evt, HotkeySlot slot)
 		{
 			if (evt.button == 0)
