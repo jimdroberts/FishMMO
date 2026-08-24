@@ -39,6 +39,9 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 
 - **Tick-based expiration** — Buffs expire deterministically using absolute network ticks (`ExpiryTick`)
 - **Tick-based periodic effects** — Periodic `OnTick` callbacks at configurable intervals using `NextTickTick`
+- **ECA-driven periodic effects** — `OnTickEvents` fires `BuffTickEvent` triggers each tick, so a DoT is an `ApplyDamageAction` and a HoT an `ApplyHealAction` — no bespoke template subclass
+- **DoTs behave like hits** — health ticks route through `CharacterDamageController.Damage` / `.Heal`, so they mitigate, generate threat, credit the caster and can kill
+- **Caster attribution** — the applying character is snapshotted on the `Buff` and used as the attacker for every subsequent tick
 - **Stacking** — Buffs support up to `MaxStacks` with symmetric modifier accounting
 - **Attribute modification** — `AttributeBuffTemplate` grants bonus attributes via `AddModifier()` on the `ExternalModifier` layer
 - **FX instantiation** — Client-side visual effect prefabs attached to character mesh
@@ -129,6 +132,7 @@ buffController.RemoveRandom(rng, includeBuffs: true, includeDebuffs: true);
 | `MaxStacks` | `uint` | Maximum stack count (0 = no stacking) |
 | `IsPermanent` | `bool` | If true, buff does not expire and `RemoveAll` / `RemoveRandom` skip it |
 | `IsDebuff` | `bool` | Determines buff vs debuff categorization for events and UI |
+| `OnTickEvents` | `List<BuffTickEvent>` | ECA triggers fired on every tick. Initiator is the caster, target is the carrier. |
 
 ### Attribute Modification
 
@@ -151,8 +155,59 @@ All modifications go through `CharacterAttribute.AddModifier()`, which operates 
 | `AttributeBuffTemplate` | Grants flat attribute bonuses via `AddModifier()`. No tick effect. |
 | `AttributeTickBuffTemplate` | Grants attribute bonuses on apply, plus periodic attribute modification on each tick. |
 | `CompositeBuffTemplate` | Composes multiple `BaseBuffTemplate` references, delegating all hooks to each child template. |
-| `ResourceTickBuffTemplate` | Periodically ticks resource attributes (e.g., health/mana regen or drain over time). |
+| `ResourceTickBuffTemplate` | Periodically ticks resource attributes (e.g., health/mana regen or drain over time). Health ticks route through the damage pipeline. |
 | `StateBuffTemplate` | Applies a character state flag on apply, removes it on removal. No tick effect. |
+
+### Damage and heal over time
+
+There are two ways to author a periodic health effect, and they compose.
+
+**ECA tick events (preferred).** Put a `BuffTickEvent` in `OnTickEvents` and hang an
+`ApplyDamageAction` or `ApplyHealAction` on it. The event fires with the buff's **carrier as the
+target** and the **caster as the initiator**, so the action behaves exactly as the same action does
+on an ability's on-hit event. Conditions, target selectors and both condition branches all work,
+which means "a poison that only ticks while its victim is moving" is a condition rather than a new
+template type. Nothing new needs writing in C#, and the AI reads the actions directly rather than
+inferring intent from numbers.
+
+**Serialized resource ticks.** `ResourceTickBuffTemplate.TickAttributes` (and the same list on
+`CompositeBuffTemplate`) still handles the flat case. A tick against the **health** resource is
+routed through `ICharacterDamageController.Damage` / `.Heal`; a tick against any other resource
+(mana, stamina) writes the resource directly, since there are no damage semantics to borrow.
+`DamageAttribute` on the template selects the resistance the tick is mitigated by — leave it empty
+for true damage.
+
+Both paths run: a `CompositeBuffTemplate` can fire tick events *and* drain a resource.
+
+> **Why health goes through the damage controller.** Both tick templates previously called
+> `CharacterResourceAttribute.AddToCurrentValue`, which clamps the value and raises an
+> attribute-changed notification and nothing else. That skipped every consequence of being hurt —
+> no resistance, no `Immortal` check, no combat entry, and no `OnDamaged` event, so a DoT generated
+> **no threat at all**. Worst of all, nothing could die of it: `Kill()` is only ever reached from
+> inside `Damage()`, so a DoT drained its victim to zero health and stopped, and the "already dead"
+> early-out at the top of `Damage()` then rejected every subsequent hit — leaving a character
+> permanently alive at nothing.
+
+#### Attribution
+
+`Buff` snapshots the applying character (`Buff.Caster`) so a tick that fires seconds later still
+has somebody to credit for threat, kill credit and combat state. It is passed by
+`ApplyBuffAction` from the ECA initiator; sources with no initiator, such as region hazards, apply
+with none.
+
+The snapshot is deliberately **not** serialized into the reconcile payload or the database. The
+server holds the authoritative buff for its whole life, which is the only place attribution is acted
+on. If the caster is destroyed — disconnected, despawned — `Buff.Caster` returns null and **the tick
+still lands**: a lingering poison is part of the simulation whether or not whoever cast it is still
+in the scene. It simply credits nobody.
+
+#### Prediction and replay
+
+Ticks run on the client as well as the server, which is what keeps predicted health in step. The
+authoritative consequences are already gated inside the damage controller — `Kill()` returns
+immediately off the server. Reconcile replays every input since the last authoritative state, so a
+tick fires again on each pass; `Buff.IsReplaying` is true during those, and is passed as
+`ignoreAchievements` so a single tick of poison cannot count a dozen times toward an achievement.
 
 ### Static Events
 
@@ -299,7 +354,7 @@ foreach buff:
       Queue for removal
   else:
     if TryTick(Character, currentTick):          // NextTickTick reached?
-      Template.OnTick(buff, Character)
+      Template.OnTick(buff, Character)          // Fires OnTickEvents, then any template-specific effect
       Fire IBuffController.OnBuffTick
       Advance NextTickTick
 ```
@@ -373,6 +428,8 @@ Buff/
     ├── BaseBuffTemplate.cs            # Abstract ScriptableObject base for all buff templates
     ├── BuffAttributeTemplate.cs       # Serializable attribute+value pair for template configuration
     ├── BuffTemplateDatabase.cs        # Name-to-template lookup database (ScriptableObject)
+    ├── Events/
+    │   └── BuffTickEvent.cs           # ECA trigger fired on each tick (DoT / HoT and anything periodic)
     └── Types/
         ├── AttributeBuffTemplate.cs       # Concrete template: grants bonus attributes via AddModifier()
         ├── AttributeTickBuffTemplate.cs   # Grants attributes on apply + periodic attribute modification on tick

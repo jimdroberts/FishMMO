@@ -113,7 +113,11 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="currentTick">The replicate-domain tick at the moment of application.</param>
-		void Apply(BaseBuffTemplate template, PredictionTick currentTick);
+		/// <param name="caster">
+		/// The character applying the buff, snapshotted so periodic effects have somebody to
+		/// credit. May be null when the source has no initiator.
+		/// </param>
+		void Apply(BaseBuffTemplate template, PredictionTick currentTick, ICharacter caster = null);
 
 		/// <summary>
 		/// Applies a buff from a server-authoritative context. Implementations should stamp the
@@ -121,7 +125,11 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="serverTick">Fallback authoritative tick used before any replicate tick exists.</param>
-		void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick);
+		/// <param name="caster">
+		/// The character applying the buff, snapshotted so periodic effects have somebody to
+		/// credit. May be null when the source has no initiator.
+		/// </param>
+		void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick, ICharacter caster = null);
 
 		/// <summary>
 		/// Maps a raw authoritative tick to the controller's current replicate-domain tick

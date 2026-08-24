@@ -434,6 +434,9 @@ namespace FishMMO.UnitTests
 			public uint LastAuthoritativeApplyTick;
 			public uint CurrentDomainTick = 500u;
 
+			/// <summary>The caster the most recent apply carried, or null when it carried none.</summary>
+			public ICharacter LastCaster;
+
 			public ICharacter Character => null;
 			public bool Initialized => true;
 			public List<Trigger> OnBuffApplyTriggers { get; } = new List<Trigger>();
@@ -448,16 +451,18 @@ namespace FishMMO.UnitTests
 			public uint GetCurrentDomainTick() => CurrentDomainTick;
 			public void Tick(uint currentTick) { }
 
-			public void Apply(BaseBuffTemplate template, PredictionTick currentTick)
+			public void Apply(BaseBuffTemplate template, PredictionTick currentTick, ICharacter caster = null)
 			{
 				DirectApplyCalls++;
 				LastDirectApplyTick = currentTick;
+				LastCaster = caster;
 			}
 
-			public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick)
+			public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick, ICharacter caster = null)
 			{
 				AuthoritativeApplyCalls++;
 				LastAuthoritativeApplyTick = serverTick;
+				LastCaster = caster;
 			}
 
 			public uint ResolveAuthoritativeTick(uint serverTick) => serverTick;

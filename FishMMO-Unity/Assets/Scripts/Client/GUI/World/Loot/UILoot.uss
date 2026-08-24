@@ -1,0 +1,239 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UILoot.uss
+    Corpse Loot Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Sizing, spacing, flex directions and positioning for the
+    loot panel. NO colors or fonts here — those live in
+    FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UILoot.uss" />
+
+    A LIST, not a grid. The bank and inventory are grids because
+    their empty slots are meaningful — they are drop targets and
+    a readout of remaining space. A corpse has neither: nothing is
+    ever put INTO it, and its slot count is an artefact of the loot
+    roll rather than a capacity the player cares about. A row per
+    item also leaves room for the item's name, which matters when
+    the decision is "is this worth a bag slot" and the player has
+    only seconds before the body decays.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Anchored explicitly, as every panel is — each is its own UIDocument whose root fills the
+    screen, so a root with a size but no position collapses to the top-left corner and stacks
+    on top of every other panel. Offset right of centre so it does not open directly over the
+    inventory, which the player is looking at while deciding what to take. Dragging overwrites
+    left/top, which is why position is absolute.
+*/
+.loot-panel {
+    position: absolute;
+    left: 62%; top: 50%; translate: -50% -50%;
+    width: 300px;
+    height: 340px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.loot-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.loot-header__left {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+    overflow: hidden;
+}
+
+.loot-header__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.loot-header__titles {
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.loot-header__title {
+    flex-shrink: 0;
+}
+
+/* The corpse name can be arbitrarily long; clip it rather than let it push the close button
+   off the panel edge. */
+.loot-header__subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.loot-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   CURRENCY ROW
+   ═══════════════════════════════════════════════════════════ */
+
+/* Above the item list rather than in it: currency is taken by a different request and is not
+   addressed by a slot index, so making it look like row zero would invite exactly the
+   off-by-one confusion the separation avoids. */
+.loot-currency {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    flex-shrink: 0;
+    margin-left: 10px;
+    margin-right: 10px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.loot-currency--hidden {
+    display: none;
+}
+
+.loot-currency__icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.loot-currency__label {
+    flex: 1;
+    -unity-text-align: middle-left;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY : scrollable item list
+   ═══════════════════════════════════════════════════════════ */
+
+.loot-scroll {
+    flex: 1;
+    padding: 8px;
+}
+
+.loot-list {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LOOT ROW
+   ═══════════════════════════════════════════════════════════ */
+
+.loot-row {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    padding-left: 4px;
+    padding-right: 8px;
+    position: relative;
+}
+
+.loot-row__icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-right: 8px;
+    position: relative;
+}
+
+.loot-row__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.loot-row__amount {
+    flex-shrink: 0;
+    min-width: 28px;
+    margin-left: 6px;
+    -unity-text-align: middle-right;
+}
+
+/*
+    Full-row overlay rather than a corner badge. A pending row must be unmistakably
+    un-clickable: the shared pile means a second click while the first is unanswered is the
+    normal way a player would try to take something twice.
+*/
+.loot-row__pending {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.loot-hidden {
+    display: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.loot-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    flex-shrink: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.loot-footer__status {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.loot-take-all {
+    flex-shrink: 0;
+    min-width: 76px;
+    height: 26px;
+    padding-left: 10px;
+    padding-right: 10px;
+}

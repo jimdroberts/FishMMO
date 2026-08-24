@@ -17,6 +17,12 @@ MonoBehaviour:
   RangedWeight: 1
   AOEWeight: 1
   SupportWeight: 1.2
+  DamageWeight: 1.2
+  HealWeight: 1
+  ControlWeight: 1
+  DebuffWeight: 1
+  BuffWeight: 1
+  ThreatWeight: 2
   MeleeRangeThreshold: 4
   AOEHitCountThreshold: 1
   Targeting: 0

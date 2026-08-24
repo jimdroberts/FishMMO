@@ -1,3 +1,11 @@
+// Nullable annotations without null-state analysis. These harness types use `T?` to document
+// which references are legitimately absent — a paired core that has not been attached, a captured
+// payload that never arrived — and Unity compiles this assembly with the nullable context off, so
+// every one of those annotations raised CS8632. Enabling `annotations` alone turns the annotations
+// on without switching on flow analysis, which would bury the real warnings in this assembly under
+// hundreds of new ones for code that was never written against it.
+#nullable enable annotations
+
 using System;
 using System.Threading.Tasks;
 using FishMMO.Auth.Core;

@@ -631,14 +631,65 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Chooses the ability to use against the current enemy target.
-		/// Overridden by archetypes that must exclude part of their spellbook — a healer's heals
-		/// are not damage abilities.
+		/// Overridden by archetypes that must reorder their spellbook — a defender leads with a
+		/// taunt, a healer breaks off to heal.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
 		/// <returns>The chosen ability, or null when nothing is usable.</returns>
 		protected virtual Ability PickAbility(AIController controller)
 		{
-			return controller.PickBestAbility(PreferredDistance > 0f ? PreferredDistance : float.MaxValue);
+			return controller.PickBestAbility(
+				PreferredDistance > 0f ? PreferredDistance : float.MaxValue,
+				IsEnemyAbility);
+		}
+
+		/// <summary>
+		/// True when an ability is something to aim at an enemy.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The classifier reads what an ability does out of its ECA actions, so this needs no list
+		/// of ability IDs on the state: an ability whose graph only heals or only buffs is filtered
+		/// out of the attack rotation wherever it came from, and one added tomorrow is filtered out
+		/// too.
+		/// </para>
+		/// <para>
+		/// Deliberately permissive at the edges. An ability that both damages and buffs stays in —
+		/// the damage is the point. A self-cast shield stays in, because the NPC aims it at itself
+		/// rather than at the enemy and casting it mid-fight is exactly right. Only an ability that
+		/// is purely supportive <em>and</em> aimed at someone else is excluded, which is the case
+		/// that produced the actual absurdity: an NPC healing the player it was trying to kill.
+		/// </para>
+		/// <para>
+		/// An ability with no recognisable actions classifies as
+		/// <see cref="AIAbilityIntent.None"/> and is allowed through, so content that predates
+		/// classification keeps working rather than silently disarming the NPC that knows it.
+		/// </para>
+		/// </remarks>
+		/// <param name="ability">The ability to test.</param>
+		/// <returns>True if the ability may be used against an enemy.</returns>
+		public static bool IsEnemyAbility(Ability ability)
+		{
+			if (ability == null || ability.Template == null)
+			{
+				return false;
+			}
+
+			AIAbilityIntent intent = AIAbilityClassifier.Classify(ability);
+
+			// Anything with an offensive component belongs in the attack rotation.
+			if (intent.IsOffensive())
+			{
+				return true;
+			}
+
+			// Purely supportive: only if the NPC is casting it on itself.
+			if (intent.IsSupportive())
+			{
+				return ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self;
+			}
+
+			return true;
 		}
 
 		/// <summary>

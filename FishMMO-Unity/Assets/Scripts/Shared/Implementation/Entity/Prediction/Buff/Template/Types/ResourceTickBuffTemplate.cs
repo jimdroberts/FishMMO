@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -19,6 +19,20 @@ namespace FishMMO.Shared
 		/// </summary>
 		[Tooltip("Resource attributes to modify per tick. Positive = heal, negative = damage.")]
 		public List<BuffAttributeTemplate> TickAttributes;
+
+		/// <summary>
+		/// Damage type used to resolve resistance when a tick reduces health.
+		/// </summary>
+		/// <remarks>
+		/// Leave empty for true damage — a null damage type bypasses resistance entirely, which is
+		/// the right default for environmental and pure-magic effects. Set it to make a poison
+		/// respect nature resistance, a burn respect fire resistance, and so on.
+		/// <para>
+		/// Ignored by ticks that heal or that target a resource other than health.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Damage type used for resistance when a tick reduces health. Leave empty for true damage.")]
+		public DamageAttributeTemplate DamageAttribute;
 
 		/// <summary>
 		/// Appends a secondary tooltip describing the per-tick resource effects.
@@ -82,27 +96,17 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called each tick. Applies resource modifications scaled by (1 + Stacks) to the target.
 		/// </summary>
+		/// <remarks>
+		/// Health ticks go through the damage pipeline rather than writing the resource directly,
+		/// so a damage-over-time effect mitigates, generates threat, credits its caster and can
+		/// actually kill. See <see cref="BaseBuffTemplate.ApplyResourceTick"/>.
+		/// </remarks>
 		/// <param name="buff">The buff instance.</param>
 		/// <param name="target">The character affected.</param>
 		public override void OnTick(Buff buff, ICharacter target)
 		{
-			if (buff == null || target == null || TickAttributes == null) return;
-			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
-
-			int multiplier = 1 + buff.Stacks;
-
-			for (int i = 0; i < TickAttributes.Count; i++)
-			{
-				BuffAttributeTemplate tickAttribute = TickAttributes[i];
-				if (tickAttribute?.Template == null) continue;
-
-				float amount = tickAttribute.Value * multiplier;
-
-				if (attributeController.TryGetResourceAttribute(tickAttribute.Template.ID, out CharacterResourceAttribute resourceAttribute))
-				{
-					resourceAttribute.AddToCurrentValue(amount);
-				}
-			}
+			base.OnTick(buff, target);
+			ApplyResourceTick(buff, target, TickAttributes, DamageAttribute);
 		}
 	}
 }

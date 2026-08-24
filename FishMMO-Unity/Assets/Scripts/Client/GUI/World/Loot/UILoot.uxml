@@ -1,0 +1,78 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UILoot.uxml   —   FishMMO Corpse Loot Panel                 ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UILoot.uss         — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    loot-*   Layout class        (UILoot.uss)                 ║
+    ║                                                              ║
+    ║  Item rows are created at runtime by UITKLoot.cs and         ║
+    ║  appended to #loot-list.                                     ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UILoot.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel loot-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header loot-header">
+
+            <ui:VisualElement name="header-left" class="loot-header__left">
+                <ui:VisualElement name="header-icon" class="fish-panel__icon loot-header__icon" />
+                <ui:VisualElement name="header-titles" class="loot-header__titles">
+                    <ui:Label name="header-title"
+                              class="fish-panel__title loot-header__title"
+                              text="LOOT" />
+                    <ui:Label name="header-subtitle"
+                              class="fish-panel__subtitle loot-header__subtitle"
+                              text="" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:Button name="close-button" class="fish-close-btn loot-close-btn" text="✕" />
+
+        </ui:VisualElement>
+
+        <!-- ── CURRENCY ─────────────────────────────────────── -->
+        <ui:VisualElement name="loot-currency-row" class="loot-currency">
+            <ui:VisualElement name="loot-currency-icon" class="loot-currency__icon" />
+            <ui:Label name="loot-currency-label" text="0" class="fish-label loot-currency__label" />
+        </ui:VisualElement>
+
+        <!-- ── BODY : scrollable item list ──────────────────── -->
+        <ui:ScrollView name="loot-scroll"
+                       class="fish-scroll loot-scroll"
+                       vertical-scroller-visibility="Auto"
+                       horizontal-scroller-visibility="Hidden"
+                       mode="Vertical">
+
+            <!-- Rows injected at runtime by UITKLoot.CreateRow():
+                     Row root    →  fish-slot loot-row
+                     Icon        →  fish-slot__icon loot-row__icon
+                     Name        →  fish-label loot-row__name
+                     Amount      →  fish-slot__amount loot-row__amount
+                     Pending     →  fish-slot__lock loot-row__pending
+            -->
+            <ui:VisualElement name="loot-list" class="loot-list" />
+            <ui:Label name="loot-empty" text="Nothing left to take." class="fish-empty loot-empty" />
+
+        </ui:ScrollView>
+
+        <!-- ── FOOTER ───────────────────────────────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer loot-footer">
+            <ui:Label name="loot-status" text="" class="fish-label fish-label--caption loot-footer__status" />
+            <ui:Button name="loot-take-all" text="Take All" class="fish-btn loot-take-all" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

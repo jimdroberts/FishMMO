@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -110,6 +110,8 @@ namespace FishMMO.Shared
 		/// <param name="target">The character affected.</param>
 		public override void OnTick(Buff buff, ICharacter target)
 		{
+			base.OnTick(buff, target);
+
 			if (buff == null || target == null || TickAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 

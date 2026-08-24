@@ -68,6 +68,7 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 - **Range hysteresis.** An NPC already attacking tolerates a target drifting 10% past its ability range before giving chase. Without it a strafing target flips the NPC between Attack and CloseDistance every tick, toggling `isStopped` and making it shudder in place.
 - **Combat slots.** Several attackers on one target claim distinct angular slots around it rather than all pathing to the same point. Ring capacity is derived from geometry — how many agents of a given radius fit on a circle — and overflow attackers form a staggered second rank.
 - **Unreachable-target break-off.** A target standing somewhere the NPC cannot path to produces a partial path; the NPC gives up after `UnreachableTargetTimeout` and drops that target's threat so the next sweep does not immediately re-acquire it.
+- **Abilities classify themselves.** An archetype never names the abilities it should use. `AIAbilityClassifier` reads the ECA actions attached to an ability and derives what it does — heal, damage, control, dispel, taunt — so a healer archetype works on any creature whose spellbook contains a heal, and picks up one added later without being edited.
 - Personality styles: Balanced, Aggressive, Defensive, Cautious, Berserker, **Pathetic**, **Determined**, **Rampaging**. A Pathetic personality is guaranteed a retreat threshold even if the field is left at zero; fearless styles ignore one entirely.
 - Targeting modes: Threat, Random, Weakest, Nearest. Rampaging forces Random and re-rolls onto a new victim mid-fight, so it cannot be held by threat or by a taunt.
 
@@ -166,10 +167,64 @@ Intervals are counted in **AI ticks**, not frames. At the default 8 Hz brain, th
 | `FishMMO > AI > Repair NPC Prefabs For Combat` | Adds missing ability-pipeline components and enables prediction |
 | `FishMMO > AI > Audit NPC Prefabs` | Reports prefabs that cannot fight, and why |
 | `FishMMO > AI > Validate Archetypes` | Reports archetypes whose configuration cannot behave as described |
+| `FishMMO > AI > Audit Ability Intents` | Reports what the AI derives each ability template to do |
 | `FishMMO > AI > Organize AI Assets` | Files every AI asset into the canonical folder layout |
 | `FishMMO > AI > Re-serialize AI Assets` | Writes newly added serialized fields into the asset YAML |
 | `FishMMO > Behavior Tree Editor` | Visual behaviour tree graph editor |
 | `FishMMO > Validate Network Timing` | Confirms every scene agrees on tick rate |
+
+### How an NPC chooses an ability
+
+Ability selection has two questions, asked in order.
+
+**What can this ability do?** `AIAbilityClassifier` walks the ability template's five ECA event
+lists, follows each event's conditions-met and conditions-not-met action lists, and turns the action
+types it finds into `AIAbilityIntent` flags:
+
+| ECA action | Intent |
+|---|---|
+| `ApplyDamageAction` | `Damage` |
+| `ApplyHealAction` | `Heal` |
+| `ApplyReviveAction` | `Revive` |
+| `ApplyTauntAction`, `ApplyThreatAction` | `Threat` |
+| `InterruptAction`, `KnockbackHitAction` | `Control` |
+| `ApplyDispelAction` | `Dispel`, plus `Buff` or `Debuff` by direction |
+| `ApplyBuffAction` | depends on the buff template (below) |
+| `PetAbilityTemplate` | `Summon` |
+
+Buffs carry no "harmful" flag, so direction is inferred: a state flag `CharacterIncapacitation`
+recognises is `Control`; the **sum** of the attribute modifiers gives `Buff` or `Debuff`; the sum of
+the resource ticks gives `Heal` or `Damage`. The sum rather than the count, so a plate-armour buff
+with a small speed penalty is still a buff. This inference is the one place classification can be
+wrong, and `AbilityTemplate.IntentOverride` is the fix when it is — it replaces the derived value
+outright. Run `FishMMO > AI > Audit Ability Intents` to see what the AI makes of every ability in
+the project.
+
+An ability with no recognisable actions classifies as `None` and stays usable, so content that
+predates classification keeps working rather than silently disarming the NPC that knows it.
+
+**How much does this archetype want it?** `AICombatPersonality` carries a weight per intent —
+`DamageWeight`, `HealWeight`, `ControlWeight`, `DebuffWeight`, `BuffWeight`, `ThreatWeight` — which
+multiplies into the ability's score alongside the existing delivery weights (melee / ranged / AOE /
+support). Delivery and purpose are orthogonal and both apply: a crowd controller wants ranged
+delivery *and* controlling purpose. An ability carrying several intents takes the strongest matching
+weight, not the product, so a compound ability cannot out-score a specialised one on flag count.
+
+The two specialised archetypes use the same classification rather than a list:
+
+- **Healer** — heals are abilities classified `Heal`. Everything else falls through to the damage
+  rotation, and the damage rotation excludes anything purely supportive.
+- **Defender** — taunts are abilities classified `Threat`, used ahead of anything the scoring picker
+  would otherwise choose.
+
+Both still expose their old template-ID list (`HealAbilityTemplateIDs`, `TauntAbilityTemplateIDs`)
+as an **override**, for an ability that acts through some route the classifier cannot see. Leave
+them empty in the normal case.
+
+Finally, `BaseAttackingState.IsEnemyAbility` keeps the attack rotation honest: an ability that is
+purely supportive and aimed at another character is excluded, so an NPC no longer heals the player
+it is fighting. A self-cast shield stays in — the NPC aims it at itself — and so does a drain that
+damages and heals, because the damage is the point.
 
 ### Asset layout
 
@@ -209,6 +264,7 @@ A state entered mid-fight for positioning (orbit, flank, flee) must have `KeepsC
 | Archetypes valid | `FishMMO > AI > Validate Archetypes` reports all valid |
 | LOD engaged | Move a player away from an NPC; its update rate should drop through Nearby, Far and Dormant |
 | Threat dispatch | Damage an NPC and confirm only that NPC's threat table changes |
+| Ability intents | `FishMMO > AI > Audit Ability Intents` reads each ability the way it was authored |
 | Taunt | Attach `ApplyTauntAction` to an ability's on-hit event; confirm the target switches to the taunter and stays |
 | Multi-attacker spacing | Pull three or more melee NPCs onto one target; they should form a ring, not a scrum |
 | Pet follow | Run a player through doorways and around props; the pet should keep up without wedging |
@@ -296,6 +352,8 @@ AI/
 ├── PackTactic.cs
 ├── AIUtility.cs
 ├── Combat/
+│   ├── AIAbilityClassifier.cs     # Derives what an ability does from its ECA actions
+│   ├── AIAbilityIntent.cs         # Heal / Damage / Control / Dispel / Threat flags
 │   ├── AICombatDecision.cs        # The shared, Unity-free combat decision
 │   ├── AICombatIntent.cs
 │   ├── AICombatSlots.cs           # Ring slotting so attackers do not converge on one point
@@ -322,6 +380,7 @@ AI/
 ### Related
 
 - ECA actions: `Entity/ECA/Actions/Character/ApplyTauntAction.cs`, `ApplyThreatAction.cs`
+- Ability templates: `Entity/Prediction/Ability/Template/AbilityTemplate.cs` (`IntentOverride`)
 - Editor tooling: `Tools/Extensions/Unity/Editor/AI/`
 - Tests: `Assets/UnitTests/AI/`
 

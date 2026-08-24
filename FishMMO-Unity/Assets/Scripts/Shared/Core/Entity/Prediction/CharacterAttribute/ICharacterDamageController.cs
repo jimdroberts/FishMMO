@@ -114,5 +114,48 @@ namespace FishMMO.Shared.Core
 		/// and records the current tick. Safe to call repeatedly — refreshes expiry.
 		/// </summary>
 		void EnterCombat();
+
+		// ───── Loot Contribution ────────────────────────────────────────────
+
+		/// <summary>
+		/// Credits <paramref name="contributor"/> with a share of this character's death.
+		/// </summary>
+		/// <remarks>
+		/// Server-only, and idempotent per contributor — a thousand hits earn the same single
+		/// share as one. Credit is resolved to the controlling player, so a pet's damage counts
+		/// for its owner; contributions from anything that is not ultimately a player are
+		/// discarded, since only a player can open a loot window.
+		/// </remarks>
+		/// <param name="contributor">The character whose action earned the credit.</param>
+		/// <param name="kind">How the credit was earned.</param>
+		void RecordCombatContribution(ICharacter contributor, CombatContributionKind kind);
+
+		/// <summary>
+		/// Extends this character's own contribution credit to <paramref name="supporter"/>.
+		/// </summary>
+		/// <remarks>
+		/// This is how healing earns loot rights. A healer never touches the victim, so there is
+		/// nothing for <see cref="RecordCombatContribution"/> to key off; instead the character
+		/// who WAS healed pushes its credit outward to everyone still fighting whatever it is
+		/// fighting. Called on the healed character, not on the victim.
+		/// </remarks>
+		/// <param name="supporter">The character to extend credit to.</param>
+		void PropagateCombatContribution(ICharacter supporter);
+
+		/// <summary>
+		/// Takes the accumulated contributor list and clears it.
+		/// </summary>
+		/// <remarks>
+		/// Consuming rather than reading keeps the death path single-shot: whoever takes the list
+		/// owns it, and a second call cannot hand the same corpse's loot rights out twice.
+		/// </remarks>
+		/// <param name="contributors">Receives the character IDs credited with the death.</param>
+		/// <returns>True when at least one contributor was credited.</returns>
+		bool TryConsumeContributors(out List<long> contributors);
+
+		/// <summary>
+		/// Drops all contribution bookkeeping in both directions.
+		/// </summary>
+		void ClearCombatContributions();
 	}
 }

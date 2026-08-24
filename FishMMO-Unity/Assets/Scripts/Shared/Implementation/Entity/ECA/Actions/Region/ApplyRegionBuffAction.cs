@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -34,6 +34,9 @@ namespace FishMMO.Shared
 			// ApplyAuthoritative self-corrects to the replicate domain via
 			// BuffController's last replicate tick. The tick argument is only used as a
 			// fallback before the first OnReplicate fires.
+			/* No caster: a region applies its buff by virtue of the character standing in it, so
+			 * there is nobody to credit for a tick. Damage from an environmental hazard should not
+			 * be attributed to the person it happens to be hurting. */
 			buffController.ApplyAuthoritative(Buff, initiator.GetLocalTick());
 		}
 	}

@@ -122,6 +122,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeItemBroadcast>(OnServerCorpseLootTakeItemBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeCurrencyBroadcast>(OnServerCorpseLootTakeCurrencyBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeAllBroadcast>(OnServerCorpseLootTakeAllBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<CorpseLootCloseBroadcast>(OnServerCorpseLootCloseBroadcastReceived, true);
 
 			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
 
@@ -182,6 +186,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeItemBroadcast>(OnServerCorpseLootTakeItemBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeCurrencyBroadcast>(OnServerCorpseLootTakeCurrencyBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeAllBroadcast>(OnServerCorpseLootTakeAllBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootCloseBroadcast>(OnServerCorpseLootCloseBroadcastReceived);
 
 			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
 
@@ -191,6 +199,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				dialogueCharacterSystem.OnAfterLoadCharacter -= CharacterSystem_OnDialogueCharacterLoaded;
 				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnDialogueCharacterDisconnected;
 			}
+
+			// Corpse loot cleanup
+			ClearCorpseSubscriptions();
 
 			// Dialogue session cleanup
 			activeDialogueSessions.Clear();
@@ -440,10 +451,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
+				IInteractable interactable = ResolveInteractable(sceneObject);
 				if (interactable != null &&
 					interactable.CanInteract(character))
 				{
+					/* Corpse looting is handled directly rather than through a trigger, because it
+					 * is intrinsic to any NPC that can die: an NPC whose prefab has no interact
+					 * triggers configured must still be lootable, and a content author must not be
+					 * able to make a creature silently unlootable by forgetting a list entry. The
+					 * ECA triggers below still run, so per-NPC extras (achievements, quest
+					 * updates, dialogue) compose on top of it. */
+					if (interactable is ILootableCorpse corpse)
+					{
+						OpenCorpseLoot(conn, character, corpse);
+					}
+
 					interactable.ExecuteOnInteract(new PlayerInteractionEventData(character, interactable,
 					(ch, inv, item) => SendNewItemBroadcast(ch.Owner, ch, inv, item)));
 				}
@@ -479,6 +501,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Look at the target and transition to idle state
 			aiController.LookTarget = character.Transform;
 			aiController.TransitionToIdleState();
+		}
+
+		/// <summary>
+		/// Resolves the interactable a client's scene object ID actually named.
+		/// </summary>
+		/// <remarks>
+		/// The registered scene object IS the interactable whenever it implements the interface,
+		/// and that identity is what the client's ID refers to. Reaching for
+		/// <c>GetComponent&lt;IInteractable&gt;()</c> instead asks the GameObject for "an"
+		/// interactable and takes whichever component order happens to yield — fine while every
+		/// GameObject had exactly one, and wrong the moment one has two. An NPC now does: it is
+		/// itself a lootable corpse, and an NPC that is also a merchant or a banker carries that
+		/// component too, so a player looting a dead merchant could have their request answered by
+		/// the shop. The fallback is kept for interactables that register through some other
+		/// component.
+		/// </remarks>
+		/// <param name="sceneObject">The resolved scene object.</param>
+		/// <returns>The interactable, or null.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static IInteractable ResolveInteractable(ISceneObject sceneObject)
+		{
+			if (sceneObject == null)
+			{
+				return null;
+			}
+			if (sceneObject is IInteractable interactable)
+			{
+				return interactable;
+			}
+			return sceneObject.GameObject != null ? sceneObject.GameObject.GetComponent<IInteractable>() : null;
 		}
 
 		/// <summary>

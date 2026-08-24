@@ -224,6 +224,33 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/Items",
 				"FishMMO/Item/Item Attribute/Attribute");
 
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "Loot Tables",
+				Group = "Items",
+				AssetType = typeof(LootTableTemplate),
+				DefaultAssetDirectory = "Assets/Templates/Entity/Items/LootTables",
+				CreateAssetMenuName = "FishMMO/Character/Loot/Loot Table",
+				/* Grouped by what the table is worth rather than by name. A designer opening this
+				 * category is nearly always balancing — comparing what a tier of creature drops
+				 * against its neighbours — and an alphabetical wall of tables makes exactly that
+				 * comparison the hardest thing to do. */
+				GetGroupLabel = asset =>
+				{
+					LootTableTemplate table = asset as LootTableTemplate;
+					if (table == null) return "Unknown";
+					if (table.MaximumCurrency <= 0) return "No Currency";
+					if (table.MaximumCurrency < 100) return "Currency: Low";
+					if (table.MaximumCurrency < 1000) return "Currency: Medium";
+					return "Currency: High";
+				},
+				GetSortOrder = asset =>
+				{
+					LootTableTemplate table = asset as LootTableTemplate;
+					return table != null ? table.MaximumCurrency : 0;
+				},
+			});
+
 			// ── NPCs ──
 			/* Archetypes come first: this is the asset a designer should reach for. One of them
 			 * fills in every state and tuning slot on an AIController, so the individual state

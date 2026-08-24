@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using FishMMO.Shared.Core;
@@ -49,6 +50,29 @@ namespace FishMMO.Shared
 		/// The interval in seconds between OnTick calls while the buff is active.
 		/// </summary>
 		public float TickRate;
+
+		[Header("Event-Condition-Action (ECA) Triggers")]
+		/// <summary>
+		/// Triggers fired on every tick of this buff.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is how periodic effects are authored. A damage-over-time buff is one of these
+		/// carrying an <see cref="ApplyDamageAction"/>; a heal-over-time is the same with an
+		/// <see cref="ApplyHealAction"/>. The event is fired with the buff's carrier as the target
+		/// and the character who applied it as the initiator, so those actions behave identically
+		/// to the same actions on an ability — resistance applies, threat is generated against the
+		/// caster, and the target can die of it.
+		/// </para>
+		/// <para>
+		/// Preferred over a bespoke template subclass. Every periodic effect worth having is a
+		/// composition of actions that already exist, and expressing it here means conditions,
+		/// target selectors and the two condition branches all work on a buff exactly as they do
+		/// on an ability, with no C# to write and nothing new for the AI to learn to read.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Triggers fired each tick. A DoT is an ApplyDamageAction here; a HoT is an ApplyHealAction.")]
+		public List<BuffTickEvent> OnTickEvents = new List<BuffTickEvent>();
 
 		/// <summary>
 		/// The maximum number of stacks this buff can have.
@@ -243,11 +267,167 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called on each tick while the buff is active. No-op by default.
-		/// Override in derived classes for periodic effects (HoT, DoT, etc.).
+		/// Called on each tick while the buff is active. Fires <see cref="OnTickEvents"/>.
 		/// </summary>
+		/// <remarks>
+		/// Derived classes that add their own periodic behaviour must call
+		/// <c>base.OnTick(buff, target)</c>, or the buff's authored tick events are silently
+		/// dropped for that template type.
+		/// </remarks>
 		/// <param name="buff">The buff instance.</param>
 		/// <param name="target">The character affected.</param>
-		public virtual void OnTick(Buff buff, ICharacter target) { }
+		public virtual void OnTick(Buff buff, ICharacter target)
+		{
+			InvokeTickEvents(buff, target);
+		}
+
+		/// <summary>
+		/// Fires this buff's ECA tick triggers against the character carrying it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Initiator is the caster, target is the carrier.</b> That split is what makes an
+		/// <see cref="ApplyDamageAction"/> on a tick event behave like a hit rather than like
+		/// self-harm: the damage lands on the carrier and is credited to whoever applied the buff,
+		/// which is what generates threat and grants the kill.
+		/// </para>
+		/// <para>
+		/// When the caster is gone — disconnected, despawned — the carrier stands in as initiator
+		/// so the trigger still has a character to resolve values and conditions against. The
+		/// effect continues to land, because a lingering poison is part of the simulation whether
+		/// or not whoever cast it is still in the scene; it simply credits nobody, and
+		/// <see cref="ApplyDamageAction"/> is content with that.
+		/// </para>
+		/// </remarks>
+		/// <param name="buff">The buff instance.</param>
+		/// <param name="target">The character carrying the buff.</param>
+		protected void InvokeTickEvents(Buff buff, ICharacter target)
+		{
+			if (buff == null || target == null || OnTickEvents == null || OnTickEvents.Count < 1)
+			{
+				return;
+			}
+
+			ICharacter caster = buff.Caster;
+
+			BuffEventData eventData = new BuffEventData(caster ?? target, buff)
+			{
+				Target = target.GameObject,
+				TargetCharacter = target,
+			};
+
+			for (int i = 0; i < OnTickEvents.Count; ++i)
+			{
+				BuffTickEvent tickEvent = OnTickEvents[i];
+				if (tickEvent != null)
+				{
+					tickEvent.Execute(eventData);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Applies one round of periodic resource changes, routing health through the damage
+		/// pipeline so a tick behaves like any other hit.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why not write the resource directly.</b> Both tick templates used to call
+		/// <c>CharacterResourceAttribute.AddToCurrentValue</c>, which clamps the value and raises
+		/// an attribute-changed notification and nothing else. That skipped every consequence of
+		/// being hurt: resistances were not applied, <c>Immortal</c> was ignored, neither party
+		/// entered combat, no <c>OnDamaged</c> event was raised — so a damage-over-time effect
+		/// generated no threat at all — and, worst of all, nothing could die of it.
+		/// <see cref="ICharacterDamageController.Kill"/> is only ever reached from inside
+		/// <c>Damage</c>, so a DoT drained its victim to zero health and stopped there; the
+		/// early-out at the top of <c>Damage</c> then rejected every subsequent hit as
+		/// "already dead", leaving a character permanently alive at nothing.
+		/// </para>
+		/// <para>
+		/// <b>Health only.</b> <c>Damage</c> and <c>Heal</c> operate on the health resource. A tick
+		/// against mana, stamina or any other resource has no damage semantics to borrow and keeps
+		/// writing the resource directly.
+		/// </para>
+		/// <para>
+		/// <b>Both sides, once each.</b> This runs on the client as well as the server, which is
+		/// what keeps predicted health in step with the server's; the authoritative consequences
+		/// are already gated inside the damage controller, whose <c>Kill</c> returns immediately
+		/// off the server. ECA trigger dispatch is suppressed while replaying, because reconcile
+		/// re-runs every tick since the last authoritative state and a single tick of poison must
+		/// not count a dozen times toward an achievement.
+		/// </para>
+		/// </remarks>
+		/// <param name="buff">The buff instance, supplying stacks, attribution and replay state.</param>
+		/// <param name="target">The character the tick lands on.</param>
+		/// <param name="tickAttributes">Per-tick resource modifiers. Positive heals, negative damages.</param>
+		/// <param name="damageAttribute">
+		/// Damage type used to resolve resistance when a tick reduces health. Null means the tick
+		/// bypasses resistance entirely.
+		/// </param>
+		protected static void ApplyResourceTick(
+			Buff buff,
+			ICharacter target,
+			System.Collections.Generic.List<BuffAttributeTemplate> tickAttributes,
+			DamageAttributeTemplate damageAttribute)
+		{
+			if (buff == null || target == null || tickAttributes == null || tickAttributes.Count < 1)
+			{
+				return;
+			}
+
+			if (!target.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+
+			// A character with no damage controller still takes the direct-write path below, so a
+			// resource tick on something that cannot fight is not silently dropped.
+			target.TryGet(out ICharacterDamageController damageController);
+			CharacterResourceAttribute health = damageController?.ResourceInstance;
+
+			int multiplier = 1 + buff.Stacks;
+
+			/* Null once the caster is gone — disconnected, despawned, destroyed. The tick still
+			 * lands: a lingering poison is part of the simulation whether or not whoever applied
+			 * it is still around. It simply credits nobody. */
+			ICharacter caster = buff.Caster;
+			bool suppressTriggers = buff.IsReplaying;
+
+			for (int i = 0; i < tickAttributes.Count; ++i)
+			{
+				BuffAttributeTemplate tickAttribute = tickAttributes[i];
+				if (tickAttribute?.Template == null)
+				{
+					continue;
+				}
+
+				int amount = tickAttribute.Value * multiplier;
+				if (amount == 0)
+				{
+					continue;
+				}
+
+				if (!attributeController.TryGetResourceAttribute(tickAttribute.Template.ID, out CharacterResourceAttribute resourceAttribute))
+				{
+					continue;
+				}
+
+				if (damageController != null && health != null && ReferenceEquals(resourceAttribute, health))
+				{
+					if (amount < 0)
+					{
+						damageController.Damage(caster, -amount, damageAttribute, suppressTriggers);
+					}
+					else
+					{
+						damageController.Heal(caster, amount, suppressTriggers);
+					}
+					continue;
+				}
+
+				// Non-health resource: no damage semantics apply.
+				resourceAttribute.AddToCurrentValue(amount);
+			}
+		}
 	}
 }

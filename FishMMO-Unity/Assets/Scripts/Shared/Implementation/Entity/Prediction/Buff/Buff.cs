@@ -63,6 +63,95 @@ namespace FishMMO.Shared
 		public BaseBuffTemplate Template { get; private set; }
 
 		/// <summary>
+		/// The character that applied this buff, snapshotted at application time. May be null.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Attribution for periodic effects. A damage-over-time tick routed through
+		/// <see cref="ICharacterDamageController.Damage"/> needs somebody to credit — for threat,
+		/// for kill credit, and for the attacker's own combat state — and the buff is the only
+		/// thing that still exists by the time the tick fires. The ability that applied it is long
+		/// gone.
+		/// </para>
+		/// <para>
+		/// Deliberately <b>not</b> serialized into the reconcile payload or the database. The
+		/// server holds the authoritative buff instance for the whole of its life, which is the
+		/// only place attribution is acted on; a client has no use for it, and a DoT restored from
+		/// the database after a relog has outlived any sensible claim to credit a kill.
+		/// </para>
+		/// <para>
+		/// A missing caster never suppresses the effect — see <see cref="Caster"/>.
+		/// </para>
+		/// </remarks>
+		private ICharacter caster;
+
+		/// <summary>
+		/// True while this buff is ticking inside a prediction replay rather than for the first time.
+		/// </summary>
+		/// <remarks>
+		/// Reconcile replays every input since the last authoritative state, so a DoT's tick fires
+		/// again on each pass. The resource mutation must repeat — that is what keeps the client's
+		/// predicted health in step — but the ECA triggers hanging off it must not, or a single
+		/// tick of poison counts a dozen times toward an achievement.
+		/// </remarks>
+		public bool IsReplaying { get; private set; }
+
+		/// <summary>
+		/// The character to credit for this buff's periodic effects, or null when there is nobody
+		/// left to credit.
+		/// </summary>
+		/// <remarks>
+		/// Returns null once the caster has been destroyed — a player who disconnected, an NPC that
+		/// despawned. That is deliberately <em>not</em> treated as a reason to stop ticking: a
+		/// lingering poison is part of the simulation whether or not the person who applied it is
+		/// still in the scene, so the effect lands with a null attacker and simply generates no
+		/// threat and no kill credit.
+		/// <para>
+		/// The null check goes through <see cref="UnityEngine.Object"/> on purpose. A destroyed
+		/// component compared through an interface reference uses reference equality and reports
+		/// itself as non-null, so the plain test would hand out a dead object.
+		/// </para>
+		/// </remarks>
+		public ICharacter Caster
+		{
+			get
+			{
+				if (caster == null)
+				{
+					return null;
+				}
+
+				if (caster is UnityEngine.Object unityObject && unityObject == null)
+				{
+					// Drop the reference so a destroyed character is not kept alive by this buff.
+					caster = null;
+					return null;
+				}
+
+				return caster;
+			}
+		}
+
+		/// <summary>
+		/// Snapshots the character responsible for this buff.
+		/// </summary>
+		/// <remarks>
+		/// Called again when an existing buff is re-applied or stacked, so a fresh application
+		/// re-points attribution at whoever cast it most recently. A null is ignored rather than
+		/// clearing an existing caster: a re-application from a source that does not know its
+		/// initiator (a region trigger, a database restore) should not strip credit from one that
+		/// did.
+		/// </remarks>
+		/// <param name="caster">The character applying the buff, or null if unknown.</param>
+		public void SetCaster(ICharacter caster)
+		{
+			if (caster != null)
+			{
+				this.caster = caster;
+			}
+		}
+
+		/// <summary>
 		/// Fixed time step per tick for duration UI conversions.
 		/// Cached from <c>TimeManager.TickDelta</c> at application time and refreshed every
 		/// tick by <see cref="BuffController.Tick"/> so that <see cref="RemainingSeconds"/>
@@ -186,15 +275,21 @@ namespace FishMMO.Shared
 		/// <param name="target">The character affected by the buff.</param>
 		/// <param name="currentTick">The current network tick.</param>
 		/// <param name="tickDelta">Fixed seconds-per-tick of the active session.</param>
+		/// <param name="isReplaying">
+		/// True when this tick is part of a prediction replay. Exposed to templates via
+		/// <see cref="IsReplaying"/> so effects that raise events can suppress them.
+		/// </param>
 		/// <returns>True if tick state changed (snapshot must be marked dirty).</returns>
 		// AggressiveInlining intentionally absent: the try/catch prevents the JIT from
 		// inlining this method regardless, so the attribute would be silently ignored.
-		public bool TryTick(ICharacter target, uint currentTick, float tickDelta)
+		public bool TryTick(ICharacter target, uint currentTick, float tickDelta, bool isReplaying = false)
 		{
 			if (Template == null || NextTickTick == TimeManager.UNSET_TICK)
 			{
 				return false;
 			}
+
+			IsReplaying = isReplaying;
 
 			uint tickRateTicks = DurationToTicks(Template.TickRate, tickDelta);
 			if (tickRateTicks == 0u)

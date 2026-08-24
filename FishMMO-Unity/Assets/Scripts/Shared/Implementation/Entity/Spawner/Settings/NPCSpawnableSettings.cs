@@ -44,6 +44,17 @@ namespace FishMMO.Shared
 		public float CorpseDecayDurationOverride;
 
 		/// <summary>
+		/// Optional loot table override, so the same prefab drops zone-appropriate loot.
+		/// </summary>
+		/// <remarks>
+		/// The counterpart to <see cref="AttributeBonusOverride"/>: a spawner that makes one orc
+		/// prefab into an elite is also the spawner that should decide the elite drops elite loot.
+		/// Leave empty to use whatever the prefab carries.
+		/// </remarks>
+		[Tooltip("Replaces the prefab's loot table. Leave empty to use the prefab's own.")]
+		public LootTableTemplate LootTableOverride;
+
+		/// <summary>
 		/// Optional AI archetype override — the NPC's whole brain in one asset.
 		/// </summary>
 		/// <remarks>
@@ -107,17 +118,32 @@ namespace FishMMO.Shared
 			NPC npc = nob.GetComponent<NPC>();
 			if (npc == null) return;
 
-			if (AttributeBonusOverride != null)
-			{
-				npc.AttributeBonuses = AttributeBonusOverride;
-			}
+			/* Every override below resolves to "this spawner's value, or the PREFAB's" — never to
+			 * whatever happens to be on the instance.
+			 *
+			 * Pooled instances are shared between spawners, and an override is a plain field
+			 * write that outlives the spawn that made it. A spawner that set an override handed
+			 * the instance back to the pool still carrying it, and the next spawner to draw that
+			 * instance — one with no override of its own, expecting the prefab default — silently
+			 * inherited it. That is how an elite's attribute database, corpse timer and loot table
+			 * leak into the ordinary creature that reuses its slot, and it gets worse the busier
+			 * the pool is. Reading the defaults back off the prefab makes each spawn independent
+			 * of whoever used the object last. */
+			NPC prefabNPC = NetworkObject != null ? NetworkObject.GetComponent<NPC>() : null;
 
-			if (CorpseDecayDurationOverride > 0f)
-			{
-				npc.CorpseDecayDuration = CorpseDecayDurationOverride;
-			}
+			npc.AttributeBonuses = AttributeBonusOverride != null
+				? AttributeBonusOverride
+				: prefabNPC?.AttributeBonuses;
 
-			ApplyAbilities(npc);
+			npc.CorpseDecayDuration = CorpseDecayDurationOverride > 0f
+				? CorpseDecayDurationOverride
+				: (prefabNPC != null ? prefabNPC.CorpseDecayDuration : npc.CorpseDecayDuration);
+
+			npc.LootTable = LootTableOverride != null
+				? LootTableOverride
+				: prefabNPC?.LootTable;
+
+			ApplyAbilities(npc, prefabNPC);
 			ApplyArchetype(nob);
 			ApplyFaction(nob);
 			ApplyScale(nob);
@@ -133,21 +159,37 @@ namespace FishMMO.Shared
 		/// settings each time rather than appended to.
 		/// </remarks>
 		/// <param name="npc">The NPC being configured.</param>
-		private void ApplyAbilities(NPC npc)
+		private void ApplyAbilities(NPC npc, NPC prefabNPC)
 		{
-			if (AdditionalAbilities == null || AdditionalAbilities.Count < 1)
-			{
-				return;
-			}
-
 			if (npc.Abilities == null)
 			{
 				npc.Abilities = new List<AbilityTemplate>();
 			}
 
-			if (ReplacePrefabAbilities)
+			/* Rebuilt from the prefab every spawn, for the same reason the scalar overrides above
+			 * are. The list is a per-instance field on a pooled object: clearing it only when this
+			 * spawner has additions of its own left the previous spawner's additions in place for
+			 * any spawner that had none, so a creature could come back knowing an elite's
+			 * signature ability. */
+			npc.Abilities.Clear();
+
+			if (!ReplacePrefabAbilities &&
+				prefabNPC != null &&
+				prefabNPC.Abilities != null)
 			{
-				npc.Abilities.Clear();
+				for (int i = 0; i < prefabNPC.Abilities.Count; ++i)
+				{
+					AbilityTemplate template = prefabNPC.Abilities[i];
+					if (template != null && !npc.Abilities.Contains(template))
+					{
+						npc.Abilities.Add(template);
+					}
+				}
+			}
+
+			if (AdditionalAbilities == null || AdditionalAbilities.Count < 1)
+			{
+				return;
 			}
 
 			for (int i = 0; i < AdditionalAbilities.Count; ++i)

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Managing.Timing;
+using FishNet.Object;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -107,6 +108,37 @@ namespace FishMMO.Shared
 		/// </summary>
 		private CharacterPredictionController predictionController;
 
+		// ───── Loot Contribution State ──────────────────────────────────────
+
+		/// <summary>
+		/// One entry per character credited with a share of this character's death.
+		/// </summary>
+		private struct ContributorEntry
+		{
+			/// <summary>The contributor's own damage controller, held so the link can be undone from either end.</summary>
+			public CharacterDamageController Controller;
+			/// <summary>How the credit was first earned.</summary>
+			public CombatContributionKind Kind;
+		}
+
+		/// <summary>
+		/// Characters credited with a share of THIS character's death, keyed by character ID.
+		/// Server-only; null until the first contribution is recorded.
+		/// </summary>
+		private Dictionary<long, ContributorEntry> contributors;
+
+		/// <summary>
+		/// The characters THIS character is credited against — the reverse of
+		/// <see cref="contributors"/>, kept so a heal can find everything the healed character is
+		/// fighting without a global index, and so either end can undo the link.
+		/// </summary>
+		private HashSet<CharacterDamageController> contributionTargets;
+
+		/// <summary>
+		/// Scratch buffer for iterating <see cref="contributionTargets"/> while recording into it.
+		/// </summary>
+		private static readonly List<CharacterDamageController> contributionIterationBuffer = new List<CharacterDamageController>();
+
 		/// <summary>
 		/// Gets whether this character is currently in combat (within the combat duration window).
 		/// </summary>
@@ -191,6 +223,11 @@ namespace FishMMO.Shared
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 
+			/* A character leaving the world must not stay on other characters' contributor lists.
+			 * A logged-out player holds no loot rights worth preserving, and the stale entry would
+			 * otherwise survive as a reference to a despawned controller. */
+			ClearCombatContributions();
+
 			predictionController = null;
 
 			base.OnStopNetwork();
@@ -220,6 +257,13 @@ namespace FishMMO.Shared
 			{
 				combatTimerActive = false;
 				Character.DisableFlags(CharacterFlags.IsInCombat);
+
+				/* Leaving combat expires loot rights in both directions. Without this, tagging a
+				 * creature for one point of damage and walking away would still entitle the
+				 * tagger to loot it half an hour later when somebody else finally killed it. The
+				 * combat window is already the game's definition of "engaged", so reusing it
+				 * keeps tag expiry and combat state from ever disagreeing. */
+				ClearCombatContributions();
 			}
 		}
 
@@ -340,6 +384,221 @@ namespace FishMMO.Shared
 			}
 		}
 
+		// ───── Loot Contribution ────────────────────────────────────────────
+
+		/// <summary>
+		/// Resolves the character that should actually be credited for an action.
+		/// </summary>
+		/// <remarks>
+		/// A pet's kills belong to its owner, and nothing that is not ultimately a player can be
+		/// credited at all — loot rights exist to decide who may open a window, and an NPC has no
+		/// window to open. Returning null is the normal answer for NPC-on-NPC combat.
+		/// </remarks>
+		/// <param name="contributor">The character that performed the action.</param>
+		/// <returns>The player to credit, or null when no player is responsible.</returns>
+		private static IPlayerCharacter ResolveContributionCredit(ICharacter contributor)
+		{
+			if (contributor == null)
+			{
+				return null;
+			}
+
+			if (contributor is IPlayerCharacter player)
+			{
+				return player;
+			}
+
+			/* A pet is an NPC, so without this it would be discarded by the test above and a
+			 * hunter who killed something entirely through their pet would earn no loot rights on
+			 * their own kill. */
+			if (contributor is Pet pet)
+			{
+				return pet.PetOwner as IPlayerCharacter;
+			}
+
+			return null;
+		}
+
+		/// <inheritdoc />
+		public void RecordCombatContribution(ICharacter contributor, CombatContributionKind kind)
+		{
+			// Contribution decides loot rights, so it is authoritative state and is tracked only
+			// where loot is granted. A client tracking it would just be building a list nothing reads.
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+
+			IPlayerCharacter credit = ResolveContributionCredit(contributor);
+			if (credit == null || ReferenceEquals(credit, Character))
+			{
+				return;
+			}
+
+			if (!credit.TryGet(out ICharacterDamageController creditDamageController))
+			{
+				return;
+			}
+			CharacterDamageController creditController = creditDamageController as CharacterDamageController;
+
+			contributors ??= new Dictionary<long, ContributorEntry>();
+
+			/* First credit wins. Overwriting would let a stray debuff late in a fight relabel a
+			 * contributor who had been hitting the target since the pull — which matters only for
+			 * diagnostics today, but silently rewriting recorded history is not worth the saving
+			 * of a dictionary probe. */
+			if (!contributors.ContainsKey(credit.ID))
+			{
+				contributors[credit.ID] = new ContributorEntry()
+				{
+					Controller = creditController,
+					Kind = kind,
+				};
+			}
+
+			if (creditController != null)
+			{
+				creditController.contributionTargets ??= new HashSet<CharacterDamageController>();
+				creditController.contributionTargets.Add(this);
+			}
+		}
+
+		/// <inheritdoc />
+		public void PropagateCombatContribution(ICharacter supporter)
+		{
+			if (!base.IsServerStarted ||
+				contributionTargets == null ||
+				contributionTargets.Count < 1)
+			{
+				return;
+			}
+
+			IPlayerCharacter credit = ResolveContributionCredit(supporter);
+			if (credit == null || ReferenceEquals(credit, Character))
+			{
+				// Self-healing earns nothing new: the healer is already on every list this
+				// character is on, which is precisely the set being iterated below.
+				return;
+			}
+
+			/* Snapshot before iterating. RecordCombatContribution writes into the SUPPORTER's
+			 * contributionTargets rather than this one, so the collection being walked is not the
+			 * one being mutated — but that is a property of the current call graph rather than of
+			 * the data structure, and a buffered walk costs nothing to make it unconditional. */
+			contributionIterationBuffer.Clear();
+			contributionIterationBuffer.AddRange(contributionTargets);
+
+			for (int i = 0; i < contributionIterationBuffer.Count; ++i)
+			{
+				CharacterDamageController victim = contributionIterationBuffer[i];
+				if (victim == null)
+				{
+					continue;
+				}
+				victim.RecordCombatContribution(supporter, CombatContributionKind.Healing);
+			}
+
+			contributionIterationBuffer.Clear();
+		}
+
+		/// <inheritdoc />
+		public bool TryConsumeContributors(out List<long> contributorIDs)
+		{
+			if (contributors == null || contributors.Count < 1)
+			{
+				contributorIDs = null;
+				ClearCombatContributions();
+				return false;
+			}
+
+			contributorIDs = new List<long>(contributors.Keys);
+			ClearCombatContributions();
+			return true;
+		}
+
+		/// <inheritdoc />
+		public void ClearCombatContributions()
+		{
+			/* Both directions, and each from the side that owns the reference. Clearing only this
+			 * character's own dictionary would leave every contributor still holding a link back
+			 * to it, so a later heal would push credit onto a corpse whose rights had already been
+			 * handed out — and, on a pooled NPC, onto whatever creature next occupied the slot. */
+			if (contributors != null)
+			{
+				foreach (ContributorEntry entry in contributors.Values)
+				{
+					entry.Controller?.contributionTargets?.Remove(this);
+				}
+				contributors.Clear();
+			}
+
+			if (contributionTargets != null)
+			{
+				// Character can be null while the behaviour is being torn down; without an ID
+				// there is nothing to remove and the far side's entry is cleared by its own reset.
+				long selfID = Character != null ? Character.ID : 0;
+				if (selfID != 0)
+				{
+					foreach (CharacterDamageController victim in contributionTargets)
+					{
+						victim?.contributors?.Remove(selfID);
+					}
+				}
+				contributionTargets.Clear();
+			}
+		}
+
+		// ───── Death Replication ────────────────────────────────────────────
+
+		/// <summary>
+		/// Tells observers this character has just died so they can pose it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Death was previously invisible to everyone except the dying player. <see cref="Kill"/>
+		/// runs only on the server, and <c>TriggerDeath</c> compiles out of server builds, so the
+		/// only thing that ever posed a corpse was <c>RestorePoseForCurrentState</c> reading
+		/// <see cref="CharacterFlags.IsDead"/> out of a spawn payload — which covers a client that
+		/// arrives after the death and nobody who was already watching. An NPC killed in front of
+		/// a player simply stopped moving, upright.
+		/// </para>
+		/// <para>
+		/// Deliberately not buffered. Late observers are served by the spawn payload, which
+		/// carries the flag for both players and NPCs, and a buffered RPC on a pooled NPC is a
+		/// message whose lifetime is tied to the pool slot rather than to the creature.
+		/// </para>
+		/// </remarks>
+		/// <param name="dead">True on death, false when the character is revived.</param>
+		[ObserversRpc(ExcludeOwner = false)]
+		private void RpcSetDeathState(bool dead)
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			if (dead)
+			{
+				Character.EnableFlags(CharacterFlags.IsDead);
+			}
+			else
+			{
+				Character.DisableFlags(CharacterFlags.IsDead);
+			}
+
+			if (Character.TryGet(out ICharacterAnimationController animationController))
+			{
+				if (dead)
+				{
+					animationController.TriggerDeath();
+				}
+				else
+				{
+					animationController.ResetDeath();
+				}
+			}
+		}
+
 		// ───── Damage / Resistance ──────────────────────────────────────────
 
 		/// <summary>
@@ -426,6 +685,11 @@ namespace FishMMO.Shared
 				attackerDamageController.EnterCombat();
 			}
 
+			/* Recorded after the damage has actually landed, so the early returns above — immortal,
+			 * already dead, fully resisted — do not hand out loot rights for a hit that did
+			 * nothing. */
+			RecordCombatContribution(attacker, CombatContributionKind.Damage);
+
 			ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
 
 			if (!ignoreAchievements)
@@ -462,6 +726,15 @@ namespace FishMMO.Shared
 			// Already dead — prevent duplicate OnKilled events and ECA triggers.
 			if (Character.IsFlagged(CharacterFlags.IsDead)) return;
 
+			/* Set the flag the guard above reads, here, rather than trusting a subscriber to do
+			 * it. CharacterSystem's OnKilled handler sets it for players and for players only, so
+			 * an NPC never carried it: the guard was permanently false for every NPC in the game
+			 * and a second Kill call ran the whole death path again — duplicate OnKilled, duplicate
+			 * ECA triggers, and with corpse looting, a second roll of the loot table. It also has
+			 * to be set before the subscribers run, because NPC.Despawn is one of them and the
+			 * corpse it creates is only correct for something already marked dead. */
+			Character.EnableFlags(CharacterFlags.IsDead);
+
 			// Clear combat state on death.
 			combatTimerActive = false;
 			Character.DisableFlags(CharacterFlags.IsInCombat);
@@ -483,6 +756,10 @@ namespace FishMMO.Shared
 
 			if (Character.TryGet(out ICharacterAnimationController anim))
 				anim.TriggerDeath();
+
+			// Observers pose the corpse from here; the owner and late joiners are covered by the
+			// death broadcast and the spawn payload respectively.
+			RpcSetDeathState(true);
 
 			InvokeKilledIsolated(killer, Character);
 		}
@@ -584,6 +861,14 @@ namespace FishMMO.Shared
 				healerDamageController.EnterCombat();
 			}
 
+			/* Healing earns loot rights on everything the healed character is fighting. Gated on
+			 * the target already being in combat for the same reason the healer's own combat entry
+			 * is: topping someone up between pulls is not participation in a kill. */
+			if (healer != null && defenderWasInCombat)
+			{
+				PropagateCombatContribution(healer);
+			}
+
 			ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
 
 			if (!ignoreAchievements)
@@ -638,6 +923,14 @@ namespace FishMMO.Shared
 				animController.ResetDeath();
 			}
 
+			// Observers are holding the death pose from RpcSetDeathState(true); without the
+			// matching clear, a resurrected character stands up on its own screen and stays a
+			// corpse on everyone else's.
+			if (base.IsServerStarted)
+			{
+				RpcSetDeathState(false);
+			}
+
 			// Fire ECA resurrect triggers.
 			if (resurrector != null)
 			{
@@ -657,12 +950,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void ResetState(bool asServer)
 		{
+			/* Before base.ResetState, which is where Character is liable to be dropped — the
+			 * cleanup needs the character ID to unhook this controller from the far side of every
+			 * contribution link. */
+			ClearCombatContributions();
+
 			base.ResetState(asServer);
 			resourceInstance = null;
 			combatTimerActive = false;
 			lastCombatTick = 0;
 			Character?.DisableFlags(CharacterFlags.IsInCombat);
-				immortal = false;
+			immortal = false;
 		}
 	}
 }

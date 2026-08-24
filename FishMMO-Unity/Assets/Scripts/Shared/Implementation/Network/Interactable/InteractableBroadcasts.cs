@@ -396,4 +396,143 @@ namespace FishMMO.Shared
 		/// <summary>Slot index to take the item from.</summary>
 		public int Slot;
 	}
+
+	// ──────────────────────────────────────────
+	//  Corpse Loot
+	// ──────────────────────────────────────────
+
+	/// <summary>
+	/// One item slot on a corpse, as sent to a looter.
+	/// </summary>
+	/// <remarks>
+	/// Carries the slot index explicitly rather than relying on array position, because emptied
+	/// slots are omitted from the array but must keep their identity — the index is what a take
+	/// request names, and it has to survive the round trip unchanged.
+	/// </remarks>
+	[Serializable]
+	public struct CorpseLootSlotData
+	{
+		/// <summary>Slot index on the corpse.</summary>
+		public int Slot;
+		/// <summary>Template ID of the item in this slot.</summary>
+		public int TemplateID;
+		/// <summary>Stack amount in this slot.</summary>
+		public uint Amount;
+	}
+
+	/// <summary>
+	/// Server → Client broadcast opening (or refreshing) a corpse's loot window.
+	/// </summary>
+	/// <remarks>
+	/// Sent both on the initial interaction and after every successful take by ANY looter, because
+	/// the pile is shared: what one player removes has to disappear from everyone else's window.
+	/// Re-sending the whole contents rather than a delta keeps the client a pure view of server
+	/// state, so a dropped or reordered update cannot leave two players disagreeing about what is
+	/// still on the body.
+	/// </remarks>
+	public struct CorpseLootBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse.</summary>
+		public long InteractableID;
+		/// <summary>Display name of the corpse.</summary>
+		public string CorpseName;
+		/// <summary>Filled item slots. Emptied slots are omitted.</summary>
+		public CorpseLootSlotData[] Items;
+		/// <summary>Currency remaining on the corpse.</summary>
+		public long Currency;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast requesting one item from a corpse.
+	/// </summary>
+	public struct CorpseLootTakeItemBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse.</summary>
+		public long InteractableID;
+		/// <summary>Slot index being taken.</summary>
+		public int Slot;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast requesting the currency on a corpse.
+	/// </summary>
+	public struct CorpseLootTakeCurrencyBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse.</summary>
+		public long InteractableID;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast requesting everything the corpse holds.
+	/// </summary>
+	public struct CorpseLootTakeAllBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse.</summary>
+		public long InteractableID;
+	}
+
+	/// <summary>
+	/// Server → Client reply to any corpse take request.
+	/// </summary>
+	/// <remarks>
+	/// Every exit from every take handler sends one of these, successful or not. The client marks
+	/// the slot it submitted as pending and will not send another request for it until an answer
+	/// arrives, so a handler that simply returned would leave that slot locked for the rest of the
+	/// window's life — the same contract the merchant sell path follows.
+	/// </remarks>
+	public struct CorpseLootResultBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse.</summary>
+		public long InteractableID;
+		/// <summary>The slot the request named, or -1 for currency and take-all.</summary>
+		public int Slot;
+		/// <summary>True when at least one thing was actually transferred.</summary>
+		public bool Success;
+		/// <summary>Why the request was refused, for client feedback.</summary>
+		public CorpseLootFailureReason Reason;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast saying the player closed a corpse's loot window.
+	/// </summary>
+	public struct CorpseLootCloseBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse.</summary>
+		public long InteractableID;
+	}
+
+	/// <summary>
+	/// Server → Client broadcast forcing a corpse's loot window shut.
+	/// </summary>
+	/// <remarks>
+	/// Sent when the corpse decays, empties, or the looter walks out of range. Without it the
+	/// window would outlive the scene object ID it refers to, and every button in it would submit
+	/// requests against an ID that no longer resolves.
+	/// </remarks>
+	public struct CorpseLootCloseWindowBroadcast : IBroadcast
+	{
+		/// <summary>Scene object ID of the corpse whose window should close.</summary>
+		public long InteractableID;
+	}
+
+	/// <summary>
+	/// Why a corpse loot request was refused.
+	/// </summary>
+	public enum CorpseLootFailureReason : byte
+	{
+		/// <summary>The request succeeded; no failure.</summary>
+		None = 0,
+		/// <summary>The corpse no longer exists, or has already decayed.</summary>
+		NoCorpse = 1,
+		/// <summary>The player did not contribute to the kill.</summary>
+		NotEligible = 2,
+		/// <summary>The player is too far from the corpse.</summary>
+		OutOfRange = 3,
+		/// <summary>The slot was already empty — usually another looter got there first.</summary>
+		AlreadyTaken = 4,
+		/// <summary>The player's inventory had no room.</summary>
+		InventoryFull = 5,
+		/// <summary>The server could not process the request.</summary>
+		ServerError = 6,
+	}
 }

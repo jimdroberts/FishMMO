@@ -40,6 +40,25 @@ namespace FishMMO.Shared
 		/// </summary>
 		public AbilityType Type;
 
+		/// <summary>
+		/// Forces this ability's AI intent instead of deriving it from the action graph.
+		/// </summary>
+		/// <remarks>
+		/// Leave at <see cref="AIAbilityIntent.None"/> for the normal case.
+		/// <see cref="AIAbilityClassifier"/> reads the ECA actions the ability already carries and
+		/// works out whether it heals, damages, controls or taunts, so archetypes never name
+		/// specific abilities.
+		/// <para>
+		/// The override exists for the two cases classification cannot get right on its own: a
+		/// custom action type it has never heard of, and a buff whose beneficial-or-detrimental
+		/// nature the attribute-sign heuristic reads backwards. Setting it replaces the derived
+		/// value entirely rather than adding to it.
+		/// </para>
+		/// </remarks>
+		[Header("AI")]
+		[Tooltip("Leave as None. Only set this when the AI misreads what the ability does — it replaces the derived intent entirely.")]
+		public AIAbilityIntent IntentOverride = AIAbilityIntent.None;
+
 		[Header("Event-Condition-Action (ECA) Triggers")]
 		[Tooltip("Ability Events to execute when the ability object 'ticks' (e.g., moves, applies continuous effects).")]
 		/// <summary>

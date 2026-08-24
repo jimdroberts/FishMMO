@@ -599,7 +599,7 @@ namespace FishMMO.Client
 				Transform target = targetController.Current.Target;
 				if (target != null)
 				{
-					IInteractable interactable = target.GetComponent<IInteractable>();
+					IInteractable interactable = ResolveInteractable(target);
 					if (interactable != null && interactable.CanInteract(Character))
 					{
 						Client.Broadcast(new InteractableBroadcast()
@@ -609,6 +609,57 @@ namespace FishMMO.Client
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// Picks which of a target's interactables the player means.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A GameObject can carry more than one. An NPC is itself a lootable corpse, and an NPC
+		/// that is also a merchant or a banker carries that component as well — so a plain
+		/// <c>GetComponent&lt;IInteractable&gt;()</c> returns whichever the component order happens
+		/// to yield, and interacting with a dead merchant could just as easily open its shop as
+		/// its corpse.
+		/// </para>
+		/// <para>
+		/// A corpse wins when there is one, because being dead is the more specific state: a body
+		/// cannot trade, and the loot on it is on a timer while the shop will still be there after
+		/// the NPC respawns. Otherwise the first interactable that will accept the interaction is
+		/// used, which is the previous behaviour for every single-component object.
+		/// </para>
+		/// </remarks>
+		/// <param name="target">The targeted transform.</param>
+		/// <returns>The interactable to send, or null.</returns>
+		private IInteractable ResolveInteractable(Transform target)
+		{
+			IInteractable[] interactables = target.GetComponents<IInteractable>();
+			if (interactables == null || interactables.Length < 1)
+			{
+				return null;
+			}
+
+			for (int i = 0; i < interactables.Length; ++i)
+			{
+				if (interactables[i] is ILootableCorpse corpse && corpse.IsCorpse)
+				{
+					return corpse;
+				}
+			}
+
+			/* Fall through to the first non-corpse. A corpse component that is not currently a
+			 * corpse must not be returned here — its CanInteract refuses while the NPC is alive,
+			 * and returning it would suppress the merchant sharing the GameObject. */
+			for (int i = 0; i < interactables.Length; ++i)
+			{
+				if (interactables[i] is ILootableCorpse)
+				{
+					continue;
+				}
+				return interactables[i];
+			}
+
+			return interactables[0];
 		}
 
 		/// <summary>

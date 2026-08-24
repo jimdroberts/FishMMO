@@ -96,6 +96,40 @@ namespace FishMMO.Shared
 		[Range(0f, 5f)]
 		public float SupportWeight = 1.0f;
 
+		[Header("Ability Intent Weights")]
+		/* Category weights above describe *delivery* — how an ability reaches its target. These
+		 * describe *purpose*, read straight out of the ability's ECA action graph by
+		 * AIAbilityClassifier. The two are orthogonal and both apply: a crowd controller wants
+		 * ranged delivery and controlling purpose, and neither weight alone says that.
+		 *
+		 * This is what replaced naming abilities by template ID on the archetype. A personality
+		 * that raises ControlWeight prefers whatever in its spellbook actually roots and stuns,
+		 * including the ability a designer adds tomorrow, with nothing to keep in step by hand. */
+
+		[Tooltip("Score multiplier for abilities that deal damage.")]
+		[Range(0f, 5f)]
+		public float DamageWeight = 1.0f;
+
+		[Tooltip("Score multiplier for abilities that restore health.")]
+		[Range(0f, 5f)]
+		public float HealWeight = 1.0f;
+
+		[Tooltip("Score multiplier for abilities that stun, root, freeze, interrupt or knock back.")]
+		[Range(0f, 5f)]
+		public float ControlWeight = 1.0f;
+
+		[Tooltip("Score multiplier for abilities that weaken a target.")]
+		[Range(0f, 5f)]
+		public float DebuffWeight = 1.0f;
+
+		[Tooltip("Score multiplier for abilities that strengthen a friend.")]
+		[Range(0f, 5f)]
+		public float BuffWeight = 1.0f;
+
+		[Tooltip("Score multiplier for taunts and other threat manipulation.")]
+		[Range(0f, 5f)]
+		public float ThreatWeight = 1.0f;
+
 		[Header("Classification Thresholds")]
 		[Tooltip("Abilities with range <= this value are considered melee. Above this = ranged.")]
 		public float MeleeRangeThreshold = 4f;
@@ -164,12 +198,28 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns a score multiplier for the given ability based on this personality's weights.
-		/// Called by <see cref="AIController.PickBestAbility"/> to bias ability selection.
+		/// Returns a score multiplier for the given ability, combining how it is delivered with
+		/// what it does.
 		/// </summary>
+		/// <remarks>
+		/// Called by <see cref="AIController.PickScoredAbility"/> to bias ability selection. The
+		/// delivery weight and the intent weight multiply: an archer personality that favours
+		/// ranged delivery and a caster personality that favours control can share an ability list
+		/// and still reach for different things in it.
+		/// </remarks>
 		/// <param name="ability">The ability being scored.</param>
 		/// <returns>A multiplier (typically 0.1–5.0) to apply to the ability's base score.</returns>
 		public float GetWeight(Ability ability)
+		{
+			return GetCategoryWeight(ability) * GetIntentWeight(ability);
+		}
+
+		/// <summary>
+		/// Returns the multiplier for how an ability is delivered — melee, ranged, area, or self.
+		/// </summary>
+		/// <param name="ability">The ability being scored.</param>
+		/// <returns>The category multiplier.</returns>
+		public float GetCategoryWeight(Ability ability)
 		{
 			AbilityCategory category = ClassifyAbility(ability);
 
@@ -181,6 +231,40 @@ namespace FishMMO.Shared
 				case AbilityCategory.Support: return SupportWeight;
 				default: return 1.0f;
 			}
+		}
+
+		/// <summary>
+		/// Returns the multiplier for what an ability does, derived from its ECA actions.
+		/// </summary>
+		/// <remarks>
+		/// The strongest matching weight, not the product of all of them. Abilities routinely carry
+		/// several intents — a nuke that also applies a burn is Damage and Debuff — and multiplying
+		/// would let a merely-compound ability out-score a genuinely specialised one purely for
+		/// having more flags set.
+		/// </remarks>
+		/// <param name="ability">The ability being scored.</param>
+		/// <returns>The intent multiplier, or 1 for an ability with no recognised intent.</returns>
+		public float GetIntentWeight(Ability ability)
+		{
+			AIAbilityIntent intent = AIAbilityClassifier.Classify(ability);
+			if (intent == AIAbilityIntent.None)
+			{
+				return 1.0f;
+			}
+
+			float weight = 0f;
+			bool matched = false;
+
+			if (intent.HasAny(AIAbilityIntent.Damage)) { weight = Mathf.Max(weight, DamageWeight); matched = true; }
+			if (intent.HasAny(AIAbilityIntent.Heal)) { weight = Mathf.Max(weight, HealWeight); matched = true; }
+			if (intent.HasAny(AIAbilityIntent.Control)) { weight = Mathf.Max(weight, ControlWeight); matched = true; }
+			if (intent.HasAny(AIAbilityIntent.Debuff)) { weight = Mathf.Max(weight, DebuffWeight); matched = true; }
+			if (intent.HasAny(AIAbilityIntent.Buff)) { weight = Mathf.Max(weight, BuffWeight); matched = true; }
+			if (intent.HasAny(AIAbilityIntent.Threat)) { weight = Mathf.Max(weight, ThreatWeight); matched = true; }
+
+			// Revive, Summon and Utility carry no weight of their own; leave them unbiased rather
+			// than letting an unweighted intent silently zero the score.
+			return matched ? weight : 1.0f;
 		}
 
 		/// <summary>
@@ -197,20 +281,28 @@ namespace FishMMO.Shared
 			// When healthy, aggressive personalities get a bonus on offensive abilities.
 			float retreatThreshold = EffectiveRetreatHealthThreshold;
 
+			AIAbilityIntent intent = AIAbilityClassifier.Classify(ability);
+			AbilityCategory cat = ClassifyAbility(ability);
+
 			if (healthPercent > retreatThreshold && HealthyAggressionBonus > 0f)
 			{
-				AbilityCategory cat = ClassifyAbility(ability);
-				if (cat == AbilityCategory.Melee || cat == AbilityCategory.Ranged || cat == AbilityCategory.AOE)
+				/* Intent first, delivery as the fallback. An ability whose ECA graph says it hurts
+				 * people is offensive whatever shape it is delivered in, and an ability with no
+				 * classifiable actions still gets the old range-based answer rather than nothing. */
+				bool offensive = intent.IsOffensive() ||
+								 (intent == AIAbilityIntent.None &&
+								  (cat == AbilityCategory.Melee || cat == AbilityCategory.Ranged || cat == AbilityCategory.AOE));
+
+				if (offensive)
 				{
 					bonus += HealthyAggressionBonus;
 				}
 			}
 
-			// When hurt, encourage support/self-buff usage.
+			// When hurt, encourage healing and self-protection over pressing the attack.
 			if (retreatThreshold > 0f && healthPercent <= retreatThreshold)
 			{
-				AbilityCategory cat = ClassifyAbility(ability);
-				if (cat == AbilityCategory.Support)
+				if (intent.HasAny(AIAbilityIntent.Heal | AIAbilityIntent.Buff) || cat == AbilityCategory.Support)
 				{
 					bonus += LowHealthSupportBonus;
 				}

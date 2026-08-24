@@ -635,7 +635,7 @@ namespace FishMMO.Shared
 				// ticks and expires on the same absolute tick still delivers its final
 				// effect. Without this, the last tick of any buff whose Duration is an
 				// exact multiple of TickRate is silently skipped.
-				if (buff.TryTick(Character, currentTick, tickDelta))
+				if (buff.TryTick(Character, currentTick, tickDelta, isReplayingTick))
 				{
 					// NextTickTick, TickCount, and CumulativeTickMultiplier changed.
 					snapshotDirty = true;
@@ -675,12 +675,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="currentTick">The prediction tick at the time of application.</param>
-		public void Apply(BaseBuffTemplate template, PredictionTick currentTick)
+		/// <param name="caster">The character applying the buff, snapshotted for attribution. May be null.</param>
+		public void Apply(BaseBuffTemplate template, PredictionTick currentTick, ICharacter caster = null)
 		{
 			// The prediction path already holds a replicate-domain tick (it came from
 			// CharacterReplicateData.GetPredictionTick), so pass its raw value straight
 			// into the single apply core.
-			ApplyResolved(template, currentTick.Value);
+			ApplyResolved(template, currentTick.Value, caster);
 		}
 
 		/// <summary>
@@ -695,7 +696,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="replicateDomainTick">Application tick, guaranteed to be in the replicate domain.</param>
-		private void ApplyResolved(BaseBuffTemplate template, uint replicateDomainTick)
+		/// <param name="caster">The character applying the buff, snapshotted for attribution. May be null.</param>
+		private void ApplyResolved(BaseBuffTemplate template, uint replicateDomainTick, ICharacter caster = null)
 		{
 			if (template == null) return;
 
@@ -733,6 +735,12 @@ namespace FishMMO.Shared
 					Character.Invoke(onBuffApplyTriggers, bed);
 				}
 			}
+
+			/* Snapshot on every application, new or refreshed, so a DoT re-applied by a second
+			 * attacker credits the one currently sustaining it rather than whoever happened to
+			 * land the first stack. SetCaster ignores nulls, so a refresh from a source with no
+			 * initiator leaves existing attribution intact. */
+			buffInstance.SetCaster(caster);
 
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
@@ -780,11 +788,11 @@ namespace FishMMO.Shared
 		/// <c>TimeManager.LocalTick</c>.
 		/// </para>
 		/// </summary>
-		public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick)
+		public void ApplyAuthoritative(BaseBuffTemplate template, uint serverTick, ICharacter caster = null)
 		{
 			// Map the raw authoritative tick into the replicate domain BEFORE applying so the
 			// PredictionTick contract holds: ApplyResolved only ever receives replicate-domain ticks.
-			ApplyResolved(template, ResolveAuthoritativeTick(serverTick));
+			ApplyResolved(template, ResolveAuthoritativeTick(serverTick), caster);
 		}
 
 		/// <summary>

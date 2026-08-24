@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Component.Transforming;
 using FishNet.Observing;
@@ -21,7 +22,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(FactionController))]
 	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(NetworkObserver))]
-	public class NPC : BaseCharacter, ISceneObject, ISpawnable
+	public class NPC : BaseCharacter, ISceneObject, ISpawnable, IInteractable, ILootableCorpse
 	{
 		/// <summary>
 		/// Static random number generator for NPC attribute seed generation.
@@ -62,6 +63,17 @@ namespace FishMMO.Shared
 		public float CorpseDecayDuration = 30f;
 
 		/// <summary>
+		/// How close a player must stand to loot this NPC's corpse.
+		/// </summary>
+		[Tooltip("Distance within which a player may loot this NPC's corpse.")]
+		public float CorpseInteractionRange = 4.0f;
+
+		/// <summary>
+		/// Milliseconds a player must wait between interactions with this corpse.
+		/// </summary>
+		private const double CORPSE_INTERACT_RATE_LIMIT = 60.0;
+
+		/// <summary>
 		/// Whether the NPC is currently in corpse state (dead but still visible).
 		/// </summary>
 		private bool isCorpse;
@@ -70,6 +82,56 @@ namespace FishMMO.Shared
 		/// Remaining seconds before the corpse returns to the object pool.
 		/// </summary>
 		private float corpseDecayTimer;
+
+		[Header("Loot")]
+		[Tooltip("What this NPC's corpse may hold. Rolled once, on the server, at the moment of death.")]
+		public LootTableTemplate LootTable;
+
+		/// <summary>
+		/// ECA triggers fired server-side when a player interacts with this NPC's corpse.
+		/// </summary>
+		[Tooltip("Triggers invoked server-side when a player loots this NPC's corpse.")]
+		[SerializeField]
+		private List<Trigger> onInteractTriggers = new List<Trigger>();
+
+		/// <summary>
+		/// The corpse's item slots. Emptied slots stay as nulls so indices remain stable.
+		/// </summary>
+		private readonly List<Item> lootItems = new List<Item>();
+
+		/// <summary>
+		/// Currency remaining on the corpse.
+		/// </summary>
+		private long lootCurrency;
+
+		/// <summary>
+		/// Character IDs allowed to loot this corpse, snapshotted from the damage controller's
+		/// contribution list at the moment of death.
+		/// </summary>
+		private readonly HashSet<long> eligibleLooters = new HashSet<long>();
+
+		/// <summary>
+		/// Connections with this corpse's loot window open. Server-only.
+		/// </summary>
+		private readonly HashSet<NetworkConnection> lootViewers = new HashSet<NetworkConnection>();
+
+		/// <summary>
+		/// Squared corpse interaction range, resolved when the corpse is created.
+		/// </summary>
+		private float corpseInteractionRangeSqr;
+
+		/// <summary>
+		/// True when entering corpse state is what disabled this NPC's brain.
+		/// </summary>
+		/// <remarks>
+		/// Tracked so <see cref="ResetState"/> restores only what the corpse path switched off.
+		/// Unconditionally re-enabling the controller would override a prefab that deliberately
+		/// ships with its brain disabled.
+		/// </remarks>
+		private bool aiDisabledByCorpse;
+
+		/// <inheritdoc />
+		public event Action<ILootableCorpse> OnCorpseExpired;
 
 		/// <summary>
 		/// Database of attribute bonuses for this NPC.
@@ -194,14 +256,50 @@ namespace FishMMO.Shared
 			// Unconditional, to match the now-unconditional subscription in OnStartServer.
 			if (base.TimeManager != null)
 				base.TimeManager.OnTick -= CorpseDecayTick;
+
+			NotifyCorpseExpired();
+
 			isCorpse = false;
 			corpseDecayTimer = 0f;
+			corpseInteractionRangeSqr = 0f;
+			OnCorpseExpired = null;
+
+			// Give the brain back, if the corpse path is what took it away.
+			if (aiDisabledByCorpse)
+			{
+				AIController ai = GetComponent<AIController>();
+				if (ai != null)
+				{
+					ai.enabled = true;
+				}
+				aiDisabledByCorpse = false;
+			}
+
+			/* Loot is per-death state and must not survive into the next occupant of this pool
+			 * slot. Anything still here was never taken — the corpse decayed with items on it —
+			 * so it is dropped rather than granted. */
+			lootItems.Clear();
+			lootCurrency = 0;
+			eligibleLooters.Clear();
+			lootViewers.Clear();
 
 			base.ResetState(asServer);
 
 #if !UNITY_SERVER
 			ClientCharacters.Remove(ID);
 #endif
+
+			/* Reset flags to the baseline a freshly spawned NPC expects.
+			 *
+			 * This is the only place it can happen. OnAwake sets IsLoaded and runs exactly once
+			 * per pooled instance, while Despawn clears it on every death — so from its second
+			 * life onwards a recycled NPC came back permanently unloaded, which
+			 * CharacterResourceAttribute.ClampCurrentValue reads to mean "do not clamp to
+			 * FinalValue" and therefore left its health able to sit above its own maximum.
+			 * IsDead is cleared here for the same reason: Kill now sets it, and a corpse returned
+			 * to the pool still carrying it would come back dead and unkillable. */
+			Flags = 0;
+			EnableFlags(CharacterFlags.IsLoaded);
 
 			npcRNG = null;
 			npcSeed = 0;
@@ -223,6 +321,12 @@ namespace FishMMO.Shared
 			// Read the attribute seed for deterministic attribute generation.
 			npcSeed = reader.ReadInt32();
 			npcGender = (CharacterGender)reader.ReadUInt8Unpacked();
+
+			/* Read and apply flags before anything below builds the model. The animation
+			 * controller poses an already-dead character when it acquires its animator, and that
+			 * acquisition is driven by the model instantiation further down — so the flag has to
+			 * be in place first or the corpse comes up standing. */
+			Flags = reader.ReadInt32();
 
 			// Instantiate the client side NPC RNG with the received seed.
 			npcRNG = new DeterministicRNG(npcSeed);
@@ -267,42 +371,170 @@ namespace FishMMO.Shared
 			npcGender = sceneObjectNamer == null ? CharacterGender.Unspecified : sceneObjectNamer.EnsureGeneratedGender();
 			writer.WriteUInt8Unpacked((byte)npcGender);
 
+			/* Flags, so a client that starts observing an NPC that is ALREADY a corpse poses it
+			 * correctly. The observers RPC covers only clients who were watching at the moment of
+			 * death; PlayerCharacter has carried its flags in the payload for exactly this reason
+			 * and NPCs did not, which is why walking up to an existing corpse showed it standing. */
+			writer.WriteInt32(Flags);
+
 			//Log.Debug($"Writing NPC RNG Seed {npcSeed}");
 		}
 
 		/// <summary>
 		/// Enters corpse state or returns to pool. On first call after death, the NPC
-		/// becomes a corpse (visible, immobile, immortal) for CorpseDecayDuration seconds.
-		/// After the timer expires, the object is returned to FishNet's pool for reuse.
+		/// becomes a corpse (visible, immobile, immortal, and lootable) for CorpseDecayDuration
+		/// seconds. After the timer expires, the object is returned to FishNet's pool for reuse.
 		/// </summary>
+		/// <remarks>
+		/// Called from the server's <c>OnKilled</c> subscriber. Everything it does is server state;
+		/// clients learn that the NPC is a corpse from <see cref="CharacterFlags.IsDead"/>, which
+		/// travels both live (an observers RPC from the damage controller) and in the spawn payload
+		/// for anyone who arrives afterwards.
+		/// </remarks>
 		public virtual void Despawn()
 		{
+			/* Server only, explicitly. Everything below is authoritative state — the loot roll,
+			 * the contributor snapshot, the decay clock — and a client has no business holding
+			 * any of it. Nothing reaches here on a client today, since the only caller is the
+			 * server's OnKilled subscriber and ObjectSpawner disables itself off the server; the
+			 * guard is here so that stays true of any future caller rather than by coincidence.
+			 * Clients derive corpse state from the replicated dead flag instead — see IsCorpse. */
+			if (!base.IsServerStarted) return;
+
 			if (isCorpse) return;
 
+			/* IsLoaded is what gates resource clamping, so a corpse must not carry it — but note
+			 * that ResetState is what puts it back for the next occupant of this pool slot.
+			 * Clearing it here and restoring it in OnAwake, as this used to, meant every recycled
+			 * NPC after its first death came back permanently unloaded. */
 			DisableFlags(CharacterFlags.IsLoaded);
 
 			// Enter corpse state -- stay spawned so clients see the death animation.
 			isCorpse = true;
 			corpseDecayTimer = CorpseDecayDuration;
+			corpseInteractionRangeSqr = CorpseInteractionRange * CorpseInteractionRange;
 
 			// Disable AI so the corpse does not move or fight.
 			AIController ai = GetComponent<AIController>();
-			if (ai != null) ai.enabled = false;
+			if (ai != null)
+			{
+				/* Remembered, because nothing else would ever switch it back on. Update() is what
+				 * drives the whole brain — LOD scheduling, state dispatch, target selection — and
+				 * a disabled MonoBehaviour does not receive it. Before this, the first death of a
+				 * pooled NPC disabled its controller permanently: every later occupant of that
+				 * pool slot spawned, stood still, and never thought again. */
+				aiDisabledByCorpse = ai.enabled;
+				ai.enabled = false;
+
+				/* A corpse holds no grudges. Beyond being wrong, a populated threat table keeps
+				 * AggressionState.HasAggression true, which is exactly the flag
+				 * AggressionDispatcher uses to decide who is worth delivering heal and kill
+				 * events to — so every corpse in the scene would be walked and handed every such
+				 * event for the whole of its decay. */
+				ai.AggressionState?.Clear();
+			}
 
 			// Prevent the corpse from being killed again.
 			if (TryGet(out ICharacterDamageController dc))
+			{
 				dc.Immortal = true;
+			}
+
+			BuildCorpseLoot(dc);
+		}
+
+		/// <summary>
+		/// Rolls the loot table and snapshots who is allowed to take from it.
+		/// </summary>
+		/// <remarks>
+		/// Both halves happen exactly once, here, because both must be settled before the first
+		/// player can possibly interact. Rolling lazily on first open would let the contents depend
+		/// on who opened it first; taking the contributor list later would lose it, since the
+		/// combat timer expires contributions and a corpse is out of combat by definition.
+		/// </remarks>
+		/// <param name="damageController">This NPC's damage controller, which owns the contributor list.</param>
+		private void BuildCorpseLoot(ICharacterDamageController damageController)
+		{
+			lootItems.Clear();
+			lootCurrency = 0;
+			eligibleLooters.Clear();
+
+			/* Consume the contributors even when there is no loot table. The list is a link back
+			 * from every contributor to this NPC, and leaving it in place would keep a pooled
+			 * corpse attached to players who have long since moved on. */
+			if (damageController != null &&
+				damageController.TryConsumeContributors(out List<long> contributors) &&
+				contributors != null)
+			{
+				for (int i = 0; i < contributors.Count; ++i)
+				{
+					eligibleLooters.Add(contributors[i]);
+				}
+			}
+
+			if (LootTable == null || eligibleLooters.Count < 1)
+			{
+				// Nobody earned rights, so there is nothing worth rolling — an unlootable pile is
+				// just a spawn payload every observer pays for.
+				return;
+			}
+
+			LootTable.Roll(npcRNG, lootItems, out int rolledCurrency);
+			lootCurrency = rolledCurrency;
 		}
 
 		/// <summary>
 		/// Returns the NPC to the object pool immediately. Called when the corpse
 		/// decay timer expires or on server shutdown.
 		/// </summary>
+		/// <remarks>
+		/// Routes through the owning <see cref="ObjectSpawner"/> so a respawn is scheduled, and
+		/// despawns directly when there is no spawner. The fallback matters: an NPC placed by
+		/// script or adopted rather than spawned has no spawner, and the null-conditional this
+		/// replaced meant such an NPC's corpse never decayed at all — it sat in the world as an
+		/// immortal, AI-disabled, permanently lootable body that nothing would ever collect.
+		/// </remarks>
 		public void ReturnToPool()
 		{
+			// Before the despawn, while the scene object ID a client is holding still resolves.
+			NotifyCorpseExpired();
+
 			isCorpse = false;
 			corpseDecayTimer = 0f;
-			ObjectSpawner?.Despawn(this);
+
+			ObjectSpawner spawner = ObjectSpawner;
+			if (spawner != null)
+			{
+				spawner.Despawn(this);
+				return;
+			}
+
+			if (base.IsServerStarted && NetworkObject != null && NetworkObject.IsSpawned)
+			{
+				NetworkManager.ServerManager.Despawn(NetworkObject, FishNet.Object.DespawnType.Pool);
+			}
+		}
+
+		/// <summary>
+		/// Tells anyone with this corpse's loot window open that it is going away.
+		/// </summary>
+		private void NotifyCorpseExpired()
+		{
+			if (lootViewers.Count < 1 && OnCorpseExpired == null)
+			{
+				return;
+			}
+
+			try
+			{
+				OnCorpseExpired?.Invoke(this);
+			}
+			catch (Exception ex)
+			{
+				FishMMO.Logging.Log.Error("NPC", $"An OnCorpseExpired subscriber threw for corpse {ID}: {ex}");
+			}
+
+			lootViewers.Clear();
 		}
 
 		/// <summary>
@@ -314,6 +546,221 @@ namespace FishMMO.Shared
 			corpseDecayTimer -= (float)base.TimeManager.TickDelta;
 			if (corpseDecayTimer <= 0f)
 				ReturnToPool();
+		}
+
+		// ───── Corpse Loot ──────────────────────────────────────────────────
+
+		/// <summary>
+		/// True while this NPC is a lootable corpse.
+		/// </summary>
+		/// <remarks>
+		/// Answers from whichever source is authoritative for the peer asking. The server owns
+		/// <see cref="isCorpse"/> outright; a client has no copy of it and reads the replicated
+		/// dead flag instead, which arrives live by observers RPC and in the spawn payload for
+		/// anyone who turns up later. Without the client arm this property is simply false on
+		/// every client, and the corpse is never offered as an interaction target at all.
+		/// </remarks>
+		public bool IsCorpse => base.IsServerStarted ? isCorpse : IsFlagged(CharacterFlags.IsDead);
+
+		/// <inheritdoc />
+		public IReadOnlyList<Item> LootItems => lootItems;
+
+		/// <inheritdoc />
+		public long LootCurrency => lootCurrency;
+
+		/// <inheritdoc />
+		public IReadOnlyCollection<NetworkConnection> LootViewers => lootViewers;
+
+		/// <inheritdoc />
+		public bool HasLoot
+		{
+			get
+			{
+				if (lootCurrency > 0)
+				{
+					return true;
+				}
+				for (int i = 0; i < lootItems.Count; ++i)
+				{
+					if (lootItems[i] != null)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+		}
+
+		/// <inheritdoc />
+		public bool IsEligibleLooter(long characterID)
+		{
+			return eligibleLooters.Contains(characterID);
+		}
+
+		/// <inheritdoc />
+		public bool TryTakeLootItem(int slot, out Item item)
+		{
+			item = null;
+
+			if (!isCorpse ||
+				slot < 0 ||
+				slot >= lootItems.Count)
+			{
+				return false;
+			}
+
+			item = lootItems[slot];
+			if (item == null)
+			{
+				return false;
+			}
+
+			/* Emptied rather than removed. Compacting the list would renumber every later slot,
+			 * and a second looter's in-flight request names a slot by index — it would land on
+			 * whatever slid into that position. */
+			lootItems[slot] = null;
+			return true;
+		}
+
+		/// <inheritdoc />
+		public bool ReturnLootItem(Item item, int slot)
+		{
+			if (item == null ||
+				slot < 0 ||
+				slot >= lootItems.Count ||
+				lootItems[slot] != null)
+			{
+				return false;
+			}
+
+			lootItems[slot] = item;
+			return true;
+		}
+
+		/// <inheritdoc />
+		public bool TryTakeLootCurrency(long maximum, out long amount)
+		{
+			amount = 0;
+
+			if (!isCorpse || maximum < 1 || lootCurrency < 1)
+			{
+				return false;
+			}
+
+			amount = lootCurrency < maximum ? lootCurrency : maximum;
+			lootCurrency -= amount;
+			return true;
+		}
+
+		/// <inheritdoc />
+		public void ReturnLootCurrency(long amount)
+		{
+			if (amount > 0)
+			{
+				lootCurrency += amount;
+			}
+		}
+
+		/// <inheritdoc />
+		public void AddLootViewer(NetworkConnection connection)
+		{
+			if (connection != null)
+			{
+				lootViewers.Add(connection);
+			}
+		}
+
+		/// <inheritdoc />
+		public void RemoveLootViewer(NetworkConnection connection)
+		{
+			if (connection != null)
+			{
+				lootViewers.Remove(connection);
+			}
+		}
+
+		// ───── Interactable ─────────────────────────────────────────────────
+
+		/// <inheritdoc />
+		public List<Trigger> OnInteractTriggers => onInteractTriggers;
+
+		/// <inheritdoc />
+		public void ExecuteOnInteract(EventData eventData)
+		{
+			if (onInteractTriggers == null)
+			{
+				return;
+			}
+			for (int i = 0; i < onInteractTriggers.Count; ++i)
+			{
+				onInteractTriggers[i]?.Execute(eventData);
+			}
+		}
+
+		/// <summary>
+		/// The interaction title. Empty while alive, so a living NPC is not advertised as
+		/// interactable and its world label is left to the naming components.
+		/// </summary>
+		public virtual string Title => IsFlagged(CharacterFlags.IsDead) ? "Corpse" : string.Empty;
+
+		/// <summary>
+		/// The colour of the corpse title in the world UI.
+		/// </summary>
+		public virtual Color TitleColor => TinyColor.ToUnityColor(TinyColor.slateGrey);
+
+		/// <inheritdoc />
+		public bool InRange(Transform transform)
+		{
+			if (transform == null || Transform == null)
+			{
+				return false;
+			}
+			// Resolved on death rather than in Awake, so an inspector change or a spawner override
+			// to CorpseInteractionRange takes effect on the very next corpse.
+			float rangeSqr = corpseInteractionRangeSqr > 0f
+				? corpseInteractionRangeSqr
+				: CorpseInteractionRange * CorpseInteractionRange;
+			return (Transform.position - transform.position).sqrMagnitude < rangeSqr;
+		}
+
+		/// <summary>
+		/// Returns true when the given player may open this NPC's loot window.
+		/// </summary>
+		/// <remarks>
+		/// Runs on both sides and answers differently on each, deliberately. The client knows only
+		/// that the NPC is dead, which is all it needs to decide whether to send a request; the
+		/// server additionally holds the contributor snapshot and is the only place eligibility is
+		/// actually enforced. A client that lies here gets a refusal, not loot.
+		/// </remarks>
+		public virtual bool CanInteract(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				return false;
+			}
+
+			if (!IsCorpse)
+			{
+				return false;
+			}
+
+			if (!InRange(character.Transform))
+			{
+				return false;
+			}
+
+			if (base.IsServerStarted &&
+				(!IsEligibleLooter(character.ID) || !HasLoot))
+			{
+				return false;
+			}
+
+			if (character.NextInteractTime >= DateTime.UtcNow)
+			{
+				return false;
+			}
+			character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(CORPSE_INTERACT_RATE_LIMIT);
+			return true;
 		}
 
 		/// <summary>

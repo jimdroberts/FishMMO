@@ -16,8 +16,17 @@ namespace FishMMO.Shared
 	/// <see cref="BaseAttackingState"/>'s shared logic.
 	/// </para>
 	/// <para>
-	/// Abilities count as heals when their template ID appears in
-	/// <see cref="HealAbilityTemplateIDs"/>; all others are treated as damage.
+	/// <b>Heals identify themselves.</b> An ability counts as a heal when
+	/// <see cref="AIAbilityClassifier"/> finds a healing action in its ECA graph — no list of
+	/// template IDs on the archetype, no naming convention. That matters because the list version
+	/// was a second copy of a fact the ability asset already stated, and the two drifted silently:
+	/// a designer adding a third heal got a healer that went on casting only the two it had been
+	/// told about, with nothing logged and nothing to notice. It also stopped one healer asset
+	/// being shared by creatures with different spellbooks, which is most of them.
+	/// </para>
+	/// <para>
+	/// <see cref="HealAbilityTemplateIDs"/> survives as an override for abilities the classifier
+	/// reads wrongly. Leave it empty in the normal case.
 	/// </para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "New AI Healer Attacking State", menuName = "FishMMO/Character/NPC/AI/Healer Attacking State", order = 4)]
@@ -46,10 +55,15 @@ namespace FishMMO.Shared
 		public float HealThreshold = 0.75f;
 
 		/// <summary>
-		/// Template IDs of abilities that should be used as heals (on allies).
-		/// All other known abilities are treated as damage abilities.
+		/// Optional escape hatch: template IDs to treat as heals in addition to whatever
+		/// <see cref="AIAbilityClassifier"/> identifies.
 		/// </summary>
-		[Tooltip("AbilityTemplate IDs that are considered heal abilities.")]
+		/// <remarks>
+		/// Normally empty. Heals are recognised from the ability's own ECA actions; this is only
+		/// for an ability that heals by some route the classifier cannot see, such as a project
+		/// specific action type.
+		/// </remarks>
+		[Tooltip("Optional. Extra AbilityTemplate IDs to force-treat as heals. Normally empty — heals are detected from the ability's ECA actions.")]
 		public List<int> HealAbilityTemplateIDs = new List<int>();
 
 		/// <summary>
@@ -85,7 +99,7 @@ namespace FishMMO.Shared
 		private const float HEAL_ABILITY_JITTER = 30f;
 
 		/// <summary>
-		/// Cached set built from <see cref="HealAbilityTemplateIDs"/> for O(1) lookup.
+		/// Cached set built from the optional <see cref="HealAbilityTemplateIDs"/> override.
 		/// </summary>
 		private HashSet<int> healTemplateSet;
 
@@ -208,13 +222,19 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// True when an ability is not one of this healer's configured heals.
+		/// True when an ability belongs in the damage rotation rather than the heal rotation.
 		/// </summary>
+		/// <remarks>
+		/// Not simply "not a heal". A healer's spellbook contains buffs and cleanses as well, and
+		/// none of those should be aimed at the thing it is fighting; the shared
+		/// <see cref="BaseAttackingState.IsEnemyAbility"/> test excludes all of them by intent.
+		/// The explicit heal override is subtracted on top of that.
+		/// </remarks>
 		/// <param name="ability">The ability to test.</param>
 		/// <returns>True if the ability may be used against an enemy.</returns>
 		private bool IsDamageAbility(Ability ability)
 		{
-			return !IsHealAbility(ability);
+			return IsEnemyAbility(ability) && !IsHealAbility(ability);
 		}
 
 		/// <summary>
@@ -322,14 +342,30 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns true if the ability's template ID is in the configured heal ability set.
+		/// True when an ability heals, as read from its ECA actions or forced by the override list.
 		/// </summary>
+		/// <remarks>
+		/// Healing only, not <see cref="AIAbilityIntent.Revive"/>. The heal rotation runs against
+		/// the most wounded <em>living</em> ally, and offering it a resurrection would either waste
+		/// the pick or fail activation outright. Reviving the dead is a separate decision that
+		/// needs a separate scan.
+		/// </remarks>
 		/// <param name="ability">The ability to check.</param>
 		/// <returns>True if the ability is a heal ability.</returns>
 		private bool IsHealAbility(Ability ability)
 		{
+			if (ability == null || ability.Template == null)
+			{
+				return false;
+			}
+
+			if (AIAbilityClassifier.HasAny(ability, AIAbilityIntent.Heal))
+			{
+				return true;
+			}
+
 			EnsureHealSet();
-			return ability != null && ability.Template != null && healTemplateSet.Contains(ability.Template.ID);
+			return healTemplateSet.Count > 0 && healTemplateSet.Contains(ability.Template.ID);
 		}
 
 		/// <summary>

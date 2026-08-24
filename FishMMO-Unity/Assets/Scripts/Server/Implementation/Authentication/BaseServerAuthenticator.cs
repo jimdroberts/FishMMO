@@ -1,3 +1,10 @@
+// Nullable annotations without null-state analysis. The authentication path annotates the
+// references that are legitimately absent — an unestablished session, a challenge that never
+// arrived — and Unity compiles this assembly with the nullable context off, so every one of those
+// annotations raised CS8632. `annotations` alone enables them without switching on flow analysis,
+// which would bury real warnings under hundreds more for code never written against it.
+#nullable enable annotations
+
 using FishNet.Authenticating;
 using FishNet.Connection;
 using FishNet.Managing;

@@ -1,3 +1,9 @@
+// Nullable annotations without null-state analysis, matching the harness this test drives. The
+// `byte[]?` locals below document material that is legitimately absent when a session produced
+// none; Unity compiles this assembly with the nullable context off, so those annotations raised
+// CS8632. `annotations` alone enables them without switching on flow analysis.
+#nullable enable annotations
+
 using System;
 using System.Threading.Tasks;
 using FishMMO.Auth.Core;

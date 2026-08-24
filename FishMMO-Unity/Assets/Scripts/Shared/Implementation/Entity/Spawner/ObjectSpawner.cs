@@ -80,10 +80,21 @@ namespace FishMMO.Shared
 		/// Extra instances reserved beyond <see cref="MaxSpawnCount"/>.
 		/// </summary>
 		/// <remarks>
-		/// Covers the window where a corpse is still decaying while its replacement has already
-		/// spawned, which briefly needs more live instances than the spawner's own maximum.
+		/// <para>
+		/// Slack, not a requirement. A corpse holds its spawner slot for the whole of its decay —
+		/// <see cref="Despawn"/> is what frees the slot and starts the respawn clock, and a corpse
+		/// does not reach it until the decay timer expires — so this spawner can never have more
+		/// than <see cref="MaxSpawnCount"/> live instances and the reservation alone would do.
+		/// </para>
+		/// <para>
+		/// The headroom is kept because the pool is shared: <see cref="ObjectSpawnerPool"/>
+		/// de-duplicates reservations across every spawner using the same prefab, taking the
+		/// largest single demand rather than the sum, so a prefab used by many spawners at once
+		/// genuinely can need more instances than any one spawner reserved. This covers that
+		/// without making the reservation quadratic.
+		/// </para>
 		/// </remarks>
-		[Tooltip("Extra pooled instances beyond MaxSpawnCount, to cover corpses that have not yet decayed.")]
+		[Tooltip("Extra pooled instances beyond MaxSpawnCount, as slack for prefabs shared between spawners.")]
 		[Min(0)]
 		public int PrewarmHeadroom = 1;
 

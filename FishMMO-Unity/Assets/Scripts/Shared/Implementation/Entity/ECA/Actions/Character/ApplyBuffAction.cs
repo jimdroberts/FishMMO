@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -86,14 +86,29 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < stacks; ++i)
 			{
+				/* The initiator is snapshotted onto the buff so periodic effects have somebody to
+				 * credit. A damage-over-time tick fires long after the ability that applied it has
+				 * gone, and without this it would land with no attacker: no threat, no kill
+				 * credit, and no combat state for whoever cast it. */
 				if (isPredictionPath)
 				{
-					buffController.Apply(BuffTemplate, tickData.Tick);
+					buffController.Apply(BuffTemplate, tickData.Tick, initiator);
 				}
 				else
 				{
-					buffController.ApplyAuthoritative(BuffTemplate, authoritativeTick);
+					buffController.ApplyAuthoritative(BuffTemplate, authoritativeTick, initiator);
 				}
+			}
+
+			/* Debuffing something is participating in killing it, so it earns loot rights the same
+			 * way a hit does. Recorded here rather than in BuffController because the controller is
+			 * only ever told WHAT to apply, never by whom — this action is the last point at which
+			 * the caster is still known. */
+			if (BuffTemplate.IsDebuff &&
+				!ReferenceEquals(initiator, target) &&
+				target.TryGet(out ICharacterDamageController targetDamageController))
+			{
+				targetDamageController.RecordCombatContribution(initiator, CombatContributionKind.Debuff);
 			}
 		}
 	}

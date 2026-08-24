@@ -23,11 +23,17 @@ namespace FishMMO.Shared
 	public class DefenderAttackingState : BaseAttackingState
 	{
 		/// <summary>
-		/// Template IDs of threat-generating abilities. These are used the moment they are
-		/// available, ahead of anything the damage picker would otherwise choose.
+		/// Optional escape hatch: template IDs to treat as taunts in addition to whatever
+		/// <see cref="AIAbilityClassifier"/> identifies.
 		/// </summary>
+		/// <remarks>
+		/// Normally empty. A taunt is recognised by the threat-manipulating action in its own ECA
+		/// graph — <see cref="ApplyTauntAction"/> or <see cref="ApplyThreatAction"/> — so a defender
+		/// asset works for any creature whose spellbook contains one, and picks up a taunt added
+		/// later without being edited.
+		/// </remarks>
 		[Header("Defender Behavior")]
-		[Tooltip("AbilityTemplate IDs treated as taunts. Used on cooldown, ahead of damage abilities.")]
+		[Tooltip("Optional. Extra AbilityTemplate IDs to force-treat as taunts. Normally empty — taunts are detected from the ability's ECA actions.")]
 		public List<int> TauntAbilityTemplateIDs = new List<int>();
 
 		/// <summary>
@@ -51,7 +57,7 @@ namespace FishMMO.Shared
 		public float BlockRepositionTolerance = 1.5f;
 
 		/// <summary>
-		/// Cached set built from <see cref="TauntAbilityTemplateIDs"/> for O(1) lookup.
+		/// Cached set built from the optional <see cref="TauntAbilityTemplateIDs"/> override.
 		/// </summary>
 		private HashSet<int> tauntTemplateSet;
 
@@ -87,14 +93,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// True when the ability is one of this defender's configured taunts.
+		/// True when the ability manipulates threat, as read from its ECA actions or forced by the
+		/// override list.
 		/// </summary>
 		/// <param name="ability">The ability to test.</param>
 		/// <returns>True if the ability is a taunt.</returns>
 		private bool IsTaunt(Ability ability)
 		{
+			if (ability == null || ability.Template == null)
+			{
+				return false;
+			}
+
+			if (AIAbilityClassifier.HasAny(ability, AIAbilityIntent.Threat))
+			{
+				return true;
+			}
+
 			EnsureTauntSet();
-			return ability != null && ability.Template != null && tauntTemplateSet.Contains(ability.Template.ID);
+			return tauntTemplateSet.Count > 0 && tauntTemplateSet.Contains(ability.Template.ID);
 		}
 
 		/// <summary>
@@ -104,15 +121,14 @@ namespace FishMMO.Shared
 		/// <returns>The chosen ability, or null.</returns>
 		protected override Ability PickAbility(AIController controller)
 		{
-			EnsureTauntSet();
-
-			if (tauntTemplateSet.Count > 0)
+			/* No gate on the override list any more. A defender whose spellbook contains a taunt
+			 * leads with it whether or not anyone listed it on this asset; one whose spellbook
+			 * contains none simply gets null here and falls through, at the cost of a single
+			 * filtered pass over an ability list that is a handful of entries long. */
+			Ability taunt = controller.PickScoredAbility(controller.GetSqrDistanceToTarget(), IsTaunt, 0f);
+			if (taunt != null)
 			{
-				Ability taunt = controller.PickScoredAbility(controller.GetSqrDistanceToTarget(), IsTaunt, 0f);
-				if (taunt != null)
-				{
-					return taunt;
-				}
+				return taunt;
 			}
 
 			return base.PickAbility(controller);
