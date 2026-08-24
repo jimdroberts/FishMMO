@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b15d1b8236d4cf0b5b3f74d99b9a983b, type: 3}
+  m_Name: Enemy - Brute
+  m_EditorClassIdentifier: 
+  Description: Heavy melee enemy. Slower swings, wider aggro radius, and very reluctant
+    to be pulled off its target.
+  InitialState: {fileID: 11400000, guid: 782b351352c8d2b9b584e82c22d3dcf6, type: 2}
+  AttackingState: {fileID: 11400000, guid: 8fea2bfc9cc7e67021f4258b5a5feaf9, type: 2}
+  IdleState: {fileID: 11400000, guid: a147728b9035421915a6cfa441838351, type: 2}
+  WanderState: {fileID: 11400000, guid: 782b351352c8d2b9b584e82c22d3dcf6, type: 2}
+  PatrolState: {fileID: 11400000, guid: 7c8337299754b7fd04e54964b911ae42, type: 2}
+  ReturnHomeState: {fileID: 11400000, guid: b84f263b6aaadc40b9179f69c75abdf0, type: 2}
+  RetreatState: {fileID: 0}
+  DeadState: {fileID: 0}
+  Personality: {fileID: 11400000, guid: 628fe87f664e5783a2ea13da979a75d7, type: 2}
+  AbilityRotation: {fileID: 0}
+  BehaviorTree: {fileID: 0}
+  OverrideThreatTuning: 0
+  AggressionDamageWeight: 1
+  AggressionHealingWeight: 0.6
+  AggressionHitBonus: 5
+  AggressionDecayRate: 3
+  AggressionStaleTimeout: 30
+  AggressionVarietyChance: 0.15
+  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
+  EnemySweepRate: 1.5
+  AvoidancePriority: 50

@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -855,6 +855,24 @@ namespace FishMMO.Shared
 			var parent = allNodes[parentIndex];
 			var child = allNodes[childIndex];
 
+			/* Refuse connections that would make the tree cyclic.
+			 *
+			 * Nodes are ScriptableObject references, so nothing structurally prevents connecting a
+			 * node to one of its own ancestors — and the editor's own node collection tolerates it
+			 * (it de-duplicates), so the cycle is invisible here. At runtime AIBehaviorTree.Evaluate
+			 * recurses through it until the stack dies, which on a dedicated server takes the whole
+			 * process down. The runtime now has a depth guard as a backstop, but the connection
+			 * should never be creatable in the first place. */
+			if (child == parent || CreatesCycle(parent, child))
+			{
+				EditorUtility.DisplayDialog(
+					"Cannot Connect",
+					$"Connecting '{child.name}' under '{parent.name}' would create a cycle.\n\n" +
+					"A behavior tree must be a tree: a node cannot be its own descendant.",
+					"OK");
+				return;
+			}
+
 			if (parent is AICompositeNode composite)
 			{
 				Undo.RecordObject(parent, "Connect BT Node");
@@ -897,6 +915,69 @@ namespace FishMMO.Shared
 			}
 
 			RebuildNodeList();
+		}
+
+		/// <summary>
+		/// Returns true when making <paramref name="child"/> a child of <paramref name="parent"/>
+		/// would put the parent inside its own subtree.
+		/// </summary>
+		/// <param name="parent">The prospective parent.</param>
+		/// <param name="child">The prospective child.</param>
+		/// <returns>True when the connection would create a cycle.</returns>
+		private static bool CreatesCycle(AIBehaviorNode parent, AIBehaviorNode child)
+		{
+			if (parent == null || child == null)
+			{
+				return false;
+			}
+
+			// Walk the child's existing subtree; reaching the parent means the edge closes a loop.
+			HashSet<AIBehaviorNode> visited = new HashSet<AIBehaviorNode>();
+			return SubtreeContains(child, parent, visited);
+		}
+
+		/// <summary>
+		/// Depth-first search of a node's subtree for a specific node.
+		/// </summary>
+		/// <param name="node">Subtree root to search.</param>
+		/// <param name="search">The node being looked for.</param>
+		/// <param name="visited">Nodes already walked, guarding against a pre-existing cycle.</param>
+		/// <returns>True when the subtree contains the searched-for node.</returns>
+		private static bool SubtreeContains(AIBehaviorNode node, AIBehaviorNode search, HashSet<AIBehaviorNode> visited)
+		{
+			if (node == null || !visited.Add(node))
+			{
+				return false;
+			}
+
+			if (node == search)
+			{
+				return true;
+			}
+
+			if (node is AICompositeNode composite && composite.Children != null)
+			{
+				for (int i = 0; i < composite.Children.Length; i++)
+				{
+					if (SubtreeContains(composite.Children[i], search, visited))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			if (node is AIInverter inverter)
+			{
+				return SubtreeContains(inverter.Child, search, visited);
+			}
+
+			if (node is AIRepeater repeater)
+			{
+				return SubtreeContains(repeater.Child, search, visited);
+			}
+
+			return false;
 		}
 
 		private void DisconnectChild(int parentIndex, int slotIndex)

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -19,6 +19,22 @@ namespace FishMMO.Shared
 		Cautious,
 		/// <summary>All-out damage, ignores self-preservation. Never retreats.</summary>
 		Berserker,
+		/// <summary>
+		/// Cowardly. Breaks and runs as soon as it is meaningfully hurt, and keeps running.
+		/// A Pathetic personality is guaranteed to have a retreat threshold even if the designer
+		/// left the field at zero — see <see cref="EffectiveRetreatHealthThreshold"/>.
+		/// </summary>
+		Pathetic,
+		/// <summary>
+		/// Never breaks. Fights to the last point of health and holds its threat target.
+		/// Functionally "Berserker without the target chaos".
+		/// </summary>
+		Determined,
+		/// <summary>
+		/// Berserk and unfocused: never retreats, ignores the threat table, and re-picks a random
+		/// living enemy at <see cref="RampageRetargetChance"/> on every re-evaluation.
+		/// </summary>
+		Rampaging,
 	}
 
 	/// <summary>
@@ -87,9 +103,17 @@ namespace FishMMO.Shared
 		[Tooltip("Abilities with HitCount > this value are considered AOE (multi-target).")]
 		public int AOEHitCountThreshold = 1;
 
+		[Header("Targeting")]
+		[Tooltip("How this NPC chooses between available enemies. Rampaging style forces Random.")]
+		public AITargetingMode Targeting = AITargetingMode.Threat;
+
+		[Tooltip("Chance (0-1) a Rampaging NPC switches to a new random enemy on each re-evaluation.")]
+		[Range(0f, 1f)]
+		public float RampageRetargetChance = 0.5f;
+
 		[Header("Combat Behavior")]
 		[Tooltip("Health percentage (0-1) at which this NPC considers retreating. " +
-				 "Berserker style ignores this. 0 = never retreat from low health.")]
+				 "Berserker, Determined and Rampaging styles ignore this. 0 = never retreat.")]
 		[Range(0f, 1f)]
 		public float RetreatHealthThreshold = 0f;
 
@@ -171,7 +195,9 @@ namespace FishMMO.Shared
 			float bonus = 0f;
 
 			// When healthy, aggressive personalities get a bonus on offensive abilities.
-			if (healthPercent > RetreatHealthThreshold && HealthyAggressionBonus > 0f)
+			float retreatThreshold = EffectiveRetreatHealthThreshold;
+
+			if (healthPercent > retreatThreshold && HealthyAggressionBonus > 0f)
 			{
 				AbilityCategory cat = ClassifyAbility(ability);
 				if (cat == AbilityCategory.Melee || cat == AbilityCategory.Ranged || cat == AbilityCategory.AOE)
@@ -181,7 +207,7 @@ namespace FishMMO.Shared
 			}
 
 			// When hurt, encourage support/self-buff usage.
-			if (RetreatHealthThreshold > 0f && healthPercent <= RetreatHealthThreshold)
+			if (retreatThreshold > 0f && healthPercent <= retreatThreshold)
 			{
 				AbilityCategory cat = ClassifyAbility(ability);
 				if (cat == AbilityCategory.Support)
@@ -194,21 +220,71 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Fallback retreat threshold applied to a <see cref="NPCCombatStyle.Pathetic"/>
+		/// personality whose <see cref="RetreatHealthThreshold"/> was left at zero.
+		/// </summary>
+		/// <remarks>
+		/// A "pathetic" archetype that silently never flees because a serialized field defaulted
+		/// to 0 is the exact failure this guards against: the style is the designer's stated
+		/// intent, so it wins over an unset number rather than being quietly ignored.
+		/// </remarks>
+		public const float PATHETIC_DEFAULT_RETREAT_THRESHOLD = 0.5f;
+
+		/// <summary>
+		/// True when this style is constitutionally incapable of fleeing, whatever
+		/// <see cref="RetreatHealthThreshold"/> says.
+		/// </summary>
+		public bool IsFearless => Style == NPCCombatStyle.Berserker ||
+								  Style == NPCCombatStyle.Determined ||
+								  Style == NPCCombatStyle.Rampaging;
+
+		/// <summary>
+		/// The retreat threshold actually used at runtime, after style overrides.
+		/// Returns 0 for fearless styles, and the Pathetic fallback for a Pathetic personality
+		/// left unconfigured.
+		/// </summary>
+		public float EffectiveRetreatHealthThreshold
+		{
+			get
+			{
+				if (IsFearless)
+					return 0f;
+
+				if (Style == NPCCombatStyle.Pathetic && RetreatHealthThreshold <= 0f)
+					return PATHETIC_DEFAULT_RETREAT_THRESHOLD;
+
+				return RetreatHealthThreshold;
+			}
+		}
+
+		/// <summary>
+		/// The targeting mode actually used at runtime, after style overrides.
+		/// <see cref="NPCCombatStyle.Rampaging"/> always targets randomly — that unfocused
+		/// re-targeting is what the style means.
+		/// </summary>
+		public AITargetingMode TargetingMode =>
+			Style == NPCCombatStyle.Rampaging ? AITargetingMode.Random : Targeting;
+
+		/// <summary>
+		/// Chance this NPC abandons its current target for a fresh random one on each mid-combat
+		/// re-evaluation. Non-zero only for <see cref="NPCCombatStyle.Rampaging"/>.
+		/// </summary>
+		public float EffectiveRetargetChance =>
+			Style == NPCCombatStyle.Rampaging ? RampageRetargetChance : 0f;
+
+		/// <summary>
 		/// Returns true if this personality's style allows retreating, and the NPC's health
-		/// has dropped below <see cref="RetreatHealthThreshold"/>.
-		/// Berserker style never retreats from low health.
+		/// has dropped to or below its <see cref="EffectiveRetreatHealthThreshold"/>.
 		/// </summary>
 		/// <param name="healthPercent">Current health as a fraction (0-1).</param>
-		/// <returns>True if the NPC should consider retreating.</returns>
+		/// <returns>True if the NPC should break off and flee.</returns>
 		public bool ShouldRetreat(float healthPercent)
 		{
-			if (Style == NPCCombatStyle.Berserker)
+			float threshold = EffectiveRetreatHealthThreshold;
+			if (threshold <= 0f)
 				return false;
 
-			if (RetreatHealthThreshold <= 0f)
-				return false;
-
-			return healthPercent <= RetreatHealthThreshold;
+			return healthPercent <= threshold;
 		}
 	}
 }

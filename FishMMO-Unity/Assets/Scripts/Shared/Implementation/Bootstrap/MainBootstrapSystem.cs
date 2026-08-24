@@ -41,14 +41,20 @@ namespace FishMMO.Shared
 		/// Nothing sets <see cref="Application.targetFrameRate"/> before a network
 		/// connection exists, and its default is -1 (unlimited), so the launcher and login
 		/// menus render as fast as the GPU allows and peg a CPU core to draw a static screen.
-		/// <para>This is only the pre-configuration default. The options UI persists both a
-		/// "Refresh Rate" and a "VSync" preference and applies them when it loads —
-		/// <c>RefreshRateSettingOption</c> / <c>UITKOptions</c> call
-		/// <c>Client.ApplyTargetFrameRate</c>, and <c>VSyncSettingOption</c> /
-		/// <c>UITKOptions</c> write <c>QualitySettings.vSyncCount</c> — which replaces both
-		/// values set here with the user's choice. Failing that, FishNet's
-		/// <c>NetworkManager.UpdateFramerate</c> raises the frame rate from
-		/// <c>ClientManager.FrameRate</c> when the client connects.</para>
+		/// <para>This is only the pre-configuration default. The options UI persists a
+		/// "Frame Rate Limit" and a "VSync" preference and applies them when it loads —
+		/// <c>UITKOptions.InitializeFrameRateLimit</c> calls
+		/// <c>Client.ApplyTargetFrameRate</c>, and <c>UITKOptions.InitializeVSync</c> writes
+		/// <c>QualitySettings.vSyncCount</c> — which replaces both values set here with the
+		/// user's choice. The applied cap is bounded below by the network tick rate and above by
+		/// the display's fastest mode.</para>
+		/// <para>FishNet is deliberately <em>not</em> part of that chain any more. Its
+		/// <c>NetworkManager.UpdateFramerate</c> overwrites <c>Application.targetFrameRate</c>
+		/// from <c>ClientManager.FrameRate</c> on every connection-state change, so with
+		/// <c>ChangeFrameRate</c> enabled the scene's value silently became a hard ceiling on
+		/// what a player could render at. The client scene now ships with that flag off, leaving
+		/// the render rate entirely to this default and the player's preference. Simulation is
+		/// unaffected either way: gameplay runs on the fixed 30 Hz TimeManager tick.</para>
 		/// </remarks>
 		private const int BootstrapTargetFrameRate = 60;
 

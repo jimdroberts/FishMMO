@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.AI;
 using FishNet.Connection;
+using FishNet.Object;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -13,7 +14,7 @@ namespace FishMMO.Shared
 	/// provides a virtual camera for aiming abilities at targets during combat.
 	/// </summary>
 	[RequireComponent(typeof(NavMeshAgent))]
-	public class AIController : CharacterBehaviour, IAIController
+	public partial class AIController : CharacterBehaviour, IAIController
 	{
 		/// <summary>
 		/// Buffer for storing colliders hit during enemy sweep.
@@ -25,6 +26,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float EnemySweepRate = 1.5f;
 
+		[Header("Archetype")]
+		/// <summary>
+		/// Optional archetype asset that fills in every state and tuning slot below.
+		/// </summary>
+		/// <remarks>
+		/// Applied in <see cref="InitializeOnce"/>. Fields the archetype leaves null keep whatever
+		/// the prefab already had, so a prefab can override one slot without abandoning the
+		/// archetype. Assign this instead of wiring a dozen slots by hand.
+		/// </remarks>
+		[Tooltip("Optional archetype asset that fills in the state and tuning slots below.")]
+		public AIArchetypeTemplate Archetype;
+
+		[Header("States")]
 		/// <summary>
 		/// The initial AI state when the controller is started.
 		/// </summary>
@@ -153,6 +167,17 @@ namespace FishMMO.Shared
 		[Tooltip("Chance to pick a non-top-threat target for variety.")]
 		public float AggressionVarietyChance = 0.15f;
 
+		/// <summary>
+		/// How quickly the NPC turns to face its look target, in radians-ish per second.
+		/// </summary>
+		/// <remarks>
+		/// Feeds an exponential smoothing factor, so the value is a rate rather than a hard
+		/// angular speed: higher snaps faster, and the result is identical at any frame rate.
+		/// </remarks>
+		[Header("Facing")]
+		[Tooltip("How quickly the NPC turns to face its target. Higher is snappier.")]
+		public float TurnRate = 8.0f;
+
 		[Header("Pathfinding")]
 		/// <summary>
 		/// Minimum seconds between <see cref="Agent"/>.<see cref="NavMeshAgent.SetDestination"/> calls
@@ -223,9 +248,53 @@ namespace FishMMO.Shared
 		public PhysicsScene PhysicsScene { get; private set; }
 
 		/// <summary>
-		/// The home position for this AI (used for leash and wandering).
+		/// Cached <see cref="Pet"/> view of <see cref="CharacterBehaviour.Character"/>, or null for
+		/// a normal NPC. Resolved once in <see cref="InitializeOnce"/>.
 		/// </summary>
-		public Vector3 Home { get; set; }
+		private Pet cachedPet;
+
+		/// <summary>
+		/// Backing field for <see cref="Home"/>, used by NPCs and by a pet under a Stay order.
+		/// </summary>
+		private Vector3 home;
+
+		/// <summary>
+		/// The anchor this AI leashes and wanders around.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For a normal NPC this is its spawn point. <b>For a pet it is its owner</b> — a pet's
+		/// home is a moving target, and every leash check, wander radius and return-home
+		/// destination in the AI reads this property, so anchoring it to the owner here fixes all
+		/// of them at once. Previously each site that cared had to remember to overwrite the field
+		/// with the owner's position, and the ones that forgot dragged the pet back toward
+		/// wherever it happened to be summoned.
+		/// </para>
+		/// <para>
+		/// A pet ordered to <see cref="PetMovementOrder.Stay"/> is the exception: it holds the
+		/// position it was standing in, which is what the setter stores.
+		/// </para>
+		/// </remarks>
+		public Vector3 Home
+		{
+			get
+			{
+				if (cachedPet != null &&
+					cachedPet.MovementOrder != PetMovementOrder.Stay &&
+					cachedPet.PetOwner != null &&
+					cachedPet.PetOwner.Transform != null)
+				{
+					return cachedPet.PetOwner.Transform.position;
+				}
+				return home;
+			}
+			set { home = value; }
+		}
+
+		/// <summary>
+		/// The pet this controller drives, or null when it drives a normal NPC.
+		/// </summary>
+		public Pet OwningPet => cachedPet;
 
 		/// <summary>
 		/// The current target for the AI (e.g., enemy, destination).
@@ -240,17 +309,30 @@ namespace FishMMO.Shared
 					return;
 
 				target = value;
+
+				/* Resolve the ICharacter once per target change rather than per use.
+				 *
+				 * GetComponent for an *interface* is markedly more expensive than for a concrete
+				 * type — Unity has to walk the GameObject's component list and type-test each one.
+				 * The combat path used to re-resolve the same target three to five times every
+				 * tick: target validity, ability picking, combat-slot claiming, and the
+				 * unreachable check each called it independently. At a few hundred NPCs in combat
+				 * that is tens of thousands of interface lookups a second to answer a question
+				 * whose answer only changes when the target does. */
+				cachedTargetCharacter = value != null ? value.GetComponent<ICharacter>() : null;
+
+				if (!AgentIsUsable())
+					return;
+
 				if (value != null)
 				{
 					// If a target is set, update the agent's destination to the target's position.
-					if (Agent.isOnNavMesh)
-						Agent.SetDestination(value.position);
+					Agent.SetDestination(value.position);
 				}
 				else
 				{
 					// If no target, set destination to current position (stop moving).
-					if (Agent.isOnNavMesh)
-						Agent.SetDestination(transform.position);
+					Agent.SetDestination(transform.position);
 				}
 			}
 		}
@@ -266,6 +348,25 @@ namespace FishMMO.Shared
 		public BaseAIState CurrentState { get; private set; }
 
 		/// <summary>
+		/// The state that is about to become <see cref="CurrentState"/>, visible to the outgoing
+		/// state's <see cref="BaseAIState.Exit"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Exists so an attacking state can tell "combat is over" from "combat is continuing in a
+		/// sub-state". <see cref="BaseAttackingState.Exit"/> clears the target and interrupts the
+		/// cast, which is right when the NPC disengages and catastrophic when it does not: the
+		/// melee archetype's flanking roll called <c>ChangeState(GetBehindState)</c>, Exit wiped
+		/// the target on the way out, and GetBehindState then found no target and dropped the NPC
+		/// to idle. Every configured orbit / flank / strafe roll silently ended the fight.
+		/// </para>
+		/// <para>
+		/// Null outside of a transition.
+		/// </para>
+		/// </remarks>
+		public BaseAIState PendingState { get; private set; }
+
+		/// <summary>
 		/// The waypoints available to this AI controller.
 		/// </summary>
 		public Vector3[] Waypoints;
@@ -276,6 +377,80 @@ namespace FishMMO.Shared
 		public int CurrentWaypointIndex { get; private set; }
 
 		private Transform target;
+
+		/// <summary>
+		/// The <see cref="ICharacter"/> on <see cref="Target"/>, resolved once when the target
+		/// changes. Null when there is no target or it is not a character.
+		/// </summary>
+		private ICharacter cachedTargetCharacter;
+
+		/// <summary>
+		/// The current combat target as an <see cref="ICharacter"/>, or null.
+		/// </summary>
+		/// <remarks>
+		/// Prefer this over calling <c>Target.GetComponent&lt;ICharacter&gt;()</c>. The result is
+		/// cached against the transform, so it costs a field read rather than an interface
+		/// component lookup.
+		/// </remarks>
+		public ICharacter TargetCharacter
+		{
+			get
+			{
+				// The transform can be destroyed under us without the setter running.
+				if (target == null)
+				{
+					return null;
+				}
+				return cachedTargetCharacter;
+			}
+		}
+
+		/// <summary>
+		/// How many times per second this NPC's brain runs, in hertz.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Rounded to the nearest whole divisor of the FishNet tick rate, so the brain always
+		/// lands on network ticks and never drifts against them. At the project's 30 Hz network
+		/// tick, 8 Hz resolves to every 4th tick — 7.5 Hz exactly, forever, on any hardware.
+		/// <see cref="EffectiveAiTickRate"/> reports what a requested rate actually resolved to.
+		/// </para>
+		/// <para>
+		/// 5-10 Hz is the useful band for an MMO brain. Decisions below about 5 Hz start to read
+		/// as sluggish reaction time to a player; above about 10 Hz the NPC is re-deciding faster
+		/// than its own pathing and animation can respond, so the extra ticks buy nothing but CPU.
+		/// </para>
+		/// </remarks>
+		[Header("Tick Rate")]
+		[Tooltip("Brain updates per second. 5-10 is the useful band. Rounded to a divisor of the network tick rate.")]
+		[Range(1f, 30f)]
+		public float AiTickRate = 8f;
+
+		/// <summary>
+		/// Network ticks between brain updates, derived from <see cref="AiTickRate"/>.
+		/// </summary>
+		private int ticksPerAiUpdate = 1;
+
+		/// <summary>
+		/// Network ticks elapsed since the last brain update.
+		/// </summary>
+		private int aiTickCounter;
+
+		/// <summary>
+		/// Seconds per network tick, cached from the TimeManager.
+		/// </summary>
+		private float networkTickDelta = 1f / 30f;
+
+		/// <summary>
+		/// Monotonic count of brain updates. Drives the LOD stagger.
+		/// </summary>
+		public uint AiTickIndex { get; private set; }
+
+		/// <summary>
+		/// The brain rate actually achieved, after rounding to a whole number of network ticks.
+		/// </summary>
+		public float EffectiveAiTickRate => ticksPerAiUpdate > 0 ? (1f / (networkTickDelta * ticksPerAiUpdate)) : 0f;
+
 		private float nextUpdate = 0.0f;
 		private float nextLeashUpdate = 0.0f;
 		private float nextEnemySweepUpdate = 0.0f;
@@ -343,6 +518,74 @@ namespace FishMMO.Shared
 		public int RotationIndex;
 
 		/// <summary>
+		/// Seconds remaining before this NPC may activate another ability.
+		/// </summary>
+		/// <remarks>
+		/// Lives on the controller, not on the attacking state, because the state is a
+		/// ScriptableObject shared by every NPC of that archetype — a timer stored there would be
+		/// one global pacing clock for the whole population.
+		/// </remarks>
+		[System.NonSerialized]
+		public float AttackCooldownTimer;
+
+		/// <summary>
+		/// Seconds of manoeuvring budget remaining for <see cref="RogueAttackingState"/>'s
+		/// flanking attempt. Per-NPC for the same reason as <see cref="AttackCooldownTimer"/>.
+		/// </summary>
+		[System.NonSerialized]
+		public float FlankTimer;
+
+		/// <summary>
+		/// Countdown used by bounded combat sub-states such as <see cref="OrbitState"/> to know
+		/// when their manoeuvre is finished. Per-NPC, for the same reason as the other timers here.
+		/// </summary>
+		[System.NonSerialized]
+		public float SubStateTimer;
+
+		/// <summary>
+		/// Seconds a pet has spent unable to reach its owner. Drives the follow state's teleport
+		/// escape hatch. Per-NPC, for the same reason as the other timers here.
+		/// </summary>
+		[System.NonSerialized]
+		public float PetStuckTimer;
+
+		/// <summary>
+		/// Seconds the NPC has spent unable to reach its combat target.
+		/// </summary>
+		[System.NonSerialized]
+		public float UnreachableTargetTimer;
+
+		/// <summary>
+		/// True when the previous combat tick resolved to attacking or holding position rather
+		/// than moving. Feeds the range hysteresis in <see cref="AICombatDecision"/>.
+		/// </summary>
+		[System.NonSerialized]
+		public bool WasAttackingLastTick;
+
+		/// <summary>
+		/// Seconds until a healer archetype rescans for wounded allies.
+		/// </summary>
+		[System.NonSerialized]
+		public float AllyScanTimer;
+
+		/// <summary>
+		/// The ally a healer archetype last chose to heal, re-validated cheaply between scans.
+		/// </summary>
+		[System.NonSerialized]
+		public ICharacter CachedHealTarget;
+
+		/// <summary>
+		/// Seconds elapsed during the AI tick currently executing.
+		/// </summary>
+		/// <remarks>
+		/// Published so helpers reached from deep inside a state's update — which do not receive
+		/// deltaTime as a parameter — can still advance per-tick timers on the same clock the
+		/// state machine runs on, rather than sampling <see cref="Time.deltaTime"/> and getting one
+		/// frame instead of one AI tick.
+		/// </remarks>
+		public float LastAiDeltaTime { get; private set; }
+
+		/// <summary>
 		/// The seeded RNG from the owning <see cref="NPC"/>.
 		/// All AI randomisation should use this instead of <c>DeterministicRNG.Shared</c>
 		/// so that NPC behaviour is fully deterministic given the same seed.
@@ -395,6 +638,61 @@ namespace FishMMO.Shared
 				enabled = false;
 				return;
 			}
+
+			/* Driven by the FishNet TimeManager rather than Unity's Update.
+			 *
+			 * Everything else authoritative in this project already runs on ticks — prediction,
+			 * cooldowns, ability activation — and the AI reading a variable frame delta made it
+			 * the one system whose behaviour changed with server load. It also made the
+			 * "deterministic" NPC RNG a half-truth: the seeded rolls were reproducible, but *when*
+			 * they were drawn was not. */
+			if (base.TimeManager != null)
+			{
+				networkTickDelta = (float)base.TimeManager.TickDelta;
+				ResolveTickRate();
+
+				base.TimeManager.OnTick += TimeManager_OnTick;
+			}
+		}
+
+		/// <summary>
+		/// Releases the tick subscription.
+		/// </summary>
+		public override void OnStopNetwork()
+		{
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+
+			aiTickCounter = 0;
+
+			base.OnStopNetwork();
+		}
+
+		/// <summary>
+		/// Converts the requested <see cref="AiTickRate"/> into a whole number of network ticks.
+		/// </summary>
+		/// <remarks>
+		/// Rounding to a divisor is what keeps the brain phase-locked to the network tick. A
+		/// fractional interval would mean the brain drifts across tick boundaries and its real
+		/// rate wobbles, which is the problem this whole change exists to remove.
+		/// </remarks>
+		private void ResolveTickRate()
+		{
+			if (networkTickDelta <= 0f)
+			{
+				networkTickDelta = 1f / 30f;
+			}
+
+			float networkTickRate = 1f / networkTickDelta;
+			float requested = Mathf.Clamp(AiTickRate, 0.1f, networkTickRate);
+
+			ticksPerAiUpdate = Mathf.Max(1, Mathf.RoundToInt(networkTickRate / requested));
+
+			// Stagger the very first brain update so a wave of NPCs spawned together does not all
+			// think on the same tick for the rest of their lives.
+			aiTickCounter = ticksPerAiUpdate > 1 ? (staggerID % ticksPerAiUpdate) : 0;
 		}
 
 		/// <summary>
@@ -404,8 +702,23 @@ namespace FishMMO.Shared
 		{
 			base.InitializeOnce();
 
-			// Derive a stagger ID so NPCs spread their updates across frames.
-			staggerID = Mathf.Abs((int)(Character.ID % int.MaxValue));
+			// Apply the archetype before anything reads the state slots.
+			if (Archetype != null)
+			{
+				Archetype.ApplyTo(this);
+			}
+
+			// Resolved once: Home reads this on every leash check and wander destination.
+			cachedPet = Character as Pet;
+
+			/* Derive a stagger ID so NPCs spread their updates across frames.
+			 *
+			 * Seeded from the GameObject's instance ID rather than Character.ID: behaviours are
+			 * initialised from BaseCharacter.Awake, which runs before NPC.OnAwake registers the
+			 * scene object and assigns an ID. Every NPC therefore read ID 0 here and every NPC
+			 * landed on the same stagger bucket, so the whole population ticked on the same
+			 * frames — the exact frame spike the stagger exists to prevent. */
+			staggerID = Mathf.Abs(gameObject.GetInstanceID());
 
 			// Initialize the per-NPC aggression state with serialized tuning values.
 			AggressionState = new AggressionState(
@@ -459,6 +772,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnDestroying()
 		{
+			ReleaseCombatSlots();
 			AggressionState?.Destroy();
 
 			base.OnDestroying();
@@ -473,6 +787,7 @@ namespace FishMMO.Shared
 		{
 			Home = home;
 			Waypoints = waypoints;
+			ResetMovementState();
 
 			PhysicsScene = Character.GameObject.scene.GetPhysicsScene();
 
@@ -488,6 +803,12 @@ namespace FishMMO.Shared
 				Agent.radius = 0.5f;
 			}
 
+			/* Warp rather than trusting the transform. A recycled NPC comes out of the pool with
+			 * its NavMeshAgent re-enabled at a new position, and the agent's internal NavMesh
+			 * location is still wherever the previous occupant was — it then refuses to path, or
+			 * paths back toward the old spot. Warp is what actually re-seats it. */
+			WarpTo(home);
+
 			// Set initial state
 			ChangeState(InitialState);
 		}
@@ -500,13 +821,28 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
-			Home = Vector3.zero;
+			/* Give up any combat ring slot before the ID is recycled. Without this a pooled NPC
+			 * leaves a phantom occupant in its old target's ring, which inflates the ring's
+			 * occupancy and pushes real attackers out to a further rank than they need. */
+			ReleaseCombatSlots();
+
+			home = Vector3.zero;
 			Target = null;
+			ResetMovementState();
 			LookTarget = null;
 			VirtualCameraPosition = Vector3.zero;
 			VirtualCameraRotation = Quaternion.identity;
 			OrbitAngle = 0f;
 			RotationIndex = 0;
+			AttackCooldownTimer = 0f;
+			FlankTimer = 0f;
+			SubStateTimer = 0f;
+			PetStuckTimer = 0f;
+			UnreachableTargetTimer = 0f;
+			WasAttackingLastTick = false;
+			AllyScanTimer = 0f;
+			CachedHealTarget = null;
+			LastAiDeltaTime = 0f;
 			aggressionTickTimer = 0f;
 			cachedTargetHalfHeight = 0f;
 			cachedTargetHeightSource = null;
@@ -515,6 +851,7 @@ namespace FishMMO.Shared
 			currentLodTier = AILodTier.Active;
 			Group = null;
 			GroupRole = NPCGroupRole.None;
+			PendingState = null;
 			BossState?.Reset();
 			AggressionState?.Clear();
 			cachedAbilities.Clear();
@@ -540,30 +877,40 @@ namespace FishMMO.Shared
 		/// </list>
 		/// </para>
 		/// </summary>
-		void Update()
+		private void TimeManager_OnTick()
 		{
+			/* Facing runs on every network tick, the brain on a fraction of them.
+			 *
+			 * The two rates want different things. Rotation is replicated by the NetworkTransform,
+			 * which sends on the network tick, so turning any faster than that is work nobody ever
+			 * sees — and turning any slower makes an NPC's head visibly snap between orientations
+			 * while its position is being smoothly interpolated. Matching the send rate is exactly
+			 * right. The brain, meanwhile, has no reason to run at 30 Hz. */
+			if (LookTarget != null)
+			{
+				FaceLookTarget(networkTickDelta);
+			}
+
+			aiTickCounter++;
+
+			// --- AI tick gate: only a fraction of network ticks drive the brain. ---
+			if (aiTickCounter < ticksPerAiUpdate)
+			{
+				return;
+			}
+			aiTickCounter = 0;
+
+			// From here on, one "AI tick" has elapsed.
+			AiTickIndex++;
+
+			float aiTickDelta = networkTickDelta * ticksPerAiUpdate;
+
+			int tickInterval = 1;
+
 			if (LodSettings != null)
 			{
-				// --- Dormant Quick Bail ---
-				// Dormant NPCs only need periodic LOD re-evaluation to wake up.
-				// Use a dedicated high-modulus gate to minimize per-frame overhead.
-				// At 60 FPS with DormantCheckModulus=120, a dormant NPC only runs
-				// this check ~once every 2 seconds.
-				if (currentLodTier == AILodTier.Dormant)
-				{
-					if ((Time.frameCount + staggerID) % LodSettings.DormantCheckModulus != 0)
-						return;
-
-					currentLodTier = EvaluateLodTier();
-					if (currentLodTier == AILodTier.Dormant)
-						return;
-
-					// Woke up — reset the LOD timer and fall through to normal processing.
-					lodReevaluateTimer = LodSettings.ReevaluateInterval;
-				}
-
-				// --- LOD Re-evaluation (non-dormant tiers) ---
-				lodReevaluateTimer -= Time.deltaTime;
+				// --- LOD re-evaluation, on its own wall-clock interval. ---
+				lodReevaluateTimer -= aiTickDelta;
 				if (lodReevaluateTimer <= 0f)
 				{
 					AILodTier previousTier = currentLodTier;
@@ -575,27 +922,34 @@ namespace FishMMO.Shared
 					{
 						OnLodTierChanged(previousTier, currentLodTier);
 					}
-
-					// If we just transitioned to Dormant, bail immediately.
-					if (currentLodTier == AILodTier.Dormant)
-						return;
 				}
 
-				// --- Frame Stagger Gate ---
-				// Spreads NPC updates evenly across frames to avoid spikes.
-				// Active: mod 3 ≈ 50ms, Nearby: mod 12 ≈ 200ms, Far: mod 60 ≈ 1s.
-				int modulus = LodSettings.GetStaggerModulus(currentLodTier);
-				if ((Time.frameCount + staggerID) % modulus != 0)
-					return;
-			}
-			else
-			{
-				// No LOD settings — simple 1-in-3 frame stagger.
-				if ((Time.frameCount + staggerID) % 3 != 0)
-					return;
+				tickInterval = LodSettings.GetTickInterval(currentLodTier);
 			}
 
-			float dt = Time.deltaTime;
+			/* Stagger gate.
+			 *
+			 * staggerID spreads NPCs across the interval so a thousand of them do not all think on
+			 * the same tick and spike one frame in every N. Keyed off a monotonic AI tick index
+			 * rather than Time.frameCount, so the spread is identical on a server running at 200
+			 * FPS and one running at 30. */
+			if (tickInterval > 1 && ((AiTickIndex + staggerID) % tickInterval) != 0)
+			{
+				return;
+			}
+
+			/* Exact, not accumulated. Every timer downstream — leash, sweep, threat decay, state
+			 * update rates — advances by precisely the wall-clock time that elapsed, computed from
+			 * the fixed network tick rather than measured from a variable frame. There is no drift
+			 * to correct and no spike to clamp. */
+			float dt = aiTickDelta * tickInterval;
+			LastAiDeltaTime = dt;
+
+			// Dormant NPCs run nothing but the re-evaluation above.
+			if (currentLodTier == AILodTier.Dormant)
+			{
+				return;
+			}
 
 			// --- Dispatch to tier-appropriate update pipeline ---
 			switch (currentLodTier)
@@ -620,8 +974,8 @@ namespace FishMMO.Shared
 		private void UpdateActive(float dt)
 		{
 			repathCooldown -= dt;
-			SweepForEnemies();
-			CheckLeash();
+			SweepForEnemies(dt);
+			CheckLeash(dt);
 
 			// --- Behavior Tree (decision layer) ---
 			bool btHandled = false;
@@ -646,12 +1000,11 @@ namespace FishMMO.Shared
 			// --- State Machine (execution layer) ---
 			if (!btHandled)
 			{
-				UpdateCurrentState();
+				UpdateCurrentState(dt);
 			}
 
 			UpdateVirtualCamera();
 			TickAggression(dt);
-			FaceLookTarget();
 		}
 
 		/// <summary>
@@ -664,11 +1017,10 @@ namespace FishMMO.Shared
 		private void UpdateNearby(float dt)
 		{
 			repathCooldown -= dt;
-			CheckLeash();
-			UpdateCurrentState();
+			CheckLeash(dt);
+			UpdateCurrentState(dt);
 			UpdateVirtualCamera();
 			TickAggression(dt);
-			FaceLookTarget();
 		}
 
 		/// <summary>
@@ -687,8 +1039,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			CheckLeash();
-			UpdateCurrentState();
+			repathCooldown -= dt;
+			CheckLeash(dt);
+			UpdateCurrentState(dt);
 		}
 
 		/// <summary>
@@ -753,6 +1106,10 @@ namespace FishMMO.Shared
 			if (CurrentState == AttackingState || CurrentState == ReturnHomeState)
 				return;
 
+			// A passive pet does not fight back; that is the whole meaning of the stance.
+			if (!PetStanceAllowsAutoEngage(false))
+				return;
+
 			// Verify the attacker is alive.
 			if (!attacker.TryGet(out ICharacterDamageController dmg) || !dmg.IsAlive)
 				return;
@@ -766,12 +1123,22 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Sweeps for nearby enemies and transitions to attacking state if any are found.
 		/// </summary>
-		private void SweepForEnemies()
+		/// <param name="deltaTime">Seconds elapsed since the previous AI tick.</param>
+		private void SweepForEnemies(float deltaTime)
 		{
 			// Only sweep for enemies if not returning home or already attacking.
 			if (AttackingState == null ||
 				CurrentState == ReturnHomeState ||
 				CurrentState == AttackingState)
+			{
+				return;
+			}
+
+			/* A pet's engagement is decided by its stance, not by proximity. PetIdleState runs
+			 * the aggressive sweep itself and the defensive case is event-driven from the owner
+			 * being attacked; letting this generic sweep run as well would make every pet
+			 * effectively aggressive regardless of what its owner ordered. */
+			if (Character is Pet)
 			{
 				return;
 			}
@@ -785,13 +1152,54 @@ namespace FishMMO.Shared
 				}
 				nextEnemySweepUpdate = EnemySweepRate;
 			}
-			nextEnemySweepUpdate -= Time.deltaTime;
+			nextEnemySweepUpdate -= deltaTime;
+		}
+
+		/// <summary>
+		/// Releases this NPC's place in any combat ring, and clears the ring it was the target of.
+		/// </summary>
+		/// <remarks>
+		/// Both directions matter: an NPC can be an attacker holding a slot and simultaneously be
+		/// the target other attackers hold slots around.
+		/// </remarks>
+		private void ReleaseCombatSlots()
+		{
+			if (Character == null)
+			{
+				return;
+			}
+
+			AICombatSlots.Release(Character.ID);
+			AICombatSlots.ReleaseTarget(Character.ID);
+		}
+
+		/// <summary>
+		/// Returns whether this NPC's pet stance permits engaging on its own.
+		/// Always true for anything that is not a pet.
+		/// </summary>
+		/// <param name="requiresAggressive">
+		/// True to require the Aggressive stance (hunting for a fight); false to accept anything
+		/// except Passive (fighting back).
+		/// </param>
+		/// <returns>True if the NPC may engage.</returns>
+		public bool PetStanceAllowsAutoEngage(bool requiresAggressive)
+		{
+			Pet pet = Character as Pet;
+			if (pet == null)
+			{
+				return true;
+			}
+
+			return requiresAggressive
+				? pet.Stance == PetStance.Aggressive
+				: pet.Stance != PetStance.Passive;
 		}
 
 		/// <summary>
 		/// Checks leash distance and transitions to return home or warps home if leash is exceeded.
 		/// </summary>
-		private void CheckLeash()
+		/// <param name="deltaTime">Seconds elapsed since the previous AI tick.</param>
+		private void CheckLeash(float deltaTime)
 		{
 			// Only check leash if leash logic is enabled and not already returning home.
 			if (ReturnHomeState == null ||
@@ -849,13 +1257,14 @@ namespace FishMMO.Shared
 
 				nextLeashUpdate = CurrentState.LeashUpdateRate;
 			}
-			nextLeashUpdate -= Time.deltaTime;
+			nextLeashUpdate -= deltaTime;
 		}
 
 		/// <summary>
 		/// Updates the current state if needed, calling its UpdateState method.
 		/// </summary>
-		private void UpdateCurrentState()
+		/// <param name="deltaTime">Seconds elapsed since the previous AI tick.</param>
+		private void UpdateCurrentState(float deltaTime)
 		{
 			if (Agent == null)
 			{
@@ -869,11 +1278,11 @@ namespace FishMMO.Shared
 			// Update state if timer has elapsed.
 			if (nextUpdate < 0.0f)
 			{
-				CurrentState.UpdateState(this, Time.deltaTime);
+				CurrentState.UpdateState(this, deltaTime);
 
-				nextUpdate = CurrentState.GetUpdateRate();
+				nextUpdate = CurrentState.GetUpdateRate(this);
 			}
-			nextUpdate -= Time.deltaTime;
+			nextUpdate -= deltaTime;
 		}
 
 		/// <summary>
@@ -898,7 +1307,23 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Stop()
 		{
+			if (!AgentIsUsable()) return;
 			Agent.isStopped = true;
+		}
+
+		/// <summary>
+		/// True when the NavMeshAgent can accept movement commands.
+		/// </summary>
+		/// <remarks>
+		/// Unity rejects <c>isStopped</c> and <c>SetDestination</c> with an error for an agent that
+		/// is disabled or not on a NavMesh. Spawn paths legitimately touch the brain around the
+		/// moment an object is activated and placed, so guard rather than log a wall of errors.
+		/// </remarks>
+		/// <returns>True if the agent is enabled and on a NavMesh.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool AgentIsUsable()
+		{
+			return Agent != null && Agent.isActiveAndEnabled && Agent.isOnNavMesh;
 		}
 
 		/// <summary>
@@ -907,6 +1332,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Resume()
 		{
+			if (!AgentIsUsable()) return;
 			Agent.isStopped = false;
 		}
 
@@ -924,7 +1350,7 @@ namespace FishMMO.Shared
 		{
 			if (repathCooldown > 0f)
 				return false;
-			if (!Agent.isOnNavMesh)
+			if (!AgentIsUsable())
 				return false;
 
 			Agent.SetDestination(position);
@@ -973,17 +1399,33 @@ namespace FishMMO.Shared
 			float nearestSqrDist = float.MaxValue;
 			Vector3 npcPos = Character.Transform.position;
 
-			foreach (var conn in Observers)
+			foreach (NetworkConnection conn in Observers)
 			{
-				// Each observer connection has objects — find the one closest.
-				foreach (var nob in conn.Objects)
+				/* FirstObject — the connection's player character — rather than walking every
+				 * object the connection owns.
+				 *
+				 * The inner loop over conn.Objects was the expensive half of this method: it is
+				 * O(observers x owned objects) per NPC per re-evaluation, and a connection owns
+				 * more than its character (its pet, anything else it has been given authority
+				 * over). Those are all within metres of the player anyway, so they never changed
+				 * the answer — they just multiplied the work. At a thousand NPCs and a hundred
+				 * players that inner loop was six figures of distance checks every couple of
+				 * seconds, to compute a number the character alone already gives. */
+				NetworkObject observerObject = conn?.FirstObject;
+				if (observerObject == null)
 				{
-					if (nob == null || nob.transform == null) continue;
+					continue;
+				}
 
-					float sqrDist = (nob.transform.position - npcPos).sqrMagnitude;
-					if (sqrDist < nearestSqrDist)
+				float sqrDist = (observerObject.transform.position - npcPos).sqrMagnitude;
+				if (sqrDist < nearestSqrDist)
+				{
+					nearestSqrDist = sqrDist;
+
+					// Cannot do better than the closest tier; stop looking.
+					if (nearestSqrDist <= LodSettings.ActiveDistanceSqr)
 					{
-						nearestSqrDist = sqrDist;
+						break;
 					}
 				}
 			}
@@ -1031,6 +1473,16 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Returns this NPC's health as a fraction (0-1) of its maximum, or 1 when it has no
+		/// health resource.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public float GetHealthPercent()
+		{
+			return AITargetSelection.GetHealthPercent(Character);
+		}
+
+		/// <summary>
 		/// Returns the squared distance from this NPC to its current target.
 		/// Returns float.MaxValue if there is no target.
 		/// </summary>
@@ -1057,6 +1509,21 @@ namespace FishMMO.Shared
 		/// <returns>The chosen ability, or null if nothing is available.</returns>
 		public Ability PickBestAbility(float preferredMaxRange = float.MaxValue)
 		{
+			return PickBestAbility(preferredMaxRange, null);
+		}
+
+		/// <summary>
+		/// Selects the best ability to use against the current target, optionally restricted to
+		/// abilities matching a predicate.
+		/// </summary>
+		/// <param name="preferredMaxRange">Maximum desired range.</param>
+		/// <param name="filter">
+		/// Optional predicate an ability must satisfy to be considered. Used by
+		/// <see cref="HealerAttackingState"/> to keep heals out of the damage rotation.
+		/// </param>
+		/// <returns>The chosen ability, or null if nothing is available.</returns>
+		public Ability PickBestAbility(float preferredMaxRange, System.Func<Ability, bool> filter)
+		{
 			if (!Character.TryGet(out IAbilityController abilityController))
 				return null;
 			if (!Character.TryGet(out ICooldownController cooldownController))
@@ -1068,7 +1535,7 @@ namespace FishMMO.Shared
 			if (AbilityRotation != null)
 			{
 				// Resolve the target character for condition evaluation.
-				ICharacter targetCharacter = Target != null ? Target.GetComponent<ICharacter>() : null;
+				ICharacter targetCharacter = TargetCharacter;
 
 				Ability rotationPick = AbilityRotation.Evaluate(
 					this,
@@ -1085,11 +1552,42 @@ namespace FishMMO.Shared
 					return null;
 			}
 
+			// --- Default scoring-based selection ---
+			return PickScoredAbility(GetSqrDistanceToTarget(), filter, DEFAULT_ABILITY_JITTER);
+		}
+
+		/// <summary>
+		/// Random score jitter applied by the default ability picker so an NPC does not always
+		/// open with the same ability.
+		/// </summary>
+		private const float DEFAULT_ABILITY_JITTER = 50f;
+
+		/// <summary>
+		/// Scores every usable known ability against a subject at the given squared distance and
+		/// returns the highest scorer.
+		/// </summary>
+		/// <remarks>
+		/// Shared by the default enemy picker and by <see cref="HealerAttackingState"/>'s heal
+		/// picker, which scores against an <em>ally's</em> distance rather than the target's.
+		/// Both previously carried their own near-identical copy of this loop.
+		/// </remarks>
+		/// <param name="sqrDistanceToSubject">Squared distance to whatever the ability will be aimed at.</param>
+		/// <param name="filter">Optional predicate an ability must satisfy. Null accepts all.</param>
+		/// <param name="jitter">Maximum random score jitter, for variety.</param>
+		/// <returns>The best-scoring usable ability, or null.</returns>
+		public Ability PickScoredAbility(float sqrDistanceToSubject, System.Func<Ability, bool> filter, float jitter)
+		{
+			if (!Character.TryGet(out IAbilityController abilityController))
+				return null;
+			if (!Character.TryGet(out ICooldownController cooldownController))
+				return null;
+			if (!Character.TryGet(out ICharacterDamageController damageController) || !damageController.IsAlive)
+				return null;
+
 			// --- Rebuild ability cache if abilities changed ---
 			RebuildAbilityCacheIfDirty(abilityController);
 
-			// --- Default scoring-based selection ---
-			float sqrDist = GetSqrDistanceToTarget();
+			float sqrDist = sqrDistanceToSubject;
 
 			// Pre-compute health percentage for personality bonuses.
 			float healthPercent = 1f;
@@ -1110,6 +1608,10 @@ namespace FishMMO.Shared
 			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
 				Ability ability = cachedAbilities[i];
+
+				// Skip abilities the caller is not interested in (e.g. heals during a damage pick).
+				if (filter != null && !filter(ability))
+					continue;
 
 				// Skip abilities on cooldown.
 				if (cooldownController.IsOnCooldown(ability.ID, currentTick))
@@ -1147,7 +1649,7 @@ namespace FishMMO.Shared
 				// Add small random jitter so the NPC doesn't always pick the same ability.
 				// Uses the seeded NPC RNG for deterministic behaviour.
 				DeterministicRNG rng = NpcRNG;
-				score += (rng ?? DeterministicRNG.Shared).Range(0f, 50f);
+				score += (rng ?? DeterministicRNG.Shared).Range(0f, jitter);
 
 				if (score > bestScore)
 				{
@@ -1203,9 +1705,30 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Re-entering the state already running is churn, not a transition: it runs Exit then
+			 * Enter, which for IdleState means Resume() immediately followed by Stop(), every
+			 * single tick. TransitionToRandomMovementState can legitimately roll the current state,
+			 * so this is reachable in normal play rather than only through mistakes.
+			 *
+			 * Attacking states are exempt because re-entering with a fresh candidate list is how
+			 * the NPC re-targets. */
+			if (CurrentState == newState && !(newState is BaseAttackingState))
+			{
+				return;
+			}
+
 			if (CurrentState != null)
 			{
-				CurrentState.Exit(this);
+				// Published before Exit so the outgoing state can see where the NPC is headed.
+				PendingState = newState;
+				try
+				{
+					CurrentState.Exit(this);
+				}
+				finally
+				{
+					PendingState = null;
+				}
 			}
 
 			//Log.Debug($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
@@ -1213,7 +1736,7 @@ namespace FishMMO.Shared
 			CurrentState = newState;
 			if (CurrentState != null)
 			{
-				nextUpdate = CurrentState.GetUpdateRate();
+				nextUpdate = CurrentState.GetUpdateRate(this);
 			}
 
 			if (newState is BaseAttackingState attackingState)
@@ -1238,6 +1761,65 @@ namespace FishMMO.Shared
 				Agent.speed = Constants.Character.WalkSpeed;
 			}
 			CurrentState?.Enter(this);
+		}
+
+		/// <summary>
+		/// Exposes the serialized combat state through <see cref="IAIStateMachine"/>.
+		/// Explicit because the inspector needs a field here, and a field cannot satisfy a
+		/// property on an interface.
+		/// </summary>
+		BaseAIState IAIStateMachine.AttackingState => AttackingState;
+
+		/// <summary>
+		/// Exposes the serialized idle state through <see cref="IAIStateMachine"/>.
+		/// </summary>
+		BaseAIState IAIStateMachine.IdleState => IdleState;
+
+		/// <summary>
+		/// Forces this NPC onto a specific character immediately, entering combat if it is not
+		/// already fighting.
+		/// </summary>
+		/// <remarks>
+		/// The scripted-aggro entry point, used by <see cref="ApplyTauntAction"/>. Distinct from
+		/// setting <see cref="Target"/> directly, which changes who the NPC is fighting without
+		/// putting it into a state that fights.
+		/// </remarks>
+		/// <param name="character">The character to attack. Ignored when null or dead.</param>
+		/// <returns>True if the NPC took the new target.</returns>
+		public bool ForceTarget(ICharacter character)
+		{
+			if (character == null || !AITargetSelection.IsValidTarget(character))
+			{
+				return false;
+			}
+
+			// A passive pet stays out of it; a taunt is not an owner's order.
+			if (!PetStanceAllowsAutoEngage(false))
+			{
+				return false;
+			}
+
+			if (!Character.TryGet(out ICharacterDamageController damageController) || !damageController.IsAlive)
+			{
+				return false;
+			}
+
+			Target = character.Transform;
+			LookTarget = character.Transform;
+
+			/* Arm the re-evaluation timer rather than zeroing it, so the NPC does not reconsider
+			 * on its very next tick. The threat the taunt applied would normally hold it anyway,
+			 * but a targeting mode that ignores threat (a rampaging beast) would otherwise shrug
+			 * the taunt off one tick later. */
+			BaseAttackingState attacking = AttackingState as BaseAttackingState;
+			TargetReevaluationTimer = attacking != null ? attacking.TargetReevaluationRate : 0f;
+
+			if (AttackingState != null && CurrentState != AttackingState)
+			{
+				ChangeState(AttackingState);
+			}
+
+			return true;
 		}
 
 		/// <summary>
@@ -1272,18 +1854,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="radius">Radius to randomize destination.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetRandomHomeDestination(float radius = 5.0f)
+		/// <returns>True if a destination was set.</returns>
+		public bool SetRandomHomeDestination(float radius = 5.0f)
 		{
-			Vector3 position = Home;
-			if (radius > 0.0f)
-			{
-				position = Vector3Extensions.RandomPositionWithinRadius(Home, radius);
-			}
-			NavMeshHit hit;
-			if (NavMesh.SamplePosition(position, out hit, radius, NavMesh.AllAreas))
-			{
-				Agent.SetDestination(hit.position);
-			}
+			Vector3 position = radius > 0.0f
+				? Vector3Extensions.RandomPositionWithinRadius(Home, radius)
+				: Home;
+
+			return TryMoveTo(position, throttle: false) != AIMovementResult.Failed;
 		}
 
 		/// <summary>
@@ -1291,60 +1869,66 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="radius">Radius to randomize destination.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetRandomDestination(float radius = 5.0f)
+		/// <returns>True if a destination was set.</returns>
+		public bool SetRandomDestination(float radius = 5.0f)
 		{
-			Vector3 position = Character.Transform.position;
-			if (radius > 0.0f)
-			{
-				position = Vector3Extensions.RandomPositionWithinRadius(position, radius);
-			}
-			NavMeshHit hit;
-			if (NavMesh.SamplePosition(position, out hit, radius, NavMesh.AllAreas))
-			{
-				Agent.SetDestination(hit.position);
-			}
+			Vector3 origin = Character.Transform.position;
+			Vector3 position = radius > 0.0f
+				? Vector3Extensions.RandomPositionWithinRadius(origin, radius)
+				: origin;
+
+			return TryMoveTo(position, throttle: false) != AIMovementResult.Failed;
 		}
 
 		/// <summary>
 		/// Transitions to the next waypoint in the waypoint array.
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void TransitionToNextWaypoint()
+		/// <returns>True if a waypoint destination was set.</returns>
+		public bool TransitionToNextWaypoint()
 		{
+			if (Waypoints == null || Waypoints.Length < 1 || !AgentIsUsable()) return false;
+
 			CurrentWaypointIndex = (CurrentWaypointIndex + 1) % Waypoints.Length;
-			Agent.SetDestination(Waypoints[CurrentWaypointIndex]);
+
+			// Unthrottled: a waypoint is a one-shot destination, and a dropped request leaves the
+			// NPC standing at the previous one believing it is on its way.
+			return TryMoveTo(Waypoints[CurrentWaypointIndex], throttle: false) != AIMovementResult.Failed;
 		}
 
 		/// <summary>
 		/// Picks the nearest waypoint to the current position and sets it as the destination.
 		/// </summary>
-		public void PickNearestWaypoint()
+		/// <returns>True if a waypoint destination was set.</returns>
+		public bool PickNearestWaypoint()
 		{
-			if (Waypoints != null && Waypoints.Length > 0)
-			{
-				float lastSqrDistance = 0.0f;
-				int closestIndex = -1;
-				// Find the nearest waypoint
-				for (int i = 0; i < Waypoints.Length; ++i)
-				{
-					Vector3 waypoint = Waypoints[i];
+			if (!AgentIsUsable()) return false;
+			if (Waypoints == null || Waypoints.Length < 1) return false;
 
-					float sqrDistance = (Character.Transform.position - waypoint).sqrMagnitude;
-					if (closestIndex < 0 || sqrDistance < lastSqrDistance)
-					{
-						lastSqrDistance = sqrDistance;
-						closestIndex = i;
-					}
+			float lastSqrDistance = 0.0f;
+			int closestIndex = -1;
+
+			// Find the nearest waypoint
+			for (int i = 0; i < Waypoints.Length; ++i)
+			{
+				Vector3 waypoint = Waypoints[i];
+
+				float sqrDistance = (Character.Transform.position - waypoint).sqrMagnitude;
+				if (closestIndex < 0 || sqrDistance < lastSqrDistance)
+				{
+					lastSqrDistance = sqrDistance;
+					closestIndex = i;
 				}
-				Agent.SetDestination(Waypoints[closestIndex]);
-				CurrentWaypointIndex = closestIndex;
 			}
+
+			CurrentWaypointIndex = closestIndex;
+			return TryMoveTo(Waypoints[closestIndex], throttle: false) != AIMovementResult.Failed;
 		}
 
 		/// <summary>
 		/// Rotates the character to face the current look target smoothly.
 		/// </summary>
-		public void FaceLookTarget()
+		public void FaceLookTarget(float deltaTime)
 		{
 			if (LookTarget == null)
 			{
@@ -1353,18 +1937,27 @@ namespace FishMMO.Shared
 
 			// Get the direction from the agent to the LookTarget
 			Vector3 direction = LookTarget.position - Character.Transform.position;
-			direction.y = 0;
+			direction.y = 0f;
 
-			if (direction == Vector3.zero)
+			// Squared compare rather than == Vector3.zero: an exact-zero test misses the
+			// near-degenerate case where the NPC is all but standing on its target, and
+			// LookRotation on a near-zero vector produces a warning and an arbitrary rotation.
+			if (direction.sqrMagnitude < 0.0001f)
 			{
 				return;
 			}
 
-			// Calculate the rotation needed to face the target
 			Quaternion targetRotation = Quaternion.LookRotation(direction);
 
-			// Apply a smooth rotation (adjust speed as needed)
-			Character.Transform.rotation = Quaternion.Slerp(Character.Transform.rotation, targetRotation, Time.deltaTime * 5f);
+			/* Exponential smoothing rather than Slerp(a, b, rate * dt).
+			 *
+			 * The linear form is frame-rate dependent: doubling the frame rate halves each step
+			 * but does not halve the total turn, so an NPC visibly turns at a different speed on a
+			 * 30 Hz server than on a 60 Hz one. 1 - e^(-rate * dt) is the closed form of the same
+			 * smoothing sampled continuously, so the result is identical at any step size. */
+			float t = 1f - Mathf.Exp(-TurnRate * deltaTime);
+
+			Character.Transform.rotation = Quaternion.Slerp(Character.Transform.rotation, targetRotation, t);
 		}
 	}
 }

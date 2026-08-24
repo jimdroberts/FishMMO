@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -86,7 +86,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public IReadOnlyList<NPCGroupMember> Members => members;
 
-		private float nextEvaluateTime;
+		private float evaluateTimer;
 		private const float EVALUATE_INTERVAL = 0.5f;
 
 		void Awake()
@@ -104,8 +104,13 @@ namespace FishMMO.Shared
 
 		void Update()
 		{
-			if (Time.time < nextEvaluateTime) return;
-			nextEvaluateTime = Time.time + EVALUATE_INTERVAL;
+			/* Accumulated delta rather than a wall-clock comparison. Time.time keeps running while
+			 * the game is paused or the editor is stepped, and comparing against it means the
+			 * first frame after a hitch fires an evaluation immediately and then another a full
+			 * interval later — a jittery cadence for something the pack tactics read every cycle. */
+			evaluateTimer -= Time.deltaTime;
+			if (evaluateTimer > 0f) return;
+			evaluateTimer = EVALUATE_INTERVAL;
 
 			EvaluateGroupState();
 		}
@@ -154,6 +159,34 @@ namespace FishMMO.Shared
 		{
 			if (enemy == null) return;
 
+			/* Re-entrancy guard. AIController.ChangeState calls back into AlertGroup whenever a
+			 * member enters an attacking state, and AlertGroup now changes members' states — so
+			 * without this the first alert recurses once per member as it wakes each one up. */
+			if (isAlerting) return;
+
+			isAlerting = true;
+			try
+			{
+				AlertGroupInternal(enemy);
+			}
+			finally
+			{
+				isAlerting = false;
+			}
+		}
+
+		/// <summary>
+		/// True while <see cref="AlertGroup"/> is walking the member list, to stop the
+		/// state-change callback from re-entering it.
+		/// </summary>
+		private bool isAlerting;
+
+		/// <summary>
+		/// Body of <see cref="AlertGroup"/>, guarded against re-entry.
+		/// </summary>
+		/// <param name="enemy">The enemy the group should focus.</param>
+		private void AlertGroupInternal(Transform enemy)
+		{
 			GroupTarget = enemy;
 
 			for (int i = 0; i < members.Count; i++)
@@ -163,9 +196,22 @@ namespace FishMMO.Shared
 				if (!IsMemberAlive(member.Controller)) continue;
 
 				// Only alert members not already in combat.
-				if (member.Controller.CurrentState != member.Controller.AttackingState)
+				if (member.Controller.CurrentState == member.Controller.AttackingState)
+					continue;
+
+				// Members already heading home are deliberately leashing; do not drag them back.
+				if (member.Controller.CurrentState == member.Controller.ReturnHomeState)
+					continue;
+
+				member.Controller.Target = enemy;
+				member.Controller.LookTarget = enemy;
+
+				/* Setting the target alone was not enough: the member stayed in whatever movement
+				 * state it was in, so an alerted pack stood around facing the enemy instead of
+				 * fighting it. The state change is what the summary always claimed happened. */
+				if (member.Controller.AttackingState != null)
 				{
-					member.Controller.Target = enemy;
+					member.Controller.ChangeState(member.Controller.AttackingState);
 				}
 			}
 		}

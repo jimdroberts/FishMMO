@@ -44,10 +44,56 @@ namespace FishMMO.Shared
 		/// </summary>
 		public LayerMask LineOfSightBlockingLayers;
 
+		[Header("Combat Continuity")]
+		/// <summary>
+		/// True when this state is a <em>combat sub-state</em>: something the NPC steps into
+		/// while still fighting, such as orbiting, flanking or kiting.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="BaseAttackingState.Exit"/> normally clears the combat target and interrupts
+		/// the cast, which is correct when the NPC disengages. Transitioning into a positioning
+		/// state is not a disengage, and clearing the target on the way in left the sub-state with
+		/// nothing to orbit — it immediately bailed to idle. Set this on orbit / flank / strafe /
+		/// retreat assets so the target survives the transition.
+		/// </remarks>
+		[Tooltip("This state continues the current fight (orbit/flank/kite). Keeps the combat target when entered from an attacking state.")]
+		public bool KeepsCombatTarget;
+
 		/// <summary>
 		/// Returns the update rate for this state (in seconds).
 		/// </summary>
 		public virtual float GetUpdateRate() { return updateRate; }
+
+		/// <summary>
+		/// Returns the update rate for this state, given the NPC that is running it.
+		/// </summary>
+		/// <remarks>
+		/// States that randomise their tick interval need the owning NPC's seeded RNG to stay
+		/// deterministic. <see cref="IdleState"/> and <see cref="WanderState"/> previously reached
+		/// for <see cref="DeterministicRNG.Shared"/> here, which made their timing depend on how
+		/// many other NPCs had drawn from the shared stream first.
+		/// </remarks>
+		/// <param name="controller">The AI controller running this state.</param>
+		/// <returns>Update rate in seconds.</returns>
+		public virtual float GetUpdateRate(AIController controller) { return GetUpdateRate(); }
+
+		/// <summary>
+		/// Returns a value between <paramref name="minimum"/> and <paramref name="maximum"/> using
+		/// the NPC's seeded RNG, or <paramref name="minimum"/> when the range is degenerate.
+		/// </summary>
+		/// <param name="controller">The AI controller running this state.</param>
+		/// <param name="minimum">Lower bound.</param>
+		/// <param name="maximum">Upper bound. Values at or below the lower bound return the lower bound.</param>
+		/// <returns>The randomised rate.</returns>
+		protected static float RandomizeRate(AIController controller, float minimum, float maximum)
+		{
+			if (maximum <= minimum)
+			{
+				return minimum;
+			}
+			DeterministicRNG rng = controller != null ? controller.NpcRNG : null;
+			return (rng ?? DeterministicRNG.Shared).Range(minimum, maximum);
+		}
 
 		/// <summary>
 		/// Called when the state is entered. Implement state-specific logic here.
@@ -67,6 +113,25 @@ namespace FishMMO.Shared
 		/// <param name="controller">The AI controller managing this NPC.</param>
 		/// <param name="deltaTime">Time since last update.</param>
 		public abstract void UpdateState(AIController controller, float deltaTime);
+
+		/// <summary>
+		/// Returns the NPC to its attacking state when it still has a live target, or to idle
+		/// when it does not.
+		/// </summary>
+		/// <remarks>
+		/// Combat sub-states (orbit, flank) used to hard-code a transition to idle when their
+		/// manoeuvre completed, which dropped the NPC out of a fight it was still winning.
+		/// </remarks>
+		/// <param name="controller">The AI controller managing this NPC.</param>
+		protected static void ReturnToCombatOrIdle(AIController controller)
+		{
+			if (controller.Target != null && controller.AttackingState != null)
+			{
+				controller.ChangeState(controller.AttackingState);
+				return;
+			}
+			controller.TransitionToIdleState();
+		}
 
 		/// <summary>
 		/// Checks if the AI has line of sight to the target. Uses raycasting to determine if any objects block the view.

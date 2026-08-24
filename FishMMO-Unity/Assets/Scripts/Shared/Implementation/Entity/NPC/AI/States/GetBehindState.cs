@@ -1,12 +1,16 @@
 ﻿using UnityEngine;
-using UnityEngine.AI;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// AI state for moving behind a target. Handles movement, rotation, and state transitions for NPCs.
+	/// Combat sub-state that circles the NPC around to the back of its current target.
 	/// </summary>
+	/// <remarks>
+	/// Enable <see cref="BaseAIState.KeepsCombatTarget"/> on assets of this type. Without it the
+	/// attacking state clears the combat target on the way out and this state finds nothing to
+	/// move behind, which turned every flanking roll into a disengage.
+	/// </remarks>
 	[CreateAssetMenu(fileName = "New AI GetBehind State", menuName = "FishMMO/Character/NPC/AI/GetBehind State", order = 0)]
 	public class GetBehindState : BaseAIState
 	{
@@ -20,6 +24,12 @@ namespace FishMMO.Shared
 		public float RotationSpeed = 5.0f;
 
 		/// <summary>
+		/// Seconds to spend getting behind the target before giving up and attacking from here.
+		/// </summary>
+		[Tooltip("Seconds spent manoeuvring before rejoining the attack. 0 = no limit.")]
+		public float MaxManoeuvreSeconds = 3.0f;
+
+		/// <summary>
 		/// Called when entering the GetBehind state. Calculates and sets destination behind the target.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
@@ -27,20 +37,28 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				Log.Warning("GetBehindState", "No target set for GetBehindState.");
+				Log.Warning("GetBehindState", $"{controller.gameObject.name} entered GetBehindState with no target. " +
+					"Enable 'Keeps Combat Target' on this state asset if it is used as a combat sub-state.");
 				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}
 
-			// Calculate the position behind the target
+			controller.Resume();
+
+			// Calculate the position behind the target.
 			Vector3 behindPosition = CalculateBehindPosition(controller.Target.position, controller.Target.forward);
 
-			// Set the destination using NavMesh sampling
-			NavMeshHit hit;
-			if (NavMesh.SamplePosition(behindPosition, out hit, BehindDistance, NavMesh.AllAreas))
+			/* Unthrottled: this is the whole point of entering the state, and a request dropped by
+			 * the repath throttle would leave the NPC standing in a flanking state it never acts
+			 * on until the timeout below rescues it. */
+			if (controller.TryMoveTo(behindPosition, throttle: false) == AIMovementResult.Failed)
 			{
-				controller.Agent.SetDestination(hit.position);
+				// No room behind the target — go straight back to fighting.
+				ReturnToCombatOrIdle(controller);
+				return;
 			}
+
+			controller.SubStateTimer = MaxManoeuvreSeconds;
 		}
 
 		/// <summary>
@@ -70,11 +88,30 @@ namespace FishMMO.Shared
 			Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
 			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * deltaTime);
 
-			// Check if we reached the destination
-			if (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f)
+			/* Bounded. Without a timeout an NPC whose flank position became unreachable mid-move
+			 * — the target walked into a corner — sits in this state indefinitely, out of combat
+			 * in every way that matters but still holding threat. */
+			if (MaxManoeuvreSeconds > 0f)
 			{
-				// Optionally, transition to another state or behavior
-				controller.TransitionToIdleState(); // Example transition
+				controller.SubStateTimer -= deltaTime;
+				if (controller.SubStateTimer <= 0f)
+				{
+					ReturnToCombatOrIdle(controller);
+					return;
+				}
+			}
+
+			switch (controller.GetMovementProgress(deltaTime))
+			{
+				case AIMovementProgress.Arrived:
+				case AIMovementProgress.Stuck:
+				case AIMovementProgress.Idle:
+					// Manoeuvre complete, or not going to complete. Either way, rejoin the fight.
+					ReturnToCombatOrIdle(controller);
+					return;
+
+				default:
+					return;
 			}
 		}
 

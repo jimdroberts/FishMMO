@@ -12,7 +12,9 @@ namespace FishMMO.Shared
 	/// Represents a non-player character (NPC) in the game. Handles attribute generation, network payloads, and spawning logic.
 	/// </summary>
 	[RequireComponent(typeof(AIController))]
+	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(AbilityController))]
+	[RequireComponent(typeof(CooldownController))]
 	[RequireComponent(typeof(BuffController))]
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(CharacterDamageController))]
@@ -131,11 +133,11 @@ namespace FishMMO.Shared
 			{
 				CharacterNameLabel.text = GameObject.name;
 			}
-		}
 #else
 			// Register this NPC in the scene object registry on the server.
 			// SceneObject registration only needs to happen once per object lifetime.
 			SceneObject.Register(this);
+#endif
 		}
 
 		/// <summary>
@@ -143,6 +145,14 @@ namespace FishMMO.Shared
 		/// Re-rolls the seed, RNG, gender, and name. Then applies attribute bonuses and learns abilities.
 		/// Spawner overrides (AttributeBonuses, CorpseDecayDuration) are injected before this runs.
 		/// </summary>
+		/// <remarks>
+		/// Deliberately not wrapped in <c>#if UNITY_SERVER</c>. FishNet only calls this on a peer
+		/// that is actually running a server, so the compile-time gate bought nothing — and it cost
+		/// a great deal: in an editor or host build (where UNITY_SERVER is undefined) the override
+		/// did not exist, so no NPC ever rolled its RNG, applied its attribute bonuses, or learned
+		/// a single ability. NPC combat could not be exercised anywhere except a dedicated server
+		/// build.
+		/// </remarks>
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
@@ -165,7 +175,6 @@ namespace FishMMO.Shared
 			// Subscribe to the server tick for corpse decay timer.
 			base.TimeManager.OnTick += CorpseDecayTick;
 		}
-#endif
 
 		/// <summary>
 		/// Called when the NPC is destroyed. Unregisters from the scene object registry.
@@ -181,11 +190,10 @@ namespace FishMMO.Shared
 		/// <param name="asServer">Whether the reset is performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
-#if UNITY_SERVER
 			// Unsubscribe from tick to prevent stale timer during pool idle.
+			// Unconditional, to match the now-unconditional subscription in OnStartServer.
 			if (base.TimeManager != null)
 				base.TimeManager.OnTick -= CorpseDecayTick;
-#endif
 			isCorpse = false;
 			corpseDecayTimer = 0f;
 
@@ -267,7 +275,7 @@ namespace FishMMO.Shared
 		/// becomes a corpse (visible, immobile, immortal) for CorpseDecayDuration seconds.
 		/// After the timer expires, the object is returned to FishNet's pool for reuse.
 		/// </summary>
-		public void Despawn()
+		public virtual void Despawn()
 		{
 			if (isCorpse) return;
 
@@ -297,7 +305,6 @@ namespace FishMMO.Shared
 			ObjectSpawner?.Despawn(this);
 		}
 
-#if UNITY_SERVER
 		/// <summary>
 		/// Called each server tick to advance the corpse decay timer.
 		/// </summary>
@@ -308,9 +315,7 @@ namespace FishMMO.Shared
 			if (corpseDecayTimer <= 0f)
 				ReturnToPool();
 		}
-#endif
 
-#if UNITY_SERVER
 		/// <summary>
 		/// Creates <see cref="Ability"/> instances from the inspector-configured
 		/// <see cref="Abilities"/> list and teaches them to the NPC's <see cref="AbilityController"/>.
@@ -343,7 +348,6 @@ namespace FishMMO.Shared
 				abilityController.LearnAbility(ability);
 			}
 		}
-#endif
 
 		/// <summary>
 		/// Applies attribute bonuses to this NPC using the attribute database and random generator.

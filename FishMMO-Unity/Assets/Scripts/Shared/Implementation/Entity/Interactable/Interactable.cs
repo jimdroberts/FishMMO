@@ -165,11 +165,35 @@ namespace FishMMO.Shared
 		public virtual void OnAwake() { }
 
 		/// <summary>
-		/// Despawns this interactable using the assigned ObjectSpawner.
+		/// Despawns this interactable, returning it to the object pool.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Routes through the owning <see cref="ObjectSpawner"/> when there is one, so the spawner
+		/// can schedule a respawn. Falls back to despawning directly otherwise.
+		/// </para>
+		/// <para>
+		/// The fallback is the important half. An interactable with no spawner — ground loot
+		/// dropped by a kill, a container placed by script — used to hit a null-conditional and do
+		/// nothing at all, so picking it up left the object spawned in the world forever: an
+		/// invisible, already-looted pickup that every client kept observing. Pooled despawn is
+		/// also what keeps world items inside the map's fixed memory budget rather than being
+		/// destroyed and re-instantiated on every drop.
+		/// </para>
+		/// </remarks>
 		public void Despawn()
 		{
-			ObjectSpawner?.Despawn(this);
+			ObjectSpawner spawner = ObjectSpawner;
+			if (spawner != null)
+			{
+				spawner.Despawn(this);
+				return;
+			}
+
+			if (base.IsServerStarted && NetworkObject != null && NetworkObject.IsSpawned)
+			{
+				NetworkManager.ServerManager.Despawn(NetworkObject, FishNet.Object.DespawnType.Pool);
+			}
 		}
 
 		/// <summary>

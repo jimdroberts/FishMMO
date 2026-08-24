@@ -1,4 +1,4 @@
-namespace FishMMO.Shared
+﻿namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Tracks accumulated aggression (threat) from a single character toward an NPC.
@@ -22,7 +22,10 @@ namespace FishMMO.Shared
 		/// <summary>Total resource (mana/stamina) spent casting abilities against the NPC.</summary>
 		public int TotalResourceSpent;
 
-		/// <summary>Timestamp (Time.time) of the last aggression event.</summary>
+		/// <summary>
+		/// Value of <see cref="AggressionController.Clock"/> at the last aggression event.
+		/// Tick-derived, not wall-clock.
+		/// </summary>
 		public float LastEventTime;
 
 		/// <summary>

@@ -15,6 +15,13 @@ namespace FishMMO.Shared
 		public bool CompleteHealOnReturn = true;
 
 		/// <summary>
+		/// How close to home counts as home. Also the fallback scatter radius when home itself
+		/// cannot be sampled onto the NavMesh.
+		/// </summary>
+		[Tooltip("Distance from home that counts as arriving.")]
+		public float HomeArrivalRadius = 2.0f;
+
+		/// <summary>
 		/// Called when the state is entered. Sets the NPC's destination to home, increases speed, and heals if applicable.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
@@ -27,8 +34,18 @@ namespace FishMMO.Shared
 			// Set agent speed to run speed for quick return.
 			controller.Agent.speed = Constants.Character.RunSpeed;
 
-			// Set a random home destination for the NPC.
-			controller.SetRandomHomeDestination();
+			controller.Resume();
+
+			/* Head for home itself rather than a random point near it. The random offset exists so
+			 * a pack does not stack on one pixel, but it is applied around the *destination*, and
+			 * sampling it can fail — which used to leave the NPC with no path while every arrival
+			 * check reported it had already arrived. HomeArrivalRadius reintroduces the spread
+			 * without risking that. */
+			if (controller.TryMoveTo(controller.Home, throttle: false) == AIMovementResult.Failed &&
+				HomeArrivalRadius > 0f)
+			{
+				controller.SetRandomHomeDestination(HomeArrivalRadius);
+			}
 
 			// Heal the NPC if CompleteHealOnReturn is true and a damage controller is present.
 			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
@@ -62,11 +79,39 @@ namespace FishMMO.Shared
 		/// <param name="deltaTime">Time since last update.</param>
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
-			// Check if the agent has reached its home destination.
-			if (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f)
+			/* A pet's Home is its owner, so this state doubles as "catch up with the player".
+			 * Repathing every tick keeps it tracking a moving anchor; for a stationary NPC home
+			 * the throttle makes it a cheap no-op. */
+			if (controller.OwningPet != null)
 			{
-				// Transition to random movement state after arriving home.
-				controller.TransitionToRandomMovementState();
+				controller.TryMoveTo(controller.Home);
+			}
+
+			switch (controller.GetMovementProgress(deltaTime, HomeArrivalRadius))
+			{
+				case AIMovementProgress.Arrived:
+					controller.TransitionToRandomMovementState();
+					return;
+
+				case AIMovementProgress.Stuck:
+					/* Returning home is the one movement an NPC must not fail: it is what pulls a
+					 * leashed mob out of terrain it should never have been in. Recovery escalates
+					 * to a warp, with home as the fallback. */
+					controller.TryRecoverFromStuck(controller.Home);
+					return;
+
+				case AIMovementProgress.Idle:
+					// No path at all — re-issue, unthrottled.
+					if (controller.TryMoveTo(controller.Home, throttle: false) == AIMovementResult.Failed)
+					{
+						// Home is not on the NavMesh. Warping is the only way back.
+						controller.WarpTo(controller.Home);
+						controller.TransitionToRandomMovementState();
+					}
+					return;
+
+				default:
+					return;
 			}
 		}
 	}

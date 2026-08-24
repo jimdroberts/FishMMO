@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 		{
 			if (Child == null) return AINodeResult.Failure;
 
-			AINodeResult result = Child.Evaluate(controller);
+			AINodeResult result = EvaluateChild(Child, controller);
 
 			switch (result)
 			{

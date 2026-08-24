@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -95,6 +95,12 @@ namespace FishMMO.Shared
 			saveButton.style.borderBottomRightRadius = 4;
 			inspectorContent.Add(saveButton);
 
+			/* Assets with a purpose-built visual editor get a button to open it. A behavior tree
+			 * inspected as a flat list of node references is close to unreadable — the structure
+			 * is the asset — so the graph editor is the real editing surface and the dashboard
+			 * should hand you straight to it. */
+			AddSpecialisedEditorButton(asset);
+
 			// Add an "Open in Default Inspector" button
 			Button openDefaultButton = new Button(() =>
 			{
@@ -107,6 +113,27 @@ namespace FishMMO.Shared
 			inspectorContent.Add(openDefaultButton);
 		}
 
+
+		/// <summary>
+		/// Adds an "open in graph editor" button for asset types that have one.
+		/// </summary>
+		/// <param name="asset">The selected asset.</param>
+		private void AddSpecialisedEditorButton(UnityEngine.Object asset)
+		{
+			AIBehaviorTree behaviorTree = asset as AIBehaviorTree;
+			if (behaviorTree == null)
+			{
+				return;
+			}
+
+			Button openGraphButton = new Button(() => BehaviorTreeEditorWindow.Open(behaviorTree));
+			openGraphButton.text = "Open Behavior Tree Editor";
+			openGraphButton.style.marginTop = 4;
+			openGraphButton.style.height = 26;
+			openGraphButton.style.backgroundColor = new Color(0.22f, 0.30f, 0.45f, 1f);
+			openGraphButton.style.color = new Color(0.80f, 0.88f, 1f, 1f);
+			inspectorContent.Add(openGraphButton);
+		}
 
 		/// <summary>
 		/// Creates a section container with a header label.

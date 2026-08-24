@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
@@ -60,6 +60,27 @@ namespace FishMMO.Shared
 		private IPredictableController[] controllers = Array.Empty<IPredictableController>();
 
 		/// <summary>
+		/// True when this character's replicate input is produced by a server-side brain
+		/// (an <see cref="FishMMO.Shared.Core.IAIController"/>) rather than by a remote client.
+		/// </summary>
+		/// <remarks>
+		/// Ownership alone cannot answer "who writes this character's input?". A monster is
+		/// server-owned and has no owning connection, while a pet is owned by the connection of
+		/// the player that summoned it — yet both are driven entirely by a server-side
+		/// <c>AIController</c>. Gating input on <see cref="NetworkBehaviour.IsOwner"/> therefore
+		/// left monsters with nobody producing input at all, and would have let a pet owner's
+		/// client produce input for a brain that does not run there.
+		/// </remarks>
+		private bool serverDrivenInput;
+
+		/// <summary>
+		/// True when this peer is the one responsible for producing this character's replicate
+		/// input for the current tick. AI characters answer "the server"; everyone else answers
+		/// "the owning client".
+		/// </summary>
+		public bool HasInputAuthority => serverDrivenInput ? base.IsServerStarted : base.IsOwner;
+
+		/// <summary>
 		/// Discovers all <see cref="IPredictableController"/> components on this GameObject,
 		/// sorts them by <see cref="IPredictableController.Order"/>, and caches the sorted array.
 		/// </summary>
@@ -72,6 +93,9 @@ namespace FishMMO.Shared
 				.ThenBy(c => c.GetType().FullName)
 				.ToList();
 			controllers = sortedList.ToArray();
+
+			// An AI brain on the same GameObject means the server writes this character's input.
+			serverDrivenInput = GetComponent<FishMMO.Shared.Core.IAIController>() != null;
 		}
 
 		/// <summary>
@@ -90,6 +114,20 @@ namespace FishMMO.Shared
 					"CharacterPredictionController",
 					$"State forwarding is disabled on NetworkObject '{base.NetworkObject.name}'. Predicted observers will desync. " +
 					"Enable 'State Forwarding' on the NetworkObject's Prediction settings.");
+			}
+
+			/* An AI character must be ownerless so the server is FishNet's controller for it.
+			 * Replicate_Authoritative only accepts server-produced input when the object has no
+			 * owner; hand an AI character to a client connection and the server's decisions are
+			 * discarded while that client — which does not run the brain — is expected to supply
+			 * the input, so the NPC can never act. This is silent at runtime, hence the warning. */
+			if (serverDrivenInput && base.IsServerStarted && base.Owner.IsValid)
+			{
+				FishMMO.Logging.Log.Warning(
+					"CharacterPredictionController",
+					$"AI character '{gameObject.name}' was spawned with an owning connection " +
+					$"(clientId {base.Owner.ClientId}). Server-side AI input will be ignored and the " +
+					"character will never act. Spawn AI characters without an owner.");
 			}
 
 			if (base.TimeManager != null)
@@ -150,7 +188,9 @@ namespace FishMMO.Shared
 				return TimeManager.UNSET_TICK;
 			}
 
-			if (base.IsController)
+			// Server-driven AI characters resolve against the server's own tick even when a
+			// client owns the NetworkObject, because the server is what produces their input.
+			if (base.IsController || (serverDrivenInput && base.IsServerStarted))
 			{
 				return base.TimeManager.LocalTick;
 			}
@@ -184,7 +224,7 @@ namespace FishMMO.Shared
 			CurrentLocalTickSnapshot = base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
 			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			CharacterReplicateData input = default;
-			if (base.IsOwner)
+			if (HasInputAuthority)
 			{
 				for (int i = 0; i < controllers.Length; i++)
 				{

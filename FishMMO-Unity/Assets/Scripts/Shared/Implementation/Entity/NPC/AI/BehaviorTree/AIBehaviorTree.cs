@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -49,7 +49,21 @@ namespace FishMMO.Shared
 			if (Root == null)
 				return AINodeResult.Failure;
 
-			return Root.Evaluate(controller);
+			/* Depth is bounded before descending. Nodes are ScriptableObject references, so
+			 * nothing stops a tree from containing a cycle — connect a node to one of its own
+			 * ancestors and Evaluate recurses until the stack dies, taking the whole server with
+			 * it. The editor now refuses to create such a connection, but an asset can also be
+			 * hand-edited or arrive from a merge, so the runtime refuses to trust the shape it is
+			 * handed. */
+			AIBehaviorNode.BeginEvaluation();
+			try
+			{
+				return Root.Evaluate(controller);
+			}
+			finally
+			{
+				AIBehaviorNode.EndEvaluation();
+			}
 		}
 	}
 }

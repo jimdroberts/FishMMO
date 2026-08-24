@@ -1,4 +1,4 @@
-namespace FishMMO.Shared.Core
+﻿namespace FishMMO.Shared.Core
 {
 	/// <summary>
 	/// Interface for AI waypoint management — patrolling and picking waypoints.
@@ -10,11 +10,13 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Transitions to the next waypoint in the waypoint array.
 		/// </summary>
-		void TransitionToNextWaypoint();
+		/// <returns>True if a waypoint destination was set.</returns>
+		bool TransitionToNextWaypoint();
 
 		/// <summary>
 		/// Picks the nearest waypoint to the current position and sets it as the destination.
 		/// </summary>
-		void PickNearestWaypoint();
+		/// <returns>True if a waypoint destination was set.</returns>
+		bool PickNearestWaypoint();
 	}
 }

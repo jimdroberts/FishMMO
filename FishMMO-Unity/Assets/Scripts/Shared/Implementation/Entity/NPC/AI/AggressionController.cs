@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -54,6 +54,25 @@ namespace FishMMO.Shared
 		/// <summary>Resource threshold (0-1) below which LowResourceThreatMultiplier activates.</summary>
 		public float LowResourceThreshold = 0.2f;
 
+		/// <summary>
+		/// Seconds of AI time this table has observed, advanced only by <see cref="Tick"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The staleness clock used to be <see cref="Time.time"/> — Unity's wall clock. That tied
+		/// threat expiry to real elapsed time while the decay it is paired with advanced on the AI
+		/// tick, so the two disagreed whenever the two rates did: an NPC throttled down to the Far
+		/// LOD tier decayed its threat slowly but expired entries at full speed, and a server
+		/// hitch expired threat for NPCs that had not run a single update during it.
+		/// </para>
+		/// <para>
+		/// Deriving both from the same tick-advanced clock makes expiry mean "this many seconds of
+		/// AI time without an event", which is what the tuning value has always claimed to mean,
+		/// and makes the whole table reproducible from a tick count.
+		/// </para>
+		/// </remarks>
+		public float Clock { get; private set; }
+
 		private readonly Dictionary<long, AggressionEntry> table = new Dictionary<long, AggressionEntry>();
 		private readonly Stack<AggressionEntry> entryPool = new Stack<AggressionEntry>();
 		private readonly List<long> staleKeys = new List<long>();
@@ -74,7 +93,7 @@ namespace FishMMO.Shared
 			entry.HitCount++;
 			entry.TotalDamage += amount;
 			entry.Points += amount * DamageWeight + HitBonusPoints;
-			entry.LastEventTime = Time.time;
+			entry.LastEventTime = Clock;
 		}
 
 		/// <summary>
@@ -85,7 +104,7 @@ namespace FishMMO.Shared
 			AggressionEntry entry = GetOrCreate(healerId);
 			entry.TotalHealing += amount;
 			entry.Points += amount * HealingWeight;
-			entry.LastEventTime = Time.time;
+			entry.LastEventTime = Clock;
 		}
 
 		/// <summary>
@@ -97,7 +116,7 @@ namespace FishMMO.Shared
 			AggressionEntry entry = GetOrCreate(characterId);
 			entry.TotalResourceSpent += amount;
 			entry.Points += amount * ResourceWeight;
-			entry.LastEventTime = Time.time;
+			entry.LastEventTime = Clock;
 		}
 
 		/// <summary>
@@ -108,7 +127,7 @@ namespace FishMMO.Shared
 			AggressionEntry entry = GetOrCreate(characterId);
 			entry.Points += points;
 			if (entry.Points < 0f) entry.Points = 0f;
-			entry.LastEventTime = Time.time;
+			entry.LastEventTime = Clock;
 		}
 
 		/// <summary>
@@ -128,6 +147,30 @@ namespace FishMMO.Shared
 			if (table.TryGetValue(characterId, out AggressionEntry entry))
 				return entry.Points;
 			return 0f;
+		}
+
+		/// <summary>
+		/// Returns the highest raw threat currently held by any tracked character, optionally
+		/// ignoring one of them.
+		/// </summary>
+		/// <remarks>
+		/// Used by <see cref="ApplyTauntAction"/> to place a taunter decisively on top rather than
+		/// adding a flat bonus that a long fight has already outgrown.
+		/// </remarks>
+		/// <param name="excludeCharacterId">Character to leave out of the comparison, or 0 for none.</param>
+		/// <returns>The highest threat points, or 0 when nothing is tracked.</returns>
+		public float GetHighestPoints(long excludeCharacterId = 0)
+		{
+			float highest = 0f;
+			foreach (KeyValuePair<long, AggressionEntry> pair in table)
+			{
+				if (pair.Key == excludeCharacterId)
+					continue;
+
+				if (pair.Value.Points > highest)
+					highest = pair.Value.Points;
+			}
+			return highest;
 		}
 
 		/// <summary>
@@ -166,7 +209,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Tick(float deltaTime)
 		{
-			float now = Time.time;
+			// The table's own clock, advanced only here. See the Clock field for why.
+			Clock += deltaTime;
+
+			float now = Clock;
 			float decay = DecayRate * deltaTime;
 			staleKeys.Clear();
 
@@ -240,8 +286,34 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Removes a single character's entry, returning it to the pool. No-op when the character
+		/// is not tracked — importantly, it does not create an entry in order to remove it.
+		/// </summary>
+		/// <param name="characterId">The character whose threat should be forgotten.</param>
+		/// <returns>True if an entry was removed.</returns>
+		public bool RemoveEntry(long characterId)
+		{
+			if (!table.TryGetValue(characterId, out AggressionEntry entry))
+				return false;
+
+			table.Remove(characterId);
+			entry.Reset();
+			entryPool.Push(entry);
+			return true;
+		}
+
+		/// <summary>
 		/// Clears all entries and returns them to the pool.
 		/// </summary>
+		/// <summary>
+		/// Resets the table and its clock for a pooled NPC being reused.
+		/// </summary>
+		public void Reset()
+		{
+			Clear();
+			Clock = 0f;
+		}
+
 		public void Clear()
 		{
 			foreach (var kvp in table)

@@ -111,6 +111,34 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Replaces the race template this character derives its initial factions from.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Spawn-time only. The race template is read lazily — nothing is derived from it during
+		/// initialisation — so assigning it before <c>ServerManager.Spawn</c> takes effect cleanly.
+		/// Calling it on an already-spawned character would leave the alliance tables it has
+		/// already built disagreeing with its new race, which is why there is no plain setter.
+		/// </para>
+		/// <para>
+		/// Exists so one NPC prefab can be hostile at one spawner and neutral at another without
+		/// duplicating the prefab — and a duplicated prefab is a second object-pool bucket and a
+		/// second fixed slice of the map's memory budget.
+		/// </para>
+		/// </remarks>
+		/// <param name="raceTemplate">The race template to adopt. Ignored when null.</param>
+		public void SetRaceTemplateOnSpawn(RaceTemplate raceTemplate)
+		{
+			if (raceTemplate == null)
+			{
+				return;
+			}
+
+			raceTemplateID = raceTemplate.ID;
+			cachedRaceTemplate = raceTemplate;
+		}
+
 #if UNITY_SERVER
 		/// <summary>
 		/// Subscribes to network tick updates used to batch and flush dirty faction state.

@@ -236,8 +236,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _remoteServerTimeout: 0
   _remoteServerTimeoutDuration: 60
-  _changeFrameRate: 1
-  _frameRate: 60
+  _changeFrameRate: 0
+  _frameRate: 500
 --- !u!114 &567623046510845244
 MonoBehaviour:
   m_ObjectHideFlags: 0

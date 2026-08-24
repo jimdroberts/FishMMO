@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
 using FishNet.Utility.Performance;
@@ -81,6 +81,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Summon = 3,
 			Release = 4,
 			LoadPet = 5,
+			Attack = 6,
+			Stance = 7,
 		}
 
 		/// <summary>
@@ -111,6 +113,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetSummonBroadcast>(OnPetSummonBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PetAttackBroadcast>(OnPetAttackBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PetStanceBroadcast>(OnPetStanceBroadcastReceived, true);
 
 			// Ability events
 			AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
@@ -152,6 +156,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<PetSummonBroadcast>(OnPetSummonBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PetAttackBroadcast>(OnPetAttackBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PetStanceBroadcast>(OnPetStanceBroadcastReceived);
 
 			// Ability events
 			AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
@@ -253,11 +259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (petController.Pet.TryGet(out IAIController aiController))
-				{
-					aiController.Home = petController.Character.Transform.position;
-					aiController.Target = petController.Character.Transform;
-				}
+				SetMovementOrder(conn, petController, PetMovementOrder.Follow);
 			}
 			finally
 			{
@@ -294,16 +296,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (petController.Pet.TryGet(out IAIController aiController))
-				{
-					aiController.Home = petController.Pet.Transform.position;
-					aiController.Target = null;
-				}
+				SetMovementOrder(conn, petController, PetMovementOrder.Stay);
 			}
 			finally
 			{
 				EndIngressGuard(guardKey);
 			}
+		}
+
+		/// <summary>
+		/// Applies a movement order to the pet and confirms it to the owner.
+		/// </summary>
+		/// <remarks>
+		/// Follow and Stay used to be expressed by writing <c>IAIController.Target</c> — the
+		/// combat target — which conflated "who I am escorting" with "who I am killing". Stay set
+		/// it to null, and the pet's idle state bailed out on a null target, so a pet told to stay
+		/// never moved again even after being told to follow. Orders now live on the pet.
+		/// </remarks>
+		/// <param name="conn">The owning connection to confirm to.</param>
+		/// <param name="petController">The owner's pet controller.</param>
+		/// <param name="order">The order to apply.</param>
+		private void SetMovementOrder(NetworkConnection conn, IPetController petController, PetMovementOrder order)
+		{
+			Pet pet = petController.Pet;
+			if (pet == null)
+			{
+				return;
+			}
+
+			pet.MovementOrder = order;
+			petController.MovementOrder = order;
+
+			if (pet.TryGet(out IAIController aiController))
+			{
+				if (order == PetMovementOrder.Stay)
+				{
+					// Hold this spot: the pet's leash anchor becomes where it is standing.
+					aiController.Home = pet.Transform.position;
+				}
+				else if (petController.Character != null)
+				{
+					aiController.Home = petController.Character.Transform.position;
+				}
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new PetMovementOrderBroadcast() { MovementOrder = order }, true, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -379,10 +416,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Capture immutable data for the async path
+				// Capture immutable data for the async path. CaptureKnownAbilities first, so
+				// abilities granted at summon time from the PetAbilityTemplate are persisted
+				// rather than silently lost on the next log in.
+				petController.Pet.CaptureKnownAbilities();
+
 				long characterID = petController.Character.ID;
 				int templateID = petController.Pet.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
-				List<int> abilities = petController.Pet.PetAbilityIDs != null ? new List<int>(petController.Pet.PetAbilityIDs) : new List<int>();
+				List<int> abilities = new List<int>(petController.Pet.PetAbilityIDs);
 
 				if (petController.Pet != null &&
 					petController.Pet.NetworkObject.IsSpawned)
@@ -391,6 +432,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				petController.Pet.PetOwner = null;
 				petController.Pet = null;
+				petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
 
 				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 
@@ -400,6 +442,201 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			finally
 			{
 				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Handles pet attack broadcast: sends the pet at whatever the owner is currently targeting.
+		/// </summary>
+		/// <remarks>
+		/// The target is read from the owner's own <see cref="ITargetController"/> rather than
+		/// taken from the message, so a client cannot name an arbitrary entity as its pet's
+		/// victim. The target is then re-validated here: alive, not the owner, not the pet, and
+		/// hostile by faction.
+		/// </remarks>
+		private void OnPetAttackBroadcastReceived(NetworkConnection conn, PetAttackBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Attack, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null || petController.Pet == null)
+				{
+					// no pet exists
+					return;
+				}
+
+				if (!player.TryGet(out ITargetController targetController))
+				{
+					return;
+				}
+
+				Transform targetTransform = targetController.Current.Target;
+				if (targetTransform == null)
+				{
+					return;
+				}
+
+				ICharacter target = targetTransform.GetComponent<ICharacter>();
+				if (!IsValidPetTarget(petController, player, target))
+				{
+					return;
+				}
+
+				CommandPetAttack(petController.Pet, target);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Handles a stance change request from the owner.
+		/// </summary>
+		private void OnPetStanceBroadcastReceived(NetworkConnection conn, PetStanceBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter player = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (player == null || !CharacterStateValidation.CanAct(player))
+				return;
+
+			// Reject values outside the enum rather than casting a hostile byte straight in.
+			if (!Enum.IsDefined(typeof(PetStance), msg.Stance))
+			{
+				return;
+			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.Stance, out long guardKey))
+			{
+				return;
+			}
+
+			try
+			{
+				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
+				if (petController == null || petController.Pet == null)
+				{
+					// no pet exists
+					return;
+				}
+
+				petController.Pet.Stance = msg.Stance;
+				petController.Stance = msg.Stance;
+
+				// A pet dropped to Passive stops what it is doing.
+				if (msg.Stance == PetStance.Passive)
+				{
+					RecallPet(petController.Pet);
+				}
+
+				Server.NetworkWrapper.Broadcast(conn, new PetStanceBroadcast() { Stance = msg.Stance }, true, Channel.Reliable);
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// Returns true when a character is a legal thing to send a pet at.
+		/// </summary>
+		/// <param name="petController">The owner's pet controller.</param>
+		/// <param name="owner">The pet's owner.</param>
+		/// <param name="target">The candidate target.</param>
+		/// <returns>True if the pet may attack the candidate.</returns>
+		private static bool IsValidPetTarget(IPetController petController, IPlayerCharacter owner, ICharacter target)
+		{
+			if (target == null || target == owner)
+			{
+				return false;
+			}
+
+			// Never let a player order their pet onto itself.
+			if (petController.Pet != null && ReferenceEquals(target, petController.Pet))
+			{
+				return false;
+			}
+
+			if (!target.TryGet(out ICharacterDamageController damageController) || !damageController.IsAlive)
+			{
+				return false;
+			}
+
+			// Faction gate: the pet copies its owner's factions at summon time, so asking the
+			// pet's own faction controller gives the same answer the AI would give itself.
+			if (petController.Pet != null &&
+				petController.Pet.TryGet(out IFactionController petFaction) &&
+				target.TryGet(out IFactionController targetFaction) &&
+				targetFaction.GetAllianceLevel(petFaction) != FactionAllianceLevel.Enemy)
+			{
+				return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Points a pet at a target and pushes it into its attacking state.
+		/// </summary>
+		/// <param name="pet">The pet to command.</param>
+		/// <param name="target">The character to attack.</param>
+		private static void CommandPetAttack(Pet pet, ICharacter target)
+		{
+			if (!pet.TryGet(out IAIController aiController))
+			{
+				return;
+			}
+
+			aiController.Target = target.Transform;
+
+			// An explicit order overrides a Stay: the pet cannot fight from its owner's heel.
+			pet.MovementOrder = PetMovementOrder.Follow;
+
+			if (aiController.AttackingState != null)
+			{
+				aiController.ChangeState(aiController.AttackingState);
+			}
+		}
+
+		/// <summary>
+		/// Breaks a pet off whatever it is doing and returns it to its owner.
+		/// </summary>
+		/// <param name="pet">The pet to recall.</param>
+		private static void RecallPet(Pet pet)
+		{
+			if (pet == null || !pet.TryGet(out IAIController aiController))
+			{
+				return;
+			}
+
+			aiController.Target = null;
+
+			if (pet.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.Interrupt(null);
+			}
+
+			if (aiController.IdleState != null)
+			{
+				aiController.ChangeState(aiController.IdleState);
 			}
 		}
 
@@ -503,24 +740,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			pet.PetOwner = owner;
 			pet.PetAbilityTemplate = petAbilityTemplate;
-			if (abilities != null)
-			{
-				pet.PetAbilityIDs = abilities;
-			}
-			petController.Pet = pet;
+			pet.Stance = petController.Stance;
+			pet.MovementOrder = PetMovementOrder.Follow;
+			petController.MovementOrder = PetMovementOrder.Follow;
 
-			if (pet.TryGet(out IAIController aiController))
-			{
-				aiController.Initialize(aiInitPosition);
-				aiController.Target = owner.Transform;
-			}
+			/* Build the ability list before the spawn: Pet.OnStartServer teaches whatever is in
+			 * PetAbilityIDs, and OnStartServer runs inside ServerManager.Spawn below. */
+			pet.PetAbilityIDs = BuildPetAbilityIDs(petAbilityTemplate, abilities);
+
+			petController.Pet = pet;
 
 			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, owner.GameObject.scene);
 
 			// Ensure the game object is active, pooled objects are disabled
 			pet.GameObject.SetActive(true);
 
-			ServerManager.Spawn(pet.GameObject, owner.NetworkObject.Owner, owner.GameObject.scene);
+			/* Initialise the brain only once the GameObject is active and in its final scene.
+			 * Initialize enters the pet's first state, and a state's Enter touches the
+			 * NavMeshAgent (speed, isStopped, destination). Doing that on a pooled object that is
+			 * still disabled and not yet placed on a NavMesh makes Unity reject each call with an
+			 * "agent is not active / not on a NavMesh" error. */
+			if (pet.TryGet(out IAIController aiController))
+			{
+				/* The pet's home is where it stands, not the world origin. The database load path
+				 * passed Vector3.zero here, so a restored pet leashed to (0,0,0) and any state
+				 * with leashing enabled marched it across the map to the map's corner. */
+				aiController.Initialize(aiInitPosition);
+
+				// Follow, do not fight: Target means "what I am attacking" to the whole AI.
+				aiController.Target = null;
+			}
+
+			/* Spawned WITHOUT an owning connection, deliberately.
+			 *
+			 * A pet's brain runs on the server, and CharacterPredictionController only produces
+			 * replicate input on the peer with input authority. Handing the pet to the summoner's
+			 * connection made the summoner's client the owner, so the client was expected to
+			 * supply the input for a brain that does not run there and the server's own decisions
+			 * were discarded — the pet could never cast anything. Nothing in the pet system reads
+			 * the pet's Owner, and its NetworkTransform is server-authoritative, so server
+			 * ownership costs nothing and makes the pet behave exactly like any other NPC. */
+			ServerManager.Spawn(pet.GameObject, null, owner.GameObject.scene);
 
 			if (pet.TryGet(out IFactionController petFactionController))
 			{
@@ -530,7 +790,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			Server.NetworkWrapper.Broadcast(broadcastTarget, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
+			// Wire the defensive-stance hook so the pet answers when its owner is attacked.
+			SubscribeOwnerAttacked(petController);
+
+			Server.NetworkWrapper.Broadcast(broadcastTarget, new PetAddBroadcast()
+			{
+				ID = pet.ID,
+				Stance = pet.Stance,
+				MovementOrder = pet.MovementOrder,
+			}, true, Channel.Reliable);
 
 			// Increment achievement for summoning a pet
 			if (PetSummonAchievementTemplate != null &&
@@ -599,7 +867,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						null, spawnPosition, character.Transform.rotation, null, true);
 
 					List<int> abilities = petData.Abilities != null ? new List<int>(petData.Abilities) : new List<int>();
-					SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, Vector3.zero, abilities, conn);
+
+					/* spawnPosition, not Vector3.zero. This is the AI's home, and passing the origin
+					 * leashed every database-restored pet to world (0,0,0): the moment it entered
+					 * any state with leashing enabled it walked — or warped — to the corner of the
+					 * map. The summon path always passed a real position; only this one did not. */
+					SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, spawnPosition, abilities, conn);
 				});
 			}
 			catch (Exception ex)
@@ -636,6 +909,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				currentHealth = health.CurrentValue;
 			}
 
+			petController.Pet?.CaptureKnownAbilities();
+
 			// Capture immutable data for the async path
 			long characterID = character.ID;
 			int templateID = petController.Pet?.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
@@ -647,6 +922,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
 			}
+
+			/* Drop the reference. Leaving it set meant that after a pet died, the owner's
+			 * controller still pointed at a despawned, pooled object — so a Summon or Follow
+			 * command would happily warp and re-task a pet that no longer existed. */
+			if (petController.Pet != null)
+			{
+				petController.Pet.PetOwner = null;
+				petController.Pet = null;
+			}
+			petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
 
 			// Async DB save, keyed by characterID to serialize with other pet ops for the same character
 			EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
@@ -766,6 +1051,100 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, spawnPosition, caster.Transform.rotation, null, true);
 			SpawnAndInitializePet(caster, petController, petAbilityTemplate, nob, spawnPosition, null, caster.Owner);
+		}
+
+		/// <summary>
+		/// Merges the abilities restored from the database with the ones the summoning spell
+		/// grants, into the list <see cref="Pet.OnStartServer"/> will learn from.
+		/// </summary>
+		/// <param name="petAbilityTemplate">The summoning spell's pet template.</param>
+		/// <param name="persisted">Ability template IDs restored from the database, or null on a fresh summon.</param>
+		/// <returns>A new list of ability template IDs, never null.</returns>
+		private static List<int> BuildPetAbilityIDs(PetAbilityTemplate petAbilityTemplate, List<int> persisted)
+		{
+			List<int> result = persisted != null ? new List<int>(persisted) : new List<int>();
+
+			if (petAbilityTemplate?.PetAbilities != null)
+			{
+				for (int i = 0; i < petAbilityTemplate.PetAbilities.Count; ++i)
+				{
+					AbilityTemplate template = petAbilityTemplate.PetAbilities[i];
+					if (template == null || result.Contains(template.ID))
+					{
+						continue;
+					}
+					result.Add(template.ID);
+				}
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// Subscribes the pet system to "my owner was attacked" for a defensive pet.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent: the handler is removed before being added, because a player can summon
+		/// several pets over one session and each summon runs through here.
+		/// </remarks>
+		/// <param name="petController">The owner's pet controller.</param>
+		private void SubscribeOwnerAttacked(IPetController petController)
+		{
+			petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
+			petController.OnOwnerAttacked += PetController_OnOwnerAttacked;
+		}
+
+		/// <summary>
+		/// Sends a defensive or aggressive pet at whoever just attacked its owner.
+		/// </summary>
+		/// <remarks>
+		/// A passive pet ignores this entirely — that is what passive means. A pet already in
+		/// combat is left alone rather than being yanked onto a new target every time its owner
+		/// takes a hit.
+		/// </remarks>
+		/// <param name="petController">The pet controller whose owner was attacked.</param>
+		/// <param name="attacker">The character that attacked the owner.</param>
+		private void PetController_OnOwnerAttacked(IPetController petController, ICharacter attacker)
+		{
+			if (petController == null || attacker == null)
+			{
+				return;
+			}
+
+			Pet pet = petController.Pet;
+			if (pet == null)
+			{
+				return;
+			}
+
+			if (pet.Stance == PetStance.Passive)
+			{
+				return;
+			}
+
+			IPlayerCharacter owner = petController.Character as IPlayerCharacter;
+			if (owner == null)
+			{
+				return;
+			}
+
+			if (!pet.TryGet(out IAIController aiController))
+			{
+				return;
+			}
+
+			// Already fighting something — do not thrash the pet's target.
+			if (aiController.CurrentState != null && aiController.CurrentState == aiController.AttackingState)
+			{
+				return;
+			}
+
+			if (!IsValidPetTarget(petController, owner, attacker))
+			{
+				return;
+			}
+
+			CommandPetAttack(pet, attacker);
 		}
 
 		// Uses ServerBehaviour.TryEnqueueAsyncWork

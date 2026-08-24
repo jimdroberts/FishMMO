@@ -1,4 +1,4 @@
-using FishMMO.Shared.Core;
+﻿using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -64,11 +64,10 @@ namespace FishMMO.Shared
 				TargetVarietyChance = varietyChance,
 			};
 
-			// These global events are NOT replay-suppressed by CharacterDamageController.
-			// We guard against duplicate processing during prediction replay below.
-			ICharacterDamageController.OnDamaged += OnCharacterDamaged;
-			ICharacterDamageController.OnHealed += OnCharacterHealed;
-			ICharacterDamageController.OnKilled += OnCharacterKilled;
+			/* Registered with the shared dispatcher rather than subscribing to the global events
+			 * directly. Per-NPC subscriptions turned every single hit in the scene into one
+			 * delegate call per NPC alive, of which at most one was relevant. */
+			AggressionDispatcher.Register(character, this);
 		}
 
 		/// <summary>
@@ -76,12 +75,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Destroy()
 		{
-			ICharacterDamageController.OnDamaged -= OnCharacterDamaged;
-			ICharacterDamageController.OnHealed -= OnCharacterHealed;
-			ICharacterDamageController.OnKilled -= OnCharacterKilled;
+			AggressionDispatcher.Unregister(character);
 
 			Controller?.Clear();
 		}
+
+		/// <summary>
+		/// True when this NPC is tracking anyone at all.
+		/// </summary>
+		/// <remarks>
+		/// Read by <see cref="AggressionDispatcher"/> to skip uninvolved NPCs without entering a
+		/// handler. An out-of-combat NPC is the common case, so this needs to stay a field read.
+		/// </remarks>
+		public bool HasAggression => Controller != null && Controller.HasAggression;
 
 		/// <summary>
 		/// Decays threat entries. Call once per tick or frame.
@@ -93,7 +99,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Clear()
 		{
-			Controller?.Clear();
+			// Reset rather than Clear: a leash or a pool reuse should not leave the table's
+			// staleness clock carrying the previous engagement's elapsed time.
+			Controller?.Reset();
 			TargetReevaluationTimer = 0f;
 		}
 
@@ -107,9 +115,15 @@ namespace FishMMO.Shared
 			Controller.RecordResourceSpent(characterId, amount);
 		}
 
-		private void OnCharacterDamaged(ICharacter attacker, ICharacter defender, int amount, DamageAttributeTemplate damageAttribute)
+		/// <summary>
+		/// Records damage this NPC took. Called by <see cref="AggressionDispatcher"/>, which has
+		/// already established that this NPC is the defender.
+		/// </summary>
+		/// <param name="attacker">The character that dealt the damage.</param>
+		/// <param name="amount">Damage dealt.</param>
+		public void HandleDamaged(ICharacter attacker, int amount)
 		{
-			if (defender != character || attacker == null || attacker == character)
+			if (attacker == null || attacker == character)
 				return;
 			if (!IsSpawnedAndAuthoritative()) return;
 
@@ -120,7 +134,13 @@ namespace FishMMO.Shared
 				OnCombatInitiated?.Invoke(attacker);
 		}
 
-		private void OnCharacterHealed(ICharacter healer, ICharacter healed, int amount)
+		/// <summary>
+		/// Records threat for a heal this NPC witnessed on one of its enemies.
+		/// </summary>
+		/// <param name="healer">The healing character.</param>
+		/// <param name="healed">The healed character.</param>
+		/// <param name="amount">Amount healed.</param>
+		public void HandleHealed(ICharacter healer, ICharacter healed, int amount)
 		{
 			if (healer == null || healer == character) return;
 			if (!IsSpawnedAndAuthoritative()) return;
@@ -133,12 +153,25 @@ namespace FishMMO.Shared
 				Controller.RecordHealing(healer.ID, amount);
 		}
 
-		private void OnCharacterKilled(ICharacter killer, ICharacter victim)
+		/// <summary>
+		/// Forgets a character that has died.
+		/// </summary>
+		/// <param name="victim">The character that died.</param>
+		public void HandleKilled(ICharacter victim)
 		{
 			if (victim == null || Controller == null) return;
 			if (!IsSpawnedAndAuthoritative()) return;
 
-			Controller.AddPoints(victim.ID, -99999f);
+			/* Only drop threat for someone this NPC was actually tracking.
+			 *
+			 * This is a global event: it fires for every death anywhere in the scene. The previous
+			 * AddPoints call ran through GetOrCreate, so each unrelated kill inserted a fresh
+			 * zero-point entry into this NPC's threat table. Two things then broke: HasAggression
+			 * became true for an NPC that had never been touched, which changed how PickTarget
+			 * behaves; and the empty-to-non-empty edge in OnCharacterDamaged had already been
+			 * consumed, so the *real* first hit no longer fired OnCombatInitiated and the NPC did
+			 * not enter combat until its next physics sweep. */
+			Controller.RemoveEntry(victim.ID);
 		}
 
 		/// <summary>

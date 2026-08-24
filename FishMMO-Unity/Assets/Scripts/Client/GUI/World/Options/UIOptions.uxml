@@ -34,6 +34,10 @@
                     <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
+                    <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
+                    <ui:DropdownField name="framerate-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="VSync" class="fish-label options-row-label" />
                     <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
                 </ui:VisualElement>

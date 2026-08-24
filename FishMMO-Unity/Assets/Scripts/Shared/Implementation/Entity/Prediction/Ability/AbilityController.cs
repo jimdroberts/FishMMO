@@ -288,6 +288,8 @@ namespace FishMMO.Shared
 		{
 			base.OnStartNetwork();
 
+			predictionController = GetComponent<CharacterPredictionController>();
+
 			// Resolve component caches — these never change during gameplay.
 			Character.TryGet(out cachedBuffController);
 			Character.TryGet(out cachedCooldownController);
@@ -427,6 +429,22 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public int Order => 100;
 
+		/// <summary>
+		/// Cached <see cref="CharacterPredictionController"/> used to resolve which peer writes
+		/// this character's replicate input. Server-driven AI characters (monsters and pets)
+		/// answer "the server"; player characters answer "the owning client".
+		/// </summary>
+		private CharacterPredictionController predictionController;
+
+		/// <summary>
+		/// True when this peer produces this character's ability input for the current tick.
+		/// Falls back to <see cref="NetworkBehaviour.IsOwner"/> when no prediction controller is
+		/// present, which preserves the original player-only behaviour.
+		/// </summary>
+		private bool HasInputAuthority => predictionController != null
+			? predictionController.HasInputAuthority
+			: base.IsOwner;
+
 		/// <inheritdoc/>
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
@@ -447,7 +465,11 @@ namespace FishMMO.Shared
 				return default;
 			}
 
-			if (!base.IsOwner)
+			// AI characters are driven by the server-side brain, which calls Activate() /
+			// Release() / Interrupt() directly. Without this the queued ability was never
+			// drained into the replicate stream: AbilityQueued latched true forever and every
+			// attacking state stopped the agent and waited on a cast that could never start.
+			if (!HasInputAuthority)
 			{
 				return default;
 			}

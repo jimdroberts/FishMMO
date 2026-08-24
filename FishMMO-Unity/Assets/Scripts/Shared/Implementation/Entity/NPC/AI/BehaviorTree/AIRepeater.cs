@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -37,13 +37,13 @@ namespace FishMMO.Shared
 			if (RepeatCount <= 0)
 			{
 				// Infinite repeat — run child once and always return Running.
-				Child.Evaluate(controller);
+				EvaluateChild(Child, controller);
 				return AINodeResult.Running;
 			}
 
 			for (int i = 0; i < RepeatCount; i++)
 			{
-				AINodeResult result = Child.Evaluate(controller);
+				AINodeResult result = EvaluateChild(Child, controller);
 
 				if (result == AINodeResult.Failure)
 					return AINodeResult.Failure;

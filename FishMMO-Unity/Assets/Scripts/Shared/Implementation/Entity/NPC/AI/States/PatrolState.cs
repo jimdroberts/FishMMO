@@ -1,36 +1,64 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// AI state for patrolling behavior. Handles waypoint selection and transitions for NPCs.
+	/// Waypoint patrol. Walks the spawner-supplied waypoint ring in order.
 	/// </summary>
 	[CreateAssetMenu(fileName = "New AI Patrol State", menuName = "FishMMO/Character/NPC/AI/Patrol State", order = 0)]
 	public class PatrolState : BaseAIState
 	{
 		/// <summary>
-		/// Called when entering the Patrol state. Picks the nearest waypoint to start patrolling.
+		/// How close the NPC must get to a waypoint before moving on to the next one.
+		/// </summary>
+		[Tooltip("Distance from a waypoint that counts as reaching it.")]
+		public float WaypointTolerance = 1.5f;
+
+		/// <summary>
+		/// Consecutive unreachable waypoints tolerated before the NPC gives up on patrolling.
+		/// </summary>
+		/// <remarks>
+		/// Guards against a waypoint ring where every entry has drifted off the NavMesh: without a
+		/// bound the NPC would advance through the whole ring every tick forever, never moving.
+		/// </remarks>
+		[Tooltip("Consecutive unreachable waypoints before the NPC abandons its patrol.")]
+		public int MaxSkippedWaypoints = 4;
+
+		/// <summary>
+		/// Starts patrolling from the nearest waypoint.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
 		public override void Enter(AIController controller)
 		{
-			controller.PickNearestWaypoint();
+			controller.Resume();
+			controller.SubStateTimer = 0f;
+
+			if (!controller.PickNearestWaypoint())
+			{
+				// No usable waypoints — patrolling is not possible for this NPC.
+				controller.TransitionToIdleState();
+			}
 		}
 
 		/// <summary>
-		/// Called when exiting the Patrol state. Can be used for cleanup.
+		/// Called when exiting the Patrol state.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
 		public override void Exit(AIController controller)
 		{
-			// Cleanup if needed
 		}
 
 		/// <summary>
-		/// Called every frame to update the Patrol state. Handles randomization and waypoint transitions.
+		/// Advances to the next waypoint on arrival, and recovers when a waypoint cannot be reached.
 		/// </summary>
+		/// <remarks>
+		/// The previous arrival test was <c>!pathPending &amp;&amp; remainingDistance &lt; 1</c>,
+		/// which is also exactly what an agent with no path at all reports. A patrol whose first
+		/// waypoint failed to sample onto the NavMesh therefore "arrived" at every waypoint in the
+		/// ring, once per tick, without taking a single step.
+		/// </remarks>
 		/// <param name="controller">The AI controller.</param>
-		/// <param name="deltaTime">Frame time.</param>
+		/// <param name="deltaTime">Seconds since the previous AI tick.</param>
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
 			if (controller.RandomizeState)
@@ -39,11 +67,40 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Try to transition to the next waypoint if close enough
-			if (!controller.Agent.pathPending &&
-				controller.Agent.remainingDistance < 1.0f)
+			switch (controller.GetMovementProgress(deltaTime, WaypointTolerance))
 			{
-				controller.TransitionToNextWaypoint();
+				case AIMovementProgress.Arrived:
+					controller.SubStateTimer = 0f;
+					AdvanceWaypoint(controller);
+					return;
+
+				case AIMovementProgress.Stuck:
+				case AIMovementProgress.Idle:
+					// Unreachable or never started. Skip it, but do not skip forever.
+					controller.SubStateTimer += 1f;
+					if (MaxSkippedWaypoints > 0 && controller.SubStateTimer >= MaxSkippedWaypoints)
+					{
+						controller.ClearPath();
+						controller.TransitionToIdleState();
+						return;
+					}
+					AdvanceWaypoint(controller);
+					return;
+
+				default:
+					return;
+			}
+		}
+
+		/// <summary>
+		/// Moves to the next waypoint, dropping to idle when there are none.
+		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		private static void AdvanceWaypoint(AIController controller)
+		{
+			if (!controller.TransitionToNextWaypoint())
+			{
+				controller.TransitionToIdleState();
 			}
 		}
 	}

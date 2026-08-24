@@ -16,10 +16,17 @@
             </ui:VisualElement>
 
             <ui:VisualElement name="pet-commands" class="pet-commands">
+                <ui:Button name="pet-attack" text="Attack" class="fish-button pet-cmd" />
                 <ui:Button name="pet-follow" text="Follow" class="fish-button pet-cmd" />
                 <ui:Button name="pet-stay" text="Stay" class="fish-button pet-cmd" />
                 <ui:Button name="pet-summon" text="Summon" class="fish-button pet-cmd" />
                 <ui:Button name="pet-release" text="Release" class="fish-button fish-button--danger pet-cmd" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="pet-stances" class="pet-commands pet-stances">
+                <ui:Button name="pet-stance-passive" text="Passive" class="fish-button pet-cmd pet-stance" />
+                <ui:Button name="pet-stance-defensive" text="Defensive" class="fish-button pet-cmd pet-stance" />
+                <ui:Button name="pet-stance-aggressive" text="Aggressive" class="fish-button pet-cmd pet-stance" />
             </ui:VisualElement>
         </ui:VisualElement>
 

@@ -99,3 +99,23 @@
     margin-bottom: 3px;
     flex-shrink: 0;
 }
+
+/*
+    Stances are a three-way radio, not four independent commands, so they get their
+    own row of thirds and a persistent "this is the current one" highlight.
+*/
+.pet-stances {
+    border-top-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.08);
+    padding-top: 4px;
+}
+
+.pet-stance {
+    width: 31%;
+    font-size: 10px;
+}
+
+.pet-stance--active {
+    background-color: rgba(120, 190, 255, 0.28);
+    border-color: rgba(150, 210, 255, 0.85);
+}

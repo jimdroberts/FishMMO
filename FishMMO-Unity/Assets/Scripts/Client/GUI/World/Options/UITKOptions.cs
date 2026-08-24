@@ -94,6 +94,12 @@ namespace FishMMO.Client
 
 		/// <summary>Configuration key for the VSync setting.</summary>
 		private const string VSyncKey = "VSync";
+
+		/// <summary>Name of the frame rate limit dropdown element in the UXML.</summary>
+		private const string FRAMERATE_DROPDOWN_NAME = "framerate-dropdown";
+
+		/// <summary>Configuration key for the frame rate limit setting.</summary>
+		private const string FrameRateKey = "Frame Rate Limit";
 		/// <summary>Configuration key for the brightness setting.</summary>
 		private const string BrightnessKey = "Brightness";
 		/// <summary>Configuration key for the resolution width setting.</summary>
@@ -187,6 +193,22 @@ namespace FishMMO.Client
 			"Tooltip Label",
 			"Tooltip Value",
 			"Tooltip Stat",
+		};
+
+		/// <summary>The frame rate limit dropdown control.</summary>
+		private DropdownField frameRateDropdown;
+
+		/// <summary>
+		/// Frame rate caps offered to the player, in frames per second.
+		/// </summary>
+		/// <remarks>
+		/// The full ladder of common rates. Which of them are actually offered is decided in
+		/// <see cref="BuildFrameRateChoices"/> — bounded below by the network tick rate and above
+		/// by what the display can present.
+		/// </remarks>
+		private static readonly int[] frameRateChoices =
+		{
+			30, 60, 75, 90, 120, 144, 165, 180, 240, 300, 360, 480, 500
 		};
 
 		/// <summary>The VSync toggle control.</summary>
@@ -307,9 +329,12 @@ namespace FishMMO.Client
 			snapSlider = Root.Q<Slider>(SNAP_SLIDER_NAME);
 			snapValueLabel = Root.Q<Label>(SNAP_VALUE_NAME);
 
+			frameRateDropdown = Root.Q<DropdownField>(FRAMERATE_DROPDOWN_NAME);
+
 			InitializeVSync();
 			InitializeBrightness();
 			InitializeDisplaySettings();
+			InitializeFrameRateLimit();
 			InitializeInterfaceSettings();
 			InitializeGameplayToggles();
 			InitializeColorSettings();
@@ -1250,6 +1275,127 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Binds the frame rate limit dropdown and applies the saved value.
+		/// </summary>
+		/// <remarks>
+		/// Applied at start-up, not merely displayed. The saved preference used to be read only to
+		/// position a dropdown, so a player who had chosen a cap got the bootstrap default until
+		/// they reopened Options and pressed Apply — every session.
+		/// </remarks>
+		private void InitializeFrameRateLimit()
+		{
+			if (frameRateDropdown == null)
+			{
+				Log.Error("UITKOptions", "Frame rate dropdown is missing.");
+				return;
+			}
+
+			List<int> choices = BuildFrameRateChoices();
+			List<string> labels = new List<string>(choices.Count);
+			for (int i = 0; i < choices.Count; ++i)
+			{
+				labels.Add(choices[i] + " FPS");
+			}
+
+			frameRateDropdown.choices = labels;
+
+			int saved = ResolveSavedFrameRate(choices);
+			frameRateDropdown.index = Mathf.Max(0, choices.IndexOf(saved));
+
+			Client.ApplyTargetFrameRate(saved);
+
+			frameRateDropdown.RegisterValueChangedCallback(evt =>
+			{
+				int index = frameRateDropdown.index;
+				if (index < 0 || index >= choices.Count)
+				{
+					return;
+				}
+
+				int selected = choices[index];
+				Configuration.GlobalSettings.Set(FrameRateKey, selected);
+				Client.ApplyTargetFrameRate(selected);
+			});
+		}
+
+		/// <summary>
+		/// Builds the selectable frame rate caps, dropping any below the tick rate.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The floor is the network tick rate, not a cosmetic minimum: FishNet derives ticks from
+		/// the update loop, so a frame rate below the tick rate cannot deliver them on schedule
+		/// and the client falls behind the server's timeline. Offering such a value would let a
+		/// player break their own connection from a settings menu.
+		/// </para>
+		/// <para>
+		/// The ceiling is the display's fastest mode. Frames produced faster than the panel can
+		/// present them are discarded at scan-out, so offering them would only sell the player
+		/// heat and fan noise.
+		/// </para>
+		/// <para>
+		/// The monitor's own rate is always included even when it is not one of the standard
+		/// ladder values — 165 Hz and 59.94 Hz panels both exist, and the player should be able to
+		/// pick their actual refresh rate rather than the nearest round number below it.
+		/// </para>
+		/// </remarks>
+		/// <returns>The frame rate caps to offer, ascending.</returns>
+		private static List<int> BuildFrameRateChoices()
+		{
+			int minimum = Client.ResolveMinimumFrameRate();
+			int maximum = Mathf.Max(minimum, Client.ResolveMaximumFrameRate());
+
+			List<int> choices = new List<int>(frameRateChoices.Length + 1);
+			for (int i = 0; i < frameRateChoices.Length; ++i)
+			{
+				int rate = frameRateChoices[i];
+				if (rate >= minimum && rate <= maximum)
+				{
+					choices.Add(rate);
+				}
+			}
+
+			// The panel's exact rate, when the ladder does not already contain it.
+			if (!choices.Contains(maximum))
+			{
+				choices.Add(maximum);
+				choices.Sort();
+			}
+
+			// Never present an empty dropdown, whatever the display and tick rate report.
+			if (choices.Count == 0)
+			{
+				choices.Add(Mathf.Clamp(minimum, Client.MinimumTargetFrameRate, Client.MaximumTargetFrameRate));
+			}
+
+			return choices;
+		}
+
+		/// <summary>
+		/// Reads the saved frame rate cap, falling back to the display's own refresh rate.
+		/// </summary>
+		/// <remarks>
+		/// A saved value that is no longer offered falls back to the fastest available rather than
+		/// being honoured. That is the case where the player has moved the game to a slower
+		/// monitor, or changed the tick rate: the old number is meaningless on the new hardware,
+		/// and the closest honest answer is the best this display can do.
+		/// </remarks>
+		/// <param name="choices">The available caps, ascending.</param>
+		/// <returns>The cap to apply.</returns>
+		private static int ResolveSavedFrameRate(List<int> choices)
+		{
+			Configuration.GlobalSettings.TryGetInt(FrameRateKey, out int saved, 0);
+
+			if (saved > 0 && choices.Contains(saved))
+			{
+				return saved;
+			}
+
+			// Default to the display's own refresh rate, which is the last (highest) entry.
+			return choices[choices.Count - 1];
+		}
+
+		/// <summary>
 		/// Pushes a display mode to the screen.
 		/// </summary>
 		/// <remarks>
@@ -1262,10 +1408,13 @@ namespace FishMMO.Client
 #if !UNITY_WEBGL
 			Screen.SetResolution(size.x, size.y, mode, rate);
 
-			/* Also cap the render loop. Screen.SetResolution changes the display mode; with
-			 * vSync off it does not limit how fast Unity renders, so without this the client
-			 * still draws as fast as it can and burns a core regardless of this setting. */
-			Client.ApplyTargetFrameRate(Mathf.RoundToInt(ToHz(rate)));
+			/* The render cap is deliberately NOT set from the display refresh rate here.
+			 *
+			 * Display refresh rate and render frame rate are separate settings with separate
+			 * controls, and deriving one from the other capped every player at their monitor's
+			 * rate — so a 144 Hz owner could never reach the 500 FPS the game supports, which is
+			 * exactly what an uncapped competitive player wants. The Frame Rate Limit dropdown
+			 * owns the cap; changing display mode no longer silently overwrites it. */
 #endif
 			/* WebGL is excluded deliberately: the browser drives presentation through
 			 * requestAnimationFrame, and forcing targetFrameRate there causes stutter. */

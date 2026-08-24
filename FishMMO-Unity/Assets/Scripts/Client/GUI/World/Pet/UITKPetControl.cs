@@ -51,6 +51,21 @@ namespace FishMMO.Client
 		/// <summary>Name of the release command button.</summary>
 		private const string RELEASE_BUTTON_NAME = "pet-release";
 
+		/// <summary>Name of the attack command button.</summary>
+		private const string ATTACK_BUTTON_NAME = "pet-attack";
+
+		/// <summary>Name of the passive stance button.</summary>
+		private const string STANCE_PASSIVE_NAME = "pet-stance-passive";
+
+		/// <summary>Name of the defensive stance button.</summary>
+		private const string STANCE_DEFENSIVE_NAME = "pet-stance-defensive";
+
+		/// <summary>Name of the aggressive stance button.</summary>
+		private const string STANCE_AGGRESSIVE_NAME = "pet-stance-aggressive";
+
+		/// <summary>Class applied to the stance button matching the pet's current stance.</summary>
+		private const string STANCE_ACTIVE_CLASS = "pet-stance--active";
+
 		/// <summary>Cached reference to the pet name label element.</summary>
 		private Label nameLabel;
 		/// <summary>Cached reference to the pet health fill element.</summary>
@@ -59,6 +74,22 @@ namespace FishMMO.Client
 		private Label healthText;
 		/// <summary>Cached reference to the pet status badge element.</summary>
 		private Label statusLabel;
+
+		/// <summary>Cached reference to the passive stance button.</summary>
+		private Button passiveButton;
+		/// <summary>Cached reference to the defensive stance button.</summary>
+		private Button defensiveButton;
+		/// <summary>Cached reference to the aggressive stance button.</summary>
+		private Button aggressiveButton;
+
+		/// <summary>
+		/// The stance currently shown. Model, not view — the panel rebuilds its tree on show, so
+		/// the highlighted button has to be reapplied from here rather than left on the elements.
+		/// </summary>
+		private PetStance petStance = PetStance.Defensive;
+
+		/// <summary>The movement order currently shown.</summary>
+		private PetMovementOrder petMovementOrder = PetMovementOrder.Follow;
 
 		/// <summary>
 		/// The pet whose health attribute this panel is currently subscribed to.
@@ -117,12 +148,38 @@ namespace FishMMO.Client
 				release.clicked += OnReleasePet;
 			}
 
+			Button attack = root.Q<Button>(ATTACK_BUTTON_NAME);
+			if (attack != null)
+			{
+				attack.clicked += OnAttackWithPet;
+			}
+
+			passiveButton = root.Q<Button>(STANCE_PASSIVE_NAME);
+			if (passiveButton != null)
+			{
+				passiveButton.clicked += OnStancePassive;
+			}
+
+			defensiveButton = root.Q<Button>(STANCE_DEFENSIVE_NAME);
+			if (defensiveButton != null)
+			{
+				defensiveButton.clicked += OnStanceDefensive;
+			}
+
+			aggressiveButton = root.Q<Button>(STANCE_AGGRESSIVE_NAME);
+			if (aggressiveButton != null)
+			{
+				aggressiveButton.clicked += OnStanceAggressive;
+			}
+
 			/* Static events, and OnStarting re-runs on every tree rebuild. Removing first makes
 			 * the pair idempotent; a bare += would stack a handler per rebuild. */
 			IPetController.OnPetSummoned -= PetController_OnPetSummoned;
 			IPetController.OnPetSummoned += PetController_OnPetSummoned;
 			IPetController.OnPetDestroyed -= PetController_OnPetDestroyed;
 			IPetController.OnPetDestroyed += PetController_OnPetDestroyed;
+			IPetController.OnPetOrdersChanged -= PetController_OnPetOrdersChanged;
+			IPetController.OnPetOrdersChanged += PetController_OnPetOrdersChanged;
 		}
 
 		/// <summary>
@@ -132,6 +189,7 @@ namespace FishMMO.Client
 		{
 			IPetController.OnPetSummoned -= PetController_OnPetSummoned;
 			IPetController.OnPetDestroyed -= PetController_OnPetDestroyed;
+			IPetController.OnPetOrdersChanged -= PetController_OnPetOrdersChanged;
 
 			UnbindPetHealth();
 
@@ -171,6 +229,8 @@ namespace FishMMO.Client
 			petName = "Pet";
 			petHealthFraction = 0.0f;
 			petHealthText = string.Empty;
+			petStance = PetStance.Defensive;
+			petMovementOrder = PetMovementOrder.Follow;
 			ApplyPetState();
 
 			Hide();
@@ -215,8 +275,66 @@ namespace FishMMO.Client
 			}
 			if (statusLabel != null)
 			{
-				statusLabel.text = boundPet != null ? "Active" : string.Empty;
+				statusLabel.text = boundPet != null ? DescribeOrders() : string.Empty;
 			}
+
+			ApplyStanceHighlight();
+		}
+
+		/// <summary>
+		/// Short badge text describing what the pet has been told to do.
+		/// </summary>
+		/// <returns>A label such as "Defensive · Stay".</returns>
+		private string DescribeOrders()
+		{
+			return petMovementOrder == PetMovementOrder.Stay
+				? petStance + " \u00B7 Stay"
+				: petStance.ToString();
+		}
+
+		/// <summary>
+		/// Marks the button matching the current stance and clears the other two.
+		/// </summary>
+		private void ApplyStanceHighlight()
+		{
+			SetStanceActive(passiveButton, petStance == PetStance.Passive);
+			SetStanceActive(defensiveButton, petStance == PetStance.Defensive);
+			SetStanceActive(aggressiveButton, petStance == PetStance.Aggressive);
+		}
+
+		/// <summary>
+		/// Adds or removes the active-stance class on a button.
+		/// </summary>
+		/// <param name="button">The stance button, which may be null before the tree is built.</param>
+		/// <param name="active">Whether this is the current stance.</param>
+		private static void SetStanceActive(Button button, bool active)
+		{
+			if (button == null)
+			{
+				return;
+			}
+			button.EnableInClassList(STANCE_ACTIVE_CLASS, active);
+		}
+
+		/// <summary>
+		/// Refreshes the panel when the server confirms a stance or movement order change.
+		/// </summary>
+		/// <param name="pet">The pet whose orders changed.</param>
+		public void PetController_OnPetOrdersChanged(Pet pet)
+		{
+			/* Static event: it fires for every pet on this client. Only react to ours. */
+			if (Character == null || !Character.TryGet(out IPetController petController))
+			{
+				return;
+			}
+			if (pet != null && !ReferenceEquals(petController.Pet, pet))
+			{
+				return;
+			}
+
+			petStance = petController.Stance;
+			petMovementOrder = petController.MovementOrder;
+			ApplyPetState();
 		}
 
 		/// <summary>
@@ -239,6 +357,8 @@ namespace FishMMO.Client
 
 			boundPet = pet;
 			petName = pet.GameObject != null ? pet.GameObject.name.Replace("(Clone)", string.Empty) : "Pet";
+			petStance = pet.Stance;
+			petMovementOrder = pet.MovementOrder;
 
 			if (pet.CharacterNameLabel != null)
 			{
@@ -348,6 +468,8 @@ namespace FishMMO.Client
 			petName = "Pet";
 			petHealthFraction = 0.0f;
 			petHealthText = string.Empty;
+			petStance = PetStance.Defensive;
+			petMovementOrder = PetMovementOrder.Follow;
 			ApplyPetState();
 
 			Hide();
@@ -398,6 +520,58 @@ namespace FishMMO.Client
 				return;
 			}
 			Client.Broadcast(new PetSummonBroadcast(), Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Orders the pet to attack the player's current target.
+		/// </summary>
+		/// <remarks>
+		/// The target is not sent: the server reads the player's own target controller, so the
+		/// client cannot nominate something it is not actually targeting.
+		/// </remarks>
+		public void OnAttackWithPet()
+		{
+			if (!HasPet())
+			{
+				return;
+			}
+			Client.Broadcast(new PetAttackBroadcast(), Channel.Reliable);
+		}
+
+		/// <summary>Requests the passive stance.</summary>
+		public void OnStancePassive()
+		{
+			RequestStance(PetStance.Passive);
+		}
+
+		/// <summary>Requests the defensive stance.</summary>
+		public void OnStanceDefensive()
+		{
+			RequestStance(PetStance.Defensive);
+		}
+
+		/// <summary>Requests the aggressive stance.</summary>
+		public void OnStanceAggressive()
+		{
+			RequestStance(PetStance.Aggressive);
+		}
+
+		/// <summary>
+		/// Asks the server to change the pet's stance.
+		/// </summary>
+		/// <remarks>
+		/// The panel does not paint the new stance here. It waits for the server's confirming
+		/// <see cref="PetStanceBroadcast"/>, so the highlighted button always reflects what the
+		/// pet is really doing rather than what was last clicked.
+		/// </remarks>
+		/// <param name="stance">The requested stance.</param>
+		private void RequestStance(PetStance stance)
+		{
+			if (!HasPet())
+			{
+				return;
+			}
+			Client.Broadcast(new PetStanceBroadcast() { Stance = stance }, Channel.Reliable);
 		}
 
 		/// <summary>

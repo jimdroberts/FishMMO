@@ -57,6 +57,37 @@ namespace FishMMO.Shared
 		public ObjectSpawnType SpawnType = ObjectSpawnType.Linear;
 
 		/// <summary>
+		/// When true, every prefab this spawner can produce is instantiated into the object pool
+		/// at scene start, up to <see cref="MaxSpawnCount"/> each.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is what makes a map's memory footprint deterministic. Without it the pool fills
+		/// lazily — the first NPC of each kind is instantiated the moment a player walks into range
+		/// — so a freshly loaded map hitches as it is explored and only reaches its true heap size
+		/// once every spawner has fired at least once. Neither behaviour can be planned against.
+		/// </para>
+		/// <para>
+		/// Turn it off for spawners whose prefabs are large and rarely used, where paying the cost
+		/// on demand is preferable to paying it always.
+		/// </para>
+		/// </remarks>
+		[Header("Pooling")]
+		[Tooltip("Instantiate this spawner's prefabs into the pool at scene start for a fixed memory footprint.")]
+		public bool PrewarmPool = true;
+
+		/// <summary>
+		/// Extra instances reserved beyond <see cref="MaxSpawnCount"/>.
+		/// </summary>
+		/// <remarks>
+		/// Covers the window where a corpse is still decaying while its replacement has already
+		/// spawned, which briefly needs more live instances than the spawner's own maximum.
+		/// </remarks>
+		[Tooltip("Extra pooled instances beyond MaxSpawnCount, to cover corpses that have not yet decayed.")]
+		[Min(0)]
+		public int PrewarmHeadroom = 1;
+
+		/// <summary>
 		/// If true, a random respawn time is selected within the minimum and maximum range. Otherwise, the initial respawn time is used.
 		/// </summary>
 		/// <summary>
@@ -143,6 +174,8 @@ namespace FishMMO.Shared
 					Spawnables[i].OnValidate();
 			}
 
+			PrewarmObjectPool();
+
 			InitialSpawnCount = InitialSpawnCount.Clamp(0, MaxSpawnCount);
 			for (int i = 0; i < InitialSpawnCount; ++i)
 			{
@@ -161,6 +194,36 @@ namespace FishMMO.Shared
 
 				// Add a new respawn time
 				SpawnableRespawnTimers.Add(respawnTime);
+			}
+		}
+
+		/// <summary>
+		/// Instantiates this spawner's prefabs into the object pool ahead of time.
+		/// </summary>
+		/// <remarks>
+		/// Reserves <see cref="MaxSpawnCount"/> plus <see cref="PrewarmHeadroom"/> of every prefab
+		/// this spawner can select. <see cref="ObjectSpawnerPool"/> de-duplicates across spawners,
+		/// so ten spawners sharing one prefab reserve the largest single demand rather than ten
+		/// times it.
+		/// </remarks>
+		private void PrewarmObjectPool()
+		{
+			if (!PrewarmPool || NetworkManager == null)
+			{
+				return;
+			}
+
+			int perPrefab = Mathf.Max(1, MaxSpawnCount + PrewarmHeadroom);
+
+			for (int i = 0; i < Spawnables.Count; ++i)
+			{
+				SpawnableSettings settings = Spawnables[i];
+				if (settings == null || settings.NetworkObject == null)
+				{
+					continue;
+				}
+
+				ObjectSpawnerPool.Reserve(NetworkManager, settings.NetworkObject, perPrefab);
 			}
 		}
 
@@ -203,21 +266,37 @@ namespace FishMMO.Shared
 		/// <param name="spawnable">The spawnable object to despawn.</param>
 		public void Despawn(ISpawnable spawnable)
 		{
-			// Remove the spawnable from the spawned dictionary.
-			Spawned.Remove(spawnable.ID);
+			if (spawnable == null)
+			{
+				return;
+			}
 
-			// Get a new respawn time for the object.
+			/* Only schedule a respawn for something this spawner is actually tracking. Despawn can
+			 * be reached twice for one object — a corpse decaying while the death handler also
+			 * fires — and each extra pass used to queue another respawn timer, so a spawner slowly
+			 * accumulated phantom timers and over-spawned once they came due. */
+			if (!Spawned.Remove(spawnable.ID))
+			{
+				return;
+			}
+
+			// GetNextRespawnTime reads the settings, so capture the time before clearing them.
+			// A settings reference can legitimately be null if the object was adopted rather than
+			// spawned here; fall back to the spawner's own initial respawn time.
 			DateTime respawnTime = GetNextRespawnTime(spawnable.SpawnableSettings);
-
-			// Add a new respawn time to the timers list.
 			SpawnableRespawnTimers.Add(respawnTime);
 
 			// Clear references to the spawner and settings.
 			spawnable.ObjectSpawner = null;
 			spawnable.SpawnableSettings = null;
 
-			// Despawn the object using the server manager and object pool.
-			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
+			/* DespawnType.Pool returns the object to FishNet's pool rather than destroying it.
+			 * Combined with the pre-warm above, a map's network objects are instantiated once at
+			 * load and then recycled for the lifetime of the scene. */
+			if (spawnable.NetworkObject != null && spawnable.NetworkObject.IsSpawned)
+			{
+				ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
+			}
 		}
 
 		/// <summary>
@@ -227,8 +306,9 @@ namespace FishMMO.Shared
 		/// <returns>The DateTime when the object should respawn.</returns>
 		private DateTime GetNextRespawnTime(SpawnableSettings spawnableSettings)
 		{
-			// Calculate the next respawn time based on a random respawn time or the initial respawn time.
-			TimeSpan respawnDelay = RandomRespawnTime
+			// A null settings reference means the object was not spawned through this spawner's
+			// normal path; the spawner's own initial respawn time is the only sane answer.
+			TimeSpan respawnDelay = RandomRespawnTime && spawnableSettings != null
 				? TimeSpan.FromSeconds(DeterministicRNG.Shared.Range(spawnableSettings.MinimumRespawnTime, spawnableSettings.MaximumRespawnTime))
 				: TimeSpan.FromSeconds(InitialRespawnTime);
 
@@ -255,8 +335,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Check if any respawn time has elapsed.
-			for (int i = 0; i < SpawnableRespawnTimers.Count; ++i)
+			/* Iterate backwards. The body removes the entry it fires, and a forward loop that
+			 * removes mid-iteration skips the following element. */
+			for (int i = SpawnableRespawnTimers.Count - 1; i >= 0; --i)
 			{
 				DateTime respawnTime = SpawnableRespawnTimers[i];
 
@@ -305,12 +386,14 @@ namespace FishMMO.Shared
 					// If all respawn conditions are met, spawn the object and remove its timer.
 					if (shouldRespawn)
 					{
-						SpawnObject();
+						/* Remove the timer BEFORE spawning. SpawnObject clears the whole timer
+						 * list when it reaches MaxSpawnCount, and the old order then tried to
+						 * remove an index from a list that had just been emptied — the count
+						 * guard turned that into a silent no-op, leaving a consumed timer in
+						 * place whenever the spawner did not hit its cap. */
+						SpawnableRespawnTimers.RemoveAt(i);
 
-						if (SpawnableRespawnTimers.Count > 0)
-						{
-							SpawnableRespawnTimers.RemoveAt(i);
-						}
+						SpawnObject();
 						return;
 					}
 				}
@@ -427,6 +510,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Hard cap. TryRespawn checks this before calling, but OnStartNetwork and any external
+			 * caller do not, and exceeding the maximum is what turns a deterministic pool
+			 * reservation back into unbounded growth. */
+			if (Spawned.Count >= MaxSpawnCount)
+			{
+				return;
+			}
+
 			SpawnableSettings spawnableSettings = Spawnables[GetSpawnIndex()];
 			if (spawnableSettings == null ||
 				spawnableSettings.NetworkObject == null)
@@ -476,7 +567,10 @@ namespace FishMMO.Shared
 				// Move the spawned object to the correct scene.
 				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, this.gameObject.scene);
 
-				// Initialize AI controller if present.
+				/* Initialise the brain after the scene move. Initialize warps the NavMeshAgent onto
+				 * the mesh at the spawn point, which is what a recycled NPC needs: it comes out of
+				 * the pool with its agent re-enabled while the agent still believes it is standing
+				 * wherever the previous occupant died. */
 				IAIController aiController = nob.GetComponent<IAIController>();
 				if (aiController != null)
 				{
@@ -489,7 +583,11 @@ namespace FishMMO.Shared
 				{
 					nobSpawnable.ObjectSpawner = this;
 					nobSpawnable.SpawnableSettings = spawnableSettings;
-					Spawned.Add(nobSpawnable.ID, nobSpawnable);
+
+					/* Indexer, not Add. A pooled object keeps its scene-object ID across a recycle,
+					 * so a stale entry left by an object that was despawned some other way would
+					 * make Add throw and abort the spawn tick. */
+					Spawned[nobSpawnable.ID] = nobSpawnable;
 				}
 
 				// Spawn the object on the server.

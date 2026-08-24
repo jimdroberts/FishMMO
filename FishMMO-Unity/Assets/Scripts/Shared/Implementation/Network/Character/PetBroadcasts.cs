@@ -4,12 +4,18 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Broadcast for adding a pet to a character.
-	/// Contains the pet's unique ID.
+	/// Contains the pet's unique ID and its current orders.
 	/// </summary>
 	public struct PetAddBroadcast : IBroadcast
 	{
 		/// <summary>Unique ID of the pet to add.</summary>
 		public long ID;
+
+		/// <summary>The pet's current combat stance, so the UI opens showing the truth.</summary>
+		public PetStance Stance;
+
+		/// <summary>The pet's current movement order.</summary>
+		public PetMovementOrder MovementOrder;
 	}
 
 	/// <summary>
@@ -50,5 +56,36 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct PetReleaseBroadcast : IBroadcast
 	{
+	}
+
+	/// <summary>
+	/// Client-to-server: send the pet at the owner's current target.
+	/// </summary>
+	/// <remarks>
+	/// Carries no target ID on purpose. The server reads the owner's own
+	/// <see cref="FishMMO.Shared.Core.ITargetController"/> so a client cannot name an arbitrary
+	/// entity — including one it cannot see or reach — as its pet's victim.
+	/// </remarks>
+	public struct PetAttackBroadcast : IBroadcast
+	{
+	}
+
+	/// <summary>
+	/// Client-to-server: change the pet's combat stance.
+	/// Also sent server-to-client to confirm the authoritative stance.
+	/// </summary>
+	public struct PetStanceBroadcast : IBroadcast
+	{
+		/// <summary>The requested (or, from the server, the authoritative) stance.</summary>
+		public PetStance Stance;
+	}
+
+	/// <summary>
+	/// Server-to-client: the pet's movement order changed.
+	/// </summary>
+	public struct PetMovementOrderBroadcast : IBroadcast
+	{
+		/// <summary>The authoritative movement order.</summary>
+		public PetMovementOrder MovementOrder;
 	}
 }

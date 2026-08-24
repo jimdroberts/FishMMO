@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab377656cb3f7194fabf1f60b959cc28, type: 3}
+  m_Name: Basic Attack State
+  m_EditorClassIdentifier: 
+  updateRate: 1
+  LeashUpdateRate: 5
+  MinLeashRange: 50
+  MaxLeashRange: 100
+  DetectionRadius: 15
+  EnemyLayers:
+    serializedVersion: 2
+    m_Bits: 64
+  LineOfSightBlockingLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  KeepsCombatTarget: 0
+  PreferredDistance: 0
+  MinComfortDistance: 0
+  EmergencyRetreatThreshold: 0.5
+  EmergencyRetreatState: {fileID: 0}
+  AttackCooldown: 1.5
+  AttackCooldownJitter: 0.5
+  TargetReevaluationRate: 3
+  AggressionSwitchThreshold: 50
+  VarietyStates: []
+  MovementVarietyChance: 0
+  VarietyEngagementMultiplier: 1.5
+  OwnerLeashRange: 30
+  UnreachableTargetTimeout: 6

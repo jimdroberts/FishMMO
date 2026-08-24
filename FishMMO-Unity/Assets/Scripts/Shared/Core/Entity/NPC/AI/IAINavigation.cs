@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AI;
 
 namespace FishMMO.Shared.Core
@@ -19,13 +19,15 @@ namespace FishMMO.Shared.Core
 		/// Sets a random destination within a radius around the home position.
 		/// </summary>
 		/// <param name="radius">Radius to randomize destination.</param>
-		void SetRandomHomeDestination(float radius);
+		/// <returns>True if a reachable destination was found and set.</returns>
+		bool SetRandomHomeDestination(float radius);
 
 		/// <summary>
 		/// Sets a random destination within a radius around the current position.
 		/// </summary>
 		/// <param name="radius">Radius to randomize destination.</param>
-		void SetRandomDestination(float radius);
+		/// <returns>True if a reachable destination was found and set.</returns>
+		bool SetRandomDestination(float radius);
 
 		/// <summary>
 		/// Stops the agent's movement.

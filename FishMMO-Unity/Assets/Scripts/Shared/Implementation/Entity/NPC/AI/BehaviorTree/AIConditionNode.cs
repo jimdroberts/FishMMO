@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 			ICharacter target = null;
 			if (controller.Target != null)
 			{
-				target = controller.Target.GetComponent<ICharacter>();
+				target = controller.TargetCharacter;
 			}
 
 			bool result = Condition.Evaluate(controller, controller.Character, target);

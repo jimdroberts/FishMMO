@@ -46,6 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab822550643fb454788ff0e4beacb4e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  PivotYAxis: 0
 --- !u!1 &4811273059840484731
 GameObject:
   m_ObjectHideFlags: 0
@@ -69,6 +70,8 @@ GameObject:
   - component: {fileID: 2898743231479186744}
   - component: {fileID: 3962825829099883798}
   - component: {fileID: 9168136948286660220}
+  - component: {fileID: 1880843646148751759}
+  - component: {fileID: 6308388451046359136}
   m_Layer: 6
   m_Name: HumanBanker
   m_TagString: Untagged
@@ -169,7 +172,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
+  _enablePrediction: 1
   _predictionType: 0
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
@@ -254,6 +257,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   EnemySweepRate: 1.5
+  Archetype: {fileID: 0}
   InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   AvoidancePriority: 50
   WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
@@ -344,6 +348,7 @@ MonoBehaviour:
   onResurrectTriggers: []
   onResurrectedTriggers: []
   immortal: 0
+  combatDurationTicks: 600
 --- !u!114 &2419637757703598923
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -377,9 +382,13 @@ MonoBehaviour:
   _componentIndexCache: 7
   _addedNetworkObject: {fileID: 7250114663715075110}
   _networkObjectCache: {fileID: 7250114663715075110}
+  characterNameLabel: {fileID: 0}
+  characterGuildLabel: {fileID: 0}
+  meshRoot: {fileID: 0}
   npcSeed: 0
   npcGender: 0
   IsCharmable: 0
+  CorpseDecayDuration: 30
   AttributeBonuses: {fileID: 0}
   Abilities: []
   objectSpawner: {fileID: 0}
@@ -497,6 +506,36 @@ MonoBehaviour:
   ChanneledTemplate: {fileID: 0}
   onAbilityActivateTriggers: []
   onAbilityCompleteTriggers: []
+--- !u!114 &1880843646148751759
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: caae36f1c31918fb3b93631b89c69b12, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &6308388451046359136
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f852b64f675784b4ebdf6e98b0726660, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CooldownController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &5335545856828808014
 GameObject:
   m_ObjectHideFlags: 0

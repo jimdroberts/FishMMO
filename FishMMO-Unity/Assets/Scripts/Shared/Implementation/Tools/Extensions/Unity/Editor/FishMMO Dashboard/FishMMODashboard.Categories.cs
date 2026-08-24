@@ -1,4 +1,4 @@
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -225,12 +225,50 @@ namespace FishMMO.Shared
 				"FishMMO/Item/Item Attribute/Attribute");
 
 			// ── NPCs ──
+			/* Archetypes come first: this is the asset a designer should reach for. One of them
+			 * fills in every state and tuning slot on an AIController, so the individual state
+			 * categories below are for authoring the pieces rather than for wiring a prefab. */
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "AI Archetypes",
+				Group = "NPCs",
+				AssetType = typeof(AIArchetypeTemplate),
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/Archetypes",
+				CreateAssetMenuName = "FishMMO/Character/NPC/AI/Archetype",
+				GetGroupLabel = asset =>
+				{
+					// "Pet - Melee" / "Enemy - Caster" group under Pet / Enemy.
+					string name = asset != null ? asset.name : string.Empty;
+					int dash = name.IndexOf(" - ", StringComparison.Ordinal);
+					return dash > 0 ? name.Substring(0, dash) : "Other";
+				},
+			});
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "AI Personalities",
+				Group = "NPCs",
+				AssetType = typeof(AICombatPersonality),
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/Personalities",
+				CreateAssetMenuName = "FishMMO/Character/NPC/AI/Combat Personality",
+				GetGroupLabel = asset =>
+				{
+					AICombatPersonality personality = asset as AICombatPersonality;
+					return personality != null ? personality.Style.ToString() : "Unknown";
+				},
+				GetSortOrder = asset =>
+				{
+					AICombatPersonality personality = asset as AICombatPersonality;
+					return personality != null ? (int)personality.Style : 0;
+				},
+			});
+
 			categories.Add(new TemplateCategory
 			{
 				DisplayName = "AI States",
 				Group = "NPCs",
 				AssetType = typeof(BaseAIState),
-				DefaultAssetDirectory = "Assets/Templates/Entity/NPCs",
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/States",
 				ConcreteTypes = new List<(string, Type)>
 				{
 					("Idle State", typeof(IdleState)),
@@ -246,7 +284,57 @@ namespace FishMMO.Shared
 					("Ranged Attacking State", typeof(RangedAttackingState)),
 					("Caster Attacking State", typeof(CasterAttackingState)),
 					("Healer Attacking State", typeof(HealerAttackingState)),
+					("Defender Attacking State", typeof(DefenderAttackingState)),
+					("Rogue Attacking State", typeof(RogueAttackingState)),
+					("Pet Attacking State", typeof(PetAttackingState)),
 				},
+				GetGroupLabel = asset =>
+				{
+					if (asset is BaseAttackingState) return "Combat";
+					if (asset is PetIdleState) return "Pet";
+					if (asset is OrbitState || asset is GetBehindState || asset is RetreatState) return "Combat Positioning";
+					return "Movement";
+				},
+				GetSortOrder = asset =>
+				{
+					if (asset is BaseAttackingState) return 0;
+					if (asset is PetIdleState) return 10;
+					if (asset is OrbitState || asset is GetBehindState || asset is RetreatState) return 20;
+					return 30;
+				},
+			});
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "AI Ability Rotations",
+				Group = "NPCs",
+				AssetType = typeof(AIAbilityRotation),
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/Rotations",
+				CreateAssetMenuName = "FishMMO/Character/NPC/AI/Ability Rotation",
+			});
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "AI Conditions",
+				Group = "NPCs",
+				AssetType = typeof(AIAbilityCondition),
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/Conditions",
+				ConcreteTypes = new List<(string, Type)>
+				{
+					("Health Condition", typeof(AIHealthCondition)),
+					("Distance Condition", typeof(AIDistanceCondition)),
+					("Buff Condition", typeof(AIBuffCondition)),
+					("Random Condition", typeof(AIRandomCondition)),
+				},
+			});
+
+			categories.Add(new TemplateCategory
+			{
+				DisplayName = "AI LOD Settings",
+				Group = "NPCs",
+				AssetType = typeof(AILodSettings),
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/LOD",
+				CreateAssetMenuName = "FishMMO/Character/NPC/AI/LOD Settings",
 			});
 
 			AddCategory<NPCGuildTemplate>("NPC Guilds", "NPCs",
@@ -258,7 +346,7 @@ namespace FishMMO.Shared
 				"FishMMO/Character/NPC/Attribute/Database");
 
 			AddCategory<BossScript>("Boss Scripts", "NPCs",
-				"Assets/Templates/Entity/NPCs/Boss",
+				AIAssetOrganizer.AI_ROOT + "/Boss",
 				"FishMMO/Character/NPC/AI/Boss Script");
 
 			categories.Add(new TemplateCategory
@@ -266,7 +354,7 @@ namespace FishMMO.Shared
 				DisplayName = "Behavior Trees",
 				Group = "NPCs",
 				AssetType = typeof(AIBehaviorTree),
-				DefaultAssetDirectory = "Assets/Templates/Entity/NPCs/AI/BehaviorTrees",
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/BehaviorTrees",
 				CreateAssetMenuName = "FishMMO/Character/NPC/AI/Behavior Tree/Behavior Tree",
 			});
 
@@ -275,7 +363,7 @@ namespace FishMMO.Shared
 				DisplayName = "Behavior Nodes",
 				Group = "NPCs",
 				AssetType = typeof(AIBehaviorNode),
-				DefaultAssetDirectory = "Assets/Templates/Entity/NPCs/AI/BehaviorNodes",
+				DefaultAssetDirectory = AIAssetOrganizer.AI_ROOT + "/BehaviorNodes",
 				ConcreteTypes = new List<(string, Type)>
 				{
 					("Selector", typeof(AISelector)),
@@ -787,8 +875,11 @@ namespace FishMMO.Shared
 		private void CreateAssetOfType(TemplateCategory cat, Type assetType, string displayName)
 		{
 
-			// Ensure directory exists
-			string dir = cat.DefaultAssetDirectory;
+			/* AI assets file themselves by type. The "AI States" category covers attacking,
+			 * movement, pet and positioning states, which live in different sub-folders, so a
+			 * single DefaultAssetDirectory would drop every new state in the parent folder and
+			 * leave it for the organizer to sort out later. */
+			string dir = AIAssetOrganizer.ResolveFolder(assetType) ?? cat.DefaultAssetDirectory;
 			if (!AssetDatabase.IsValidFolder(dir))
 			{
 				CreateDirectoryRecursive(dir);

@@ -18,15 +18,12 @@ namespace FishMMO.Shared
 		/// Returns the update rate for the idle state, possibly randomized between base and max.
 		/// </summary>
 		/// <returns>Update rate in seconds.</returns>
-		public override float GetUpdateRate()
+		/// <param name="controller">The AI controller running this state.</param>
+		public override float GetUpdateRate(AIController controller)
 		{
-			float updateRate = base.GetUpdateRate();
-			if (MaxUpdateRate > updateRate)
-			{
-				updateRate = DeterministicRNG.Shared.Range(updateRate, MaxUpdateRate);
-			}
-			return updateRate;
+			return RandomizeRate(controller, base.GetUpdateRate(), MaxUpdateRate);
 		}
+
 
 		/// <summary>
 		/// Called when entering the idle state. Stops the AI's movement.
@@ -54,11 +51,22 @@ namespace FishMMO.Shared
 		/// <param name="deltaTime">Frame time.</param>
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
-			if (controller.LookTarget == null ||
-				Vector3.Distance(controller.transform.position, controller.LookTarget.position) > DetectionRadius * 0.5f)
+			/* A pet idles at its owner's heel rather than drifting into a movement state, and
+			 * drifting away from a moving owner is exactly what a wander transition would do.
+			 * Its own follow state handles staying close. */
+			if (controller.OwningPet != null)
 			{
-				controller.TransitionToRandomMovementState();
+				return;
 			}
+
+			if (controller.LookTarget != null &&
+				Vector3.Distance(controller.Character.Transform.position, controller.LookTarget.position) <= DetectionRadius * 0.5f)
+			{
+				// Something nearby is still worth watching; keep standing here.
+				return;
+			}
+
+			controller.TransitionToRandomMovementState();
 		}
 	}
 }

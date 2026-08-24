@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using FishNet.Broadcast;
 using FishNet.Managing;
 
@@ -1946,31 +1946,160 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Caps how fast the client renders, and keeps FishNet from overriding the cap.
+		/// Lowest render rate a client may be capped to.
+		/// </summary>
+		/// <remarks>
+		/// The floor exists because of the tick, not because of visual quality. FishNet derives
+		/// ticks from the update loop, so a frame rate below the tick rate cannot deliver them on
+		/// time: ticks bunch up several to a frame and the client falls behind the server's
+		/// timeline. 30 matches the project's tick rate, and
+		/// <see cref="ResolveMinimumFrameRate"/> raises it automatically if the tick rate is ever
+		/// increased.
+		/// </remarks>
+		public const int MinimumTargetFrameRate = 30;
+
+		/// <summary>
+		/// Absolute ceiling on the render rate, before the display's own limit is applied.
+		/// </summary>
+		/// <remarks>
+		/// 500 is also FishNet's own <c>NetworkManager.MAXIMUM_FRAMERATE</c>, which
+		/// <c>ClientManager.SetFrameRate</c> clamps to. Matching it means the two never disagree
+		/// about what was requested. The effective ceiling is normally lower — see
+		/// <see cref="ResolveMaximumFrameRate"/>.
+		/// </remarks>
+		public const int MaximumTargetFrameRate = 500;
+
+		/// <summary>
+		/// Fallback display refresh rate used when the platform reports no usable display modes.
+		/// </summary>
+		private const int FallbackDisplayRefreshRate = 60;
+
+		/// <summary>
+		/// Caps how fast the client renders.
 		/// </summary>
 		/// <param name="framesPerSecond">
-		/// Target frames per second, normally the user's saved "Refresh Rate" preference.
-		/// Values outside 1..500 are ignored.
+		/// Target frames per second, normally the user's saved frame-rate preference. Clamped
+		/// between <see cref="ResolveMinimumFrameRate"/> and <see cref="ResolveMaximumFrameRate"/>
+		/// — that is, no slower than the tick rate and no faster than the display can present.
 		/// </param>
 		/// <remarks>
-		/// Setting <see cref="Application.targetFrameRate"/> alone is not enough to make a
-		/// preference stick. FishNet's <c>NetworkManager.UpdateFramerate</c> writes
-		/// <c>targetFrameRate</c> from <c>ClientManager.FrameRate</c> — 500 by default —
-		/// every time the connection state changes, so a value set here would be discarded
-		/// at the next connect or server hop. Pushing the same number into
-		/// <c>ClientManager.SetFrameRate</c> makes FishNet's own value agree, so the cap
-		/// survives every later <c>UpdateFramerate</c> call.
+		/// <para>
+		/// <b>Render rate and tick rate are independent.</b> This sets only how often the client
+		/// draws. Simulation runs on the FishNet <c>TimeManager</c> tick — a fixed 30 Hz, set
+		/// per-scene and identical on client and server — and every authoritative system rides it:
+		/// prediction, reconciliation, cooldowns, ability activation and NPC brains. A player at
+		/// 500 FPS and one at 30 FPS send the same number of packets, simulate the same number of
+		/// physics steps, and reconcile against the same ticks. The only things a higher frame rate
+		/// buys are smoother interpolation between ticks and slightly fresher input sampling
+		/// within one.
+		/// </para>
+		/// <para>
+		/// The single point where the two touch is the floor above: the frame rate must clear the
+		/// tick rate for ticks to be delivered on schedule. That is a one-way dependency — the
+		/// tick rate is never derived from the render rate.
+		/// </para>
+		/// <para>
+		/// Clamped rather than rejected. The previous version returned without doing anything for
+		/// an out-of-range value, so a monitor reporting an unusual refresh rate left the cap at
+		/// whatever it happened to be — silently ignoring the user's setting instead of honouring
+		/// it as closely as it can.
+		/// </para>
+		/// <para>
+		/// Setting <see cref="Application.targetFrameRate"/> alone is not reliably enough. FishNet's
+		/// <c>NetworkManager.UpdateFramerate</c> writes <c>targetFrameRate</c> from
+		/// <c>ClientManager.FrameRate</c> every time the connection state changes, so a value set
+		/// here can be discarded at the next connect or server hop. The client scene now ships with
+		/// <c>ChangeFrameRate</c> disabled so FishNet leaves the render rate alone entirely, but
+		/// the matching <c>ClientManager.SetFrameRate</c> call below is kept: it costs nothing, and
+		/// it keeps the preference intact if the flag is ever re-enabled or the client runs as a
+		/// host, where FishNet takes the higher of the client and server rates.
+		/// </para>
 		/// <para>Applying the screen refresh rate via <c>Screen.SetResolution</c> changes the
 		/// display mode only; with vSync off it does not limit the render loop.</para>
 		/// </remarks>
 		public static void ApplyTargetFrameRate(int framesPerSecond)
 		{
-			if (framesPerSecond <= 0 || framesPerSecond > 500) return;
+			int minimum = ResolveMinimumFrameRate();
+			int maximum = Mathf.Max(minimum, ResolveMaximumFrameRate());
+			int clamped = Mathf.Clamp(framesPerSecond, minimum, maximum);
 
-			Application.targetFrameRate = framesPerSecond;
+			Application.targetFrameRate = clamped;
 
 			// Keep FishNet's value in step so UpdateFramerate does not overwrite ours.
-			NetworkManager?.ClientManager?.SetFrameRate((ushort)framesPerSecond);
+			NetworkManager?.ClientManager?.SetFrameRate((ushort)clamped);
+		}
+
+		/// <summary>
+		/// The highest frame rate this client may be capped to: the monitor's fastest mode, or
+		/// <see cref="MaximumTargetFrameRate"/>, whichever is lower.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Frames drawn faster than the display can present them are never seen. They cost GPU
+		/// time, power and heat to produce and are then discarded at scan-out, so the ceiling is
+		/// the panel's own capability rather than an arbitrary number.
+		/// </para>
+		/// <para>
+		/// Enforced here rather than only in the options UI so the bound holds for every caller —
+		/// a saved preference from a machine with a faster monitor, or a config edited by hand,
+		/// clamps down to what the current display can actually show.
+		/// </para>
+		/// <para>
+		/// The 500 ceiling still applies on top, both because it is FishNet's own limit and
+		/// because a display reporting something implausible should not be taken at its word.
+		/// </para>
+		/// </remarks>
+		/// <returns>The maximum frames per second.</returns>
+		public static int ResolveMaximumFrameRate()
+		{
+			return Mathf.Min(ResolveDisplayRefreshRate(), MaximumTargetFrameRate);
+		}
+
+		/// <summary>
+		/// The fastest refresh rate the current display reports.
+		/// </summary>
+		/// <remarks>
+		/// Scans every supported display mode rather than reading the current one: a player
+		/// running windowed at a lower mode still has the panel's full refresh rate available, and
+		/// capping them to whatever mode they happen to be in would be wrong.
+		/// </remarks>
+		/// <returns>The highest reported refresh rate in hertz, or a safe fallback.</returns>
+		public static int ResolveDisplayRefreshRate()
+		{
+			int highest = 0;
+
+			Resolution[] resolutions = Screen.resolutions;
+			for (int i = 0; i < resolutions.Length; ++i)
+			{
+				int hz = Mathf.RoundToInt((float)resolutions[i].refreshRateRatio.value);
+				if (hz > highest)
+				{
+					highest = hz;
+				}
+			}
+
+			if (highest <= 0)
+			{
+				// Some platforms (and headless/batch runs) enumerate no modes at all.
+				highest = Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
+			}
+
+			return highest > 0 ? highest : FallbackDisplayRefreshRate;
+		}
+
+		/// <summary>
+		/// The lowest frame rate this client may be capped to, given the live tick rate.
+		/// </summary>
+		/// <remarks>
+		/// Reads the tick rate from the TimeManager when one exists so the floor tracks the actual
+		/// configuration rather than a constant that can drift away from it. Falls back to
+		/// <see cref="MinimumTargetFrameRate"/> before the network is up.
+		/// </remarks>
+		/// <returns>The minimum frames per second.</returns>
+		public static int ResolveMinimumFrameRate()
+		{
+			ushort tickRate = NetworkManager?.TimeManager?.TickRate ?? 0;
+			return Mathf.Max(MinimumTargetFrameRate, tickRate);
 		}
 
 		private void OnCharacterStartLocal(IPlayerCharacter c)

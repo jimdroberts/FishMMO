@@ -1,3 +1,4 @@
+﻿using System.Collections.Generic;
 using FishNet.Object;
 using UnityEngine;
 
@@ -13,6 +14,18 @@ namespace FishMMO.Shared
 		/// The prefab for the pet to be spawned.
 		/// </summary>
 		public NetworkObject PetPrefab;
+
+		/// <summary>
+		/// Abilities the summoned pet starts knowing.
+		/// </summary>
+		/// <remarks>
+		/// These are taught to the pet's <see cref="FishMMO.Shared.Core.IAbilityController"/> on
+		/// summon and persisted with it, so the pet keeps them across a log out. The pet prefab's
+		/// own <see cref="NPC.Abilities"/> list is learned as well; use that for abilities every
+		/// pet of this species has, and this list for abilities granted by the summoning spell.
+		/// </remarks>
+		[Tooltip("Abilities the summoned pet starts with. Learned on summon and persisted.")]
+		public List<AbilityTemplate> PetAbilities = new List<AbilityTemplate>();
 
 		/// <summary>
 		/// The bounding box for spawning the pet.

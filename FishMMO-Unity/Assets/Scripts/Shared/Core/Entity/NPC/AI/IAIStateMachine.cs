@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace FishMMO.Shared.Core
 {
@@ -13,6 +13,16 @@ namespace FishMMO.Shared.Core
 		/// The current AI state.
 		/// </summary>
 		BaseAIState CurrentState { get; }
+
+		/// <summary>
+		/// The state this NPC uses for combat, or null when it cannot fight.
+		/// </summary>
+		BaseAIState AttackingState { get; }
+
+		/// <summary>
+		/// The state this NPC falls back to when it has nothing to do.
+		/// </summary>
+		BaseAIState IdleState { get; }
 
 		/// <summary>
 		/// Changes the AI state, optionally providing targets for attacking states.

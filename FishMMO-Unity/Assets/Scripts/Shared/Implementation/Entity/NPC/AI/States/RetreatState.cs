@@ -1,97 +1,178 @@
-﻿using UnityEngine;
-using UnityEngine.AI;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// AI State for retreating from a target. Causes the NPC to move away from its target until a safe distance is reached.
+	/// Moves the NPC away from its target until a safe distance is reached, then disengages.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Used both as the flee state for a <see cref="NPCCombatStyle.Pathetic"/> or
+	/// <see cref="NPCCombatStyle.Cautious"/> personality and as a caster's emergency-retreat
+	/// hand-off. Enable <see cref="BaseAIState.KeepsCombatTarget"/> on assets of this type: the
+	/// retreat direction is computed <em>from</em> the target, so clearing it on the way in would
+	/// leave the NPC with no idea which way to run.
+	/// </para>
+	/// <para>
+	/// Fleeing is the movement most likely to run out of room — the NPC is by definition being
+	/// pushed toward whatever is behind it — so every step of it is bounded. A cornered NPC that
+	/// cannot retreat gives up and re-engages rather than standing against a wall being hit while
+	/// a "retreating" state reports success.
+	/// </para>
+	/// </remarks>
 	[CreateAssetMenu(fileName = "New AI Retreat State", menuName = "FishMMO/Character/NPC/AI/Retreat State", order = 0)]
 	public class RetreatState : BaseAIState
 	{
 		/// <summary>
-		/// The distance the NPC will attempt to move away from its target when retreating.
+		/// How far the NPC moves away from its target on each retreat leg.
 		/// </summary>
 		public float RetreatDistance = 10.0f;
 
 		/// <summary>
-		/// The minimum distance from the target that is considered safe. Once reached, the NPC will stop retreating.
+		/// Distance from the target at which the NPC stops retreating.
 		/// </summary>
 		public float SafeDistance = 20.0f;
 
 		/// <summary>
-		/// Called when the state is entered. Sets the retreat destination away from the target.
+		/// Seconds the NPC will keep trying to retreat before accepting that it cannot.
+		/// </summary>
+		[Tooltip("Seconds spent retreating before giving up. 0 = retreat until safe.")]
+		public float MaxRetreatSeconds = 8.0f;
+
+		/// <summary>
+		/// Picks the first retreat destination.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
 		public override void Enter(AIController controller)
 		{
+			controller.SubStateTimer = MaxRetreatSeconds;
+
 			if (controller.Target == null)
 			{
-				// If there is no target, transition to idle or another default state.
+				// Nothing to run from.
 				controller.TransitionToIdleState();
 				return;
 			}
 
-			// Calculate the direction away from the target.
-			Vector3 retreatDirection = (controller.Character.Transform.position - controller.Target.position).normalized;
-			// Calculate the retreat position by moving RetreatDistance units away from the target.
-			Vector3 retreatPosition = controller.Character.Transform.position + retreatDirection * RetreatDistance;
-
-			// Use NavMesh to find a valid position near the calculated retreat position.
-			NavMeshHit hit;
-			if (NavMesh.SamplePosition(retreatPosition, out hit, RetreatDistance, NavMesh.AllAreas))
-			{
-				// Set the agent's destination to the valid retreat position.
-				controller.SetThrottledDestination(hit.position);
-			}
+			controller.Resume();
+			MoveAway(controller);
 		}
 
 		/// <summary>
-		/// Called when the state is exited. No special logic needed for retreat state.
+		/// Called when the state is exited.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
 		public override void Exit(AIController controller)
 		{
-			// No exit logic required for retreat state.
 		}
 
 		/// <summary>
-		/// Called every frame while in this state. Handles retreat logic and transitions when safe distance is reached.
+		/// Keeps backing away until safe, cornered, or out of patience.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
-		/// <param name="deltaTime">Time since last update.</param>
+		/// <param name="deltaTime">Seconds since the previous AI tick.</param>
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
 			if (controller.Target == null)
 			{
-				// If the target is lost, transition to idle state.
-				controller.TransitionToIdleState();
+				Disengage(controller);
 				return;
 			}
 
-			// Check if the agent has reached its current retreat destination.
-			if (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f)
+			// Safe already? Stop, whatever the path is doing.
+			float sqrDistance = controller.GetSqrDistanceToTarget();
+			if (sqrDistance > SafeDistance * SafeDistance)
 			{
-				// Measure the distance to the target.
-				float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
-				if (distanceToTarget > SafeDistance)
-				{
-					// If safe distance is maintained, transition to idle or another appropriate state.
-					controller.TransitionToIdleState();
-				}
-				else
-				{
-					// If not yet at safe distance, calculate a new retreat position and continue retreating.
-					Vector3 retreatDirection = (controller.Character.Transform.position - controller.Target.position).normalized;
-					Vector3 retreatPosition = controller.Character.Transform.position + retreatDirection * RetreatDistance;
+				Disengage(controller);
+				return;
+			}
 
-					NavMeshHit hit;
-					if (NavMesh.SamplePosition(retreatPosition, out hit, RetreatDistance, NavMesh.AllAreas))
-					{
-						controller.SetThrottledDestination(hit.position);
-					}
+			if (MaxRetreatSeconds > 0f)
+			{
+				controller.SubStateTimer -= deltaTime;
+				if (controller.SubStateTimer <= 0f)
+				{
+					/* Out of patience. The NPC is cornered or the pursuer is faster than it is;
+					 * either way, standing in a retreat state achieves nothing. Hand back to the
+					 * attacking state so it fights rather than cowering in place. */
+					ReturnToCombatOrIdle(controller);
+					return;
 				}
 			}
+
+			switch (controller.GetMovementProgress(deltaTime))
+			{
+				case AIMovementProgress.Arrived:
+					// Reached this leg but still not safe — take another one.
+					MoveAway(controller);
+					return;
+
+				case AIMovementProgress.Stuck:
+					// Backed into geometry. Try to slide out; the timeout above is the backstop.
+					controller.TryRecoverFromStuck(controller.Home);
+					return;
+
+				case AIMovementProgress.Idle:
+					MoveAway(controller);
+					return;
+
+				default:
+					return;
+			}
+		}
+
+		/// <summary>
+		/// Sets a destination directly away from the target, trying diagonals when straight back
+		/// is blocked.
+		/// </summary>
+		/// <param name="controller">The AI controller managing this NPC.</param>
+		private void MoveAway(AIController controller)
+		{
+			if (controller.Target == null)
+			{
+				return;
+			}
+
+			Vector3 position = controller.Character.Transform.position;
+			Vector3 away = position - controller.Target.position;
+			away.y = 0f;
+
+			// Standing exactly on the target: any direction is away. Pick a stable one so the NPC
+			// does not pick a different direction on every tick and vibrate in place.
+			if (away.sqrMagnitude < 0.0001f)
+			{
+				away = -controller.Character.Transform.forward;
+			}
+			away.Normalize();
+
+			if (controller.TryMoveTo(position + away * RetreatDistance, throttle: false) != AIMovementResult.Failed)
+			{
+				return;
+			}
+
+			// Straight back is off the NavMesh — try the two rear diagonals before conceding.
+			Vector3 right = Vector3.Cross(Vector3.up, away);
+			if (controller.TryMoveTo(position + (away + right).normalized * RetreatDistance, throttle: false) != AIMovementResult.Failed)
+			{
+				return;
+			}
+			controller.TryMoveTo(position + (away - right).normalized * RetreatDistance, throttle: false);
+		}
+
+		/// <summary>
+		/// Stops fleeing and drops the target.
+		/// </summary>
+		/// <remarks>
+		/// Clearing the target matters: leaving it set lets the out-of-combat sweep re-acquire
+		/// whatever the NPC just fled from, so a fleeing NPC bounced straight back into the fight.
+		/// </remarks>
+		/// <param name="controller">The AI controller managing this NPC.</param>
+		private static void Disengage(AIController controller)
+		{
+			controller.Target = null;
+			controller.LookTarget = null;
+			controller.ClearPath();
+			controller.TransitionToIdleState();
 		}
 	}
 }

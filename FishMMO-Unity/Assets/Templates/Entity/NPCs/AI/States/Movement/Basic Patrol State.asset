@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce4ed3a5b7eaaf34c80d2996af8594ce, type: 3}
+  m_Name: Basic Patrol State
+  m_EditorClassIdentifier: 
+  updateRate: 1
+  LeashUpdateRate: 5
+  MinLeashRange: 50
+  MaxLeashRange: 100
+  DetectionRadius: 20
+  EnemyLayers:
+    serializedVersion: 2
+    m_Bits: 64
+  LineOfSightBlockingLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  KeepsCombatTarget: 0
+  WaypointTolerance: 1.5
+  MaxSkippedWaypoints: 4
