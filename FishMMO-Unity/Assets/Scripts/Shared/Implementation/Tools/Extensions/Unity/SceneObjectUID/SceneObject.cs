@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -60,6 +60,17 @@ namespace FishMMO.Shared
 			// If this is a client, we don't want to assign an ID, as it will be assigned by the server.
 			if (!asClient)
 			{
+				/* Already holding a live registration: keep the ID rather than issuing a new one.
+				 *
+				 * Server registration happens in OnStartServer, which runs again every time a
+				 * pooled object is respawned. Handing out a fresh ID there would strand the old
+				 * dictionary entry and, worse, change the ID out from under any client still
+				 * holding it — so a re-registration must be a no-op. */
+				if (IsRegistered(sceneObject))
+				{
+					return;
+				}
+
 				// Assign a unique ID not already in use. Decrementing keeps every scene object ID
 				// negative and therefore disjoint from any character ID — see currentID.
 				do
@@ -80,7 +91,31 @@ namespace FishMMO.Shared
 		/// <param name="sceneObject">The scene object to unregister.</param>
 		public static void Unregister(ISceneObject sceneObject)
 		{
-			Objects.Remove(sceneObject.ID);
+			/* Identity-checked. Removing by ID alone will evict whoever currently holds that ID,
+			 * which is not necessarily this object: an unregistered object still has ID 0, and a
+			 * pooled object that was re-registered under a new ID would otherwise have its
+			 * successor's entry torn out by its own late teardown. */
+			if (sceneObject == null)
+			{
+				return;
+			}
+			if (Objects.TryGetValue(sceneObject.ID, out ISceneObject existing) &&
+				ReferenceEquals(existing, sceneObject))
+			{
+				Objects.Remove(sceneObject.ID);
+			}
+		}
+
+		/// <summary>
+		/// True when this exact object is the one currently registered under its own ID.
+		/// </summary>
+		/// <param name="sceneObject">The object to test.</param>
+		/// <returns>True if registered.</returns>
+		public static bool IsRegistered(ISceneObject sceneObject)
+		{
+			return sceneObject != null &&
+				   Objects.TryGetValue(sceneObject.ID, out ISceneObject existing) &&
+				   ReferenceEquals(existing, sceneObject);
 		}
 	}
 }

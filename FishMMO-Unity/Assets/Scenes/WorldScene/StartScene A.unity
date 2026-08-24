@@ -414,22 +414,90 @@ MonoBehaviour:
   InitialSpawnCount: 4
   MaxSpawnCount: 4
   SpawnType: 0
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 50, y: 5, z: 25}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
-  - rid: -2
-  - rid: -2
-  - rid: -2
+  - rid: 1701798270728142851
+  - rid: 1701798270728142852
+  - rid: 1701798270728142853
+  - rid: 1701798270728142855
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 1701798270728142851
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 1701798270728142852
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 1701798270728142853
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 1701798270728142855
+      type: {class: ItemSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        ItemTemplate: {fileID: 11400000, guid: d4194c9fc4a87c84cbdde10c40a67656, type: 2}
+        MinimumAmount: 1
+        MaximumAmount: 1
+        RollTable: []
+        AchievementTemplateID: 0
 --- !u!114 &70787373
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1524,21 +1592,75 @@ MonoBehaviour:
   InitialSpawnCount: 6
   MaxSpawnCount: 9
   SpawnType: 2
+  PrewarmPool: 1
+  PrewarmHeadroom: 1
   RandomRespawnTime: 1
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 75, y: 15, z: 65}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
-  - rid: -2
-  - rid: -2
-  - rid: -2
+  - rid: 1701798270728142848
+  - rid: 1701798270728142849
+  - rid: 1701798270728142850
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
   references:
     version: 2
     RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    - rid: 1701798270728142848
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 1701798270728142849
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
+    - rid: 1701798270728142850
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+          type: 3}
+        MinimumRespawnTime: 0
+        MaximumRespawnTime: 0
+        SpawnChance: 0.5
+        YOffset: 0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        MinimumScale: 1
+        MaximumScale: 1
 --- !u!114 &784079646
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2128,7 +2250,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 233ec218-7363-4d27-9e29-7645a4151c1c
+  destinationID: 
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &999801835
 GameObject:
@@ -2708,7 +2830,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: f5af695c-c112-48c1-b738-41522ab8b500
+  destinationID: 
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1350134063
 GameObject:
@@ -3096,7 +3218,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 6459955d-9b23-40b1-8863-37e5616b1800
+  destinationID: 
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1521362700
 GameObject:
@@ -3142,7 +3264,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: e97dae04-89b3-47a3-9d9c-56d8f2f05b55
+  destinationID: 
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1527394873
 GameObject:
@@ -3303,7 +3425,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 1565944405}
   _networkObjectCache: {fileID: 0}
   InteractionRange: 10
-  onInteractTriggers: []
+  onInteractTriggers:
+  - {fileID: 11400000, guid: 6f65fd31ee0b84eb913a1631ae865bab, type: 2}
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   DungeonImage: {fileID: 0}
   DungeonName: Test Dungeon
@@ -3464,7 +3587,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _destinationID: 8cc50df6-4bab-4505-84dc-28d5cf672c96
+  destinationID: 
   GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1578285058
 GameObject:
@@ -4558,7 +4681,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 1729415598}
   _networkObjectCache: {fileID: 1729415598}
   InteractionRange: 7.5
-  onInteractTriggers: []
+  onInteractTriggers:
+  - {fileID: 11400000, guid: 93f114be71e8057ab1006aec9afc37a2, type: 2}
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   AchievementTemplate: {fileID: 0}
 --- !u!114 &1729415598

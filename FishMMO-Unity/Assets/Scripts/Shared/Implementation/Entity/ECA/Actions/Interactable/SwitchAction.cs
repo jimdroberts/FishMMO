@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -19,7 +19,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-#if UNITY_SERVER
+			// Server-only. Runtime check, not #if UNITY_SERVER: that define is absent in the
+			// editor, where the scene server also runs — see BaseAction.IsServer.
+			if (!IsServer(initiator))
+			{
+				return;
+			}
+
 			if (initiator is not IPlayerCharacter player) return;
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
@@ -48,7 +54,6 @@ namespace FishMMO.Shared
 			{
 				achievementController.Increment(switchInteractable.AchievementTemplate, 1);
 			}
-#endif
 		}
 	}
 }

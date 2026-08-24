@@ -47,6 +47,62 @@ The Interactable system is a server-authoritative, template-driven framework for
 - Gathering nodes with weighted drop tables, limited uses, and gather timers
 - Merchant tab system supporting abilities, ability events, and items
 
+## Interaction Behaviour Is ECA Triggers
+
+`Banker`, `Merchant`, `Bindstone`, `Teleporter` and the rest are **data holders**. None of them
+carries hard-coded interact behaviour — what an interactable does when used comes entirely from the
+`Trigger` assets in its `OnInteractTriggers` list, which `InteractableSystem` fires after
+server-side validation.
+
+The one exception is corpse looting, which `InteractableSystem` calls directly. That is deliberate:
+looting is intrinsic to any NPC that can die, and a content author must not be able to make a
+creature silently unlootable by forgetting a list entry. An NPC's own triggers still run on top,
+for achievements, quest updates and dialogue.
+
+**An empty list therefore means the object does nothing when used.** It still shows its title, still
+accepts the interaction, and still passes every validation — it just has no implementation. The
+system logs a warning when this happens, and `FishMMO > Interactables > Audit Interact Triggers`
+reports it across every prefab and scene in the project.
+
+### Shipped interaction triggers
+
+Under `Assets/Templates/Entity/ECA/Interactions/`:
+
+| Asset | Actions | Used by |
+|---|---|---|
+| `Bindstone Interact` | `BindstoneAction` | Bindstone |
+| `Banker Interact` | `NPCLookAtInteractorAction`, `SendBankerBroadcastAction` | HumanBanker |
+| `Merchant Interact` | `NPCLookAtInteractorAction`, `SendMerchantBroadcastAction` | HumanGeneralMerchant |
+| `Ability Crafter Interact` | `NPCLookAtInteractorAction`, `SendAbilityCrafterBroadcastAction` | HumanAbilityCrafter |
+| `Dungeon Entrance Interact` | `SendDungeonFinderBroadcastAction` | InstanceDungeonTest |
+| `Teleporter Interact` | `TeleportAction` | every Teleporter |
+| `World Item Pickup` | `PickupWorldItemAction` | Small World Item |
+
+Create more with `FishMMO/ECA/Trigger`, or from the FishMMO Dashboard's **ECA → Triggers** category.
+
+### Server-only actions
+
+Interaction actions run on the server only, gated at **runtime** via `BaseAction.IsServer` rather
+than `#if UNITY_SERVER`. The define is a build-target one and is absent in the editor, where the
+scene server also runs — so the compile-time gate silently emptied every action body in the
+configuration the project is developed in.
+
+### Resolving which interactable a player meant
+
+One GameObject often carries several: an NPC is its own lootable corpse, and an NPC that also trades
+or hands out quests carries that component too. `InteractableResolver` is the single definition of
+the rule — **a corpse wins while it is one**, otherwise the first non-corpse interactable — shared by
+the client's target resolution, the scene server's interaction system, and the quest system.
+
+`Interactable.CanInteract` enforces the other half: a non-corpse interactable on a body refuses, so
+a dead merchant cannot open its shop.
+
+### Rate limiting
+
+`CanInteract` is a pure question. Spending the character's interact rate limit is a separate,
+explicit call to `TryConsumeInteractRateLimit`, because three different callers ask the question and
+only the interaction path should pay for it.
+
 ## Prerequisites
 
 - **Unity 6.3 LTS**

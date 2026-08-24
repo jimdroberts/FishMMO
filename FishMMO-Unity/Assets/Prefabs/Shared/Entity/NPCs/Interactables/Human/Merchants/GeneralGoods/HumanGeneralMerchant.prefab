@@ -156,7 +156,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 6349228138187238843}
   _networkObjectCache: {fileID: 6349228138187238843}
   InteractionRange: 3.5
-  onInteractTriggers: []
+  onInteractTriggers:
+  - {fileID: 11400000, guid: 1131aa5377e19ec030d6ba5d5dae3e27, type: 2}
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Template: {fileID: 11400000, guid: 335c46c3e1940fa41a866740a873f64a, type: 2}
   AchievementTemplate: {fileID: 0}

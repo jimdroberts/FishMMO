@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
@@ -23,7 +23,13 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing the interaction context.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-#if UNITY_SERVER
+			// Server-only. Runtime check, not #if UNITY_SERVER: that define is absent in the
+			// editor, where the scene server also runs — see BaseAction.IsServer.
+			if (!IsServer(initiator))
+			{
+				return;
+			}
+
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
 			ILoreObject loreObject = data.Interactable as ILoreObject;
@@ -115,7 +121,6 @@ namespace FishMMO.Shared
 			{
 				achievementController.Increment(loreObject.AchievementTemplate, 1);
 			}
-#endif
 		}
 	}
 }

@@ -5,6 +5,7 @@ using FishNet.Component.Transforming;
 using FishNet.Observing;
 using FishNet.Connection;
 using FishNet.Serializing;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -57,6 +58,32 @@ namespace FishMMO.Shared
 		/// If true, this NPC can be charmed by players.
 		/// </summary>
 		public bool IsCharmable;
+
+		[Header("Respawn")]
+		[Tooltip("Shortest time in seconds before this NPC respawns after its corpse decays. A spawner may override it.")]
+		[Min(0f)]
+		public float MinimumRespawnTime = 30f;
+
+		/// <summary>
+		/// Longest time in seconds before this NPC respawns after its corpse decays.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The prefab is the right home for these because respawn cadence is a property of the
+		/// creature, not of the patch of ground it stands on: a wolf should come back at wolf pace
+		/// wherever it is placed, and a rare spawn should stay rare at every spawner that can
+		/// produce it. Before this, the values lived only on <see cref="NPCSpawnableSettings"/> and
+		/// defaulted to zero — so any spawner whose author did not fill them in respawned its
+		/// creatures instantly, forever.
+		/// </para>
+		/// <para>
+		/// A spawner can still override the pair for a specific placement — see
+		/// <see cref="NPCSpawnableSettings.MinimumRespawnTime"/>.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Longest time in seconds before this NPC respawns after its corpse decays. A spawner may override it.")]
+		[Min(0f)]
+		public float MaximumRespawnTime = 60f;
 
 		[Header("Corpse Decay")]
 		[Tooltip("Seconds the corpse remains visible after death before returning to the object pool.")]
@@ -177,6 +204,28 @@ namespace FishMMO.Shared
 			set { spawnableSettings = value; }
 		}
 
+#if UNITY_EDITOR
+		/// <summary>
+		/// Keeps the respawn range orderable in the inspector.
+		/// </summary>
+		/// <remarks>
+		/// An inverted range is not merely odd: the RNG returns the minimum whenever
+		/// <c>min &gt;= max</c>, so a prefab authored 60-to-30 would silently respawn at a fixed
+		/// 60 seconds and never vary. Clamping here makes that impossible to author by accident.
+		/// </remarks>
+		protected virtual void OnValidate()
+		{
+			if (MinimumRespawnTime < 0f)
+			{
+				MinimumRespawnTime = 0f;
+			}
+			if (MaximumRespawnTime < MinimumRespawnTime)
+			{
+				MaximumRespawnTime = MinimumRespawnTime;
+			}
+		}
+#endif
+
 		/// <summary>
 		/// Called when the NPC is awakened. Handles name cleanup and registration.
 		/// </summary>
@@ -195,10 +244,6 @@ namespace FishMMO.Shared
 			{
 				CharacterNameLabel.text = GameObject.name;
 			}
-#else
-			// Register this NPC in the scene object registry on the server.
-			// SceneObject registration only needs to happen once per object lifetime.
-			SceneObject.Register(this);
 #endif
 		}
 
@@ -218,6 +263,13 @@ namespace FishMMO.Shared
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
+
+			/* Registration moved here from OnAwake's #if UNITY_SERVER arm, which is undefined when
+			 * the scene server runs from the editor — so no NPC ever entered the registry there,
+			 * every NPC kept ID 0, and the interaction path could not resolve a single one. This
+			 * is the same compile-time gate already removed from this method's body below, and it
+			 * cost the same thing twice. Re-registering a pooled NPC keeps its existing ID. */
+			SceneObject.Register(this);
 
 			// Re-roll seed and RNG on every spawn (pool reuse).
 			// ResetState clears these when the object returns to the pool.
@@ -685,16 +737,33 @@ namespace FishMMO.Shared
 		public List<Trigger> OnInteractTriggers => onInteractTriggers;
 
 		/// <inheritdoc />
-		public void ExecuteOnInteract(EventData eventData)
+		/// <remarks>
+		/// Unlike every other interactable, an NPC with no triggers is not a misconfiguration:
+		/// looting is wired directly into the interaction handler precisely so that a creature
+		/// with an empty list is still lootable. Triggers here are the optional extras — an
+		/// achievement, a quest update, a line of dialogue on the body — so an empty list is
+		/// silent.
+		/// </remarks>
+		public bool ExecuteOnInteract(EventData eventData)
 		{
-			if (onInteractTriggers == null)
+			if (onInteractTriggers == null || onInteractTriggers.Count < 1)
 			{
-				return;
+				return false;
 			}
+
+			bool fired = false;
 			for (int i = 0; i < onInteractTriggers.Count; ++i)
 			{
-				onInteractTriggers[i]?.Execute(eventData);
+				Trigger trigger = onInteractTriggers[i];
+				if (trigger == null)
+				{
+					Log.Warning("NPC", $"'{Name}' has an empty entry at index {i} of its OnInteract triggers; skipping it.");
+					continue;
+				}
+				trigger.Execute(eventData);
+				fired = true;
 			}
+			return fired;
 		}
 
 		/// <summary>
@@ -731,6 +800,10 @@ namespace FishMMO.Shared
 		/// that the NPC is dead, which is all it needs to decide whether to send a request; the
 		/// server additionally holds the contributor snapshot and is the only place eligibility is
 		/// actually enforced. A client that lies here gets a refusal, not loot.
+		/// <para>
+		/// Pure, like every other <see cref="IInteractable.CanInteract"/>. The corpse rate limit is
+		/// spent through <see cref="TryConsumeInteractRateLimit"/> instead.
+		/// </para>
 		/// </remarks>
 		public virtual bool CanInteract(IPlayerCharacter character)
 		{
@@ -755,6 +828,16 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			return true;
+		}
+
+		/// <inheritdoc />
+		public bool TryConsumeInteractRateLimit(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				return false;
+			}
 			if (character.NextInteractTime >= DateTime.UtcNow)
 			{
 				return false;
@@ -762,6 +845,9 @@ namespace FishMMO.Shared
 			character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(CORPSE_INTERACT_RATE_LIMIT);
 			return true;
 		}
+
+		/// <inheritdoc />
+		public double InteractRateLimit => CORPSE_INTERACT_RATE_LIMIT;
 
 		/// <summary>
 		/// Creates <see cref="Ability"/> instances from the inspector-configured

@@ -4,6 +4,7 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Serializing;
 using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -38,12 +39,43 @@ namespace FishMMO.Shared
 		public List<Trigger> OnInteractTriggers => onInteractTriggers;
 
 		/// <inheritdoc />
-		public void ExecuteOnInteract(EventData eventData)
+		/// <remarks>
+		/// <para>
+		/// Every entry is null-checked. A list element left empty in the inspector is an easy
+		/// authoring slip and used to take the whole interaction down with a
+		/// NullReferenceException, losing the triggers after it as well as the one that was blank.
+		/// </para>
+		/// <para>
+		/// An interactable with no triggers at all is warned about once per interaction rather
+		/// than passing silently. There is no default behaviour left in these classes — the ECA
+		/// list is the entire implementation — so an empty list means the object does nothing when
+		/// used, and that is indistinguishable from a broken object unless it says so.
+		/// </para>
+		/// </remarks>
+		public bool ExecuteOnInteract(EventData eventData)
 		{
+			if (onInteractTriggers == null || onInteractTriggers.Count < 1)
+			{
+				Log.Warning("Interactable",
+					$"'{Name}' ({GetType().Name}) was interacted with but has no OnInteract triggers configured, so nothing happened. " +
+					"Interaction behaviour is defined entirely by ECA triggers; assign one on the prefab or scene object.");
+				return false;
+			}
+
+			bool fired = false;
 			for (int i = 0; i < onInteractTriggers.Count; ++i)
 			{
-				onInteractTriggers[i].Execute(eventData);
+				Trigger trigger = onInteractTriggers[i];
+				if (trigger == null)
+				{
+					Log.Warning("Interactable",
+						$"'{Name}' ({GetType().Name}) has an empty entry at index {i} of its OnInteract triggers; skipping it.");
+					continue;
+				}
+				trigger.Execute(eventData);
+				fired = true;
 			}
+			return fired;
 		}
 
 		/// <summary>
@@ -124,11 +156,36 @@ namespace FishMMO.Shared
 					character.CharacterGuildLabel.text = $"<<color=#{hex}>{Title}</color>>";
 				}
 			}
+#endif
 		}
-#else
+
+		/// <summary>
+		/// Registers this interactable in the scene object registry and assigns its ID.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Deliberately not in <c>Awake</c> under <c>#if UNITY_SERVER</c>, which is where it used
+		/// to live. <c>UNITY_SERVER</c> is a build-target define, and the scene server also runs
+		/// from the editor — where it is undefined. Every interactable therefore skipped
+		/// registration there, kept ID 0, and sent 0 to every client in <see cref="WritePayload"/>;
+		/// the server's own registry stayed empty, so <c>ValidateSceneObject</c> refused every
+		/// interaction in the world. Nothing could be talked to, looted, or bound to outside a
+		/// dedicated server build. This is the same gate that had already been found and removed
+		/// from <c>NPC.OnStartServer</c>, for the same reason.
+		/// </para>
+		/// <para>
+		/// <see cref="OnStartServer"/> is the correct home: FishNet invokes it only on a peer that
+		/// is actually running a server, and it runs before the spawn message — and therefore
+		/// before <see cref="WritePayload"/> — is built, so the ID a client receives is the one
+		/// assigned here. Re-registration on pool reuse is a no-op that preserves the existing ID.
+		/// </para>
+		/// </remarks>
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+
 			SceneObject.Register(this);
 		}
-#endif
 
 		/// <summary>
 		/// Called when the object is destroyed. Unregisters this interactable from the scene.
@@ -231,22 +288,47 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		/// <summary>
-		/// Returns true if the specified player character can interact with this object.
-		/// Checks rate limiting and range before allowing interaction.
-		/// </summary>
+		/// <inheritdoc />
+		/// <remarks>
+		/// Range, and not being a corpse. The rate limit is no longer spent here — see
+		/// <see cref="IInteractable.CanInteract"/> for why a question that answered by consuming a
+		/// budget could not be asked by three callers at once.
+		/// </remarks>
 		/// <param name="character">The player character attempting to interact.</param>
 		/// <returns>True if interaction is allowed, false otherwise.</returns>
 		public virtual bool CanInteract(IPlayerCharacter character)
 		{
-			if (character != null &&
-				character.NextInteractTime < DateTime.UtcNow && InRange(character.Transform))
+			if (character == null)
 			{
-				character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(InteractRateLimit);
-
-				return true;
+				return false;
 			}
-			return false;
+
+			/* A dead body does not trade, bank, or hand out work. This component may share its
+			 * GameObject with an NPC that is currently a corpse, and while it is, the corpse is
+			 * the only thing on that object anyone can interact with — which is the same rule the
+			 * target resolver uses to decide which component a player meant. Without it, a player
+			 * could open a shop on the merchant they had just killed. */
+			if (InteractableResolver.IsCorpse(GameObject))
+			{
+				return false;
+			}
+
+			return InRange(character.Transform);
+		}
+
+		/// <inheritdoc />
+		public bool TryConsumeInteractRateLimit(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				return false;
+			}
+			if (character.NextInteractTime >= DateTime.UtcNow)
+			{
+				return false;
+			}
+			character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(InteractRateLimit);
+			return true;
 		}
 
 #if UNITY_EDITOR

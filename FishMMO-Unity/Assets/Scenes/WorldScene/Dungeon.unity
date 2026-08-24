@@ -659,7 +659,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 520637846}
   _networkObjectCache: {fileID: 520637846}
   InteractionRange: 3.5
-  onInteractTriggers: []
+  onInteractTriggers:
+  - {fileID: 11400000, guid: 0a6aa6eb1dcea50a25afa70dbe803610, type: 2}
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 1770604219}
   DestinationID: 

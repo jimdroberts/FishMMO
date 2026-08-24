@@ -292,9 +292,10 @@ namespace FishMMO.Shared
 			}
 
 			// GetNextRespawnTime reads the settings, so capture the time before clearing them.
-			// A settings reference can legitimately be null if the object was adopted rather than
-			// spawned here; fall back to the spawner's own initial respawn time.
-			DateTime respawnTime = GetNextRespawnTime(spawnable.SpawnableSettings);
+			// The spawnable is passed too: a settings reference can legitimately be null when the
+			// object was adopted rather than spawned here, and the instance itself may still know
+			// its own respawn cadence.
+			DateTime respawnTime = GetNextRespawnTime(spawnable.SpawnableSettings, spawnable);
 			SpawnableRespawnTimers.Add(respawnTime);
 
 			// Clear references to the spawner and settings.
@@ -313,18 +314,72 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Calculates the next respawn time for a spawnable object based on its settings and spawner configuration.
 		/// </summary>
-		/// <param name="spawnableSettings">The settings for the spawnable object.</param>
+		/// <remarks>
+		/// The range comes from <see cref="SpawnableSettings.ResolveRespawnTimeRange"/> rather than
+		/// from the settings' fields, so a subclass can answer with its prefab's own cadence when
+		/// this spawner has not overridden it. That is what lets an NPC prefab carry a sensible
+		/// default and a spawner override it only where a placement genuinely differs.
+		/// </remarks>
+		/// <param name="spawnableSettings">The settings for the spawnable object, or null.</param>
+		/// <param name="spawnable">The instance being despawned, when there is one.</param>
 		/// <returns>The DateTime when the object should respawn.</returns>
-		private DateTime GetNextRespawnTime(SpawnableSettings spawnableSettings)
+		private DateTime GetNextRespawnTime(SpawnableSettings spawnableSettings, ISpawnable spawnable = null)
 		{
-			// A null settings reference means the object was not spawned through this spawner's
-			// normal path; the spawner's own initial respawn time is the only sane answer.
-			TimeSpan respawnDelay = RandomRespawnTime && spawnableSettings != null
-				? TimeSpan.FromSeconds(DeterministicRNG.Shared.Range(spawnableSettings.MinimumRespawnTime, spawnableSettings.MaximumRespawnTime))
-				: TimeSpan.FromSeconds(InitialRespawnTime);
+			if (!TryResolveRespawnRange(spawnableSettings, spawnable, out float minimum, out float maximum))
+			{
+				// Nothing knows a cadence for this object — it was adopted rather than spawned
+				// here and is not an NPC. The spawner's own initial respawn time is all that is
+				// left to go on.
+				return DateTime.UtcNow.Add(TimeSpan.FromSeconds(InitialRespawnTime));
+			}
+
+			/* When randomisation is off the MAXIMUM is the delay, which is what the
+			 * RandomRespawnTime tooltip has always promised. It used to fall back to
+			 * InitialRespawnTime instead — a different setting entirely, defaulting to zero — so
+			 * turning randomisation off made a spawner respawn its objects instantly and ignore
+			 * every respawn value authored anywhere. */
+			float delay = RandomRespawnTime
+				? DeterministicRNG.Shared.Range(minimum, maximum)
+				: maximum;
 
 			// Return the DateTime of when the object should respawn.
-			return DateTime.UtcNow.Add(respawnDelay);
+			return DateTime.UtcNow.Add(TimeSpan.FromSeconds(delay));
+		}
+
+		/// <summary>
+		/// Finds a respawn delay range for an object, from its settings or from the object itself.
+		/// </summary>
+		/// <param name="spawnableSettings">The settings for the spawnable object, or null.</param>
+		/// <param name="spawnable">The instance being despawned, when there is one.</param>
+		/// <param name="minimum">Receives the shortest respawn delay in seconds.</param>
+		/// <param name="maximum">Receives the longest respawn delay in seconds.</param>
+		/// <returns>True when a range was found.</returns>
+		private static bool TryResolveRespawnRange(SpawnableSettings spawnableSettings, ISpawnable spawnable, out float minimum, out float maximum)
+		{
+			if (spawnableSettings != null)
+			{
+				spawnableSettings.ResolveRespawnTimeRange(out minimum, out maximum);
+				return true;
+			}
+
+			/* No settings, so ask the instance. An NPC adopted by this spawner rather than spawned
+			 * through it still carries its own cadence, and honouring it is strictly better than
+			 * the old behaviour of respawning such an object on InitialRespawnTime — which is
+			 * zero unless someone set it. */
+			NPC npc = spawnable != null && spawnable.NetworkObject != null
+				? spawnable.NetworkObject.GetComponent<NPC>()
+				: null;
+
+			if (npc == null)
+			{
+				minimum = 0f;
+				maximum = 0f;
+				return false;
+			}
+
+			minimum = Mathf.Max(0f, npc.MinimumRespawnTime);
+			maximum = Mathf.Max(minimum, npc.MaximumRespawnTime);
+			return true;
 		}
 
 		/// <summary>

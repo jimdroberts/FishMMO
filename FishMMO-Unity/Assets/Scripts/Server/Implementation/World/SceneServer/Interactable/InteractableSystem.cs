@@ -451,9 +451,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				IInteractable interactable = ResolveInteractable(sceneObject);
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
 				if (interactable != null &&
-					interactable.CanInteract(character))
+					interactable.CanInteract(character) &&
+					interactable.TryConsumeInteractRateLimit(character))
 				{
 					/* Corpse looting is handled directly rather than through a trigger, because it
 					 * is intrinsic to any NPC that can die: an NPC whose prefab has no interact
@@ -507,30 +508,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Resolves the interactable a client's scene object ID actually named.
 		/// </summary>
 		/// <remarks>
-		/// The registered scene object IS the interactable whenever it implements the interface,
-		/// and that identity is what the client's ID refers to. Reaching for
-		/// <c>GetComponent&lt;IInteractable&gt;()</c> instead asks the GameObject for "an"
-		/// interactable and takes whichever component order happens to yield — fine while every
-		/// GameObject had exactly one, and wrong the moment one has two. An NPC now does: it is
-		/// itself a lootable corpse, and an NPC that is also a merchant or a banker carries that
-		/// component too, so a player looting a dead merchant could have their request answered by
-		/// the shop. The fallback is kept for interactables that register through some other
-		/// component.
+		/// Delegates to <see cref="InteractableResolver"/>, which is the single definition of the
+		/// corpse-versus-living rule shared by the client's target resolution, this system, and the
+		/// quest system. It used to be written out here alone, which is how the quest system came
+		/// to keep the raw <c>GetComponent&lt;IInteractable&gt;()</c> this replaced.
 		/// </remarks>
 		/// <param name="sceneObject">The resolved scene object.</param>
 		/// <returns>The interactable, or null.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static IInteractable ResolveInteractable(ISceneObject sceneObject)
 		{
-			if (sceneObject == null)
-			{
-				return null;
-			}
-			if (sceneObject is IInteractable interactable)
-			{
-				return interactable;
-			}
-			return sceneObject.GameObject != null ? sceneObject.GameObject.GetComponent<IInteractable>() : null;
+			return InteractableResolver.Resolve(sceneObject);
 		}
 
 		/// <summary>

@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -513,7 +513,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
+				/* Resolve through the shared rule rather than GetComponent. A quest giver is an NPC,
+				 * and an NPC is also its own lootable corpse — so component order decided which of
+				 * the two answered, and a dead one could answer for a live quest. The resolver
+				 * hands back the corpse while the NPC is dead, which is not an IQuestInteractable,
+				 * so the request is refused below. CanInteract additionally refuses any non-corpse
+				 * interactable on a body.
+				 *
+				 * The interact rate limit is deliberately not spent here: this path already holds
+				 * its own ingress guard, and consuming the limiter would refuse a quest accepted
+				 * moments after the interaction that offered it. */
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
 				if (interactable == null || !interactable.CanInteract(character))
 				{
 					return;
@@ -600,7 +610,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
+				/* Resolve through the shared rule rather than GetComponent. A quest giver is an NPC,
+				 * and an NPC is also its own lootable corpse — so component order decided which of
+				 * the two answered, and a dead one could answer for a live quest. The resolver
+				 * hands back the corpse while the NPC is dead, which is not an IQuestInteractable,
+				 * so the request is refused below. CanInteract additionally refuses any non-corpse
+				 * interactable on a body.
+				 *
+				 * The interact rate limit is deliberately not spent here: this path already holds
+				 * its own ingress guard, and consuming the limiter would refuse a quest accepted
+				 * moments after the interaction that offered it. */
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
 				if (interactable == null || !interactable.CanInteract(character))
 				{
 					return;

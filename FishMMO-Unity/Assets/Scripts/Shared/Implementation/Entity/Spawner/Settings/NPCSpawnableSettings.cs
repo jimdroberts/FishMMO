@@ -277,6 +277,57 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Resolves the respawn delay range, preferring this spawner's override and falling back
+		/// to the NPC prefab's own cadence.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="SpawnableSettings.MinimumRespawnTime"/> and
+		/// <see cref="SpawnableSettings.MaximumRespawnTime"/> are OVERRIDES here, not the values
+		/// themselves. Leaving both at zero — which is what an author who has not thought about
+		/// respawn timing leaves them at — means "use whatever the prefab says", so a creature
+		/// keeps its own cadence at every spawner that can produce it and only differs where
+		/// someone deliberately said it should.
+		/// </para>
+		/// <para>
+		/// Zero is the unset marker rather than a separate toggle, matching
+		/// <see cref="CorpseDecayDurationOverride"/>. It costs the ability to author a genuinely
+		/// instant respawn, which is degenerate for an NPC and was previously the accidental
+		/// default for every spawner that left these blank.
+		/// </para>
+		/// <para>
+		/// Only the maximum is tested for "set". A minimum of zero is a legitimate override — "any
+		/// time between now and thirty seconds" is a real cadence — whereas a maximum of zero
+		/// cannot describe a range at all.
+		/// </para>
+		/// </remarks>
+		/// <param name="minimum">Receives the shortest respawn delay in seconds.</param>
+		/// <param name="maximum">Receives the longest respawn delay in seconds.</param>
+		public override void ResolveRespawnTimeRange(out float minimum, out float maximum)
+		{
+			if (MaximumRespawnTime > 0f)
+			{
+				base.ResolveRespawnTimeRange(out minimum, out maximum);
+				return;
+			}
+
+			/* Read off the PREFAB, not off any live instance. This is called both when an NPC
+			 * despawns and at spawner start-up before anything has been instantiated, so the
+			 * prefab is the only source available on both paths — and it is the correct one
+			 * regardless, since a pooled instance carries whatever the last spawner to use it
+			 * wrote. */
+			NPC prefabNPC = NetworkObject != null ? NetworkObject.GetComponent<NPC>() : null;
+			if (prefabNPC == null)
+			{
+				base.ResolveRespawnTimeRange(out minimum, out maximum);
+				return;
+			}
+
+			minimum = Mathf.Max(0f, prefabNPC.MinimumRespawnTime);
+			maximum = Mathf.Max(minimum, prefabNPC.MaximumRespawnTime);
+		}
+
+		/// <summary>
 		/// Validates the settings, and reports scale ranges that cannot produce a value.
 		/// </summary>
 		public override void OnValidate()

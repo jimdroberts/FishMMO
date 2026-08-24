@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Shared;
 
@@ -56,6 +56,33 @@ namespace FishMMO.Shared.Core
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">Event data for the action.</param>
 		public abstract void Execute(ICharacter initiator, EventData eventData);
+
+		/// <summary>
+		/// True when this action is running on a peer that is actually hosting a server.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The runtime replacement for <c>#if UNITY_SERVER</c>, which every server-only action body
+		/// used to be wrapped in. <c>UNITY_SERVER</c> is a build-target define, so it is undefined
+		/// in the editor — and the scene server runs from the editor. Every one of those bodies
+		/// therefore compiled to nothing there, which meant a bindstone bound nobody, a merchant
+		/// opened no shop, and a teleporter moved no one, in the configuration the project is
+		/// developed in. It is the same compile-time gate already found and removed from
+		/// <c>NPC.OnStartServer</c> and from scene object registration.
+		/// </para>
+		/// <para>
+		/// Asks the initiator's own <see cref="FishNet.Object.NetworkObject"/> rather than a global
+		/// singleton, so a client-hosted process answers for the peer the character belongs to.
+		/// </para>
+		/// </remarks>
+		/// <param name="initiator">The character the action is running for.</param>
+		/// <returns>True when the local peer's server is initialized.</returns>
+		protected static bool IsServer(ICharacter initiator)
+		{
+			return initiator != null &&
+				   initiator.NetworkObject != null &&
+				   initiator.NetworkObject.IsServerInitialized;
+		}
 
 		/// <summary>
 		/// Strict target resolution: returns the explicit <see cref="EventData.TargetCharacter"/>
