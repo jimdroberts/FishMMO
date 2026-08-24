@@ -740,98 +740,110 @@ Both login panels additionally report a connection that stopped **without** the 
 62. **Reconcile Delta Efficiency** — Delta serializer sends only changed fields. Idle tick: ~20 bytes. Walking: ~43 bytes. Combat: ~86 bytes. Full struct: ~223-1300 bytes raw → 95-97% reduction.
 
 ### AI System (NPC)
-63. **State Machine** — `BaseAIState` subclasses: Idle, Wander, Patrol, ReturnHome, Retreat, MeleeAttacking, RangedAttacking, CasterAttacking, HealerAttacking (via `BaseAttackingState`), GetBehind, Orbit, PetIdle, BossScript, plus `AggressionState`.  
-64. **Behavior Tree** — `AIBehaviorTree` of `AIBehaviorNode`s: `AISelector`, `AISequence`, `AIInverter`, `AIRepeater`, `AICompositeNode`, `AIConditionNode`, plus game-specific leaves `AIHasTargetNode`, `AIIsDeadNode`, `AIGroupInCombatNode`, `AIAdoptGroupTargetNode`, `AIStateTransitionNode`.  
-65. **Group Combat** — `NPCGroup` with roles, pack tactics, aggression management.  
-66. **Boss Mechanics** — `BossPhase`, `BossScript`, `BossTimedMechanic`.  
-67. **Navigation** — NavMeshAgent-based with waypoints, avoidance priorities, LOD settings.  
-68. **Deterministic RNG** — Seeded per-NPC for reproducible behavior.  
-69. **Ability Rotation** — `AIAbilityRotation` for combat ability selection.  
-70. **Combat Personality** — `AICombatPersonality` configuration for varied NPC combat styles.
+63. **State Machine** — `BaseAIState` subclasses: Idle, Wander, Patrol, ReturnHome, Retreat, GetBehind, Orbit, PetIdle, and the attacking family (`BaseAttackingState` plus Melee/Ranged/Caster/Pet presets and the Healer/Defender/Rogue subclasses), plus `AggressionState` and `BossScript`.  
+64. **Archetypes Are Data** — `AIArchetypeTemplate` is one asset that is a whole brain: states, personality, ability rotation, behaviour tree, threat tuning and LOD profile. Assign it to `AIController.Archetype` and every other slot fills itself in at spawn. `Validate()` reports configurations that spawn and then quietly misbehave. 16 archetypes ship (10 enemy, 6 pet).  
+65. **Shared Combat Decision** — `AICombatDecision.Plan` is a pure function over plain floats that every attacking state runs. Melee, archer, caster, defender and rogue behaviour fall out of four serialized numbers, so an archetype's behaviour is assertable in an EditMode test without a scene.  
+66. **Tick-Driven Brain** — The AI runs on the FishNet `TimeManager` tick, not `Update`. `AiTickRate` (default 8 Hz) is rounded to a whole divisor of the 30 Hz network tick so the brain is phase-locked and its rate does not move with server load. Elapsed time per tick is computed, not measured.  
+67. **Level of Detail** — Four distance tiers with per-tier intervals counted in AI ticks: Active (full pipeline), Nearby (no BT/boss/sweep; combat entry is event-driven), Far (movement only), Dormant (wake-up check). Three profiles ship, including a responsive one for pets.  
+68. **Combat Slots** — `AICombatSlots` gives each attacker on a shared target its own angular slot, with ring capacity derived from agent geometry and a staggered second rank for overflow. Unity's local avoidance stops agents overlapping but has no say in where they are going; several NPCs sent to one point shove each other around it regardless of tuning.  
+69. **Movement Correctness** — `AIController.Movement` reports `Complete` / `Partial` / `Failed` / `Throttled` rather than assuming success. Unity returns a *partial* path to an unreachable destination instead of failing, so an NPC that only checks arrival distance stops at the near side of an obstacle and reports success. Includes widening NavMesh sampling, stuck detection, and escalating recovery that warps only after visibly failing to walk out.  
+70. **Group Combat** — `NPCGroup` with roles and pack tactics (Surround, Flank, FocusFire, Kite) that assign each member a distinct orbit angle and ring radius.  
+71. **Boss Mechanics** — `BossPhase`, `BossScript`, `BossTimedMechanic`.  
+72. **Behavior Tree** — `AIBehaviorTree` of `AIBehaviorNode`s: `AISelector`, `AISequence`, `AIInverter`, `AIRepeater`, `AICompositeNode`, `AIConditionNode`, plus game-specific leaves `AIHasTargetNode`, `AIIsDeadNode`, `AIGroupInCombatNode`, `AIAdoptGroupTargetNode`, `AIStateTransitionNode`. The editor refuses cyclic connections and the runtime carries a depth guard, so a hand-edited asset degrades to a failed evaluation instead of a stack overflow that terminates the server.  
+73. **Deterministic RNG** — Seeded per-NPC for reproducible behavior, now paired with tick-driven timing so *when* a roll is drawn is reproducible too.  
+74. **Ability Rotation** — `AIAbilityRotation` for condition-driven combat ability selection, evaluated before the default scorer.  
+75. **Combat Personality** — `AICombatPersonality` styles: Balanced, Aggressive, Defensive, Cautious, Berserker, Pathetic, Determined, Rampaging. Targeting modes: Threat, Random, Weakest, Nearest. A Pathetic personality is guaranteed a retreat threshold even if the field is left at zero; Rampaging forces random re-targeting so it cannot be held by threat.
 
 ### Interactable System
-71. **16 Interactable Types** — All derive from `Interactable : NetworkBehaviour, IInteractable, ISpawnable`: `AbilityCrafter`, `Banker`, `Bindstone`, `CapturePoint`, `Container`, `DialogueInteractable`, `DungeonEntrance`, `GatheringNode`, `LoreObject`, `Mailbox`, `Merchant`, `QuestInteractable`, `Shrine`, `Switch`, `Teleporter`, `WorldItem`.  
-72. **Base Interaction — ECA-Authored, No Handler Plugins** — `InteractionRange` 3.5u default, `INTERACT_RATE_LIMIT` of 60ms (overridable per type via `InteractRateLimit`). Behaviour is authored entirely as a `List<Trigger> OnInteractTriggers` on the interactable prefab and fired via `IInteractable.ExecuteOnInteract(EventData)`. There is **no** server-side handler-plugin architecture — no handler interface, no registration attribute, and no handler initializer exists anywhere in the codebase.  
-73. **Server-Side Validation** — The server's `InteractableSystem` validates the scene, runs `ValidateSceneObject` against the character's scene handle, resolves the `IInteractable` component, checks `CanInteract()` (which covers `InRange()` and the rate limit), then invokes `ExecuteOnInteract` with a `PlayerInteractionEventData` — all inside an `IngressGuard`.  
-74. **Capture Points** — PvP capture points with state machine (`CapturePointTemplate`, `ObjectiveState`).  
-75. **Dialogue Trees** — `DialogueTemplate` with `DialogueNode`/`DialogueChoice`, server-authoritative session management with choice bitmasks.  
-76. **Gathering Nodes** — Harvesting with `GatheringDrop` drop tables, cooldowns, remaining uses (`GatheringNodeTemplate`).  
-77. **Merchant Tabs** — Categorized merchant inventory tabs (`MerchantTabType`, `MerchantTemplate`).
+76. **16 Interactable Types** — All derive from `Interactable : NetworkBehaviour, IInteractable, ISpawnable`: `AbilityCrafter`, `Banker`, `Bindstone`, `CapturePoint`, `Container`, `DialogueInteractable`, `DungeonEntrance`, `GatheringNode`, `LoreObject`, `Mailbox`, `Merchant`, `QuestInteractable`, `Shrine`, `Switch`, `Teleporter`, `WorldItem`.  
+77. **Base Interaction — ECA-Authored, No Handler Plugins** — `InteractionRange` 3.5u default, `INTERACT_RATE_LIMIT` of 60ms (overridable per type via `InteractRateLimit`). Behaviour is authored entirely as a `List<Trigger> OnInteractTriggers` on the interactable prefab and fired via `IInteractable.ExecuteOnInteract(EventData)`. There is **no** server-side handler-plugin architecture — no handler interface, no registration attribute, and no handler initializer exists anywhere in the codebase.  
+78. **Server-Side Validation** — The server's `InteractableSystem` validates the scene, runs `ValidateSceneObject` against the character's scene handle, resolves the `IInteractable` component, checks `CanInteract()` (which covers `InRange()` and the rate limit), then invokes `ExecuteOnInteract` with a `PlayerInteractionEventData` — all inside an `IngressGuard`.  
+79. **Capture Points** — PvP capture points with state machine (`CapturePointTemplate`, `ObjectiveState`).  
+80. **Dialogue Trees** — `DialogueTemplate` with `DialogueNode`/`DialogueChoice`, server-authoritative session management with choice bitmasks.  
+81. **Gathering Nodes** — Harvesting with `GatheringDrop` drop tables, cooldowns, remaining uses (`GatheringNodeTemplate`).  
+82. **Merchant Tabs** — Categorized merchant inventory tabs (`MerchantTabType`, `MerchantTemplate`).
 
 ### Faction System
-78. **Faction Standing** — Per-faction integer standing with Allied/Neutral/Hostile classification.  
-79. **Faction Matrices** — Template-driven faction relationship matrices with editor tooling.
+83. **Faction Standing** — Per-faction integer standing with Allied/Neutral/Hostile classification.  
+84. **Faction Matrices** — Template-driven faction relationship matrices with editor tooling.
 
 ### Quest System
-80. **Quest Lifecycle** — Inactive → Active → Complete → TurnedIn / Failed.  
-81. **Objective Tracking** — Per-objective progress with required amounts.  
-82. **Attribute Requirements** — Pre-requisite attribute checks before acceptance.
+85. **Quest Lifecycle** — Inactive → Active → Complete → TurnedIn / Failed.  
+86. **Objective Tracking** — Per-objective progress with required amounts.  
+87. **Attribute Requirements** — Pre-requisite attribute checks before acceptance.
 
 ### Social Systems
-83. **Friends** — Friend list management with online status.  
-84. **Guilds** — Membership, invites, ranks, join/leave ECA triggers.  
-85. **Parties** — Creation, invites, member tracking, leader ranks.
+88. **Friends** — Friend list management with online status.  
+89. **Guilds** — Membership, invites, ranks, join/leave ECA triggers.  
+90. **Parties** — Creation, invites, member tracking, leader ranks.
 
 ### World System
-86. **World Scene Details** — Per-scene configuration: max clients, spawn/respawn positions, teleporters, boundaries.  
-87. **Day/Night Cycle** — Configurable cycle durations, skybox transitions, object activation/deactivation, material alpha fading, ECA triggers for day/night transitions.  
-88. **Spawner System** — Linear/Random/Weighted spawning with respawn conditions (OR/AND), initial/max counts, pooling (`ObjectSpawner`). NPC corpse decay with per-spawner override. Re-rolled attributes on each spawn.  
-89. **Teleporter System** — Cross-scene and same-scene teleportation with cached destinations.  
-90. **Region System** — Zone definitions for area effects (fog, skybox, audio, buffs, attributes, region name display).  
-91. **Scene Boundaries** — Terrain and custom boundary definitions.
+91. **World Scene Details** — Per-scene configuration: max clients, spawn/respawn positions, teleporters, boundaries.  
+92. **Day/Night Cycle** — Configurable cycle durations, skybox transitions, object activation/deactivation, material alpha fading, ECA triggers for day/night transitions.  
+93. **Spawner System** — Linear/Random/Weighted spawning with respawn conditions (OR/AND), initial/max counts, pooling (`ObjectSpawner`). NPC corpse decay with per-spawner override. Re-rolled attributes on each spawn.  
+94. **Deterministic Memory Footprint** — `ObjectSpawnerPool` reserves `MaxSpawnCount + PrewarmHeadroom` instances of every prefab a spawner can select, at scene load, de-duplicated across spawners sharing a prefab. Entities are cached and recycled through FishNet's pool rather than destroyed; the pre-warm converts a heap that grew as players explored into a one-time load cost you can plan capacity against.  
+95. **Per-Spawner Entity Overrides** — `NPCSpawnableSettings` rolls attributes, AI archetype, additional or replacement abilities, faction, corpse decay and a random uniform scale. `ItemSpawnableSettings` carries a weighted roll table. One prefab serves a zone's worth of variants, which matters for memory as well as content: a duplicated prefab is a second pool bucket and a second fixed slice of the budget.  
+96. **Teleporter System** — Cross-scene and same-scene teleportation with cached destinations.  
+97. **Region System** — Zone definitions for area effects (fog, skybox, audio, buffs, attributes, region name display).  
+98. **Scene Boundaries** — Terrain and custom boundary definitions.
 
 ### Character Appearance & Visual Equipment
-92. **Modular Character System** — One shared humanoid skeleton, one Animator, one animation library for all races and equipment.  
-93. **Body Region System** — Body mesh split into 6 hideable regions (Head, Torso, Arms, Hands, Legs, Feet). `BodyVisibilityManager` with per-slot reference counting for overlapping equipment hides.  
-94. **Character Customization** — Bone scaling for Height, ArmLength, LegLength, TorsoLength, ShoulderWidth, HeadScale. Race presets (Human/Dwarf/Elf). Blend shapes for Weight, MuscleMass, ChestSize, WaistSize.  
-95. **Equipment Visuals** — `EquipmentVisualController` with persistent renderer pool (no Instantiate/Destroy spam). Loads prefabs via Addressables, extracts mesh + materials, binds to skeleton via `SkeletonBinder.BindMeshKeepParent`. A template with no model assigned is treated as "no mesh", not as an error: an unassigned `AssetReference` still serializes as an object with an empty `m_AssetGUID`, so it passes a null check and then throws `InvalidKeyException` out of `LoadAssetAsync` — surfacing as an unhandled exception in the player's console on equipping an ordinary item. The reference is tested with `RuntimeKeyIsValid()` as well as for null, which routes it to the "no mesh configured" warning that already existed to describe exactly that case.  
-96. **Weapon Attachment** — Weapons as `MeshRenderer` children of bone transforms (RightHand, LeftHand). Follow animations automatically. Scale-independent from body proportions.  
-97. **Equipment Mesh Variations** — `EquippableItemTemplate.EquipmentMeshes` list with seed-based selection via `ModelPools`/`ModelSeed`.  
-98. **SkeletonBinder** — Bone name matching with caching. Generation-based cache invalidation for instance ID recycling safety.  
-99. **Animation System** — `CharacterAnimationController` with Speed, IsGrounded, IsCrouching, Jump, Attack, Block, Roll, Cast, Death, RootMotion. FishNet `NetworkAnimator` integration.  
-100. **Ability Animation** — `TriggerAbilityAnimation` maps `AbilityType` to animation: Physical→Attack, Magic→Cast, Block→SetBlocking, Roll→TriggerRoll. Death animation suppresses all other state.
+99. **Modular Character System** — One shared humanoid skeleton, one Animator, one animation library for all races and equipment.  
+100. **Body Region System** — Body mesh split into 6 hideable regions (Head, Torso, Arms, Hands, Legs, Feet). `BodyVisibilityManager` with per-slot reference counting for overlapping equipment hides.  
+101. **Character Customization** — Bone scaling for Height, ArmLength, LegLength, TorsoLength, ShoulderWidth, HeadScale. Race presets (Human/Dwarf/Elf). Blend shapes for Weight, MuscleMass, ChestSize, WaistSize.  
+102. **Equipment Visuals** — `EquipmentVisualController` with persistent renderer pool (no Instantiate/Destroy spam). Loads prefabs via Addressables, extracts mesh + materials, binds to skeleton via `SkeletonBinder.BindMeshKeepParent`. A template with no model assigned is treated as "no mesh", not as an error: an unassigned `AssetReference` still serializes as an object with an empty `m_AssetGUID`, so it passes a null check and then throws `InvalidKeyException` out of `LoadAssetAsync` — surfacing as an unhandled exception in the player's console on equipping an ordinary item. The reference is tested with `RuntimeKeyIsValid()` as well as for null, which routes it to the "no mesh configured" warning that already existed to describe exactly that case.  
+103. **Weapon Attachment** — Weapons as `MeshRenderer` children of bone transforms (RightHand, LeftHand). Follow animations automatically. Scale-independent from body proportions.  
+104. **Equipment Mesh Variations** — `EquippableItemTemplate.EquipmentMeshes` list with seed-based selection via `ModelPools`/`ModelSeed`.  
+105. **SkeletonBinder** — Bone name matching with caching. Generation-based cache invalidation for instance ID recycling safety.  
+106. **Animation System** — `CharacterAnimationController` with Speed, IsGrounded, IsCrouching, Jump, Attack, Block, Roll, Cast, Death, RootMotion. FishNet `NetworkAnimator` integration.  
+107. **Ability Animation** — `TriggerAbilityAnimation` maps `AbilityType` to animation: Physical→Attack, Magic→Cast, Block→SetBlocking, Roll→TriggerRoll. Death animation suppresses all other state.
 
 ### AI Threat System
-101. **Threat Table** — `AggressionController` with damage, healing, resource expenditure threat. Configurable weights per category.  
-102. **Vulnerability Scoring** — Low-health targets (<30%) get 1.5x threat multiplier. Low-mana targets (<20%) get 1.3x multiplier. AI intelligently pressures weakened enemies.  
-103. **Replay-Safe Events** — `AggressionState.IsSpawnedAndAuthoritative()` guard prevents threat double-counting during client-side prediction replay.  
-104. **Object-Pooled Aggression Entries** — Stack-based pool for `AggressionEntry` to avoid per-event allocations.
+108. **Threat Table** — `AggressionController` with damage, healing, resource expenditure threat. Configurable weights per category.  
+109. **Vulnerability Scoring** — Low-health targets (<30%) get 1.5x threat multiplier. Low-mana targets (<20%) get 1.3x multiplier. AI intelligently pressures weakened enemies.  
+110. **Replay-Safe Events** — `AggressionState.IsSpawnedAndAuthoritative()` guard prevents threat double-counting during client-side prediction replay.  
+111. **Object-Pooled Aggression Entries** — Stack-based pool for `AggressionEntry` to avoid per-event allocations.  
+112. **Single-Dispatch Routing** — `AggressionDispatcher` holds one global subscription for the whole process and routes damage by dictionary lookup on the defender, so a hit costs O(1) rather than one delegate invocation per NPC alive. Heal and kill walk a list and skip anyone whose table is empty with a field read.  
+113. **Tick-Derived Staleness Clock** — Decay and expiry share one clock advanced only by `Tick`, so "stale" means *seconds of AI time without an event*. Wall-clock expiry disagreed with tick-driven decay whenever LOD throttled an NPC or the server hitched.  
+114. **Taunts and Threat Abilities** — `ApplyTauntAction` and `ApplyThreatAction` are ECA actions attachable to ability events. The taunt guarantees top threat rather than adding a flat bonus a long fight has already outgrown, and can force an immediate target switch. `ApplyThreatAction` is the caller that finally gives `ResourceWeight` meaning.
 
 ### Network Broadcasts (30+ types)
-105. **Auth** — Authentication request/response, token sync.  
-106. **Character** — Character data, abilities, achievements, archetype, factions, friends, guild, party, pet, quest, hotkeys.  
-107. **Inventory** — Inventory, equipment, bank slot sync.  
-108. **Character Create/Select** — Creation request/result, character details, delete.  
-109. **Chat** — Chat messages with 10 channels (Say, World, Region, Party, Guild, Tell, Trade, System, Command, Discord).  
-110. **Interactable** — Interactable state sync.  
-111. **Naming** — Name reservation/release, ID ↔ name resolution.  
-112. **Scene** — Scene loading, transitions, channel addresses (`ChannelAddress` identifies a channel by its `scenes.id`, never by a process-local handle), scene-routing queue positions (`WorldSceneQueuePositionBroadcast` with a `WorldSceneQueueReason`), voluntary-transfer refusals (`SceneTransferRefusedBroadcast` with a `SceneTransferRefusalReason`: `DestinationUnavailable`, `DestinationFull`, `CharacterStateChanged`, `OnCooldown`, `PartyInstanceExists`, `ServerError`), and the leave-instance request. Both voluntary transfers — a channel switch and a dungeon entrance — finish validating asynchronously after the client has already closed its own UI, so every refusal is named rather than returning silently; a silent refusal is indistinguishable from a lost request, and the obvious response (clicking again) is what the cooldown then swallows.  
-113. **Server Select** — Server list and connection info.
+115. **Auth** — Authentication request/response, token sync.  
+116. **Character** — Character data, abilities, achievements, archetype, factions, friends, guild, party, pet, quest, hotkeys.  
+117. **Inventory** — Inventory, equipment, bank slot sync.  
+118. **Character Create/Select** — Creation request/result, character details, delete.  
+119. **Chat** — Chat messages with 10 channels (Say, World, Region, Party, Guild, Tell, Trade, System, Command, Discord).  
+120. **Interactable** — Interactable state sync.  
+121. **Naming** — Name reservation/release, ID ↔ name resolution.  
+122. **Scene** — Scene loading, transitions, channel addresses (`ChannelAddress` identifies a channel by its `scenes.id`, never by a process-local handle), scene-routing queue positions (`WorldSceneQueuePositionBroadcast` with a `WorldSceneQueueReason`), voluntary-transfer refusals (`SceneTransferRefusedBroadcast` with a `SceneTransferRefusalReason`: `DestinationUnavailable`, `DestinationFull`, `CharacterStateChanged`, `OnCooldown`, `PartyInstanceExists`, `ServerError`), and the leave-instance request. Both voluntary transfers — a channel switch and a dungeon entrance — finish validating asynchronously after the client has already closed its own UI, so every refusal is named rather than returning silently; a silent refusal is indistinguishable from a lost request, and the obvious response (clicking again) is what the cooldown then swallows.  
+123. **Server Select** — Server list and connection info.
 
 ### Bootstrap & Tools
-114. **Bootstrap System** — Multi-environment asset/scene preloading (Editor, Standalone, WebGL), version management, graceful shutdown. Each phase enqueues its work and completes on its own `batch.Completed` signal rather than a shared global event.  
-115. **Addressable Integration** — `AddressableLoadProcessor` for async prefab/sprite/mesh/scene loading with caching.  
-116. **Per-Caller Load Batches** — `BeginProcessQueue()` returns an `AddressableLoadBatch` claiming exactly the items that caller enqueued, with its own `Completed` event, `Progressed` event, `TotalItems`/`CompletedItems`/`Progress`, and `FailedItems`/`HasFailures`. This replaces completion signalling through the processor's global `OnProgressUpdate` multicast delegate, which reported "done" to every bootstrap system and loading screen whenever *any* drain finished and could double-invoke subscribers that resubscribed during dispatch. `OnProgressUpdate` remains as a display-only progress feed. A batch counts an item finished whether it succeeded, failed, or was dropped — failures surface via `FailedItems` instead of withholding completion and stalling boot. Handlers subscribing after completion are invoked immediately, so a fully-cached batch that completes inside `BeginProcessQueue` cannot be missed.  
-117. **Template Caching** — `CachedScriptableObject` with database-wide lookup and Addressable icon/mesh loading.  
-118. **DeterministicRNG** — Reproducible random number generator for networked determinism.  
-119. **SerializableDictionary / SerializableHashSet** — Unity-serializable generic collections with custom property drawers.  
-120. **Version Management** — `VersionBuilder` with `VersionConfig` ScriptableObject; increments major/minor/patch, writes `version.txt` at build time.
+124. **Bootstrap System** — Multi-environment asset/scene preloading (Editor, Standalone, WebGL), version management, graceful shutdown. Each phase enqueues its work and completes on its own `batch.Completed` signal rather than a shared global event.  
+125. **Addressable Integration** — `AddressableLoadProcessor` for async prefab/sprite/mesh/scene loading with caching.  
+126. **Per-Caller Load Batches** — `BeginProcessQueue()` returns an `AddressableLoadBatch` claiming exactly the items that caller enqueued, with its own `Completed` event, `Progressed` event, `TotalItems`/`CompletedItems`/`Progress`, and `FailedItems`/`HasFailures`. This replaces completion signalling through the processor's global `OnProgressUpdate` multicast delegate, which reported "done" to every bootstrap system and loading screen whenever *any* drain finished and could double-invoke subscribers that resubscribed during dispatch. `OnProgressUpdate` remains as a display-only progress feed. A batch counts an item finished whether it succeeded, failed, or was dropped — failures surface via `FailedItems` instead of withholding completion and stalling boot. Handlers subscribing after completion are invoked immediately, so a fully-cached batch that completes inside `BeginProcessQueue` cannot be missed.  
+127. **Template Caching** — `CachedScriptableObject` with database-wide lookup and Addressable icon/mesh loading.  
+128. **DeterministicRNG** — Reproducible random number generator for networked determinism.  
+129. **SerializableDictionary / SerializableHashSet** — Unity-serializable generic collections with custom property drawers.  
+130. **Version Management** — `VersionBuilder` with `VersionConfig` ScriptableObject; increments major/minor/patch, writes `version.txt` at build time.
 
 ### Editor Tools
-121. **FishMMO Dashboard** — The single editor hub (`FishMMO > FishMMO Dashboard`, Ctrl+Shift+D), a UI Toolkit window whose panels are Build & Version, Categories, Game Settings, Inspector, and Patcher. Most FishMMO editor workflows are panels inside this window, not separate menu items. Backed by the custom build tool suite: AddressableManager, BuildConfigurator, BuildExecutor, LinkerGenerator. `BuildExecutor` additionally performs two post-build copies: `CopyRemoteAddressablesToBuild` stages `ServerData/[BuildTarget]/` bundles into the built player's `StreamingAssets/ServerData/[BuildTarget]/` for server builds (so `DynamicAddressableLoadPathSystem` can load them over `file://`), and `CopyUpdaterToBuild` copies the standalone Updater executable and its runtime dependencies into standalone client builds — without it the launcher's `Constants.Configuration.UpdaterExecutable` lookup fails and players are stranded on an unpatchable version. Both are skipped for build types that do not need them (server/WebGL for the updater).  
-122. **Patch Generator** — `PatchGeneratorWindow` (`EditorWindow`) for creating delta patches between builds with manifest generation, surfaced through the Dashboard's **Patcher** panel (`FishMMODashboard.Patcher.cs`). It has no menu item of its own.  
-123. **Addressables Dashboard** — Analysis, build, categorization, and tree view for addressable assets. Menu: `FishMMO > Addressables Dashboard`.  
-124. **Behavior Tree Editor** — Visual editor for NPC behaviour trees. Menu: `FishMMO > Behavior Tree Editor` (spelled "Behavior").  
-125. **Dialogue Tree Editor** — Visual editor for NPC dialogue trees. Menu: `FishMMO > Dialogue Tree Editor`.  
-126. **World Scene Details Cache Builder** — Builds cached world scene details at edit time. Menu: `FishMMO > Rebuild World Scene Details`.  
-127. **Custom Property Drawers** — `[ShowReadonly]`, `[SubclassSelector]`, `[TemplateReference]`, serializable dictionary drawers.  
-128. **Build Option Toggles** — `FishMMO > Build > Build Type` (Client/Server), `> OS Target` (Windows x64 / Linux x64 / WebGL), and `> Environment` (Development/Production/Enable Local Directory), from `BuildEnvironmentOptions.cs` and `WorkingEnvironmentOptions.cs`. These set build options only — **they do not run builds**; builds execute from the Dashboard's Build & Version panel.  
-129. **Security Assembly Filter** — Editor-only assembly filtering for security-sensitive code.  
-130. **Version Menu** — `FishMMO > Version > Increment Major/Minor/Patch` drives `VersionBuilder`.  
-131. **QuickStart Scene Menu** — `FishMMO > QuickStart > …` opens Main Bootstrap, Client Preboot/Postboot/Launcher, and Login/World/Scene Server scenes directly, ordered by priority.  
-132. **Script Compilation Menu** — `FishMMO > Script Compilation > …` toggles Auto Refresh and selects recompile behaviour while in Play Mode (Recompile After Finished Playing / Recompile And Continue Playing / Stop Playing And Recompile).  
-133. **Equipment Slot Validator** — `FishMMO > Validate > Equipment Item Slots` reports equippable templates whose `ItemSlot` disagrees with the folder they are filed under. It exists because a slot mismatch has no symptom a developer would recognise: templates serialize the slot as an integer, so renumbering the enum silently changes what every already-authored asset means, nothing throws, and every value is still a legal slot. The folder is the cross-check because it independently records what a human meant when they filed the asset — two statements of the same fact are what make the drift detectable at all. A mismatch is **reported, not corrected**: a template deliberately filed somewhere that does not match its slot is legitimate, and the tool cannot tell that apart from a mistake. Templates not filed under a slot-named folder are counted and skipped.  
-134. **AddressablesPlayModeSceneHandleFix** — Editor-only workaround for the "Attempting to use an invalid operation handle" exception Addressables throws from its own Play Mode teardown. `AddressablesImpl.Dispose()` releases each scene handle twice (once from `m_resultToHandle`, once from `m_SceneInstances`) with no `IsValid()` guard. Subscribes from `[InitializeOnLoadMethod]` so it runs ahead of the Addressables package's own handler, which our runtime shutdown path cannot do.
+131. **FishMMO Dashboard** — The single editor hub (`FishMMO > FishMMO Dashboard`, Ctrl+Shift+D), a UI Toolkit window whose panels are Build & Version, Categories, Game Settings, Inspector, and Patcher. Most FishMMO editor workflows are panels inside this window, not separate menu items. Backed by the custom build tool suite: AddressableManager, BuildConfigurator, BuildExecutor, LinkerGenerator. `BuildExecutor` additionally performs two post-build copies: `CopyRemoteAddressablesToBuild` stages `ServerData/[BuildTarget]/` bundles into the built player's `StreamingAssets/ServerData/[BuildTarget]/` for server builds (so `DynamicAddressableLoadPathSystem` can load them over `file://`), and `CopyUpdaterToBuild` copies the standalone Updater executable and its runtime dependencies into standalone client builds — without it the launcher's `Constants.Configuration.UpdaterExecutable` lookup fails and players are stranded on an unpatchable version. Both are skipped for build types that do not need them (server/WebGL for the updater).  
+132. **Patch Generator** — `PatchGeneratorWindow` (`EditorWindow`) for creating delta patches between builds with manifest generation, surfaced through the Dashboard's **Patcher** panel (`FishMMODashboard.Patcher.cs`). It has no menu item of its own.  
+133. **Addressables Dashboard** — Analysis, build, categorization, and tree view for addressable assets. Menu: `FishMMO > Addressables Dashboard`.  
+134. **Behavior Tree Editor** — Visual editor for NPC behaviour trees. Menu: `FishMMO > Behavior Tree Editor` (spelled "Behavior"), or the Open button on a tree selected in the FishMMO Dashboard. Refuses connections that would make the tree cyclic.  
+135. **AI Prefab Tooling** — `FishMMO > AI > Repair NPC Prefabs For Combat` adds the ability-pipeline components and enables prediction; `Audit NPC Prefabs` reports prefabs that cannot fight and why; `Validate Archetypes` reports archetypes whose configuration cannot behave as described; `Organize AI Assets` and `Re-serialize AI Assets` maintain the canonical asset layout.  
+136. **Network Timing Validator** — `FishMMO > Validate Network Timing` confirms every scene's `NetworkManager` agrees on tick rate. FishNet does not synchronise it — `SetTickRate` says so explicitly — and a mismatch does not throw or refuse the connection, it just makes the client simulate on a different timeline and present as latency.  
+137. **Dialogue Tree Editor** — Visual editor for NPC dialogue trees. Menu: `FishMMO > Dialogue Tree Editor`.  
+138. **World Scene Details Cache Builder** — Builds cached world scene details at edit time. Menu: `FishMMO > Rebuild World Scene Details`.  
+139. **Custom Property Drawers** — `[ShowReadonly]`, `[SubclassSelector]`, `[TemplateReference]`, serializable dictionary drawers.  
+140. **Build Option Toggles** — `FishMMO > Build > Build Type` (Client/Server), `> OS Target` (Windows x64 / Linux x64 / WebGL), and `> Environment` (Development/Production/Enable Local Directory), from `BuildEnvironmentOptions.cs` and `WorkingEnvironmentOptions.cs`. These set build options only — **they do not run builds**; builds execute from the Dashboard's Build & Version panel.  
+141. **Security Assembly Filter** — Editor-only assembly filtering for security-sensitive code.  
+142. **Version Menu** — `FishMMO > Version > Increment Major/Minor/Patch` drives `VersionBuilder`.  
+143. **QuickStart Scene Menu** — `FishMMO > QuickStart > …` opens Main Bootstrap, Client Preboot/Postboot/Launcher, and Login/World/Scene Server scenes directly, ordered by priority.  
+144. **Script Compilation Menu** — `FishMMO > Script Compilation > …` toggles Auto Refresh and selects recompile behaviour while in Play Mode (Recompile After Finished Playing / Recompile And Continue Playing / Stop Playing And Recompile).  
+145. **Equipment Slot Validator** — `FishMMO > Validate > Equipment Item Slots` reports equippable templates whose `ItemSlot` disagrees with the folder they are filed under. It exists because a slot mismatch has no symptom a developer would recognise: templates serialize the slot as an integer, so renumbering the enum silently changes what every already-authored asset means, nothing throws, and every value is still a legal slot. The folder is the cross-check because it independently records what a human meant when they filed the asset — two statements of the same fact are what make the drift detectable at all. A mismatch is **reported, not corrected**: a template deliberately filed somewhere that does not match its slot is legitimate, and the tool cannot tell that apart from a mistake. Templates not filed under a slot-named folder are counted and skipped.  
+146. **AddressablesPlayModeSceneHandleFix** — Editor-only workaround for the "Attempting to use an invalid operation handle" exception Addressables throws from its own Play Mode teardown. `AddressablesImpl.Dispose()` releases each scene handle twice (once from `m_resultToHandle`, once from `m_SceneInstances`) with no `IsValid()` guard. Subscribes from `[InitializeOnLoadMethod]` so it runs ahead of the Addressables package's own handler, which our runtime shutdown path cannot do.
 
 ---
 

@@ -72,7 +72,7 @@ FishMMO is a complete multiplayer online game framework consisting of:
 
 | Component | Description |
 |---|---|
-| **FishMMO-Unity** | Unity project containing client, server, and shared game code (900+ C# files) — full prediction pipeline, modular character visuals, threat-based AI, ECA trigger system |
+| **FishMMO-Unity** | Unity project containing client, server, and shared game code (900+ C# files) — full prediction pipeline, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
 | **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, X25519 ECDH, token auth, TOTP 2FA) |
 | **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (41 entities/tables, 42 services) |
 | **FishMMO-WebTransport** | C++ native library wrapping MsQuic (QUIC/HTTP3) — P/Invoked from C# as a FishNet transport plugin |

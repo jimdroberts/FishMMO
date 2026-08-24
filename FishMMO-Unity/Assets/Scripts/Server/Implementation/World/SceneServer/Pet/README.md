@@ -1,6 +1,6 @@
 # Pet System
 
-**Short description:** Server-side pet lifecycle and runtime control system for scene-server player characters, handling pet follow/stay/summon/release requests, ability-driven spawning, character-driven spawn/despawn transitions, ingress guarding, and asynchronous database persistence with main-thread-marshaled broadcasts.
+**Short description:** Server-side pet lifecycle and runtime control system for scene-server player characters, handling follow/stay/attack/stance/summon/release commands, ability-driven spawning and ability learning, character-driven spawn/despawn transitions, ingress guarding, and asynchronous database persistence with main-thread-marshaled broadcasts.
 
 ## Table of Contents
 
@@ -28,6 +28,23 @@ The design separates responsibilities across execution contexts:
 
 All DB writes are queued through `TryEnqueueAsyncWork(...)` to `IAsyncWorkerData` with `entityKey = characterID` for per-character operation ordering. If queueing fails (backpressure/missing dependency), the system logs warnings while keeping gameplay state intact. Broadcasts are only emitted after successful state transitions, ensuring clients never see stale or uncommitted data.
 
+### Ownership
+
+Pets are spawned **without an owning connection** — server-owned, exactly like any other NPC. FishNet's `Replicate_Authoritative` only accepts server-produced input for an object with no owner, so handing a pet to the summoner's connection would make that client responsible for supplying input to a brain that does not run there, and the server's own decisions would be discarded. Nothing in the pet system reads the pet's `Owner`, and the pet's `NetworkTransform` is server-authoritative, so server ownership costs nothing.
+
+### Commands and orders
+
+A pet carries two independent pieces of state, both server-authoritative and both written into the spawn payload:
+
+| State | Values | Meaning |
+|---|---|---|
+| `PetStance` | `Passive`, `Defensive`, `Aggressive` | Whether the pet *initiates*. An explicit attack order works in every stance. |
+| `PetMovementOrder` | `Follow`, `Stay` | Whether the pet heels or holds position. |
+
+Both are byte-backed enums whose zero values (`Passive`, `Follow`) are the safe defaults, so an unset value never makes a pet pick a fight or strand itself. Clients only ever *request* a change; the server confirms with a broadcast.
+
+Movement orders are expressed as orders, not by writing the AI's combat target. `Target` means "the thing I am fighting" throughout the AI, and conflating the two is what previously made a pet told to Stay never move again.
+
 ## Supported Platforms
 
 | Platform | Supported | Notes |
@@ -40,12 +57,17 @@ All DB writes are queued through `TryEnqueueAsyncWork(...)` to `IAsyncWorkerData
 
 ## Features
 
-- Pet follow, stay, summon (warp), and release commands via network broadcasts with full validation
+- Pet follow, stay, attack, stance, summon (warp), and release commands via network broadcasts with full validation
+- Attack orders read the owner's own `ITargetController` rather than trusting a target ID from the message, then re-validate the target as alive, not the owner, not the pet, and hostile by faction
+- Stance changes reject values outside the enum rather than casting a hostile byte straight in; dropping to `Passive` recalls the pet and interrupts its cast
+- Defensive and Aggressive pets answer an attack on their owner via `IPetController.OnOwnerAttacked`, a server-side hook raised from the global damage event
+- Pet ability learning: template IDs restored from the database and abilities granted by the `PetAbilityTemplate` are both taught to the pet's `IAbilityController` on spawn, and captured back before persistence
 - Per-connection ingress guarding with debounce and in-flight protection to prevent duplicate operations across all pet control actions
 - Ability-driven pet summoning via `AbilityObject.OnPetSummon` with bounding-box randomization and ground sphere cast for spawn positioning
 - Automatic pet spawn on character login via async database load and main-thread marshaling
 - Automatic pet state capture and async persistence on character despawn or pet death
-- Pet AI initialization with follow-target and home-position management via `IAIController`
+- Pet AI initialization after the scene move and activation, so the NavMeshAgent is warped onto the mesh at its real spawn position rather than being driven while inactive
+- A pet's AI `Home` resolves to its owner's live position, so leashing, wandering and return-home all track the player without the pet system having to write anything
 - Faction data copying from owner to pet via `IFactionController.CopyFrom`
 - Shared `SpawnAndInitializePet` helper that handles existing-pet despawn, pooled object retrieval, AI/faction init, scene transfer, network spawn, and broadcast emission
 - Optimistic concurrency on pet persistence with version-incremented writes via `ICharacterPetService`
@@ -54,6 +76,7 @@ All DB writes are queued through `TryEnqueueAsyncWork(...)` to `IAsyncWorkerData
 - Achievement integration for pet summon events via configurable `AchievementTemplate`
 - Graceful degradation: logs warnings on persistence queue failures while keeping in-memory gameplay state intact
 - Object pool integration: pets are retrieved from and returned to the FishNet object pool to reduce allocation pressure
+- Stale-reference safety: the owner's controller reference is cleared on death and despawn, so a Summon or Follow command cannot re-task a pooled pet that no longer exists
 - Guard release deferred until async operation completes for character spawn pet loads, preventing overlap windows for duplicate operations
 
 ## Prerequisites
@@ -73,7 +96,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 3. Confirm that `AsyncWorkerData` (`IAsyncWorkerData`) is available for non-blocking DB write queuing.
 4. Confirm that `ICharacterSystem<NetworkConnection, Scene>` is registered in the behaviour registry.
 5. Verify that the database service `ICharacterPetService` is available in the DB service registry.
-6. On initialize, `PetSystem` automatically registers broadcast handlers for `PetFollowBroadcast`, `PetStayBroadcast`, `PetSummonBroadcast`, and `PetReleaseBroadcast`, and subscribes to `AbilityObject.OnPetSummon`, `OnSpawnCharacter`, `OnDespawnCharacter`, and `OnPetKilled`; on deinitialize, it unregisters them all.
+6. On initialize, `PetSystem` automatically registers broadcast handlers for `PetFollowBroadcast`, `PetStayBroadcast`, `PetAttackBroadcast`, `PetStanceBroadcast`, `PetSummonBroadcast`, and `PetReleaseBroadcast`, and subscribes to `AbilityObject.OnPetSummon`, `OnSpawnCharacter`, `OnDespawnCharacter`, and `OnPetKilled`; on deinitialize, it unregisters them all.
+7. Give the pet prefab an AI archetype — one of the six `Pet - *` assets under `Assets/Templates/Entity/NPCs/AI/Archetypes/` — and give the `PetAbilityTemplate` a `PetAbilities` list. A pet with no abilities will follow its owner and never attack.
 
 ## Configuration
 
@@ -117,6 +141,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 - `PetFollowBroadcast` → `OnPetFollowBroadcastReceived`
 - `PetStayBroadcast` → `OnPetStayBroadcastReceived`
+- `PetAttackBroadcast` → `OnPetAttackBroadcastReceived`
+- `PetStanceBroadcast` → `OnPetStanceBroadcastReceived`
 - `PetSummonBroadcast` → `OnPetSummonBroadcastReceived`
 - `PetReleaseBroadcast` → `OnPetReleaseBroadcastReceived`
 
@@ -126,14 +152,20 @@ And unregisters them on deinitialize.
 
 | Broadcast | Purpose |
 |---|---|
-| `PetAddBroadcast` | Notify owner of successful pet spawn (includes pet ID) |
+| `PetAddBroadcast` | Notify owner of successful pet spawn (pet ID, stance, movement order) |
 | `PetRemoveBroadcast` | Notify owner of pet removal (release or death) |
+| `PetStanceBroadcast` | Confirm the authoritative stance after a change request |
+| `PetMovementOrderBroadcast` | Confirm the authoritative movement order after Follow or Stay |
+
+The UI does not paint a requested stance optimistically — it waits for the server's confirming broadcast, so the highlighted button always reflects what the pet is really doing rather than what was last clicked.
 
 ### External Integration Points
 
 | Integration | Role |
 |---|---|
-| `IPetController` | Pet ownership state on the character object |
+| `IPetController` | Pet ownership state, stance/order mirror, and the `OnOwnerAttacked` server hook |
+| `ITargetController` | Source of truth for an attack order's target — read from the owner, never from the message |
+| `IAbilityController` | Pet ability learning on spawn and capture before persistence |
 | `IAIController` | Pet AI home position, follow target, agent warping, and initialization |
 | `IFactionController` | Faction data copying from owner to pet |
 | `ICharacterAttributeController` | Health attribute read during despawn to determine alive/spawned state |
@@ -147,7 +179,7 @@ And unregisters them on deinitialize.
 
 ### Ingress Guarding
 
-Pet ingress uses per-connection operation keys with debounce + in-flight protection. Operation codes are scoped per action type (`Follow`, `Stay`, `Summon`, `Release`, `LoadPet`). For the character-spawn pet load path, guard release is deferred until the async operation completes (not at enqueue-time), preventing overlap windows for duplicate pet loads on rapid reconnect. For synchronous broadcast handlers (follow, stay, summon), guards are released in a `finally` block after the handler completes.
+Pet ingress uses per-connection operation keys with debounce + in-flight protection. Operation codes are scoped per action type (`Follow`, `Stay`, `Summon`, `Release`, `LoadPet`, `Attack`, `Stance`). For the character-spawn pet load path, guard release is deferred until the async operation completes (not at enqueue-time), preventing overlap windows for duplicate pet loads on rapid reconnect. For synchronous broadcast handlers (follow, stay, summon), guards are released in a `finally` block after the handler completes.
 
 ### Async Worker and Backpressure
 
@@ -164,6 +196,7 @@ This prevents unbounded fire-and-forget tasks and preserves operation order per 
 ### Persistence Model
 
 `SavePetAsync(...)`:
+- Is always preceded by `Pet.CaptureKnownAbilities()`, so abilities granted at summon time from the `PetAbilityTemplate` are persisted rather than lost on the next log in.
 - Fetches the existing pet row for optimistic version increment.
 - Persists `(characterID, templateID, abilities, spawned)` state with `version + 1`.
 - Uses per-character keyed queueing to preserve operation order.
@@ -180,7 +213,12 @@ This prevents unbounded fire-and-forget tasks and preserves operation order per 
 |---|---|
 | System initialization | Confirm `PetSystem` initializes without errors; broadcast handlers are registered |
 | Pet follow | Send a `PetFollowBroadcast` with an active pet; verify AI target is set to owner transform |
-| Pet stay | Send a `PetStayBroadcast` with an active pet; verify AI home is set to pet position and target is cleared |
+| Pet stay | Send a `PetStayBroadcast` with an active pet; verify the pet holds position and `PetMovementOrderBroadcast` reaches the client |
+| Pet attack | Target a hostile, send a `PetAttackBroadcast`; verify the pet engages it. Target a friendly or the pet itself; verify the order is refused |
+| Pet stance | Send each `PetStanceBroadcast` value; verify the confirming broadcast, and that Passive recalls a fighting pet |
+| Defensive response | With a Defensive pet, have a hostile attack the owner; verify the pet engages the attacker |
+| Pet abilities | Summon a pet whose `PetAbilityTemplate.PetAbilities` is populated; verify the pet's `IAbilityController` knows them and the pet attacks |
+| Ability persistence | Summon, release, and re-log; verify the pet returns with the same abilities |
 | Pet summon (warp) | Send a `PetSummonBroadcast` with an active pet; verify AI agent warps to owner position |
 | Pet release | Send a `PetReleaseBroadcast` with an active pet; verify pet is despawned, `PetRemoveBroadcast` reaches client, and async save is queued with `spawned=false` |
 | Character spawn pet load | Spawn a character with a previously saved pet; verify async load triggers and pet is instantiated with correct template and abilities |
@@ -209,30 +247,61 @@ flowchart LR
     Sys -->|broadcast| Clients[Nearby Clients]
 ```
 
-### Pet Follow
+### Pet Follow / Stay
 
 ```
-OnPetFollowBroadcastReceived(conn, msg, channel)
+OnPetFollowBroadcastReceived / OnPetStayBroadcastReceived
 │
 ├─ 1. Validate connection and spawned object
 ├─ 2. Acquire ingress guard (debounce + in-flight)
 ├─ 3. Validate IPetController exists with active pet
-├─ 4. Set IAIController.Home to owner position
-├─ 5. Set IAIController.Target to owner transform
-└─ 6. Release ingress guard (finally)
+├─ 4. SetMovementOrder(conn, petController, Follow | Stay)
+│      ├── Pet.MovementOrder = order
+│      ├── Stay  → AI Home pinned to the pet's current position
+│      ├── Follow → AI Home resolves to the owner again
+│      └── Broadcast PetMovementOrderBroadcast to the owner
+└─ 5. Release ingress guard (finally)
 ```
 
-### Pet Stay
+### Pet Attack
 
 ```
-OnPetStayBroadcastReceived(conn, msg, channel)
+OnPetAttackBroadcastReceived(conn, msg, channel)
 │
 ├─ 1. Validate connection and spawned object
 ├─ 2. Acquire ingress guard (debounce + in-flight)
 ├─ 3. Validate IPetController exists with active pet
-├─ 4. Set IAIController.Home to pet's current position
-├─ 5. Clear IAIController.Target (null)
-└─ 6. Release ingress guard (finally)
+├─ 4. Read the owner's ITargetController.Current.Target
+│      (never taken from the message — a client cannot name an arbitrary victim)
+├─ 5. IsValidPetTarget: alive, not the owner, not the pet, hostile by faction
+├─ 6. CommandPetAttack → set AI target, clear any Stay, enter the attacking state
+└─ 7. Release ingress guard (finally)
+```
+
+### Pet Stance
+
+```
+OnPetStanceBroadcastReceived(conn, msg, channel)
+│
+├─ 1. Validate connection and spawned object
+├─ 2. Reject a stance outside the enum
+├─ 3. Acquire ingress guard (debounce + in-flight)
+├─ 4. Validate IPetController exists with active pet
+├─ 5. Apply stance to both the Pet and the controller mirror
+├─ 6. Passive → RecallPet (clear target, interrupt cast, return to idle)
+├─ 7. Broadcast PetStanceBroadcast to confirm
+└─ 8. Release ingress guard (finally)
+```
+
+### Owner Attacked → Defensive Response
+
+```
+IPetController.OnOwnerAttacked(petController, attacker)
+│
+├─ 1. Ignore if the pet is Passive
+├─ 2. Ignore if the pet is already in its attacking state (do not thrash its target)
+├─ 3. IsValidPetTarget(attacker)
+└─ 4. CommandPetAttack(pet, attacker)
 ```
 
 ### Pet Summon (Warp)
@@ -256,9 +325,10 @@ OnPetReleaseBroadcastReceived(conn, msg, channel)
 ├─ 2. Acquire ingress guard (debounce + in-flight)
 ├─ 3. Validate database services available
 ├─ 4. Validate IPetController exists with active pet
-├─ 5. Capture immutable DTO (characterID, templateID, abilities)
+├─ 5. CaptureKnownAbilities, then capture an immutable DTO
+│      (characterID, templateID, abilities)
 ├─ 6. Despawn pet network object to pool
-├─ 7. Clear pet owner and controller references
+├─ 7. Clear pet owner and controller references, unsubscribe OnOwnerAttacked
 ├─ 8. Broadcast PetRemoveBroadcast to owner
 ├─ 9. Enqueue async SavePetAsync(spawned=false) keyed by characterID
 └─ 10. Release ingress guard (finally)
@@ -280,14 +350,18 @@ CharacterSystem_OnSpawnCharacter(conn, character, scene)
 │           ├── Re-validate connection/character/network state
 │           ├── Resolve PetAbilityTemplate from templateID
 │           ├── Retrieve pooled pet NetworkObject at owner position
-│           ├── SpawnAndInitializePet(...)
+│           ├── SpawnAndInitializePet(..., spawnPosition, ...)
 │           │    ├── Despawn any existing pet
-│           │    ├── Initialize Pet component (owner, template, abilities)
-│           │    ├── Initialize AI (home, follow target)
+│           │    ├── Initialize Pet component (owner, template, stance, orders)
+│           │    ├── Build the ability list (persisted IDs + template grants)
 │           │    ├── Move to owner scene
-│           │    ├── Activate and network-spawn
+│           │    ├── Activate
+│           │    ├── Initialize AI — warps the agent onto the NavMesh at spawnPosition
+│           │    ├── Network-spawn with NO owning connection (server-owned)
+│           │    │     └── Pet.OnStartServer learns the ability list
 │           │    ├── Copy faction from owner
-│           │    ├── Broadcast PetAddBroadcast
+│           │    ├── Subscribe the defensive OnOwnerAttacked hook
+│           │    ├── Broadcast PetAddBroadcast (id, stance, order)
 │           │    └── Increment achievement (if configured)
 │           └── Guard release (finally, deferred)
 │
@@ -302,9 +376,11 @@ CharacterSystem_OnDespawnCharacter(conn, character)
 ├─ 1. Validate character and IPetController
 ├─ 2. Validate database services available
 ├─ 3. Read pet health to determine alive/spawned state
-├─ 4. Capture immutable DTO (characterID, templateID, abilities, spawned)
+├─ 4. CaptureKnownAbilities, then capture an immutable DTO
+│      (characterID, templateID, abilities, spawned)
 ├─ 5. Despawn pet network object to pool (if spawned)
-└─ 6. Enqueue async SavePetAsync(characterID, templateID, abilities, spawned)
+├─ 6. Clear the controller's pet reference and unsubscribe OnOwnerAttacked
+└─ 7. Enqueue async SavePetAsync(characterID, templateID, abilities, spawned)
 ```
 
 ### Pet Killed
@@ -328,12 +404,16 @@ AbilityObject_OnPetSummon(petAbilityTemplate, caster)
 ├─ 5. Retrieve pooled pet NetworkObject at ground position
 └─ 6. SpawnAndInitializePet(...)
        ├── Despawn any existing pet
-       ├── Initialize Pet component (owner, template)
-       ├── Initialize AI (spawn position, follow target)
+       ├── Initialize Pet component (owner, template, stance, orders)
+       ├── Build the ability list from PetAbilityTemplate.PetAbilities
        ├── Move to caster scene
-       ├── Activate and network-spawn
+       ├── Activate
+       ├── Initialize AI — warps the agent onto the NavMesh at the ground-cast position
+       ├── Network-spawn with NO owning connection (server-owned)
+       │     └── Pet.OnStartServer learns the ability list
        ├── Copy faction from caster
-       ├── Broadcast PetAddBroadcast
+       ├── Subscribe the defensive OnOwnerAttacked hook
+       ├── Broadcast PetAddBroadcast (id, stance, order)
        └── Increment achievement (if configured)
 ```
 
@@ -351,6 +431,13 @@ Error Handling
 ├─ Pooled object missing Pet component → returned to pool, spawn aborted
 └─ Broadcasts → only emitted after successful state transitions
 ```
+
+## Known Limitations
+
+| Limitation | Detail |
+|---|---|
+| Stance is not persisted | `PetStance` lives on the pet and the controller for the session. A player who sets Aggressive and logs out returns to the `Defensive` default. Persisting it needs a `character_pet` schema change. |
+| Pet health is not persisted | A pet re-summoned after a log in returns at full health. `spawned` is persisted; the health value that decided it is not. |
 
 ## Project Structure
 

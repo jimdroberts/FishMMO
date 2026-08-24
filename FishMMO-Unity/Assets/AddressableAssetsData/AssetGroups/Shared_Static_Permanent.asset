@@ -15,6 +15,12 @@ MonoBehaviour:
   m_GroupName: Shared_Static_Permanent
   m_GUID: 23636b54ceb43a03f93abc3987c4632a
   m_SerializeEntries:
+  - m_GUID: 0000dcf078b2e49537af1fcaa7244eca
+    m_Address: Archer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 02a306f12237e8c4b90a2dbdccf178bb
     m_Address: Damage Dealt
     m_ReadOnly: 0
@@ -119,6 +125,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 23b76e39682ae764690280034e76f280
     m_Address: Tier1 Sword Attack Power
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23fab518843ac25c03488d568bf860ab
+    m_Address: Pet Melee Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2651c85903d94974e6e6e2bac6576e61
+    m_Address: Healer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -328,6 +346,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 782b351352c8d2b9b584e82c22d3dcf6
+    m_Address: Shared Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 793ad9eb498a9224989b975a594d5a38
     m_Address: Human
     m_ReadOnly: 0
@@ -357,8 +381,20 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d7c73381d0e7f4b5530f072f05cf0fa
+    m_Address: Crowd Controller Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
     m_Address: Self Minor Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 806e118c585a0f971e054f4730bb520b
+    m_Address: Rogue Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -375,14 +411,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8751b24bf85f92efad896766fd2ace5e
+    m_Address: Combat Flee State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a6915836749a01333e29a4e009c4fde
+    m_Address: Pet Archer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fe93c66f5bc53c45a7b0f8334be9016
     m_Address: StandardAttributeDatabase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fea2bfc9cc7e67021f4258b5a5feaf9
+    m_Address: Brute Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93fb2e9d657c108f5e209832010309be
+    m_Address: Defender Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 981218c27f282fe423a954a7d0bd7262
+    m_Address: Pet Defender Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -395,6 +461,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9aa49e0922d75f341a2be18b3000840a
     m_Address: Water Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ac234842ad51b3fbb1ed5c7598ba571
+    m_Address: Pet Healer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -423,6 +495,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4e7c324c4896a028eb1714c42f92c79
+    m_Address: Combat Flank State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
     m_ReadOnly: 0
@@ -431,6 +509,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: acce2c15167bca3468900e3963385b1e
     m_Address: Basic GetBehind State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af5ca3927add4dd0594aa10c585672f4
+    m_Address: Combat Strafe State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -466,6 +550,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b646a6d9bc4f07d428f12e255af67366
     m_Address: Basic ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b84f263b6aaadc40b9179f69c75abdf0
+    m_Address: Shared ReturnHome State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -536,6 +626,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb7473dde6a389f684e5e790b5eda8f0
+    m_Address: Combat Orbit State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfb923ff685794269056d51a4ae2e4b5
+    m_Address: Critter Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d00db1805f33b104b8b2198459b0a45d
     m_Address: Ability On Hit Event
     m_ReadOnly: 0
@@ -566,6 +668,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d821d4f4f560539ba889e64332e67a34
+    m_Address: Pet Rogue Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
     m_Address: SunAndMoon
     m_ReadOnly: 0
@@ -574,6 +682,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0d004d1b5e90374fa54e7f9aec2166a
     m_Address: Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e104c34faa16622bc33889b0c4991e34
+    m_Address: Melee Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -609,6 +723,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e44fb83268c5970a9182d915e579dad7
+    m_Address: Caster Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e48c22ecb1287cf4185c17311214bc8a
     m_Address: Punch
     m_ReadOnly: 0
@@ -635,6 +755,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e6d97319903785e4f8bbdbaa2ba21412
     m_Address: Minor Movement Speed Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ecd31ff07e929f6ee0b89178e183cb54
+    m_Address: Pet Caster Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -689,6 +815,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f563991b5f3117546a87ff13e7fab199
     m_Address: Death Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f5b1bcb5c5de2a877d9877e43907f58d
+    m_Address: Pet Follow State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
