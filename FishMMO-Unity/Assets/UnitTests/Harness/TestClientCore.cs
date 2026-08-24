@@ -73,6 +73,9 @@ namespace FishMMO.UnitTests.Harness
 			WasDisconnected = false;
 			pendingTokenString = null;
 			ClearAuthToken();
+			/* An attempt is a new connection, and only the transport can tell the server core
+			 * that the last one ended. See TestServerCore.BeginNewConnection. */
+			server?.BeginNewConnection(clientId);
 			CreateAccountSends.Clear();
 			TwoFactorSetups.Clear();
 			AccountVerifySends.Clear();

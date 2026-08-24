@@ -273,6 +273,24 @@ namespace FishMMO.Shared
 		/// </remarks>
 		/// <param name="reader">The network reader.</param>
 		/// <param name="currentTick">Current network tick used to translate and discard expired entries.</param>
+		/// <summary>
+		/// True when this controller belongs to the local player's own spawned object.
+		/// </summary>
+		/// <remarks>
+		/// Null-safe where <c>base.IsOwner</c> is not. <c>IsOwner</c> resolves through the cached
+		/// <see cref="NetworkObject"/>, which does not exist before the object is spawned or after it
+		/// has been despawned, so reading it throws rather than answering "no".
+		/// <para>
+		/// Every use of this gates a LOCAL-UI announcement, and an object with no network identity has
+		/// no local player to announce to — so "not spawned" and "not owner" want the same answer.
+		/// <see cref="Read"/> and <see cref="RestoreFromReconcile"/> are the ones that made this matter:
+		/// they are plain deserialisation entry points, perfectly callable — and unit-testable — without
+		/// a spawned object, until the ownership gate at the end of each of them dereferenced a
+		/// NetworkObject that was not there.
+		/// </para>
+		/// </remarks>
+		private bool IsLocalOwner => base.NetworkObject != null && base.IsOwner;
+
 		public void Read(Reader reader, uint currentTick)
 		{
 			const int maxPayloadCooldowns = 4096;
@@ -346,7 +364,7 @@ namespace FishMMO.Shared
 			 * Fired after the loop so a handler cannot observe a half-filled dictionary, and gated
 			 * on ownership exactly as AddCooldown is: these events drive the LOCAL player's UI, and
 			 * every remote character's payload comes through here too. */
-			if (!base.IsOwner || ICooldownController.OnAddCooldown == null)
+			if (!IsLocalOwner || ICooldownController.OnAddCooldown == null)
 			{
 				return;
 			}
@@ -564,7 +582,7 @@ namespace FishMMO.Shared
 			cooldowns[id] = cooldown;
 			snapshotDirty = true;
 
-			if (!base.IsOwner)
+			if (!IsLocalOwner)
 			{
 				return;
 			}
@@ -592,7 +610,7 @@ namespace FishMMO.Shared
 			// Skip event invocation when invoked from a replayed prediction tick to
 			// avoid duplicate UI / ECA dispatch. Non-replay callers (live owner ExpireElapsed
 			// pass, external code) still fire the event.
-			if (base.IsOwner && !isReplayingTick)
+			if (IsLocalOwner && !isReplayingTick)
 			{
 				ICooldownController.OnRemoveCooldown?.Invoke(id);
 			}
@@ -726,7 +744,7 @@ namespace FishMMO.Shared
 			 * silent, because the hotkey bar's sweep is started by these events and by nothing
 			 * else. Fired after the dictionary is whole, and gated on ownership like AddCooldown —
 			 * reconcile also runs for predicted objects the local player does not own. */
-			if (!base.IsOwner)
+			if (!IsLocalOwner)
 			{
 				return;
 			}

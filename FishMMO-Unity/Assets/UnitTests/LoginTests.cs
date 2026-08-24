@@ -283,12 +283,14 @@ namespace FishMMO.UnitTests
 		/// </remarks>
 		private static void SpreadAttemptsAcrossDistinctIps(AuthTestHarness h)
 		{
-			int next = 0;
-			h.Server.AddressResolver = (_) =>
-			{
-				next++;
-				return $"203.0.113.{next % 251}";
-			};
+			/* Keyed on the attempt, not on the call. GetConnectionAddress is consulted twice
+			 * during a single handshake — to bind the cookie to an IP, then to verify the echo
+			 * against that same IP — so a counter that advanced per call handed out two
+			 * different addresses within one attempt, the cookie correctly refused to verify,
+			 * and the connection was dropped at the handshake. Every attempt then ended in
+			 * silence rather than in an auth result, and these tests timed out long before
+			 * reaching the lockout they exist to prove. */
+			h.Server.AddressResolver = (_) => $"203.0.113.{(h.Server.ConnectionEpoch % 251) + 1}";
 		}
 
 		[Test]

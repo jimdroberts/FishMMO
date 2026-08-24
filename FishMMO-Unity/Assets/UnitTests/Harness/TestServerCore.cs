@@ -101,6 +101,62 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override bool IsConnectionActive(int conn) => !disconnected;
 
+		/// <summary>
+		/// Marks the modelled connection live again, for a test that drives more than one
+		/// attempt through the same harness.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="disconnected"/> stands in for a whole connection, and
+		/// <see cref="DisconnectConnection"/> latches it one way. Every rejection funnels through
+		/// the core's <c>RejectAndPurge</c>, which broadcasts the result only
+		/// <c>if (IsConnectionActive(conn))</c> — so once one attempt had been refused, the next
+		/// one was answered with silence and the client waited on a result that would never
+		/// arrive. Any test making two consecutive REFUSED attempts therefore timed out on the
+		/// second, which is why the per-account lockout tests could never reach the assertion
+		/// they exist for: the lockout is only reached after ten failures.
+		/// <para>
+		/// A real server sees a genuinely new connection per attempt, with its own state, so
+		/// clearing this at the start of an attempt is what models production. It is cleared at
+		/// the START of the next attempt rather than at the end of the previous one so that
+		/// <see cref="WasDisconnected"/> still reports what the attempt just made did.
+		/// </para>
+		/// </remarks>
+		internal void BeginNewConnection(int conn)
+		{
+			/* A real transport is what tells the authenticator that a connection ended, and this
+			 * harness has no transport — so state the core keys by connection id outlived the
+			 * attempt that created it. Two separate stalls came out of that:
+			 *
+			 *  - After a REFUSED attempt, DisconnectConnection had latched `disconnected`, and
+			 *    every rejection routes through the core's RejectAndPurge, which broadcasts only
+			 *    `if (IsConnectionActive(conn))`. The next refusal was therefore answered with
+			 *    silence.
+			 *  - After a SUCCESSFUL attempt, nothing disconnected at all — correctly, the client
+			 *    is authenticated — so the core still held authenticated state for this id and
+			 *    ignored the next attempt's handshake as a replay on a live session. The client
+			 *    waited for a cookie challenge that was never going to come.
+			 *
+			 * HandleConnectionStopped is the same entry point the hosting transport calls, so
+			 * this models production rather than reaching around it. */
+			HandleConnectionStopped(conn);
+			disconnected = false;
+			ConnectionEpoch++;
+		}
+
+		/// <summary>
+		/// Counts the attempts driven through this harness. Stable for the whole of one attempt.
+		/// </summary>
+		/// <remarks>
+		/// Exists so a test that wants a different source address per attempt has something to
+		/// derive it from that does not change underneath the handshake.
+		/// <see cref="GetConnectionAddress"/> is called at least twice per attempt — once to bind
+		/// the cookie to an IP and again to verify the echoed cookie against it — so a resolver
+		/// that advances on every CALL issues the challenge from one address and validates it
+		/// from another. The cookie then cannot verify, by design, and the connection is dropped
+		/// at the handshake before authentication is ever reached.
+		/// </remarks>
+		public int ConnectionEpoch { get; private set; }
+
 		protected override void BroadcastAuthResult(int conn, ClientAuthenticationResult result, bool reliable)
 		{
 			_ = AuthTestTrace.Log("Server", "BroadcastAuthResult", $"conn={conn} result={result} reliable={reliable}");
