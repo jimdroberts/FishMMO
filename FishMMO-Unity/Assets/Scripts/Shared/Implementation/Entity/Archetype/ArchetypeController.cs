@@ -1,4 +1,4 @@
-using FishNet.Broadcast;
+﻿using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -187,7 +187,10 @@ namespace FishMMO.Shared
 			NetworkConnection owner = character.Owner;
 			foreach (NetworkConnection observer in character.Observers)
 			{
-				if (observer == null || observer == owner)
+				/* IsActive matches FactionController's otherwise-identical copy of this loop.
+				 * A connection that is disconnecting can still be sitting in Observers, and
+				 * NetworkConnection.Broadcast logs an error rather than dropping it quietly. */
+				if (observer == null || observer == owner || !observer.IsActive)
 				{
 					continue;
 				}

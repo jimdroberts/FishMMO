@@ -44,6 +44,18 @@ namespace FishMMO.Shared
 		public float CorpseDecayDurationOverride;
 
 		/// <summary>
+		/// Optional empty-corpse decay override. When greater than zero, replaces the NPC prefab's
+		/// <see cref="NPC.EmptyCorpseDecayDuration"/>. Zero uses the prefab's own value.
+		/// </summary>
+		/// <remarks>
+		/// Useful where a placement's corpse density differs from the creature's norm — a dense
+		/// grinding camp wants its emptied bodies gone sooner than the same creature standing
+		/// alone on a road.
+		/// </remarks>
+		[Tooltip("Empty-corpse decay duration in seconds. 0 = use prefab default.")]
+		public float EmptyCorpseDecayDurationOverride;
+
+		/// <summary>
 		/// Optional loot table override, so the same prefab drops zone-appropriate loot.
 		/// </summary>
 		/// <remarks>
@@ -138,6 +150,10 @@ namespace FishMMO.Shared
 			npc.CorpseDecayDuration = CorpseDecayDurationOverride > 0f
 				? CorpseDecayDurationOverride
 				: (prefabNPC != null ? prefabNPC.CorpseDecayDuration : npc.CorpseDecayDuration);
+
+			npc.EmptyCorpseDecayDuration = EmptyCorpseDecayDurationOverride > 0f
+				? EmptyCorpseDecayDurationOverride
+				: (prefabNPC != null ? prefabNPC.EmptyCorpseDecayDuration : npc.EmptyCorpseDecayDuration);
 
 			npc.LootTable = LootTableOverride != null
 				? LootTableOverride
@@ -334,6 +350,8 @@ namespace FishMMO.Shared
 		{
 			base.OnValidate();
 
+			if (CorpseDecayDurationOverride < 0f) CorpseDecayDurationOverride = 0f;
+			if (EmptyCorpseDecayDurationOverride < 0f) EmptyCorpseDecayDurationOverride = 0f;
 			if (MinimumScale < 0f) MinimumScale = 0f;
 			if (MaximumScale < MinimumScale) MaximumScale = MinimumScale;
 		}

@@ -90,6 +90,32 @@ namespace FishMMO.Shared
 		public float CorpseDecayDuration = 30f;
 
 		/// <summary>
+		/// Seconds an empty corpse remains before returning to the object pool.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A body with nothing on it is scenery. The full decay duration exists to give the people
+		/// who earned the kill time to walk over and take their loot, and none of that applies once
+		/// there is nothing left to take — or once it turns out there never was, which is the case
+		/// for every NPC killed by another NPC, by the environment, or by a player with no loot
+		/// table configured. Left on the full timer those bodies accumulate: a busy zone ends up
+		/// carpeted in corpses that no one can interact with, each still spawned, still observed by
+		/// every client in range, and still holding its spawner's slot.
+		/// </para>
+		/// <para>
+		/// Only ever shortens a corpse's remaining life, never extends it, so setting this longer
+		/// than <see cref="CorpseDecayDuration"/> simply has no effect.
+		/// </para>
+		/// <para>
+		/// Keep it comfortably longer than the death animation, or bodies will pop out of the world
+		/// mid-collapse.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Seconds an empty corpse remains before returning to the pool. Only ever shortens the decay, never extends it.")]
+		[Min(0f)]
+		public float EmptyCorpseDecayDuration = 5f;
+
+		/// <summary>
 		/// How close a player must stand to loot this NPC's corpse.
 		/// </summary>
 		[Tooltip("Distance within which a player may loot this NPC's corpse.")]
@@ -109,6 +135,16 @@ namespace FishMMO.Shared
 		/// Remaining seconds before the corpse returns to the object pool.
 		/// </summary>
 		private float corpseDecayTimer;
+
+		/// <summary>
+		/// True once the decay timer has been cut short because the corpse was found empty.
+		/// </summary>
+		/// <remarks>
+		/// Latched so the clamp is applied once rather than re-evaluated against a shrinking
+		/// timer every tick, and so <see cref="HasLoot"/> — which walks the slot list — is only
+		/// asked until it first answers no.
+		/// </remarks>
+		private bool corpseDecayShortened;
 
 		[Header("Loot")]
 		[Tooltip("What this NPC's corpse may hold. Rolled once, on the server, at the moment of death.")]
@@ -215,6 +251,14 @@ namespace FishMMO.Shared
 		/// </remarks>
 		protected virtual void OnValidate()
 		{
+			if (CorpseDecayDuration < 0f)
+			{
+				CorpseDecayDuration = 0f;
+			}
+			if (EmptyCorpseDecayDuration < 0f)
+			{
+				EmptyCorpseDecayDuration = 0f;
+			}
 			if (MinimumRespawnTime < 0f)
 			{
 				MinimumRespawnTime = 0f;
@@ -313,6 +357,7 @@ namespace FishMMO.Shared
 
 			isCorpse = false;
 			corpseDecayTimer = 0f;
+			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = 0f;
 			OnCorpseExpired = null;
 
@@ -464,6 +509,7 @@ namespace FishMMO.Shared
 			// Enter corpse state -- stay spawned so clients see the death animation.
 			isCorpse = true;
 			corpseDecayTimer = CorpseDecayDuration;
+			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = CorpseInteractionRange * CorpseInteractionRange;
 
 			// Disable AI so the corpse does not move or fight.
@@ -595,6 +641,34 @@ namespace FishMMO.Shared
 		private void CorpseDecayTick()
 		{
 			if (!isCorpse) return;
+
+			/* Cut the timer short the moment the body is empty.
+			 *
+			 * Done here, on the tick, rather than at each of the places that remove loot — taking
+			 * an item, taking currency, taking everything, and rolling a table that produced
+			 * nothing are four separate paths, and a fifth would be easy to add without
+			 * remembering this. Evaluating the condition instead of trusting callers to report it
+			 * means every one of them is covered, including the case where the corpse was never
+			 * lootable in the first place.
+			 *
+			 * It also sidesteps the ordering hazard that per-call-site shortening would carry: a
+			 * take that fails to reach the looter's inventory puts the item straight back, and
+			 * shortening at the moment of removal would leave a still-full corpse on the short
+			 * timer. Both halves of that happen inside one broadcast handler, so no tick can
+			 * observe the gap. */
+			if (!corpseDecayShortened && !HasLoot)
+			{
+				corpseDecayShortened = true;
+
+				// Clamp, never extend — a longer empty duration than the full one is a
+				// configuration mistake, not an instruction to keep the body around.
+				float emptyDuration = Mathf.Max(0f, EmptyCorpseDecayDuration);
+				if (corpseDecayTimer > emptyDuration)
+				{
+					corpseDecayTimer = emptyDuration;
+				}
+			}
+
 			corpseDecayTimer -= (float)base.TimeManager.TickDelta;
 			if (corpseDecayTimer <= 0f)
 				ReturnToPool();
