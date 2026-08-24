@@ -30,4 +30,4 @@ MonoBehaviour:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
-        RequiredHeadroom: 3
+        RequiredClearance: 3

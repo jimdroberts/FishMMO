@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 			IMerchant merchant = data.Interactable as IMerchant;
 			if (merchant?.Template == null) return;
 
-			initiator.NetworkObject.Broadcast(new MerchantBroadcast()
+			SendToOwner(initiator, new MerchantBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
 				TemplateID = merchant.Template.ID,

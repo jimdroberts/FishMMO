@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 			if (initiator is not IPlayerCharacter player) return;
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
-			initiator.NetworkObject.Broadcast(new AbilityCrafterBroadcast() { InteractableID = data.Interactable.ID });
+			SendToOwner(player, new AbilityCrafterBroadcast() { InteractableID = data.Interactable.ID });
 
 			IAbilityCrafter abilityCrafter = data.Interactable as IAbilityCrafter;
 			if (abilityCrafter?.AchievementTemplate != null &&

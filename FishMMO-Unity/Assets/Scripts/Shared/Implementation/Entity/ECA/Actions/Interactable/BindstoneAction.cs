@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using KinematicCharacterController;
 using FishMMO.Shared.Core;
@@ -23,19 +23,33 @@ namespace FishMMO.Shared
 	public class BindstoneAction : BaseAction
 	{
 		/// <summary>
-		/// Refuse to bind when something solid is directly overhead within this distance.
+		/// Total vertical clearance, in metres from the ground, a bind position must have.
 		/// </summary>
 		/// <remarks>
-		/// Catches the case the ground and overlap checks cannot: a player who has clipped beneath
-		/// the world stands on the underside of the terrain quite stably and overlaps nothing, and
-		/// binding there gives them a permanent respawn inside the map.
 		/// <para>
-		/// Set to 0 for a bindstone that is legitimately indoors or in a cave, where a ceiling is
-		/// expected and this check would refuse every honest bind.
+		/// Floored at the character's own capsule height plus
+		/// <see cref="MINIMUM_CLEARANCE_MARGIN"/>, whatever is configured here — a player needs room
+		/// to stand and room to move, and a bind point is respawned into with no further validation.
+		/// Raising this asks for more; lowering it cannot go below the floor, so there is no value
+		/// that disables the check.
+		/// </para>
+		/// <para>
+		/// Derived from the live capsule rather than a constant, because races differ in height and
+		/// a fixed number would be too strict for one and too loose for another.
 		/// </para>
 		/// </remarks>
-		[Tooltip("Refuse to bind with solid geometry this close overhead. 0 disables — use 0 for indoor or cave bindstones.")]
-		public float RequiredHeadroom = 3.0f;
+		[Tooltip("Total vertical clearance a bind spot needs, in metres from the ground. Always at least the character's height + 1m.")]
+		public float RequiredClearance = 3.0f;
+
+		/// <summary>
+		/// Free space a character needs above its own head to be able to move after respawning.
+		/// </summary>
+		/// <remarks>
+		/// One metre. Enough that a respawn cannot land somebody in a gap they exactly fill — which
+		/// passes an overlap test and is still stuck — while staying under any sane indoor ceiling,
+		/// so a bindstone inside a building is not refused for being inside a building.
+		/// </remarks>
+		public const float MINIMUM_CLEARANCE_MARGIN = 1.0f;
 
 		/// <summary>
 		/// Buffer for the capsule overlap test.
@@ -174,28 +188,35 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			if (RequiredHeadroom > 0f)
-			{
-				/* Under the map. A player who has clipped through the world stands on the
-				 * underside of the terrain perfectly stably and overlaps nothing, so neither check
-				 * above sees it — but there is solid ground directly above their head, which there
-				 * is not when standing on the world the right way up.
-				 *
-				 * Swept with the character's own capsule rather than raycast from a point, so a
-				 * gap the player's shoulders would not fit through does not read as open sky. */
-				int hits = motor.CharacterCollisionsSweep(
-					position,
-					rotation,
-					motor.CharacterUp,
-					RequiredHeadroom,
-					out RaycastHit closestHit,
-					sweepBuffer);
+			/* Clearance, and with it the under-the-map case. A player who has clipped through the
+			 * world stands on the underside of the terrain perfectly stably and overlaps nothing,
+			 * so neither check above sees it — but there is world directly above their head, which
+			 * there is not when standing on the world the right way up.
+			 *
+			 * Swept with the character's own capsule rather than raycast from a point, so a gap the
+			 * player's shoulders would not fit through does not read as open sky.
+			 *
+			 * The sweep measures travel available above the head, and the capsule already occupies
+			 * its own height — so the distance asked for is the total clearance minus that height,
+			 * not the total. Sweeping the full figure would demand a room more than twice the
+			 * player's height and refuse every honest indoor bind. */
+			float capsuleHeight = motor.Capsule != null ? motor.Capsule.height : 0f;
+			float requiredClearance = Mathf.Max(RequiredClearance, capsuleHeight + MINIMUM_CLEARANCE_MARGIN);
+			float requiredHeadroom = Mathf.Max(requiredClearance - capsuleHeight, MINIMUM_CLEARANCE_MARGIN);
 
-				if (hits > 0 && closestHit.collider != null)
-				{
-					rejection = $"only {closestHit.distance:0.00}m of headroom below '{closestHit.collider.name}'";
-					return false;
-				}
+			int hits = motor.CharacterCollisionsSweep(
+				position,
+				rotation,
+				motor.CharacterUp,
+				requiredHeadroom,
+				out RaycastHit closestHit,
+				sweepBuffer);
+
+			if (hits > 0 && closestHit.collider != null)
+			{
+				rejection = $"needs {requiredClearance:0.00}m of clearance but only has " +
+							$"{capsuleHeight + closestHit.distance:0.00}m below '{closestHit.collider.name}'";
+				return false;
 			}
 
 			return true;

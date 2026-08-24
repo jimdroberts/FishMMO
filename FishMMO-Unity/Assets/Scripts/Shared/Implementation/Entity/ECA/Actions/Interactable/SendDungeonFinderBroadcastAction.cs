@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
-			initiator.NetworkObject.Broadcast(new DungeonFinderBroadcast()
+			SendToOwner(initiator, new DungeonFinderBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
 			});

@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 			LoreObjectTemplate template = loreObject.Template;
 
 			// Show the lore window on the client
-			initiator.NetworkObject.Broadcast(new LoreObjectBroadcast()
+			SendToOwner(initiator, new LoreObjectBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
 				TemplateID = template.ID,
@@ -64,7 +64,7 @@ namespace FishMMO.Shared
 						abilityController.LearnBaseAbilities(toLearn);
 						for (int i = 0; i < toLearn.Count; i++)
 						{
-							initiator.NetworkObject.Broadcast(
+							SendToOwner(initiator,
 								new KnownAbilityAddBroadcast() { TemplateID = toLearn[i].ID });
 						}
 					}
@@ -91,7 +91,7 @@ namespace FishMMO.Shared
 						abilityController.LearnAbilityEvents(toLearn);
 						for (int i = 0; i < toLearn.Count; i++)
 						{
-							initiator.NetworkObject.Broadcast(
+							SendToOwner(initiator,
 								new KnownAbilityEventAddBroadcast() { TemplateID = toLearn[i].ID });
 						}
 					}

@@ -1,4 +1,5 @@
 ﻿using System;
+using FishNet.Object;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -43,11 +44,20 @@ namespace FishMMO.Shared
 				target.Activate(player);
 			}
 
-			initiator.NetworkObject.Broadcast(new SwitchStateBroadcast()
+			/* World state, not a personal result — sent to the observers of the SWITCH rather
+			 * than to the player who threw it, so everyone who can see the door sees it move.
+			 * Broadcasting from the player's NetworkObject, which is what this used to do, picked
+			 * the set of clients who can see the player: near enough to be plausible, and not the
+			 * same set at all. */
+			NetworkObject switchObject = data.Interactable.GameObject.GetComponent<NetworkObject>();
+			if (switchObject != null)
 			{
-				InteractableID = data.Interactable.ID,
-				Activated = target.IsActivated,
-			});
+				switchObject.Broadcast(new SwitchStateBroadcast()
+				{
+					InteractableID = data.Interactable.ID,
+					Activated = target.IsActivated,
+				});
+			}
 
 			if (switchInteractable.AchievementTemplate != null &&
 				player.TryGet(out IAchievementController achievementController))

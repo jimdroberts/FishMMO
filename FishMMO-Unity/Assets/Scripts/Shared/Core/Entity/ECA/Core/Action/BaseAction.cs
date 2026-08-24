@@ -1,4 +1,6 @@
 ﻿using System;
+using FishNet.Broadcast;
+using FishNet.Connection;
 using UnityEngine;
 using FishMMO.Shared;
 
@@ -82,6 +84,36 @@ namespace FishMMO.Shared.Core
 			return initiator != null &&
 				   initiator.NetworkObject != null &&
 				   initiator.NetworkObject.IsServerInitialized;
+		}
+
+		/// <summary>
+		/// Sends a broadcast to the one player an action is acting for.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Not</b> <c>initiator.NetworkObject.Broadcast(...)</c>, which is what these actions
+		/// used to call. That sends to the <em>observers</em> of the initiator's NetworkObject —
+		/// every client that can see the player, not the player. One person opening a merchant
+		/// therefore opened the shop on every screen within observer range, because the client
+		/// handlers have no reason to filter a message they were sent directly.
+		/// </para>
+		/// <para>
+		/// Anything that opens a window, offers a quest, or reports a personal result belongs here.
+		/// Genuine world state — a switch throwing, a door opening — should go to the observers of
+		/// the <em>object that changed</em>, which is a different set again.
+		/// </para>
+		/// </remarks>
+		/// <typeparam name="T">The broadcast type.</typeparam>
+		/// <param name="character">The character whose owning connection should receive it.</param>
+		/// <param name="message">The broadcast to send.</param>
+		protected static void SendToOwner<T>(ICharacter character, T message) where T : struct, IBroadcast
+		{
+			NetworkConnection owner = character?.Owner;
+			if (owner == null || !owner.IsActive)
+			{
+				return;
+			}
+			owner.Broadcast(message);
 		}
 
 		/// <summary>

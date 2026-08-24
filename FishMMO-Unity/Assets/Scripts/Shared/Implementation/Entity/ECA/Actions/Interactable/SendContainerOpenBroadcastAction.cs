@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			initiator.NetworkObject.Broadcast(new ContainerOpenBroadcast()
+			SendToOwner(player, new ContainerOpenBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
 				TemplateID = container.Template.ID,

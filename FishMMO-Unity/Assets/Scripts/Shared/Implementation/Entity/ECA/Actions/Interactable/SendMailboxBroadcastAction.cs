@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 			if (initiator is not IPlayerCharacter player) return;
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
-			initiator.NetworkObject.Broadcast(new MailboxBroadcast() { InteractableID = data.Interactable.ID });
+			SendToOwner(player, new MailboxBroadcast() { InteractableID = data.Interactable.ID });
 
 			IMailbox mailbox = data.Interactable as IMailbox;
 			if (mailbox?.AchievementTemplate != null &&

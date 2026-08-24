@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 			{
 				bankController.LastInteractableID = data.Interactable.ID;
 
-				initiator.NetworkObject.Broadcast(new BankerBroadcast());
+				SendToOwner(player, new BankerBroadcast());
 			}
 
 			if (banker?.AchievementTemplate != null &&

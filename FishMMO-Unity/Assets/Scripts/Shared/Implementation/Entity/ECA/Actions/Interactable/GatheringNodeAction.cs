@@ -36,7 +36,7 @@ namespace FishMMO.Shared
 			GatheringNodeTemplate template = node.Template;
 
 			// Notify the client about the gathering attempt (shows progress bar)
-			initiator.NetworkObject.Broadcast(new GatheringNodeBroadcast()
+			SendToOwner(initiator, new GatheringNodeBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
 				TemplateID = template.ID,

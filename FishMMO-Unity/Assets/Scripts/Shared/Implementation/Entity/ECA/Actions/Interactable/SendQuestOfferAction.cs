@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 
 			if (availableIDs.Count < 1) return;
 
-			initiator.NetworkObject.Broadcast(new QuestOfferBroadcast()
+			SendToOwner(player, new QuestOfferBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
 				TemplateIDs = availableIDs.ToArray(),
