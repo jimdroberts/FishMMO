@@ -375,7 +375,13 @@ namespace FishMMO.Client
 			 * to pay by routing straight back into this method. */
 			ICharacterAttributeController characterAttributeController = target.GetComponent<ICharacterAttributeController>();
 			IBuffController buffController = target.GetComponent<IBuffController>();
-			IInteractable interactable = target.GetComponent<IInteractable>();
+			/* Resolved through the shared rule, not a raw GetComponent. The target frame and the
+			 * interact key have to agree about which component the player is looking at: a dead
+			 * merchant carries both a Merchant and the NPC that is its own corpse, and
+			 * PlayerInputController already resolves that pair through InteractableResolver. With
+			 * a raw GetComponent here the frame could name and describe the shop while pressing
+			 * the key looted the body. */
+			IInteractable interactable = InteractableResolver.Resolve(target.gameObject);
 			ICharacter character = target.GetComponent<ICharacter>();
 			SceneTeleporter teleporter = target.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = target.GetComponent<SceneObjectNamer>();

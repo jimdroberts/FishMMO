@@ -128,11 +128,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
 		{
 			if (abilities == null || !abilities.Any())
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Abilities collection must not be null or empty.");
 			}
@@ -140,7 +140,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var list = abilities.ToList();
 			if (list.Any(a => a.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more abilities had an invalid Version. Version must be greater than 0.");
 			}
@@ -200,8 +200,13 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = list.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
+				/* Both branches contribute. The batch is split by whether a row already has a
+				 * primary key, so neither statement alone describes what the caller asked for. */
+				BulkWriteResult outcome = new BulkWriteResult(suppliedRows, 0, 0);
 				var allCharacterIds = list.Select(a => a.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
 					.AsNoTracking()
@@ -289,13 +294,16 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE t.id = u.id
 							AND u.version > t.version;";
 
-					await ExecuteBulkUpsertAsync(
+					int appliedExisting = await ExecuteBulkUpsertAsync(
 						dbContext,
 						sql,
 						activeExistingItems.Count,
 						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilityEventsJson, cooldownArray },
 						"One or more abilities were rejected due to a stale Version.",
-						cancellationToken).ConfigureAwait(false);
+						cancellationToken,
+						BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+					outcome += new BulkWriteResult(0, activeExistingItems.Count, appliedExisting);
 				}
 
 				if (activeNewItems.Count > 0)
@@ -344,14 +352,19 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE
 							EXCLUDED.version > {TableName}.version;";
 
-					await ExecuteBulkUpsertAsync(
+					int appliedNew = await ExecuteBulkUpsertAsync(
 						dbContext,
 						sql,
 						activeNewItems.Count,
 						new object[] { characterIdArray, templateIdArray, versionArray, abilityEventsJson, cooldownArray, now },
 						"One or more abilities were rejected due to a stale Version.",
-						cancellationToken).ConfigureAwait(false);
+						cancellationToken,
+						BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+					outcome += new BulkWriteResult(0, activeNewItems.Count, appliedNew);
 				}
+
+				return outcome;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

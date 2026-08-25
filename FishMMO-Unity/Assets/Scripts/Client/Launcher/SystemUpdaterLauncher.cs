@@ -39,6 +39,81 @@ namespace FishMMO.Client
 		private const float handoffGraceSeconds = 10f;
 
 		/// <summary>
+		/// Makes sure the updater carries its execute bit on Linux and macOS.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The build pipeline sets this bit when the client is built on a Unix host, but it does
+		/// not survive the journey to a player. A Linux build distributed as a .zip arrives with
+		/// every file at 0644 — the ZIP format carries POSIX modes only as an optional extension
+		/// that most Windows-side tooling neither writes nor preserves — and a client built on a
+		/// Windows editor never had the bit set in the first place.
+		/// </para>
+		/// <para>
+		/// The player never sees why. The game itself launched (they made THAT file executable,
+		/// or their extractor did), the update downloads and verifies, and then the handoff dies
+		/// with a permission error on a console nobody is reading, leaving the install pinned to
+		/// an old version with no route forward. One chmod removes the whole failure mode.
+		/// </para>
+		/// <para>
+		/// Shelling out rather than calling <c>File.SetUnixFileMode</c>: that API is .NET 7 and
+		/// the Unity player runtime does not expose it. Best-effort throughout — if chmod is
+		/// missing or refuses, the launch below fails exactly as it would have anyway, and this
+		/// costs one short-lived process.
+		/// </para>
+		/// </remarks>
+		private static void EnsureExecutableOnUnix(string path)
+		{
+#if UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX
+			try
+			{
+				ProcessStartInfo chmod = new ProcessStartInfo("chmod")
+				{
+					UseShellExecute = false,
+					CreateNoWindow = true,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+				};
+				try
+				{
+					chmod.ArgumentList.Add("+x");
+					chmod.ArgumentList.Add(path);
+				}
+				catch (NotSupportedException)
+				{
+					// The same IL2CPP fallback the launch below uses: some Mono/IL2CPP versions
+					// do not implement ArgumentList. Quoting matters here — an install path with
+					// a space in it is the common case on macOS and not rare on Linux.
+					chmod.Arguments = $"+x \"{path}\"";
+				}
+
+				using (Process process = Process.Start(chmod))
+				{
+					if (process == null)
+					{
+						return;
+					}
+					// Bounded: this runs on the main thread, and a chmod that has not finished
+					// in two seconds is not going to.
+					if (!process.WaitForExit(2000))
+					{
+						Log.Warning("Updater", "chmod on the updater did not finish; continuing anyway.");
+						return;
+					}
+					if (process.ExitCode != 0)
+					{
+						Log.Warning("Updater", $"Could not mark the updater executable (chmod exit {process.ExitCode}). The launch below may fail with a permission error.");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("Updater", $"Could not mark the updater executable: {ex.Message}. The launch below may fail with a permission error.");
+			}
+#endif
+		}
+
+		/// <summary>
 		/// Launches the updater executable and hands off to it via a coroutine, ensuring
 		/// callbacks execute on the Unity main thread.
 		/// <para><b>IMPORTANT:</b> This method returns an IEnumerator and the caller
@@ -83,6 +158,8 @@ namespace FishMMO.Client
 				onError?.Invoke($"Updater executable not found at: {updaterPath}");
 				yield break;
 			}
+
+			EnsureExecutableOnUnix(updaterPath);
 
 			Process process = null;
 			DataReceivedEventHandler outputHandler = null;

@@ -1,7 +1,8 @@
-using FishNet.Broadcast;
+﻿using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -75,15 +76,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// validate interactable
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-				if (interactable == null ||
-					!interactable.InRange(character.Transform))
-				{
-					return;
-				}
+				/* Resolve through the shared rule and ask CanInteract, not GetComponent + InRange.
+				 *
+				 * Two things were wrong with the old pair. GetComponent returns whichever
+				 * IInteractable the component order happens to yield, and a merchant NPC carries
+				 * two — the Merchant and the NPC that is its own lootable corpse — so which one
+				 * answered a purchase was decided by the order somebody happened to add components
+				 * to the prefab.
+				 *
+				 * More seriously, InRange is not CanInteract. CanInteract is where the corpse gate
+				 * lives, and skipping it meant a player could kill a merchant and then keep
+				 * trading with the body: opening the shop was refused, but nothing requires the
+				 * shop to have been opened before a MerchantPurchaseBroadcast is accepted, so a
+				 * client could simply send one. */
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
 				IMerchant merchant = interactable as IMerchant;
 				if (merchant == null ||
+					merchant.Template == null ||
+					!interactable.CanInteract(character) ||
 					merchantTemplate.ID != merchant.Template.ID)
 				{
 					return;
@@ -310,15 +320,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-				if (interactable == null || !interactable.InRange(character.Transform))
-				{
-					return;
-				}
-
+				// Resolved and gated exactly as the purchase path is — see the note there. A dead
+				// merchant does not buy either.
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
 				IMerchant merchant = interactable as IMerchant;
 				MerchantTemplate merchantTemplate = merchant?.Template;
-				if (merchantTemplate == null || !merchantTemplate.BuysItems)
+				if (merchantTemplate == null ||
+					!merchantTemplate.BuysItems ||
+					!interactable.CanInteract(character))
 				{
 					return;
 				}
@@ -714,11 +723,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				DatabaseResult result = await service.PersistAsync(dtos);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem", $"PersistMerchantAttributesToDbAsync DB error (CharID={charID}, {dtos.Count} attrs): {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				await BulkWriteReporting.ReportAsync("InteractableSystem", "Merchant attribute save",
+					await service.PersistAsync(dtos), $"CharID={charID}");
 			}
 			catch (System.Exception ex)
 			{

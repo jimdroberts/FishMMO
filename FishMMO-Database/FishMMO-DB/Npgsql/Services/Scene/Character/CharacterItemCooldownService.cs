@@ -126,11 +126,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterItemCooldownData> cooldowns, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterItemCooldownData> cooldowns, CancellationToken cancellationToken = default)
 		{
 			if (cooldowns == null || !cooldowns.Any())
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Item cooldowns collection must not be null or empty.");
 			}
@@ -138,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var list = cooldowns.ToList();
 			if (list.Any(c => c.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more item cooldowns had an invalid Version. Version must be greater than 0.");
 			}
@@ -159,7 +159,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = list.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var allCharacterIds = list.Select(c => c.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -179,7 +181,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeCooldowns = list.Where(c => activeCharacterIdSet.Contains(c.CharacterID)).ToList();
 				if (activeCooldowns.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -214,13 +216,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeCooldowns.Count,
 					new object[] { characterIdArray, categoryArray, versionArray, cooldownEndArray, now },
 					"One or more item cooldowns were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeCooldowns.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

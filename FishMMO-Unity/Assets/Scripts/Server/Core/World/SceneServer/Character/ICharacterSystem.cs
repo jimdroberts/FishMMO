@@ -60,6 +60,55 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void SuppressCombatLingerOnDisconnect(TConnection connection);
 
 		/// <summary>
+		/// Ends the combat-logout linger held for <paramref name="accountName"/>, if there is one,
+		/// saving the body and handing its session claim back.
+		/// </summary>
+		/// <remarks>
+		/// A lingering body has no connection, so it is invisible to everything that acts on a
+		/// player by finding their connection — including the administrative kick, which therefore
+		/// did nothing at all to a character that had combat-logged. That is the opposite of what a
+		/// kick is for: the body stays in the world, still targetable, and goes on holding the
+		/// character's session claim, so the operator's remedy for a stuck character is precisely
+		/// the case where it has no effect.
+		/// <para>
+		/// This is the ordinary end of a linger, not a special teardown: the body is persisted and
+		/// despawned and the claim released, exactly as when its timer runs out. The character
+		/// keeps whatever happened to it while it stood there.
+		/// </para>
+		/// </remarks>
+		/// <param name="accountName">Account whose lingering body should be removed.</param>
+		/// <param name="reason">Why the linger is being ended, for diagnostics.</param>
+		/// <returns><c>true</c> when a lingering body was found and removed.</returns>
+		bool TryEndCombatLingerForAccount(string accountName, string reason);
+
+		/// <summary>
+		/// Returns everyone standing in an instance to the open world, so the instance can be
+		/// unloaded without stranding them.
+		/// </summary>
+		/// <remarks>
+		/// An instance is normally emptied by its occupants leaving; this is the path for an
+		/// instance that ends on the server's terms — a lifetime cap expiring, or a leader closing
+		/// it — where the characters inside have not asked to go anywhere.
+        /// <para>
+		/// Each character takes the ordinary leave-instance route: announced while it still belongs
+		/// to the instance so the population is debited correctly, put back at the open-world
+		/// position it entered from, saved, released, and disconnected to be re-routed. It is not
+		/// gated on combat or death, because the scene is going away regardless and refusing would
+		/// leave the character in a scene that is about to be destroyed.
+		/// </para>
+		/// <para>
+		/// Combat-logout bodies in the instance are finalised as well. They have no connection, so
+		/// nothing else would notice them — and destroying the scene under one strands that
+		/// character's session claim until its lease expires, locking the player out of every scene
+		/// server in the meantime.
+		/// </para>
+		/// </remarks>
+		/// <param name="instanceSceneID">Scene row ID of the instance being closed.</param>
+		/// <param name="reason">Why it is closing, for diagnostics.</param>
+		/// <returns>How many connected characters were moved.</returns>
+		int ReturnInstanceOccupantsToWorld(long instanceSceneID, string reason);
+
+		/// <summary>
 		/// Moves a character to another channel (another instance of the same scene) by
 		/// releasing it here, bound to <paramref name="targetSceneHandle"/>, and dropping the
 		/// connection so the client re-routes through the world server.

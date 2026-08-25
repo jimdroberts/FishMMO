@@ -38,6 +38,10 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(1);
 
+			builder.Property(e => e.TickCount)
+				.IsRequired()
+				.HasDefaultValue(0);
+
 			// Unique constraint: one buff template per character pet
 			builder.HasIndex(e => new { e.CharacterID, e.TemplateID })
 				.IsUnique();

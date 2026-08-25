@@ -1,0 +1,119 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UILore.uss
+    Lore Object Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UILore.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Wider and shorter than the loot-style panels because this one
+    holds prose. A narrow column forces a wall of short lines,
+    which is materially harder to read than the same words at a
+    comfortable measure — and the player is reading this by
+    choice, not scanning it under a decay timer.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+/* Centred, unlike the loot panels: nothing is being compared against the inventory, so there
+   is no reason to keep the middle of the screen clear. Absolute because dragging writes
+   left/top. */
+.lore-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 460px;
+    height: 380px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.lore-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.lore-header__title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.lore-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════ */
+
+.lore-scroll {
+    flex: 1;
+    padding: 12px;
+}
+
+/*
+    white-space: normal is the whole point of this rule. UI Toolkit labels do not wrap by
+    default, so lore text would run off the right edge as one line and the scroll view would
+    grow a horizontal scroller instead of flowing the paragraph.
+*/
+.lore-text {
+    white-space: normal;
+    -unity-text-align: upper-left;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+/* Hidden entirely when the lore granted nothing, rather than left as an empty strip: an
+   always-present blank bar reads as something that failed to load. */
+.lore-footer {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    flex-shrink: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.lore-footer__grants {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.lore-hidden {
+    display: none;
+}

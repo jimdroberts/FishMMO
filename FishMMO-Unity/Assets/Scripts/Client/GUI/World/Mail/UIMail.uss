@@ -1,0 +1,314 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIMail.uss
+    Mailbox Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIMail.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Two columns rather than a list that swaps to a reader. Mail
+    carries attachments, and an attachment is the reason the
+    window is open — keeping the inbox visible while reading means
+    the player can see at a glance which of the remaining letters
+    still have something on them, instead of paging back and forth.
+
+    Read and compose share the right column and are toggled by the
+    header tabs, so the panel never grows to fit both.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+.mail-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 560px;
+    height: 400px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.mail-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.mail-header__title {
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.mail-tabs {
+    flex-direction: row;
+    flex: 1;
+    align-items: center;
+}
+
+.mail-tab {
+    height: 24px;
+    min-width: 68px;
+    margin-right: 4px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.mail-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════ */
+
+.mail-body {
+    flex-direction: row;
+    flex: 1;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+
+/* ── LEFT : inbox ──────────────────────────────────────── */
+
+.mail-scroll {
+    width: 200px;
+    flex-shrink: 0;
+    padding: 6px;
+}
+
+.mail-list {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/*
+    fish-divider is authored as a horizontal rule — 1px high, full width. Turning it on its
+    side needs both halves overridden: the height back to auto so it stretches, and an explicit
+    width to give it thickness. Without the height reset it would be a 1px dot.
+*/
+.mail-divider {
+    width: 1px;
+    height: auto;
+    flex-shrink: 0;
+    align-self: stretch;
+}
+
+.mail-row {
+    flex-direction: column;
+    align-items: stretch;
+    flex-shrink: 0;
+    min-height: 38px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.mail-row__sender {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.mail-row__subject {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+/* An attachment marker on the row, so the inbox answers "which of these still has something
+   on it" without the player opening each one. */
+.mail-row__clip {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+}
+
+
+/* ── RIGHT : read pane ─────────────────────────────────── */
+
+.mail-read {
+    flex: 1;
+    flex-direction: column;
+    padding: 10px;
+    overflow: hidden;
+}
+
+.mail-read__subject {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.mail-read__sender {
+    margin-bottom: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.mail-read__scroll {
+    flex: 1;
+}
+
+/* white-space: normal so a message body wraps instead of running off the edge and growing a
+   horizontal scroller — UI Toolkit labels do not wrap by default. */
+.mail-read__body {
+    white-space: normal;
+    -unity-text-align: upper-left;
+    flex-shrink: 0;
+}
+
+.mail-read__attachment {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    flex-shrink: 0;
+    margin-top: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.mail-attachment__label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.mail-attachment__claim {
+    flex-shrink: 0;
+    min-width: 60px;
+    height: 24px;
+}
+
+.mail-read__actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+
+.mail-read__status {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.mail-read__delete {
+    flex-shrink: 0;
+    min-width: 70px;
+    height: 24px;
+}
+
+
+/* ── RIGHT : compose pane ──────────────────────────────── */
+
+.mail-compose {
+    flex: 1;
+    flex-direction: column;
+    padding: 10px;
+    overflow: hidden;
+}
+
+.mail-compose__caption {
+    flex-shrink: 0;
+    margin-bottom: 2px;
+}
+
+.mail-compose__field {
+    height: 22px;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.mail-compose__body {
+    flex: 1;
+    min-height: 60px;
+    margin-bottom: 6px;
+    white-space: normal;
+}
+
+.mail-compose__amounts {
+    flex-direction: row;
+    flex-shrink: 0;
+}
+
+.mail-compose__amount {
+    flex-direction: column;
+    flex: 1;
+    margin-right: 8px;
+}
+
+.mail-compose__small {
+    height: 22px;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.mail-compose__actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    flex-shrink: 0;
+}
+
+.mail-compose__status {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.mail-compose__send {
+    flex-shrink: 0;
+    min-width: 70px;
+    height: 24px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════════════════ */
+
+.mail-hidden {
+    display: none;
+}

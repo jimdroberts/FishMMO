@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using System;
 using System.Collections.Generic;
@@ -338,6 +338,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DespawnLingeringBody(entry.Character);
 		}
 
+		/// <inheritdoc/>
+		public bool TryEndCombatLingerForAccount(string accountName, string reason)
+		{
+			if (string.IsNullOrEmpty(accountName) ||
+				!lingeringCharactersByAccount.TryGetValue(accountName, out long characterID))
+			{
+				return false;
+			}
+
+			FinalizeCombatLinger(characterID, reason ?? "removed");
+			return true;
+		}
+
 		/// <summary>
 		/// Ends every active linger. Used on shutdown so no body is left owning a claim.
 		/// </summary>
@@ -435,9 +448,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var buffDataList = new List<CharacterBuffData>(8);
 			var attributeDataList = new List<CharacterAttributeData>(16);
 			var abilityDataList = new List<CharacterAbilityData>(8);
+			var petDataList = new List<PetSnapshot>(1);
 			AppendBuffData(character, buffDataList);
 			AppendAttributeData(character, attributeDataList);
 			AppendAbilityData(character, abilityDataList);
+			AppendPetData(character, petDataList);
 
 			DespawnLingeringBody(character);
 
@@ -446,7 +461,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!EnqueueAsyncWork(() => ReattachAndLoadAsync(
 					conn, accountName, characterService, serverID,
-					charData, buffDataList, attributeDataList, abilityDataList, heldToken)))
+					charData, buffDataList, attributeDataList, abilityDataList, petDataList, heldToken)))
 			{
 				// Nothing will run the save or the load, so hand the claim back rather than
 				// leaving the character owned by a server that has forgotten about it.
@@ -519,6 +534,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			List<CharacterBuffData> buffs,
 			List<CharacterAttributeData> attributes,
 			List<CharacterAbilityData> abilities,
+			List<PetSnapshot> pets,
 			Guid heldToken)
 		{
 			// Ordering matters: the load below re-reads this row, so anything not written yet is
@@ -546,6 +562,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (abilities.Count > 0)
 			{
 				await SaveAbilitiesAsync(abilities);
+			}
+			if (pets.Count > 0)
+			{
+				// Before the load below, like everything above it: PetSystem restores the pet off
+				// the back of the character spawn, and would otherwise read the state the body
+				// had when the linger began rather than the state it ended with.
+				await SavePetsAsync(pets);
 			}
 
 			// The character ID travels with the token: LoadCharacterAsync has to be able to hand
@@ -576,12 +599,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="buffs">Destination for buff rows.</param>
 		/// <param name="attributes">Destination for attribute rows.</param>
 		/// <param name="abilities">Destination for ability rows.</param>
+		/// <param name="pets">Destination for pet snapshots.</param>
 		private void AppendLingeringCharacterSnapshots(
 			ICharacterMappingData<NetworkConnection> mappingData,
 			List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterData,
 			List<CharacterBuffData> buffs,
 			List<CharacterAttributeData> attributes,
-			List<CharacterAbilityData> abilities)
+			List<CharacterAbilityData> abilities,
+			List<PetSnapshot> pets)
 		{
 			if (lingeringCharacters.Count == 0)
 			{
@@ -605,6 +630,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AppendBuffData(character, buffs);
 				AppendAttributeData(character, attributes);
 				AppendAbilityData(character, abilities);
+				AppendPetData(character, pets);
 			}
 		}
 
@@ -626,9 +652,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var buffDataList = new List<CharacterBuffData>(8);
 			var attributeDataList = new List<CharacterAttributeData>(16);
 			var abilityDataList = new List<CharacterAbilityData>(8);
+			var petDataList = new List<PetSnapshot>(1);
 			AppendBuffData(character, buffDataList);
 			AppendAttributeData(character, attributeDataList);
 			AppendAbilityData(character, abilityDataList);
+			AppendPetData(character, petDataList);
 
 			if (!EnqueueAsyncWork(() => SaveCharacterAsync(charData, ownership)))
 			{
@@ -645,6 +673,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (abilityDataList.Count > 0)
 			{
 				EnqueuePersistence(() => SaveAbilitiesAsync(abilityDataList));
+			}
+			if (petDataList.Count > 0)
+			{
+				EnqueuePersistence(() => SavePetsAsync(petDataList));
 			}
 		}
 	}

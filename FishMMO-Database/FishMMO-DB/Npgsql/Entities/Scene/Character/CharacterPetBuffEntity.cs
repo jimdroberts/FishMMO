@@ -29,11 +29,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public double RemainingTime { get; set; }
 		/// <summary>
-		/// Reserved for future use. Interval in seconds between periodic tick effects.
-		/// Intentionally always written as 0 in the current PersistAsync implementation.
-		/// This field is a schema placeholder for future periodic-DoT (damage-over-time)
-		/// or periodic-heal mechanics. When the game logic is ready, set this to the
-		/// desired tick interval and uncomment the write path in CharacterPetBuffService.
+		/// Seconds until this buff's next periodic tick.
 		/// </summary>
 		public double TickTime { get; set; }
 		/// <summary>
@@ -41,10 +37,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public int Stacks { get; set; }
 		/// <summary>
-		/// Reserved for future use. Total number of ticks that have occurred for this buff.
-		/// Intentionally always written as 0 in the current PersistAsync implementation.
-		/// Paired with <see cref="TickTime"/> — when periodic tick logic is added, this
-		/// field tracks the cumulative tick count for resume/restore on server restart.
+		/// Number of ticks that have fired for this buff instance, so cumulative periodic
+		/// effects resume where they left off rather than restarting.
 		/// </summary>
 		public int TickCount { get; set; }
 		public DateTime TimeCreated { get; set; }

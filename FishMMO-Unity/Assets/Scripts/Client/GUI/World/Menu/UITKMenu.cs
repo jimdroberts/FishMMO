@@ -22,6 +22,8 @@ namespace FishMMO.Client
 
 		/// <summary>Name of the options button element in the UXML.</summary>
 		private const string OPTIONS_BUTTON_NAME = "menu-options-btn";
+		/// <summary>Name of the scene-channel picker button element in the UXML.</summary>
+		private const string CHANNELS_BUTTON_NAME = "menu-channels-btn";
 		/// <summary>Name of the quit-to-login button element in the UXML.</summary>
 		private const string QUIT_TO_LOGIN_BUTTON_NAME = "menu-quit-to-login-btn";
 		/// <summary>Name of the quit button element in the UXML.</summary>
@@ -43,6 +45,12 @@ namespace FishMMO.Client
 			if (optionsButton != null)
 			{
 				optionsButton.clicked += OnButtonOptions;
+			}
+
+			Button channelsButton = Root.Q<Button>(CHANNELS_BUTTON_NAME);
+			if (channelsButton != null)
+			{
+				channelsButton.clicked += OnButtonChannels;
 			}
 
 			Button quitToLoginButton = Root.Q<Button>(QUIT_TO_LOGIN_BUTTON_NAME);
@@ -72,6 +80,27 @@ namespace FishMMO.Client
 			if (UIManager.TryGetTK("UIOptions", out UITKOptions uiOptions))
 			{
 				uiOptions.Show();
+			}
+		}
+
+		/// <summary>
+		/// Opens the scene-channel picker.
+		/// </summary>
+		/// <remarks>
+		/// Reached from here rather than from a key binding because a channel switch is a rare,
+		/// deliberate act — it releases the character and reconnects them through the world server
+		/// — and because the menu is the one panel a player can always open. The picker asks the
+		/// server for a fresh list as it opens; nothing is armed by this click.
+		/// <para>
+		/// The menu stays open behind it. Closing here would leave a player who opened the picker
+		/// by mistake with nothing on screen and no way back to Resume.
+		/// </para>
+		/// </remarks>
+		public void OnButtonChannels()
+		{
+			if (UIManager.TryGetTK("UISceneChannel", out UITKSceneChannel sceneChannel))
+			{
+				sceneChannel.Show();
 			}
 		}
 

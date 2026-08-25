@@ -16,19 +16,16 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Provides async operations for CRUD operations on character pet buff data.
 	/// Uses the BaseService execution strategy for automatic retry on transient database failures.
 	/// Returns DatabaseResult for consistent, safe error handling.
-	///
-	/// FIELD MAPPING (DTO â Entity columns):
-	///   CharacterPetBuffData.Level      â character_pet_buffs.stacks
-	///   CharacterPetBuffData.BuffTimeEnd â character_pet_buffs.remaining_time
-	///
-	/// When PersistAsync writes Level as the stacks column and BuffTimeEnd as
-	/// remaining_time, these are mapped inversely in FetchAsync:
-	///   character_pet_buffs.stacks        â CharacterPetBuffData.Level
-	///   character_pet_buffs.remaining_time â CharacterPetBuffData.BuffTimeEnd
-	///
-	/// The character_pet_buffs.tick_time and character_pet_buffs.tick_count columns
-	/// are always written as 0 â they are reserved for future periodic-tick mechanics.
 	/// </summary>
+	/// <remarks>
+	/// Every DTO field maps to the column of the same name, and every column is written. This
+	/// used to be a renaming layer: <c>Level</c> into <c>stacks</c>, <c>BuffTimeEnd</c> into
+	/// <c>remaining_time</c>, with <c>tick_time</c> and <c>tick_count</c> hard-coded to zero as
+	/// "reserved for future use". They were never reserved. They are the tick schedule and the
+	/// accumulated tick count of a periodic effect, the player's own buff service has always
+	/// written them, and zeroing them restored a damage-over-time effect on a pet with its
+	/// cumulative progress erased and its next tick due immediately.
+	/// </remarks>
 	public sealed class CharacterPetBuffService : BaseService<CharacterPetBuffEntity>, ICharacterPetBuffService
 	{
 		/// <summary>
@@ -127,7 +124,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { buffData.CharacterID, buffData.TemplateID, buffData.Version, buffData.BuffTimeEnd, 0f, buffData.Level, 0, now },
+					new object[] { buffData.CharacterID, buffData.TemplateID, buffData.Version, buffData.RemainingTime, buffData.TickTime, buffData.Stacks, buffData.TickCount, now },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -141,11 +138,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterPetBuffData> buffs, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterPetBuffData> buffs, CancellationToken cancellationToken = default)
 		{
 			if (buffs == null || !buffs.Any())
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Pet buffs collection must not be null or empty.");
 			}
@@ -153,7 +150,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var list = buffs.ToList();
 			if (list.Any(b => b.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more pet buffs had an invalid Version. Version must be greater than 0.");
 			}
@@ -174,7 +171,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = list.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var allCharacterIds = list.Select(b => b.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -194,17 +193,17 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeBuffs = list.Where(b => activeCharacterIdSet.Contains(b.CharacterID)).ToList();
 				if (activeBuffs.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
 				var characterIdArray = activeBuffs.Select(b => b.CharacterID).ToArray();
 				var templateIdArray = activeBuffs.Select(b => b.TemplateID).ToArray();
 				var versionArray = activeBuffs.Select(b => b.Version).ToArray();
-				var remainingTimeArray = activeBuffs.Select(b => b.BuffTimeEnd).ToArray();
-				var tickTimeArray = activeBuffs.Select(b => 0f).ToArray();
-				var stacksArray = activeBuffs.Select(b => b.Level).ToArray();
-				var tickCountArray = activeBuffs.Select(b => 0).ToArray();
+				var remainingTimeArray = activeBuffs.Select(b => b.RemainingTime).ToArray();
+				var tickTimeArray = activeBuffs.Select(b => b.TickTime).ToArray();
+				var stacksArray = activeBuffs.Select(b => b.Stacks).ToArray();
+				var tickCountArray = activeBuffs.Select(b => b.TickCount).ToArray();
 
 				var sql = $@"
 					INSERT INTO {TableName}
@@ -225,7 +224,7 @@ namespace FishMMO.Database.Npgsql.Services
 						{{1}}::integer[],
 						{{2}}::bigint[],
 						{{3}}::double precision[],
-						{{4}}::real[],
+						{{4}}::double precision[],
 						{{5}}::integer[],
 						{{6}}::integer[]
 					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count)
@@ -241,13 +240,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeBuffs.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, tickCountArray, now },
 					"One or more pet buffs were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeBuffs.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -311,8 +313,10 @@ namespace FishMMO.Database.Npgsql.Services
 					version: b.Version,
 					characterID: b.CharacterID,
 					templateID: b.TemplateID,
-					level: b.Stacks,
-					buffTimeEnd: b.RemainingTime
+					remainingTime: b.RemainingTime,
+					tickTime: b.TickTime,
+					stacks: b.Stacks,
+					tickCount: b.TickCount
 				)).ToList();
 
 				return (IReadOnlyList<CharacterPetBuffData>)buffs;

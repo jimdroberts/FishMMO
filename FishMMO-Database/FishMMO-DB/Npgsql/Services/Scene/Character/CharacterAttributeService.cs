@@ -38,11 +38,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterAttributeData> attributes, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterAttributeData> attributes, CancellationToken cancellationToken = default)
 		{
 			if (attributes == null || !attributes.Any())
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Attributes collection must not be null or empty.");
 			}
@@ -50,7 +50,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var attributeList = attributes.ToList();
 			if (attributeList.Any(a => a.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more attributes had an invalid Version. Version must be greater than 0.");
 			}
@@ -71,7 +71,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = attributeList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = attributeList.Select(a => a.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -91,7 +93,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeAttributes = attributeList.Where(a => activeCharacterIdSet.Contains(a.CharacterID)).ToList();
 				if (activeAttributes.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -130,13 +132,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeAttributes.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, valueArray, currentValueArray, now },
 					"One or more attributes were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeAttributes.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

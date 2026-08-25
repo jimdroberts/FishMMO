@@ -702,11 +702,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await hotkeyService.PersistAsync(hotkeys);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("HotkeySystem", $"PersistHotkeysAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				/* The bar is written whole, empty slots included, so anything short of a complete
+				 * write leaves a cleared slot still showing its old binding. Reported as a
+				 * discrepancy rather than silently accepted. */
+				await BulkWriteReporting.RequireCompleteAsync("HotkeySystem", "Hotkey bar save",
+					await hotkeyService.PersistAsync(hotkeys), $"{hotkeys.Count} slots");
 			}
 			catch (Exception ex)
 			{

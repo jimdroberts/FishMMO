@@ -246,6 +246,13 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Client → Server broadcast to send mail to another player.
 	/// </summary>
+	/// <remarks>
+	/// The attachment is named the same way a merchant sale is: an inventory <em>slot</em> and a
+	/// quantity, never an item ID and never a value. The server resolves what is actually in that
+	/// slot, takes it out of the sender's inventory itself, and attaches what it removed — so a
+	/// forged message can only ever name a slot the sender does not have, or more of a stack than
+	/// they hold, both of which are clamped or refused.
+	/// </remarks>
 	public struct MailSendBroadcast : IBroadcast
 	{
 		/// <summary>ID of the mailbox interactable the player is using.</summary>
@@ -256,6 +263,78 @@ namespace FishMMO.Shared
 		public string Subject;
 		/// <summary>Mail body text.</summary>
 		public string Body;
+		/// <summary>Inventory slot holding the item to attach, or -1 for no item.</summary>
+		public int AttachmentSlot;
+		/// <summary>How much of that slot's stack to attach. Clamped server-side.</summary>
+		public int AttachmentQuantity;
+		/// <summary>Currency to attach. Clamped server-side to what the sender holds.</summary>
+		public int CurrencyAttachment;
+	}
+
+	/// <summary>
+	/// Server → Client reply to a mail send.
+	/// </summary>
+	/// <remarks>
+	/// Sent from every exit. The client disables its send control while a request is outstanding —
+	/// the double-submit guard that stops one mis-timed click mailing a stack twice — and a
+	/// handler that returned silently would leave that control disabled for good. Same contract as
+	/// <see cref="MerchantSellResultBroadcast"/>.
+	/// </remarks>
+	public struct MailSendResultBroadcast : IBroadcast
+	{
+		/// <summary>True when the mail was accepted for delivery.</summary>
+		public bool Success;
+		/// <summary>Why the send was refused.</summary>
+		public MailFailureReason Reason;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast claiming one mail's attachment.
+	/// </summary>
+	public struct MailClaimAttachmentBroadcast : IBroadcast
+	{
+		/// <summary>ID of the mailbox interactable the player is using.</summary>
+		public long InteractableID;
+		/// <summary>ID of the mail whose attachment is being claimed.</summary>
+		public long MailID;
+	}
+
+	/// <summary>
+	/// Server → Client reply to an attachment claim.
+	/// </summary>
+	public struct MailClaimResultBroadcast : IBroadcast
+	{
+		/// <summary>The mail the request named.</summary>
+		public long MailID;
+		/// <summary>True when something was actually transferred.</summary>
+		public bool Success;
+		/// <summary>Why the claim was refused.</summary>
+		public MailFailureReason Reason;
+	}
+
+	/// <summary>
+	/// Why a mail send or attachment claim was refused.
+	/// </summary>
+	public enum MailFailureReason : byte
+	{
+		/// <summary>The request succeeded; no failure.</summary>
+		None = 0,
+		/// <summary>The server could not process the request.</summary>
+		ServerError = 1,
+		/// <summary>The player is not near a mailbox, or it no longer exists.</summary>
+		NoMailbox = 2,
+		/// <summary>The named recipient does not exist.</summary>
+		NoRecipient = 3,
+		/// <summary>The subject or body was empty, too long, or otherwise rejected.</summary>
+		InvalidMessage = 4,
+		/// <summary>The named inventory slot was empty or locked.</summary>
+		InvalidAttachment = 5,
+		/// <summary>The sender does not hold enough currency to attach that much.</summary>
+		NotEnoughCurrency = 6,
+		/// <summary>The mail had nothing attached, or it was already claimed.</summary>
+		NothingToClaim = 7,
+		/// <summary>The claimer's inventory had no room for the attachment.</summary>
+		InventoryFull = 8,
 	}
 
 	/// <summary>
@@ -274,14 +353,25 @@ namespace FishMMO.Shared
 	// ──────────────────────────────────────────
 
 	/// <summary>
-	/// Server → Client broadcast when a shrine effect is applied. Used for VFX/SFX feedback.
+	/// Server → Client broadcast answering a shrine interaction.
 	/// </summary>
+	/// <remarks>
+	/// Sent on refusal as well as on success. A shrine now has a per-character cooldown, and a
+	/// refusal that sent nothing back would be indistinguishable from a lost packet — the player
+	/// presses the key and the world does not react, which is the dead-keypress failure this
+	/// codebase has had to chase out of several other paths. <see cref="RemainingCooldownSeconds"/>
+	/// is what lets the client say <em>why</em> rather than merely that nothing happened.
+	/// </remarks>
 	public struct ShrineBroadcast : IBroadcast
 	{
 		/// <summary>ID of the shrine interactable.</summary>
 		public long InteractableID;
 		/// <summary>Template ID of the shrine.</summary>
 		public int TemplateID;
+		/// <summary>True when the shrine's effects were actually applied.</summary>
+		public bool Success;
+		/// <summary>Seconds until this character may use the shrine again. 0 when it is ready.</summary>
+		public float RemainingCooldownSeconds;
 	}
 
 	// ──────────────────────────────────────────
@@ -395,6 +485,45 @@ namespace FishMMO.Shared
 		public long InteractableID;
 		/// <summary>Slot index to take the item from.</summary>
 		public int Slot;
+	}
+
+	/// <summary>
+	/// Server → Client reply to a container take request.
+	/// </summary>
+	/// <remarks>
+	/// The take handler had no reply of any kind, so a client could not tell a refusal from a lost
+	/// packet and had nothing to release a per-slot pending lock on. Every exit now sends one, and
+	/// a successful take is followed by a fresh <see cref="ContainerOpenBroadcast"/> — the same
+	/// snapshot-not-delta contract corpse loot uses, so a client that missed an update still
+	/// converges on what the container actually holds.
+	/// </remarks>
+	public struct ContainerTakeResultBroadcast : IBroadcast
+	{
+		/// <summary>ID of the container interactable.</summary>
+		public long InteractableID;
+		/// <summary>The slot the request named.</summary>
+		public int Slot;
+		/// <summary>True when the item was transferred.</summary>
+		public bool Success;
+		/// <summary>Why the take was refused.</summary>
+		public ContainerFailureReason Reason;
+	}
+
+	/// <summary>
+	/// Why a container take was refused.
+	/// </summary>
+	public enum ContainerFailureReason : byte
+	{
+		/// <summary>The request succeeded; no failure.</summary>
+		None = 0,
+		/// <summary>The container no longer exists or is out of range.</summary>
+		NoContainer = 1,
+		/// <summary>The slot was empty — usually somebody else got there first.</summary>
+		AlreadyTaken = 2,
+		/// <summary>The player's inventory had no room.</summary>
+		InventoryFull = 3,
+		/// <summary>The server could not process the request.</summary>
+		ServerError = 4,
 	}
 
 	// ──────────────────────────────────────────

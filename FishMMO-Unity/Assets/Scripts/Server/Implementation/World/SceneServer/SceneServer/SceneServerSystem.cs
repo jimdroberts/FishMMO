@@ -475,6 +475,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			runtimeData.ScenePulseDataBuffer.Clear();
 			runtimeData.ScenesToUnloadBuffer.Clear();
 
+			// Instances past their lifetime cap this pulse. See the use site below.
+			List<long> expiredInstances = null;
+
 			if (mappingData.WorldScenes != null)
 			{
 				foreach (var sceneGroup in mappingData.WorldScenes.Values)
@@ -496,6 +499,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						for (int d = 0; d < runtimeData.SceneDetailsValuesBuffer.Count; d++)
 						{
 							ISceneInstanceDetails sceneDetails = runtimeData.SceneDetailsValuesBuffer[d];
+
+							/* A lifetime cap, checked before anything else.
+							 *
+							 * The stale sweep below only ever removes an EMPTY instance, so an
+							 * occupied one had no upper bound at all: a party that kept someone
+							 * standing in a dungeon held its scene, its physics simulation and its
+							 * row for as long as they cared to, and — now that a party may hold only
+							 * one instance — locked itself out of every other dungeon while they
+							 * did. This bounds the instance itself rather than its idleness. */
+							if (IsInstanceExpired(sceneDetails))
+							{
+								/* Kept apart from the stale list rather than folded into it. The two
+								 * are different events — an instance that ran out of time with people
+								 * in it, and a scene that has been empty long enough to reclaim — and
+								 * an operator reading the log needs to be able to tell which happened.
+								 * Allocated only when something actually expires, which is rare. */
+								(expiredInstances ??= new List<long>()).Add(sceneDetails.SceneID);
+								continue;
+							}
+
+							WarnInstanceOfPendingExpiry(sceneDetails);
+
 							if (sceneDetails.StalePulse)
 							{
 								double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
@@ -522,10 +547,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			// Unload stale scenes immediately on main thread
+			/* Unload on the main thread. Everything goes through CloseInstance rather than
+			 * UnloadScene: a stale scene is empty by definition, but an expired instance is not, and
+			 * destroying a scene with people standing in it is what CloseInstance exists to
+			 * prevent. */
 			for (int i = 0; i < runtimeData.ScenesToUnloadBuffer.Count; i++)
 			{
-				UnloadScene(runtimeData.ScenesToUnloadBuffer[i]);
+				CloseInstance(runtimeData.ScenesToUnloadBuffer[i], "empty for longer than the idle timeout");
+			}
+
+			if (expiredInstances != null)
+			{
+				for (int i = 0; i < expiredInstances.Count; i++)
+				{
+					CloseInstance(expiredInstances[i], "instance lifetime reached");
+				}
 			}
 
 			// Snapshot pulse data before passing to async — avoids fragile shared-buffer pattern
@@ -605,6 +641,184 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// every stale scene on every pulse.
 		/// </summary>
 		private readonly HashSet<string> loggedMissingStaleTimeoutKeys = new HashSet<string>(StringComparer.Ordinal);
+
+		#region Instance Lifetime
+
+		/// <summary>Default cap on how long one instance may exist, in minutes.</summary>
+		/// <remarks>
+		/// Generous enough that no ordinary dungeon run reaches it — this is a backstop against an
+		/// instance that is never finished, not a completion timer. Operators override it with the
+		/// <c>MaxInstanceLifetimeMinutes</c> configuration key.
+		/// </remarks>
+		private const int DefaultMaxInstanceLifetimeMinutes = 120;
+
+		/// <summary>Remaining-time marks, in seconds, at which occupants are warned.</summary>
+		/// <remarks>
+		/// Announced on crossing a mark rather than at a fixed interval, so the pulse rate does not
+		/// decide how often players are told. Mirrors the maintenance-shutdown countdown.
+		/// </remarks>
+		private static readonly int[] InstanceExpiryWarnSeconds = { 600, 300, 60 };
+
+		/// <summary>Expiry marks already announced, keyed by scene row.</summary>
+		private readonly Dictionary<long, HashSet<int>> announcedInstanceExpiry = new Dictionary<long, HashSet<int>>();
+
+		/// <summary>
+		/// How long an instance may exist before it is closed, whoever is still inside.
+		/// </summary>
+		/// <remarks>
+		/// Falls back to a safe default rather than to zero — <c>TryGetInt</c> leaves its out
+		/// parameter at 0 when the key is missing, and a zero cap would close every instance on the
+		/// pulse after it loaded.
+		/// </remarks>
+		private int ResolveMaxInstanceLifetimeMinutes()
+		{
+			const string key = "MaxInstanceLifetimeMinutes";
+
+			if (Server.Configuration == null ||
+				!Server.Configuration.TryGetInt(key, out int minutes) ||
+				minutes < 1)
+			{
+				if (!loggedMissingStaleTimeoutKeys.Contains(key))
+				{
+					loggedMissingStaleTimeoutKeys.Add(key);
+					Log.Warning("SceneServerSystem",
+						$"Configuration key '{key}' is missing or not a positive number. Using the default of {DefaultMaxInstanceLifetimeMinutes} minutes.");
+				}
+				return DefaultMaxInstanceLifetimeMinutes;
+			}
+
+			return minutes;
+		}
+
+		/// <summary>
+		/// Whether an instance has outlived the lifetime cap.
+		/// </summary>
+		/// <remarks>
+		/// Open-world scenes are exempt. They are shared infrastructure with no owner and no end —
+		/// closing one would evict everybody in a zone — and their idleness is already bounded by
+		/// the stale sweep.
+		/// </remarks>
+		private bool IsInstanceExpired(ISceneInstanceDetails details)
+		{
+			if (details == null || details.SceneType == SceneType.OpenWorld)
+			{
+				return false;
+			}
+
+			// A row with no creation time recorded cannot be aged; treat it as young rather than
+			// closing an instance on the strength of a default value.
+			if (details.CreatedUtc == default)
+			{
+				return false;
+			}
+
+			return (DateTime.UtcNow - details.CreatedUtc).TotalMinutes >= ResolveMaxInstanceLifetimeMinutes();
+		}
+
+		/// <summary>
+		/// Tells an instance's occupants how long it has left, once per mark crossed.
+		/// </summary>
+		private void WarnInstanceOfPendingExpiry(ISceneInstanceDetails details)
+		{
+			if (details == null ||
+				details.SceneType == SceneType.OpenWorld ||
+				details.CreatedUtc == default ||
+				details.CharacterCount < 1)
+			{
+				return;
+			}
+
+			double remaining = (ResolveMaxInstanceLifetimeMinutes() * 60.0) -
+							   (DateTime.UtcNow - details.CreatedUtc).TotalSeconds;
+
+			/* Nothing to say yet, which is where an instance spends nearly all of its life. Checked
+			 * before the bookkeeping below so the common case is one subtraction and a comparison
+			 * rather than a dictionary lookup per instance per pulse. */
+			if (remaining <= 0.0 || remaining > InstanceExpiryWarnSeconds[0])
+			{
+				return;
+			}
+
+			if (!announcedInstanceExpiry.TryGetValue(details.SceneID, out HashSet<int> announced))
+			{
+				announcedInstanceExpiry[details.SceneID] = announced = new HashSet<int>();
+			}
+
+			for (int i = 0; i < InstanceExpiryWarnSeconds.Length; ++i)
+			{
+				int mark = InstanceExpiryWarnSeconds[i];
+				if (remaining > mark || !announced.Add(mark))
+				{
+					continue;
+				}
+
+				BroadcastToInstance(details.SceneID,
+					$"This dungeon closes in {DescribeDuration(mark)}.");
+				return;
+			}
+		}
+
+		/// <summary>
+		/// Returns an instance's occupants to the open world and unloads it.
+		/// </summary>
+		/// <remarks>
+		/// The only way an instance may be unloaded. <see cref="UnloadScene"/> destroys the scene
+		/// outright, which was safe while the sole caller was the stale sweep — that only ever
+		/// picks empty scenes — but is not once an instance can be closed with people standing in
+		/// it. Evicting first sends each of them through the ordinary leave-instance path, so their
+		/// state is saved, their session claim released and their client re-routed, rather than
+		/// having the ground removed from under them.
+		/// </remarks>
+		/// <param name="sceneID">Scene row of the instance to close.</param>
+		/// <param name="reason">Why it is closing, for diagnostics.</param>
+		public void CloseInstance(long sceneID, string reason)
+		{
+			announcedInstanceExpiry.Remove(sceneID);
+
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				characterSystem.ReturnInstanceOccupantsToWorld(sceneID, reason);
+			}
+
+			UnloadScene(sceneID);
+		}
+
+		/// <summary>
+		/// Sends a system-channel message to everyone standing in one instance.
+		/// </summary>
+		private void BroadcastToInstance(long sceneID, string text)
+		{
+			if (Server?.NetworkWrapper == null ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
+			{
+				return;
+			}
+
+			foreach (var kvp in charMapping.ConnectionCharacters)
+			{
+				IPlayerCharacter character = kvp.Value;
+				if (character == null ||
+					!character.IsInInstance() ||
+					character.InstanceSceneHandle != sceneID)
+				{
+					continue;
+				}
+
+				NetworkConnection conn = kvp.Key;
+				if (conn == null || !conn.IsActive)
+				{
+					continue;
+				}
+
+				Server.NetworkWrapper.Broadcast(conn, new ChatBroadcast()
+				{
+					Channel = ChatChannel.System,
+					Text = text,
+				}, true, FishNet.Transporting.Channel.Reliable);
+			}
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Performs a bounded TTL sweep of expired pending scene load requests.
@@ -893,12 +1107,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
 				!mappingData.PendingScenes.TryGetValue(sceneDataKey, out PendingSceneInfo pendingInfo))
 			{
-				Log.Warning("SceneServerSystem", "Pending Scene does not exist!");
+				/* The request this load belongs to is gone, so nothing will ever adopt the scene.
+				 *
+				 * The ordinary way to get here is SweepExpiredPendingScenes: a load that takes
+				 * longer than pendingSceneTimeoutSeconds has its request removed and its row failed,
+				 * and then finishes anyway. The resulting Unity scene was simply abandoned — never
+				 * given a physics ticker, never entered in the instance registry, therefore never
+				 * pulsed, never seen as stale and never unloaded. It stayed fully loaded and
+				 * simulated for the life of the process, and a scene server that is slow enough to
+				 * trip the timeout once is slow enough to do it repeatedly.
+				 *
+				 * Unload it here instead. Handles already present in the registry are skipped: those
+				 * belong to instances that are in service, and unloading one would evict its
+				 * occupants. */
+				Log.Warning("SceneServerSystem",
+					$"Scene load completed for SceneID={sceneDataKey} but its pending request is gone (most likely timed out); unloading the orphaned scene.");
+				UnloadOrphanedScenes(mappingData, args.LoadedScenes);
 				return;
 			}
 			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 			{
 				Log.Warning("SceneServerSystem", "Runtime data missing while processing scene load end.");
+				mappingData.PendingScenes.Remove(sceneDataKey);
+				UnloadOrphanedScenes(mappingData, args.LoadedScenes);
 				return;
 			}
 
@@ -913,6 +1144,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update: SceneID={sceneData.ID}. Firing directly.");
 					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
 				}
+				// The row is refused, but the scene may well have loaded. See UnloadOrphanedScenes.
+				UnloadOrphanedScenes(mappingData, args.LoadedScenes);
 				return;
 			}
 
@@ -925,6 +1158,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Log.Warning("SceneServerSystem", $"Failed to enqueue async status update: SceneID={sceneData.ID}. Firing directly.");
 					_ = UpdateSceneStatusAsync(sceneData.ID, SceneStatus.Failed);
 				}
+				UnloadOrphanedScenes(mappingData, args.LoadedScenes);
 				return;
 			}
 
@@ -943,7 +1177,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Scene scene = args.LoadedScenes[0];
 
 				// Process the scene by adding it to the world dictionary mappings.
-				ProcessScene(scene, sceneType, sceneData.WorldServerID, sceneData.ID);
+				ProcessScene(scene, sceneType, sceneData.WorldServerID, sceneData.ID, sceneData.TimeCreated);
 
 				// Capture Scene.name on the main thread. TryEnqueueAsyncWork runs its lambda
 				// on an AsyncWorkerData thread-pool worker, and Unity's Scene.name getter is
@@ -958,7 +1192,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long readySceneId = sceneData.ID;
 
 				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {sceneName}:{sceneHandle} (SceneID={readySceneId}) to the database.");
-				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(readySceneId, runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle), runtimeData.ID))
+				/* Keyed by the scene row, not by this server.
+				 *
+				 * The ordering key names the entity the work is about, and this write is about one
+				 * scene. Keying it by the scene server id put every scene-ready write into a single
+				 * ordering lane shared with the heartbeat pulse, so a slow pulse delayed every scene
+				 * coming into service behind it — and nothing about two different scenes becoming
+				 * ready needs to be ordered at all. Per-scene ordering is what matters here: it is
+				 * what keeps a ready write from overtaking a status write for the same row. */
+				if (!TryEnqueueAsyncWork(() => SetSceneReadyAsync(readySceneId, runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle), readySceneId))
 				{
 					Log.Warning("SceneServerSystem", $"Failed to enqueue async SetSceneReady: Scene={sceneName}:{sceneHandle}. Firing directly.");
 					// Fire-and-forget is safe here: SetSceneReadyAsync has its own
@@ -969,6 +1211,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					_ = SetSceneReadyAsync(readySceneId, runtimeData.ID, sceneData.WorldServerID, sceneName, sceneHandle);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Unloads scenes that finished loading but have no scene row left to belong to.
+		/// </summary>
+		/// <remarks>
+		/// Reached whenever <see cref="SceneManager_OnLoadEnd"/> refuses a completed load: the
+		/// pending request timed out and was swept, or the row turned out to be unusable. Nothing
+		/// downstream knows about such a scene — it is not in the instance registry, so it is never
+		/// pulsed, never detected as stale and never unloaded — so leaving it in place leaks a
+		/// fully simulated scene, plus everything in it, for the life of the process. A scene
+		/// server slow enough to trip the pending-scene timeout once will trip it again.
+		/// <para>
+		/// Handles already registered in <see cref="ISceneInstanceMappingData.SceneInstanceByHandle"/>
+		/// are skipped. Those describe instances that are in service, and unloading one would
+		/// destroy the scene its occupants are standing in.
+		/// </para>
+		/// </remarks>
+		/// <param name="mappingData">Instance registry, or <c>null</c> when it could not be resolved.</param>
+		/// <param name="loadedScenes">Scenes reported by the load that is being abandoned.</param>
+		private void UnloadOrphanedScenes(ISceneInstanceMappingData mappingData, Scene[] loadedScenes)
+		{
+			if (loadedScenes == null || loadedScenes.Length < 1)
+			{
+				return;
+			}
+
+			List<SceneLookupData> lookups = null;
+			for (int i = 0; i < loadedScenes.Length; ++i)
+			{
+				Scene scene = loadedScenes[i];
+				if (!scene.IsValid())
+				{
+					continue;
+				}
+
+				if (mappingData?.SceneInstanceByHandle != null &&
+					mappingData.SceneInstanceByHandle.ContainsKey(scene.handle))
+				{
+					// In service. Not ours to remove.
+					continue;
+				}
+
+				(lookups ??= new List<SceneLookupData>(loadedScenes.Length)).Add(new SceneLookupData(scene.handle));
+			}
+
+			if (lookups == null)
+			{
+				return;
+			}
+
+			Log.Warning("SceneServerSystem", $"Unloading {lookups.Count} orphaned scene(s) left behind by an abandoned load.");
+
+			Server?.NetworkWrapper?.NetworkManager?.SceneManager?.UnloadConnectionScenes(new SceneUnloadData()
+			{
+				SceneLookupDatas = lookups.ToArray(),
+			});
 		}
 
 		/// <summary>
@@ -1053,7 +1352,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="scene">The loaded Unity scene.</param>
 		/// <param name="sceneType">Type of the scene.</param>
 		/// <param name="worldServerID">World server ID.</param>
-		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID, long sceneID)
+		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID, long sceneID, DateTime rowCreatedUtc)
 		{
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
@@ -1094,6 +1393,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Handle = scene.handle,
 					CharacterCount = 0,
 					LastExit = DateTime.UtcNow,
+					// The row's creation time, not now: the lifetime cap has to count the queue and
+					// the load as part of this instance's life. See ISceneInstanceDetails.CreatedUtc.
+					CreatedUtc = rowCreatedUtc,
 				};
 				instances.Add(sceneID, details);
 
@@ -1183,6 +1485,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					mappingData.SceneInstanceByHandle.Remove(handle);
 					mappingData.SceneNameByHandle.Remove(handle);
 					mappingData.SceneInstanceByID.Remove(details.SceneID);
+
+					// The expiry countdown's bookkeeping goes with the instance. CloseInstance
+					// clears it on the path it owns; this covers every other way a scene can leave,
+					// so the map cannot accumulate an entry per instance the process ever warned.
+					announcedInstanceExpiry.Remove(details.SceneID);
 
 					Log.Debug("SceneServerSystem", $"Unloaded scene SceneID={details.SceneID} (local handle {handle})");
 				}

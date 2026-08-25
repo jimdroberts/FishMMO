@@ -1,4 +1,6 @@
 using FishMMO.Shared.Core;
+using FishNet.Connection;
+using FishNet.Serializing;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -78,6 +80,42 @@ namespace FishMMO.Shared
 			}
 
 			return true;
+		}
+
+		/// <summary>
+		/// Writes the switch's current state so a client that arrives later sees the right pose.
+		/// </summary>
+		/// <remarks>
+		/// <c>SwitchStateBroadcast</c> only reaches clients that were already observing when the
+		/// switch was thrown. Without the state in the payload, a player walking into a room whose
+		/// door was opened an hour ago finds it shut on their screen alone — and pressing the
+		/// switch then <em>closes</em> it for everyone else, because the server's copy was open all
+		/// along. This is the same gap NPCs had with their dead flag, and the same fix.
+		/// </remarks>
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			base.WritePayload(connection, writer);
+			writer.WriteBoolean(SwitchTarget != null && SwitchTarget.IsActivated);
+		}
+
+		/// <summary>
+		/// Reads the switch's state and drives the target to match it.
+		/// </summary>
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		{
+			base.ReadPayload(connection, reader);
+
+			bool activated = reader.ReadBoolean();
+			if (SwitchTarget == null)
+			{
+				return;
+			}
+
+			/* Snapped, not activated. This state is history — it describes a switch that was
+			 * thrown before this client could see it — so the transition must not be replayed, or
+			 * walking into a room would set every door in it swinging as though someone had just
+			 * pulled the lever. */
+			SwitchTarget.SnapTo(activated);
 		}
 
 #if UNITY_EDITOR

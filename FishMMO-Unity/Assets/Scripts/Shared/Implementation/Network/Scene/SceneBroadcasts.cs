@@ -139,7 +139,20 @@ namespace FishMMO.Shared
 		/// <summary>The transfer is still on cooldown for this character.</summary>
 		OnCooldown = 4,
 
-		/// <summary>A party member already holds an instance of this content; join theirs instead.</summary>
+		/// <summary>
+		/// The character, or its party, already has a different instance open.
+		/// </summary>
+		/// <remarks>
+		/// A party may hold one instance at a time, not one per dungeon. Without that rule a party
+		/// could open a live copy of every dungeon on the shard — enter one, walk out, enter the
+		/// next — and each abandoned copy held a full physics scene and a scene row until its own
+		/// idle timeout expired.
+		/// <para>
+		/// Distinct from <see cref="DestinationFull"/>: the instance they hold is not the one they
+		/// asked for, so there is nothing to join. They have to finish it, close it, or wait for it
+		/// to expire.
+		/// </para>
+		/// </remarks>
 		PartyInstanceExists = 5,
 
 		/// <summary>The server could not complete the request and the client should try again.</summary>

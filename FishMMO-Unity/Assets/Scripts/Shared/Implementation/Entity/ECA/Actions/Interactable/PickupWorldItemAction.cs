@@ -65,10 +65,35 @@ namespace FishMMO.Shared
 						achievementController.Increment(worldItem.AchievementTemplateID, 1);
 					}
 
-					if (newItem.IsStackable && newItem.Stackable.Amount > 1)
-						worldItem.Amount = newItem.Stackable.Amount;
-					else
-						worldItem.Despawn();
+					/* A successful grant always takes the WHOLE pile, so the pickup always
+					 * despawns.
+					 *
+					 * The previous code tried to leave a remainder behind:
+					 *
+					 *     if (newItem.IsStackable && newItem.Stackable.Amount > 1)
+					 *         worldItem.Amount = newItem.Stackable.Amount;
+					 *     else
+					 *         worldItem.Despawn();
+					 *
+					 * — but there is no such thing as a remainder here. ItemContainer.TryAddItem
+					 * opens with CanAddItem, which refuses unless the entire stack fits, so it is
+					 * all-or-nothing; and SendNewItemBroadcast only reports success when TryAddItem
+					 * succeeded. What newItem.Stackable.Amount actually holds afterwards depends on
+					 * HOW the stack was placed: zero when it was merged into stacks the player
+					 * already had, and the full original amount when it went into an empty slot,
+					 * because a placed item keeps its own count.
+					 *
+					 * The empty-slot case is the common one, and it took the branch that did not
+					 * despawn — so picking up a stack of two or more into a free slot granted the
+					 * items AND left the pile lying there at its original size, ready to be picked
+					 * up again. Unbounded item duplication on the most ordinary loot action in the
+					 * game, on any stackable drop of size two or more.
+					 *
+					 * The amount is zeroed before the despawn so that even a stale scene object ID
+					 * replayed against this instance before the pool reuses it finds nothing to
+					 * take. */
+					worldItem.Amount = 0;
+					worldItem.Despawn();
 				}
 			}
 			finally

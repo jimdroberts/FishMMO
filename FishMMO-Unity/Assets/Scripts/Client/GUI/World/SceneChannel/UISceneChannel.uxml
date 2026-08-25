@@ -1,0 +1,32 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UISceneChannel.uss" />
+    <ui:VisualElement name="scenechannel-root" class="fish-panel scenechannel-panel">
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header scenechannel-header">
+            <ui:VisualElement class="fish-panel__icon scenechannel-header__icon" />
+            <ui:VisualElement class="scenechannel-header__titles">
+                <ui:Label text="CHANNELS" class="fish-panel__title" />
+                <ui:Label name="scenechannel-subtitle" text="No channels to show" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="scenechannel-count" text="-" class="fish-badge scenechannel-count" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="scenechannel-columns" class="scenechannel-columns">
+            <ui:Label text="CHANNEL" class="fish-col-head scenechannel-col scenechannel-col--name" />
+            <ui:Label text="PLAYERS" class="fish-col-head scenechannel-col scenechannel-col--population" />
+        </ui:VisualElement>
+
+        <ui:ScrollView name="scenechannel-scroll" class="fish-scroll scenechannel-scroll">
+            <ui:VisualElement name="scenechannel-list" class="scenechannel-list" />
+            <ui:Label name="scenechannel-status" text="Use Refresh to look for channels."
+                      class="fish-empty scenechannel-status" />
+        </ui:ScrollView>
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer scenechannel-footer">
+            <ui:Button name="scenechannel-refresh" text="Refresh" class="fish-button fish-button--primary scenechannel-action" />
+            <ui:Button name="scenechannel-close" text="Close" class="fish-button scenechannel-action" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

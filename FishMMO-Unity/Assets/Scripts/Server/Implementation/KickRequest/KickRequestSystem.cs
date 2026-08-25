@@ -290,6 +290,26 @@ namespace FishMMO.Server.Implementation
 					string accountName = kickRequest.AccountName;
 					TryEnqueueMainThread(() =>
 					{
+						/* A combat-logout body has no connection, so the lookup below never finds
+						 * it and the kick used to do nothing at all to a character that had logged
+						 * out mid-fight — while the body went on standing in the world holding that
+						 * character's session claim. A kick is the operator's remedy for a stuck
+						 * character, so the one case where the character is hardest to load is
+						 * exactly the case it silently skipped.
+						 *
+						 * Ending the linger is its ordinary conclusion: the body is saved and
+						 * despawned and the claim handed back. Attempted before the connection
+						 * lookup because the two are mutually exclusive — a reconnected player has
+						 * already reclaimed their body — and because TryGet fails harmlessly on the
+						 * login and world servers, which run this system with no character system. */
+						if (Server.BehaviourRegistry != null &&
+							Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> lingerSystem) &&
+							lingerSystem.TryEndCombatLingerForAccount(accountName, "administrative kick"))
+						{
+							Log.Warning("KickRequestSystem",
+								$"Removed the combat-logout body of kicked account '{accountName}'.");
+						}
+
 						if (Server.AccountManager.GetConnectionByAccountName(accountName, out NetworkConnection conn))
 						{
 							/* An operator kick is not a player quitting mid-fight.

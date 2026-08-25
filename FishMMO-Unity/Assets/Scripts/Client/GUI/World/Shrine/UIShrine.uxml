@@ -1,0 +1,29 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIShrine.uxml   —   FishMMO Shrine Feedback                  ║
+    ║                                                              ║
+    ║  A transient line telling the player what a shrine did, or    ║
+    ║  why it did nothing. Opens on ShrineBroadcast, closes itself.  ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIShrine.uss       — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*    Visual theme class  (FishMMO-Theme.uss)         ║
+    ║    shrine-*  Layout class        (UIShrine.uss)              ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIShrine.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-well shrine-panel">
+        <ui:Label name="shrine-title" class="fish-label fish-label--accent shrine-title" text="Shrine" />
+        <ui:Label name="shrine-message" class="fish-label shrine-message" text="Restored." />
+    </ui:VisualElement>
+
+</ui:UXML>

@@ -419,6 +419,27 @@ namespace FishMMO.Shared
 			return null;
 		}
 
+		/// <summary>
+		/// Resolves the character a kill should be attributed to.
+		/// </summary>
+		/// <remarks>
+		/// The mirror of <see cref="ResolveContributionCredit"/> for the kill itself. It differs
+		/// in one way: this one falls back to the killer rather than to null, because an NPC
+		/// killing another NPC still legitimately runs its own kill triggers — there is simply
+		/// no loot window involved.
+		/// </remarks>
+		/// <param name="killer">The character that landed the killing blow.</param>
+		/// <returns>The character to credit, or null when there was no killer.</returns>
+		private static ICharacter ResolveKillCredit(ICharacter killer)
+		{
+			if (killer is Pet pet && pet.PetOwner != null)
+			{
+				return pet.PetOwner;
+			}
+
+			return killer;
+		}
+
 		/// <inheritdoc />
 		public void RecordCombatContribution(ICharacter contributor, CombatContributionKind kind)
 		{
@@ -739,14 +760,24 @@ namespace FishMMO.Shared
 			combatTimerActive = false;
 			Character.DisableFlags(CharacterFlags.IsInCombat);
 
-			if (killer != null)
+			/* Credit the owner, not the pet.
+			 *
+			 * Quest objectives, achievements and faction gains are all driven off the killer's
+			 * OnKillTriggers, and a pet is an NPC whose prefab carries none — so a player who
+			 * killed something entirely through their pet advanced no quest, earned no
+			 * achievement and gained no standing. FactionController also refuses adjustments for
+			 * anything that is an NPC, so even a pet with triggers configured could not have
+			 * earned the standing. Loot rights already resolved through to the owner
+			 * (ResolveContributionCredit); this is the other half of the same rule. */
+			ICharacter creditedKiller = ResolveKillCredit(killer);
+			if (creditedKiller != null)
 			{
-				if (killer.TryGet(out IFactionController fc) &&
+				if (creditedKiller.TryGet(out IFactionController fc) &&
 					Character.TryGet(out IFactionController dfc))
 					fc.AdjustFaction(dfc, 0.01f, 0.01f);
 
-				if (killer.TryGet(out ICharacterDamageController kdc))
-					killer.Invoke(kdc.OnKillTriggers, new EventData(killer, Character));
+				if (creditedKiller.TryGet(out ICharacterDamageController kdc))
+					creditedKiller.Invoke(kdc.OnKillTriggers, new EventData(creditedKiller, Character));
 			}
 
 			Character.Invoke(OnKilledTriggers, new EventData(Character, killer));

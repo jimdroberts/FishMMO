@@ -98,8 +98,16 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// Grant items — fire event per item so InteractableSystem can persist each one
-			if (template.GrantItems != null && template.GrantItems.Count > 0)
+			/* Grant items — one time per character, unlike everything above it.
+			 *
+			 * The ability and event grants are naturally idempotent: the controller is asked what
+			 * the character already knows and the already-known are skipped. Items have no such
+			 * memory, so without this the whole list was handed out again on every read. The claim
+			 * is taken before any item is created so a refusal costs nothing, and it is only taken
+			 * when there is something to grant — a lore object with no items must not consume a
+			 * claim that a later content edit would then have to work around. */
+			if (template.GrantItems != null && template.GrantItems.Count > 0 &&
+				loreObject.TryConsumeItemGrant(initiator.ID))
 			{
 				if (initiator.TryGet(out IInventoryController inventoryController))
 				{

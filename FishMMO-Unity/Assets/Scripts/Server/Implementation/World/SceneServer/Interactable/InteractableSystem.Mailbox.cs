@@ -64,15 +64,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// Validate mailbox scene object
-				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
-				{
-					return;
-				}
-
-				// Validate interactable is a mailbox in range
-				IMailbox mailbox = sceneObject.GameObject.GetComponent<IMailbox>();
-				if (mailbox == null || !mailbox.InRange(character.Transform))
+				if (!TryValidateMailbox(character, msg.InteractableID))
 				{
 					return;
 				}
@@ -175,34 +167,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();if (character == null)
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null)
 			{
 				return;
 			}
 
 			if (!CharacterStateValidation.CanAct(character))
+			{
+				SendMailSendResult(conn, false, MailFailureReason.ServerError);
 				return;
+			}
 
 			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
 			{
+				SendMailSendResult(conn, false, MailFailureReason.ServerError);
 				return;
 			}
 
 			bool asyncOwnsGuard = false;
+			MailFailureReason reason = MailFailureReason.ServerError;
 			try
 			{
 				// Validate input
 				if (string.IsNullOrWhiteSpace(msg.RecipientName) ||
 					!Authentication.IsAllowedCharacterName(msg.RecipientName) ||
 					string.IsNullOrWhiteSpace(msg.Subject) ||
-					string.IsNullOrWhiteSpace(msg.Body))
-				{
-					return;
-				}
-
-				if (msg.Subject.Length > MaxMailSubjectLength ||
+					string.IsNullOrWhiteSpace(msg.Body) ||
+					msg.Subject.Length > MaxMailSubjectLength ||
 					msg.Body.Length > MaxMailBodyLength)
 				{
+					reason = MailFailureReason.InvalidMessage;
 					return;
 				}
 
@@ -213,14 +208,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// Validate mailbox scene object
-				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+				if (!TryValidateMailbox(character, msg.InteractableID))
 				{
+					reason = MailFailureReason.NoMailbox;
 					return;
 				}
 
-				IMailbox mailbox = sceneObject.GameObject.GetComponent<IMailbox>();
-				if (mailbox == null || !mailbox.InRange(character.Transform))
+				/* Take the attachment out of the sender BEFORE the mail exists.
+				 *
+				 * The failure directions are not symmetric. Escrowing first and failing to send
+				 * loses the item, which is recoverable and reportable; creating the mail first and
+				 * failing to escrow puts the same item in the sender's bags and in the recipient's
+				 * mailbox at once, which is duplication. This is the same ordering the merchant
+				 * purchase and corpse currency paths use, for the same reason. */
+				if (!TryEscrowMailAttachment(conn, character, msg, out MailAttachment attachment, out reason))
 				{
 					return;
 				}
@@ -231,9 +232,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				string subject = msg.Subject;
 				string body = msg.Body;
 
-				if (TryEnqueueAsyncWork(() => SendMailAsync(senderID, senderName, recipientName, subject, body, guardKey), conn, senderID))
+				if (TryEnqueueAsyncWork(() => SendMailAsync(conn, senderID, senderName, recipientName, subject, body, attachment, guardKey), conn, senderID))
 				{
 					asyncOwnsGuard = true;
+					reason = MailFailureReason.None;
+				}
+				else
+				{
+					// The worker refused it, so nothing will ever send this mail. Put the
+					// attachment back rather than letting the escrow swallow it.
+					RefundMailAttachment(conn, character, attachment);
 				}
 			}
 			finally
@@ -241,15 +249,289 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (!asyncOwnsGuard)
 				{
 					EndIngressGuard(guardKey);
+					SendMailSendResult(conn, false, reason);
 				}
 			}
 		}
 
 		/// <summary>
+		/// What a send took out of the sender, so it can be attached or given back.
+		/// </summary>
+		private struct MailAttachment
+		{
+			/// <summary>Template ID of the escrowed item, or 0 when no item was attached.</summary>
+			public int ItemTemplateID;
+			/// <summary>Generation seed of the escrowed item.</summary>
+			public int ItemSeed;
+			/// <summary>Stack size escrowed.</summary>
+			public uint ItemAmount;
+			/// <summary>Currency escrowed.</summary>
+			public int Currency;
+			/// <summary>Inventory slot the item came out of, for a refund.</summary>
+			public int SourceSlot;
+
+			/// <summary>True when this escrow holds anything at all.</summary>
+			public bool HasAnything => (ItemTemplateID != 0 && ItemAmount > 0) || Currency > 0;
+		}
+
+		/// <summary>
+		/// Validates that the character is standing at the mailbox its request names.
+		/// </summary>
+		/// <remarks>
+		/// Resolved through the shared rule and gated on <c>CanInteract</c> rather than a bare
+		/// range test, so the mail paths agree with every other interaction about which component
+		/// answers and about refusing a corpse.
+		/// </remarks>
+		/// <param name="character">The requesting character.</param>
+		/// <param name="interactableID">The mailbox's scene object ID.</param>
+		/// <returns>True when the mailbox resolves and will accept the interaction.</returns>
+		private bool TryValidateMailbox(IPlayerCharacter character, long interactableID)
+		{
+			if (!ValidateSceneObject(interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+			{
+				return false;
+			}
+
+			IInteractable interactable = InteractableResolver.Resolve(sceneObject);
+			return interactable is IMailbox && interactable.CanInteract(character);
+		}
+
+		/// <summary>
+		/// Removes the requested attachment from the sender and reports what was taken.
+		/// </summary>
+		/// <remarks>
+		/// Nothing about the attachment's identity or value comes from the client: the request
+		/// names an inventory slot and a quantity, and what is actually in that slot is what gets
+		/// attached. Currency is clamped to the sender's own balance.
+		/// </remarks>
+		/// <param name="conn">The sender's connection, for inventory updates.</param>
+		/// <param name="character">The sender.</param>
+		/// <param name="msg">The send request.</param>
+		/// <param name="attachment">Receives what was escrowed.</param>
+		/// <param name="reason">Receives why the escrow failed.</param>
+		/// <returns>True when the escrow succeeded, including the no-attachment case.</returns>
+		private bool TryEscrowMailAttachment(
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			MailSendBroadcast msg,
+			out MailAttachment attachment,
+			out MailFailureReason reason)
+		{
+			attachment = new MailAttachment() { SourceSlot = -1 };
+			reason = MailFailureReason.ServerError;
+
+			long characterID = character.ID;
+
+			// ── Currency ──────────────────────────────────────────────────────
+			if (msg.CurrencyAttachment > 0)
+			{
+				if (currencyTemplate == null ||
+					!character.TryGet(out ICharacterAttributeController attributeController) ||
+					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+				{
+					return false;
+				}
+
+				// Value, not FinalValue — AddValue writes the base, so testing the modified total
+				// would let a buffed character mail currency it does not have.
+				if (currency.Value < msg.CurrencyAttachment)
+				{
+					reason = MailFailureReason.NotEnoughCurrency;
+					return false;
+				}
+
+				currency.AddValue(-msg.CurrencyAttachment);
+				attachment.Currency = msg.CurrencyAttachment;
+
+				if (!TryPersistMerchantAttributes(character))
+				{
+					currency.AddValue(msg.CurrencyAttachment);
+					attachment.Currency = 0;
+					return false;
+				}
+			}
+
+			// ── Item ──────────────────────────────────────────────────────────
+			if (msg.AttachmentSlot >= 0)
+			{
+				if (!character.TryGet(out IInventoryController inventoryController) ||
+					!inventoryController.IsValidSlot(msg.AttachmentSlot) ||
+					inventoryController.IsSlotLocked(msg.AttachmentSlot) ||
+					!inventoryController.TryGetItem(msg.AttachmentSlot, out Item item) ||
+					item == null ||
+					item.Template == null)
+				{
+					RefundMailAttachment(conn, character, attachment);
+					attachment = new MailAttachment() { SourceSlot = -1 };
+					reason = MailFailureReason.InvalidAttachment;
+					return false;
+				}
+
+				long available = item.IsStackable ? item.Stackable.Amount : 1;
+				long requested = msg.AttachmentQuantity <= 0 ? available : msg.AttachmentQuantity;
+				long quantity = Math.Min(requested, available);
+				if (quantity < 1)
+				{
+					RefundMailAttachment(conn, character, attachment);
+					attachment = new MailAttachment() { SourceSlot = -1 };
+					reason = MailFailureReason.InvalidAttachment;
+					return false;
+				}
+
+				attachment.ItemTemplateID = item.Template.ID;
+				attachment.ItemSeed = item.IsGenerated ? item.Generator.Seed : 0;
+				attachment.ItemAmount = (uint)quantity;
+				attachment.SourceSlot = msg.AttachmentSlot;
+
+				// Whole slot or part of a stack, mirroring the merchant sell removal exactly.
+				if (quantity >= available)
+				{
+					Item removed = inventoryController.RemoveItem(msg.AttachmentSlot);
+					if (removed == null)
+					{
+						RefundMailAttachment(conn, character, attachment);
+						attachment = new MailAttachment() { SourceSlot = -1 };
+						reason = MailFailureReason.InvalidAttachment;
+						return false;
+					}
+
+					removed.Version++;
+					long version = removed.Version;
+					int slot = msg.AttachmentSlot;
+					if (!EnqueuePersistence(() => DeleteMerchantSoldSlotAsync(characterID, slot, version), characterID))
+					{
+						// Could not record the removal; putting it back is the only safe answer.
+						inventoryController.SetItemSlot(removed, slot);
+						RefundMailAttachment(conn, character, attachment);
+						attachment = new MailAttachment() { SourceSlot = -1 };
+						return false;
+					}
+
+					Server.NetworkWrapper.Broadcast(conn, new InventoryRemoveItemBroadcast()
+					{
+						Slot = slot,
+					}, true, Channel.Reliable);
+				}
+				else
+				{
+					item.Stackable.Remove((uint)quantity);
+					item.Version++;
+
+					List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>
+					{
+						new CharacterInventoryData(
+							id: item.ID,
+							version: item.Version,
+							characterID: characterID,
+							templateID: item.Template.ID,
+							slot: item.Slot,
+							seed: item.IsGenerated ? item.Generator.Seed : 0,
+							amount: item.Stackable.Amount),
+					};
+
+					if (!EnqueuePersistence(() => PersistInventoryItemsAsync(itemsToSave), characterID))
+					{
+						item.Stackable.Amount += (uint)quantity;
+						item.Version++;
+						RefundMailAttachment(conn, character, attachment);
+						attachment = new MailAttachment() { SourceSlot = -1 };
+						return false;
+					}
+
+					Server.NetworkWrapper.Broadcast(conn, new InventorySetItemBroadcast()
+					{
+						InstanceID = item.ID,
+						TemplateID = item.Template.ID,
+						Slot = item.Slot,
+						Seed = item.IsGenerated ? item.Generator.Seed : 0,
+						StackSize = item.Stackable.Amount,
+					}, true, Channel.Reliable);
+				}
+			}
+
+			reason = MailFailureReason.None;
+			return true;
+		}
+
+		/// <summary>
+		/// Gives an escrowed attachment back to the sender. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// The item is returned through the normal grant path rather than to the slot it came from:
+		/// the slot may have been filled in the meantime, and a grant that finds no room fails
+		/// loudly instead of overwriting whatever is there now.
+		/// </remarks>
+		/// <param name="conn">The sender's connection.</param>
+		/// <param name="character">The sender.</param>
+		/// <param name="attachment">What to give back.</param>
+		private void RefundMailAttachment(NetworkConnection conn, IPlayerCharacter character, MailAttachment attachment)
+		{
+			if (!attachment.HasAnything)
+			{
+				return;
+			}
+
+			if (attachment.Currency > 0 &&
+				currencyTemplate != null &&
+				character.TryGet(out ICharacterAttributeController attributeController) &&
+				attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+			{
+				currency.AddValue(attachment.Currency);
+				if (!TryPersistMerchantAttributes(character))
+				{
+					Log.Error("InteractableSystem", $"Mail refund: currency persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
+				}
+			}
+
+			if (attachment.ItemTemplateID != 0 &&
+				attachment.ItemAmount > 0 &&
+				character.TryGet(out IInventoryController inventoryController))
+			{
+				BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(attachment.ItemTemplateID);
+				if (itemTemplate != null)
+				{
+					Item restored = new Item(itemTemplate, attachment.ItemAmount);
+					if (!SendNewItemBroadcast(conn, character, inventoryController, restored))
+					{
+						Log.Error("InteractableSystem", $"Mail refund: could not return attachment to CharID={character.ID}; the item was lost.");
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Sends the one reply every exit from the send handler owes the client.
+		/// </summary>
+		private void SendMailSendResult(NetworkConnection conn, bool success, MailFailureReason reason)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new MailSendResultBroadcast()
+			{
+				Success = success,
+				Reason = reason,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
 		/// Sends mail via the database asynchronously.
 		/// </summary>
-		private async Task SendMailAsync(long senderID, string senderName, string recipientName, string subject, string body, long guardKey)
+		private async Task SendMailAsync(
+			NetworkConnection conn,
+			long senderID,
+			string senderName,
+			string recipientName,
+			string subject,
+			string body,
+			MailAttachment attachment,
+			long guardKey)
 		{
+			bool delivered = false;
+			MailFailureReason reason = MailFailureReason.ServerError;
+
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null)
@@ -274,6 +556,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (!recipientResult.IsSuccess || recipientResult.Data == null)
 				{
 					await Log.Warning("InteractableSystem", $"SendMailAsync: Recipient '{recipientName}' not found (SenderID={senderID}).");
+					reason = MailFailureReason.NoRecipient;
 					return;
 				}
 
@@ -285,15 +568,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					recipientID,
 					subject,
 					body,
-					0, // itemAttachmentTemplateID
-					0, // itemAttachmentSeed
-					0, // itemAttachmentAmount
+					attachment.ItemTemplateID,
+					attachment.ItemSeed,
+					attachment.ItemAmount,
+					attachment.Currency,
 					1  // version
 				);
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem", $"SendMailAsync DB error (SenderID={senderID}): {result.ErrorCode} - {result.ErrorMessage}");
+					return;
 				}
+
+				delivered = true;
+				reason = MailFailureReason.None;
 			}
 			catch (Exception ex)
 			{
@@ -302,7 +590,399 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			finally
 			{
 				EndIngressGuard(guardKey);
+
+				/* The refund and the reply are main-thread work: both touch the character's
+				 * in-memory inventory and attributes, and this is a worker thread. Marshalled
+				 * rather than done here for the same reason every other async path in this system
+				 * hands its result back. */
+				bool succeeded = delivered;
+				MailFailureReason finalReason = reason;
+				TryEnqueueMainThread(() =>
+				{
+					if (!succeeded)
+					{
+						IPlayerCharacter sender = conn != null && conn.IsActive && conn.FirstObject != null
+							? conn.FirstObject.GetComponent<IPlayerCharacter>()
+							: null;
+
+						if (sender != null && sender.ID == senderID)
+						{
+							RefundMailAttachment(conn, sender, attachment);
+						}
+						else if (attachment.HasAnything)
+						{
+							/* The sender left before the send failed, so there is nobody to hand
+							 * the escrow back to in memory. It is already removed from their
+							 * persisted inventory, so it is gone — logged loudly because it is the
+							 * one place on this path that loses a player's property. */
+							Log.Error("InteractableSystem",
+								$"Mail send failed for CharID={senderID} after the sender disconnected; the escrowed attachment could not be returned.");
+						}
+					}
+
+					SendMailSendResult(conn, succeeded, finalReason);
+				});
 			}
+		}
+
+		/// <summary>
+		/// Handles a <see cref="MailClaimAttachmentBroadcast"/>: hands one mail's attachment to its owner.
+		/// </summary>
+		/// <remarks>
+		/// The attachment is read and cleared by a single database statement, so two claims racing
+		/// on one mail cannot both be granted — see <c>ICharacterMailService.ClaimAttachmentAsync</c>.
+		/// What this adds on top is a room check <em>before</em> the clear: the clear is
+		/// irreversible, and claiming into a full inventory would destroy the item.
+		/// </remarks>
+		private void OnServerMailClaimAttachmentBroadcastReceived(NetworkConnection conn, MailClaimAttachmentBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null)
+			{
+				return;
+			}
+
+			if (!CharacterStateValidation.CanAct(character))
+			{
+				SendMailClaimResult(conn, msg.MailID, false, MailFailureReason.ServerError);
+				return;
+			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
+			{
+				SendMailClaimResult(conn, msg.MailID, false, MailFailureReason.ServerError);
+				return;
+			}
+
+			bool asyncOwnsGuard = false;
+			MailFailureReason reason = MailFailureReason.ServerError;
+			try
+			{
+				if (worldSceneDetailsCache == null ||
+					!worldSceneDetailsCache.Scenes.TryGetValue(character.CurrentSceneName(), out _))
+				{
+					return;
+				}
+
+				if (!TryValidateMailbox(character, msg.InteractableID))
+				{
+					reason = MailFailureReason.NoMailbox;
+					return;
+				}
+
+				long characterID = character.ID;
+				long mailID = msg.MailID;
+
+				if (TryEnqueueAsyncWork(() => ClaimMailAttachmentAsync(conn, character, characterID, mailID, guardKey), conn, characterID))
+				{
+					asyncOwnsGuard = true;
+				}
+			}
+			finally
+			{
+				if (!asyncOwnsGuard)
+				{
+					EndIngressGuard(guardKey);
+					SendMailClaimResult(conn, msg.MailID, false, reason);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Reads one mail's attachment, checks the claimer has room, clears it, and grants it.
+		/// </summary>
+		private async Task ClaimMailAttachmentAsync(
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			long characterID,
+			long mailID,
+			long guardKey)
+		{
+			bool guardReleased = false;
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterMailService>(out var mailService))
+				{
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mailID, false, MailFailureReason.ServerError));
+					return;
+				}
+
+				/* Read the attachment before claiming it.
+				 *
+				 * The claim is a destructive, irreversible clear, so the room check has to happen
+				 * first — granting into a full inventory after the row is already zeroed would
+				 * destroy the item outright. This peek is not authoritative and does not need to
+				 * be: the claim's own predicate is what prevents a double grant, and only this
+				 * character can claim this mail, so nothing can change between the two calls
+				 * except by this same connection, which the ingress guard serialises. */
+				DatabaseResult<System.Collections.Generic.IReadOnlyList<CharacterMailData>> listResult =
+					await mailService.FetchAsync(characterID);
+				if (!listResult.IsSuccess || listResult.Data == null)
+				{
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mailID, false, MailFailureReason.ServerError));
+					return;
+				}
+
+				CharacterMailData? found = null;
+				for (int i = 0; i < listResult.Data.Count; ++i)
+				{
+					if (listResult.Data[i].ID == mailID)
+					{
+						found = listResult.Data[i];
+						break;
+					}
+				}
+
+				if (!found.HasValue ||
+					(found.Value.ItemAttachmentTemplateID == 0 && found.Value.CurrencyAttachment <= 0))
+				{
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mailID, false, MailFailureReason.NothingToClaim));
+					return;
+				}
+
+				CharacterMailData mail = found.Value;
+
+				/* Hand back to the main thread for the room check.
+				 *
+				 * The inventory is main-thread state and this is a worker, so the check cannot
+				 * happen here — and it has to happen before the claim, because the claim is an
+				 * irreversible clear. The continuation takes ownership of the ingress guard from
+				 * this point on; releasing it here would let a second claim start while this one
+				 * is still deciding.
+				 */
+				if (!TryEnqueueMainThread(() => ContinueMailClaim(conn, character, characterID, mail, guardKey)))
+				{
+					await Log.Warning("InteractableSystem", $"ClaimMailAttachmentAsync: main-thread queue rejected the room check for MailID={mailID}.");
+					EndIngressGuard(guardKey);
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mailID, false, MailFailureReason.ServerError));
+				}
+
+				// The continuation owns the guard now; do not release it in the finally below.
+				guardReleased = true;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"Error claiming mail attachment (MailID={mailID}, CharID={characterID}): {ex}");
+				TryEnqueueMainThread(() => SendMailClaimResult(conn, mailID, false, MailFailureReason.ServerError));
+			}
+			finally
+			{
+				if (!guardReleased)
+				{
+					EndIngressGuard(guardKey);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Checks the claimer has room, then goes back to the database to take the attachment.
+		/// Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// The middle hop of the claim. It exists because the two things the claim needs — the
+		/// character's inventory and the database — live on different threads, and the order
+		/// between them is not negotiable: room first, because the clear that follows cannot be
+		/// undone.
+		/// </remarks>
+		/// <param name="conn">The claimer's connection.</param>
+		/// <param name="character">The claiming character.</param>
+		/// <param name="characterID">The claiming character's ID.</param>
+		/// <param name="mail">The mail as it was read a moment ago.</param>
+		/// <param name="guardKey">The ingress guard this hop now owns.</param>
+		private void ContinueMailClaim(
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			long characterID,
+			CharacterMailData mail,
+			long guardKey)
+		{
+			bool handedOn = false;
+			MailFailureReason reason = MailFailureReason.ServerError;
+			try
+			{
+				if (conn == null || !conn.IsActive || character == null)
+				{
+					return;
+				}
+
+				if (!HasRoomForMailAttachment(character, mail))
+				{
+					reason = MailFailureReason.InventoryFull;
+					return;
+				}
+
+				if (TryEnqueueAsyncWork(() => FinishMailClaimAsync(conn, character, characterID, mail, guardKey), conn, characterID))
+				{
+					handedOn = true;
+				}
+			}
+			finally
+			{
+				if (!handedOn)
+				{
+					EndIngressGuard(guardKey);
+					SendMailClaimResult(conn, mail.ID, false, reason);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Takes the attachment off the mail and hands the grant back to the main thread.
+		/// </summary>
+		private async Task FinishMailClaimAsync(
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			long characterID,
+			CharacterMailData mail,
+			long guardKey)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterMailService>(out var mailService))
+				{
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mail.ID, false, MailFailureReason.ServerError));
+					return;
+				}
+
+				DatabaseResult<CharacterMailAttachmentData?> claim =
+					await mailService.ClaimAttachmentAsync(mail.ID, characterID, mail.Version + 1);
+
+				if (!claim.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem", $"FinishMailClaimAsync DB error (MailID={mail.ID}, CharID={characterID}): {claim.ErrorCode} - {claim.ErrorMessage}");
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mail.ID, false, MailFailureReason.ServerError));
+					return;
+				}
+
+				if (!claim.Data.HasValue || !claim.Data.Value.HasAnything)
+				{
+					// Already claimed, or nothing was attached after all.
+					TryEnqueueMainThread(() => SendMailClaimResult(conn, mail.ID, false, MailFailureReason.NothingToClaim));
+					return;
+				}
+
+				CharacterMailAttachmentData attachment = claim.Data.Value;
+				TryEnqueueMainThread(() => GrantMailAttachment(conn, character, mail.ID, attachment));
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"Error finishing mail claim (MailID={mail.ID}, CharID={characterID}): {ex}");
+				TryEnqueueMainThread(() => SendMailClaimResult(conn, mail.ID, false, MailFailureReason.ServerError));
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <summary>
+		/// True when the character can accept everything attached to a mail. Main thread only.
+		/// </summary>
+		private bool HasRoomForMailAttachment(IPlayerCharacter character, CharacterMailData mail)
+		{
+			if (mail.ItemAttachmentTemplateID == 0 || mail.ItemAttachmentAmount <= 0)
+			{
+				// Currency only. The claimer's balance is an int and the grant clamps to it, so
+				// there is nothing that can fail to fit.
+				return true;
+			}
+
+			if (!character.TryGet(out IInventoryController inventoryController))
+			{
+				return false;
+			}
+
+			BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(mail.ItemAttachmentTemplateID);
+			if (itemTemplate == null)
+			{
+				return false;
+			}
+
+			return inventoryController.CanAddItem(new Item(itemTemplate, (uint)mail.ItemAttachmentAmount));
+		}
+
+		/// <summary>
+		/// Hands a claimed attachment to its owner. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// The database row is already cleared by the time this runs, so a failure here loses the
+		/// attachment rather than duplicating it — the correct direction, and the reason the room
+		/// check happens before the claim rather than here.
+		/// </remarks>
+		private void GrantMailAttachment(NetworkConnection conn, IPlayerCharacter character, long mailID, CharacterMailAttachmentData attachment)
+		{
+			if (conn == null || !conn.IsActive || character == null)
+			{
+				Log.Error("InteractableSystem", $"Mail attachment claimed for MailID={mailID} but the claimer had gone; the attachment was lost.");
+				return;
+			}
+
+			bool granted = false;
+
+			if (attachment.CurrencyAmount > 0 &&
+				currencyTemplate != null &&
+				character.TryGet(out ICharacterAttributeController attributeController) &&
+				attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+			{
+				// Clamped to the headroom left in an int balance, exactly as corpse currency is.
+				long capacity = (long)int.MaxValue - currency.Value;
+				int amount = (int)Math.Min(capacity, attachment.CurrencyAmount);
+				if (amount > 0)
+				{
+					currency.AddValue(amount);
+					granted = true;
+					if (!TryPersistMerchantAttributes(character))
+					{
+						Log.Error("InteractableSystem", $"Mail claim: currency persist rejected for CharID={character.ID}; the mail row is cleared but the payout is not recorded.");
+					}
+				}
+			}
+
+			if (attachment.ItemTemplateID != 0 &&
+				attachment.ItemAmount > 0 &&
+				character.TryGet(out IInventoryController inventoryController))
+			{
+				BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(attachment.ItemTemplateID);
+				if (itemTemplate != null)
+				{
+					Item item = new Item(itemTemplate, attachment.ItemAmount);
+					if (SendNewItemBroadcast(conn, character, inventoryController, item))
+					{
+						granted = true;
+					}
+					else
+					{
+						Log.Error("InteractableSystem", $"Mail claim: could not grant the attachment on MailID={mailID} to CharID={character.ID}; the item was lost.");
+					}
+				}
+			}
+
+			SendMailClaimResult(conn, mailID, granted, granted ? MailFailureReason.None : MailFailureReason.ServerError);
+		}
+
+		/// <summary>
+		/// Sends the one reply every exit from the claim path owes the client.
+		/// </summary>
+		private void SendMailClaimResult(NetworkConnection conn, long mailID, bool success, MailFailureReason reason)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new MailClaimResultBroadcast()
+			{
+				MailID = mailID,
+				Success = success,
+				Reason = reason,
+			}, true, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -339,14 +1019,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// Validate mailbox scene object
-				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
-				{
-					return;
-				}
-
-				IMailbox mailbox = sceneObject.GameObject.GetComponent<IMailbox>();
-				if (mailbox == null || !mailbox.InRange(character.Transform))
+				if (!TryValidateMailbox(character, msg.InteractableID))
 				{
 					return;
 				}

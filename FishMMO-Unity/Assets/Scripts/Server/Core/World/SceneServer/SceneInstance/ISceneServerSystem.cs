@@ -65,6 +65,21 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void UnloadScene(long sceneID);
 
 		/// <summary>
+		/// Closes an instance: returns everyone inside it to the open world, then unloads it.
+		/// </summary>
+		/// <remarks>
+		/// The correct way to end an instance that still has occupants. <see cref="UnloadScene"/>
+		/// destroys the scene outright, which is safe only for one that is already empty — the
+		/// stale sweep's case. Anything that closes an instance on the server's terms, whether a
+		/// lifetime cap expiring or a party leader asking, has to go through here so the characters
+		/// inside are saved, released and re-routed rather than having the ground taken from under
+		/// them.
+		/// </remarks>
+		/// <param name="sceneID">Scene row of the instance to close.</param>
+		/// <param name="reason">Why it is closing, for diagnostics and player messaging.</param>
+		void CloseInstance(long sceneID, string reason);
+
+		/// <summary>
 		/// Adjusts the tracked character count for a scene instance.
 		/// </summary>
 		/// <remarks>

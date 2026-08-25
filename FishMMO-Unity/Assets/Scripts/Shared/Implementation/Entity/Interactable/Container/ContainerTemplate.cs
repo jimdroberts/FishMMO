@@ -37,6 +37,28 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool DespawnWhenEmpty;
 
+		/// <summary>
+		/// What this container holds. Rolled once, on the server, each time it spawns.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Without this a container had no way to contain anything. <see cref="SlotCount"/> slots
+		/// were created empty on awake and nothing anywhere ever put an item in one, so every chest
+		/// in the world opened bare, <c>FilledSlots</c> was always zero, and
+		/// <see cref="DespawnWhenEmpty"/> described a condition that was true from the moment the
+		/// object spawned.
+		/// </para>
+		/// <para>
+		/// The same <see cref="LootTableTemplate"/> a creature drops from, so a chest and a corpse
+		/// are authored and balanced the same way. Currency is rolled but discarded: a container
+		/// exposes item slots and has no currency channel in
+		/// <c>ContainerOpenBroadcast</c>, so a table with a currency range on it is a content
+		/// mistake worth leaving visible rather than silently inventing a place to put it.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Loot table rolled into this container's slots each time it spawns. None = empty container.")]
+		public LootTableTemplate LootTable;
+
 		public string Name { get { return this.name; } }
 
 		/// <summary>

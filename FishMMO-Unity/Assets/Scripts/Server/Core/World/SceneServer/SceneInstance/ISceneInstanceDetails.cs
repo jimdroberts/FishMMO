@@ -79,6 +79,22 @@ namespace FishMMO.Server.Core.World.SceneServer
 		DateTime LastExit { get; set; }
 
 		/// <summary>
+		/// When the scene row this instance was loaded for was created.
+		/// </summary>
+		/// <remarks>
+		/// The row's creation time rather than the moment the scene finished loading, so the age
+		/// this yields includes the time spent queued and loading. That is the age a lifetime cap
+		/// has to measure: an instance that took a minute to come up has still been occupying a
+		/// slot for that minute.
+		/// <para>
+		/// Distinct from <see cref="LastExit"/>, which measures how long an instance has been
+		/// <em>empty</em>. The two bound different things — an abandoned instance and an endless
+		/// one — and neither substitutes for the other.
+		/// </para>
+		/// </remarks>
+		DateTime CreatedUtc { get; set; }
+
+		/// <summary>
 		/// Adds to the current character count for the scene instance.
 		/// </summary>
 		/// <param name="count">Amount to add to the character count. May be negative to decrement. Implementations should clamp the resulting count to zero if necessary.</param>

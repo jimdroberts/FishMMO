@@ -312,24 +312,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="dialogue">The dialogue interactable.</param>
 		public void StartDialogueSession(IPlayerCharacter character, ISceneObject sceneObject, IDialogueInteractable dialogue)
 		{
+			if (dialogue == null)
+			{
+				return;
+			}
 			StartDialogueSessionInternal(character, sceneObject != null ? sceneObject.ID : 0, dialogue.Template, dialogue);
 		}
 
 		/// <summary>
-		/// Starts a new dialogue session triggered by an ECA action (no interactable required).
+		/// Starts a new dialogue session triggered by an ECA action.
 		/// </summary>
+		/// <remarks>
+		/// <paramref name="interactable"/> is what anchors the conversation to a place in the
+		/// world. Every dialogue in the game reaches the server through this method — the
+		/// interactable-typed <see cref="StartDialogueSession"/> overload has no callers — so when
+		/// this passed a hard-coded 0 for the scene object ID, <em>every</em> session was
+		/// unanchored and the choice handler's range check was dead code for all of them. A player
+		/// could open a conversation, walk to the far side of the zone, and keep taking choices —
+		/// including any that hand out items or currency.
+		/// </remarks>
 		/// <param name="character">The player character starting the dialogue.</param>
 		/// <param name="template">The dialogue template to use.</param>
-		public void StartECADialogueSession(IPlayerCharacter character, DialogueTemplate template)
+		/// <param name="interactable">The interactable the dialogue is anchored to, or null.</param>
+		public void StartECADialogueSession(IPlayerCharacter character, DialogueTemplate template, IInteractable interactable = null)
 		{
-			StartDialogueSessionInternal(character, 0, template, null);
+			StartDialogueSessionInternal(character, interactable != null ? interactable.ID : 0, template, interactable);
 		}
 
 		/// <summary>
 		/// Core dialogue session startup. Evaluates start node conditions, creates the session,
 		/// and broadcasts <see cref="DialogueStartBroadcast"/> to the client.
 		/// </summary>
-		private void StartDialogueSessionInternal(IPlayerCharacter character, long interactableID, DialogueTemplate template, IDialogueInteractable dialogue)
+		private void StartDialogueSessionInternal(IPlayerCharacter character, long interactableID, DialogueTemplate template, IInteractable dialogue)
 		{
 			if (character == null || template == null)
 			{
@@ -383,8 +397,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			// Evaluate start node conditions
-			ICharacter speaker = dialogue != null ? dialogue.Transform.GetComponent<ICharacter>() : null;
+			// Evaluate start node conditions. The speaker is whoever the interactable sits on, if
+			// it sits on a character at all — a talking signpost has none.
+			ICharacter speaker = dialogue?.Transform != null ? dialogue.Transform.GetComponent<ICharacter>() : null;
 			DialogueEventData eventData = new DialogueEventData(
 				character,
 				speaker,
@@ -486,8 +501,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						return;
 					}
 
-					IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-					if (interactable == null || !interactable.InRange(character.Transform))
+					/* Resolved through the shared rule, and asked CanInteract rather than InRange.
+					 * The raw GetComponent returned whichever IInteractable component order
+					 * yielded — on a talking NPC that is a coin flip between the
+					 * DialogueInteractable and the NPC's own corpse component, whose InRange uses
+					 * the corpse's range instead. CanInteract also refuses a conversation with a
+					 * body, which InRange alone did not. */
+					IInteractable interactable = InteractableResolver.Resolve(sceneObject);
+					if (interactable == null || !interactable.CanInteract(character))
 					{
 						EndDialogueSessionWithBroadcast(character);
 						return;
@@ -911,10 +932,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Handles the <see cref="DisplayDialogueAction.OnServerDialogueRequested"/> static event.
+		/// Handles the <see cref="IDialogueInteractable.OnServerDialogueRequested"/> static event.
 		/// Resolves the initiator as a player character and starts an ECA-triggered dialogue session.
 		/// </summary>
-		private void OnDisplayDialogueActionRequested(ICharacter initiator, DialogueTemplate template)
+		/// <param name="initiator">The character the dialogue was raised for.</param>
+		/// <param name="template">The dialogue template to run.</param>
+		/// <param name="interactable">The interactable the dialogue is anchored to, or null.</param>
+		private void OnDisplayDialogueActionRequested(ICharacter initiator, DialogueTemplate template, IInteractable interactable)
 		{
 			if (initiator == null || template == null)
 			{
@@ -927,7 +951,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			StartECADialogueSession(player, template);
+			StartECADialogueSession(player, template, interactable);
 		}
 	}
 }

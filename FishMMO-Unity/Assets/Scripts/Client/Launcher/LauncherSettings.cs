@@ -35,6 +35,10 @@ namespace FishMMO.Client
 		public const string KeyWindowHeight = "Launcher.WindowHeight";
 		/// <summary>Override for where patch archives are downloaded to and read from.</summary>
 		public const string KeyPatchDirectory = "Launcher.PatchDirectory";
+		/// <summary>Target version of the update currently being retried.</summary>
+		public const string KeyUpdateAttemptVersion = "Launcher.UpdateAttemptVersion";
+		/// <summary>How many times that update has been handed to the updater.</summary>
+		public const string KeyUpdateAttemptCount = "Launcher.UpdateAttemptCount";
 
 		/// <summary>
 		/// Where patch archives are stored, or empty to use the install's own Patches folder.
@@ -107,6 +111,92 @@ namespace FishMMO.Client
 				Log.Warning("LauncherSettings", $"Ignoring patch directory '{configured}' ({ex.Message}). Using '{defaultDirectory}'.");
 				return defaultDirectory;
 			}
+		}
+
+		/// <summary>
+		/// How many automatic attempts at the same update are made before the launcher stops
+		/// starting them on its own.
+		/// </summary>
+		/// <remarks>
+		/// Three: enough to ride out a transient failure (a half-written archive, a file the
+		/// antivirus had open, a machine that lost power mid-apply), few enough that a genuinely
+		/// broken upgrade path does not cost the player an unbounded number of multi-gigabyte
+		/// downloads.
+		/// </remarks>
+		public const int MaxConsecutiveUpdateAttempts = 3;
+
+		/// <summary>
+		/// Records that an update to <paramref name="targetVersion"/> is about to be handed to
+		/// the updater, and returns which attempt this is (1 for the first).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This exists because the failure it guards against is invisible from inside a single
+		/// run. The updater's first action is to terminate this process, so when a patch fails
+		/// AFTER that point there is no launcher left to be told: the updater rolls back,
+		/// relaunches the client at the unchanged version, the launcher checks again, finds the
+		/// same mismatch, and — with auto-update on — downloads and applies the same archive
+		/// again. Nothing in that cycle is an error from any single participant's point of
+		/// view, and it repeats forever.
+		/// </para>
+		/// <para>
+		/// Written and flushed BEFORE the handoff for the same reason: anything recorded after
+		/// it never gets written, because the process is gone.
+		/// </para>
+		/// </remarks>
+		public static int RecordUpdateAttempt(string targetVersion)
+		{
+			if (string.IsNullOrEmpty(targetVersion))
+			{
+				return 0;
+			}
+
+			string tracked = GetString(KeyUpdateAttemptVersion, string.Empty);
+			int count = string.Equals(tracked, targetVersion, StringComparison.Ordinal)
+				? GetInt(KeyUpdateAttemptCount, 0)
+				: 0;
+
+			count += 1;
+			SetValue(KeyUpdateAttemptVersion, targetVersion);
+			SetValue(KeyUpdateAttemptCount, count);
+			Save();
+			return count;
+		}
+
+		/// <summary>
+		/// True when <paramref name="targetVersion"/> has already been attempted
+		/// <see cref="MaxConsecutiveUpdateAttempts"/> times without the client reaching it.
+		/// </summary>
+		/// <remarks>
+		/// Only automatic updates are gated on this. A player who presses Update anyway has
+		/// made a decision, and one more attempt at their request is not a loop.
+		/// </remarks>
+		public static bool HasExhaustedUpdateAttempts(string targetVersion)
+		{
+			if (string.IsNullOrEmpty(targetVersion))
+			{
+				return false;
+			}
+			if (!string.Equals(GetString(KeyUpdateAttemptVersion, string.Empty), targetVersion, StringComparison.Ordinal))
+			{
+				return false;
+			}
+			return GetInt(KeyUpdateAttemptCount, 0) >= MaxConsecutiveUpdateAttempts;
+		}
+
+		/// <summary>
+		/// Clears the attempt counter. Called once the client is confirmed to be at the
+		/// server's version — the only evidence that an update actually landed.
+		/// </summary>
+		public static void ClearUpdateAttempts()
+		{
+			if (GetInt(KeyUpdateAttemptCount, 0) == 0 && string.IsNullOrEmpty(GetString(KeyUpdateAttemptVersion, string.Empty)))
+			{
+				return;
+			}
+			SetValue(KeyUpdateAttemptVersion, string.Empty);
+			SetValue(KeyUpdateAttemptCount, 0);
+			Save();
 		}
 
 		/// <summary>
@@ -257,6 +347,16 @@ namespace FishMMO.Client
 			{
 				Log.Warning("LauncherSettings", $"Could not save launcher configuration: {ex.Message}");
 			}
+		}
+
+		private static string GetString(string key, string fallback)
+		{
+			if (Configuration.GlobalSettings == null)
+			{
+				return fallback;
+			}
+			Configuration.GlobalSettings.TryGetString(key, out string value, fallback);
+			return value ?? fallback;
 		}
 
 		private static bool GetBool(string key, bool fallback)

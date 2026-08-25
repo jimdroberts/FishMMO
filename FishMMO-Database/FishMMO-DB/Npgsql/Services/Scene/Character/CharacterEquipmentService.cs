@@ -174,19 +174,19 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterEquipmentData> equipment, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterEquipmentData> equipment, CancellationToken cancellationToken = default)
 		{
 			var equipmentList = equipment?.ToList();
 			if (equipmentList == null || equipmentList.Count == 0)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Empty or null equipment collection.");
 			}
 
 			if (equipmentList.Any(e => e.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more equipment items had an invalid Version. Version must be greater than 0.");
 			}
@@ -207,7 +207,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = equipmentList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = equipmentList.Select(e => e.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -227,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeEquipment = equipmentList.Where(e => activeCharacterIdSet.Contains(e.CharacterID)).ToList();
 				if (activeEquipment.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -248,13 +250,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var sql = GetUpsertSql();
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeEquipment.Count,
 					new object[] { characterIdArray, slotArray, versionArray, templateIdArray, seedArray, amountArray, now },
 					"One or more equipment items were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeEquipment.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

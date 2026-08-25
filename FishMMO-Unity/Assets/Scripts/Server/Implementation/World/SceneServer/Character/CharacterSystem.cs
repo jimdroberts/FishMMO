@@ -308,6 +308,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			sceneUnloadLastTimeByClientId.Clear();
 			validatedSceneLastTimeByClientId.Clear();
 
+			/* Capture every claim this server holds BEFORE the lingers are finalised.
+			 *
+			 * FinalizeCombatLinger takes a lingering body's token out of SessionTokens and hands it
+			 * to the async worker pool to save and release. That pool is drained on a bounded
+			 * budget during teardown, so on a slow database the release can be dropped — and unlike
+			 * a dropped save, a dropped release is not a small loss: the character stays Online
+			 * until its two-minute lease expires, and the player is refused by every scene server
+			 * for that whole time after a restart.
+			 *
+			 * Snapshotting first puts those tokens in the synchronous release loop below, which
+			 * runs regardless of what the pool manages. The pool's own release then finds the
+			 * session already Offline and reports nothing to do, which is exactly what
+			 * ReleaseCharacterSessionAsync treats as success. */
+			Dictionary<long, CharacterSessionInfo> heldClaims = null;
+			if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> claimData))
+			{
+				heldClaims = new Dictionary<long, CharacterSessionInfo>(claimData.SessionTokens);
+			}
+
 			// Bring every lingering body back into the normal save/despawn/release path before
 			// the shutdown snapshot below runs, so its state is captured and its claim handed
 			// back rather than being left Online until the lease expires.
@@ -319,8 +338,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 				{
-					// Capture all session tokens (spawned + waiting-to-load characters)
-					var sessionTokens = new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
+					/* Claims as they stood before the lingers were finalised — see above. Falls
+					 * back to reading them now only if the pre-snapshot could not be taken, which
+					 * means the mapping data was unavailable then and this will be empty anyway. */
+					var sessionTokens = heldClaims ?? new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
 
 					// Snapshot character data on the main thread (Unity API access required),
 					// paired with the claim held for each so the shutdown write can prove

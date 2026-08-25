@@ -13,9 +13,26 @@ namespace FishMMO.Shared
 	public class PetController : CharacterBehaviour, IPetController
 	{
 		/// <summary>
+		/// Backing field for <see cref="Pet"/>.
+		/// </summary>
+		private Pet pet;
+
+		/// <summary>
 		/// The pet instance managed by this controller.
 		/// </summary>
-		public Pet Pet { get; set; }
+		/// <remarks>
+		/// Assignment drives the server's damage subscription — see
+		/// <see cref="UpdateDamageSubscription"/>.
+		/// </remarks>
+		public Pet Pet
+		{
+			get { return pet; }
+			set
+			{
+				pet = value;
+				UpdateDamageSubscription();
+			}
+		}
 
 		/// <summary>
 		/// The pet's combat stance as this peer currently understands it.
@@ -62,16 +79,49 @@ namespace FishMMO.Shared
 		private bool subscribedToDamage;
 
 		/// <summary>
-		/// Subscribes to the global damage event on the server.
+		/// Called when the network object starts. The damage subscription is taken lazily, when a
+		/// pet actually exists.
 		/// </summary>
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
 
-			if (base.IsServerStarted && !subscribedToDamage)
+			UpdateDamageSubscription();
+		}
+
+		/// <summary>
+		/// Holds the global damage subscription for exactly as long as this controller has a pet.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="ICharacterDamageController.OnDamaged"/> is a single static event raised for
+		/// every point of damage dealt anywhere on the server. Subscribing one handler per player
+		/// for the whole of that player's session — which is what taking the subscription in
+		/// OnStartNetwork amounted to — makes the cost of a single hit proportional to the number
+		/// of players logged in, and all but a handful of those handlers exist only to compare
+		/// two references and return. On a populated scene server that is millions of delegate
+		/// invocations a second spent discovering that nobody cares.
+		/// <para>
+		/// Scoping it to "has a pet" costs one comparison per assignment and leaves the handler
+		/// list the length of the number of players who actually have a pet out.
+		/// </para>
+		/// </remarks>
+		private void UpdateDamageSubscription()
+		{
+			bool wanted = pet != null && base.IsServerStarted;
+
+			if (wanted == subscribedToDamage)
+			{
+				return;
+			}
+
+			if (wanted)
 			{
 				ICharacterDamageController.OnDamaged += CharacterDamageController_OnDamaged;
 				subscribedToDamage = true;
+			}
+			else
+			{
+				ReleaseDamageSubscription();
 			}
 		}
 
@@ -123,7 +173,7 @@ namespace FishMMO.Shared
 			}
 
 			// Never turn the pet on its own owner.
-			if (Pet != null && ReferenceEquals(attacker, Pet))
+			if (pet != null && ReferenceEquals(attacker, pet))
 			{
 				return;
 			}
@@ -138,7 +188,15 @@ namespace FishMMO.Shared
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
-			Pet = null;
+
+			/* Released explicitly rather than left to the Pet setter. By the time a pooled
+			 * character is reset the network object may already have stopped, so
+			 * UpdateDamageSubscription's IsServerStarted test would decline to touch a
+			 * subscription that is still held — and the handler would outlive the pet, the
+			 * character, and this controller's usefulness. */
+			pet = null;
+			ReleaseDamageSubscription();
+
 			Stance = PetStance.Defensive;
 			MovementOrder = PetMovementOrder.Follow;
 		}

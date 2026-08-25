@@ -33,7 +33,33 @@ namespace FishMMO.Shared
 
 			ShrineTemplate template = shrine.Template;
 
+			/* A shrine is a restore point between fights unless its template says otherwise.
+			 * CharacterStateValidation.CanAct — which every interaction passes through — does not
+			 * reject a character in combat, so without this check the shrine was a full heal
+			 * available mid-fight. */
+			if (!template.UsableInCombat &&
+				player.IsFlagged(CharacterFlags.IsInCombat))
+			{
+				SendShrineResult(player, data.Interactable, template, false, shrine.GetRemainingCooldown(player.ID));
+				return;
+			}
+
+			/* Spend the cooldown BEFORE anything is applied, and bail out if it is still running.
+			 *
+			 * Shrine.CanInteract tests the same cooldown, but only the server holds the table, so
+			 * a client always believes the shrine is ready and always sends the request. This is
+			 * the authoritative gate; CanInteract is the local courtesy that stops a well-behaved
+			 * client asking. */
+			/* Resolved BEFORE the cooldown is spent. It is the last thing on this path that can
+			 * fail, and failing after the consume would burn the player's cooldown on a use that
+			 * healed nothing — and return without a reply, so they would not even learn why. */
 			if (!player.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			if (!shrine.TryConsumeCooldown(player.ID))
+			{
+				SendShrineResult(player, data.Interactable, template, false, shrine.GetRemainingCooldown(player.ID));
+				return;
+			}
 
 			/* Health goes through the damage controller, not straight into the resource.
 			 * AddToCurrentValue clamps a number and raises an attribute-changed notification and
@@ -72,17 +98,37 @@ namespace FishMMO.Shared
 				}
 			}
 
-			SendToOwner(initiator, new ShrineBroadcast()
-			{
-				InteractableID = data.Interactable.ID,
-				TemplateID = template.ID,
-			});
+			SendShrineResult(player, data.Interactable, template, true, shrine.GetRemainingCooldown(player.ID));
 
 			if (shrine.AchievementTemplate != null &&
 				player.TryGet(out IAchievementController achievementController))
 			{
 				achievementController.Increment(shrine.AchievementTemplate, 1);
 			}
+		}
+
+		/// <summary>
+		/// Sends the one reply every exit from this action owes the player.
+		/// </summary>
+		/// <param name="player">The interacting player.</param>
+		/// <param name="interactable">The shrine that was used.</param>
+		/// <param name="template">The shrine's template.</param>
+		/// <param name="success">Whether the effects were applied.</param>
+		/// <param name="remainingCooldown">Seconds until the shrine is usable again.</param>
+		private static void SendShrineResult(
+			ICharacter player,
+			IInteractable interactable,
+			ShrineTemplate template,
+			bool success,
+			float remainingCooldown)
+		{
+			SendToOwner(player, new ShrineBroadcast()
+			{
+				InteractableID = interactable.ID,
+				TemplateID = template.ID,
+				Success = success,
+				RemainingCooldownSeconds = remainingCooldown,
+			});
 		}
 	}
 }

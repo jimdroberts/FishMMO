@@ -366,15 +366,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 
 				IPetController petController = conn.FirstObject.GetComponent<IPetController>();
-				if (petController == null || petController.Pet == null)
+				if (petController == null || petController.Pet == null || petController.Character == null)
 				{
 					// no pet exists
 					return;
 				}
 
-				if (petController.Pet.TryGet(out IAIController aiController))
+				if (!petController.Pet.TryGet(out IAIController aiController))
 				{
-					aiController.Agent.Warp(petController.Character.Transform.position);
+					return;
+				}
+
+				/* AIController.WarpTo, not NavMeshAgent.Warp.
+				 *
+				 * The raw agent call does three things wrong here. It dereferences Agent, which
+				 * is null on a pet whose brain never initialised; it hands Unity a point that
+				 * has not been sampled onto the NavMesh, so a summon issued while the owner
+				 * stands on a gap in the mesh silently fails; and it leaves the agent's existing
+				 * path intact, so the pet arrives beside its owner and immediately walks back to
+				 * wherever it was heading. WarpTo samples, warps and resets the movement state. */
+				Vector3 ownerPosition = petController.Character.Transform.position;
+				aiController.WarpTo(ownerPosition);
+
+				/* A pet told to Stay holds the spot it was standing in, and that spot is its
+				 * leash anchor. Summoning it moves the pet without moving the anchor, which
+				 * would leave it heeling to a position it is no longer at. Re-anchor. */
+				if (petController.Pet.MovementOrder == PetMovementOrder.Stay)
+				{
+					aiController.Home = ownerPosition;
 				}
 			}
 			finally
@@ -416,16 +435,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Capture immutable data for the async path. CaptureKnownAbilities first, so
-				// abilities granted at summon time from the PetAbilityTemplate are persisted
-				// rather than silently lost on the next log in.
-				petController.Pet.CaptureKnownAbilities();
+				// Record the dismissal before the reference is dropped. Snapshots the pet's
+				// abilities on the way past, so anything granted at summon time from the
+				// PetAbilityTemplate survives rather than being silently lost at the next login.
+				PersistPetDismissed(player, petController.Pet);
 
-				long characterID = petController.Character.ID;
-				int templateID = petController.Pet.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
-				List<int> abilities = new List<int>(petController.Pet.PetAbilityIDs);
-
-				if (petController.Pet != null &&
+				if (petController.Pet.NetworkObject != null &&
 					petController.Pet.NetworkObject.IsSpawned)
 				{
 					ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
@@ -436,8 +451,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 
-				// Async DB save with spawned=false, keyed by characterID to serialize with summon ops
-				EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, false), characterID);
+				// Server-side dismiss triggers — see InvokePetTriggers for why the client-side
+				// raise in PetController is not enough on its own.
+				InvokePetTriggers(petController.Character, petController.OnPetDismissTriggers, null);
 			}
 			finally
 			{
@@ -449,10 +465,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Handles pet attack broadcast: sends the pet at whatever the owner is currently targeting.
 		/// </summary>
 		/// <remarks>
-		/// The target is read from the owner's own <see cref="ITargetController"/> rather than
-		/// taken from the message, so a client cannot name an arbitrary entity as its pet's
-		/// victim. The target is then re-validated here: alive, not the owner, not the pet, and
-		/// hostile by faction.
+		/// The message carries no target. The server resolves one itself, by raycasting from the
+		/// owner's replicated camera transform in the owner's own physics scene — the same way
+		/// the ability system decides what a cast hits — so a client can point but cannot name a
+		/// victim. Whatever comes back is then re-validated: alive, in the same scene, not the
+		/// owner, not the pet, and hostile by faction.
 		/// </remarks>
 		private void OnPetAttackBroadcastReceived(NetworkConnection conn, PetAttackBroadcast msg, Channel channel)
 		{
@@ -484,7 +501,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				Transform targetTransform = targetController.Current.Target;
+				/* Re-resolve the target rather than reading whatever is already sitting in
+				 * ITargetController.Current.
+				 *
+				 * Current is only ever written on the server by AbilityController's activation
+				 * path — TargetController.Update runs off Camera.main and so does nothing on a
+				 * headless server. Reading it directly therefore meant "attack" did nothing at
+				 * all for a player who had not cast an ability, and sent the pet at whatever
+				 * that player's LAST cast happened to raycast through for everyone else. The
+				 * pet-attack button was, in practice, non-functional.
+				 *
+				 * The camera transform below is the same replicated, already-sanitised input the
+				 * ability system aims with (KCCController.SetInputs validates the rotation), and
+				 * the raycast is the server's own, in the character's own physics scene, clamped
+				 * to TargetController.MAX_TARGET_DISTANCE. So the client still cannot name a
+				 * target: it can only point, and the server decides what is under the pointer. */
+				Vector3 cameraPosition = player.CharacterController != null
+					? player.CharacterController.VirtualCameraPosition
+					: player.Transform.position;
+				Quaternion cameraRotation = player.CharacterController != null
+					? player.CharacterController.VirtualCameraRotation
+					: player.Transform.rotation;
+
+				TargetInfo targetInfo = targetController.UpdateTarget(
+					cameraPosition,
+					cameraRotation * Vector3.forward,
+					TargetController.MAX_TARGET_DISTANCE);
+
+				Transform targetTransform = targetInfo.Target;
 				if (targetTransform == null)
 				{
 					return;
@@ -580,11 +624,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			// Faction gate: the pet copies its owner's factions at summon time, so asking the
-			// pet's own faction controller gives the same answer the AI would give itself.
+			// Same world, same instance. SceneObject IDs and character references are process-wide
+			// while scenes are stacked per instance, so without this a pet could be pointed at
+			// something in another copy of the same dungeon.
 			if (petController.Pet != null &&
-				petController.Pet.TryGet(out IFactionController petFaction) &&
-				target.TryGet(out IFactionController targetFaction) &&
+				petController.Pet.GameObject.scene != target.GameObject.scene)
+			{
+				return false;
+			}
+
+			/* Faction gate: the pet copies its owner's factions at summon time, so asking the
+			 * pet's own faction controller gives the same answer the AI would give itself.
+			 *
+			 * Fails CLOSED. The previous form was one long && chain that returned false only
+			 * when every link held, so a target — or a pet — with no faction controller at all
+			 * short-circuited the whole test and fell through to "valid". A missing faction
+			 * controller is not permission to attack. */
+			if (petController.Pet == null ||
+				!petController.Pet.TryGet(out IFactionController petFaction) ||
+				!target.TryGet(out IFactionController targetFaction) ||
 				targetFaction.GetAllianceLevel(petFaction) != FactionAllianceLevel.Enemy)
 			{
 				return false;
@@ -645,12 +703,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, Scene scene)
 		{
-			if (character == null)
+			if (character == null || conn == null)
 			{
 				return;
 			}
 
-			if (scene == null)
+			/* IsValid, not a null test. Scene is a struct, so `scene == null` bound to the lifted
+			 * == the struct's own operator generates and answered false unconditionally — the
+			 * guard could never fire. An unloaded or never-loaded scene handle is what actually
+			 * has to be rejected here. */
+			if (!scene.IsValid())
 			{
 				return;
 			}
@@ -711,6 +773,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="aiInitPosition">Position passed to <see cref="IAIController.Initialize"/>.</param>
 		/// <param name="abilities">Optional ability list restored from the database; null when summoned fresh.</param>
 		/// <param name="broadcastTarget">Network connection that should receive the PetAddBroadcast.</param>
+		/// <param name="persistedAttributes">Attribute values restored from the database; null when summoned fresh.</param>
+		/// <param name="persistedBuffs">Buffs restored from the database; null when summoned fresh.</param>
 		/// <returns>True if the pet was successfully spawned; false if the pooled object had no Pet component.</returns>
 		private bool SpawnAndInitializePet(
 			IPlayerCharacter owner,
@@ -719,7 +783,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			NetworkObject nob,
 			Vector3 aiInitPosition,
 			List<int> abilities,
-			NetworkConnection broadcastTarget)
+			NetworkConnection broadcastTarget,
+			List<PetPersistedAttribute> persistedAttributes = null,
+			List<PetPersistedBuff> persistedBuffs = null)
 		{
 			// Despawn any existing pet before assigning the new one to prevent ghost pets.
 			if (petController.Pet != null &&
@@ -748,6 +814,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * PetAbilityIDs, and OnStartServer runs inside ServerManager.Spawn below. */
 			pet.PetAbilityIDs = BuildPetAbilityIDs(petAbilityTemplate, abilities);
 
+			/* Restored health and buffs, staged for the same reason and applied at the same
+			 * moment. Both are serialised into the spawn payload by their own controllers, and
+			 * FishNet writes that payload after the start callbacks have run — so applying them
+			 * from Pet.OnStartServer is what puts a wounded pet on its owner's screen at the
+			 * health it actually had, rather than at full and then snapping down. Null on a fresh
+			 * summon: a newly conjured pet arrives whole and unbuffed. */
+			pet.PersistedAttributes = persistedAttributes;
+			pet.PersistedBuffs = persistedBuffs;
+
 			petController.Pet = pet;
 
 			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, owner.GameObject.scene);
@@ -771,6 +846,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				aiController.Target = null;
 			}
 
+			/* Factions BEFORE the spawn, not after.
+			 *
+			 * FactionController.WritePayload serialises the faction table into the spawn payload,
+			 * and CopyFrom does not mark anything dirty — the per-tick flush only ever sends
+			 * factions marked dirty, and MarkAllFactionsDirty runs once, in OnStartNetwork.
+			 * Copying after ServerManager.Spawn therefore shipped every observer the PREFAB's
+			 * factions and never corrected them, so a summoned pet read as hostile (or neutral)
+			 * to its own owner's client for its entire life. */
+			if (pet.TryGet(out IFactionController petFactionController) &&
+				owner.TryGet(out IFactionController ownerFactionController))
+			{
+				petFactionController.CopyFrom(ownerFactionController);
+			}
+
 			/* Spawned WITHOUT an owning connection, deliberately.
 			 *
 			 * A pet's brain runs on the server, and CharacterPredictionController only produces
@@ -781,14 +870,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the pet's Owner, and its NetworkTransform is server-authoritative, so server
 			 * ownership costs nothing and makes the pet behave exactly like any other NPC. */
 			ServerManager.Spawn(pet.GameObject, null, owner.GameObject.scene);
-
-			if (pet.TryGet(out IFactionController petFactionController))
-			{
-				if (owner.TryGet(out IFactionController ownerFactionController))
-				{
-					petFactionController.CopyFrom(ownerFactionController);
-				}
-			}
 
 			// Wire the defensive-stance hook so the pet answers when its owner is attacked.
 			SubscribeOwnerAttacked(petController);
@@ -807,7 +888,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				achievementController.Increment(PetSummonAchievementTemplate, 1);
 			}
 
+			/* Fire the summon triggers HERE, on the server.
+			 *
+			 * PetController raises them too, but only from inside its `#if !UNITY_SERVER` arm — so
+			 * they ran exclusively on the owning client, and every action a designer can put in
+			 * one of those lists opens with BaseAction.IsServer and returns immediately off the
+			 * server. The whole OnPetSummonTriggers / OnPetDismissTriggers feature was therefore
+			 * inert: the lists could be authored on the prefab and nothing they contained would
+			 * ever execute. The client-side invocation is left alone, so purely presentational
+			 * actions still fire there. */
+			InvokePetTriggers(owner, petController.OnPetSummonTriggers, pet);
+
 			return true;
+		}
+
+		/// <summary>
+		/// Runs one of the pet controller's ECA trigger lists on the server.
+		/// </summary>
+		/// <param name="owner">The pet's owner, and the event's initiator.</param>
+		/// <param name="triggers">The list to fire. A null or empty list is a no-op.</param>
+		/// <param name="pet">The pet involved, or null for a dismissal.</param>
+		private static void InvokePetTriggers(ICharacter owner, List<Trigger> triggers, Pet pet)
+		{
+			if (owner == null || triggers == null || triggers.Count < 1)
+			{
+				return;
+			}
+			owner.Invoke(triggers, new PetEventData(owner, pet));
 		}
 
 		/// <summary>
@@ -835,6 +942,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				CharacterPetData petData = fetchResult.Data.Value;
 
+				/* Attributes and buffs are only accepted when their version matches the pet
+				 * row's. All three tables are stamped together by the character save, so a row
+				 * carrying an older version belongs to a pet that has since been dismissed — and
+				 * a previous pet may well have known an attribute or carried a buff this one does
+				 * not. Matching on the version is what keeps a hunter's new wolf from inheriting
+				 * the mana pool of the elemental it replaced. */
+				List<PetPersistedAttribute> persistedAttributes = await FetchPersistedPetAttributesAsync(characterID, petData.Version);
+				List<PetPersistedBuff> persistedBuffs = await FetchPersistedPetBuffsAsync(characterID, petData.Version);
+
 				// Marshal pet instantiation back to the main thread
 				TryEnqueueMainThread(() =>
 				{
@@ -842,6 +958,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					if (Server == null ||
 						conn == null || !conn.IsActive ||
 						character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+					{
+						return;
+					}
+
+					/* The character object is pooled. Between the fetch above and this drain it
+					 * can be despawned, returned to the pool and handed to an entirely different
+					 * player — at which point every check above still passes, because it is the
+					 * same C# object and it IS spawned, just not for us. Comparing the ID is what
+					 * tells the two apart, and getting it wrong hands one player another
+					 * player's pet. */
+					if (character.ID != characterID)
+					{
+						return;
+					}
+
+					// Same reasoning for the connection: FirstObject must still be this character.
+					if (conn.FirstObject != character.NetworkObject)
 					{
 						return;
 					}
@@ -872,7 +1005,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * leashed every database-restored pet to world (0,0,0): the moment it entered
 					 * any state with leashing enabled it walked — or warped — to the corner of the
 					 * map. The summon path always passed a real position; only this one did not. */
-					SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, spawnPosition, abilities, conn);
+					SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, spawnPosition, abilities, conn,
+						persistedAttributes, persistedBuffs);
 				});
 			}
 			catch (Exception ex)
@@ -882,8 +1016,98 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles character despawn event, saving pet state and despawning the pet object if necessary.
+		/// Reads the pet's saved attribute values, keeping only the rows written alongside the
+		/// pet row being restored.
 		/// </summary>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="petVersion">The version stamped on the pet row.</param>
+		/// <returns>Attribute values to stage onto the pet, or null when there are none.</returns>
+		private async Task<List<PetPersistedAttribute>> FetchPersistedPetAttributesAsync(long characterID, long petVersion)
+		{
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetAttributeService>(out var petAttributeService))
+			{
+				return null;
+			}
+
+			DatabaseResult<IReadOnlyList<CharacterPetAttributeData>> result = await petAttributeService.FetchAsync(characterID);
+			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			{
+				return null;
+			}
+
+			List<PetPersistedAttribute> attributes = new List<PetPersistedAttribute>(result.Data.Count);
+			for (int i = 0; i < result.Data.Count; ++i)
+			{
+				CharacterPetAttributeData row = result.Data[i];
+				if (row.Version != petVersion)
+				{
+					continue;
+				}
+
+				attributes.Add(new PetPersistedAttribute()
+				{
+					TemplateID = row.TemplateID,
+					Value = row.Value,
+					CurrentValue = row.CurrentValue,
+				});
+			}
+
+			return attributes.Count > 0 ? attributes : null;
+		}
+
+		/// <summary>
+		/// Reads the pet's saved buffs, keeping only the rows written alongside the pet row being
+		/// restored.
+		/// </summary>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="petVersion">The version stamped on the pet row.</param>
+		/// <returns>Buffs to stage onto the pet, or null when there are none.</returns>
+		private async Task<List<PetPersistedBuff>> FetchPersistedPetBuffsAsync(long characterID, long petVersion)
+		{
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetBuffService>(out var petBuffService))
+			{
+				return null;
+			}
+
+			DatabaseResult<IReadOnlyList<CharacterPetBuffData>> result = await petBuffService.FetchAsync(characterID);
+			if (!result.IsSuccess || result.Data == null || result.Data.Count < 1)
+			{
+				return null;
+			}
+
+			List<PetPersistedBuff> buffs = new List<PetPersistedBuff>(result.Data.Count);
+			for (int i = 0; i < result.Data.Count; ++i)
+			{
+				CharacterPetBuffData row = result.Data[i];
+				if (row.Version != petVersion)
+				{
+					continue;
+				}
+
+				buffs.Add(new PetPersistedBuff()
+				{
+					TemplateID = row.TemplateID,
+					RemainingTime = row.RemainingTime,
+					TickTime = row.TickTime,
+					Stacks = row.Stacks,
+					TickCount = row.TickCount,
+				});
+			}
+
+			return buffs.Count > 0 ? buffs : null;
+		}
+
+		/// <summary>
+		/// Removes the character's pet from the world when the character leaves it.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately writes nothing. A live pet's state — its row, its attributes and its
+		/// buffs — is snapshotted by the character save that precedes this event, and written
+		/// before the character's session claim is released; see
+		/// <c>CharacterSystem.AppendPetData</c>. Persisting again from here would be a second,
+		/// unordered write racing the one that matters, which is exactly what let a player zone
+		/// between scene servers and arrive without the pet they had out.
+		/// </remarks>
 		private void CharacterSystem_OnDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character == null)
@@ -896,99 +1120,102 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (Server?.Database?.ServiceRegistry == null)
+			Pet pet = petController.Pet;
+			if (pet == null)
 			{
+				petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
 				return;
 			}
 
-			float currentHealth = 0.0f;
-			if (petController.Pet != null &&
-				petController.Pet.TryGet(out ICharacterAttributeController petAttributeController) &&
-				petAttributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
+			if (pet.NetworkObject != null && pet.NetworkObject.IsSpawned)
 			{
-				currentHealth = health.CurrentValue;
-			}
-
-			petController.Pet?.CaptureKnownAbilities();
-
-			// Capture immutable data for the async path
-			long characterID = character.ID;
-			int templateID = petController.Pet?.PetAbilityTemplate != null ? petController.Pet.PetAbilityTemplate.ID : 0;
-			List<int> abilities = petController.Pet?.PetAbilityIDs != null ? new List<int>(petController.Pet.PetAbilityIDs) : new List<int>();
-			bool spawned = petController.Pet != null && currentHealth > 0.0f;
-
-			if (petController.Pet != null &&
-				petController.Pet.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+				ServerManager.Despawn(pet.NetworkObject, DespawnType.Pool);
 			}
 
 			/* Drop the reference. Leaving it set meant that after a pet died, the owner's
 			 * controller still pointed at a despawned, pooled object — so a Summon or Follow
 			 * command would happily warp and re-task a pet that no longer existed. */
-			if (petController.Pet != null)
-			{
-				petController.Pet.PetOwner = null;
-				petController.Pet = null;
-			}
+			pet.PetOwner = null;
+			petController.Pet = null;
 			petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
-
-			// Async DB save, keyed by characterID to serialize with other pet ops for the same character
-			EnqueuePersistence(() => SavePetAsync(characterID, templateID, abilities, spawned), characterID);
 		}
 
 		/// <summary>
-		/// Asynchronously persists pet state to the database.
-		/// Fetches the existing pet record to obtain the version, then persists with version+1.
+		/// Records that a pet is no longer out, so it is not restored on the owner's next login.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Only the dismissal paths need this. Everything about a <em>live</em> pet — its row, its
+		/// attributes and its buffs — is snapshotted and written by the character save itself
+		/// (<c>CharacterSystem.AppendPetData</c>), which is what puts the pet's state in the
+		/// database before the character's session claim is released and therefore before the
+		/// destination scene server can read it. A pet released or killed mid-session has no
+		/// character save to ride along with, and leaving the row alone would mean a pet that
+		/// died at noon was waiting, alive, at the next login.
+		/// </para>
+		/// <para>
+		/// Versions come from the owner's own counter for the reason described on
+		/// <c>AppendPetData</c>: a pooled pet has no durable identity to hang a version stream on.
+		/// Bumping it here costs nothing — the counter only has to increase, not be contiguous —
+		/// and keeps this write ordered against the character saves that share it.
+		/// </para>
+		/// </remarks>
+		/// <param name="owner">The pet's owner.</param>
+		/// <param name="pet">The pet being dismissed.</param>
+		private void PersistPetDismissed(IPlayerCharacter owner, Pet pet)
+		{
+			if (owner == null || pet == null || Server?.Database?.ServiceRegistry == null)
+			{
+				return;
+			}
+
+			int templateID = pet.PetAbilityTemplate != null ? pet.PetAbilityTemplate.ID : 0;
+			if (templateID <= 0)
+			{
+				Log.Warning("PetSystem", $"Pet for character {owner.ID} was dismissed with no resolvable ability template; the database still lists it as out.");
+				return;
+			}
+
+			// Abilities granted at summon time live only on the controller until this runs.
+			pet.CaptureKnownAbilities();
+
+			long characterID = owner.ID;
+			long version = ++owner.Version;
+			List<int> abilities = pet.PetAbilityIDs != null ? new List<int>(pet.PetAbilityIDs) : new List<int>();
+
+			// Keyed by characterID to serialize with any other pet op for the same character.
+			EnqueuePersistence(() => SavePetDismissedAsync(characterID, version, templateID, abilities), characterID);
+		}
+
+		/// <summary>
+		/// Writes the pet row with <c>spawned = false</c>.
 		/// </summary>
 		/// <param name="characterID">Character identifier that owns the pet.</param>
+		/// <param name="version">Version to stamp the row with.</param>
 		/// <param name="templateID">Pet template identifier.</param>
 		/// <param name="abilities">Pet ability template identifiers.</param>
-		/// <param name="spawned">Whether the pet should be marked as spawned.</param>
 		/// <returns>Asynchronous persistence task.</returns>
-		private async Task SavePetAsync(long characterID, int templateID, List<int> abilities, bool spawned)
+		private async Task SavePetDismissedAsync(long characterID, long version, int templateID, List<int> abilities)
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var charPetService))
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var charPetService))
 				{
 					return;
 				}
 
-				if (templateID <= 0)
-				{
-					await Log.Warning("PetSystem", $"SavePetAsync skipped for CharID={characterID}: templateID={templateID} is invalid.");
-					return;
-				}
-
-				// Fetch existing pet record to get ID and version for optimistic concurrency.
-				DatabaseResult<CharacterPetData?> fetchResult = await charPetService.FetchAsync(characterID);
-				long existingID = 0;
-				long existingVersion = 0;
-				if (fetchResult.IsSuccess && fetchResult.Data.HasValue)
-				{
-					existingID = fetchResult.Data.Value.ID;
-					existingVersion = fetchResult.Data.Value.Version;
-				}
-
-				// Version is set to existingVersion + 1 for optimistic concurrency.
-				// The DB layer should enforce WHERE version = existingVersion to prevent stale overwrites.
-				CharacterPetData petData = new CharacterPetData(existingID, existingVersion + 1, characterID, templateID, abilities, spawned);
+				CharacterPetData petData = new CharacterPetData(0, version, characterID, templateID, abilities, false);
 				DatabaseResult persistResult = await charPetService.PersistAsync(petData);
 				if (!persistResult.IsSuccess)
 				{
-					await Log.Warning("PetSystem", $"SavePetAsync version conflict or DB error for CharID={characterID}: " +
-						$"expectedVersion={existingVersion}, newVersion={existingVersion + 1}, " +
-						$"error={persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+					await Log.Warning("PetSystem", $"SavePetDismissedAsync failed for CharID={characterID} at version {version}: " +
+						$"{persistResult.ErrorCode} - {persistResult.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("PetSystem", $"Error saving pet (CharID={characterID}): {ex}");
+				await Log.Error("PetSystem", $"Error recording pet dismissal (CharID={characterID}): {ex}");
 			}
 		}
 
@@ -997,12 +1224,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void CharacterSystem_OnPetKilled(NetworkConnection conn, IPlayerCharacter character)
 		{
+			/* Read the trigger list BEFORE the despawn path clears the controller's pet reference,
+			 * so a dismiss caused by death fires the same triggers a voluntary release does. */
+			List<Trigger> dismissTriggers = null;
+			if (character != null && character.TryGet(out IPetController petController))
+			{
+				dismissTriggers = petController.OnPetDismissTriggers;
+
+				/* A death is a dismissal the character save will never hear about. The owner is
+				 * still logged in, so no save is coming to write spawned = false for them, and
+				 * without this the row keeps saying the pet is out — handing the player their
+				 * dead pet back, alive and whole, at the next login. */
+				PersistPetDismissed(character, petController.Pet);
+			}
+
 			CharacterSystem_OnDespawnCharacter(conn, character);
 
 			if (conn != null)
 			{
 				Server.NetworkWrapper.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 			}
+
+			InvokePetTriggers(character, dismissTriggers, null);
 		}
 
 		/// <summary>
@@ -1113,6 +1356,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Pet pet = petController.Pet;
 			if (pet == null)
+			{
+				return;
+			}
+
+			/* A dead pet does not come to anyone's aid. The controller's reference is cleared by
+			 * the death path, but that runs from the kill handler and this event is raised from
+			 * the damage handler — the blow that kills the pet and the next blow that lands on its
+			 * owner can be in the same frame, so the reference can still be live here. Commanding
+			 * a corpse pushes it into its attacking state, which then drives a NavMeshAgent on an
+			 * object that is about to be despawned. */
+			if (!pet.TryGet(out ICharacterDamageController petDamageController) ||
+				!petDamageController.IsAlive)
 			{
 				return;
 			}

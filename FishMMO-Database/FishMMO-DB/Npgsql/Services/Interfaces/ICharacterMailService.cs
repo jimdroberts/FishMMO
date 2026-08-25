@@ -40,6 +40,39 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			int itemAttachmentTemplateID,
 			int itemAttachmentSeed,
 			uint itemAttachmentAmount,
+			int currencyAttachment,
+			long incomingVersion,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Takes the attachment off one mail, returning what was on it.
+		/// </summary>
+		/// <param name="mailId">The mail to claim from.</param>
+		/// <param name="characterId">The owning character ID, for authorization.</param>
+		/// <param name="incomingVersion">The authoritative, monotonic version for this write.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// The attachment as it stood before the clear, or no data when the mail had nothing
+		/// attached, does not belong to this character, or has already been claimed.
+		/// </returns>
+		/// <remarks>
+		/// <para>
+		/// <b>Read and clear are one statement.</b> The attachment columns are zeroed and their
+		/// previous values returned by the same <c>UPDATE</c>, whose <c>WHERE</c> additionally
+		/// requires that something is still attached. Two claims racing on one mail therefore
+		/// serialise on the row lock and only the first affects a row — the second matches nothing
+		/// and returns no data. Fetching the mail and then clearing it would leave a window in
+		/// which both reads see the same item and both callers grant it.
+		/// </para>
+		/// <para>
+		/// The caller grants what comes back. That ordering means a crash between the clear and the
+		/// grant loses the attachment rather than duplicating it, which is the correct direction
+		/// for an authoritative server — the same reasoning the merchant and corpse loot paths use.
+		/// </para>
+		/// </remarks>
+		Task<DatabaseResult<CharacterMailAttachmentData?>> ClaimAttachmentAsync(
+			long mailId,
+			long characterId,
 			long incomingVersion,
 			CancellationToken cancellationToken = default);
 

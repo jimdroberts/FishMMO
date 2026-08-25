@@ -101,6 +101,84 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Enqueues an instance for a character only while no member of their party already holds
+		/// a usable one of the same scene.
+		/// </summary>
+		/// <param name="worldServerId">World server the party belongs to.</param>
+		/// <param name="sceneName">Instance scene being requested.</param>
+		/// <param name="sceneType">Scene type to record on the row.</param>
+		/// <param name="characterId">Character the new row is created for.</param>
+		/// <param name="partyCharacterIds">
+		/// Every character whose existing instance should block this insert — the party's members,
+		/// including the requester. An empty or null list makes this equivalent to
+		/// <see cref="EnqueueAsync"/>.
+		/// </param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// The new row's ID, or <c>0</c> when a party member already holds a Pending, Loading or
+		/// Ready instance — <em>of any scene</em> — and no row was created. The caller must then
+		/// look that instance up: join it when it is the dungeon being asked for, refuse otherwise.
+		/// </returns>
+		/// <remarks>
+		/// The dungeon finder searches the party for an existing instance and creates one only if
+		/// it finds none, but those are two statements with an await between them — and every
+		/// member of a party clicking the same entrance runs that sequence at the same time, on
+		/// per-character async workers, potentially on different scene servers. Each one saw no
+		/// instance, each one created its own, and a party that pressed the button together was
+		/// split across separate copies of the dungeon: precisely the outcome the party search
+		/// exists to prevent, in exactly the situation it is needed most.
+		/// <para>
+		/// The existence check and the insert are one statement here, so the losers of the race
+		/// insert nothing and are told to join the winner's instance instead.
+		/// </para>
+		/// <para>
+		/// Ready is included in the blocking states as well as Pending and Loading. Unlike the
+		/// open-world limit — where a running instance says nothing about whether another is
+		/// needed — a party wants exactly one instance, and a running one is the strongest reason
+		/// not to make a second.
+		/// </para>
+		/// <para>
+		/// <b>One instance, not one per dungeon.</b> The blocking check does not match on scene
+		/// name. Scoped to the name, a party could hold a live copy of every dungeon on the shard
+		/// at once — open one, walk out, open the next — with each abandoned copy holding a full
+		/// physics scene and a scene row until its own idle timeout expired.
+		/// </para>
+		/// </remarks>
+		Task<DatabaseResult<long>> EnqueueForPartyAsync(
+			long worldServerId,
+			string sceneName,
+			SceneType sceneType,
+			long characterId,
+			IReadOnlyList<long> partyCharacterIds,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches every enterable instance owned by any of the given characters on one world
+		/// server.
+		/// </summary>
+		/// <remarks>
+		/// The batched form of <see cref="FetchCharacterInstanceAsync"/>, and the query the dungeon
+		/// finder actually needs: it has to know whether the party holds an instance <em>at all</em>
+		/// before it can decide between joining, refusing, and creating — and it used to answer that
+		/// with one round trip per party member, plus another for the requester.
+		/// <para>
+		/// Only Pending, Loading and Ready rows are returned, matching what
+		/// <see cref="EnqueueForPartyAsync"/> blocks on, so a caller cannot be refused a creation by
+		/// a row this does not show it.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterIds">Characters to look up; duplicates and non-positive ids are ignored.</param>
+		/// <param name="sceneType">Instance type to match, normally <see cref="SceneType.Group"/>.</param>
+		/// <param name="worldServerId">World server the characters belong to.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The matching rows, newest first. Empty when the characters hold none.</returns>
+		Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchCharacterInstancesAsync(
+			IReadOnlyList<long> characterIds,
+			SceneType sceneType,
+			long worldServerId,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Dequeues the next pending scene load request and marks it as loading.
 		/// </summary>
 		/// <param name="cancellationToken">Cancellation token.</param>
@@ -245,6 +323,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <para>
 		/// Ordered newest-first so the answer is deterministic even where duplicate rows already
 		/// exist from before this filter, and so the most recently opened instance wins.
+		/// </para>
+		/// <para>
+		/// Only rows a character can still be placed in — Pending, Loading or Ready — are
+		/// considered. Every caller already discarded anything else, so this does not change what
+		/// they see; it changes which row wins the ordering when a character holds several. A
+		/// Failed row that happened to be newer used to mask a live instance the character owned,
+		/// and <see cref="EnqueueForPartyAsync"/> blocks on that live row — so the caller could
+		/// neither be routed to it nor create a replacement until it unloaded on its own.
 		/// </para>
 		/// Returns entity not found exception if no matching instance exists.
 		/// </remarks>

@@ -97,9 +97,14 @@ namespace FishMMO.Database.Npgsql.Services
 				 * The WHERE on the DO UPDATE skips rows the merge would not change, so
 				 * re-persisting an unchanged mask — the common case when a character re-opens a
 				 * dialogue they have exhausted — writes no dead tuple at all. That also means the
-				 * affected row count is legitimately lower than the batch size, which is why this
-				 * does not go through ExecuteBulkUpsertAsync: that helper treats a short count as
-				 * a lost-authority error, and here it is the intended no-op. */
+				 * affected row count is legitimately lower than the batch size.
+				 *
+				 * This does not go through ExecuteBulkUpsertAsync, which counts affected rows.
+				 * Note that the helper could now tolerate the short count — see
+				 * BulkVersionConflictPolicy.SkipStaleRows — but it would be tolerating it for the
+				 * wrong reason: there a short count means a row lost a version race, and here it
+				 * means the merge found nothing to change. Counting rows to learn nothing is a
+				 * round trip this path does not need. */
 				var sql = $@"
 					INSERT INTO {TableName}
 						(character_id, template_id, choices, time_created, time_updated)

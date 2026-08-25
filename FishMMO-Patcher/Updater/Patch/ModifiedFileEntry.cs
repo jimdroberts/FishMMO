@@ -26,5 +26,18 @@ namespace FishMMO.Patcher
 		// This is crucial for the Patcher to correctly truncate or extend the file.
 		[JsonPropertyName("final_file_size")]
 		public long FinalFileSize { get; set; }
+
+		/// <summary>
+		/// POSIX permission bits the patched file should carry, or null to keep whatever the
+		/// file being replaced already had.
+		/// </summary>
+		/// <remarks>
+		/// Keeping the existing bits is the right default and the one the updater uses when
+		/// this is absent: the patched result is written to a fresh temp file at 0644 and then
+		/// moved over the target, so without carrying the mode across, every patch that touches
+		/// the Linux client executable leaves the game unable to start.
+		/// </remarks>
+		[JsonPropertyName("unix_mode")]
+		public int? UnixMode { get; set; }
 	}
 }

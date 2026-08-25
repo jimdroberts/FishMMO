@@ -219,7 +219,10 @@ public class PatchVersionService : IDisposable
 			// view to concurrent readers. Swap onto patches atomically when complete.
 			var fresh = new Dictionary<string, PatchEntry>(StringComparer.Ordinal);
 
-			foreach (var filePath in Directory.EnumerateFiles(patchesPath, "*.zip", SearchOption.TopDirectoryOnly))
+			// The same pattern the watcher uses. This was "*.zip" here and Patches:SearchPattern
+			// there, so a configured pattern changed what triggered a reindex without changing
+			// what a reindex actually looked at.
+			foreach (var filePath in Directory.EnumerateFiles(patchesPath, searchPattern, SearchOption.TopDirectoryOnly))
 			{
 				string fileName = Path.GetFileName(filePath);
 				Match match = patchFileNameRegex.Match(fileName);
@@ -230,14 +233,22 @@ public class PatchVersionService : IDisposable
 					continue;
 				}
 
-				string fromString = match.Groups[1].Value;
-				string toString = match.Groups[2].Value;
-
-				if (VersionConfig.Parse(fromString) == null || VersionConfig.Parse(toString) is not VersionConfig toVersion)
+				if (VersionConfig.Parse(match.Groups[1].Value) is not VersionConfig fromVersion ||
+					VersionConfig.Parse(match.Groups[2].Value) is not VersionConfig toVersion)
 				{
 					Log.Warning("PatchVersionService", $"Could not parse versions from patch file name '{fileName}'.");
 					continue;
 				}
+
+				/* Index under the NORMALISED version strings, not the raw ones from the file
+				 * name. TryGetPatch is called with VersionConfig.FullVersion, which is rebuilt
+				 * from the parsed components — so a file named "1.02.3-1.0.4.zip" was indexed
+				 * as "1.02.3-1.0.4" and looked up as "1.2.3-1.0.4", and the patch was invisible
+				 * to every client that needed it while the directory listing showed it present.
+				 * The name regex permits leading zeros, so this is reachable from a file name
+				 * alone. */
+				string fromString = fromVersion.FullVersion;
+				string toString = toVersion.FullVersion;
 
 				// Resolve to a canonical absolute path and verify it lives inside PatchesRoot.
 				string fullPath = Path.GetFullPath(filePath);
@@ -260,6 +271,9 @@ public class PatchVersionService : IDisposable
 					continue;
 				}
 
+				long sizeBeforeHash = info.Length;
+				DateTime writtenBeforeHash = info.LastWriteTimeUtc;
+
 				string sha256;
 				try
 				{
@@ -271,7 +285,29 @@ public class PatchVersionService : IDisposable
 					continue;
 				}
 
-				var entry = new PatchEntry(fromString, toString, fullPath, info.Length, sha256);
+				/* Refuse to index a file that is still being written.
+				 *
+				 * The FileSystemWatcher fires on the FIRST write and the debounce is a second —
+				 * nowhere near long enough for an scp or rsync of a multi-gigabyte archive to
+				 * finish. Indexing mid-copy publishes the SHA-256 of a partial file as the
+				 * digest of the finished one, and since that digest is the only integrity check
+				 * the launcher applies, every client downloading in that window gets a hash
+				 * mismatch and discards a perfectly good archive.
+				 *
+				 * Re-stating after the hash catches it: if the file grew or was touched while it
+				 * was being read, the bytes hashed are not the bytes on disk. The watcher's
+				 * later events schedule the reindex that picks it up once it settles, so
+				 * skipping here costs only the wait. */
+				var infoAfterHash = new FileInfo(fullPath);
+				if (!infoAfterHash.Exists ||
+					infoAfterHash.Length != sizeBeforeHash ||
+					infoAfterHash.LastWriteTimeUtc != writtenBeforeHash)
+				{
+					Log.Warning("PatchVersionService", $"'{fileName}' changed while it was being hashed; it is still being written. Skipping until it settles.");
+					continue;
+				}
+
+				var entry = new PatchEntry(fromString, toString, fullPath, sizeBeforeHash, sha256);
 				fresh[$"{fromString}-{toString}"] = entry;
 
 				if (highestVersion == null || toVersion > highestVersion)

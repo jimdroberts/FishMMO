@@ -19,9 +19,37 @@ namespace FishMMO.Shared.Patcher
 		/// </summary>
 		/// <param name="oldFilePath">The path to the original (old) version of the file.</param>
 		/// <param name="newFilePath">The path to the updated (new) version of the file.</param>
-		/// <returns>A byte array containing the binary patch data, or an empty array if generation fails.</returns>
-		public byte[] Generate(string oldFilePath, string newFilePath)
+		/// <param name="error">
+		/// Null on success. Non-null when the diff could not be produced at all, which the
+		/// caller MUST treat as a failed patch rather than as "no changes".
+		/// </param>
+		/// <returns>
+		/// The binary patch data. An EMPTY array with a null <paramref name="error"/> means the
+		/// aligned diff found nothing to say about these two files — which is not the same as
+		/// them being identical, and callers must not assume it is. See the remarks.
+		/// </returns>
+		/// <remarks>
+		/// <para>
+		/// <b>Empty is not "identical".</b> This method compares the two files chunk by chunk at
+		/// the SAME offsets, so it produces nothing when every 64 KB window of the new file
+		/// matches the old file at that offset — which is also true when the new file is a
+		/// strict prefix of the old one and its length is an exact multiple of the chunk size.
+		/// The files differ (one is shorter) and the diff is empty. The caller previously read
+		/// that as "identical, nothing to do", logged exactly that, and omitted the file from
+		/// the manifest: the client then moved to the new version still holding the old,
+		/// longer file, with no hash check anywhere that would notice.
+		/// </para>
+		/// <para>
+		/// <b>Failure is not "identical" either.</b> An I/O error used to be swallowed into the
+		/// same empty array — a locked or unreadable source file silently dropped that file from
+		/// the patch. That is the same silent-staleness bug with a much wider trigger, which is
+		/// why failure now has its own out-parameter instead of sharing a return value with a
+		/// legitimate result.
+		/// </para>
+		/// </remarks>
+		public byte[] Generate(string oldFilePath, string newFilePath, out string error)
 		{
+			error = null;
 			try
 			{
 				using (MemoryStream patchDataStream = new MemoryStream())
@@ -96,6 +124,7 @@ namespace FishMMO.Shared.Patcher
 			catch (Exception ex)
 			{
 				Log.Error("PatchGenerator", $"Failed generating patch data for '{oldFilePath}' vs '{newFilePath}': {ex.Message}\n{ex.StackTrace}");
+				error = $"{ex.GetType().Name}: {ex.Message}";
 				return Array.Empty<byte>();
 			}
 		}

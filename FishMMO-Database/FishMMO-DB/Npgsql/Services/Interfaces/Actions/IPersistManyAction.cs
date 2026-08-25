@@ -17,8 +17,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces.Actions
 		/// <summary>
 		/// Persists the provided items.
 		/// </summary>
+		/// <remarks>
+		/// A successful result does not mean every supplied row was written. Batched writes are
+		/// version-gated and the service filters what it cannot act on, so the outcome carries
+		/// counts rather than a bare boolean — see <see cref="BulkWriteResult"/>, which explains
+		/// which discrepancies a caller should care about and which are routine.
+		/// </remarks>
 		/// <param name="items">Items to persist.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		Task<DatabaseResult> PersistAsync(IEnumerable<TItem> items, CancellationToken cancellationToken = default);
+		/// <returns>What the write actually did, or a failure.</returns>
+		Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<TItem> items, CancellationToken cancellationToken = default);
 	}
 }

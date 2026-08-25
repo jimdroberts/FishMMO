@@ -1,0 +1,171 @@
+/*
+    UISceneChannel.uss
+    Layout for the scene-channel picker. Colours come from FishMMO-Theme.uss.
+
+    The panel is a short list of destinations: a header naming what is being
+    listed and how many there are, a column strip, the channel rows, and a
+    footer with the only two actions there are — ask again, or give up.
+
+    Sizes are written against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+*/
+
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner. Centred, because this is a modal-feeling choice rather than a
+    persistent roster.
+*/
+.scenechannel-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 280px;
+    max-height: 55%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.scenechannel-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.scenechannel-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.scenechannel-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it and the subtitle overflows into the strip
+    below. Same fix as UIParty.
+*/
+.scenechannel-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.scenechannel-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.scenechannel-count {
+    min-width: 26px;
+    height: 16px;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-shrink: 0;
+}
+
+/* ── Column strip ───────────────────────────────────────── */
+
+.scenechannel-columns {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    padding-left: 12px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.scenechannel-col {
+    flex-shrink: 0;
+}
+
+.scenechannel-col--name { flex-grow: 1; }
+
+.scenechannel-col--population {
+    width: 60px;
+    -unity-text-align: middle-right;
+}
+
+/* ── Body ───────────────────────────────────────────────── */
+
+.scenechannel-scroll {
+    flex-grow: 1;
+    min-height: 60px;
+}
+
+.scenechannel-list {
+    flex-direction: column;
+}
+
+/*
+    One channel row. The theme's .fish-row supplies the hover state and the
+    leading accent rail; this only sets the geometry.
+*/
+.scenechannel-row {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.scenechannel-row__name {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.scenechannel-row__population {
+    width: 60px;
+    flex-shrink: 0;
+}
+
+/*
+    The channel the character is already on. Marked rather than hidden: a
+    picker that silently omits where you are gives you no way to tell one
+    identical-looking channel from another. The row is disabled in C#, so this
+    only has to read as "not a destination".
+*/
+.scenechannel-row--current {
+    background-color: var(--brand-lo);
+    border-left-color: var(--brand-500);
+}
+
+.scenechannel-status {
+    margin-top: 18px;
+    margin-bottom: 18px;
+    white-space: normal;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.scenechannel-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.scenechannel-action {
+    flex-grow: 1;
+    height: 22px;
+    margin-left: 2px;
+    margin-right: 2px;
+}

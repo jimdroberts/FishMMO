@@ -50,5 +50,19 @@ namespace FishMMO.Shared.Patcher
 		/// </summary>
 		[JsonPropertyName("final_file_size")]
 		public long FinalFileSize { get; set; }
+
+		/// <summary>
+		/// POSIX permission bits the patched file must carry, or null to keep whatever the
+		/// file being replaced already had.
+		/// Serialized as 'unix_mode' in JSON, and omitted entirely when null.
+		/// </summary>
+		/// <remarks>
+		/// The updater preserves the replaced file's own bits when this is absent, which is
+		/// the correct default; this field exists so a build that deliberately CHANGES a
+		/// file's permissions can say so.
+		/// </remarks>
+		[JsonPropertyName("unix_mode")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public int? UnixMode { get; set; }
 	}
 }

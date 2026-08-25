@@ -70,7 +70,7 @@
         <!-- ── FOOTER ───────────────────────────────────────── -->
         <ui:VisualElement name="panel-footer" class="fish-panel__footer loot-footer">
             <ui:Label name="loot-status" text="" class="fish-label fish-label--caption loot-footer__status" />
-            <ui:Button name="loot-take-all" text="Take All" class="fish-btn loot-take-all" />
+            <ui:Button name="loot-take-all" text="Take All" class="fish-button loot-take-all" />
         </ui:VisualElement>
 
     </ui:VisualElement>

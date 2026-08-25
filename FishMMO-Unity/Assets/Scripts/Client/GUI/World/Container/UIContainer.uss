@@ -1,0 +1,204 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIContainer.uss
+    World Container Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    Sizing, spacing, flex directions and positioning. NO colors
+    or fonts here — those live in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIContainer.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    A LIST, not a grid — the same reasoning as the corpse loot
+    panel. A world container is read-only from the player's side:
+    nothing is ever put INTO it, so its empty slots are not drop
+    targets and its slot count is an artefact of the loot roll
+    rather than a capacity worth showing. A row per item also
+    leaves room for the item's name, which is what the player is
+    actually deciding on.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Anchored explicitly, as every panel is — each is its own UIDocument whose root fills the
+    screen, so a root with a size but no position collapses to the top-left corner and stacks
+    on top of every other panel. Offset right of centre so it does not open over the inventory
+    the player is comparing against. Dragging overwrites left/top, hence absolute.
+*/
+.container-panel {
+    position: absolute;
+    left: 62%; top: 50%; translate: -50% -50%;
+    width: 300px;
+    height: 340px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.container-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.container-header__left {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+    overflow: hidden;
+}
+
+.container-header__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.container-header__titles {
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.container-header__title {
+    flex-shrink: 0;
+}
+
+/* A container's description is author-supplied and can be arbitrarily long; clip it rather
+   than let it push the close button off the panel edge. */
+.container-header__subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.container-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY : scrollable item list
+   ═══════════════════════════════════════════════════════════ */
+
+.container-scroll {
+    flex: 1;
+    padding: 8px;
+}
+
+.container-list {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   CONTAINER ROW
+   ═══════════════════════════════════════════════════════════ */
+
+.container-row {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    padding-left: 4px;
+    padding-right: 8px;
+    position: relative;
+}
+
+.container-row__icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-right: 8px;
+    position: relative;
+}
+
+.container-row__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.container-row__amount {
+    flex-shrink: 0;
+    min-width: 28px;
+    margin-left: 6px;
+    -unity-text-align: middle-right;
+}
+
+/*
+    Full-row overlay rather than a corner badge. A pending row must be unmistakably
+    un-clickable: two players can be at the same chest, so a second click while the first is
+    unanswered is the natural way somebody tries to take an item twice.
+*/
+.container-row__pending {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.container-hidden {
+    display: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.container-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    flex-shrink: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.container-footer__status {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.container-take-all {
+    flex-shrink: 0;
+    min-width: 76px;
+    height: 26px;
+    padding-left: 10px;
+    padding-right: 10px;
+}

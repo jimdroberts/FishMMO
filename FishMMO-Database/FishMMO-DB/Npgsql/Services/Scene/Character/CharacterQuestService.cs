@@ -38,11 +38,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterQuestData> quests, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterQuestData> quests, CancellationToken cancellationToken = default)
 		{
 			if (quests == null || !quests.Any())
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Quests collection must not be null or empty.");
 			}
@@ -50,7 +50,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var questList = quests.ToList();
 			if (questList.Any(q => q.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more quests had an invalid Version. Version must be greater than 0.");
 			}
@@ -71,7 +71,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = questList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = questList.Select(q => q.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -91,7 +93,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeQuests = questList.Where(q => activeCharacterIdSet.Contains(q.CharacterID)).ToList();
 				if (activeQuests.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -130,13 +132,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeQuests.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, statusArray, objectiveValuesArray, now },
 					"One or more quests were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeQuests.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

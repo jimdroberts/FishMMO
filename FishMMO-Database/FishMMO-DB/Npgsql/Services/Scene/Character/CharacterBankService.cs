@@ -174,19 +174,19 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterBankData> items, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterBankData> items, CancellationToken cancellationToken = default)
 		{
 			var itemList = items?.ToList();
 			if (itemList == null || itemList.Count == 0)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"No items to save. Items collection must not be null or empty.");
 			}
 
 			if (itemList.Any(i => i.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more bank items had an invalid Version. Version must be greater than 0.");
 			}
@@ -207,7 +207,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = itemList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = itemList.Select(i => i.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -227,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeItems = itemList.Where(i => activeCharacterIdSet.Contains(i.CharacterID)).ToList();
 				if (activeItems.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -248,13 +250,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var sql = GetUpsertSql();
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeItems.Count,
 					new object[] { characterIdArray, slotArray, versionArray, templateIdArray, seedArray, amountArray, now },
 					"One or more bank items were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeItems.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

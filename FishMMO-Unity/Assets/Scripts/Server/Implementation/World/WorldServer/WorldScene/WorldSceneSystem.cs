@@ -1513,10 +1513,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			worldResidencyDeadlineByClientId[conn.ClientId] =
 				DateTime.UtcNow.AddSeconds(WorldResidencyGraceSeconds);
 
-			// Queue async instance connection processing
+			/* Rate-limited means "not yet", not "go away".
+			 *
+			 * This debounce is per account and lasts instanceLookupDebounceSeconds (3s), and the
+			 * ordinary way to trip it is a client that has just been here: a scene server that
+			 * refuses a handoff — the instance is hosted elsewhere, its scene is not loaded, the
+			 * claim was contended — sends the client straight back, and it re-authenticates well
+			 * inside the window. Kicking there turned one recoverable routing hiccup into two
+			 * round trips through the login pipeline, with a "you are doing that too often"
+			 * notice for a player who did nothing but reconnect.
+			 *
+			 * Queue it instead. The routing cycle calls ProcessInstanceConnectionAsync for
+			 * everything on this queue, and that applies the same debounce itself and puts the
+			 * connection back if it is still inside the window — so the limit is enforced exactly
+			 * as before, it just costs a wait rather than a session. The wait is bounded from both
+			 * ends: the queue TTL purges a connection that never routes, and the residency
+			 * watchdog armed above covers a connection that ends up in no queue at all. */
 			if (!TryBeginInstanceLookup(accountName))
 			{
-				Kick(conn, "Instance routing rate limited", DisconnectNoticeReason.RateLimited);
+				Log.Debug("WorldSceneSystem",
+					$"World Scene System: {conn.ClientId} instance lookup debounced; queued for the next routing cycle.");
+				AddToQueue(conn, 0L, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
 				return;
 			}
 
@@ -1607,13 +1624,51 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Removes expired account debounce entries to bound dictionary growth.
 		/// </summary>
+		/// <remarks>
+		/// Repeated until the tracker is drained rather than capped at one pass.
+		/// <para>
+		/// The per-pass limits exist to bound how long a single sweep holds the tracker's lock, but
+		/// applied once per <see cref="debounceCleanupIntervalSeconds"/> they also bounded the
+		/// <em>rate</em> at which entries could be reclaimed — at the shipped values, 128 every 60
+		/// seconds. An entry is added for every authentication and expires after
+		/// <see cref="instanceLookupDebounceSeconds"/> (3s), so any world server sustaining more
+		/// than about two logins a second accumulated expired entries faster than it could remove
+		/// them and the tracker grew without bound for the life of the process.
+		/// </para>
+		/// <para>
+		/// The loop is not unbounded work: <c>SweepExpired</c> walks an expiry-ordered queue and
+		/// stops at the first entry that is still live, so each pass costs only what it actually
+		/// reclaims. The total is capped anyway, at the tracker's own size, so a pathological
+		/// sweep cannot monopolise the frame.
+		/// </para>
+		/// </remarks>
 		/// <param name="runtimeData">Cached runtime data from the caller to avoid redundant TryGet.</param>
 		private void CleanupExpiredDebounceEntries(WorldSceneSystemRuntimeData runtimeData)
 		{
-			runtimeData.InstanceLookupDebounce.SweepExpired(
-				DateTime.UtcNow,
-				debounceCleanupMaxScanPerSweep,
-				debounceCleanupMaxRemovalsPerSweep);
+			var tracker = runtimeData.InstanceLookupDebounce;
+			if (tracker == null)
+			{
+				return;
+			}
+
+			DateTime nowUtc = DateTime.UtcNow;
+			int budget = Math.Max(debounceCleanupMaxRemovalsPerSweep, tracker.Count);
+			int reclaimed = 0;
+
+			while (reclaimed < budget)
+			{
+				int removed = tracker.SweepExpired(
+					nowUtc,
+					debounceCleanupMaxScanPerSweep,
+					debounceCleanupMaxRemovalsPerSweep);
+
+				if (removed < 1)
+				{
+					break;
+				}
+
+				reclaimed += removed;
+			}
 		}
 
 		/// <summary>

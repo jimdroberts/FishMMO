@@ -40,11 +40,11 @@ namespace FishMMO.Shared.Patcher
 		/// <summary>
 		/// Comma-separated list of file extensions to ignore during patch generation.
 		/// </summary>
-		private string ignoredExtensionsInput = ".cfg, .log, .bak";
+		private string ignoredExtensionsInput = ".cfg, .log, .bak, .lock";
 		/// <summary>
 		/// Comma-separated list of directory names to ignore during patch generation.
 		/// </summary>
-		private string ignoredDirectoriesInput = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip";
+		private string ignoredDirectoriesInput = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip, .fishmmo-update-staging";
 
 		/// <summary>
 		/// Set of file extensions to ignore during patch generation.
@@ -786,6 +786,11 @@ namespace FishMMO.Shared.Patcher
 				Dictionary<string, (string relativePath, string hash)> oldFilesWithHashes = GetAllFilesWithHashes(oldDirectory, ignoredExtensions, ignoredDirectories);
 				HashSet<string> oldFileRelativePaths = DictionaryKeysToHashSet(oldFilesWithHashes);
 
+				// POSIX permission bits for both trees, or null when the build host cannot
+				// report them. Null is a supported outcome, not an error — see ProbeUnixModes.
+				Dictionary<string, int> latestUnixModes = ProbeUnixModes(latestClientDirectory);
+				Dictionary<string, int> oldUnixModes = ProbeUnixModes(oldDirectory);
+
 				List<string> filesToDelete = oldFileRelativePaths.Except(latestFileRelativePaths).ToList();
 				List<string> filesToAdd = latestFileRelativePaths.Except(oldFileRelativePaths).ToList();
 				List<string> filesToCompare = oldFileRelativePaths.Intersect(latestFileRelativePaths).ToList();
@@ -801,48 +806,96 @@ namespace FishMMO.Shared.Patcher
 				}
 
 				progressCallback?.Invoke(0.4f, "Generating file diffs for modified files...");
+
+				/* Anything that stops a changed file from making it into the patch is collected
+				 * here and rethrown afterwards, so the patch is not produced at all.
+				 *
+				 * The previous code logged and continued on every failure path, which shipped a
+				 * patch that was missing files while reporting success. The client applies it,
+				 * moves to the new version, and keeps running the old copies of whatever was
+				 * dropped — and nothing downstream can detect that, because the manifest never
+				 * claimed those files existed. A patch that is not built is a visible problem;
+				 * a patch that is quietly incomplete is not. */
+				ConcurrentBag<string> generationFailures = new ConcurrentBag<string>();
+
 				Parallel.ForEach(filesToCompare, (comparedRelativePath) =>
 				{
-					if (oldFilesWithHashes[comparedRelativePath].hash != latestFilesWithHashes[comparedRelativePath].hash)
+					if (oldFilesWithHashes[comparedRelativePath].hash == latestFilesWithHashes[comparedRelativePath].hash)
 					{
-						string oldFullFilePath = Path.Combine(oldDirectory, comparedRelativePath);
-						string newFullFilePath = Path.Combine(latestClientDirectory, comparedRelativePath);
+						return;
+					}
 
-						byte[] patchDataBytes = patchGenerator.Generate(oldFullFilePath, newFullFilePath);
+					string oldFullFilePath = Path.Combine(oldDirectory, comparedRelativePath);
+					string newFullFilePath = Path.Combine(latestClientDirectory, comparedRelativePath);
+					string entryName = comparedRelativePath.Replace('\\', '/');
 
-						if (patchDataBytes.Length > 0)
+					byte[] patchDataBytes = patchGenerator.Generate(oldFullFilePath, newFullFilePath, out string generateError);
+
+					if (generateError != null)
+					{
+						generationFailures.Add($"{comparedRelativePath}: {generateError}");
+						return;
+					}
+
+					if (patchDataBytes.Length == 0)
+					{
+						/* The files differ by hash but the aligned diff produced nothing — see
+						 * PatchGenerator.Generate's remarks; a new file that is a strict prefix
+						 * of the old one and a whole number of chunks long does exactly this.
+						 * Ship the whole file instead. It is larger than a delta and always
+						 * correct, and the updater treats an addition over an existing path as
+						 * a replacement (staging the original aside so it is still rolled back
+						 * on failure). */
+						Log.Warning("Patcher", $"\tNo delta could be expressed for '{comparedRelativePath}'; shipping the whole file instead.");
+						newFilesData.Add(new NewFileEntry
 						{
-							string tempPatchFile = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid()}.bin");
-							try
-							{
-								File.WriteAllBytes(tempPatchFile, patchDataBytes);
-								tempPatchFilesToCleanUp.Add(tempPatchFile);
+							RelativePath = comparedRelativePath,
+							NewHash = latestFilesWithHashes[comparedRelativePath].hash,
+							FileDataEntryName = $"new_files/{entryName}",
+							UnixMode = latestUnixModes != null && latestUnixModes.TryGetValue(comparedRelativePath, out int wholeFileMode) ? wholeFileMode : (int?)null,
+						});
+						return;
+					}
 
-								// Get the final file size from the new file
-								long finalFileSize = new FileInfo(newFullFilePath).Length;
+					string tempPatchFile = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid()}.bin");
+					try
+					{
+						File.WriteAllBytes(tempPatchFile, patchDataBytes);
+						tempPatchFilesToCleanUp.Add(tempPatchFile);
 
-								modifiedFilesData.Add(new ModifiedFileEntry
-								{
-									RelativePath = comparedRelativePath,
-									OldHash = oldFilesWithHashes[comparedRelativePath].hash,
-									NewHash = latestFilesWithHashes[comparedRelativePath].hash,
-									PatchDataEntryName = $"patches/{comparedRelativePath.Replace('\\', '/')}.bin",
-									TempPatchFilePath = tempPatchFile,
-									FinalFileSize = finalFileSize // Populate the new property
-								});
-								Log.Info("Patcher", $"\tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
-							}
-							catch (Exception ex)
-							{
-								Log.Error("Patcher", $"\tError writing patch for {comparedRelativePath} to temp file: {ex.Message}");
-							}
-						}
-						else
+						// Get the final file size from the new file
+						long finalFileSize = new FileInfo(newFullFilePath).Length;
+
+						modifiedFilesData.Add(new ModifiedFileEntry
 						{
-							Log.Info("Patcher", $"\tFiles are identical, no patch generated for: {comparedRelativePath}");
-						}
+							RelativePath = comparedRelativePath,
+							OldHash = oldFilesWithHashes[comparedRelativePath].hash,
+							NewHash = latestFilesWithHashes[comparedRelativePath].hash,
+							PatchDataEntryName = $"patches/{entryName}.bin",
+							TempPatchFilePath = tempPatchFile,
+							FinalFileSize = finalFileSize, // Populate the new property
+							/* Only emitted when the new build's bits differ from the old one's.
+							 * The updater's default — keep whatever the replaced file had — is
+							 * the right answer the rest of the time, and it also works for
+							 * archives built on a host that cannot read modes at all. */
+							UnixMode = ChangedUnixMode(oldUnixModes, latestUnixModes, comparedRelativePath),
+						});
+						Log.Info("Patcher", $"\tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
+					}
+					catch (Exception ex)
+					{
+						Log.Error("Patcher", $"\tError writing patch for {comparedRelativePath} to temp file: {ex.Message}");
+						generationFailures.Add($"{comparedRelativePath}: {ex.Message}");
 					}
 				});
+
+				if (!generationFailures.IsEmpty)
+				{
+					throw new InvalidOperationException(
+						$"Refusing to build {patchFileName}: {generationFailures.Count} file(s) could not be diffed, and a patch " +
+						"that silently omits changed files leaves the client reporting a version it is not running. " +
+						"First failures: " + string.Join("; ", generationFailures.Take(5)));
+				}
 
 				progressCallback?.Invoke(0.6f, "Processing new files...");
 				Parallel.ForEach(filesToAdd, (newRelativePath) =>
@@ -851,7 +904,11 @@ namespace FishMMO.Shared.Patcher
 					{
 						RelativePath = newRelativePath,
 						NewHash = latestFilesWithHashes[newRelativePath].hash,
-						FileDataEntryName = $"new_files/{newRelativePath.Replace('\\', '/')}"
+						FileDataEntryName = $"new_files/{newRelativePath.Replace('\\', '/')}",
+						/* Permissions do not travel with the bytes. The updater writes new files
+						 * with File.Create, which produces 0644, so a native binary or script
+						 * shipped as an addition lands unrunnable unless the mode comes with it. */
+						UnixMode = latestUnixModes != null && latestUnixModes.TryGetValue(newRelativePath, out int addedMode) ? addedMode : (int?)null,
 					});
 					Log.Info("Patcher", $"\tPrepared metadata for new file: {newRelativePath}");
 				});
@@ -952,6 +1009,143 @@ namespace FishMMO.Shared.Patcher
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// Reads the POSIX permission bits of every file under <paramref name="rootDirectory"/>.
+		/// </summary>
+		/// <returns>
+		/// Relative path (forward slashes) to octal mode, or <c>null</c> when this host cannot
+		/// report modes — a Windows editor, or a probe that failed.
+		/// </returns>
+		/// <remarks>
+		/// <para>
+		/// The Unity editor's runtime predates <c>File.GetUnixFileMode</c> (.NET 7), so there is
+		/// no managed way to read a permission bit here. One <c>find | stat</c> per tree is the
+		/// alternative — a single child process for the whole build, not one per file, which
+		/// matters when a client build is tens of thousands of files.
+		/// </para>
+		/// <para>
+		/// Returning null is a supported outcome and not a failure: the updater falls back to
+		/// preserving the replaced file's own bits (correct for every modified file) and to
+		/// sniffing an ELF/Mach-O/shebang signature for additions. A patch built on Windows is
+		/// therefore still usable on Linux; it is just less exact about a newly-added
+		/// executable that carries no recognisable signature.
+		/// </para>
+		/// </remarks>
+		internal static Dictionary<string, int> ProbeUnixModes(string rootDirectory)
+		{
+			bool isMac = Application.platform == RuntimePlatform.OSXEditor;
+			if (Application.platform != RuntimePlatform.LinuxEditor && !isMac)
+			{
+				return null;
+			}
+
+			try
+			{
+				string root = Path.GetFullPath(rootDirectory);
+				if (!root.EndsWith(Path.DirectorySeparatorChar.ToString()))
+				{
+					root += Path.DirectorySeparatorChar;
+				}
+
+				// GNU stat and BSD stat spell the octal permission field differently; both
+				// print "<mode> <path>" with the path exactly as find handed it over.
+				string statFormat = isMac ? "-f%Lp %N" : "-c%a %n";
+
+				var startInfo = new System.Diagnostics.ProcessStartInfo("find")
+				{
+					UseShellExecute = false,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+					CreateNoWindow = true,
+				};
+				startInfo.ArgumentList.Add(root.TrimEnd(Path.DirectorySeparatorChar));
+				startInfo.ArgumentList.Add("-type");
+				startInfo.ArgumentList.Add("f");
+				startInfo.ArgumentList.Add("-exec");
+				startInfo.ArgumentList.Add("stat");
+				startInfo.ArgumentList.Add(statFormat);
+				startInfo.ArgumentList.Add("{}");
+				startInfo.ArgumentList.Add("+");
+
+				var modes = new Dictionary<string, int>();
+				using (var process = System.Diagnostics.Process.Start(startInfo))
+				{
+					string stdout = process.StandardOutput.ReadToEnd();
+					process.StandardError.ReadToEnd();
+					if (!process.WaitForExit(120000))
+					{
+						try { process.Kill(); } catch { }
+						Log.Warning("Patcher", $"Permission probe for '{rootDirectory}' timed out; modes will not be recorded in the manifest.");
+						return null;
+					}
+
+					foreach (string line in stdout.Split('\n'))
+					{
+						int space = line.IndexOf(' ');
+						if (space <= 0)
+						{
+							continue;
+						}
+
+						// Octal, and only the low nine bits: setuid/setgid/sticky are not
+						// something a patch may ask a player's machine to set.
+						int mode;
+						try
+						{
+							mode = Convert.ToInt32(line.Substring(0, space), 8) & 0x1FF;
+						}
+						catch (Exception)
+						{
+							continue;
+						}
+
+						string absolute = line.Substring(space + 1).TrimEnd('\r');
+						if (!absolute.StartsWith(root, StringComparison.Ordinal))
+						{
+							continue;
+						}
+
+						modes[absolute.Substring(root.Length).Replace('\\', '/')] = mode;
+					}
+				}
+
+				Log.Info("Patcher", $"Recorded POSIX permissions for {modes.Count} file(s) under '{rootDirectory}'.");
+				return modes;
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("Patcher", $"Could not read POSIX permissions under '{rootDirectory}' ({ex.Message}); the manifest will omit them.");
+				return null;
+			}
+		}
+
+		/// <summary>
+		/// The new tree's mode for <paramref name="relativePath"/>, but only when it differs
+		/// from the old tree's.
+		/// </summary>
+		/// <remarks>
+		/// Emitting it unconditionally would bake the build host's umask into every manifest
+		/// entry and hand it to installs that never had those bits. The updater's default —
+		/// keep what the replaced file already carried — is what should normally win; this
+		/// field exists for the case where the build deliberately changed a file's mode.
+		/// </remarks>
+		internal static int? ChangedUnixMode(Dictionary<string, int> oldModes, Dictionary<string, int> newModes, string relativePath)
+		{
+			if (oldModes == null || newModes == null)
+			{
+				return null;
+			}
+			if (!newModes.TryGetValue(relativePath, out int newMode))
+			{
+				return null;
+			}
+			if (oldModes.TryGetValue(relativePath, out int oldMode) && oldMode == newMode)
+			{
+				return null;
+			}
+			return newMode;
 		}
 
 		/// <summary>

@@ -57,6 +57,37 @@ namespace FishMMO.Shared
 		[Range(0f, 1f)]
 		public float ManaHealPercent = 1.0f;
 
+		[Header("Cooldown")]
+		/// <summary>
+		/// Seconds a character must wait between uses of one shrine. 0 disables the cooldown.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Per character, per shrine — not shared. Two players never queue for the same stone, and
+		/// using one shrine does not lock a player out of another.
+		/// </para>
+		/// <para>
+		/// Without this a shrine was a full heal plus <see cref="BuffStackCount"/> stacks once per
+		/// second, which is all the global interaction debounce allows and nothing else stood in
+		/// the way. Held on the server only: the cooldown table lives on the
+		/// <see cref="Shrine"/> instance and is never replicated, so a client cannot shorten it.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Seconds one character must wait between uses of this shrine. 0 = no cooldown.")]
+		[Min(0.0f)]
+		public float CooldownSeconds = 300.0f;
+
+		/// <summary>
+		/// Whether the shrine may be used while the character is in combat.
+		/// </summary>
+		/// <remarks>
+		/// Off by default. A shrine is a restore point between fights; a full heal available
+		/// mid-fight is a combat mechanic, and one worth opting into deliberately rather than
+		/// inheriting by omission.
+		/// </remarks>
+		[Tooltip("Allow this shrine to be used while in combat.")]
+		public bool UsableInCombat = false;
+
 		[Header("Buff")]
 		/// <summary>
 		/// Optional buff to apply on interaction. Null means no buff is applied.

@@ -38,11 +38,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterArchetypeData> archetypes, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterArchetypeData> archetypes, CancellationToken cancellationToken = default)
 		{
 			if (archetypes == null)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Archetypes collection must not be null.");
 			}
@@ -50,14 +50,14 @@ namespace FishMMO.Database.Npgsql.Services
 			var archetypeList = archetypes.ToList();
 			if (archetypeList.Count == 0)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Archetypes collection must not be empty.");
 			}
 
 			if (archetypeList.Any(a => a.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more archetypes had an invalid Version. Version must be greater than 0.");
 			}
@@ -77,7 +77,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = archetypeList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = archetypeList.Select(a => a.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -97,7 +99,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeArchetypes = archetypeList.Where(a => activeCharacterIdSet.Contains(a.CharacterID)).ToList();
 				if (activeArchetypes.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -128,13 +130,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeArchetypes.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, now },
 					"One or more archetypes were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeArchetypes.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

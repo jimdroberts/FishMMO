@@ -122,19 +122,19 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterKnownAbilityData> knownAbilities, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterKnownAbilityData> knownAbilities, CancellationToken cancellationToken = default)
 		{
 			var abilityList = knownAbilities?.ToList();
 			if (abilityList == null || abilityList.Count == 0)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Abilities collection must not be null or empty.");
 			}
 
 			if (abilityList.Any(a => a.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more known abilities had an invalid Version. Version must be greater than 0.");
 			}
@@ -150,7 +150,9 @@ namespace FishMMO.Database.Npgsql.Services
 				abilityList = deduped.Values.ToList();
 			}
 
-			var saveResult = await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = abilityList.Count;
+
+			var saveResult = await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = abilityList.Select(a => a.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -172,7 +174,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToList();
 				if (activeAbilities.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -203,13 +205,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeAbilities.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, now },
 					"One or more known abilities were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeAbilities.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return saveResult;

@@ -75,10 +75,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				// validate interactable
-				IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-				if (interactable == null ||
-					!interactable.InRange(character.Transform))
+				/* The interactable must actually BE an ability crafter, and must accept the
+				 * interaction.
+				 *
+				 * Neither was checked. The old pair asked only "is there an IInteractable here and
+				 * am I in range of it", so any interactable in the world served as a crafting
+				 * bench — a mailbox, a bindstone, a lore tablet, a corpse. The IAbilityCrafter cast
+				 * further down existed solely to find an achievement template, so a request naming
+				 * the wrong object crafted the ability anyway and merely skipped the achievement.
+				 *
+				 * CanInteract rather than InRange for the same reason as the merchant paths: it is
+				 * where the corpse gate lives, and without it the crafter's body kept taking
+				 * orders after the crafter was killed. */
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
+				IAbilityCrafter abilityCrafter = interactable as IAbilityCrafter;
+				if (abilityCrafter == null ||
+					!interactable.CanInteract(character))
 				{
 					return;
 				}
@@ -178,35 +190,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Log.Debug("InteractableSystem", "currencyTemplate is null.");
 					return;
 				}
+				/* Value, not FinalValue.
+				 *
+				 * AddValue below writes the BASE value; FinalValue is the base plus every modifier
+				 * in force. Testing one and writing the other let a character carrying any
+				 * currency-boosting buff craft against currency it did not have and go negative by
+				 * exactly the size of the buff. The merchant purchase and ability-learning paths
+				 * were already fixed for this; the crafting path was not. */
 				if (!character.TryGet(out ICharacterAttributeController attributeController) ||
 					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-					currency.FinalValue < price)
+					currency.Value < price)
 				{
 					return;
 				}
 
-				Ability newAbility = LearnAbility(abilityController, mainAbility, new List<int>(msg.Events));
-				if (newAbility != null)
+				/* Deduct, persist, then grant — the same ordering the merchant purchase path uses,
+				 * and for the same reason. The deduction used to be in-memory only: nothing on this
+				 * path ever enqueued a character attribute write, so the price of a crafted ability
+				 * survived only until the next periodic character save and was lost outright if the
+				 * server went down before it. TryPersistMerchantAttributes snapshots the in-memory
+				 * values as they stand when it is called, which is why it has to run after the
+				 * deduction rather than before it. */
+				currency.AddValue(-price);
+
+				if (!TryPersistMerchantAttributes(character))
 				{
-					currency.AddValue(-price);
+					Log.Warning("InteractableSystem", $"AbilityCraft: currency persist rejected for CharID={character.ID}; refunding {price}.");
+					currency.AddValue(price);
+					return;
+				}
 
-					AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
+				Ability newAbility = LearnAbility(abilityController, mainAbility, new List<int>(msg.Events));
+				if (newAbility == null)
+				{
+					// Nothing was learned, so put the money back and record the refund.
+					currency.AddValue(price);
+					if (!TryPersistMerchantAttributes(character))
 					{
-						ID = newAbility.ID,
-						TemplateID = newAbility.Template.ID,
-						Events = msg.Events,
-					};
-
-					Server.NetworkWrapper.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
-
-					// Increment achievement for crafting an ability
-					IAbilityCrafter abilityCrafter = interactable as IAbilityCrafter;
-					if (abilityCrafter != null &&
-						abilityCrafter.AchievementTemplate != null &&
-						character.TryGet(out IAchievementController achievementController))
-					{
-						achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
+						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 					}
+					return;
+				}
+
+				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
+				{
+					ID = newAbility.ID,
+					TemplateID = newAbility.Template.ID,
+					Events = msg.Events,
+				};
+
+				Server.NetworkWrapper.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
+
+				// Increment achievement for crafting an ability
+				if (abilityCrafter.AchievementTemplate != null &&
+					character.TryGet(out IAchievementController achievementController))
+				{
+					achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
 				}
 			}
 			finally

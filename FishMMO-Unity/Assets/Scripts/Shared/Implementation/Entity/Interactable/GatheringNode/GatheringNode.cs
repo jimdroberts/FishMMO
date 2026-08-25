@@ -70,6 +70,24 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Restores the node's charges when this instance returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="OnAwake"/> is where <see cref="RemainingUses"/> is seeded, and Unity calls
+		/// Awake once per instance — not once per spawn. A pooled node therefore came back out of
+		/// the pool with the zero its previous life ended on, and <see cref="CanInteract"/> refuses
+		/// a node with no uses left: every gathering node in a scene became permanently depleted
+		/// the first time it was exhausted, for the remaining life of the server process.
+		/// </remarks>
+		/// <param name="asServer">True when the reset is for the server instance.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			RemainingUses = Template != null ? Template.MaxUses : 0;
+		}
+
+		/// <summary>
 		/// Writes the gathering node's remaining uses to the network payload.
 		/// </summary>
 		public override void WritePayload(NetworkConnection connection, Writer writer)

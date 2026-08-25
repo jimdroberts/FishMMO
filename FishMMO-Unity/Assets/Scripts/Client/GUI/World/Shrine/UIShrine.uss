@@ -1,0 +1,64 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIShrine.uss
+    Shrine Feedback  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIShrine.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Non-interactive, like the gathering bar, but it does carry a
+    surface (fish-well). Unlike the gathering bar it is nothing but
+    text, and text floating directly over the 3D world is legible
+    only against whatever happens to be behind it — which for a
+    shrine is usually bright particle effects.
+
+    Its whole job is to answer a keypress that would otherwise look
+    ignored: a shrine on cooldown refuses silently on the server,
+    and a refusal the player cannot see is indistinguishable from
+    a dropped packet.
+
+    The text authored in the UXML is placeholder. The panel starts
+    closed and every open writes both labels before it is shown, so
+    the placeholder is never on screen — it exists so the panel
+    renders as something in the editor preview rather than as an
+    empty rectangle.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+/* Above centre so it does not sit under the crosshair, and well clear of the gathering bar
+   below it — the two can legitimately be on screen at once. */
+.shrine-panel {
+    position: absolute;
+    left: 50%; top: 34%; translate: -50% -50%;
+    width: 280px;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.shrine-title {
+    -unity-text-align: middle-center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.shrine-message {
+    -unity-text-align: middle-center;
+    margin-top: 2px;
+    white-space: normal;
+    flex-shrink: 0;
+}

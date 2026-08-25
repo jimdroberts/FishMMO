@@ -1,0 +1,49 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UILore.uxml   —   FishMMO Lore Object Panel                 ║
+    ║                                                              ║
+    ║  A readable found in the world: tablet, tombstone, book.      ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UILore.uss         — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    lore-*   Layout class        (UILore.uss)                 ║
+    ║                                                              ║
+    ║  Everything here is static; UITKLore.cs only writes text.    ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UILore.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel lore-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header lore-header">
+            <ui:Label name="header-title" class="fish-panel__title lore-header__title" text="LORE" />
+            <ui:Button name="close-button" class="fish-close-btn lore-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <!-- ── BODY : the text itself ───────────────────────── -->
+        <ui:ScrollView name="lore-scroll"
+                       class="fish-scroll lore-scroll"
+                       vertical-scroller-visibility="Auto"
+                       horizontal-scroller-visibility="Hidden"
+                       mode="Vertical">
+            <ui:Label name="lore-text" class="fish-label lore-text" text="" />
+        </ui:ScrollView>
+
+        <!-- ── FOOTER ───────────────────────────────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer lore-footer">
+            <ui:Label name="lore-grants" text="" class="fish-label fish-label--caption lore-footer__grants" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

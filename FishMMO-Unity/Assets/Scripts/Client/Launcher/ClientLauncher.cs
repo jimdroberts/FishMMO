@@ -1106,6 +1106,30 @@ namespace FishMMO.Client
 						? $"Launcher has been in {stuckState} for over {this.transientStateHardCeilingSeconds}s. Recovering."
 						: $"Launcher stalled in {stuckState} for over {this.transientStateTimeoutSeconds}s with no activity. Recovering.");
 
+				/* ApplyingPatch is not recoverable, and must not be treated as if it were.
+				 *
+				 * By this state the updater is a separate process that owns the install: it has
+				 * been handed our PID, it is rewriting the binaries this launcher is running
+				 * from, and its normal course is to terminate us. Reaching the watchdog at all
+				 * means that termination did not happen — but the updater is still out there and
+				 * still patching, because nothing about failing to kill us stops it.
+				 *
+				 * The generic recovery below would hand the player an enabled retry button in
+				 * exactly that situation. Pressing it starts a second version check, a second
+				 * download and a second updater against an install the first one is halfway
+				 * through rewriting. Quitting is the only action here that is safe whichever way
+				 * it went: if the updater is healthy this is what it was asking for, and if it
+				 * died the player relaunches into a clean version check with no second updater
+				 * in flight. */
+				if (stuckState == LauncherState.ApplyingPatch)
+				{
+					Log.Error("ClientLauncher",
+						"The updater already owns this install, so there is nothing safe to recover to. Shutting the launcher down and leaving it to finish.");
+					AbortInFlightWork();
+					Quit();
+					yield break;
+				}
+
 				/* Stop the work, THEN clear the guards.
 				 *
 				 * Clearing the flags alone left the coroutines that owned them running: a
@@ -1591,6 +1615,17 @@ namespace FishMMO.Client
 
 					SetLauncherState(LauncherState.ApplyingPatch);
 
+					/* Counted and flushed to disk BEFORE the handoff, because after it there is
+					 * no launcher left to count anything: the updater terminates this process
+					 * before it touches a file. A patch that fails from that point on rolls
+					 * back, relaunches the client at the unchanged version, and is met by a
+					 * launcher that finds the same mismatch and starts the same download —
+					 * which is a loop no participant can see it is in. See
+					 * LauncherSettings.RecordUpdateAttempt. */
+					int attempt = LauncherSettings.RecordUpdateAttempt(this.latestVersionString);
+					Log.Info("ClientLauncher",
+						$"Handing off to the updater for {MainBootstrapSystem.GameVersion} -> {this.latestVersionString} (attempt {attempt} of {LauncherSettings.MaxConsecutiveUpdateAttempts}).");
+
 					// Delegate updater launch to updater launcher service. NOTE: the patch
 					// archive is deliberately NOT deleted here — the Updater is about to
 					// read it, and it removes the archive itself once applied.
@@ -1838,7 +1873,20 @@ namespace FishMMO.Client
 						yield break;
 					}
 
-					if (LauncherSettings.AutoUpdate)
+					/* An update that has already been attempted and did not land is not
+					 * attempted again on its own. The updater kills this process before it
+					 * patches, so a failure after that point is reported to nobody: the client
+					 * comes back at the same version and an automatic retry starts the identical
+					 * download, forever. Only the AUTOMATIC path is gated — the button below
+					 * still works, because a player who presses it has decided. */
+					bool autoUpdateExhausted = LauncherSettings.HasExhaustedUpdateAttempts(this.latestVersionString);
+					if (autoUpdateExhausted)
+					{
+						Log.Warning("ClientLauncher",
+							$"Update to {this.latestVersionString} has already been attempted {LauncherSettings.MaxConsecutiveUpdateAttempts} times without succeeding. Not retrying automatically.");
+					}
+
+					if (LauncherSettings.AutoUpdate && !autoUpdateExhausted)
 					{
 						PlayButtonUpdate();
 					}
@@ -1850,8 +1898,9 @@ namespace FishMMO.Client
 						string sizeNote = this.expectedPatchSize > 0
 							? $" ({DownloadStats.FormatBytes((ulong)this.expectedPatchSize)})"
 							: string.Empty;
-						SetLauncherState(LauncherState.UpdateAvailable,
-							$"Version {this.latestVersionString} is available{sizeNote}. Press Update to download it.");
+						SetLauncherState(LauncherState.UpdateAvailable, autoUpdateExhausted
+							? $"Version {this.latestVersionString} could not be installed after {LauncherSettings.MaxConsecutiveUpdateAttempts} attempts. Press Update to try once more, or reinstall the client if it keeps failing."
+							: $"Version {this.latestVersionString} is available{sizeNote}. Press Update to download it.");
 					}
 #endif
 				}
@@ -1862,6 +1911,10 @@ namespace FishMMO.Client
 				}
 				else
 				{
+					// At the server's version: whatever update was in flight has landed (or
+					// there never was one). This is the only evidence that exists, since the
+					// updater cannot report success to a launcher it has already terminated.
+					LauncherSettings.ClearUpdateAttempts();
 					SetLauncherState(LauncherState.ReadyToPlay);
 				}
 			}

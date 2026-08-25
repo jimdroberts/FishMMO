@@ -263,6 +263,7 @@ namespace FishMMO.Client
 			this.clientPostbootSystem?.SetClient(this);
 			UIManager.SetClient(this);
 			ClientNamingSystem.Initialize(this);
+			ClientInteractableStateSystem.Initialize(this);
 
 			KinematicCharacterSystem.EnsureCreation();
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
@@ -430,6 +431,7 @@ namespace FishMMO.Client
 				NetworkManager.SceneManager.OnLoadEnd -= OnSceneLoadEnd;
 				NetworkManager.SceneManager.OnUnloadEnd -= OnSceneUnloadEnd;
 			}
+			ClientInteractableStateSystem.Destroy();
 			ClientNamingSystem.Destroy();
 			UIManager.SetClient(null);
 			this.clientPostbootSystem?.UnsetClient(this);
@@ -1071,6 +1073,21 @@ namespace FishMMO.Client
 				// Do not claim readiness for a scene set that did not load — the server
 				// would spawn the character into a world this client cannot render.
 				Log.Error("Client", $"World scene preload failed for: {string.Join(", ", batch.FailedItems)}. Not acknowledging scene validation.");
+
+				/* Say so, and go back rather than sit here.
+				 *
+				 * The acknowledgement above is the only thing that completes world entry, and the
+				 * server sends ClientValidatedSceneBroadcast exactly once — so declining to send it
+				 * left the client behind a loading overlay with nothing else in play. The scene
+				 * server's handshake watchdog does eventually end it, but only after 90 seconds, and
+				 * it does so by dropping the connection with no explanation for the minute and a
+				 * half that preceded it.
+				 *
+				 * A failed preload is not transient — the same addressables will fail again — so
+				 * this returns to the login screen with the reason on screen instead of feeding the
+				 * client's reconnect loop an attempt that cannot succeed. */
+				LoginNotice.Show("Some game content failed to load. Please restart the client, and verify your installation if this continues.");
+				QuitToLogin();
 				return;
 			}
 
@@ -1130,7 +1147,7 @@ namespace FishMMO.Client
 				case SceneTransferRefusalReason.OnCooldown:
 					return "You are travelling too often. Wait a moment and try again.";
 				case SceneTransferRefusalReason.PartyInstanceExists:
-					return "A party member already has this instance open.";
+					return "You already have a dungeon open. Finish or close it before starting another.";
 				case SceneTransferRefusalReason.AlreadyAtDestination:
 					return "You are already on that channel.";
 				case SceneTransferRefusalReason.ServerError:
@@ -2224,7 +2241,18 @@ namespace FishMMO.Client
 		/// <param name="pet">The pet instance.</param>
 		private static void OnPetReadId(long ownerId, Pet pet)
 		{
-			if (pet != null && ownerId != 0) ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerId, name => { if (pet.CharacterGuildLabel) pet.CharacterGuildLabel.text = $"<{name}'s pet>"; });
+			if (pet == null || ownerId == 0) return;
+
+			/* The name lookup can go to the server and come back arbitrarily later, by which
+			 * time this pet may have been despawned and handed out of the object pool as some
+			 * other player's pet. Capturing the ID and re-checking it on the way back is what
+			 * stops the callback labelling a stranger's pet with this owner's name. */
+			long petId = pet.ID;
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerId, name =>
+			{
+				if (pet == null || pet.ID != petId) return;
+				if (pet.CharacterGuildLabel) pet.CharacterGuildLabel.text = $"<{name}'s pet>";
+			});
 		}
 		/// <summary>
 		/// Displays the region name label with the specified styling and lifetime parameters.

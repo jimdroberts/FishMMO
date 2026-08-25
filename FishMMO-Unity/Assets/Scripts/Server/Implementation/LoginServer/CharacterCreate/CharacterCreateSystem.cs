@@ -504,10 +504,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					if (factions.Count > 0)
 					{
-						DatabaseResult factionResult = await factionService.PersistAsync(factions);
-						if (!factionResult.IsSuccess)
+						/* Must land in full. These rows are being created for the first time, so
+						 * nothing newer can exist to supersede them — a short write means rows
+						 * were dropped, and a character handed to the player missing part of its
+						 * starting factions is worse than a failed creation they can retry. */
+						if (!await BulkWriteReporting.RequireCompleteAsync(
+								"CharacterCreateSystem", "Starting factions", await factionService.PersistAsync(factions), $"character {characterID}"))
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist factions: [{factionResult.ErrorCode}] {factionResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -523,10 +526,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					if (abilities.Count > 0)
 					{
-						DatabaseResult abilityResult = await abilityService.PersistAsync(abilities);
-						if (!abilityResult.IsSuccess)
+						/* Must land in full. These rows are being created for the first time, so
+						 * nothing newer can exist to supersede them — a short write means rows
+						 * were dropped, and a character handed to the player missing part of its
+						 * starting abilities is worse than a failed creation they can retry. */
+						if (!await BulkWriteReporting.RequireCompleteAsync(
+								"CharacterCreateSystem", "Starting abilities", await abilityService.PersistAsync(abilities), $"character {characterID}"))
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist abilities: [{abilityResult.ErrorCode}] {abilityResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -542,10 +548,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					if (inventoryItems.Count > 0)
 					{
-						DatabaseResult inventoryResult = await inventoryService.PersistAsync(inventoryItems);
-						if (!inventoryResult.IsSuccess)
+						/* Must land in full. These rows are being created for the first time, so
+						 * nothing newer can exist to supersede them — a short write means rows
+						 * were dropped, and a character handed to the player missing part of its
+						 * starting inventory is worse than a failed creation they can retry. */
+						if (!await BulkWriteReporting.RequireCompleteAsync(
+								"CharacterCreateSystem", "Starting inventory", await inventoryService.PersistAsync(inventoryItems), $"character {characterID}"))
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist inventory: [{inventoryResult.ErrorCode}] {inventoryResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -561,10 +570,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					if (equipment.Count > 0)
 					{
-						DatabaseResult equipResult = await equipmentService.PersistAsync(equipment);
-						if (!equipResult.IsSuccess)
+						/* Must land in full. These rows are being created for the first time, so
+						 * nothing newer can exist to supersede them — a short write means rows
+						 * were dropped, and a character handed to the player missing part of its
+						 * starting equipment is worse than a failed creation they can retry. */
+						if (!await BulkWriteReporting.RequireCompleteAsync(
+								"CharacterCreateSystem", "Starting equipment", await equipmentService.PersistAsync(equipment), $"character {characterID}"))
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist equipment: [{equipResult.ErrorCode}] {equipResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -580,10 +592,13 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					if (initialAttributes.Count > 0)
 					{
-						DatabaseResult attrResult = await attributeService.PersistAsync(initialAttributes.Values);
-						if (!attrResult.IsSuccess)
+						/* Must land in full. These rows are being created for the first time, so
+						 * nothing newer can exist to supersede them — a short write means rows
+						 * were dropped, and a character handed to the player missing part of its
+						 * starting attributes is worse than a failed creation they can retry. */
+						if (!await BulkWriteReporting.RequireCompleteAsync(
+								"CharacterCreateSystem", "Starting attributes", await attributeService.PersistAsync(initialAttributes.Values), $"character {characterID}"))
 						{
-							await Log.Error("CharacterCreateSystem", $"Failed to persist attributes: [{attrResult.ErrorCode}] {attrResult.ErrorMessage}");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)

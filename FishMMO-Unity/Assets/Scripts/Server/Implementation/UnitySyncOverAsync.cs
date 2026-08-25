@@ -106,11 +106,19 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Clamps a requested timeout to whatever remains of the shutdown budget.
 		/// </summary>
+		/// <remarks>
+		/// Public because the budget has to cover every blocking wait on the teardown path, not
+		/// only the ones that go through <see cref="TryRun{T}"/>. <c>AsyncWorkerData</c> drains its
+		/// in-flight work with a bounded sleep rather than an async wait — it is waiting on a count,
+		/// not on a task — and an unaccounted three seconds there is exactly what this budget exists
+		/// to prevent: the total is sized to fit inside a supervisor's stop timeout, and overrunning
+		/// it means being SIGKILLed mid-flush having accomplished nothing.
+		/// </remarks>
 		/// <returns>
 		/// The effective timeout, or 0 when the budget is spent — callers then fail immediately
 		/// rather than blocking teardown further.
 		/// </returns>
-		private static int ClampToShutdownBudget(int timeoutMilliseconds)
+		public static int ClampToShutdownBudget(int timeoutMilliseconds)
 		{
 			long deadline = shutdownDeadlineTimestamp;
 			if (deadline == 0)

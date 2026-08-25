@@ -121,6 +121,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<MailClaimAttachmentBroadcast>(OnServerMailClaimAttachmentBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeItemBroadcast>(OnServerCorpseLootTakeItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeCurrencyBroadcast>(OnServerCorpseLootTakeCurrencyBroadcastReceived, true);
@@ -128,6 +129,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<CorpseLootCloseBroadcast>(OnServerCorpseLootCloseBroadcastReceived, true);
 
 			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
+
+			/* Registered here rather than beside /leaveinstance on the character system, because
+			 * closing an instance is dungeon-finder business: it has to resolve the party's
+			 * instance the same way an entry request does. See OnCloseDungeonCommand. */
+			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
+			{
+				{ "/closedungeon", OnCloseDungeonCommand },
+				{ "/closeinstance", OnCloseDungeonCommand },
+			});
 
 			/* The dialogue choice cache is memory-only and keyed by character ID. Without these
 			 * two hooks it has no idea who is still playing, which is what made its capacity
@@ -185,6 +195,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<MailClaimAttachmentBroadcast>(OnServerMailClaimAttachmentBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeItemBroadcast>(OnServerCorpseLootTakeItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeCurrencyBroadcast>(OnServerCorpseLootTakeCurrencyBroadcastReceived);
@@ -192,6 +203,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootCloseBroadcast>(OnServerCorpseLootCloseBroadcastReceived);
 
 			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
+
+			// Static registry: a command left behind outlives this ScriptableObject.
+			ChatHelper.RemoveCommands(new[] { "/closedungeon", "/closeinstance" });
 
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> dialogueCharacterSystem) &&
 				dialogueCharacterSystem != null)
@@ -385,11 +399,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				DatabaseResult result = await inventoryService.PersistAsync(items);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem", $"PersistInventoryItemsAsync DB error ({items.Count} items): {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				await BulkWriteReporting.ReportAsync("InteractableSystem", "Inventory item save",
+					await inventoryService.PersistAsync(items), $"{items.Count} items");
 			}
 			catch (Exception ex)
 			{
@@ -522,12 +533,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Validates that a scene object exists and belongs to the expected scene.
+		/// Validates that a scene object exists, is still live, and belongs to the expected scene.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Liveness is the part that is easy to miss.</b> Nothing unregisters an interactable
+		/// from <see cref="SceneObject.Objects"/> when it despawns — registration is deliberately
+		/// keyed to the object's lifetime rather than to a spawn, so a pooled instance keeps the ID
+		/// a client may still be holding. FishNet's pool stores a despawned object by deactivating
+		/// it and leaving it in its scene, so the ID keeps resolving, the scene handle keeps
+		/// matching, and the transform stays exactly where the object died.
+		/// </para>
+		/// <para>
+		/// Every interaction handler downstream of this therefore accepted requests naming objects
+		/// that no longer exist as far as the world is concerned. The sharp end was ground loot: a
+		/// client that had seen a world item's ID could replay the interact message after picking
+		/// it up and be granted the stack again — and again — until the pooled instance was reused,
+		/// because the item's amount and template survive the despawn. The same stale ID reaches a
+		/// depleted gathering node, an emptied container, and a corpse that has already returned to
+		/// the pool.
+		/// </para>
+		/// <para>
+		/// <c>activeInHierarchy</c> is the test rather than a <c>NetworkObject</c> lookup because it
+		/// is exactly what the pool toggles (<c>SetActive(false)</c> on store, <c>true</c> on
+		/// retrieve) and costs no component search on a path every interaction runs through.
+		/// </para>
+		/// </remarks>
 		/// <param name="sceneObjectID">The ID of the scene object to validate.</param>
 		/// <param name="characterSceneHandle">The scene handle of the character for scene matching.</param>
 		/// <param name="sceneObject">When successful, the resolved scene object.</param>
-		/// <returns>True if the scene object exists and matches the character scene; otherwise false.</returns>
+		/// <returns>True if the scene object exists, is live, and matches the character scene; otherwise false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool ValidateSceneObject(long sceneObjectID, int characterSceneHandle, out ISceneObject sceneObject)
 		{
@@ -536,9 +571,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Log.Debug("InteractableSystem", $"Missing SceneObject ID:{sceneObjectID}");
 				return false;
 			}
-			if (sceneObject.GameObject.scene.handle != characterSceneHandle)
+			GameObject gameObject = sceneObject.GameObject;
+			if (gameObject == null || !gameObject.activeInHierarchy)
+			{
+				Log.Debug("InteractableSystem", $"SceneObject ID:{sceneObjectID} is despawned.");
+				sceneObject = null;
+				return false;
+			}
+			if (gameObject.scene.handle != characterSceneHandle)
 			{
 				Log.Debug("InteractableSystem", "Object scene mismatch.");
+				sceneObject = null;
 				return false;
 			}
 			return true;

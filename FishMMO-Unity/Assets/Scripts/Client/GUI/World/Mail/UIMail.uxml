@@ -1,0 +1,116 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIMail.uxml   —   FishMMO Mailbox Panel                      ║
+    ║                                                              ║
+    ║  Left  : the character's inbox, one row per mail.              ║
+    ║  Right : either the selected mail, or the compose form.        ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIMail.uss         — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    mail-*   Layout class        (UIMail.uss)                 ║
+    ║                                                              ║
+    ║  Inbox rows are created at runtime by UITKMail.cs and         ║
+    ║  appended to #mail-list.                                      ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIMail.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel mail-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header mail-header">
+            <ui:Label name="header-title" class="fish-panel__title mail-header__title" text="MAILBOX" />
+            <ui:VisualElement name="mail-tabs" class="mail-tabs">
+                <ui:Button name="mail-tab-inbox" class="fish-tab fish-tab--active mail-tab" text="Inbox" />
+                <ui:Button name="mail-tab-compose" class="fish-tab mail-tab" text="Compose" />
+            </ui:VisualElement>
+            <ui:Button name="close-button" class="fish-close-btn mail-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <!-- ── BODY : inbox + detail ────────────────────────── -->
+        <ui:VisualElement name="mail-body" class="mail-body">
+
+            <!-- LEFT : inbox list -->
+            <ui:ScrollView name="mail-scroll"
+                           class="fish-scroll mail-scroll"
+                           vertical-scroller-visibility="Auto"
+                           horizontal-scroller-visibility="Hidden"
+                           mode="Vertical">
+                <!-- Rows injected at runtime by UITKMail.CreateRow():
+                         Row root  →  fish-row mail-row
+                         Sender    →  fish-row__name mail-row__sender
+                         Subject   →  fish-row__meta mail-row__subject
+                         Clip      →  fish-badge mail-row__clip
+                -->
+                <ui:VisualElement name="mail-list" class="mail-list" />
+                <ui:Label name="mail-empty" text="No mail." class="fish-empty mail-empty" />
+            </ui:ScrollView>
+
+            <!-- Vertical rule. fish-divider supplies the colour (no colour literal may appear
+                 in a panel stylesheet); mail-divider turns its 1px height into a 1px width. -->
+            <ui:VisualElement name="mail-divider" class="fish-divider mail-divider" />
+
+            <!-- RIGHT : read pane -->
+            <ui:VisualElement name="mail-read" class="mail-read">
+                <ui:Label name="mail-read-subject" class="fish-label fish-label--title mail-read__subject" text="" />
+                <ui:Label name="mail-read-sender" class="fish-label fish-label--caption mail-read__sender" text="" />
+                <ui:ScrollView name="mail-read-scroll"
+                               class="fish-scroll mail-read__scroll"
+                               vertical-scroller-visibility="Auto"
+                               horizontal-scroller-visibility="Hidden"
+                               mode="Vertical">
+                    <ui:Label name="mail-read-body" class="fish-label mail-read__body" text="" />
+                </ui:ScrollView>
+                <ui:VisualElement name="mail-read-attachment" class="fish-well mail-read__attachment">
+                    <ui:Label name="mail-attachment-label" class="fish-label mail-attachment__label" text="" />
+                    <ui:Button name="mail-claim" class="fish-button fish-button--primary mail-attachment__claim" text="Take" />
+                </ui:VisualElement>
+                <ui:VisualElement name="mail-read-actions" class="mail-read__actions">
+                    <ui:Label name="mail-status" class="fish-label fish-label--caption mail-read__status" text="" />
+                    <ui:Button name="mail-delete" class="fish-button fish-button--danger mail-read__delete" text="Delete" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- RIGHT : compose pane -->
+            <ui:VisualElement name="mail-compose" class="mail-compose mail-hidden">
+                <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="To" />
+                <ui:TextField name="mail-compose-to" class="fish-input mail-compose__field" />
+                <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Subject" />
+                <ui:TextField name="mail-compose-subject" class="fish-input mail-compose__field" />
+                <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Message" />
+                <ui:TextField name="mail-compose-body" class="fish-input mail-compose__body" multiline="true" />
+
+                <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Attach item" />
+                <ui:DropdownField name="mail-compose-item" class="fish-dropdown mail-compose__field" />
+
+                <ui:VisualElement name="mail-compose-amounts" class="mail-compose__amounts">
+                    <ui:VisualElement class="mail-compose__amount">
+                        <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Quantity" />
+                        <ui:TextField name="mail-compose-quantity" class="fish-input mail-compose__small" value="1" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="mail-compose__amount">
+                        <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Currency" />
+                        <ui:TextField name="mail-compose-currency" class="fish-input mail-compose__small" value="0" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="mail-compose-actions" class="mail-compose__actions">
+                    <ui:Label name="mail-compose-status" class="fish-label fish-label--caption mail-compose__status" text="" />
+                    <ui:Button name="mail-send" class="fish-button fish-button--primary mail-compose__send" text="Send" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

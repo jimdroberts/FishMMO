@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -289,7 +289,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 					!TryGetDbService(out ICharacterHotkeyService hotkeyService) ||
 					!TryGetDbService(out ICharacterInventoryService inventoryService) ||
 					!TryGetDbService(out ICharacterKnownAbilityService knownAbilityService) ||
-					!TryGetDbService(out ICharacterPetService petService))
+					!TryGetDbService(out ICharacterPetService petService) ||
+					!TryGetDbService(out ICharacterPetAttributeService petAttributeService) ||
+					!TryGetDbService(out ICharacterPetBuffService petBuffService))
 				{
 					await Log.Warning("CharacterSelectSystem", "One or more DB services unavailable for character delete.");
 					SendDeleteFailure(conn);
@@ -366,6 +368,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete known abilities for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await petService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pets for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						r = await petAttributeService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pet attributes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						r = await petBuffService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete pet buffs for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 					}
 
 					// Soft-delete the character row (also hard-deletes guild/party memberships)

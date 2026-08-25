@@ -181,19 +181,19 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
 		{
 			var petList = pets?.Where(p => p.CharacterID > 0).ToList();
 			if (petList == null || petList.Count == 0)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Pets collection must not be null or empty.");
 			}
 
 			if (petList.Any(p => p.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more pets had an invalid Version. Version must be greater than 0.");
 			}
@@ -255,8 +255,13 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = petList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
+				/* Both branches contribute. The batch is split by whether a row already has a
+				 * primary key, so neither statement alone describes what the caller asked for. */
+				BulkWriteResult outcome = new BulkWriteResult(suppliedRows, 0, 0);
 				var characterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
 					.AsNoTracking()
@@ -344,13 +349,16 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE t.id = u.id
 							AND u.version > t.version;";
 
-					await ExecuteBulkUpsertAsync(
+					int appliedUpdates = await ExecuteBulkUpsertAsync(
 						dbContext,
 						sql,
 						activeUpdates.Count,
 						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray },
 						"One or more pets were rejected due to a stale Version.",
-						cancellationToken).ConfigureAwait(false);
+						cancellationToken,
+						BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+					outcome += new BulkWriteResult(0, activeUpdates.Count, appliedUpdates);
 				}
 
 				if (activeInserts.Count > 0)
@@ -400,14 +408,19 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE
 							EXCLUDED.version > {TableName}.version;";
 
-					await ExecuteBulkUpsertAsync(
+					int appliedInserts = await ExecuteBulkUpsertAsync(
 						dbContext,
 						sql,
 						activeInserts.Count,
 						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray, now },
 						"One or more pets were rejected due to a stale Version.",
-						cancellationToken).ConfigureAwait(false);
+						cancellationToken,
+						BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+					outcome += new BulkWriteResult(0, activeInserts.Count, appliedInserts);
 				}
+
+				return outcome;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

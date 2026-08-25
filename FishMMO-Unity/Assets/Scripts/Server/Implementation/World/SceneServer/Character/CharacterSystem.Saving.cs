@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using System;
 using System.Collections.Concurrent;
@@ -66,6 +66,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var buffDataList = new List<CharacterBuffData>(data.CharactersByID.Count * 4);
 			var attributeDataList = new List<CharacterAttributeData>(data.CharactersByID.Count * 16);
 			var abilityDataList = new List<CharacterAbilityData>(data.CharactersByID.Count * 8);
+			var petDataList = new List<PetSnapshot>();
 			foreach (var character in data.CharactersByID.Values)
 			{
 				CharacterSessionInfo? ownership = data.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
@@ -75,10 +76,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AppendBuffData(character, buffDataList);
 				AppendAttributeData(character, attributeDataList);
 				AppendAbilityData(character, abilityDataList);
+				AppendPetData(character, petDataList);
 			}
 
 			// Combat-logout bodies have no connection and so are absent from the map above.
-			AppendLingeringCharacterSnapshots(data, characterDataList, buffDataList, attributeDataList, abilityDataList);
+			AppendLingeringCharacterSnapshots(data, characterDataList, buffDataList, attributeDataList, abilityDataList, petDataList);
 
 			if (characterDataList.Count == 0)
 			{
@@ -103,6 +105,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (abilityDataList.Count > 0)
 			{
 				EnqueuePersistence(() => SaveAbilitiesAsync(abilityDataList));
+			}
+			if (petDataList.Count > 0)
+			{
+				EnqueuePersistence(() => SavePetsAsync(petDataList));
 			}
 		}
 
@@ -135,35 +141,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var buffDataList = new List<CharacterBuffData>(8);
 			var attributeDataList = new List<CharacterAttributeData>(16);
 			var abilityDataList = new List<CharacterAbilityData>(8);
+			var petDataList = new List<PetSnapshot>(1);
 			AppendBuffData(character, buffDataList);
 			AppendAttributeData(character, attributeDataList);
 			AppendAbilityData(character, abilityDataList);
+			AppendPetData(character, petDataList);
 
-			// Save then fully release session (Online → Offline).
-			//
-			// The async worker pool is bounded and drops writes when full, so this enqueue can
-			// fail. The session token has already been taken out of SessionTokens by the
-			// caller, which means a dropped work item used to leave nothing anywhere that
-			// could ever release the claim: the character stayed Online until its lease
-			// expired, and every attempt to load it on the destination scene server was
-			// kicked for the whole two minutes. Hand it to the retry queue instead.
-			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, sessionInfo)))
+			/* Save everything, THEN release the session (Online → Offline).
+			 *
+			 * All of it in one work item, on purpose. The sub-entity writes used to be enqueued
+			 * separately, which put them on a different worker lane than the save-and-release —
+			 * so the claim could be handed back while a character's buffs, attributes, abilities
+			 * or pet were still unwritten. The destination scene server claims the moment the
+			 * release lands and reads the row immediately, and whatever had not been flushed yet
+			 * simply was not there: a player zoning could arrive missing the pet they had out,
+			 * and the write that finally landed a moment later described a character that had
+			 * already moved on.
+			 *
+			 * The async worker pool is bounded and drops writes when full, so this enqueue can
+			 * fail. The session token has already been taken out of SessionTokens by the
+			 * caller, which means a dropped work item used to leave nothing anywhere that
+			 * could ever release the claim: the character stayed Online until its lease
+			 * expired, and every attempt to load it on the destination scene server was
+			 * kicked for the whole two minutes. Hand it to the retry queue instead. */
+			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(
+					charData, buffDataList, attributeDataList, abilityDataList, petDataList, sessionInfo)))
 			{
 				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID} — queued for retry.");
 				QueuePendingFlush(charData.ID, charData, sessionInfo);
-			}
-
-			if (buffDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveBuffsAsync(buffDataList));
-			}
-			if (attributeDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveAttributesAsync(attributeDataList));
-			}
-			if (abilityDataList.Count > 0)
-			{
-				EnqueuePersistence(() => SaveAbilitiesAsync(abilityDataList));
 			}
 
 			// Immediately log out for now.. we could add a timeout later on..?
@@ -318,11 +323,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// This ensures the character data is persisted while we still hold the session lock,
 		/// preventing another server from claiming the character before the save completes.
 		/// </summary>
-		private async Task SaveAndReleaseCharacterAsync(CharacterData charData, CharacterSessionInfo? sessionInfo)
+		private async Task SaveAndReleaseCharacterAsync(
+			CharacterData charData,
+			List<CharacterBuffData> buffs,
+			List<CharacterAttributeData> attributes,
+			List<CharacterAbilityData> abilities,
+			List<PetSnapshot> pets,
+			CharacterSessionInfo? sessionInfo)
 		{
 			// Save first — we must persist while still holding the session lock, and prove that
 			// ownership in the same statement so a lapsed lease cannot overwrite the new owner.
 			bool saved = await SaveCharacterAsync(charData, sessionInfo);
+
+			/* Sub-entities before the release, not alongside it. Everything the next owner is
+			 * about to read has to be in the database before the claim it reads under is
+			 * available. Awaited in sequence rather than in parallel so a saturated pool cannot
+			 * reorder them behind the release. */
+			if (attributes != null && attributes.Count > 0)
+			{
+				await SaveAttributesAsync(attributes);
+			}
+			if (buffs != null && buffs.Count > 0)
+			{
+				await SaveBuffsAsync(buffs);
+			}
+			if (abilities != null && abilities.Count > 0)
+			{
+				await SaveAbilitiesAsync(abilities);
+			}
+			if (pets != null && pets.Count > 0)
+			{
+				await SavePetsAsync(pets);
+			}
 
 			// Release regardless of whether the save landed. Holding the claim back because a
 			// write failed would strand the character far more visibly than losing one save:
@@ -1033,6 +1065,268 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// One character's complete pet state, captured together.
+		/// </summary>
+		/// <remarks>
+		/// The three pet tables are snapshotted and written as a unit because they share a
+		/// version stream — see <see cref="AppendPetData"/>. Splitting them into three flat
+		/// lists, the way the character's own sub-entities are handled, would lose the grouping
+		/// that makes a restored pet's health provably belong to the pet row it came with.
+		/// </remarks>
+		private readonly struct PetSnapshot
+		{
+			/// <summary>The pet row: which template, which abilities, and whether it was out.</summary>
+			public readonly CharacterPetData Pet;
+
+			/// <summary>The pet's attribute values at the moment of the snapshot.</summary>
+			public readonly List<CharacterPetAttributeData> Attributes;
+
+			/// <summary>The pet's active buffs at the moment of the snapshot.</summary>
+			public readonly List<CharacterPetBuffData> Buffs;
+
+			public PetSnapshot(CharacterPetData pet, List<CharacterPetAttributeData> attributes, List<CharacterPetBuffData> buffs)
+			{
+				Pet = pet;
+				Attributes = attributes;
+				Buffs = buffs;
+			}
+		}
+
+		/// <summary>
+		/// Appends a snapshot of the character's live pet — the pet row, its attributes and its
+		/// buffs — so a pet survives a logout or a scene-server handover with the health and
+		/// effects it actually had.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Main-thread only, and it must run <em>after</em> <see cref="BuildCharacterData"/> for
+		/// the same character: all three pet tables are stamped with the character's own version
+		/// counter, which that method increments.
+		/// </para>
+		/// <para>
+		/// Sharing the character's counter is what makes the pet's version stream work without a
+		/// read. A pet is pooled and re-summoned freely, so it has no durable identity of its own
+		/// to hang a counter on — a freshly summoned pet starting from version 1 would be
+		/// rejected as stale against rows left by the pet before it. The character's counter is
+		/// monotonic, survives restarts because it is loaded from the character row, and is
+		/// already incremented exactly once per snapshot.
+		/// </para>
+		/// <para>
+		/// It also gives the restore path a correctness check it could not otherwise have: rows
+		/// written in one pass all carry the same version, so
+		/// <c>PetSystem.LoadAndSpawnPetAsync</c> can require an attribute or buff row to match
+		/// the pet row's version and thereby ignore leftovers from a previous pet that happened
+		/// to know an attribute this one does not.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character whose pet to snapshot.</param>
+		/// <param name="pets">Destination for the snapshot.</param>
+		private void AppendPetData(IPlayerCharacter character, List<PetSnapshot> pets)
+		{
+			if (!character.TryGet(out IPetController petController))
+			{
+				return;
+			}
+
+			Pet pet = petController.Pet;
+			if (pet == null)
+			{
+				/* No pet out, nothing to say. Whatever the pet row holds is already correct —
+				 * it was written to spawned = false by whichever path dismissed or killed the
+				 * pet — and writing a row here would only be able to say "no template", which
+				 * is not a state the schema can express. */
+				return;
+			}
+
+			int templateID = pet.PetAbilityTemplate != null ? pet.PetAbilityTemplate.ID : 0;
+			if (templateID <= 0)
+			{
+				Log.Warning("CharacterSystem", $"Character {character.ID} has a pet with no resolvable ability template; its state was not persisted.");
+				return;
+			}
+
+			// BuildCharacterData has already incremented this for the current pass.
+			long version = Math.Max(1L, character.Version);
+
+			// Abilities granted at summon time live only on the controller until this runs.
+			pet.CaptureKnownAbilities();
+
+			float currentHealth = 0.0f;
+			if (pet.TryGet(out ICharacterAttributeController petAttributeController) &&
+				petAttributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
+			{
+				currentHealth = health.CurrentValue;
+			}
+
+			CharacterPetData petData = new CharacterPetData(
+				id: 0,
+				version: version,
+				characterID: character.ID,
+				templateID: templateID,
+				abilities: pet.PetAbilityIDs != null ? new List<int>(pet.PetAbilityIDs) : new List<int>(),
+				spawned: currentHealth > 0.0f);
+
+			var attributeData = new List<CharacterPetAttributeData>(16);
+			AppendPetAttributeData(character.ID, version, petAttributeController, attributeData);
+
+			var buffData = new List<CharacterPetBuffData>(4);
+			AppendPetBuffData(character.ID, version, pet, buffData);
+
+			pets.Add(new PetSnapshot(petData, attributeData, buffData));
+		}
+
+		/// <summary>
+		/// Appends the pet's attribute values.
+		/// </summary>
+		/// <remarks>
+		/// Unlike the owner's own attributes, nothing is skipped for a zero version: a pet's
+		/// attributes are built from its prefab on every spawn and never carry a version loaded
+		/// from the database, so the owner's "skip template defaults" rule would skip every row
+		/// a pet has. The stamped version comes from the character instead.
+		/// </remarks>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="version">Version to stamp every row with.</param>
+		/// <param name="attributeController">The pet's attribute controller, or null.</param>
+		/// <param name="attributes">Destination for the rows.</param>
+		private static void AppendPetAttributeData(
+			long characterID,
+			long version,
+			ICharacterAttributeController attributeController,
+			List<CharacterPetAttributeData> attributes)
+		{
+			if (attributeController == null)
+			{
+				return;
+			}
+
+			foreach (var kvp in attributeController.Attributes)
+			{
+				attributes.Add(new CharacterPetAttributeData(
+					id: 0,
+					version: version,
+					characterID: characterID,
+					templateID: kvp.Key,
+					value: kvp.Value.Value,
+					currentValue: 0.0f));
+			}
+
+			foreach (var kvp in attributeController.ResourceAttributes)
+			{
+				attributes.Add(new CharacterPetAttributeData(
+					id: 0,
+					version: version,
+					characterID: characterID,
+					templateID: kvp.Key,
+					value: kvp.Value.Value,
+					currentValue: kvp.Value.CurrentValue));
+			}
+		}
+
+		/// <summary>
+		/// Appends the pet's active buffs, converting absolute ticks into remaining seconds the
+		/// same way the owner's buffs are converted.
+		/// </summary>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="version">Version to stamp every row with.</param>
+		/// <param name="pet">The pet.</param>
+		/// <param name="buffs">Destination for the rows.</param>
+		private void AppendPetBuffData(long characterID, long version, Pet pet, List<CharacterPetBuffData> buffs)
+		{
+			if (!pet.TryGet(out IBuffController buffController) || buffController.Buffs.Count == 0)
+			{
+				return;
+			}
+
+			var timeManager = Server?.NetworkWrapper?.NetworkManager?.TimeManager;
+			if (timeManager == null)
+			{
+				return;
+			}
+
+			float tickDelta = (float)timeManager.TickDelta;
+			uint currentTick = buffController.ResolveAuthoritativeTick(timeManager.LocalTick);
+
+			foreach (var kvp in buffController.Buffs)
+			{
+				Buff buff = kvp.Value;
+				if (buff == null || buff.Template == null)
+				{
+					continue;
+				}
+
+				// Absolute ticks → remaining seconds. Clamp negatives to 0 (about to expire).
+				int remainingTicks = (int)(buff.ExpiryTick - currentTick);
+				int nextTickTicks = (int)(buff.NextTickTick - currentTick);
+
+				buffs.Add(new CharacterPetBuffData(
+					id: 0,
+					version: version,
+					characterID: characterID,
+					templateID: buff.Template.ID,
+					remainingTime: remainingTicks > 0 ? remainingTicks * tickDelta : 0f,
+					tickTime: nextTickTicks > 0 ? nextTickTicks * tickDelta : 0f,
+					stacks: buff.Stacks,
+					tickCount: buff.TickCount));
+			}
+		}
+
+		/// <summary>
+		/// Persists pet state — row, attributes and buffs — for every snapshotted character.
+		/// </summary>
+		/// <remarks>
+		/// The pet row goes first. If the two dependent writes fail after it, the restore path's
+		/// version check simply rejects the older attribute and buff rows and the pet comes back
+		/// at its template defaults — which is a far better outcome than the reverse ordering,
+		/// where a pet row that failed to write would leave the next login restoring a previous
+		/// pet's health onto the wrong creature.
+		/// </remarks>
+		/// <param name="pets">Snapshots to write.</param>
+		private async Task SavePetsAsync(List<PetSnapshot> pets)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null || pets == null || pets.Count == 0)
+				{
+					return;
+				}
+
+				/* Each of the three writes is reported and none aborts the others. A superseded
+				 * pet row means a newer write for that character already landed — a dismissal, or
+				 * a logout that overtook the periodic pass — and the attribute and buff rows are
+				 * then simply ignored on restore by the version match they no longer satisfy.
+				 * Abandoning the remaining writes would leave those tables one pass further out
+				 * of date for no benefit. */
+				if (Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var petService))
+				{
+					var petRows = pets.Select(p => p.Pet).ToList();
+					await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet save", await petService.PersistAsync(petRows));
+				}
+
+				if (Server.Database.ServiceRegistry.TryGet<ICharacterPetAttributeService>(out var petAttributeService))
+				{
+					var attributeRows = pets.SelectMany(p => p.Attributes).ToList();
+					if (attributeRows.Count > 0)
+					{
+						await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet attribute save", await petAttributeService.PersistAsync(attributeRows));
+					}
+				}
+
+				if (Server.Database.ServiceRegistry.TryGet<ICharacterPetBuffService>(out var petBuffService))
+				{
+					var buffRows = pets.SelectMany(p => p.Buffs).ToList();
+					if (buffRows.Count > 0)
+					{
+						await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet buff save", await petBuffService.PersistAsync(buffRows));
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"SavePetsAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
 		/// Persists a snapshot of buff state asynchronously.
 		/// </summary>
 		private async Task SaveBuffsAsync(List<CharacterBuffData> buffs)
@@ -1045,11 +1339,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await buffService.PersistAsync(buffs);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("CharacterSystem", $"SaveBuffsAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				await BulkWriteReporting.ReportAsync("CharacterSystem", "Buff save", await buffService.PersistAsync(buffs));
 			}
 			catch (Exception ex)
 			{
@@ -1070,11 +1360,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await attrService.PersistAsync(attributes);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("CharacterSystem", $"SaveAttributesAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				await BulkWriteReporting.ReportAsync("CharacterSystem", "Attribute save", await attrService.PersistAsync(attributes));
 			}
 			catch (Exception ex)
 			{
@@ -1095,11 +1381,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await abilityService.PersistAsync(abilities);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("CharacterSystem", $"SaveAbilitiesAsync DB error: {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				await BulkWriteReporting.ReportAsync("CharacterSystem", "Ability save", await abilityService.PersistAsync(abilities));
 			}
 			catch (Exception ex)
 			{

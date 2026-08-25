@@ -1242,11 +1242,11 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<bool>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<DateTime?>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+				return DatabaseResult<DateTime?>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
 			}
 
 			if (cooldown < TimeSpan.Zero)
@@ -1268,20 +1268,59 @@ namespace FishMMO.Database.Npgsql.Services
 				 * precisely the case that matters, because the whole point of persisting this is
 				 * that consecutive switches land on different servers. The row is not
 				 * version-gated: this is a rate limit, not gameplay state, and it must neither
-				 * lose to a concurrent save nor bump the version a save is guarding on. */
-				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+				 * lose to a concurrent save nor bump the version a save is guarding on.
+				 *
+				 * The pre-update value comes back through a CTE, because RETURNING reports the row
+				 * as written. The caller needs it to undo the claim when the transfer it was taken
+				 * for does not happen — see RollbackChannelSwitchAsync. */
+				var sql = $@"WITH previous AS (
+						SELECT id, last_channel_switch_utc
+						FROM {tableName}
+						WHERE id = {{1}} AND deleted = false
+					)
+					UPDATE {tableName} AS c
+					SET last_channel_switch_utc = {{0}}
+					FROM previous
+					WHERE c.id = previous.id
+						AND previous.last_channel_switch_utc <= {{2}}
+					RETURNING previous.last_channel_switch_utc";
+
+				return await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[] { nowUtc, characterId, eligibleBeforeUtc },
+					reader => (DateTime?)reader.GetDateTime(0),
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> RollbackChannelSwitchAsync(long characterId, DateTime previousUtc, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid character ID.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				/* Guarded on the column still being ahead of what we are restoring, so this is a
+				 * no-op if the claim has already been superseded. Nothing else writes this column
+				 * and a character has one session at a time, so the only thing that can be ahead
+				 * of previousUtc is the claim being undone. */
+				await dbContext.Database.ExecuteSqlRawAsync(
 					$@"UPDATE {tableName}
 					SET last_channel_switch_utc = {{0}}
 					WHERE id = {{1}}
 						AND deleted = false
-						AND last_channel_switch_utc <= {{2}}",
-					new object[] { nowUtc, characterId, eligibleBeforeUtc },
+						AND last_channel_switch_utc > {{0}}",
+					new object[] { previousUtc, characterId },
 					cancellationToken).ConfigureAwait(false);
-
-				return rowsAffected > 0;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result;
 		}
 
 		/// <inheritdoc/>

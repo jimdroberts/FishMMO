@@ -1188,33 +1188,110 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
+		/// How a bulk versioned write should treat rows that lose the version race.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Every bulk upsert in this layer is gated <c>EXCLUDED.version &gt; table.version</c>, so a
+		/// row whose incoming version is not newer than what is already stored is simply not
+		/// applied. Whether that is a failure depends entirely on what the batch <em>means</em>,
+		/// and the two meanings need opposite handling.
+		/// </para>
+		/// </remarks>
+		protected enum BulkVersionConflictPolicy
+		{
+			/// <summary>
+			/// The batch is one indivisible statement and a skipped row invalidates the rows
+			/// around it, so the whole write is rolled back.
+			/// </summary>
+			/// <remarks>
+			/// Correct for slot-addressed layouts — inventory, bank, equipment, hotkeys — where a
+			/// row's key is a <em>position</em> that its contents move between. Applying "the item
+			/// is now in slot 5" without "slot 3 is now empty" leaves one item occupying two
+			/// slots, which is item duplication, and applying the reverse loses it outright. The
+			/// batch is a layout; half a layout is not a smaller layout, it is a wrong one.
+			/// </remarks>
+			Fail = 0,
+
+			/// <summary>
+			/// Rows are independent facts. A row that loses to a newer write is correctly left
+			/// alone and the rest of the batch stands.
+			/// </summary>
+			/// <remarks>
+			/// Correct for template-addressed state — attributes, buffs, abilities, factions,
+			/// quests, pets — where a row's key <em>is</em> its identity and never migrates. Two
+			/// such rows have no bearing on one another, so there is nothing for a skipped row to
+			/// corrupt.
+			/// </remarks>
+			SkipStaleRows = 1,
+		}
+
+		/// <summary>
 		/// Executes a bulk UPSERT statement and enforces version/authority semantics by validating the affected row count.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <paramref name="policy"/> decides what a shortfall means; see
+		/// <see cref="BulkVersionConflictPolicy"/>. It defaults to <c>Fail</c> so that a caller
+		/// which has not thought about the question keeps the strictest behaviour.
+		/// </para>
+		/// <para>
+		/// <b>Why <c>SkipStaleRows</c> exists.</b> Under <c>Fail</c>, one row losing a version race
+		/// rolls back the entire statement — including every row that would have applied cleanly.
+		/// For a batch that spans many characters, as the periodic save's does, that turns a
+		/// routine and expected race into total data loss for everyone in the batch: a single
+		/// player logging out while the periodic pass is in flight writes their row at a newer
+		/// version, and the pass then discards the buffs, attributes, abilities and pet state of
+		/// every other character it had collected. The losing row is not even the one that
+		/// suffers — its newer data is already safely stored.
+		/// </para>
+		/// <para>
+		/// <b>What a skip cannot hide.</b> A row is skipped only when the database already holds a
+		/// version at least as new, so nothing is lost when one is: the stored value is the more
+		/// recent of the two. The failure mode this would otherwise mask — a version counter that
+		/// has stopped incrementing, freezing an entity's state silently — still announces itself,
+		/// because the character row is written through the single-row path, which continues to
+		/// surface <see cref="StaleStateException"/> and is incremented from the same counter.
+		/// </para>
+		/// <para>
+		/// An <em>over</em>-application is always fatal regardless of policy. Affecting more rows
+		/// than were supplied means the statement matched something it was not given — an
+		/// ambiguous multi-row join being the usual cause — and that is a defect in the SQL, not a
+		/// concurrency outcome.
+		/// </para>
+		/// </remarks>
 		/// <param name="dbContext">The active DbContext for the current transaction.</param>
 		/// <param name="sql">
 		/// A fully-formed SQL statement (typically using UNNEST + INSERT ... ON CONFLICT DO UPDATE) built with <see cref="TableName"/>.
 		/// The SQL should be parameterized for values and must never accept user-controlled identifiers.
 		/// </param>
 		/// <param name="expectedRowsAffected">
-		/// The number of rows that must be inserted or updated for the operation to be considered successful.
-		/// Callers should pre-filter inputs (e.g., skip non-active characters) so this expectation is stable.
+		/// The number of rows supplied to the statement. Callers should pre-filter inputs (e.g., skip
+		/// non-active characters) so this expectation is stable.
 		/// </param>
 		/// <param name="parameters">SQL parameters to pass to EF Core.</param>
 		/// <param name="staleStateMessage">Message used when version/authority is lost.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <param name="policy">How to treat rows rejected by version gating.</param>
+		/// <returns>The number of rows actually inserted or updated.</returns>
 		/// <exception cref="ArgumentNullException">Thrown when <paramref name="dbContext"/> or <paramref name="sql"/> is null.</exception>
 		/// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="expectedRowsAffected"/> is negative.</exception>
 		/// <exception cref="StaleStateException">
-		/// Thrown when fewer than <paramref name="expectedRowsAffected"/> rows were affected, indicating that at least one incoming row
+		/// Thrown under <see cref="BulkVersionConflictPolicy.Fail"/> when fewer than
+		/// <paramref name="expectedRowsAffected"/> rows were affected, indicating that at least one incoming row
 		/// was rejected by version gating (e.g., <c>EXCLUDED.version &lt;= table.version</c>).
 		/// </exception>
-		protected static async Task ExecuteBulkUpsertAsync(
+		/// <exception cref="DatabaseException">
+		/// Thrown, under any policy, when more rows were affected than were supplied.
+		/// </exception>
+		protected static async Task<int> ExecuteBulkUpsertAsync(
 			NpgsqlDbContext dbContext,
 			string sql,
 			int expectedRowsAffected,
 			object[] parameters,
 			string staleStateMessage,
-			CancellationToken cancellationToken)
+			CancellationToken cancellationToken,
+			BulkVersionConflictPolicy policy = BulkVersionConflictPolicy.Fail)
 		{
 			if (dbContext == null) throw new ArgumentNullException(nameof(dbContext));
 			if (sql == null) throw new ArgumentNullException(nameof(sql));
@@ -1222,7 +1299,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (expectedRowsAffected == 0)
 			{
-				return;
+				return 0;
 			}
 
 			var upsertStatement = sql.TrimEnd(';');
@@ -1236,10 +1313,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var count = await ExecuteScalarIntAsync(dbContext, countSql, parameters, cancellationToken).ConfigureAwait(false);
 
-			if (count != expectedRowsAffected)
+			if (count > expectedRowsAffected)
+			{
+				throw new DatabaseException(
+					$"Bulk upsert affected {count} rows from {expectedRowsAffected} supplied. " +
+					"The statement matched rows it was not given; check for an ambiguous join or duplicate keys in the batch.",
+					errorCode: DatabaseErrorCodes.DatabaseError);
+			}
+
+			if (count < expectedRowsAffected && policy == BulkVersionConflictPolicy.Fail)
 			{
 				throw new StaleStateException(staleStateMessage);
 			}
+
+			return count;
 		}
 
 		/// <summary>

@@ -166,5 +166,151 @@ namespace FishMMO.UnitTests.AI
 					$"'{template.name}' has no PetPrefab — summoning it is a silent no-op.");
 			}
 		}
+
+		[Test]
+		public void PetAbilityTemplates_SpawnPrefabsThatAreActuallyPets()
+		{
+			/* PetSystem.SpawnAndInitializePet pulls the prefab out of the object pool and then
+			 * asks it for a Pet component. A prefab without one is returned to the pool and the
+			 * summon fails silently — the player casts, pays the cost, and nothing appears. */
+			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
+			{
+				if (template.PetPrefab == null)
+				{
+					continue;
+				}
+
+				Assert.IsNotNull(template.PetPrefab.GetComponent<Pet>(),
+					$"'{template.name}'.PetPrefab ('{template.PetPrefab.name}') has no Pet component, " +
+					"so summoning it can only fail.");
+			}
+		}
+
+		[Test]
+		public void PetPrefabs_HaveNoMovementStatesToWanderOffInto()
+		{
+			/* AIArchetypeTemplate.ApplyTo skips null fields so a prefab can override one slot —
+			 * which also means a WanderState or PatrolState left on the PET prefab survives the
+			 * archetype that deliberately leaves both empty. It then joins AIController's
+			 * movementStates list, and every TransitionToRandomMovementState — which is where a
+			 * pet lands whenever a fight ends — can roll it. The pet wanders off from the owner
+			 * it belongs to, and no amount of following brings it back until the roll changes. */
+			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
+			{
+				if (template.PetPrefab == null)
+				{
+					continue;
+				}
+
+				AIController controller = template.PetPrefab.GetComponent<AIController>();
+				if (controller == null)
+				{
+					continue;
+				}
+
+				BaseAIState wander = ResolveSlot(controller.Archetype?.WanderState, controller.WanderState);
+				BaseAIState patrol = ResolveSlot(controller.Archetype?.PatrolState, controller.PatrolState);
+
+				Assert.IsNull(wander,
+					$"'{template.PetPrefab.name}' resolves a wander state, so it can drift away from its owner.");
+				Assert.IsNull(patrol,
+					$"'{template.PetPrefab.name}' resolves a patrol state, so it can drift away from its owner.");
+			}
+		}
+
+		[Test]
+		public void PetPrefabs_ResolveAPetFollowStateAndAnAttackingState()
+		{
+			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
+			{
+				if (template.PetPrefab == null)
+				{
+					continue;
+				}
+
+				AIController controller = template.PetPrefab.GetComponent<AIController>();
+				Assert.IsNotNull(controller,
+					$"'{template.PetPrefab.name}' has no AIController, so it has no brain at all.");
+
+				BaseAIState idle = ResolveSlot(controller.Archetype?.IdleState, controller.IdleState);
+				BaseAIState initial = ResolveSlot(controller.Archetype?.InitialState, controller.InitialState);
+				BaseAIState attacking = ResolveSlot(controller.Archetype?.AttackingState, controller.AttackingState);
+
+				Assert.IsInstanceOf<PetIdleState>(idle,
+					$"'{template.PetPrefab.name}' does not resolve a PetIdleState, so it will never follow its owner.");
+				Assert.IsInstanceOf<PetIdleState>(initial,
+					$"'{template.PetPrefab.name}' does not START in a PetIdleState, so a freshly summoned pet stands still.");
+				Assert.IsNotNull(attacking,
+					$"'{template.PetPrefab.name}' resolves no attacking state, so it cannot fight even when ordered to.");
+			}
+		}
+
+		[Test]
+		public void PetPrefabs_HaveAnAttributeDatabaseWithHealth()
+		{
+			/* Pet persistence is built on the attribute controller: the pet's health is what
+			 * decides whether the pet row is written as still out, and the restore path writes
+			 * saved values back into this controller's dictionaries. A prefab with no attribute
+			 * database populates neither dictionary, so AddNPCAttributes is a no-op, the pet has
+			 * no health to lose, and every save records it as dismissed. */
+			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
+			{
+				if (template.PetPrefab == null)
+				{
+					continue;
+				}
+
+				CharacterAttributeController attributeController = template.PetPrefab.GetComponent<CharacterAttributeController>();
+				Assert.IsNotNull(attributeController,
+					$"'{template.PetPrefab.name}' has no CharacterAttributeController.");
+				Assert.IsNotNull(attributeController.CharacterAttributeDatabase,
+					$"'{template.PetPrefab.name}' has no attribute database, so it spawns with no attributes at all.");
+
+				bool hasHealth = false;
+				foreach (CharacterAttributeTemplate attribute in attributeController.CharacterAttributeDatabase.Attributes)
+				{
+					if (attribute != null &&
+						attribute.IsResourceAttribute &&
+						attribute.ID == attributeController.HealthResourceTemplateID)
+					{
+						hasHealth = true;
+						break;
+					}
+				}
+
+				Assert.IsTrue(hasHealth,
+					$"'{template.PetPrefab.name}' resolves no health resource attribute, so it cannot be damaged, " +
+					"killed, or saved as still summoned.");
+			}
+		}
+
+		/// <summary>
+		/// Mirrors <see cref="AIArchetypeTemplate.ApplyTo"/>: the archetype wins unless it left
+		/// the slot null, in which case whatever the prefab carries survives.
+		/// </summary>
+		private static BaseAIState ResolveSlot(BaseAIState fromArchetype, BaseAIState fromPrefab)
+		{
+			return fromArchetype != null ? fromArchetype : fromPrefab;
+		}
+
+		/// <summary>
+		/// Every pet summoning template in the project.
+		/// </summary>
+		private static List<PetAbilityTemplate> LoadPetAbilityTemplates()
+		{
+			List<PetAbilityTemplate> templates = new List<PetAbilityTemplate>();
+
+			foreach (string guid in AssetDatabase.FindAssets("t:PetAbilityTemplate"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				PetAbilityTemplate template = AssetDatabase.LoadAssetAtPath<PetAbilityTemplate>(path);
+				if (template != null)
+				{
+					templates.Add(template);
+				}
+			}
+
+			return templates;
+		}
 	}
 }

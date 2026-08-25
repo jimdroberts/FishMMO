@@ -1,0 +1,43 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UICapturePoint.uxml   —   FishMMO Objective Readout          ║
+    ║                                                              ║
+    ║  Shows a capture point's state while it is being fought over.  ║
+    ║  Opens on CapturePointUpdateBroadcast and closes itself once   ║
+    ║  the objective has been quiet for a while.                     ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss     — colors, fonts, transitions     ║
+    ║    2. UICapturePoint.uss    — sizes, flex, spacing           ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*     Visual theme class  (FishMMO-Theme.uss)        ║
+    ║    capture-*  Layout class        (UICapturePoint.uss)       ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UICapturePoint.uss" />
+
+    <ui:VisualElement name="panel-root" class="capture-panel">
+
+        <ui:VisualElement name="capture-head" class="capture-head">
+            <!-- Placeholder text. The panel starts closed and every update writes all three
+                 labels before it is shown, so this is never on screen; it exists so the editor
+                 preview renders the real layout instead of an empty bar. -->
+            <ui:Label name="capture-title" class="fish-label fish-label--title capture-title" text="Objective" />
+            <ui:Label name="capture-state" class="fish-badge capture-state" text="NEUTRAL" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="capture-bar" class="fish-bar capture-bar">
+            <ui:VisualElement name="capture-bar-fill" class="fish-bar__fill fish-bar__fill--xp capture-bar__fill" />
+        </ui:VisualElement>
+
+        <ui:Label name="capture-owner" class="fish-label fish-label--caption capture-owner" text="Uncontrolled" />
+
+    </ui:VisualElement>
+
+</ui:UXML>

@@ -1,0 +1,77 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UICapturePoint.uss
+    Objective Readout  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UICapturePoint.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Top-centre rather than centred, and chrome-less. A capture is
+    contested PvP: the player needs to see the bar without it
+    covering the fight they are having over it, so this sits in
+    the band above the action the way objective trackers do.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+.capture-panel {
+    position: absolute;
+    left: 50%; top: 12%; translate: -50% -50%;
+    width: 260px;
+    flex-direction: column;
+    align-items: stretch;
+    flex-shrink: 0;
+}
+
+.capture-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.capture-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.capture-state {
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.capture-bar {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+/* Width is driven from C# as a percentage; the rule only establishes the starting state so a
+   bar that opens before its first update does not flash full. */
+.capture-bar__fill {
+    width: 0%;
+    height: 100%;
+}
+
+.capture-owner {
+    -unity-text-align: middle-center;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.capture-hidden {
+    display: none;
+}

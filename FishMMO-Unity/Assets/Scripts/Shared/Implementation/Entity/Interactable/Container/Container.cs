@@ -416,6 +416,121 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Rolls this container's contents. Server only, once per spawn.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="OnStartServer"/> rather than <c>OnAwake</c>, for the same reason NPC ability
+		/// learning and scene object registration live there: Awake runs once per pooled instance,
+		/// so a container respawned from the pool would come back with whatever its previous life
+		/// left behind — which, since a looted chest ends empty, means empty forever.
+		/// <see cref="ResetState"/> clears and re-sizes the slots on the way into the pool and this
+		/// fills them on the way out.
+		/// </para>
+		/// <para>
+		/// The roll is server-side and the result reaches clients through
+		/// <see cref="WritePayload"/>, which runs after this and before the spawn message is built.
+		/// A client never rolls: it is told what is in the box.
+		/// </para>
+		/// </remarks>
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+
+			RollContents();
+		}
+
+		/// <summary>
+		/// Fills this container's slots from its template's loot table.
+		/// </summary>
+		private void RollContents()
+		{
+			if (Template == null || Template.LootTable == null)
+			{
+				return;
+			}
+
+			// Slots are authored by OnAwake and re-created by ResetState; if neither has run for
+			// this instance yet there is nowhere to put anything.
+			if (items.Count < 1)
+			{
+				AddSlots(null, Template.SlotCount);
+			}
+
+			List<Item> rolled = new List<Item>();
+			Template.LootTable.Roll(DeterministicRNG.Shared, rolled, out int _);
+
+			for (int i = 0; i < rolled.Count; ++i)
+			{
+				Item item = rolled[i];
+				if (item == null)
+				{
+					continue;
+				}
+
+				/* Placed into the first free slot rather than by index, so a table that rolls more
+				 * entries than the container has slots simply fills it and stops. Dropping the
+				 * remainder is the right failure: the alternative is either an item that exists in
+				 * no container, or a silent write past the end of the slot list. */
+				if (!TryPlaceInFreeSlot(item))
+				{
+					break;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Puts an item in the first empty slot.
+		/// </summary>
+		/// <param name="item">The item to place.</param>
+		/// <returns>True when a slot was found and the item placed.</returns>
+		private bool TryPlaceInFreeSlot(Item item)
+		{
+			for (int i = 0; i < items.Count; ++i)
+			{
+				if (items[i] != null)
+				{
+					continue;
+				}
+				if (SetItemSlot(item, i))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Rebuilds the slot list when this instance returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="OnAwake"/> is what sizes the container, and Unity calls Awake once per
+		/// instance rather than once per spawn — so a recycled container came back holding
+		/// whatever its previous life had left in it, and a chest emptied by one player would
+		/// respawn already empty for the next.
+		/// </para>
+		/// <para>
+		/// The slots are re-added rather than merely emptied, because a container whose template
+		/// was assigned after Awake would otherwise come back with no slots at all.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True when the reset is for the server instance.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			Clear();
+			items.Clear();
+			lockedSlots?.Clear();
+
+			if (Template != null)
+			{
+				AddSlots(null, Template.SlotCount);
+			}
+		}
+
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
 			base.WritePayload(connection, writer);

@@ -50,19 +50,19 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> PersistAsync(IEnumerable<CharacterFactionData> factions, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterFactionData> factions, CancellationToken cancellationToken = default)
 		{
 			var factionList = factions?.ToList();
 			if (factionList == null || factionList.Count == 0)
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Empty or null factions collection.");
 			}
 
 			if (factionList.Any(f => f.Version <= 0))
 			{
-				return DatabaseResult.Failure(
+				return DatabaseResult<BulkWriteResult>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"One or more factions had an invalid Version. Version must be greater than 0.");
 			}
@@ -83,7 +83,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteTransactionAsync(async dbContext =>
+			int suppliedRows = factionList.Count;
+
+			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = factionList.Select(f => f.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -103,7 +105,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeFactions = factionList.Where(f => activeCharacterIdSet.Contains(f.CharacterID)).ToList();
 				if (activeFactions.Count == 0)
 				{
-					return;
+					return new BulkWriteResult(suppliedRows, 0, 0);
 				}
 
 				var now = DateTime.UtcNow;
@@ -138,13 +140,16 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE
 						EXCLUDED.version > {TableName}.version;";
 
-				await ExecuteBulkUpsertAsync(
+				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeFactions.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, valueArray, now },
 					"One or more factions were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
+
+				return new BulkWriteResult(suppliedRows, activeFactions.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

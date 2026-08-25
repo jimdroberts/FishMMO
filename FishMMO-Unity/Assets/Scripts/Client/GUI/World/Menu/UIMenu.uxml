@@ -12,6 +12,7 @@
             <ui:VisualElement name="menu-body" class="menu-body">
                 <ui:Button name="menu-close-btn" text="Resume" class="fish-button fish-button--primary menu-action" />
                 <ui:Button name="menu-options-btn" text="Options" class="fish-button menu-action" />
+                <ui:Button name="menu-channels-btn" text="Channels" class="fish-button menu-action" />
                 <ui:VisualElement class="fish-divider menu-sep" />
                 <ui:Button name="menu-quit-to-login-btn" text="Quit to Login" class="fish-button menu-action" />
                 <ui:Button name="menu-quit-btn" text="Quit to Desktop" class="fish-button fish-button--danger menu-action" />

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using FishNet.Connection;
+using FishNet.Managing.Timing;
 using FishNet.Serializing;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -49,6 +50,22 @@ namespace FishMMO.Shared
 		public List<int> PetAbilityIDs { get; set; }
 
 		/// <summary>
+		/// Attribute values restored from the database, applied at spawn.
+		/// </summary>
+		/// <remarks>
+		/// Staged rather than applied directly for the same reason <see cref="PetAbilityIDs"/> is:
+		/// the pet system fills this in before <c>ServerManager.Spawn</c>, and the values can only
+		/// be written once <see cref="NPC.OnStartServer"/> has built the attribute controller and
+		/// rolled the prefab's own bonuses over it. See <see cref="ApplyPersistedState"/>.
+		/// </remarks>
+		public List<PetPersistedAttribute> PersistedAttributes { get; set; }
+
+		/// <summary>
+		/// Buffs restored from the database, applied at spawn.
+		/// </summary>
+		public List<PetPersistedBuff> PersistedBuffs { get; set; }
+
+		/// <summary>
 		/// Called when the pet is awakened. Initializes the abilities list.
 		/// </summary>
 		public override void OnAwake()
@@ -65,11 +82,118 @@ namespace FishMMO.Shared
 		/// Server spawn. Runs after <see cref="NPC.OnStartServer"/> has taught the prefab's own
 		/// ability list, and adds anything restored from the database on top.
 		/// </summary>
+		/// <remarks>
+		/// This is the last point at which restored state can be written and still reach clients
+		/// in the spawn payload. FishNet invokes the start callbacks during
+		/// <c>SpawnWithoutChecks</c> and only writes each observer's payload afterwards, in the
+		/// observer rebuild — so anything applied here is serialised, and anything applied after
+		/// <c>ServerManager.Spawn</c> returns is not.
+		/// </remarks>
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
 
 			LearnPersistedAbilities();
+			ApplyPersistedState();
+		}
+
+		/// <summary>
+		/// Writes restored attribute values and buffs onto this pet's controllers.
+		/// </summary>
+		/// <remarks>
+		/// Attributes before buffs, matching the order the owner's own state is restored in:
+		/// a buff's modifiers are re-applied by <see cref="IBuffController.Apply(Buff, bool)"/>
+		/// on top of the base values, so writing the base values second would double-count them.
+		/// </remarks>
+		private void ApplyPersistedState()
+		{
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+
+			ApplyPersistedAttributes();
+			ApplyPersistedBuffs();
+		}
+
+		/// <summary>
+		/// Restores saved attribute values, distinguishing resources by template rather than by
+		/// whether their current value happens to be non-zero.
+		/// </summary>
+		private void ApplyPersistedAttributes()
+		{
+			if (PersistedAttributes == null ||
+				PersistedAttributes.Count < 1 ||
+				!this.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+
+			for (int i = 0; i < PersistedAttributes.Count; ++i)
+			{
+				PetPersistedAttribute attribute = PersistedAttributes[i];
+
+				/* Asked of the template, never inferred from CurrentValue. A resource sitting at
+				 * zero — a pet dismissed at death's door, an empty mana pool — is still a
+				 * resource, and filing it as a plain attribute strands the real resource
+				 * unrestored while planting a bogus base attribute in its place. */
+				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);
+				if (template == null)
+				{
+					Log.Warning("Pet", $"{gameObject.name} has a persisted attribute template {attribute.TemplateID}, which no longer exists. Skipping.");
+					continue;
+				}
+
+				if (template.IsResourceAttribute)
+				{
+					attributeController.SetResourceAttribute(attribute.TemplateID, attribute.Value, attribute.CurrentValue, null);
+				}
+				else
+				{
+					attributeController.SetAttribute(attribute.TemplateID, attribute.Value);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Rebuilds saved buffs, converting the persisted remaining seconds back into absolute
+		/// ticks against this server's clock.
+		/// </summary>
+		private void ApplyPersistedBuffs()
+		{
+			if (PersistedBuffs == null ||
+				PersistedBuffs.Count < 1 ||
+				!this.TryGet(out IBuffController buffController))
+			{
+				return;
+			}
+
+			TimeManager timeManager = base.TimeManager;
+			if (timeManager == null)
+			{
+				return;
+			}
+
+			float tickDelta = (float)timeManager.TickDelta;
+			if (tickDelta <= 0f)
+			{
+				return;
+			}
+
+			uint currentTick = buffController.ResolveAuthoritativeTick(timeManager.LocalTick);
+
+			for (int i = 0; i < PersistedBuffs.Count; ++i)
+			{
+				PetPersistedBuff persisted = PersistedBuffs[i];
+
+				// At least one tick in the future: a buff restored with an expiry already behind
+				// the clock is removed on the very tick it is applied, which reads as the buff
+				// simply not surviving the despawn at all.
+				uint expiryTick = currentTick + (uint)Math.Max(1.0, Math.Ceiling(persisted.RemainingTime / tickDelta));
+				uint nextTickTick = currentTick + (uint)Math.Max(1.0, Math.Ceiling(persisted.TickTime / tickDelta));
+
+				buffController.Apply(new Buff(persisted.TemplateID, expiryTick, nextTickTick, tickDelta, persisted.Stacks, persisted.TickCount));
+			}
 		}
 
 		/// <summary>
@@ -93,6 +217,11 @@ namespace FishMMO.Shared
 			 * restored from the database, so clearing it here would empty the caller's list too —
 			 * including the copy the persistence path is about to write back. */
 			PetAbilityIDs = new List<int>();
+
+			// Restore payloads are per-spawn. Left in place they would be re-applied to whatever
+			// pet next occupies this pool slot.
+			PersistedAttributes = null;
+			PersistedBuffs = null;
 		}
 
 		/// <summary>

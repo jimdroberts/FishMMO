@@ -62,9 +62,11 @@ namespace FishMMO.Shared
 	/// Client-to-server: send the pet at the owner's current target.
 	/// </summary>
 	/// <remarks>
-	/// Carries no target ID on purpose. The server reads the owner's own
-	/// <see cref="FishMMO.Shared.Core.ITargetController"/> so a client cannot name an arbitrary
-	/// entity — including one it cannot see or reach — as its pet's victim.
+	/// Carries no target ID on purpose. The server raycasts from the owner's replicated camera
+	/// transform, in the owner's own physics scene and clamped to
+	/// <see cref="FishMMO.Shared.TargetController.MAX_TARGET_DISTANCE"/>, exactly as the ability
+	/// system resolves what a cast hits. A client can therefore point but cannot name an
+	/// arbitrary entity — including one it cannot see or reach — as its pet's victim.
 	/// </remarks>
 	public struct PetAttackBroadcast : IBroadcast
 	{

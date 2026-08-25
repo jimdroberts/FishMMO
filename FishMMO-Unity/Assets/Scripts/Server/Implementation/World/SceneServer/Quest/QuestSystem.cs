@@ -709,6 +709,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		/// <summary>
+		/// Resolves a scene object ID the client named, refusing anything despawned or in another scene.
+		/// </summary>
+		/// <remarks>
+		/// The liveness test matters for the same reason it does in
+		/// <c>InteractableSystem.ValidateSceneObject</c>: a despawned interactable stays registered
+		/// and stays in its scene, so its ID keeps resolving long after it has gone back to the
+		/// pool. FishNet's pool deactivates what it stores, which is what this checks.
+		/// </remarks>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static bool ValidateSceneObject(long sceneObjectID, int characterSceneHandle, out ISceneObject sceneObject)
 		{
@@ -716,7 +725,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return false;
 			}
-			if (sceneObject.GameObject.scene.handle != characterSceneHandle)
+			GameObject gameObject = sceneObject.GameObject;
+			if (gameObject == null || !gameObject.activeInHierarchy)
+			{
+				sceneObject = null;
+				return false;
+			}
+			if (gameObject.scene.handle != characterSceneHandle)
 			{
 				sceneObject = null;
 				return false;
@@ -843,11 +858,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				DatabaseResult result = await service.PersistAsync(new[] { dto });
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("QuestSystem", $"PersistQuestAsync DB error (CharID={dto.CharacterID}, TemplateID={dto.TemplateID}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				await BulkWriteReporting.ReportAsync("QuestSystem", "Quest save",
+					await service.PersistAsync(new[] { dto }), $"CharID={dto.CharacterID}, TemplateID={dto.TemplateID}");
 			}
 			catch (Exception ex)
 			{

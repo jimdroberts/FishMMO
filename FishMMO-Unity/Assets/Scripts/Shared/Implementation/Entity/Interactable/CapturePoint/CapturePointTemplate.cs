@@ -45,6 +45,26 @@ namespace FishMMO.Shared
 		public int InteractionsToCapture = 1;
 
 		/// <summary>
+		/// Seconds of inactivity after which an unfinished capture resets. 0 disables decay.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Without decay a partial capture is permanent: a player who applies four of five
+		/// interactions and walks away leaves the point sitting at four forever, so the next person
+		/// to touch it — possibly hours later, possibly an enemy — completes a capture they did
+		/// almost none of. It also makes <see cref="InteractionsToCapture"/> meaningless as a cost,
+		/// since the total can be paid in arbitrarily small instalments across a whole session.
+		/// </para>
+		/// <para>
+		/// The timer restarts on every interaction that adds progress, so a player who keeps
+		/// working at the point never loses it; it only expires once they stop.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Seconds of inactivity before an unfinished capture resets to zero. 0 = never decays.")]
+		[Min(0.0f)]
+		public float ProgressDecaySeconds = 30.0f;
+
+		/// <summary>
 		/// The display name of this capture point template.
 		/// </summary>
 		public string Name { get { return this.name; } }

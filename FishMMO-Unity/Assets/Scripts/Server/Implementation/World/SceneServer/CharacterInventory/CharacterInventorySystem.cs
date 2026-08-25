@@ -907,7 +907,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					if (batch.InventoryWrites != null && batch.InventoryWrites.Count > 0)
 					{
-						DatabaseResult result = await inventoryService.PersistAsync(batch.InventoryWrites);
+						DatabaseResult result = RequireCompleteWrite("inventory write", batch.CharacterID,
+							await inventoryService.PersistAsync(batch.InventoryWrites));
 						if (!result.IsSuccess) return result;
 					}
 				}
@@ -928,7 +929,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					if (batch.BankWrites != null && batch.BankWrites.Count > 0)
 					{
-						DatabaseResult result = await bankService.PersistAsync(batch.BankWrites);
+						DatabaseResult result = RequireCompleteWrite("bank write", batch.CharacterID,
+							await bankService.PersistAsync(batch.BankWrites));
 						if (!result.IsSuccess) return result;
 					}
 				}
@@ -971,8 +973,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterAttributeService is not registered.");
 				}
-				DatabaseResult result = await attributeService.PersistAsync(batch.AttributeWrites);
-				if (!result.IsSuccess) return result;
+				DatabaseResult attributeResult = RequireCompleteWrite("attribute write", batch.CharacterID,
+					await attributeService.PersistAsync(batch.AttributeWrites));
+				if (!attributeResult.IsSuccess) return attributeResult;
+			}
+
+			return DatabaseResult.Success();
+		}
+
+		/// <summary>
+		/// Collapses a bulk write's outcome into a plain result, treating anything short of a
+		/// complete write as a failure.
+		/// </summary>
+		/// <remarks>
+		/// Item containers are addressed by slot, so a batch is a layout rather than a set of
+		/// independent rows: "the sword is now in slot 5" only makes sense alongside "slot 3 is
+		/// now empty". Half a layout duplicates an item or loses one, and neither is a state the
+		/// rest of the server knows how to repair — so a short write has to surface as a failure
+		/// and let the batch machinery deal with it, exactly as an error would.
+		/// </remarks>
+		/// <param name="operation">What was being written, for the message.</param>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="result">The write's outcome.</param>
+		/// <returns>Success only when every supplied row was written.</returns>
+		private static DatabaseResult RequireCompleteWrite(string operation, long characterID, DatabaseResult<BulkWriteResult> result)
+		{
+			if (!result.IsSuccess)
+			{
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+
+			BulkWriteResult write = result.Data;
+			if (!write.IsComplete)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.StaleState,
+					$"Character {characterID} {operation} was incomplete: {write}. A partly written container " +
+					"cannot be trusted, so the batch is failed rather than left half-applied.",
+					isTransient: false);
 			}
 
 			return DatabaseResult.Success();
@@ -2210,22 +2248,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Log.Debug("CharacterInventorySystem", $"Missing SceneObject ID:{sceneObjectID}");
 				return false;
 			}
+			/* A despawned interactable stays registered and stays in its scene — FishNet's pool
+			 * just deactivates what it stores — so the ID keeps resolving after the object has
+			 * gone. Without this the banker's stale ID authorised bank access from anywhere. */
+			if (sceneObject.GameObject == null || !sceneObject.GameObject.activeInHierarchy)
+			{
+				Log.Debug("CharacterInventorySystem", $"SceneObject ID:{sceneObjectID} is despawned.");
+				return false;
+			}
 			if (sceneObject.GameObject.scene.handle != character.GameObject.scene.handle)
 			{
 				Log.Debug("CharacterInventorySystem", "Object scene mismatch.");
 				return false;
 			}
-			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
-			if (interactable == null ||
-				!interactable.InRange(character.Transform))
-			{
-				Log.Debug("CharacterInventorySystem", $"{character.CharacterName} is not in range of {sceneObject.GameObject.name}!");
-				return false;
-			}
-			Banker banker = interactable as Banker;
+			/* Resolved through the shared rule and gated on CanInteract. GetComponent returned
+			 * whichever IInteractable the prefab's component order yielded — a banker NPC carries
+			 * both a Banker and the NPC that is its own corpse — and InRange skips the corpse gate,
+			 * so a killed banker still opened the vault. */
+			IInteractable interactable = InteractableResolver.Resolve(sceneObject);
+			IBanker banker = interactable as IBanker;
 			if (banker == null)
 			{
 				Log.Debug("CharacterInventorySystem", $"{sceneObject.GameObject.name} is not a banker!");
+				return false;
+			}
+			if (!interactable.CanInteract(character))
+			{
+				Log.Debug("CharacterInventorySystem", $"{character.CharacterName} cannot interact with {sceneObject.GameObject.name}!");
 				return false;
 			}
 			return true;

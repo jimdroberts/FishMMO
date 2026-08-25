@@ -41,10 +41,10 @@ namespace FishMMO.Shared
 		private bool patcherMultipleMode = false;
 
 		/// <summary>Comma-separated list of file extensions to ignore.</summary>
-		private string patcherIgnoredExtensions = ".cfg, .log, .bak";
+		private string patcherIgnoredExtensions = ".cfg, .log, .bak, .lock";
 
 		/// <summary>Comma-separated list of directory names to ignore.</summary>
-		private string patcherIgnoredDirectories = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip";
+		private string patcherIgnoredDirectories = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip, .fishmmo-update-staging";
 
 		/// <summary>Whether a patch operation is currently in progress.</summary>
 		private bool patcherIsProcessing = false;

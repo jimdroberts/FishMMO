@@ -73,6 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 			int itemAttachmentTemplateID,
 			int itemAttachmentSeed,
 			uint itemAttachmentAmount,
+			int currencyAttachment,
 			long incomingVersion,
 			CancellationToken cancellationToken = default)
 		{
@@ -129,9 +130,77 @@ namespace FishMMO.Database.Npgsql.Services
 					// parameter throws NotSupportedException whether or not mail carries an attachment,
 					// because the declared type is what gets boxed. item_attachment_amount is bigint, so
 					// long binds exactly. Same defect as the item services' Amount.
-					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, (long)itemAttachmentAmount, 0, false, incomingVersion, now },
+					// currencyAttachment was hard-coded to 0 here, so a mail could carry an item but
+					// never money — the column existed, the DTO exposed it, and nothing could put a
+					// value in it.
+					new object[] { senderCharacterId, senderName, recipientCharacterId, subject, body, itemAttachmentTemplateID, itemAttachmentSeed, (long)itemAttachmentAmount, currencyAttachment, false, incomingVersion, now },
 					cancellationToken)
 					.ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<CharacterMailAttachmentData?>> ClaimAttachmentAsync(
+			long mailId,
+			long characterId,
+			long incomingVersion,
+			CancellationToken cancellationToken = default)
+		{
+			if (mailId <= 0 || characterId <= 0)
+			{
+				return DatabaseResult<CharacterMailAttachmentData?>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid mail ID or character ID. Both must be greater than 0.");
+			}
+
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult<CharacterMailAttachmentData?>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Invalid Version. Version must be greater than 0.");
+			}
+
+			return await ExecuteWriteAsync<CharacterMailAttachmentData?>(async dbContext =>
+			{
+				/* Read and clear in one statement.
+				 *
+				 * The self-join to `prev` is what makes RETURNING give the values as they were
+				 * BEFORE the update — RETURNING on its own reports the new values, which here are
+				 * all zero and therefore useless. The `<> 0` predicate is the anti-double-claim
+				 * guard: once the first claim has zeroed the row, a second UPDATE matches nothing
+				 * and returns no row, and Postgres serialises the two on the row lock so they
+				 * cannot both see the attachment. */
+				var sql = $@"
+					UPDATE {TableName} AS m
+					SET item_attachment_template_id = 0,
+						item_attachment_seed = 0,
+						item_attachment_amount = 0,
+						currency_attachment = 0,
+						version = {{2}}
+					FROM {TableName} AS prev
+					WHERE m.id = prev.id
+						AND m.id = {{0}}
+						AND m.character_id = {{1}}
+						AND m.deleted = FALSE
+						AND m.version < {{2}}
+						AND (m.item_attachment_template_id <> 0 OR m.currency_attachment <> 0)
+					RETURNING prev.item_attachment_template_id,
+							  prev.item_attachment_seed,
+							  prev.item_attachment_amount,
+							  prev.currency_attachment";
+
+				return await ExecuteReturningOrDefaultAsync<CharacterMailAttachmentData?>(
+					dbContext,
+					sql,
+					new object[] { mailId, characterId, incomingVersion },
+					reader => new CharacterMailAttachmentData(
+						reader.GetInt32(0),
+						reader.GetInt32(1),
+						// item_attachment_amount is bigint; Npgsql cannot bind or read uint
+						// directly, so it is stored and read as long and narrowed here.
+						(uint)reader.GetInt64(2),
+						reader.GetInt32(3)),
+					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

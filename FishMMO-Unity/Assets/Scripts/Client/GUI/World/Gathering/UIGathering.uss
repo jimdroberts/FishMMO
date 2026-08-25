@@ -1,0 +1,55 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIGathering.uss
+    Gathering Progress  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+
+    LOAD ORDER in UXML (required):
+        <ui:Style src="FishMMO-Theme.uss" />
+        <ui:Style src="UIGathering.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Deliberately chrome-less: no fish-panel background, no header,
+    no close button. This is a readout that appears for a couple
+    of seconds while the player holds still, not a window they
+    interact with — giving it a frame and a close button would
+    invite them to treat it as one.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+/* Below centre, clear of the crosshair and above the hotkey bar — the same band a cast bar
+   occupies, because it is the same kind of information. */
+.gather-panel {
+    position: absolute;
+    left: 50%; top: 62%; translate: -50% -50%;
+    width: 240px;
+    flex-direction: column;
+    align-items: stretch;
+    flex-shrink: 0;
+}
+
+.gather-label {
+    -unity-text-align: middle-center;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.gather-bar {
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* Width is driven from C# as a percentage; the rule only establishes the starting state so a
+   bar that opens before its first update does not flash full. */
+.gather-bar__fill {
+    width: 0%;
+    height: 100%;
+}

@@ -593,8 +593,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							{
 								OnPetKilled?.Invoke(ownerObject.Owner, petOwner);
 							}
-							pet.Despawn();
 						}
+
+						/* Outside the owner check, deliberately. A pet whose owner reference has
+						 * already been cleared — or which was never owned by a player — still has
+						 * to leave the world. Nested inside, such a pet was left spawned, flagged
+						 * dead, with its brain still enabled and nothing anywhere that would ever
+						 * collect it: Pet.Despawn skips the corpse timer that reclaims an NPC. */
+						pet.Despawn();
 					}
 					else
 					{
@@ -750,8 +756,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// the escape hatch is reachable whether or not the client's UI offers a button for it.
 		/// </remarks>
 		/// <param name="player">Character to release from its instance.</param>
+		/// <param name="enforceState">
+		/// True for a player-initiated exit, which is refused in combat or while dead. False when
+		/// the instance itself is going away and there is nothing to gate — see
+		/// <see cref="ReturnInstanceOccupantsToWorld"/>. A forced exit cannot be an escape: the
+		/// scene the character would be escaping from is being unloaded either way.
+		/// </param>
 		/// <returns><c>true</c> when the transfer was started.</returns>
-		private bool TryLeaveInstance(IPlayerCharacter player)
+		private bool TryLeaveInstance(IPlayerCharacter player, bool enforceState = true)
 		{
 			if (player == null || !player.IsInInstance())
 			{
@@ -768,7 +780,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * resurrect — so it does not need this one, and allowing it would let a corpse walk
 			 * itself out of the dungeon it died in. Combat is refused for the same reason every
 			 * other voluntary transfer is. */
-			if (!CharacterStateValidation.CanActOrMove(player))
+			if (enforceState && !CharacterStateValidation.CanActOrMove(player))
 			{
 				Server.NetworkWrapper.Broadcast(conn,
 					new SceneTransferRefusedBroadcast { Reason = SceneTransferRefusalReason.CharacterStateChanged },
@@ -800,6 +812,81 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Log.Debug("CharacterSystem", $"{player.CharacterName} left its instance; returning to {player.SceneName}.");
 			conn.Disconnect(false);
 			return true;
+		}
+
+		/// <inheritdoc/>
+		public int ReturnInstanceOccupantsToWorld(long instanceSceneID, string reason)
+		{
+			if (instanceSceneID <= 0 ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			{
+				return 0;
+			}
+
+			/* Snapshotted before anything is moved. Releasing a character mutates the very maps
+			 * this walks, and relying on FishNet deferring the disconnect would be relying on its
+			 * scheduling rather than on anything this loop controls. */
+			List<IPlayerCharacter> occupants = null;
+			foreach (var kvp in data.ConnectionCharacters)
+			{
+				IPlayerCharacter resident = kvp.Value;
+				if (resident != null &&
+					resident.IsInInstance() &&
+					resident.InstanceSceneHandle == instanceSceneID)
+				{
+					(occupants ??= new List<IPlayerCharacter>()).Add(resident);
+				}
+			}
+
+			/* Bodies left by a combat logout are not in ConnectionCharacters and have no owner, so
+			 * the loop above cannot see them — but they are standing in this scene and they hold
+			 * their characters' session claims. Destroying the scene under them would strand those
+			 * claims until the lease expired, locking the players out of every scene server for two
+			 * minutes. Ending the linger saves the body and hands the claim back, which is its
+			 * ordinary conclusion. */
+			List<long> lingering = null;
+			foreach (var kvp in lingeringCharacters)
+			{
+				IPlayerCharacter body = kvp.Value.Character;
+				if (body != null &&
+					body.IsInInstance() &&
+					body.InstanceSceneHandle == instanceSceneID)
+				{
+					(lingering ??= new List<long>()).Add(kvp.Key);
+				}
+			}
+
+			int moved = 0;
+
+			if (occupants != null)
+			{
+				for (int i = 0; i < occupants.Count; ++i)
+				{
+					// enforceState: false — the scene is going away, so there is no state that
+					// could make staying the right answer.
+					if (TryLeaveInstance(occupants[i], enforceState: false))
+					{
+						++moved;
+					}
+				}
+			}
+
+			if (lingering != null)
+			{
+				for (int i = 0; i < lingering.Count; ++i)
+				{
+					FinalizeCombatLinger(lingering[i], reason ?? "instance closed");
+				}
+			}
+
+			if (moved > 0 || lingering != null)
+			{
+				Log.Debug("CharacterSystem",
+					$"Instance {instanceSceneID} closed ({reason}): returned {moved} character(s) to the open world" +
+					(lingering != null ? $" and ended {lingering.Count} combat-logout linger(s)." : "."));
+			}
+
+			return moved;
 		}
 
 		/// <summary>

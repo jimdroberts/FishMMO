@@ -28,5 +28,21 @@ namespace FishMMO.Shared.Patcher
 		/// </summary>
 		[JsonPropertyName("file_data_entry_name")]
 		public string FileDataEntryName { get; set; }
+
+		/// <summary>
+		/// POSIX permission bits the file must carry once written, or null when the build host
+		/// could not report them (Windows, or a probe failure).
+		/// Serialized as 'unix_mode' in JSON, and omitted entirely when null.
+		/// </summary>
+		/// <remarks>
+		/// The updater creates new files with <c>File.Create</c>, which produces 0644 — so a
+		/// natively-executable file shipped as an addition arrives unrunnable. When this is
+		/// absent the updater falls back to sniffing the file's first bytes for an ELF/Mach-O
+		/// or shebang signature, which covers the cases that matter but is a heuristic; this
+		/// field is the exact answer where one is available.
+		/// </remarks>
+		[JsonPropertyName("unix_mode")]
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public int? UnixMode { get; set; }
 	}
 }

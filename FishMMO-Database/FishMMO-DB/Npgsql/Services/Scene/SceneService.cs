@@ -26,7 +26,20 @@ namespace FishMMO.Database.Npgsql.Services
 					.Where(s => s.CharacterID == characterId &&
 								s.SceneType == sceneType &&
 								s.WorldServerID == worldServerId &&
-								s.SceneName == sceneName)
+								s.SceneName == sceneName &&
+								/* Enterable rows only.
+								 *
+								 * Both callers already discard a row they cannot enter, so this
+								 * changes nothing for them except which row wins the ordering below
+								 * — and that mattered: a Failed row that happened to be newer than
+								 * a live one masked an instance the character actually owns. Since
+								 * EnqueueForPartyAsync blocks on that live row, the caller could
+								 * then neither reach it nor replace it until it unloaded of its own
+								 * accord. Filtering here makes what this returns agree with what
+								 * that insert guard considers to exist. */
+								(s.SceneStatus == (int)SceneStatus.Ready ||
+								 s.SceneStatus == (int)SceneStatus.Pending ||
+								 s.SceneStatus == (int)SceneStatus.Loading))
 					// Newest first: duplicate rows for the same (character, scene) can already
 					// exist from before this query filtered on the scene, and an unordered
 					// FirstOrDefault made which one came back a property of physical row order.
@@ -173,6 +186,126 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Zero means the insert was skipped because enough loads are already outstanding,
 			// which is the whole point of this method and is reported as success.
+			return result;
+		}
+
+		/// <summary>
+		/// Ceiling on how many party members the blocking check below considers.
+		/// </summary>
+		/// <remarks>
+		/// The predicate is built as an inline list of parameters rather than an array bind, so it
+		/// has to be bounded. Far above any real party size; a list longer than this is a caller
+		/// bug rather than a party, and truncating is safer than emitting unbounded SQL.
+		/// </remarks>
+		private const int MaxPartyBlockingIds = 64;
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<long>> EnqueueForPartyAsync(
+			long worldServerId,
+			string sceneName,
+			SceneType sceneType,
+			long characterId,
+			IReadOnlyList<long> partyCharacterIds,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
+			{
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
+			}
+
+			// Deduplicated, and the requester is always included: a row created for them between
+			// the caller's own lookup and this insert must block it too.
+			var blocking = new List<long>(MaxPartyBlockingIds);
+			var seen = new HashSet<long>();
+			if (characterId > 0 && seen.Add(characterId))
+			{
+				blocking.Add(characterId);
+			}
+			if (partyCharacterIds != null)
+			{
+				for (int i = 0; i < partyCharacterIds.Count && blocking.Count < MaxPartyBlockingIds; ++i)
+				{
+					long memberId = partyCharacterIds[i];
+					if (memberId > 0 && seen.Add(memberId))
+					{
+						blocking.Add(memberId);
+					}
+				}
+			}
+
+			if (blocking.Count == 0)
+			{
+				// Nothing to guard against; an unconditional insert is the same statement.
+				return await EnqueueAsync(worldServerId, sceneName, sceneType, characterId, cancellationToken).ConfigureAwait(false);
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				/* One statement, so no other member of the party can insert between the existence
+				 * check and this insert. scene_server_id and scene_handle are written as 0 because
+				 * no scene server owns the row yet — DequeueAsync hands it to one, and SetReadyAsync
+				 * stamps both. */
+				var ids = new System.Text.StringBuilder();
+				for (int i = 0; i < blocking.Count; ++i)
+				{
+					if (i > 0)
+					{
+						ids.Append(", ");
+					}
+					// Fixed parameter offset: {0}..{5} are the row values and the blocking states.
+					ids.Append('{').Append(6 + i).Append('}');
+				}
+
+				// Placeholder indices for the two extra status parameters, which sit after the
+				// variable-length id list. Computed rather than interpolated inline: `{{expr}}` in
+				// an interpolated verbatim string is an escaped literal brace, not a value.
+				int loadingIndex = 6 + blocking.Count;
+				int readyIndex = 7 + blocking.Count;
+
+				/* The guard deliberately does NOT match on scene_name.
+				 *
+				 * One instance per party, not one per party per dungeon. Scoped to the name, a
+				 * party could hold a live copy of every dungeon on the shard at once — open one,
+				 * walk out, open the next — and each abandoned copy held a full physics scene and
+				 * a scene row until its own idle timeout expired. The scene_name in the inserted
+				 * row is which dungeon this request is for; the NOT EXISTS below is "does this
+				 * party already have one open at all". */
+				var sql = $@"INSERT INTO {TableName}
+						(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created)
+					SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}
+					WHERE NOT EXISTS (
+						SELECT 1 FROM {TableName}
+						WHERE world_server_id = {{0}}
+							AND scene_type = {{3}}
+							AND character_id IN ({ids})
+							AND scene_status IN ({{2}}, {{{loadingIndex}}}, {{{readyIndex}}})
+					)
+					RETURNING id";
+
+				var parameters = new object[8 + blocking.Count];
+				parameters[0] = worldServerId;
+				parameters[1] = sceneName;
+				parameters[2] = (int)SceneStatus.Pending;
+				parameters[3] = (int)sceneType;
+				parameters[4] = characterId;
+				parameters[5] = DateTime.UtcNow;
+				for (int i = 0; i < blocking.Count; ++i)
+				{
+					parameters[6 + i] = blocking[i];
+				}
+				parameters[6 + blocking.Count] = (int)SceneStatus.Loading;
+				parameters[7 + blocking.Count] = (int)SceneStatus.Ready;
+
+				return await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					parameters,
+					reader => reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			// Zero means a party member already holds a usable instance, which is the whole point
+			// of this method and is reported as success.
 			return result;
 		}
 
@@ -455,6 +588,61 @@ namespace FishMMO.Database.Npgsql.Services
 				return MapEntityToDto(scene);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchCharacterInstancesAsync(
+			IReadOnlyList<long> characterIds,
+			SceneType sceneType,
+			long worldServerId,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0)
+			{
+				return DatabaseResult<IReadOnlyList<SceneData>>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
+			}
+
+			var ids = new List<long>();
+			var seen = new HashSet<long>();
+			if (characterIds != null)
+			{
+				for (int i = 0; i < characterIds.Count && ids.Count < MaxPartyBlockingIds; ++i)
+				{
+					long characterId = characterIds[i];
+					if (characterId > 0 && seen.Add(characterId))
+					{
+						ids.Add(characterId);
+					}
+				}
+			}
+
+			if (ids.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<SceneData>>.Success(Array.Empty<SceneData>());
+			}
+
+			int type = (int)sceneType;
+			int pending = (int)SceneStatus.Pending;
+			int loading = (int)SceneStatus.Loading;
+			int ready = (int)SceneStatus.Ready;
+
+			return await ExecuteReadAsync<IReadOnlyList<SceneData>>(async dbContext =>
+			{
+				var scenes = await dbContext.Scenes
+					.AsNoTracking()
+					.Where(s => ids.Contains(s.CharacterID) &&
+								s.SceneType == type &&
+								s.WorldServerID == worldServerId &&
+								(s.SceneStatus == pending || s.SceneStatus == loading || s.SceneStatus == ready))
+					// Newest first, so a caller taking the first match of a given scene name gets
+					// the most recently opened one — the same rule FetchCharacterInstanceAsync uses.
+					.OrderByDescending(s => s.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
+				return data;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

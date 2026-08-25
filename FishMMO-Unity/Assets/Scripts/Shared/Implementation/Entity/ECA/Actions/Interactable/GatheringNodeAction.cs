@@ -54,8 +54,15 @@ namespace FishMMO.Shared
 				amount = DeterministicRNG.Shared.Range(drop.MinAmount, drop.MaxAmount + 1);
 			}
 
+			/* A charge is only spent when the player actually received something. The grant fails
+			 * on a full inventory, and consuming a use for it burned a finite, shared resource —
+			 * on a node with one use left, that destroyed the node for everyone. */
 			Item newItem = new Item(drop.Item, (uint)amount);
-			data.OnGrantItem?.Invoke(initiator, inventoryController, newItem);
+			if (data.OnGrantItem == null ||
+				!data.OnGrantItem(initiator, inventoryController, newItem))
+			{
+				return;
+			}
 
 			if (node.AchievementTemplate != null &&
 				initiator.TryGet(out IAchievementController achievementController))

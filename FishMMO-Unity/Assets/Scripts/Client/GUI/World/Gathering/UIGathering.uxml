@@ -1,0 +1,32 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIGathering.uxml   —   FishMMO Gathering Progress            ║
+    ║                                                              ║
+    ║  A transient cast-bar shown while harvesting a node.          ║
+    ║  Opens on GatheringNodeBroadcast and closes itself.            ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIGathering.uss    — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*    Visual theme class  (FishMMO-Theme.uss)         ║
+    ║    gather-*  Layout class        (UIGathering.uss)           ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIGathering.uss" />
+
+    <ui:VisualElement name="panel-root" class="gather-panel">
+        <!-- Placeholder text; overwritten on every open, so never seen at runtime. -->
+        <ui:Label name="gather-label" class="fish-label gather-label" text="Gathering" />
+        <ui:VisualElement name="gather-bar" class="fish-bar gather-bar">
+            <ui:VisualElement name="gather-bar-fill" class="fish-bar__fill fish-bar__fill--teal gather-bar__fill" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+</ui:UXML>

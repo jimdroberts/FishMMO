@@ -12,6 +12,17 @@
 		private const int StreamBufferSize = 65536; // Buffer size for streaming operations (64KB).
 
 		/// <summary>
+		/// Largest single replacement segment a patch stream may declare (256 MiB).
+		/// </summary>
+		/// <remarks>
+		/// The generator coalesces contiguous differences, so one segment can legitimately be
+		/// most of a rewritten file — but not more than this, and a value beyond it means the
+		/// stream is corrupt rather than that the file is large. It exists to bound the
+		/// allocation, not to bound real patches.
+		/// </remarks>
+		private const int MaxSegmentBytes = 256 * 1024 * 1024;
+
+		/// <summary>
 		/// Applies a binary patch from a BinaryReader to a target file,
 		/// creating a new temporary file with the patched content.
 		/// The responsibility for replacing the original file and cleanup
@@ -46,21 +57,18 @@
 				// Ensure the temporary file is empty and ready for writing.
 				try { File.Delete(tempPatchedFilePath); } catch { /* Ignore if file doesn't exist or cannot be deleted immediately */ }
 
-				// Create a backup of the original file for rollback.
-				string backupFilePath = normalizedTargetFilePath + ".bak";
-				try
-				{
-					Console.WriteLine($"Attempting to create backup of '{normalizedTargetFilePath}' to '{backupFilePath}'.");
-					File.Copy(normalizedTargetFilePath, backupFilePath, true); // Overwrite if backup already exists
-					Console.WriteLine($"Created backup of '{normalizedTargetFilePath}' at '{backupFilePath}'.");
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine($"Error creating backup for '{normalizedTargetFilePath}': {ex.GetType().Name} - {ex.Message}");
-
-					try { File.Delete(tempPatchedFilePath); } catch { /* Ignore cleanup errors */ }
-					return null; // Critical failure, cannot proceed without a valid backup
-				}
+				/* No backup is taken here.
+				 *
+				 * This method used to copy the target to "<target>.bak" before reading it. That
+				 * was a second, redundant copy — the caller stages the original aside before it
+				 * replaces anything, which is the copy the rollback actually uses — and it
+				 * doubled the I/O of every patch, on a Unity client that means a full duplicate
+				 * of every changed asset. Worse, it wrote INTO the install and only removed the
+				 * file on the success path, so a failed patch left a complete second copy of
+				 * every touched file lying beside the originals until someone noticed.
+				 *
+				 * This method only ever READS the target; producing the patched bytes needs no
+				 * backup of its own. */
 
 				// Apply the patch by reading from the original and writing to a temporary file.
 				// originalFileStream: Allows other processes to read/write while open.
@@ -169,6 +177,28 @@
 			long offset = reader.ReadInt64();
 			int length = reader.ReadInt32();
 			int newBytesLength = reader.ReadInt32();
+
+			/* Every field above is a length or a position read straight out of the archive, so
+			 * every one of them is checked before it is used. BinaryReader.ReadBytes allocates
+			 * its whole buffer up front, which turns a single corrupt or hostile int into a
+			 * 2 GB allocation; a negative one throws from inside the BCL with a message that
+			 * says nothing about patch data. The archive is SHA-256 verified before the updater
+			 * ever runs, so this is not the load-bearing defence — but a parser that trusts its
+			 * own input for its allocation sizes is one integrity check away from being the
+			 * whole story. */
+			if (offset < 0)
+			{
+				throw new InvalidDataException($"Patch data declares a negative offset ({offset}).");
+			}
+			if (length < 0)
+			{
+				throw new InvalidDataException($"Patch data declares a negative replacement length ({length}).");
+			}
+			if (newBytesLength < 0 || newBytesLength > MaxSegmentBytes)
+			{
+				throw new InvalidDataException($"Patch data declares an implausible segment length ({newBytesLength} bytes).");
+			}
+
 			byte[] newBytes = reader.ReadBytes(newBytesLength);
 
 			if (newBytes.Length != newBytesLength)

@@ -154,10 +154,35 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cooldown">Minimum interval between switches.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// <c>true</c> when the switch may proceed and the character has been stamped;
-		/// <c>false</c> when it is still on cooldown.
+		/// The timestamp the claim replaced when the switch may proceed, so a caller that then
+		/// fails to perform the transfer can put it back with
+		/// <see cref="RollbackChannelSwitchAsync"/>; <c>null</c> when the character is still on
+		/// cooldown and nothing was stamped.
 		/// </returns>
-		Task<DatabaseResult<bool>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<DateTime?>> TryBeginChannelSwitchAsync(long characterId, TimeSpan cooldown, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Restores a channel-switch cooldown claimed by <see cref="TryBeginChannelSwitchAsync"/>
+		/// for a switch that did not happen.
+		/// </summary>
+		/// <remarks>
+		/// The claim has to be taken before the transfer, because it is the last thing that can
+		/// refuse the request — but the transfer can still fail after it: the character enters
+		/// combat during the validation, the connection goes away, or the scene server's
+		/// main-thread queue rejects the hand-off. Leaving the claim in place then charged a player
+		/// the full cooldown for a switch they were refused, and answered their retry with "you are
+		/// travelling too often" on top of the refusal they had already been given.
+		/// <para>
+		/// Restores the exact previous value rather than clearing the column, so a player who
+		/// genuinely switched moments ago still serves out the remainder of that cooldown. Nothing
+		/// else writes this column, and a character has one session, so the guard below cannot
+		/// discard a newer legitimate claim.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterId">Character whose claim is being released.</param>
+		/// <param name="previousUtc">The value returned by the claim, restored as-is.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<DatabaseResult> RollbackChannelSwitchAsync(long characterId, DateTime previousUtc, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Attempts to claim ownership of a character session (Offline → Online).

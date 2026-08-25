@@ -30,6 +30,20 @@ namespace FishMMO.Shared.Core
 		bool SetRandomDestination(float radius);
 
 		/// <summary>
+		/// Places the agent at a world position, updating its NavMesh location rather than only
+		/// its transform, and clears whatever it was doing.
+		/// </summary>
+		/// <remarks>
+		/// Exposed here so callers outside the AI assembly are not driven to
+		/// <see cref="NavMeshAgent.Warp"/> directly. The raw call skips NavMesh sampling, leaves
+		/// the existing path in place so the agent immediately walks back, and throws when the
+		/// agent is null or inactive — all three of which the pet summon path hit.
+		/// </remarks>
+		/// <param name="position">The world position to place the agent at.</param>
+		/// <returns>True if the agent was placed on the NavMesh.</returns>
+		bool WarpTo(Vector3 position);
+
+		/// <summary>
 		/// Stops the agent's movement.
 		/// </summary>
 		void Stop();
