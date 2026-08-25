@@ -640,6 +640,16 @@ namespace FishMMO.Client
 			 * visual tree for USS classes, and until the tree is cloned there is nothing to
 			 * query. ReinitializeIfTreeReplaced re-registers if the tree is later rebuilt. */
 			RegisterThemeRoot(root);
+
+			/* The interface scale is read during the client's boot phase, before any UIDocument
+			 * exists, so it has nowhere to be written at the moment it is resolved. The first
+			 * panel to come up supplies the PanelSettings it applies to; every later call is a
+			 * reference comparison and does nothing. */
+			if (Document != null)
+			{
+				UITKPanelScale.Register(Document.panelSettings);
+			}
+
 			return true;
 		}
 
@@ -823,6 +833,7 @@ namespace FishMMO.Client
 			 * dragged. Driven from here rather than from a manager of its own because every panel
 			 * already runs this and none of them may assume another one exists. */
 			UITKPanelPositions.Pump();
+			ClientSettings.Pump();
 
 			PollLoseFocus();
 			OnTick();
@@ -1533,6 +1544,36 @@ namespace FishMMO.Client
 			this.dragTarget.style.bottom = StyleKeyword.Auto;
 
 			this.appliedPosition = position;
+		}
+
+		/// <summary>
+		/// Re-reads this panel's stored position and moves it there, or returns it to the
+		/// stylesheet when nothing is stored.
+		/// </summary>
+		/// <remarks>
+		/// For the case where the stored position changed underneath the panel rather than because
+		/// of it — loading a shared UI profile is the only one today. <see cref="EnforcePosition"/>
+		/// reads the stored value exactly once, on first layout, and remembers that it has; without
+		/// this, a layout written into configuration would not appear until the client restarted.
+		/// <para>
+		/// The absence of a stored position is applied too, and deliberately: a profile that says
+		/// nothing about a panel means that panel belongs where the stylesheet puts it. Leaving it
+		/// wherever the player last dragged it would produce a layout that is neither theirs nor
+		/// the one they loaded.
+		/// </para>
+		/// </remarks>
+		public void ReloadStoredPosition()
+		{
+			if (!UITKPanelPositions.TryLoad(Name, out Vector2 stored))
+			{
+				ResetPosition();
+				return;
+			}
+
+			this.positionRestored = true;
+
+			// Through SetDragPosition, which snaps to the grid and clamps into the viewport.
+			SetDragPosition(stored);
 		}
 
 		/// <summary>

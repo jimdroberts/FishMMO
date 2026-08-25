@@ -1,0 +1,213 @@
+/*
+    UIInstance.uss
+    Layout for the instance-management panel. Colours come from FishMMO-Theme.uss.
+
+    The panel is a roster with a clock: a header carrying the instance's name and
+    how long it has left, a line naming who opened it, the members themselves,
+    and a footer of actions. Sizes are written against the 1200x800 reference
+    resolution declared by Assets/UI Toolkit/PanelSettings.asset.
+*/
+
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner. Centred, because this is a deliberate management window rather than
+    a persistent readout.
+*/
+.instance-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 320px;
+    max-height: 60%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.instance-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.instance-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.instance-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header and the subtitle overflows into the strip below.
+*/
+.instance-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.instance-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+/*
+    Wide enough for mm:ss without the badge resizing as the clock ticks — a
+    badge that changes width every second drags the header about with it.
+*/
+.instance-timer {
+    min-width: 48px;
+    height: 16px;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+}
+
+/* ── Leader line ────────────────────────────────────────── */
+
+.instance-leader {
+    height: 16px;
+    padding-left: 12px;
+    padding-right: 10px;
+    flex-shrink: 0;
+    -unity-text-align: middle-left;
+}
+
+/* ── Column strip ───────────────────────────────────────── */
+
+.instance-columns {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    padding-left: 12px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.instance-col {
+    flex-shrink: 0;
+}
+
+.instance-col--name { flex-grow: 1; }
+
+/* Matches the Remove button's footprint so the caption strip lines up with it. */
+.instance-col--action { width: 72px; }
+
+/* ── Body ───────────────────────────────────────────────── */
+
+.instance-scroll {
+    flex-grow: 1;
+    min-height: 60px;
+}
+
+.instance-list {
+    flex-direction: column;
+}
+
+/*
+    One roster row. The theme's .fish-row supplies the hover state and the
+    leading accent rail; this only sets the geometry. Taller than a plain list
+    row because it carries a button.
+*/
+.instance-row {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.instance-row__name {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.instance-row__action {
+    width: 66px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+/* The row for the member who opened the instance. */
+.instance-row--leader {
+    border-left-color: var(--brand-500);
+}
+
+/* The viewer's own row, so a roster of similar names is still readable at a glance. */
+.instance-row--self {
+    background-color: var(--brand-lo);
+}
+
+.instance-status {
+    margin-top: 18px;
+    margin-bottom: 18px;
+    white-space: normal;
+}
+
+/* ── Visibility ─────────────────────────────────────────── */
+
+/*
+    Sits between the roster and the footer: it describes the run rather than
+    acting on the viewer, so it does not belong among the buttons.
+*/
+.instance-privacy {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+}
+
+/*
+    A UITK Toggle lays its label out as a base-field label: a fixed minimum width
+    with the input half growing to fill whatever is left, which parks the
+    checkmark far from the words it belongs to. Pinned to its content here rather
+    than in the theme, because a form full of aligned toggles genuinely wants the
+    column and a lone one in a footer does not.
+*/
+.instance-privacy > .unity-base-field__label {
+    min-width: auto;
+    width: auto;
+    margin-right: 6px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
+
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.instance-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.instance-action {
+    flex-grow: 1;
+    height: 22px;
+    margin-left: 2px;
+    margin-right: 2px;
+}

@@ -1,3 +1,4 @@
+using System;
 using FishNet.Broadcast;
 using FishNet.Managing.Scened;
 
@@ -167,6 +168,38 @@ namespace FishMMO.Shared
 		/// send — the player experienced as the button doing nothing at all.
 		/// </remarks>
 		AlreadyAtDestination = 7,
+
+		/// <summary>
+		/// The character does not meet the difficulty's own entry requirements.
+		/// </summary>
+		/// <remarks>
+		/// A dungeon declares its requirements per difficulty — a minimum level, a minimum party
+		/// size — so the same character can be turned away from Hard and welcomed on Normal. Kept
+		/// distinct from <see cref="CharacterStateChanged"/> because it is not transient: waiting
+		/// will not fix it, and telling the player it might is worse than telling them nothing.
+		/// </remarks>
+		RequirementsNotMet = 8,
+
+		/// <summary>
+		/// The instance the request named is not one the requester may join.
+		/// </summary>
+		/// <remarks>
+		/// It closed, went private, filled, or was never joinable and the row ID was guessed. All
+		/// four are reported the same way on purpose: a refusal that distinguished them would let
+		/// an ID be probed to learn whether a particular instance exists.
+		/// </remarks>
+		InstanceUnavailable = 9,
+
+		/// <summary>
+		/// The character is in a party and cannot join another group's instance without leaving it.
+		/// </summary>
+		/// <remarks>
+		/// Joining somebody else's run also joins their party. Doing that silently would drop the
+		/// character out of a group they are already in — and, if they led it, hand that group to
+		/// somebody else without asking. So it is refused, and leaving is left as the player's own
+		/// deliberate act.
+		/// </remarks>
+		AlreadyInParty = 10,
 	}
 
 	/// <summary>
@@ -196,6 +229,131 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public struct RequestLeaveInstanceBroadcast : IBroadcast
 	{
+	}
+
+	/// <summary>
+	/// Broadcast asking the server for the state of the instance the character is standing in.
+	/// </summary>
+	/// <remarks>
+	/// Sent when the player opens the instance panel and on its refresh timer. Everything the
+	/// panel shows is server state that changes without the client being told — members leave,
+	/// the lifetime counts down — and there is no push channel for it, so the panel asks rather
+	/// than rendering something it cached.
+	/// </remarks>
+	public struct RequestInstanceDetailsBroadcast : IBroadcast
+	{
+	}
+
+	/// <summary>
+	/// One member of an instance, as presented to another member.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="IsLeader"/> and <see cref="IsSelf"/> are resolved by the server for the
+	/// specific character being answered rather than left for the client to work out. The client
+	/// cannot reliably decide either — and more to the point it must not, because the same
+	/// judgement decides whether the kick controls are offered.
+	/// </remarks>
+	[Serializable]
+	public struct InstanceMemberData
+	{
+		/// <summary>The member's character ID. The only identity a kick request may name.</summary>
+		public long CharacterID;
+
+		/// <summary>The member's character name, for display.</summary>
+		public string Name;
+
+		/// <summary>Whether this member leads the party that owns the instance.</summary>
+		public bool IsLeader;
+
+		/// <summary>Whether this member is the character being answered.</summary>
+		public bool IsSelf;
+	}
+
+	/// <summary>
+	/// Broadcast carrying the state of an instance to one of its members.
+	/// </summary>
+	/// <remarks>
+	/// Answered for every request, including the ones with nothing to report — a character that
+	/// is not in an instance gets <see cref="InInstance"/> false rather than silence, for the
+	/// same reason the channel list answers with an empty list: a panel the player opened and
+	/// that never fills in is indistinguishable from a hung game.
+	/// </remarks>
+	public struct InstanceDetailsBroadcast : IBroadcast
+	{
+		/// <summary>False when the character is not in an instance; every other field is then unset.</summary>
+		public bool InInstance;
+
+		/// <summary>Scene name of the instance.</summary>
+		public string SceneName;
+
+		/// <summary>
+		/// Seconds until the instance closes on its own, or 0 when it is not time-bounded.
+		/// </summary>
+		/// <remarks>
+		/// A snapshot. The client counts down from it between refreshes rather than being sent a
+		/// tick, so the number on screen keeps moving without a message per second.
+		/// </remarks>
+		public int RemainingSeconds;
+
+		/// <summary>Character ID of the leader of the party that owns the instance.</summary>
+		public long LeaderCharacterID;
+
+		/// <summary>Name of that leader, for display.</summary>
+		public string LeaderName;
+
+		/// <summary>
+		/// Whether the character being answered is the leader, and so may remove others.
+		/// </summary>
+		/// <remarks>
+		/// Decided by the server and sent, rather than inferred client-side by comparing IDs. The
+		/// client's copy of this only decides whether the controls are <em>drawn</em>; the server
+		/// re-checks on the request itself, because a drawn control is not an authorisation.
+		/// </remarks>
+		public bool ViewerIsLeader;
+
+		/// <summary>Everyone currently standing in the instance.</summary>
+		public InstanceMemberData[] Members;
+
+		/// <summary>Name of the difficulty the instance was opened at, for display.</summary>
+		public string DifficultyName;
+
+		/// <summary>
+		/// Whether the instance is hidden from the dungeon finder's public list.
+		/// </summary>
+		/// <remarks>
+		/// Shown to every member, not only the leader. Whether strangers can walk into the run
+		/// they are in is something all of them have an interest in knowing; only the leader can
+		/// change it.
+		/// </remarks>
+		public bool IsPrivate;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast showing or hiding the instance in the dungeon finder's list.
+	/// </summary>
+	/// <remarks>
+	/// Honoured only for the leader of the party that owns the instance, and re-authorised
+	/// against the row itself when it is written — the client's copy of who leads decides only
+	/// whether the control is drawn.
+	/// </remarks>
+	public struct InstancePrivacyBroadcast : IBroadcast
+	{
+		/// <summary>True to hide the instance from the finder, false to offer it.</summary>
+		public bool IsPrivate;
+	}
+
+	/// <summary>
+	/// Broadcast asking the server to remove another character from the instance.
+	/// </summary>
+	/// <remarks>
+	/// Honoured only for the member who opened the instance, and never for themselves — a leader
+	/// who wants out uses <see cref="RequestLeaveInstanceBroadcast"/> like anyone else, which
+	/// keeps "I am leaving" and "you are leaving" as separate, separately-authorised requests.
+	/// </remarks>
+	public struct InstanceKickBroadcast : IBroadcast
+	{
+		/// <summary>Character to remove from the instance.</summary>
+		public long CharacterID;
 	}
 
 	/// <summary>

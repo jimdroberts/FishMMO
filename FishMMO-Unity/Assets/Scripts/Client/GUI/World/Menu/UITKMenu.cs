@@ -1,4 +1,5 @@
 ﻿using UnityEngine.UIElements;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -24,6 +25,8 @@ namespace FishMMO.Client
 		private const string OPTIONS_BUTTON_NAME = "menu-options-btn";
 		/// <summary>Name of the scene-channel picker button element in the UXML.</summary>
 		private const string CHANNELS_BUTTON_NAME = "menu-channels-btn";
+		/// <summary>Name of the instance-management button element in the UXML.</summary>
+		private const string INSTANCE_BUTTON_NAME = "menu-instance-btn";
 		/// <summary>Name of the quit-to-login button element in the UXML.</summary>
 		private const string QUIT_TO_LOGIN_BUTTON_NAME = "menu-quit-to-login-btn";
 		/// <summary>Name of the quit button element in the UXML.</summary>
@@ -53,6 +56,12 @@ namespace FishMMO.Client
 				channelsButton.clicked += OnButtonChannels;
 			}
 
+			Button instanceButton = Root.Q<Button>(INSTANCE_BUTTON_NAME);
+			if (instanceButton != null)
+			{
+				instanceButton.clicked += OnButtonInstance;
+			}
+
 			Button quitToLoginButton = Root.Q<Button>(QUIT_TO_LOGIN_BUTTON_NAME);
 			if (quitToLoginButton != null)
 			{
@@ -80,7 +89,10 @@ namespace FishMMO.Client
 			if (UIManager.TryGetTK("UIOptions", out UITKOptions uiOptions))
 			{
 				uiOptions.Show();
+				return;
 			}
+
+			ReportUnavailable("Options are not available right now.");
 		}
 
 		/// <summary>
@@ -101,7 +113,58 @@ namespace FishMMO.Client
 			if (UIManager.TryGetTK("UISceneChannel", out UITKSceneChannel sceneChannel))
 			{
 				sceneChannel.Show();
+				return;
 			}
+
+			/* Reported, not swallowed. The picker lives in ClientWorldGUI while this menu can be
+			 * reached from anywhere that loads it, so "no panel answered to that name" is a real
+			 * state — and a button that does nothing at all, twice, is indistinguishable from a
+			 * frozen client. */
+			ReportUnavailable("Channel selection is not available right now.");
+		}
+
+		/// <summary>
+		/// Tells the player that a menu destination could not be opened.
+		/// </summary>
+		/// <param name="message">What could not be opened.</param>
+		/// <remarks>
+		/// Best-effort, and deliberately silent when even the dialog is missing: this is already
+		/// the failure path, and the alternative is an exception raised from a button handler.
+		/// </remarks>
+		private static void ReportUnavailable(string message)
+		{
+			if (UIManager.TryGetTK(DIALOG_NAME, out UITKDialogBox dialog))
+			{
+				dialog.Open(message);
+				return;
+			}
+
+			Log.Warning("UITKMenu", message);
+		}
+
+		/// <summary>
+		/// Opens the instance-management panel.
+		/// </summary>
+		/// <remarks>
+		/// Offered unconditionally rather than only while the player is in a dungeon. The menu is
+		/// built once and the panel is what knows whether there is an instance to describe — it
+		/// asks the server on every open and says "You are not in a dungeon" when there is not,
+		/// which is a better answer than a button that is sometimes missing for reasons the player
+		/// has to infer.
+		/// <para>
+		/// The menu stays open behind it, as it does for Options and Channels: closing here would
+		/// leave a player who opened it by mistake with no way back to Resume.
+		/// </para>
+		/// </remarks>
+		public void OnButtonInstance()
+		{
+			if (UIManager.TryGetTK("UIInstance", out UITKInstance instance))
+			{
+				instance.Show();
+				return;
+			}
+
+			ReportUnavailable("Dungeon information is not available right now.");
 		}
 
 		/// <summary>

@@ -144,11 +144,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// physics scene and a scene row until its own idle timeout expired.
 		/// </para>
 		/// </remarks>
+		/// <param name="worldServerId">World server the instance belongs to.</param>
+		/// <param name="sceneName">Dungeon scene to open.</param>
+		/// <param name="sceneType">Instance type, normally <see cref="SceneType.Group"/>.</param>
+		/// <param name="characterId">Character opening the instance.</param>
+		/// <param name="partyId">
+		/// Party that will own the instance, or 0 for an ungrouped character. Recorded on the row
+		/// and blocked on in addition to the member ids, so the instance stays resolvable by the
+		/// party even after whoever opened it has left or logged out.
+		/// </param>
+		/// <param name="difficulty">Index into the dungeon's own difficulty list.</param>
+		/// <param name="isPrivate">True to open it hidden from the dungeon finder's public list.</param>
+		/// <param name="partyCharacterIds">Party roster to block on; duplicates and non-positive ids are ignored.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
 		Task<DatabaseResult<long>> EnqueueForPartyAsync(
 			long worldServerId,
 			string sceneName,
 			SceneType sceneType,
 			long characterId,
+			long partyId,
+			int difficulty,
+			bool isPrivate,
 			IReadOnlyList<long> partyCharacterIds,
 			CancellationToken cancellationToken = default);
 
@@ -170,12 +186,71 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="characterIds">Characters to look up; duplicates and non-positive ids are ignored.</param>
 		/// <param name="sceneType">Instance type to match, normally <see cref="SceneType.Group"/>.</param>
 		/// <param name="worldServerId">World server the characters belong to.</param>
+		/// <param name="partyId">
+		/// Party to match in addition to the character ids, or 0 to match on characters alone.
+		/// This is what makes an instance resolvable after its opener has left the party or logged
+		/// out: without it the remaining members see nothing, open a second copy, and split from
+		/// anyone still inside — and a member who steps out cannot get back in.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>The matching rows, newest first. Empty when the characters hold none.</returns>
 		Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchCharacterInstancesAsync(
 			IReadOnlyList<long> characterIds,
 			SceneType sceneType,
 			long worldServerId,
+			long partyId = 0,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Lists the instances of one dungeon, at one difficulty, that anybody may join.
+		/// </summary>
+		/// <remarks>
+		/// Backs the dungeon finder's browsable list. Excludes instances the owning party has
+		/// marked private and instances already at capacity, because neither can be joined and a
+		/// row whose Join is guaranteed to be refused is worse than no row.
+		/// <para>
+		/// Includes instances that are still Pending or Loading. A party that has just opened a
+		/// dungeon spends several seconds in those states, which is exactly when a straggler is
+		/// looking for them — hiding it would show an empty list to somebody whose group is right
+		/// there, and they would open a second copy.
+		/// </para>
+		/// </remarks>
+		/// <param name="worldServerId">World server to search.</param>
+		/// <param name="sceneName">Dungeon scene name.</param>
+		/// <param name="difficulty">Difficulty index to match.</param>
+		/// <param name="sceneType">Instance type, normally <see cref="SceneType.Group"/>.</param>
+		/// <param name="maxClients">Capacity of one instance of this dungeon; rows at or above it are omitted.</param>
+		/// <param name="maxRows">Ceiling on rows returned. Clamped to 1..128.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Joinable rows, oldest first. Empty when there are none.</returns>
+		Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchJoinableInstancesAsync(
+			long worldServerId,
+			string sceneName,
+			int difficulty,
+			SceneType sceneType,
+			int maxClients,
+			int maxRows = 32,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Shows or hides one instance in the dungeon finder's public list.
+		/// </summary>
+		/// <remarks>
+		/// Ownership is re-asserted inside the UPDATE rather than checked beforehand, so an
+		/// authorisation that went stale between the caller's roster read and this write updates
+		/// nothing instead of flipping another party's dungeon.
+		/// </remarks>
+		/// <param name="sceneId">Instance row to change.</param>
+		/// <param name="requiredPartyId">Party that must own the row, or 0 for an ungrouped instance.</param>
+		/// <param name="requiredCharacterId">Character that must own an ungrouped row.</param>
+		/// <param name="isPrivate">True to hide it from the list, false to offer it.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>True when a row was actually updated; false when the caller does not own it.</returns>
+		Task<DatabaseResult<bool>> SetInstancePrivacyAsync(
+			long sceneId,
+			long requiredPartyId,
+			long requiredCharacterId,
+			bool isPrivate,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

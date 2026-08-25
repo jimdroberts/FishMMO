@@ -8,14 +8,26 @@
                 <ui:Label text="OPTIONS" class="fish-panel__title" />
             </ui:VisualElement>
 
-            <ui:ScrollView name="options-scroll" class="fish-scroll options-scroll">
+            <!--
+                One page per tab. Only the active page is displayed; UITKOptions owns which that
+                is. Pages exist in the tree whether or not they are shown, so every control is
+                resolved once in OnStarting rather than being rebuilt whenever a tab is selected.
+            -->
+            <ui:VisualElement name="options-tabs" class="options-tabs">
+                <ui:Button name="options-tab-display" text="Display" class="fish-tab options-tab" />
+                <ui:Button name="options-tab-audio" text="Audio" class="fish-tab options-tab" />
+                <ui:Button name="options-tab-gameplay" text="Gameplay" class="fish-tab options-tab" />
+                <ui:Button name="options-tab-controls" text="Key Bindings" class="fish-tab options-tab" />
+                <ui:Button name="options-tab-interface" text="UI" class="fish-tab options-tab" />
+            </ui:VisualElement>
 
-                <!-- ── Screen ───────────────────────────────────── -->
-                <!--
-                    Display settings are staged, not applied on change. A bad mode can leave the
-                    player unable to see the control that would undo it, so nothing here takes
-                    effect until Apply, and Apply arms a countdown that puts it back.
-                -->
+            <!-- ══ Display ═══════════════════════════════════════ -->
+            <!--
+                Display settings are staged, not applied on change. A bad mode can leave the
+                player unable to see the control that would undo it, so nothing here takes
+                effect until Apply, and Apply arms a countdown that puts it back.
+            -->
+            <ui:ScrollView name="options-page-display" class="fish-scroll options-scroll">
                 <ui:Label text="SCREEN" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Resolution" class="fish-label options-row-label" />
@@ -29,18 +41,6 @@
                     <ui:Label text="Fullscreen" class="fish-label options-row-label" />
                     <ui:DropdownField name="fullscreen-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Brightness" class="fish-label options-row-label" />
-                    <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
-                    <ui:DropdownField name="framerate-dropdown" class="fish-dropdown options-row-field" />
-                </ui:VisualElement>
-                <ui:VisualElement class="options-row">
-                    <ui:Label text="VSync" class="fish-label options-row-label" />
-                    <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
-                </ui:VisualElement>
                 <ui:VisualElement class="options-row options-row--action">
                     <ui:Label name="options-screen-status" text="" class="fish-hint options-screen-status" />
                     <ui:Button name="options-screen-keep-btn" text="Keep"
@@ -51,24 +51,84 @@
                                class="fish-button fish-button--primary options-screen-btn" />
                 </ui:VisualElement>
 
-                <!-- ── Controls ─────────────────────────────────── -->
-                <!-- Rows are built by UITKOptions from the PlayerControls asset. -->
-                <ui:Label text="CONTROLS" class="fish-attr-category options-section" />
-                <ui:VisualElement name="options-controls-list" class="options-list" />
-                <ui:Label name="options-controls-status" text="" class="fish-hint options-controls-status" />
+                <ui:Label text="GRAPHICS" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Quality" class="fish-label options-row-label" />
+                    <ui:DropdownField name="quality-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Brightness" class="fish-label options-row-label" />
+                    <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
+                    <ui:Label name="brightness-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
+                    <ui:DropdownField name="framerate-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="VSync" class="fish-label options-row-label" />
+                    <ui:Toggle name="vsync-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label name="options-graphics-hint" text="" class="fish-hint options-hint" />
+            </ui:ScrollView>
+
+            <!-- ══ Audio ═════════════════════════════════════════ -->
+            <!-- Rows are built by UITKOptions from the AudioChannel enum. -->
+            <ui:ScrollView name="options-page-audio" class="fish-scroll options-scroll">
+                <ui:Label text="VOLUME" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-audio-list" class="options-list" />
+                <ui:Label text="BEHAVIOUR" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Mute When Unfocused" class="fish-label options-row-label" />
+                    <ui:Toggle name="audio-mute-unfocused-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
                 <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="options-reset-audio-btn" text="Reset Audio"
+                               class="fish-button options-reset-btn" />
+                </ui:VisualElement>
+            </ui:ScrollView>
+
+            <!-- ══ Gameplay ══════════════════════════════════════ -->
+            <!-- Rows are built by UITKOptions from its GameplayToggles table. -->
+            <ui:ScrollView name="options-page-gameplay" class="fish-scroll options-scroll">
+                <ui:Label text="GAMEPLAY" class="fish-attr-category options-section" />
+                <ui:VisualElement name="options-gameplay-list" class="options-list" />
+            </ui:ScrollView>
+
+            <!-- ══ Key Bindings ══════════════════════════════════ -->
+            <!-- Rows are built by UITKOptions from the PlayerControls asset. -->
+            <!--
+                The status line and Reset All Keys sit OUTSIDE the scroller. The list is forty-odd
+                rows tall, so anything inside it is off-screen for most of the page — and the two
+                things that must never be off-screen are the message explaining why a rebind was
+                refused, and the control that undoes a set of bindings the player has broken.
+            -->
+            <ui:VisualElement name="options-page-controls" class="options-page">
+                <ui:VisualElement class="options-row options-row--action options-controls-bar">
+                    <ui:Label name="options-controls-status" text="" class="fish-hint options-controls-status" />
                     <ui:Button name="options-reset-controls-btn" text="Reset All Keys"
                                class="fish-button options-reset-btn" />
                 </ui:VisualElement>
+                <ui:Label text="Click a binding, then press the key you want.  Escape cancels  ·  Backspace clears a binding  ·  each key can only be used once."
+                          class="fish-hint options-hint options-controls-hint" />
+                <ui:ScrollView class="fish-scroll options-scroll">
+                    <ui:VisualElement name="options-controls-list" class="options-list" />
+                </ui:ScrollView>
+            </ui:VisualElement>
 
-                <!-- ── Interface ────────────────────────────────── -->
-                <!--
-                    Window layout. The snap grid rounds a dragged panel onto a lattice so two
-                    windows placed side by side actually line up; Reset returns every panel to the
-                    position its stylesheet gives it, which is the only way back from a panel left
-                    on a monitor that is no longer attached.
-                -->
-                <ui:Label text="INTERFACE" class="fish-attr-category options-section" />
+            <!-- ══ UI ════════════════════════════════════════════ -->
+            <!--
+                Window layout, theme colours, and the shareable profile that carries both. The
+                layout reset is the only way back from an arrangement the player cannot fix by
+                dragging — a panel left on a monitor that is no longer attached, most obviously.
+            -->
+            <ui:ScrollView name="options-page-interface" class="fish-scroll options-scroll">
+                <ui:Label text="LAYOUT" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Interface Scale" class="fish-label options-row-label" />
+                    <ui:Slider name="ui-scale-slider" low-value="0.75" high-value="1.5" class="options-row-field" />
+                    <ui:Label name="ui-scale-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Window Snap Grid" class="fish-label options-row-label" />
                     <ui:Slider name="ui-snap-slider" low-value="0" high-value="32" class="options-row-field" />
@@ -79,13 +139,6 @@
                                class="fish-button options-reset-btn" />
                 </ui:VisualElement>
 
-                <!-- ── Gameplay ─────────────────────────────────── -->
-                <!-- Rows are built by UITKOptions from its GameplayToggles table. -->
-                <ui:Label text="GAMEPLAY" class="fish-attr-category options-section" />
-                <ui:VisualElement name="options-gameplay-list" class="options-list" />
-
-                <!-- ── Colours ──────────────────────────────────── -->
-                <!-- Rows are built by UITKOptions from UITKTheme.ColorNames. -->
                 <ui:Label text="COLOURS" class="fish-attr-category options-section" />
                 <ui:VisualElement name="options-color-list" class="options-list" />
                 <ui:VisualElement class="options-row options-row--action">
@@ -93,6 +146,21 @@
                                class="fish-button options-reset-btn" />
                 </ui:VisualElement>
 
+                <ui:Label text="UI PROFILE" class="fish-attr-category options-section" />
+                <ui:Label text="Saves this layout, scale and colour scheme to a file of its own, separate from Configuration.cfg, so it can be shared."
+                          class="fish-hint options-hint" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Saved Profiles" class="fish-label options-row-label" />
+                    <ui:DropdownField name="ui-profile-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="ui-profile-load-btn" text="Load" class="fish-button options-profile-btn" />
+                    <ui:Button name="ui-profile-delete-btn" text="Delete" class="fish-button options-profile-btn" />
+                    <ui:Button name="ui-profile-save-btn" text="Save As…"
+                               class="fish-button fish-button--primary options-profile-btn" />
+                </ui:VisualElement>
+                <ui:Label name="ui-profile-status" text="" class="fish-hint options-profile-status" />
+                <ui:Label name="ui-profile-path" text="" class="fish-hint options-profile-path" />
             </ui:ScrollView>
 
             <ui:VisualElement name="options-footer" class="fish-panel__footer options-footer">

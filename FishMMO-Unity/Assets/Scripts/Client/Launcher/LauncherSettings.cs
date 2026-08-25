@@ -306,26 +306,11 @@ namespace FishMMO.Client
 		/// </remarks>
 		public static void EnsureLoaded()
 		{
-			if (Configuration.GlobalSettings != null)
-			{
-				return;
-			}
-
-			try
-			{
-				Configuration.SetGlobalSettings(new Configuration(Constants.GetWorkingDirectory()));
-				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME))
-				{
-					Log.Debug("LauncherSettings", "No configuration file found; launcher defaults will be used.");
-				}
-			}
-			catch (Exception ex)
-			{
-				// A settings file that cannot be read must not stop the launcher. Every getter
-				// below falls back to its default when the store is unavailable, so the
-				// launcher continues with the behaviour it has always had.
-				Log.Warning("LauncherSettings", $"Could not load launcher configuration: {ex.Message}. Using defaults.");
-			}
+			/* Delegated rather than duplicated. Two places that each construct a Configuration
+			 * over the same file is how the launcher and the game end up with separate stores —
+			 * whichever saves last wins, and the other half's changes vanish. ClientSettings owns
+			 * the single instance and every caller asks it. */
+			ClientSettings.EnsureLoaded();
 		}
 
 		/// <summary>

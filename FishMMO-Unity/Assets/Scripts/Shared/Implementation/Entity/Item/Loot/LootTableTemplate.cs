@@ -70,9 +70,31 @@ namespace FishMMO.Shared
 		/// <param name="rng">Random source. Falls back to the shared generator when null.</param>
 		/// <param name="results">Receives the rolled items. Cleared before use.</param>
 		/// <param name="currency">Receives the rolled currency amount.</param>
-		public void Roll(DeterministicRNG rng, List<Item> results, out int currency)
+		/// <param name="quantityMultiplier">
+		/// Scales the amount in each stack rolled, for a dungeon difficulty that pays better. 1
+		/// leaves the table alone, which is what the open world always passes.
+		/// </param>
+		/// <param name="currencyMultiplier">Scales the currency rolled. 1 leaves it alone.</param>
+		public void Roll(DeterministicRNG rng, List<Item> results, out int currency, float quantityMultiplier = 1.0f, float currencyMultiplier = 1.0f)
 		{
 			currency = 0;
+
+			/* Applied to the amounts rolled, never to the drop chances or to the number of entries
+			 * considered.
+			 *
+			 * Scaling chance would change *what* a table can produce — a rare line that is meant
+			 * to be rare on every difficulty would stop being rare on the hardest one, which is a
+			 * much larger design statement than "this difficulty pays more". Scaling the amounts
+			 * keeps the shape of a table intact and changes only how much of it you get.
+			 */
+			if (quantityMultiplier < 0.0f)
+			{
+				quantityMultiplier = 0.0f;
+			}
+			if (currencyMultiplier < 0.0f)
+			{
+				currencyMultiplier = 0.0f;
+			}
 
 			if (results == null)
 			{
@@ -91,6 +113,13 @@ namespace FishMMO.Shared
 				int maximum = Mathf.Max(minimum, MaximumCurrency);
 				// Range's upper bound is exclusive, so an inclusive maximum needs the +1.
 				currency = minimum == maximum ? minimum : rng.Range(minimum, maximum + 1);
+
+				if (currencyMultiplier != 1.0f)
+				{
+					// Rounded, then floored at 1 for any table that rolled something at all: a
+					// reduced multiplier should thin a purse, not empty it.
+					currency = Mathf.Max(currency > 0 ? 1 : 0, Mathf.RoundToInt(currency * currencyMultiplier));
+				}
 			}
 
 			if (Entries == null || Entries.Count < 1)
@@ -116,6 +145,13 @@ namespace FishMMO.Shared
 				int minimum = Mathf.Max(1, entry.MinimumAmount);
 				int maximum = Mathf.Max(minimum, entry.MaximumAmount);
 				int amount = minimum == maximum ? minimum : rng.Range(minimum, maximum + 1);
+
+				if (quantityMultiplier != 1.0f)
+				{
+					// At least one. An entry that passed its drop chance has dropped; a multiplier
+					// must not turn that into an empty slot.
+					amount = Mathf.Max(1, Mathf.RoundToInt(amount * quantityMultiplier));
+				}
 
 				/* Clamp to the template's own stack ceiling. A corpse slot holds one Item, and an
 				 * Item over its MaxStackSize is a stack the inventory can never accept whole —

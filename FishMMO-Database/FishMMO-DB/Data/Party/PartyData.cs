@@ -8,9 +8,15 @@ namespace FishMMO.Database.Data
 		/// <summary>Primary key.</summary>
 		public readonly long ID;
 
-		public PartyData(long id)
+		/// <summary>
+		/// World server this party belongs to. A party exists on exactly one.
+		/// </summary>
+		public readonly long WorldServerID;
+
+		public PartyData(long id, long worldServerID = 0)
 		{
 			ID = id;
+			WorldServerID = worldServerID;
 		}
 	}
 }

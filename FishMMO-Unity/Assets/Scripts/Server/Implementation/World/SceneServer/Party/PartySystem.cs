@@ -922,8 +922,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				float healthPCT = partyController.Character.TryGet(out ICharacterAttributeController attributeController)
 					? attributeController.GetHealthResourceAttributeCurrentPercentage()
 					: 0.0f;
+				/* Stamped on the party at creation and never changed afterwards. A party belongs
+				 * to the world server it was formed on; a member who later arrives on a different
+				 * one is dropped from it rather than carrying it across. */
+				long worldServerID = player.WorldServerID;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT), guardKey, characterID);
+				deferGuardRelease = TryEnqueueIngressWork(() => CreatePartyAsync(conn, characterID, sceneName, healthPCT, worldServerID), guardKey, characterID);
 				if (!deferGuardRelease) SendServerBusy(conn);
 			}
 			finally
@@ -943,7 +947,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sceneName">Current scene name for broadcast context.</param>
 		/// <param name="healthPCT">Current requester health percentage.</param>
 		/// <returns>Asynchronous party-creation task.</returns>
-		private async Task CreatePartyAsync(NetworkConnection conn, long characterID, string sceneName, float healthPCT)
+		private async Task CreatePartyAsync(NetworkConnection conn, long characterID, string sceneName, float healthPCT, long worldServerID)
 		{
 			try
 			{
@@ -957,7 +961,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult<long> createResult = await partyService.CreateAsync();
+				DatabaseResult<long> createResult = await partyService.CreateAsync(worldServerID);
 				if (!createResult.IsSuccess)
 				{
 					return;
@@ -1361,6 +1365,333 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+
+		/// <summary>
+		/// Adds a character to an existing party without an invitation, on behalf of the dungeon
+		/// finder. Call from an async worker.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Joining somebody else's dungeon joins their group. It has to: an instance's leadership,
+		/// its kick authority, and its very identity are all the owning party's, so a character
+		/// standing inside one while belonging to nobody would be in a run with no one able to
+		/// manage them and no way for them to be found by it again.
+		/// </para>
+		/// <para>
+		/// <b>This is not an invitation bypass.</b> The only caller is the dungeon finder, and it
+		/// calls this only after establishing that the party has published a joinable instance —
+		/// which is an explicit, revocable offer by that party's leader. A character who already
+		/// belongs to a party is refused before reaching here rather than being moved, because
+		/// silently removing somebody from a group they are in, and possibly lead, is not
+		/// something a click on a dungeon list should be able to do.
+		/// </para>
+		/// <para>
+		/// Capacity is enforced against the same <see cref="MaxPartySize"/> the invitation path
+		/// uses. A full party's instance simply cannot be joined, which is the correct outcome:
+		/// there would be nobody to add the joiner to.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The joining character's connection.</param>
+		/// <param name="characterID">The joining character.</param>
+		/// <param name="partyID">Party that owns the instance being joined.</param>
+		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
+		/// <returns>True when membership was persisted; false when it was refused or failed.</returns>
+		public async Task<bool> TryAddCharacterToPartyAsync(NetworkConnection conn, long characterID, long partyID, float healthPCT)
+		{
+			if (conn == null || characterID <= 0 || partyID <= 0)
+			{
+				return false;
+			}
+
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
+					!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return false;
+				}
+
+				/* Read the roster before persisting, exactly as the invitation path does.
+				 *
+				 * PersistAsync enforces the cap itself, but reading first is what lets a full
+				 * party be reported as a refusal the finder can turn into "that group is full"
+				 * rather than a bare failure indistinguishable from a database fault. */
+				DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
+				if (!membersResult.IsSuccess || membersResult.Data == null)
+				{
+					await Log.Warning("PartySystem", $"Could not read party {partyID} while joining an instance for character {characterID}.");
+					return false;
+				}
+
+				if (membersResult.Data.Count >= MaxPartySize)
+				{
+					return false;
+				}
+
+				/* Already a member — treat as success rather than as a failure.
+				 *
+				 * Reachable without a modified client: a member who walked out of their own
+				 * party's instance and came back through the finder's list arrives here still on
+				 * the roster. Persisting again would be harmless but refusing would lock them out
+				 * of the dungeon they had just left. */
+				for (int i = 0; i < membersResult.Data.Count; ++i)
+				{
+					if (membersResult.Data[i].CharacterID == characterID)
+					{
+						return true;
+					}
+				}
+
+				CharacterPartyData partyData = new CharacterPartyData(0, 1, characterID, partyID, (byte)PartyRank.Member, healthPCT);
+				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
+				if (!persistResult.IsSuccess)
+				{
+					return false;
+				}
+
+				/* Re-read the roster and repair a party that has been left leaderless.
+				 *
+				 * The join and a departure race each other, and the departure is the dangerous
+				 * half: LeavePartyAsync hands leadership to one of the *remaining* members, chosen
+				 * from a roster read before this insert landed. If the leader left in that window
+				 * the transfer either picked nobody — the party was empty as far as it could see —
+				 * or picked somebody who has since gone too, and the joiner arrives into a party
+				 * with no leader at all. Nothing would ever repair that on its own: promotion
+				 * requires a leader to perform it, closing the dungeon requires a leader to
+				 * authorise it, and the party would drift until its last member logged out.
+				 *
+				 * Cheap to check and unambiguous to fix, so it is checked on every join rather
+				 * than only when a race is suspected. */
+				DatabaseResult<IReadOnlyList<CharacterPartyData>> afterResult = await charPartyService.FetchManyAsync(partyID);
+				PartyRank joinedRank = PartyRank.Member;
+				if (afterResult.IsSuccess && afterResult.Data != null && afterResult.Data.Count > 0)
+				{
+					bool hasLeader = false;
+					long lowestMemberID = long.MaxValue;
+					long ourVersion = 1;
+					for (int i = 0; i < afterResult.Data.Count; ++i)
+					{
+						CharacterPartyData member = afterResult.Data[i];
+						if ((PartyRank)member.Rank == PartyRank.Leader)
+						{
+							hasLeader = true;
+							break;
+						}
+						if (member.CharacterID < lowestMemberID)
+						{
+							lowestMemberID = member.CharacterID;
+						}
+						if (member.CharacterID == characterID)
+						{
+							ourVersion = member.Version;
+						}
+					}
+
+					/* Promoted deterministically by lowest character ID rather than at random, so
+					 * two servers repairing the same party concurrently choose the same member and
+					 * the second write is a no-op instead of a second leader. */
+					if (!hasLeader && lowestMemberID == characterID)
+					{
+						DatabaseResult promoteResult = await charPartyService.UpdateRankAsync(
+							characterID, partyID, (byte)PartyRank.Leader, ourVersion + 1);
+						if (promoteResult.IsSuccess)
+						{
+							joinedRank = PartyRank.Leader;
+							await Log.Warning("PartySystem",
+								$"Party {partyID} had no leader when character {characterID} joined an instance; promoted them.");
+						}
+					}
+				}
+
+				// Tell the other scene servers to refresh their copies of this party.
+				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"Instance join party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
+
+				/* The controller and the client's own view are updated on the main thread, before
+				 * the finder disconnects the character to move it.
+				 *
+				 * The update pump would get there eventually, but "eventually" is after the
+				 * transfer: the character would arrive inside the instance still believing it has
+				 * no party, and the instance panel it opens on arrival would show a run it is not
+				 * a member of. Sending it here means the party is already true by the time the
+				 * hand-off happens. */
+				TryEnqueueMainThread(() =>
+				{
+					if (Server == null || conn.FirstObject == null)
+					{
+						return;
+					}
+
+					IPartyController pc = conn.FirstObject.GetComponent<IPartyController>();
+					if (pc == null)
+					{
+						return;
+					}
+
+					pc.ID = partyID;
+					pc.Rank = joinedRank;
+
+					AddPartyCharacterTracker(partyID, characterID);
+
+					PartyAddBroadcast addBroadcast = new PartyAddBroadcast()
+					{
+						PartyID = partyID,
+						CharacterID = characterID,
+						Rank = joinedRank,
+						HealthPCT = healthPCT,
+					};
+
+					// The joiner's own view.
+					Server.NetworkWrapper.Broadcast(conn, addBroadcast, true, Channel.Reliable);
+
+					/* And everybody already in the party who is on this scene server.
+					 *
+					 * The update pump reaches every member eventually, wherever they are, but
+					 * "eventually" is up to a pump interval — and the people most likely to be
+					 * looking at their party frame when somebody joins their dungeon are the ones
+					 * standing in it. Pushing the row now means the roster is right the moment the
+					 * joiner appears rather than seconds later. Members on other scene servers
+					 * still converge through the pump, which is why this is an addition to that
+					 * mechanism rather than a replacement for it.
+					 *
+					 * The joiner is skipped: they were just sent the same row directly, and their
+					 * controller may not be in the tracker yet. */
+					if (Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var partyMapping) &&
+						partyMapping.PartyCharacterTracker.TryGetValue(partyID, out HashSet<long> localMembers) &&
+						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMapping))
+					{
+						foreach (long memberID in localMembers)
+						{
+							if (memberID == characterID)
+							{
+								continue;
+							}
+
+							if (characterMapping.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
+								member?.Owner != null)
+							{
+								Server.NetworkWrapper.Broadcast(member.Owner, addBroadcast, true, Channel.Reliable);
+							}
+						}
+					}
+
+					if (PartyJoinAchievementTemplate != null &&
+						conn.FirstObject.GetComponent<IPlayerCharacter>() is IPlayerCharacter character &&
+						character.TryGet(out IAchievementController achievementController))
+					{
+						achievementController.Increment(PartyJoinAchievementTemplate, 1);
+					}
+				});
+
+				return true;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error joining party {partyID} for instance entry (CharID={characterID}): {ex}");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Forms a party of one for a character who is opening a dungeon others may join.
+		/// Call from an async worker.
+		/// </summary>
+		/// <remarks>
+		/// An instance is owned by a party, and joining one joins that party — so an instance
+		/// opened by somebody with no party has no group for a joiner to be added to, and could
+		/// only ever be a solo run. Rather than refusing to let ungrouped players advertise at
+		/// all, opening a dungeon publicly forms the party the listing implies.
+		/// <para>
+		/// Only reached when the player has explicitly chosen to open the dungeon publicly. A
+		/// private or solo run creates no party, because none is needed and forming one silently
+		/// would be a side effect the player did not ask for.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The character's connection.</param>
+		/// <param name="characterID">The character forming the party.</param>
+		/// <param name="worldServerID">World server the party will belong to.</param>
+		/// <param name="sceneName">Scene name, for the create broadcast's location field.</param>
+		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
+		/// <returns>The new party ID, or 0 when it could not be created.</returns>
+		public async Task<long> TryCreatePartyForInstanceAsync(NetworkConnection conn, long characterID, long worldServerID, string sceneName, float healthPCT)
+		{
+			if (conn == null || characterID <= 0)
+			{
+				return 0;
+			}
+
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService) ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				{
+					return 0;
+				}
+
+				DatabaseResult<long> createResult = await partyService.CreateAsync(worldServerID);
+				if (!createResult.IsSuccess || createResult.Data <= 0)
+				{
+					return 0;
+				}
+
+				long newPartyID = createResult.Data;
+
+				CharacterPartyData partyData = new CharacterPartyData(0, 1, characterID, newPartyID, (byte)PartyRank.Leader, healthPCT);
+				DatabaseResult persistResult = await charPartyService.PersistAsync(partyData, MaxPartySize);
+				if (!persistResult.IsSuccess)
+				{
+					/* The party row exists but has no members, and nothing else will ever put one
+					 * in it. Removed rather than left behind: an empty party is invisible, so it
+					 * would accumulate silently, and the instance about to be opened would be
+					 * recorded against a party nobody belongs to — which is exactly the leaderless
+					 * state the join path has to repair. */
+					DatabaseResult deleteResult = await partyService.DeleteAsync(newPartyID);
+					if (!deleteResult.IsSuccess)
+					{
+						await Log.Warning("PartySystem", $"Could not remove empty party {newPartyID} after a failed instance-party creation.");
+					}
+					return 0;
+				}
+
+				TryEnqueueMainThread(() =>
+				{
+					if (Server == null || conn.FirstObject == null)
+					{
+						return;
+					}
+
+					IPartyController pc = conn.FirstObject.GetComponent<IPartyController>();
+					if (pc == null)
+					{
+						return;
+					}
+
+					pc.ID = newPartyID;
+					pc.Rank = PartyRank.Leader;
+
+					AddPartyCharacterTracker(newPartyID, characterID);
+
+					Server.NetworkWrapper.Broadcast(conn, new PartyCreateBroadcast()
+					{
+						PartyID = newPartyID,
+						Location = sceneName,
+					}, true, Channel.Reliable);
+				});
+
+				return newPartyID;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error creating a party for an instance (CharID={characterID}): {ex}");
+				return 0;
+			}
+		}
+
 		/// <summary>
 		/// Handles decline of a party invitation, removes pending invitation for the character.
 		/// </summary>
@@ -1472,6 +1803,154 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Removes one membership row, transferring leadership or retiring the party as required.
+		/// </summary>
+		/// <remarks>
+		/// The database half of leaving a party, with nothing in it that touches a connection —
+		/// which is what lets it serve both a player who chose to leave and a character being
+		/// dropped from a party it cannot belong to. The caller does whatever announcing is
+		/// appropriate afterwards.
+		/// <para>
+		/// The order matters and is deliberate: leadership moves to a remaining member <em>before</em>
+		/// the leaver's row is deleted, so there is no window in which the party exists with
+		/// members and no leader. The join path repairs that state if it is ever reached anyway,
+		/// but not creating it is better than repairing it.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterID">Member being removed.</param>
+		/// <param name="partyID">Party they are being removed from.</param>
+		/// <param name="rank">Their rank, which decides whether leadership has to move.</param>
+		/// <param name="caller">Name used in warnings, so a failure says which path produced it.</param>
+		/// <returns>True when the member was found and the removal was attempted.</returns>
+		private async Task<bool> RemovePartyMemberRowsAsync(long characterID, long partyID, PartyRank rank, string caller)
+		{
+			if (Server?.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+			{
+				return false;
+			}
+			if (!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService))
+			{
+				return false;
+			}
+			if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+			{
+				return false;
+			}
+
+			// Fetch current members
+			DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
+			if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count == 0)
+			{
+				return false;
+			}
+
+			IReadOnlyList<CharacterPartyData> members = membersResult.Data;
+
+			// Count remaining (excluding the leaving character)
+			List<CharacterPartyData> remainingMembers = new List<CharacterPartyData>();
+			CharacterPartyData leavingMember = default;
+			bool leavingMemberFound = false;
+			foreach (CharacterPartyData member in members)
+			{
+				if (member.CharacterID == characterID)
+				{
+					leavingMember = member;
+					leavingMemberFound = true;
+					continue;
+				}
+				remainingMembers.Add(member);
+			}
+
+			// If the leaving member was not found, their Version would default to 0
+			// causing incorrect optimistic concurrency tokens. Abort early.
+			if (!leavingMemberFound)
+			{
+				return false;
+			}
+
+			int remainingCount = remainingMembers.Count;
+
+			// Transfer leadership if the leaving character was leader and others remain
+			if (rank == PartyRank.Leader && remainingCount > 0)
+			{
+				DeterministicRNG rng = new DeterministicRNG();
+				CharacterPartyData newLeader = remainingMembers[rng.Next(0, remainingMembers.Count)];
+				DatabaseResult leaderResult = await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
+				if (!leaderResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"{caller} leadership transfer failed (PartyID={partyID}, NewLeader={newLeader.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
+				}
+			}
+
+			// Delete the leaving member
+			DatabaseResult deleteResult = await charPartyService.DeleteAsync(characterID, leavingMember.Version + 1);
+			if (!deleteResult.IsSuccess)
+			{
+				await Log.Warning("PartySystem", $"{caller} member delete failed (CharID={characterID}, PartyID={partyID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+			}
+
+			if (remainingCount < 1)
+			{
+				// Delete the party
+				DatabaseResult partyDeleteResult = await partyService.DeleteAsync(partyID);
+				if (!partyDeleteResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"{caller} party delete failed (PartyID={partyID}): {partyDeleteResult.ErrorCode} - {partyDeleteResult.ErrorMessage}");
+				}
+				DatabaseResult<int> updateDeleteResult = await partyUpdateService.DeleteAsync(partyID);
+				if (!updateDeleteResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"{caller} party update delete failed (PartyID={partyID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
+				}
+			}
+			else
+			{
+				// Tell the other servers to update their party lists
+				DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
+				if (!updateResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"{caller} party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+				}
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Drops a character out of a party it cannot belong to, with no connection involved.
+		/// </summary>
+		/// <remarks>
+		/// Called while a character is loading, before it has been spawned — principally when it
+		/// has arrived on a world server other than the one its party belongs to. Parties are
+		/// replicated between scene servers by a pump scoped to a single world server, so a
+		/// membership that crossed would be updated by pumps that cannot see each other and would
+		/// never converge; the membership is dropped on arrival instead.
+		/// <para>
+		/// Nothing is broadcast. There is no client yet to tell, and the character will be sent
+		/// its party state — an absent one — as part of the load it is in the middle of.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterID">Character being removed.</param>
+		/// <param name="partyID">Party it is being removed from.</param>
+		/// <param name="rank">Its rank in that party.</param>
+		/// <param name="reason">Why, for the log line.</param>
+		public async Task RemoveCharacterFromPartyAsync(long characterID, long partyID, PartyRank rank, string reason)
+		{
+			try
+			{
+				if (await RemovePartyMemberRowsAsync(characterID, partyID, rank, nameof(RemoveCharacterFromPartyAsync)))
+				{
+					await Log.Debug("PartySystem", $"Character {characterID} was removed from party {partyID}: {reason}.");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error removing character {characterID} from party {partyID}: {ex}");
+			}
+		}
+
+		/// <summary>
 		/// Asynchronously handles party leave DB operations: fetches members, transfers leadership if needed,
 		/// deletes the leaving member, and cleans up or notifies other servers.
 		/// </summary>
@@ -1484,94 +1963,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			try
 			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+				if (!await RemovePartyMemberRowsAsync(characterID, partyID, rank, nameof(LeavePartyAsync)))
 				{
 					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IPartyService>(out var partyService))
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
-				{
-					return;
-				}
-
-				// Fetch current members
-				DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
-				if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count == 0)
-				{
-					return;
-				}
-
-				IReadOnlyList<CharacterPartyData> members = membersResult.Data;
-
-				// Count remaining (excluding the leaving character)
-				List<CharacterPartyData> remainingMembers = new List<CharacterPartyData>();
-				CharacterPartyData leavingMember = default;
-				bool leavingMemberFound = false;
-				foreach (CharacterPartyData member in members)
-				{
-					if (member.CharacterID == characterID)
-					{
-						leavingMember = member;
-						leavingMemberFound = true;
-						continue;
-					}
-					remainingMembers.Add(member);
-				}
-
-				// If the leaving member was not found, their Version would default to 0
-				// causing incorrect optimistic concurrency tokens. Abort early.
-				if (!leavingMemberFound)
-				{
-					return;
-				}
-
-				int remainingCount = remainingMembers.Count;
-
-				// Transfer leadership if the leaving character was leader and others remain
-				if (rank == PartyRank.Leader && remainingCount > 0)
-				{
-					DeterministicRNG rng = new DeterministicRNG();
-					CharacterPartyData newLeader = remainingMembers[rng.Next(0, remainingMembers.Count)];
-					DatabaseResult leaderResult = await charPartyService.UpdateRankAsync(newLeader.CharacterID, partyID, (byte)PartyRank.Leader, newLeader.Version + 1);
-					if (!leaderResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"LeavePartyAsync leadership transfer failed (PartyID={partyID}, NewLeader={newLeader.CharacterID}): {leaderResult.ErrorCode} - {leaderResult.ErrorMessage}");
-					}
-				}
-
-				// Delete the leaving member
-				DatabaseResult deleteResult = await charPartyService.DeleteAsync(characterID, leavingMember.Version + 1);
-				if (!deleteResult.IsSuccess)
-				{
-					await Log.Warning("PartySystem", $"LeavePartyAsync member delete failed (CharID={characterID}, PartyID={partyID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
-				}
-
-				if (remainingCount < 1)
-				{
-					// Delete the party
-					DatabaseResult partyDeleteResult = await partyService.DeleteAsync(partyID);
-					if (!partyDeleteResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"LeavePartyAsync party delete failed (PartyID={partyID}): {partyDeleteResult.ErrorCode} - {partyDeleteResult.ErrorMessage}");
-					}
-					DatabaseResult<int> updateDeleteResult = await partyUpdateService.DeleteAsync(partyID);
-					if (!updateDeleteResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"LeavePartyAsync party update delete failed (PartyID={partyID}): {updateDeleteResult.ErrorCode} - {updateDeleteResult.ErrorMessage}");
-					}
-				}
-				else
-				{
-					// Tell the other servers to update their party lists
-					DatabaseResult updateResult = await partyUpdateService.PersistAsync(partyID);
-					if (!updateResult.IsSuccess)
-					{
-						await Log.Warning("PartySystem", $"LeavePartyAsync party update notification failed (PartyID={partyID}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
-					}
 				}
 
 				TryEnqueueMainThread(() =>

@@ -203,6 +203,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnClientSet()
 		{
+			/* Guarded. SetClient runs from UIManager as soon as a Client exists, and the network
+			 * manager is resolved separately — a panel that assumed both were up threw here during
+			 * a reconnect and took the rest of the panel wiring down with it. */
+			if (Client == null || Client.NetworkManager == null || Client.NetworkManager.ClientManager == null)
+			{
+				return;
+			}
 			Client.NetworkManager.ClientManager.RegisterBroadcast<SceneChannelListBroadcast>(OnClientSceneChannelListBroadcastReceived);
 		}
 
@@ -211,6 +218,10 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnClientUnset()
 		{
+			if (Client == null || Client.NetworkManager == null || Client.NetworkManager.ClientManager == null)
+			{
+				return;
+			}
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<SceneChannelListBroadcast>(OnClientSceneChannelListBroadcastReceived);
 		}
 
@@ -367,9 +378,17 @@ namespace FishMMO.Client
 
 			if (this.subtitleLabel != null)
 			{
-				this.subtitleLabel.text = hasRows
-					? "Pick a channel to travel to"
-					: "No channels to show";
+				/* The scene's name, when the server sent one. Every channel of a scene shares it,
+				 * so it belongs in the header rather than on each identical row — and without it
+				 * the panel is a list of numbered destinations with nothing saying what they are
+				 * numbered instances OF. */
+				string sceneName = hasRows ? this.channels[0].SceneName : null;
+
+				this.subtitleLabel.text = !hasRows
+					? "No channels to show"
+					: string.IsNullOrEmpty(sceneName)
+						? "Pick a channel to travel to"
+						: $"Pick a channel of {sceneName}";
 			}
 		}
 
@@ -443,27 +462,77 @@ namespace FishMMO.Client
 				return row;
 			}
 
+			/* ClickEvent, not PointerDownEvent. UI Toolkit raises a click only when the press AND
+			 * the release both land on the element, which is what makes a drag that started on a
+			 * row — the obvious way to scroll a list with more channels than fit — not a
+			 * selection. A press alone committed the player to leaving the world. */
 			ChannelAddress selected = address;
-			row.RegisterCallback<PointerDownEvent>(evt => OnRowPointerDown(evt, selected));
+			int selectedOrdinal = ordinal;
+			row.RegisterCallback<ClickEvent>(evt =>
+			{
+				// 0 is the left button. Nothing is bound to the others here.
+				if (evt.button != 0)
+				{
+					return;
+				}
+
+				evt.StopPropagation();
+				ConfirmChannel(selected, selectedOrdinal);
+			});
 			return row;
 		}
 
 		/// <summary>
-		/// Travels to a channel on left-click.
+		/// Asks the player to confirm a channel switch before committing to it.
 		/// </summary>
-		/// <param name="evt">The pointer-down event.</param>
 		/// <param name="address">The channel the row represents.</param>
-		private void OnRowPointerDown(PointerDownEvent evt, ChannelAddress address)
+		/// <param name="ordinal">The channel's position in the list, as the row labels it.</param>
+		/// <remarks>
+		/// A channel switch is not a window change: the scene server releases the character and
+		/// drops the connection, and the player comes back through the world server behind a
+		/// loading screen. There is no undo, it interrupts whatever they were doing, and the rows
+		/// it is chosen from are a list of near-identical entries a few pixels apart. The game menu
+		/// confirms its two destructive actions for exactly this reason; this belongs in the same
+		/// category and was the one route out of the world that did not ask.
+		/// <para>
+		/// The population is repeated in the prompt because it is the only thing distinguishing one
+		/// channel from another, and it is what a player picking a quieter instance is actually
+		/// choosing on.
+		/// </para>
+		/// </remarks>
+		private void ConfirmChannel(ChannelAddress address, int ordinal)
 		{
-			// 0 is the left button. Nothing is bound to the others here.
-			if (evt.button != 0)
+			if (Client == null || Character == null)
 			{
 				return;
 			}
 
-			evt.StopPropagation();
+			// Stale snapshot: the list could have been redrawn between the click and this running.
+			if (address.SceneHandle == this.currentSceneHandle)
+			{
+				return;
+			}
 
-			SelectChannel(address);
+			string population = address.CharacterCount == 1
+				? "1 player"
+				: $"{address.CharacterCount} players";
+
+			if (!UIManager.TryGetTK("UIDialogBox", out UITKDialogBox confirm))
+			{
+				/* No dialog to ask with. Travelling anyway would be the safer-looking choice and is
+				 * the wrong one: the whole point of the prompt is that this cannot be taken back,
+				 * so a missing prompt has to mean the action does not happen. */
+				if (this.statusLabel != null)
+				{
+					this.statusLabel.style.display = DisplayStyle.Flex;
+					this.statusLabel.text = "The confirmation dialog is unavailable; the channel switch was not sent.";
+				}
+				return;
+			}
+
+			confirm.Open(
+				$"Travel to Channel {ordinal} ({population})?\n\nYou will be disconnected and reloaded into the new channel.",
+				() => SelectChannel(address));
 		}
 
 		/// <summary>

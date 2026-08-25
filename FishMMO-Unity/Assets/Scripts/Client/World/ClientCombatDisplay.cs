@@ -81,6 +81,11 @@ namespace FishMMO.Client
 		{
 			RefreshConfig();
 
+			/* Without this the cache below is never invalidated: the values were read once at
+			 * start-up and the options panel had no way to reach them, so turning damage numbers
+			 * off did nothing until the client was restarted. */
+			ClientSettings.OnGameplayChanged += RefreshConfig;
+
 			ICharacterDamageController.OnDamaged += OnDamaged;
 			ICharacterDamageController.OnHealed += OnHealed;
 			ICharacterDamageController.OnKilled += OnKilled;
@@ -93,6 +98,8 @@ namespace FishMMO.Client
 		/// <summary>Unsubscribes from all combat/achievement events. Call during teardown.</summary>
 		public void Shutdown()
 		{
+			ClientSettings.OnGameplayChanged -= RefreshConfig;
+
 			ICharacterDamageController.OnDamaged -= OnDamaged;
 			ICharacterDamageController.OnHealed -= OnHealed;
 			ICharacterDamageController.OnKilled -= OnKilled;
@@ -121,9 +128,13 @@ namespace FishMMO.Client
 				return;
 			}
 
-			showDamage = Config("ShowDamage");
-			showHeals = Config("ShowHeals");
-			showAchievements = Config("ShowAchievementCompletion");
+			/* Through ClientSettings, which supplies the default declared alongside the toggle.
+			 * Reading these with an implicit default of false — which a bare TryGetBool gives —
+			 * meant a fresh install showed no damage numbers while its own options screen showed
+			 * the box ticked, and ticking it off and on again was the only way to reconcile them. */
+			showDamage = ClientSettings.GetGameplayToggle(ClientSettings.ShowDamageKey);
+			showHeals = ClientSettings.GetGameplayToggle(ClientSettings.ShowHealsKey);
+			showAchievements = ClientSettings.GetGameplayToggle(ClientSettings.ShowAchievementsKey);
 			configLoaded = true;
 		}
 
@@ -249,12 +260,5 @@ namespace FishMMO.Client
 			int fx = 0; fx.EnableBit(LabelEffect.FadeIn); fx.EnableBit(LabelEffect.FadeOut); fx.EnableBit(LabelEffect.Bounce);
 			UITKLabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 2.0f, 4.0f, false, fx);
 		}
-
-		/// <remarks>
-		/// Null-guarded: settings are not guaranteed to exist when this type is constructed.
-		/// </remarks>
-		private static bool Config(string key) =>
-			Configuration.GlobalSettings != null &&
-			Configuration.GlobalSettings.TryGetBool(key, out bool r) && r;
 	}
 }

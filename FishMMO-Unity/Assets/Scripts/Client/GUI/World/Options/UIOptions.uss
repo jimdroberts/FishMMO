@@ -11,9 +11,16 @@
 }
 
 .options-panel {
-    min-width: 420px;
-    max-width: 560px;
-    max-height: 80%;
+    min-width: 480px;
+    max-width: 600px;
+    /*
+        Both bounds, not just the maximum. Each tab holds a different amount of content — Gameplay
+        is five rows, Key Bindings is forty — and a panel sized to its content resizes under the
+        player's hand every time they change tab, moving the tab strip they are clicking on. A
+        minimum height keeps the chrome still.
+    */
+    min-height: 60%;
+    max-height: 85%;
     padding: 16px;
 }
 
@@ -208,10 +215,138 @@
     flex-shrink: 0;
 }
 
+/*
+    Takes the free space in its row so the Reset All Keys button beside it stays hard right, and
+    wraps rather than overflowing — a conflict message names two bindings and a key and is easily
+    longer than the panel is wide.
+*/
 .options-controls-status {
-    margin-top: 2px;
-    margin-bottom: 2px;
+    flex-grow: 1;
+    margin-right: 8px;
     min-height: 13px;
     font-size: 10px;
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+/*
+    A tab page that is not itself the scroller. Used where part of the page has to stay put while
+    the rest scrolls. min-height: 0 is required: a flex child defaults to min-height: auto, which
+    refuses to shrink below its content and would let a forty-row list push the panel past its
+    max-height instead of scrolling inside it.
+*/
+.options-page {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/*
+    The standing explanation of how the tab works, kept separate from the status line so an
+    outcome message never displaces it. Both sit outside the scroller, above forty rows of
+    bindings.
+*/
+.options-controls-hint {
+    flex-shrink: 0;
+    margin-top: 0;
+}
+
+.options-controls-bar {
+    flex-shrink: 0;
+    margin-bottom: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABS
+   One page per tab, only the active one displayed. The strip
+   uses the shared .fish-tab appearance so the settings panel
+   looks like every other tabbed window in the client.
+   ═══════════════════════════════════════════════════════════ */
+
+.options-tabs {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+}
+
+/*
+    Equal shares of the strip rather than text-sized buttons. "UI" and "Key Bindings" differ by a
+    factor of five in width, and a strip of proportionally sized tabs makes the short one an
+    awkward target and moves every tab whenever a label is edited.
+*/
+.options-tab {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 28px;
+    font-size: 11px;
+}
+
+/*
+    A hidden page keeps its place in the tree so its controls stay resolved; display: none removes
+    it from layout entirely, which is what makes the panel size to the visible page alone.
+*/
+.options-page--hidden {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HINTS
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Explanatory text under a section. white-space: normal because the default in UI Toolkit is
+    nowrap, which turns a sentence into a single line that overflows the panel.
+*/
+.options-hint {
+    font-size: 10px;
+    margin-top: 2px;
+    margin-bottom: 6px;
+    white-space: normal;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUDIO
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Wider than .options-row-value: an audio read-out shows a percentage up to "100%", and the
+    label must not resize the slider as the player drags through the hundreds.
+*/
+.options-audio-value {
+    flex-shrink: 0;
+    width: 44px;
+    margin-left: 8px;
+    -unity-text-align: middle-right;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UI PROFILES
+   ═══════════════════════════════════════════════════════════ */
+
+.options-profile-btn {
+    height: 24px;
+    min-width: 76px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.options-profile-status {
+    font-size: 10px;
+    min-height: 13px;
+    margin-top: 4px;
+    white-space: normal;
+    flex-shrink: 0;
+}
+
+/*
+    The folder the profiles live in, shown so a player can find the file to send somebody. Small,
+    dim and selectable-looking rather than presented as a control.
+*/
+.options-profile-path {
+    font-size: 9px;
+    opacity: 0.6;
+    margin-top: 2px;
+    white-space: normal;
     flex-shrink: 0;
 }

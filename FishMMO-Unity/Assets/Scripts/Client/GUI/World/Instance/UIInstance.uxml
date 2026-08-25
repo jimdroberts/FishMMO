@@ -1,0 +1,38 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIInstance.uss" />
+    <ui:VisualElement name="instance-root" class="fish-panel instance-panel">
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header instance-header">
+            <ui:VisualElement class="fish-panel__icon instance-header__icon" />
+            <ui:VisualElement class="instance-header__titles">
+                <ui:Label name="instance-title" text="INSTANCE" class="fish-panel__title" />
+                <ui:Label name="instance-subtitle" text="Not in a dungeon" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="instance-timer" text="--:--" class="fish-badge instance-timer" />
+        </ui:VisualElement>
+
+        <ui:Label name="instance-leader" text="" class="fish-hint instance-leader" />
+
+        <ui:VisualElement name="instance-columns" class="instance-columns">
+            <ui:Label text="MEMBER" class="fish-col-head instance-col instance-col--name" />
+            <ui:Label text="" class="fish-col-head instance-col instance-col--action" />
+        </ui:VisualElement>
+
+        <ui:ScrollView name="instance-scroll" class="fish-scroll instance-scroll">
+            <ui:VisualElement name="instance-list" class="instance-list" />
+            <ui:Label name="instance-status" text="Use Refresh to load the dungeon details."
+                      class="fish-empty instance-status" />
+        </ui:ScrollView>
+
+        <ui:Toggle name="instance-privacy" label="Open to others"
+                   class="fish-toggle instance-privacy" />
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer instance-footer">
+            <ui:Button name="instance-refresh" text="Refresh" class="fish-button instance-action" />
+            <ui:Button name="instance-leave" text="Leave" class="fish-button fish-button--danger instance-action" />
+            <ui:Button name="instance-close" text="Close" class="fish-button instance-action" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

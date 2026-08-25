@@ -55,11 +55,41 @@ namespace FishMMO.Client
 		/// <summary>Shared PlayerControls for read-only queries (hotkey bar, chat).</summary>
 		public static PlayerControls Controls { get; private set; }
 
-		/// <summary>Ensures the static Controls instance is created.</summary>
+		/// <summary>
+		/// Creates the shared <see cref="PlayerControls"/> asset and applies the player's saved
+		/// keybinding overrides, without enabling any action map.
+		/// </summary>
+		/// <remarks>
+		/// Split out of <see cref="InitializeControls"/> so the settings panel can list and rebind
+		/// keys before the player has entered the world. The asset on its own is inert data: no
+		/// action fires until a map is enabled, so creating it early does not make the world's
+		/// input live on the login screen.
+		/// <para>
+		/// Called from the client's boot phase. Before that existed, the asset was created only by
+		/// <see cref="Initialize"/> on world entry — so the Key Bindings tab had nothing to show
+		/// until then, and a saved override was not read until then either.
+		/// </para>
+		/// </remarks>
+		public static void EnsureControlsCreated()
+		{
+			if (Controls != null)
+			{
+				return;
+			}
+
+			Controls = new PlayerControls();
+			LoadBindingOverrides();
+		}
+
+		/// <summary>Ensures the static Controls instance is created and its maps are enabled.</summary>
 		public static void InitializeControls()
 		{
-			if (Controls != null) return;
-			Controls = new PlayerControls();
+			EnsureControlsCreated();
+
+			/* Enabling is idempotent and deliberately NOT skipped when the asset already exists:
+			 * the boot phase creates it inert, so on the normal path this is the call that
+			 * actually turns input on. An early-out on "already created" is how the player ends
+			 * up in the world unable to move. */
 			Controls.Enable();
 			Controls.Player.Enable();
 			Controls.UI.Enable();
@@ -76,10 +106,18 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Persists keybinding overrides to global configuration.</summary>
+		/// <remarks>
+		/// Through <see cref="ClientSettings.SetString"/>, which schedules the debounced write.
+		/// Writing straight into the store left the new binding in memory only: it survived until
+		/// something else happened to save the file, and was lost outright if nothing did.
+		/// </remarks>
 		public static void SaveBindingOverrides()
 		{
-			if (Configuration.GlobalSettings != null && Controls != null)
-				Configuration.GlobalSettings.Set("InputBindingOverrides", Controls.SaveBindingOverridesAsJson());
+			if (Controls == null)
+			{
+				return;
+			}
+			ClientSettings.SetString(ClientSettings.InputBindingOverridesKey, Controls.SaveBindingOverridesAsJson());
 		}
 
 #if UNITY_EDITOR
@@ -147,9 +185,10 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput += KCCPlayer_OnHandleCharacterInput;
 			}
 
-			// Ensure the shared PlayerControls exists and load saved keybinds.
+			/* Ensures the shared PlayerControls exists and its maps are enabled. Saved keybinds
+			 * are applied by EnsureControlsCreated when the asset is built — normally during the
+			 * client's boot phase, long before this runs — so there is no second load here. */
 			InitializeControls();
-			LoadBindingOverrides();
 
 			// Start with cursor visible (login/loading state).
 			MouseMode = true;
@@ -223,6 +262,9 @@ namespace FishMMO.Client
 			Controls.Player.Achievements.performed += OnAchievementsPerformed;
 			Controls.Player.Factions.performed += OnFactionsPerformed;
 			Controls.Player.Minimap.performed += OnMinimapPerformed;
+			Controls.Player.Lore.performed += OnLorePerformed;
+			Controls.Player.Pet.performed += OnPetPerformed;
+			Controls.Player.Options.performed += OnOptionsPerformed;
 			Controls.Player.Menu.performed += OnMenuPerformed;
 		}
 
@@ -267,6 +309,9 @@ namespace FishMMO.Client
 			Controls.Player.Achievements.performed -= OnAchievementsPerformed;
 			Controls.Player.Factions.performed -= OnFactionsPerformed;
 			Controls.Player.Minimap.performed -= OnMinimapPerformed;
+			Controls.Player.Lore.performed -= OnLorePerformed;
+			Controls.Player.Pet.performed -= OnPetPerformed;
+			Controls.Player.Options.performed -= OnOptionsPerformed;
 			Controls.Player.Menu.performed -= OnMenuPerformed;
 		}
 
@@ -757,6 +802,49 @@ namespace FishMMO.Client
 			UIManager.ToggleVisibility("UIMinimap");
 		}
 
+		/*
+		 * The panels below are opened by the player, so each has a key. The ones that are NOT
+		 * here are deliberate.
+		 *
+		 * A merchant, bank, loot window, NPC dialogue, shrine, gathering node, trade container,
+		 * MAILBOX or DUNGEON FINDER is opened by the SERVER, in a reply sent after it has
+		 * validated an interaction with something in the world. There is nothing for a key to do
+		 * in those cases: pressing it would either open a window the server never populated, or
+		 * claim to open a mailbox the character is not standing in front of — and a player who
+		 * found the empty window would reasonably report it as broken.
+		 *
+		 * The scene channel picker and the instance panel are reached from the menu for the
+		 * reason the menu documents: they are rare, deliberate acts rather than windows a player
+		 * flicks in and out of.
+		 */
+
+		private void OnLorePerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+			UIManager.ToggleVisibility("UILore");
+		}
+
+		private void OnPetPerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+			UIManager.ToggleVisibility("UIPetControl");
+		}
+
+		/// <summary>
+		/// Callback for the settings shortcut.
+		/// </summary>
+		/// <remarks>
+		/// A key of its own as well as the route through the menu. Options is the panel a player
+		/// reaches for when something is wrong — the sound is too loud, the frame rate is wrong,
+		/// a key does not do what they expect — and making that a two-step trip through a menu
+		/// that pauses nothing is a poor trade for one keyboard letter.
+		/// </remarks>
+		private void OnOptionsPerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+			UIManager.ToggleVisibility("UIOptions");
+		}
+
 		private void OnMenuPerformed(InputAction.CallbackContext context)
 		{
 			/* Escape is bound to CloseLastUI as well as Menu, and CloseLastUI is handled first.
@@ -771,10 +859,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Loads keybinding overrides from global config.</summary>
-		private static void LoadBindingOverrides()
+		/// <remarks>
+		/// Public so the boot phase can apply saved bindings as soon as the configuration is
+		/// loaded, rather than leaving them until world entry.
+		/// </remarks>
+		public static void LoadBindingOverrides()
 		{
 			if (Configuration.GlobalSettings == null || Controls == null) return;
-			if (!Configuration.GlobalSettings.TryGetString("InputBindingOverrides", out string json)
+			if (!Configuration.GlobalSettings.TryGetString(ClientSettings.InputBindingOverridesKey, out string json)
 				|| string.IsNullOrEmpty(json))
 			{
 				return;
@@ -800,7 +892,7 @@ namespace FishMMO.Client
 				Log.Error("PlayerInputController",
 					"Saved keybinding overrides could not be parsed and have been discarded; " +
 					"the default bindings are in effect.", ex);
-				Configuration.GlobalSettings.Set("InputBindingOverrides", string.Empty);
+				ClientSettings.SetString(ClientSettings.InputBindingOverridesKey, string.Empty);
 			}
 		}
 	}

@@ -265,6 +265,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Drain any remaining queued main-thread actions
 			DrainMainThreadQueue(drainAll: true);
 
+			/* Drop every published difficulty ruleset.
+			 *
+			 * Static state, so it survives leaving play mode in the editor when domain reload is
+			 * disabled — and a registry carried into the next session would describe the previous
+			 * session's scenes, at handles the engine is free to hand out again. */
+			DungeonDifficultyRegistry.Clear();
+
 			// Delete scene server data from database
 			if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 			{
@@ -691,6 +698,70 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// How long one particular instance may exist, honouring its difficulty's own limit.
+		/// </summary>
+		/// <remarks>
+		/// A difficulty may shorten or lengthen the run it describes — a timed challenge is one of
+		/// the few levers that changes how a dungeon plays without touching a single number in
+		/// combat — and the figure it declares wins over the server-wide cap when it declares one.
+		/// <para>
+		/// A difficulty that declares nothing falls through to the configured cap, which is also
+		/// what every open-world scene and every dungeon without a template gets. So the cap
+		/// remains the backstop it was: whatever a dungeon asks for, an instance is still bounded.
+		/// </para>
+		/// </remarks>
+		private int ResolveInstanceLifetimeMinutes(ISceneInstanceDetails details)
+		{
+			if (details != null && details.SceneType != SceneType.OpenWorld)
+			{
+				DungeonTemplate template = DungeonTemplate.GetBySceneName(details.Name);
+				if (template != null)
+				{
+					DungeonDifficultyDefinition difficulty = template.GetDifficulty(details.Difficulty);
+					if (difficulty != null && difficulty.LifetimeMinutes > 0)
+					{
+						return difficulty.LifetimeMinutes;
+					}
+				}
+			}
+
+			return ResolveMaxInstanceLifetimeMinutes();
+		}
+
+		/// <summary>
+		/// The difficulty rules that apply inside one loaded scene, or null when none do.
+		/// </summary>
+		/// <remarks>
+		/// Null for the open world, for a dungeon with no template, and for a dungeon whose
+		/// template declares no difficulties — all three of which are runs with exactly one way to
+		/// play them, where a ruleset would only be a set of multipliers of one.
+		/// <para>
+		/// An index the dungeon no longer offers also resolves to null rather than to a default
+		/// ruleset. It means the difficulty list was edited while this instance was queued or
+		/// running, and applying somebody else's rules to a run people are already inside is worse
+		/// than applying none.
+		/// </para>
+		/// </remarks>
+		private static DungeonDifficultyDefinition ResolveSceneDifficulty(SceneType sceneType, string sceneName, int difficulty)
+		{
+			if (sceneType == SceneType.OpenWorld)
+			{
+				return null;
+			}
+
+			DungeonTemplate template = DungeonTemplate.GetBySceneName(sceneName);
+			if (template == null ||
+				template.Difficulties == null ||
+				template.Difficulties.Count < 1 ||
+				!template.IsValidDifficulty(difficulty))
+			{
+				return null;
+			}
+
+			return template.GetDifficulty(difficulty);
+		}
+
+		/// <summary>
 		/// Whether an instance has outlived the lifetime cap.
 		/// </summary>
 		/// <remarks>
@@ -712,7 +783,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			return (DateTime.UtcNow - details.CreatedUtc).TotalMinutes >= ResolveMaxInstanceLifetimeMinutes();
+			return (DateTime.UtcNow - details.CreatedUtc).TotalMinutes >= ResolveInstanceLifetimeMinutes(details);
+		}
+
+		/// <inheritdoc/>
+		public bool TryGetInstanceExpiry(long sceneID, out DateTime expiresUtc)
+		{
+			expiresUtc = default;
+
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
+				!mappingData.SceneInstanceByID.TryGetValue(sceneID, out ISceneInstanceDetails details) ||
+				details.SceneType == SceneType.OpenWorld ||
+				details.CreatedUtc == default)
+			{
+				return false;
+			}
+
+			expiresUtc = details.CreatedUtc.AddMinutes(ResolveInstanceLifetimeMinutes(details));
+			return true;
 		}
 
 		/// <summary>
@@ -728,7 +816,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			double remaining = (ResolveMaxInstanceLifetimeMinutes() * 60.0) -
+			double remaining = (ResolveInstanceLifetimeMinutes(details) * 60.0) -
 							   (DateTime.UtcNow - details.CreatedUtc).TotalSeconds;
 
 			/* Nothing to say yet, which is where an instance spends nearly all of its life. Checked
@@ -1177,7 +1265,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Scene scene = args.LoadedScenes[0];
 
 				// Process the scene by adding it to the world dictionary mappings.
-				ProcessScene(scene, sceneType, sceneData.WorldServerID, sceneData.ID, sceneData.TimeCreated);
+				ProcessScene(scene, sceneType, sceneData.WorldServerID, sceneData.ID, sceneData.TimeCreated, sceneData.CharacterID, sceneData.PartyID, sceneData.Difficulty, sceneData.IsPrivate);
 
 				// Capture Scene.name on the main thread. TryEnqueueAsyncWork runs its lambda
 				// on an AsyncWorkerData thread-pool worker, and Unity's Scene.name getter is
@@ -1352,7 +1440,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="scene">The loaded Unity scene.</param>
 		/// <param name="sceneType">Type of the scene.</param>
 		/// <param name="worldServerID">World server ID.</param>
-		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID, long sceneID, DateTime rowCreatedUtc)
+		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID, long sceneID, DateTime rowCreatedUtc, long ownerCharacterID, long partyID, int difficulty, bool isPrivate)
 		{
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
@@ -1396,6 +1484,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// The row's creation time, not now: the lifetime cap has to count the queue and
 					// the load as part of this instance's life. See ISceneInstanceDetails.CreatedUtc.
 					CreatedUtc = rowCreatedUtc,
+					// Whose instance this is. See ISceneInstanceDetails.OwnerCharacterID.
+					OwnerCharacterID = ownerCharacterID,
+
+					/* The owning party, the difficulty, and whether it is listed, carried from
+					 * the row that asked for this scene.
+					 *
+					 * Read here rather than looked up later because this is the only moment they
+					 * are available for free: the scene server dequeued the row to load the scene
+					 * and is holding it. Every consumer afterwards — the instance panel, the kick
+					 * authority, the difficulty rules applied to what spawns inside — is on the
+					 * main thread and cannot go back to the database for them. */
+					PartyID = partyID,
+					Difficulty = difficulty,
+					IsPrivate = isPrivate,
 				};
 				instances.Add(sceneID, details);
 
@@ -1406,6 +1508,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Always remove mappings in SceneManager_OnUnloadEnd to keep these maps correct.
 				mappingData.SceneInstanceByHandle[scene.handle] = details;
 				mappingData.SceneInstanceByID[sceneID] = details;
+
+				/* Publish this scene's difficulty rules for the things that will spawn inside it.
+				 *
+				 * An NPC waking up in a dungeon knows only the Unity scene it is in — not which
+				 * row asked for it, not which party owns it, and not what difficulty they chose —
+				 * and it cannot ask the server systems, which live in an assembly it does not
+				 * reference. This is the one place that knows all of it, at the one moment before
+				 * anything has spawned. Withdrawn again in SceneManager_OnUnloadEnd; a handle
+				 * outliving its scene would eventually be read as another scene's rules.
+				 *
+				 * Registering null is a removal, so an open-world scene, or a dungeon with no
+				 * template, actively clears anything left at a reused handle. */
+				DungeonDifficultyRegistry.Register(scene.handle, ResolveSceneDifficulty(sceneType, scene.name, difficulty));
 			}
 			else
 			{
@@ -1458,6 +1573,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			for (int i = 0; i < args.UnloadedScenesV2.Count; ++i)
 			{
 				int handle = args.UnloadedScenesV2[i].Handle;
+
+				/* Withdraw this scene's difficulty rules unconditionally, before anything else.
+				 *
+				 * Outside the instance-details branch on purpose: a scene that was never tracked
+				 * as an instance can still have been registered, and — much more to the point —
+				 * Unity reuses scene handles once a scene has gone. An entry that outlived its
+				 * scene is not merely stale, it is another dungeon's rules waiting to be applied
+				 * to whatever loads at that handle next. */
+				DungeonDifficultyRegistry.Unregister(handle);
 
 				// O(1) lookup via flat map — no nested iteration required
 				if (mappingData.SceneInstanceByHandle.TryGetValue(handle, out ISceneInstanceDetails details))

@@ -24,12 +24,25 @@ namespace FishMMO.Shared
 		public string DungeonName;
 
 		/// <summary>
+		/// The dungeon this entrance leads to: its description, artwork and difficulty list.
+		/// </summary>
+		/// <remarks>
+		/// Optional. An entrance without one leads to a dungeon with a single unnamed difficulty
+		/// and default rules, which is exactly how every entrance behaved before difficulties
+		/// existed — so leaving it unset is a working configuration, not a broken one.
+		/// </remarks>
+		public DungeonTemplate Template;
+
+		/// <summary>
 		/// Achievement to increment when a player enters this dungeon.
 		/// </summary>
 		public AchievementTemplate AchievementTemplate;
 
 		/// <inheritdoc />
 		string IDungeonEntrance.DungeonName => DungeonName;
+
+		/// <inheritdoc />
+		int IDungeonEntrance.DungeonTemplateID => Template != null ? Template.ID : 0;
 
 		/// <inheritdoc />
 		AchievementTemplate IDungeonEntrance.AchievementTemplate => AchievementTemplate;

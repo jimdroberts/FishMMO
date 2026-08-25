@@ -116,7 +116,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MerchantSellBroadcast>(OnServerMerchantSellBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
+			/* Three requests, not one. The finder browses, opens and joins, and each is
+			 * authorised on its own terms — DungeonFinderBroadcast is now purely the server's
+			 * message opening the panel and is not accepted from a client at all. */
+			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderListBroadcast>(OnServerDungeonFinderListBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderCreateBroadcast>(OnServerDungeonFinderCreateBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderJoinBroadcast>(OnServerDungeonFinderJoinBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
@@ -190,7 +195,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MerchantSellBroadcast>(OnServerMerchantSellBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderListBroadcast>(OnServerDungeonFinderListBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderCreateBroadcast>(OnServerDungeonFinderCreateBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderJoinBroadcast>(OnServerDungeonFinderJoinBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
@@ -279,6 +286,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 			return runtimeData.IngressGuard.TryBegin(connectionId, 0, interactionDebounceMilliseconds, out guardKey);
+		}
+
+		/// <summary>
+		/// Attempts to acquire the ingress guard for one named operation, at its own debounce rate.
+		/// </summary>
+		/// <remarks>
+		/// Most interactions share operation 0, which is right for them: they are all "the player
+		/// clicked something" and debouncing them together is the point. A few need their own key
+		/// because they are not interchangeable — browsing a dungeon list and entering a dungeon
+		/// are debounced at rates two orders of magnitude apart, and sharing a key would let the
+		/// cheap one lock out the expensive one.
+		/// </remarks>
+		/// <param name="connectionId">The client connection ID.</param>
+		/// <param name="operation">Operation code, unique among this system's named operations.</param>
+		/// <param name="debounceMilliseconds">Minimum milliseconds between requests for this key.</param>
+		/// <param name="guardKey">When successful, the guard key to pass to <see cref="EndIngressGuard"/>.</param>
+		/// <returns>True if the guard was acquired; false if it is debounced or already in flight.</returns>
+		private bool TryBeginIngressGuard(int connectionId, byte operation, int debounceMilliseconds, out long guardKey)
+		{
+			if (!Server.DataContainerRegistry.TryGet<IInteractableSystemRuntimeData>(out var runtimeData))
+			{
+				guardKey = 0;
+				return false;
+			}
+			return runtimeData.IngressGuard.TryBegin(connectionId, operation, debounceMilliseconds, out guardKey);
 		}
 
 		/// <summary>

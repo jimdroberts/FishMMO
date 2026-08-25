@@ -328,6 +328,7 @@ namespace FishMMO.Shared
 			}
 
 			AddNPCAttributes(true);
+			ApplyInstanceDifficulty();
 			LearnNPCAbilities();
 
 			// Subscribe to the server tick for corpse decay timer.
@@ -577,7 +578,17 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			LootTable.Roll(npcRNG, lootItems, out int rolledCurrency);
+			/* Loot is rolled at the difficulty of the scene the NPC died in.
+			 *
+			 * Read here rather than remembered from spawn deliberately: what a corpse is worth is
+			 * decided when it is made, and a scene's rules are fixed for its whole life, so the two
+			 * cannot disagree. The open world publishes no rules and gets 1 and 1. */
+			DungeonDifficultyRegistry.GetLootMultipliers(
+				gameObject.scene.handle,
+				out float lootQuantityMultiplier,
+				out float lootCurrencyMultiplier);
+
+			LootTable.Roll(npcRNG, lootItems, out int rolledCurrency, lootQuantityMultiplier, lootCurrencyMultiplier);
 			lootCurrency = rolledCurrency;
 		}
 
@@ -953,6 +964,89 @@ namespace FishMMO.Shared
 				// NPCs don't craft abilities so there's no DB-assigned ID.
 				Ability ability = new Ability((long)template.ID, template);
 				abilityController.LearnAbility(ability);
+			}
+		}
+
+		/// <summary>
+		/// Scales this NPC for the difficulty of the dungeon instance it spawned into.
+		/// Server only, and only inside an instance that declares rules.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Runs after <see cref="AddNPCAttributes"/>, on top of whatever the spawner and the
+		/// prefab already decided. The order is the point: a difficulty describes how much harder
+		/// this dungeon is than itself, not what its enemies are, so it multiplies the finished
+		/// figures rather than replacing any of them. A zone that varies its NPCs by spawner keeps
+		/// that variation on every difficulty.
+		/// </para>
+		/// <para>
+		/// Resource attributes are scaled as a group because they are the one group the code can
+		/// identify. Everything else is named explicitly by the difficulty — there is no built-in
+		/// notion of which attribute means damage, and guessing at one would be wrong for any
+		/// build that spreads it across several attributes or calls it something else.
+		/// </para>
+		/// <para>
+		/// A resource's current value is raised with its maximum. Scaling only the ceiling would
+		/// spawn every enemy in a hard dungeon already wounded, in exact proportion to how much
+		/// harder the dungeon was supposed to be.
+		/// </para>
+		/// </remarks>
+		private void ApplyInstanceDifficulty()
+		{
+			if (!DungeonDifficultyRegistry.TryGet(gameObject.scene.handle, out DungeonDifficultyDefinition difficulty) ||
+				difficulty == null ||
+				!this.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+
+			if (difficulty.EnemyResourceMultiplier != 1.0f && difficulty.EnemyResourceMultiplier > 0.0f)
+			{
+				foreach (CharacterResourceAttribute resource in attributeController.ResourceAttributes.Values)
+				{
+					if (resource == null)
+					{
+						continue;
+					}
+
+					int current = resource.Value;
+					int scaled = Mathf.Max(1, Mathf.RoundToInt(current * difficulty.EnemyResourceMultiplier));
+					resource.AddModifier(scaled - current);
+					resource.SetCurrentValue(scaled);
+				}
+			}
+
+			if (difficulty.EnemyAttributeScalars == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < difficulty.EnemyAttributeScalars.Count; ++i)
+			{
+				DungeonAttributeScalar scalar = difficulty.EnemyAttributeScalars[i];
+				if (scalar == null ||
+					scalar.Template == null ||
+					scalar.Multiplier == 1.0f ||
+					scalar.Multiplier <= 0.0f)
+				{
+					continue;
+				}
+
+				if (attributeController.TryGetAttribute(scalar.Template, out CharacterAttribute attribute))
+				{
+					int current = attribute.Value;
+					attribute.AddModifier(Mathf.RoundToInt(current * scalar.Multiplier) - current);
+				}
+				else if (attributeController.TryGetResourceAttribute(scalar.Template, out CharacterResourceAttribute resource))
+				{
+					/* A resource named explicitly as well as covered by the group multiplier is
+					 * scaled twice, and that is intended: the group figure is "everything tougher"
+					 * and a named entry is "this one especially". */
+					int current = resource.Value;
+					int scaled = Mathf.Max(1, Mathf.RoundToInt(current * scalar.Multiplier));
+					resource.AddModifier(scaled - current);
+					resource.SetCurrentValue(scaled);
+				}
 			}
 		}
 

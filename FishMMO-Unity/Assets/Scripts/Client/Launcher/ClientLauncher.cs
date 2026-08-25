@@ -296,6 +296,21 @@ namespace FishMMO.Client
 		/// </summary>
 		private const float WindowSizeSaveDelay = 0.75f;
 		/// <summary>
+		/// True once the launch has handed the window over to the game, after which a size
+		/// change is the game's business and must not be recorded as the launcher's.
+		/// </summary>
+		private bool windowSizeTrackingStopped;
+#if !UNITY_EDITOR
+		/// <summary>
+		/// The display's own resolution and refresh rate, read before
+		/// <see cref="ApplyWindowSize"/> shrinks the window, and used at hand-off when the
+		/// player has no saved display mode of their own.
+		/// </summary>
+		private bool nativeModeCaptured;
+		private Vector2Int nativeSize;
+		private RefreshRate nativeRefreshRate;
+#endif
+		/// <summary>
 		/// Base URL of the APIHost candidate that responded successfully during the
 		/// most recent version check. Used so that the subsequent patch download
 		/// targets the same endpoint (instead of re-randomizing and potentially
@@ -566,15 +581,87 @@ namespace FishMMO.Client
 			int width = stored.x > 0 ? stored.x : this.DefaultScreenWidth;
 			int height = stored.y > 0 ? stored.y : this.DefaultScreenHeight;
 
+			/* The display's own mode is read before the window is shrunk, not after. The launcher
+			 * and the game share one process and one window, so this call is the last thing to
+			 * touch the mode the game will start in, and a player with no saved settings has to
+			 * be given the display's native mode back at hand-off. Reading it here means the
+			 * value is the one the desktop reported at start-up, independent of whatever the
+			 * windowed launcher leaves the window at. */
+#if !UNITY_EDITOR
+			Resolution native = Screen.currentResolution;
+			this.nativeSize = new Vector2Int(native.width, native.height);
+			this.nativeRefreshRate = native.refreshRateRatio;
+			this.nativeModeCaptured = this.nativeSize.x > 0 && this.nativeSize.y > 0;
+#endif
+
+			SetScreenResolution(width, height, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio);
+		}
+
+		/// <summary>
+		/// Applies a display mode, tolerating a refresh rate this display will not accept.
+		/// </summary>
+		/// <remarks>
+		/// Some display configurations report a refresh rate <c>Screen.SetResolution</c> then
+		/// rejects. The resolution and mode are what matter here, so a rejected rate falls back
+		/// to 60 Hz rather than leaving the window at whatever it happened to be.
+		/// </remarks>
+		private static void SetScreenResolution(int width, int height, FullScreenMode mode, RefreshRate rate)
+		{
 			try
 			{
-				Screen.SetResolution(width, height, FullScreenMode.Windowed, Screen.currentResolution.refreshRateRatio);
+				Screen.SetResolution(width, height, mode, rate);
 			}
 			catch
 			{
-				// Some display configurations report a refresh rate SetResolution rejects.
-				Screen.SetResolution(width, height, FullScreenMode.Windowed, new RefreshRate() { numerator = 60, denominator = 1 });
+				Screen.SetResolution(width, height, mode, new RefreshRate() { numerator = 60, denominator = 1 });
 			}
+		}
+
+		/// <summary>
+		/// Hands the window back to the game, undoing the windowed mode the launcher forced.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>Why this is needed at all.</b> The launcher does not spawn the game as a
+		/// separate process — it loads the postboot scene into its own. So the small windowed
+		/// mode <see cref="ApplyWindowSize"/> sets to make the launcher usable is still in force
+		/// when the game comes up, and nothing else puts the player's mode back:
+		/// <c>ClientSettingsBootstrap</c> applies the saved settings once per session, during
+		/// boot, which is before this class overwrites the display mode. A player who had chosen
+		/// fullscreen therefore got the launcher's window size instead, every launch.</para>
+		/// <para>The saved mode wins when there is one. With nothing saved — a fresh install, or
+		/// a saved resolution this display does not offer — the display's own native resolution
+		/// and refresh rate are used, borderless fullscreen, which is the same default
+		/// <see cref="ClientDisplaySettings.TryResolveSavedDisplayMode"/> applies to a missing
+		/// fullscreen key. Leaving the launcher's small window in place is never right: it is
+		/// sized for the launcher, not for the game.</para>
+		/// </remarks>
+		private void RestoreGameDisplayMode()
+		{
+			/* Set on every platform, editor included. Past this point the window belongs to the
+			 * game, and the resize below would otherwise be observed by Update and written back
+			 * as the launcher's remembered size — so a player running the game fullscreen at
+			 * 3840x2160 would reopen the launcher at 3840x2160 next time. */
+			this.windowSizeTrackingStopped = true;
+
+#if !UNITY_EDITOR
+			if (ClientDisplaySettings.TryResolveSavedDisplayMode(out Vector2Int size, out RefreshRate rate, out FullScreenMode mode))
+			{
+				Log.Debug("ClientLauncher", $"Restoring the saved display mode {size.x}x{size.y} {mode} for the game.");
+				SetScreenResolution(size.x, size.y, mode, rate);
+				return;
+			}
+
+			if (!this.nativeModeCaptured)
+			{
+				// Nothing saved and no usable reading of the display: the window the launcher is
+				// already in is the only thing left, and resizing it to a guess would be worse.
+				Log.Warning("ClientLauncher", "No saved display mode and no usable display resolution; leaving the game in the launcher's window.");
+				return;
+			}
+
+			Log.Debug("ClientLauncher", $"No saved display mode; using the display's native {this.nativeSize.x}x{this.nativeSize.y} for the game.");
+			SetScreenResolution(this.nativeSize.x, this.nativeSize.y, FullScreenMode.FullScreenWindow, this.nativeRefreshRate);
+#endif
 		}
 
 		/// <summary>
@@ -592,6 +679,12 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void Update()
 		{
+			// The game owns the window from hand-off onwards; its size is not the launcher's.
+			if (this.windowSizeTrackingStopped)
+			{
+				return;
+			}
+
 			if (Screen.width != this.lastKnownWidth || Screen.height != this.lastKnownHeight)
 			{
 				this.lastKnownWidth = Screen.width;
@@ -1427,6 +1520,10 @@ namespace FishMMO.Client
 			 * watchdog then fired 30 seconds into a perfectly good session and reported a launch
 			 * failure over the running game. */
 			CancelLaunchWatchdog();
+
+			/* Before the UI is hidden and this scene unloads — unloading destroys this component,
+			 * and the restore reads state that lives on it. */
+			RestoreGameDisplayMode();
 
 			this.view.SetVisible(false);
 

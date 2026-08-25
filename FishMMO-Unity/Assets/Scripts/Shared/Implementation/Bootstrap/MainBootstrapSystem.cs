@@ -59,6 +59,18 @@ namespace FishMMO.Shared
 		private const int BootstrapTargetFrameRate = 60;
 
 		/// <summary>
+		/// Raised during client preload, immediately after the boot-time frame rate and VSync
+		/// defaults are installed, so a client can apply the player's saved settings over them.
+		/// </summary>
+		/// <remarks>
+		/// Subscribe from a <c>RuntimeInitializeOnLoadMethod(BeforeSceneLoad)</c>, which is
+		/// guaranteed to run before any scene's <c>Awake</c> and therefore before this system
+		/// starts its bootstrap chain. Never raised on a headless server: it has no display, no
+		/// audio and no player settings to honour.
+		/// </remarks>
+		public static event Action OnApplyClientBootSettings;
+
+		/// <summary>
 		/// Indicates if shutdown is currently being initiated.
 		/// </summary>
 		private static bool isInitiatingShutdown = false;
@@ -364,12 +376,33 @@ namespace FishMMO.Shared
 			 * vSyncCount is forced to 0 first: Application.targetFrameRate is ignored entirely
 			 * whenever the active QualitySettings level has vSync enabled, so the cap silently
 			 * did nothing on any such level (the "Balanced" level ships with vSyncCount: 1).
-			 * This only sets the boot-time default — the player's saved VSync preference is
-			 * applied later by the options UI (UIOptions.OnStarting -> VSyncSettingOption.Load,
-			 * UITKOptions.InitializeVSync), so nothing here overrides a user choice. */
+			 * This only sets the boot-time default — the player's saved VSync preference and
+			 * frame-rate cap are applied immediately below, through OnApplyClientBootSettings, so
+			 * nothing here survives over a choice the player has actually made. */
 			QualitySettings.vSyncCount = 0;
 			Application.targetFrameRate = BootstrapTargetFrameRate;
 			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus (FishNet raises it on connect).");
+
+			/* And immediately after, the player's own preferences — so a saved cap, VSync choice,
+			 * display mode, brightness and audio levels are in force for the whole of boot rather
+			 * than only from whenever the settings panel happens to be opened.
+			 *
+			 * A hook rather than a direct call because the applier lives in FishMMO.Client, which
+			 * this assembly cannot reference. A hook rather than a second
+			 * RuntimeInitializeOnLoadMethod because ordering is the entire point: the two lines
+			 * above are a default for a client that has no preference, and anything that runs
+			 * before them is silently overwritten by them. Called here, the preference always
+			 * wins.
+			 *
+			 * Isolated: a settings file that cannot be applied must not stop the client booting. */
+			try
+			{
+				OnApplyClientBootSettings?.Invoke();
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[MainBootstrapSystem] Applying saved client settings failed: {ex}. Continuing boot with defaults.");
+			}
 #endif
 
 			GameVersion = versionConfig?.FullVersion ?? "UNKNOWN";

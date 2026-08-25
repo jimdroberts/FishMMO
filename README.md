@@ -51,6 +51,7 @@ A modular, open-source MMO framework built on **Unity 6.3 LTS**, **FishNet**, **
   - [FishMMO-CMS](#fishmmo-cms)
 - [Client Setup](#client-setup)
   - [Client Launcher Flow](#client-launcher-flow)
+  - [Client Settings and Options](#client-settings-and-options)
   - [Client TLS Certificate Pinning](#client-tls-certificate-pinning)
 - [Production Deployment](#production-deployment)
   - [Linux Config Hardening](#linux-config-hardening)
@@ -844,7 +845,7 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | `Port` | Listen port (Login=7770, World=7780, Scene=7790+) | varies |
 | `StaleSceneTimeout` | **Minutes** an empty **open-world** scene instance stays loaded before it is unloaded and its scene row deleted. SceneServer only. The templates ship `5`; the code's fallback when the key is missing is `60` | 5 |
 | `StaleInstanceSceneTimeout` | **Minutes** an empty **Group/PvP (instanced)** scene stays loaded. Deliberately shorter than `StaleSceneTimeout`: a dungeon instance belongs to one character or party, so once it empties it is unlikely to be wanted again, while each one holds a full physics scene. Long enough to survive a wipe-and-run-back or a relog. SceneServer only; the code's fallback is `5` | 2 |
-| `MaxInstanceLifetimeMinutes` | **Minutes** an instanced scene may exist before it is closed regardless of who is inside. SceneServer only. Measured from the scene row's creation, so it includes the time spent queued and loading. `StaleInstanceSceneTimeout` only ever reclaims an **empty** instance, so an occupied one had no upper bound at all — and since a party may hold only one instance at a time, a dungeon nobody finishes locks that party out of every other. Occupants are warned at 10 / 5 / 1 minutes and then returned to the open world through the ordinary leave-instance path. Open-world scenes are exempt. Code's fallback when the key is missing is `120` | 120 |
+| `MaxInstanceLifetimeMinutes` | **Minutes** an instanced scene may exist before it is closed regardless of who is inside. SceneServer only. Measured from the scene row's creation, so it includes the time spent queued and loading. `StaleInstanceSceneTimeout` only ever reclaims an **empty** instance, so an occupied one had no upper bound at all — and since a party may hold only one instance at a time, a dungeon nobody finishes locks that party out of every other. Occupants are warned at 10 / 5 / 1 minutes and then returned to the open world through the ordinary leave-instance path. Open-world scenes are exempt. A dungeon difficulty that declares its own `LifetimeMinutes` overrides this for instances opened at it — a timed challenge is one of the few levers that changes how a dungeon plays without touching a number in combat — and this remains the backstop for everything that declares nothing. Code's fallback when the key is missing is `120` | 120 |
 | `CertificatePath` | PEM certificate for QUIC/TLS (game servers terminate their own TLS) | platform-dependent |
 | `PrivateKeyPath` | PEM private key for QUIC/TLS | platform-dependent |
 | `ConnectionTokenHmacKeyBase64` | **Leave empty.** Loaded at runtime from the `connection_token_keys` database table | empty |
@@ -1564,6 +1565,8 @@ out. These two commands exist so that is a decision rather than a wait. Both are
 | Command | Effect |
 |---|---|
 | `/leaveinstance` (`/exitinstance`) | Returns the character to the open world at the point it entered from. The system-level guarantee that instanced content cannot trap a player: a dungeon is expected to provide an exit teleporter, but that is content data, and a character bound to an instance is routed back into it on every login — so quitting is not an escape. Refused in combat, so it is not one either |
+| Instance panel (Escape → Dungeon) | Shows the dungeon's name and difficulty, how long it has left, and everyone in it, marking who leads. **Leadership is the owning party's leader**, so it follows a promotion rather than staying with whoever opened the run. The leader can remove others and can hide the run from the dungeon finder; anyone can leave, and everyone sees the visibility. Removal is immediate and returns the target to the open world at the point they entered from — it is not a disconnect, so they are not routed back into the instance they were just removed from |
+| Dungeon finder (a dungeon entrance) | Lists the runs of that dungeon currently open at the chosen difficulty, with who is running each and how full it is. Joining one enters the dungeon **and joins that group's party**, so it is refused for anyone already in a party with somebody else. Opening a new run picks a difficulty and whether to list it for strangers |
 | `/closedungeon` (`/closeinstance`) | Ends the party's current instance. From **inside**, everyone in it is returned to the open world and the scene is unloaded; from **outside**, the instance is retired only if it is empty, and the hosting scene server reclaims the scene on its own. Party leader only, since it removes everybody — a character with no party is its own leader. Refused while anyone inside is in combat, because the eviction path deliberately skips state validation (there is nothing to validate against when a lifetime cap expires) and reaching it from a command would otherwise make it an instant escape from a losing fight |
 
 Commands are refused silently to anyone below `AccessLevel.Admin` — the server gives no
@@ -1857,6 +1860,188 @@ Settings live in the shared `Configuration.GlobalSettings` file alongside the ga
 On Windows, **Browse** opens the native folder dialog (`NativeFolderPicker`, a `SHBrowseForFolder` shell call). Unity exposes no runtime folder picker, so the button is hidden on other platforms — the path text field sets the folder on every platform and nothing is unreachable without it.
 
 > The launcher is a plain `MonoBehaviour` and only exists in **Standalone** builds. In the Editor and on WebGL the `ClientPreboot` bootstrap loads `ClientPostboot` directly, because neither can run the external updater. A transient-state watchdog (`transientStateTimeoutSeconds`, default `120`) recovers the UI if a launcher coroutine dies mid-flight.
+
+### Client Settings and Options
+
+Every client setting lives in the same `Configuration.cfg` beside the client executable that the
+launcher uses — one file, one store, one owner. `ClientSettings` creates and loads it, names every
+key exactly once, clamps everything read out of it, and owns the single debounced write that puts
+it back on disk.
+
+#### When settings are loaded and applied
+
+Loading happens in two phases, and the split matters.
+
+1. **`BeforeSceneLoad`** — `ClientSettingsBootstrap` creates and loads `Configuration.GlobalSettings`
+   before any scene's `Awake`, so the first panel to register already has settings to read. It also
+   creates the `PlayerControls` asset and applies the player's saved key bindings — *without*
+   enabling an action map, so the bindings are inspectable and editable from the login screen while
+   nothing in the world becomes live early.
+2. **`MainBootstrapSystem.OnApplyClientBootSettings`** — raised during client preload, immediately
+   after the bootstrap system installs its boot-time frame-rate cap and forces `vSyncCount` to 0.
+   The saved display mode, quality level, brightness, VSync, frame-rate cap, audio levels and
+   interface scale are applied there.
+
+The order is not incidental. Those two bootstrap lines are a *default* for a client with no
+preference, and anything applied before them is silently overwritten by them — so the hook fires
+after, and the player's choice always wins. A scene with no `MainBootstrapSystem` (the UI validation
+and unit-test scenes) is covered by an `AfterSceneLoad` backstop; applying is idempotent either way.
+
+> Before this existed, nothing loaded the settings file at client start-up at all: the store was
+> created lazily by whichever of the launcher or the Options panel asked first, and the Options
+> panel ships closed. In a client started past the launcher, neither ran — key binding overrides
+> were skipped without a word, panel positions were never restored, the theme loaded from nothing,
+> and a saved resolution was never applied.
+
+Brightness is re-applied on every `sceneLoaded`: `RenderSettings.ambientLight` is per-scene state
+baked into whichever scene is active, and the client loads several.
+
+Writes are debounced. `Configuration.Save` serialises and rewrites the whole file, so a slider bound
+straight to it rewrites the file once per frame for as long as it is held. Everything coalesces onto
+a short quiet period and is flushed when the Options panel closes and when the client shuts down.
+**In the Editor the disk write is skipped** — `Constants.GetWorkingDirectory()` resolves to the
+repository root there rather than to an install directory — so settings behave normally in play mode
+but do not rewrite the checked-out file.
+
+#### Options panel
+
+`FishMMO → Options` (or the `O` key, or Escape → Menu → Options) opens a five-tab panel. Every row
+that belongs to a list — audio channels, gameplay toggles, theme colours, key bindings — is
+generated from the table that defines it rather than authored in the UXML, so a configuration key
+cannot be lost by editing a scene.
+
+| Tab | Contents |
+|---|---|
+| **Display** | Resolution, refresh rate, fullscreen mode, quality level, brightness, frame-rate limit, VSync |
+| **Audio** | Master, Music, Sound Effects, Ambient, Interface and Voice volumes; mute when unfocused |
+| **Gameplay** | Damage numbers, healing numbers, achievement popups, ignore party invites, ignore guild invites |
+| **Key Bindings** | Every rebindable binding in the Player action map, with conflict detection |
+| **UI** | Interface scale, window snap grid, window layout reset, the thirteen theme colours, and shareable UI profiles |
+
+**Display settings are staged, not live.** Every other setting can be undone by the control that set
+it; a display mode cannot — pick one the monitor will not show and the player cannot see the control
+that would put it back. The three display dropdowns write to a pending selection, **Apply** commits
+it and arms a 12-second countdown, and **Keep** is the only thing that writes it to the file. Closing
+the panel with a mode unconfirmed restores the previous one immediately rather than leaving the
+player waiting out a countdown whose prompt is no longer on screen.
+
+#### Configuration keys
+
+| Key | Default | Range | Description |
+|---|---|---|---|
+| `Resolution Width` / `Resolution Height` | *(unset)* | a mode the display reports | Written only by **Keep**. A saved mode the display no longer offers is refused at boot and the current mode is kept |
+| `Refresh Rate` | *(unset)* | Hz offered at that resolution | Display refresh rate. Separate from the render cap below — deriving one from the other capped every player at their monitor's rate |
+| `Fullscreen` | `FullScreenWindow` | a `FullScreenMode` value | Stored as the enum value, **not** a dropdown index: the list is built per platform, so an index means a different mode on a build without exclusive fullscreen |
+| `Quality Level` | *(unset)* | a level name | Stored by **name**, not index — quality levels can be reordered between builds and an index would silently select a different one |
+| `Brightness` | `1.0` | 0–1 | Scene ambient light. Re-applied on every scene load |
+| `Frame Rate Limit` | display refresh rate | tick rate – display rate, capped at 500 | Floored at the network tick rate: FishNet derives ticks from the update loop, so a lower frame rate cannot deliver them on schedule |
+| `VSync` | `false` | — | While on, `Application.targetFrameRate` is ignored entirely and the frame-rate limit above does nothing. The panel says so |
+| `Audio.Volume.Master` | `1.0` | 0–1 | Applied to `AudioListener.volume`. Stored as the slider position; applied as its square, so the middle of the slider lands near the middle of the perceived range |
+| `Audio.Volume.Music` | `0.6` | 0–1 | Below the rest deliberately: it is the only channel that plays continuously, and a score mixed level with combat effects buries the cues a player reacts to |
+| `Audio.Volume.Effects` / `.Ambient` / `.Interface` / `.Voice` | `1.0` / `0.8` / `0.8` / `1.0` | 0–1 | Read through `ClientAudioSettings.EffectiveVolume(channel)` by anything that plays a sound |
+| `Audio.MuteWhenUnfocused` | `false` | — | Silences the client while its window has no focus. Applied on top of Master rather than by writing zero into it, so the saved level survives alt-tabbing |
+| `ShowDamage` / `ShowHeals` / `ShowAchievementCompletion` | `true` | — | Floating combat text and achievement popups |
+| `IgnorePartyInvites` / `IgnoreGuildInvites` | `false` | — | Invitations are **declined**, not dropped: an invitation silently discarded leaves the inviter staring at a prompt that never resolves and the server holding an invitation that blocks the next one |
+| `UI.Scale` | `1.0` | 0.75–1.5 | Interface scale, applied by dividing the shared `PanelSettings` reference resolution. Restored to the authored value when Editor play mode ends, so a play session cannot dirty the asset |
+| `UI.SnapGridSize` | `8` | 0–32 points | Grid that dragged panels snap to. `0` disables snapping |
+| `UI.Panel.<name>.X` / `.Y` | *(unset)* | panel points | Where the player dragged each window. Re-clamped into the viewport on restore, so a position saved on a 21:9 monitor is still reachable on a 16:9 one |
+| `InputBindingOverrides` | *(unset)* | JSON | Key binding overrides for the whole asset. A value that cannot be parsed is discarded with a log and the defaults are used — it used to abort input initialisation entirely, leaving the player in the world with no controls and no way to reach the panel that would reset them |
+| `<Name>ColorR/G/B/A` | *(unset)* | 0–255 | The thirteen themeable colours. Presence is decided by the `R` channel, so a legitimately black colour is not mistaken for an absent one |
+
+#### UI profiles
+
+The **UI** tab can save the window layout, interface scale, snap grid and colour scheme to a file of
+its own under `<install root>/UIProfiles/<name>.cfg`, and load one back. This is deliberately *not*
+`Configuration.cfg`: that file holds the whole client's settings, including its API host, launcher
+state and this machine's display mode, none of which is meaningful on another player's computer and
+some of which is actively wrong there. A profile carries only the parts worth sharing, so it can be
+handed to somebody else as a plain text file.
+
+`Configuration.cfg` stays the source of truth. Loading a profile writes its keys into the global
+store and saves; nothing reads a profile at runtime, so a profile that is later deleted cannot take
+the player's interface with it. A profile is applied **wholesale**, including the absence of a key —
+a window it says nothing about returns to where the stylesheet puts it, because merging somebody
+else's layout over yours produces an arrangement neither of you has ever seen. Every value is
+re-validated on the way in: panel coordinates are re-clamped into the viewport, the scale is clamped
+to the range the slider offers, and a key the format does not define is ignored rather than copied
+through.
+
+#### Key bindings
+
+The **Key Bindings** tab lists every rebindable binding in the `Player` action map, one row per
+binding — composite parts (`Move / up`, `Move / down`, …) get their own rows, because that is where
+the keys a player actually wants to change live. Gamepad rows are captioned as such and only accept
+gamepad controls; keyboard rows only accept keyboard and mouse controls.
+
+Three rules govern the prompt, and all three hold on every row:
+
+- **Escape cancels.** It can never be bound to anything. The cancelling key press is consumed by the
+  rebind, so it cancels the prompt without also closing the Options panel behind it.
+- **Backspace clears.** It can never be bound to anything either. Pressing it while a row is
+  listening leaves that binding *unbound* — the action stops working until something is bound to it
+  again. The row's own `↺` restores the key the game shipped with.
+- **Duplicates are not allowed.** A rebind that would put two bindings on one control is undone and
+  reported, naming the binding that already holds the key. Two actions on one key produces a client
+  where one of them appears to have stopped working with nothing on screen saying why, and the
+  player who created it is the least likely person to suspect the settings screen.
+
+Those three combine into the way keys are swapped: clear the binding that holds the key you want,
+then bind it. Without the clear, refusing duplicates would make a swap impossible — there would be
+no way to free a key.
+
+The left mouse button is also unbindable. `PerformInteractiveRebinding` suppresses the events it
+matches, so with the left button eligible the first click after starting a rebind — including the
+click meant to cancel it — was swallowed and bound to the action instead. Other mouse buttons stay
+bindable.
+
+A per-row `↺` restores that row's shipped key, and is refused if doing so would create a duplicate.
+**Reset All Keys** discards every rebind at once after a confirmation, and is the unconditional way
+back: the state it produces is the shipped one and cannot collide with itself. Both it and the status
+line sit outside the scrolling list, so neither is off-screen behind forty rows of bindings.
+
+Escape cannot be captured, so `Escape → Menu → Options` is reachable no matter what a player binds.
+
+#### Default bindings
+
+| Action | Keyboard / Mouse | Gamepad |
+|---|---|---|
+| Move | `W` `A` `S` `D` | Left stick |
+| Look | Mouse | Right stick |
+| Jump | `Space` | A / Cross |
+| Crouch | `C` | L3 |
+| Sprint | `Left Shift` | Left trigger |
+| Interact | `E` | X / Square |
+| Toggle Mouse Mode | `Tab` | Select |
+| Toggle First Person | `F1` | — |
+| Cancel *(interrupt cast)* | `Escape` | B / Circle |
+| Close Last UI | `Escape` | B / Circle |
+| Menu | `Escape` | Start |
+| Chat | `Enter`, `/` | — |
+| Hotkeys 1–10 | `1`–`9`, `0` | — |
+| Inventory | `I` | — |
+| Abilities | `K` | — |
+| Equipment | `P` | — |
+| Guild | `G` | — |
+| Party | `Y` | — |
+| Friends | `T` | — |
+| Achievements | `J` | — |
+| Factions | `U` | — |
+| Minimap | `M` | — |
+| Lore | `L` | — |
+| Pet | `V` | — |
+| Options | `O` | — |
+
+`Escape` drives Cancel, Close Last UI and Menu together by design — Cancel interrupts a cast, Close
+Last UI closes the top panel, and Menu opens the menu when neither of the first two had anything to
+do. That authored overlap is exempt from duplicate detection; overlaps a player creates are not.
+
+Windows the **server** opens have no key, and that is deliberate: a merchant, bank, loot window, NPC
+dialogue, shrine, gathering node, trade container, **mailbox** or **dungeon finder** is opened by a
+server reply after it has validated an interaction with something in the world. A key would either
+open a window the server never populated or claim to open a mailbox the character is not standing in
+front of — and a player who found the empty window would reasonably report it as broken. The scene
+channel picker and the instance panel are reached from the game menu instead, because both are rare,
+deliberate acts rather than windows a player flicks in and out of.
 
 ### Client TLS Certificate Pinning
 

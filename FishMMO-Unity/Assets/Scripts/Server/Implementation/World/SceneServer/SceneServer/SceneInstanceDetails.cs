@@ -46,6 +46,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <inheritdoc />
 		public DateTime CreatedUtc { get; set; }
 
+		/// <inheritdoc />
+		public long OwnerCharacterID { get; set; }
+
+		/// <inheritdoc />
+		public long PartyID { get; set; }
+
+		/// <inheritdoc />
+		public int Difficulty { get; set; }
+
+		/// <inheritdoc />
+		public bool IsPrivate { get; set; }
+
 		/// <summary>
 		/// Adds or subtracts from the character count, updating LastExit if the scene becomes empty.
 		/// </summary>

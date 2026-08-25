@@ -110,6 +110,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Remove the connection->character entry
 			data.ConnectionCharacters.Remove(conn);
 
+			/* The instance death count goes with the character, on every route out of this server.
+			 *
+			 * TryLeaveInstance clears it on the way out of a dungeon, but that is only one of the
+			 * ways a character stops being ours — logging out, being kicked, and being moved
+			 * between scene servers all arrive here instead. Without this the map would keep one
+			 * entry per character the process has ever hosted, and a character that reconnected
+			 * into the same instance would resume a count from a run it had already left. */
+			ClearInstanceDeathCount(character.ID);
+
 			// Remove the characterID->character entry
 			data.CharactersByID.Remove(character.ID);
 			// Remove the characterName->character entry
@@ -537,6 +546,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Handle Player deaths
 			if (playerCharacter != null)
 			{
+				/* A difficulty that limits lives spends one here.
+				 *
+				 * After the death flag is set and the buffs are gone, so the character is in the
+				 * state the rest of the death path expects before anything can move it. */
+				ApplyInstanceDeathRules(playerCharacter);
+
 				//Log.Debug("CharacterSystem", $"PlayerCharacter: {playerCharacter.GameObject.name} Died");
 
 				// A combat-logged body has no owner to notify — it was killed precisely because
@@ -802,6 +817,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			player.DisableFlags(CharacterFlags.IsInInstance);
 			player.DisableFlags(CharacterFlags.IsLoaded);
 
+			/* The run is over, so its death count goes with it. A limited-lives rule is about one
+			 * attempt: coming back to the same dungeon starts a fresh one, and a count that
+			 * survived the exit would end that attempt before it began. */
+			ClearInstanceDeathCount(player.ID);
+
 			// Save and fully release before dropping the connection so the destination scene
 			// server can claim the character.
 			RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
@@ -932,6 +952,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!player.IsFlagged(CharacterFlags.IsDead))
 					return;
 
+				/* Re-checked here, not just at the offer.
+				 *
+				 * An offer recorded outside a no-resurrection dungeon stands for thirty seconds,
+				 * and a character can be moved into one inside that window — so the offer check
+				 * alone is a prompt filter, and this is the rule. Where the character is standing
+				 * when it redeems is what decides. */
+				if (!IsResurrectionAllowed(player))
+				{
+					pendingResurrectOffers.Remove(player.ID);
+					SendSystemMessage(conn, "The dead cannot be raised in this dungeon.");
+					return;
+				}
+
 				/* The accept must answer an offer this server actually recorded. Checking only
 				 * that the named resurrector existed and shared the scene — as this did — let a
 				 * dead player revive themselves at full health whenever anyone else was nearby,
@@ -1040,6 +1073,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Only a dead character has anything to accept.
 			if (!player.IsFlagged(CharacterFlags.IsDead))
 			{
+				return;
+			}
+
+			/* Some dungeons forbid resurrection outright, and offering one there would put a
+			 * button on a dead player's screen that the accept path is going to refuse. Recording
+			 * nothing is also what makes that refusal safe: there is no stale offer to redeem the
+			 * moment they leave. */
+			if (!IsResurrectionAllowed(player))
+			{
+				SendSystemMessage(player.Owner, "The dead cannot be raised in this dungeon.");
 				return;
 			}
 

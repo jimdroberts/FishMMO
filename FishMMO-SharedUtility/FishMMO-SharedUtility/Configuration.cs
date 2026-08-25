@@ -204,6 +204,50 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Returns every setting name currently held, optionally restricted to those beginning
+		/// with <paramref name="prefix"/>.
+		/// </summary>
+		/// <param name="prefix">
+		/// Case-insensitive prefix to filter by, or null/empty for every key.
+		/// </param>
+		/// <returns>A snapshot of the matching names.</returns>
+		/// <remarks>
+		/// A copy, taken under the read lock, rather than a live view: the dictionary is mutated
+		/// from other threads and callers walk this list while calling <see cref="Set"/> and
+		/// <see cref="Remove"/> on the same instance, either of which would invalidate an
+		/// enumerator taken over the dictionary itself.
+		/// <para>
+		/// Environment-variable overrides are deliberately NOT included. They are a deployment
+		/// mechanism for individual known keys, not part of the stored configuration, and a caller
+		/// enumerating keys is asking what this file holds.
+		/// </para>
+		/// </remarks>
+		public List<string> GetKeys(string? prefix = null)
+		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
+
+			settingsLock.EnterReadLock();
+			try
+			{
+				List<string> keys = new List<string>(this.settings.Count);
+				foreach (KeyValuePair<string, string> pair in this.settings)
+				{
+					if (!string.IsNullOrEmpty(prefix) &&
+						!pair.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+					keys.Add(pair.Key);
+				}
+				return keys;
+			}
+			finally
+			{
+				settingsLock.ExitReadLock();
+			}
+		}
+
+		/// <summary>
 		/// Combines the settings from another configuration with this configuration.
 		/// Existing entries in this configuration will be overwritten by values from the 'other' configuration.
 		/// If the 'other' configuration is null, no changes are made.

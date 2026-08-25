@@ -36,6 +36,41 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long CharacterID { get; set; }
 		/// <summary>Number of characters currently in this scene.</summary>
 		public int CharacterCount { get; set; }
+
+		/// <summary>
+		/// Party that owns this instance, or 0 when it was opened by an ungrouped character.
+		/// </summary>
+		/// <remarks>
+		/// The durable answer to "whose dungeon is this". <see cref="CharacterID"/> records only
+		/// who happened to open it, and that character can leave the party, log out, or be dropped
+		/// from it — after which the remaining members could no longer resolve their own instance
+		/// and would silently open a second one, splitting the group. Membership is looked up
+		/// through this column so the instance survives any change to who created it.
+		/// </remarks>
+		public long PartyID { get; set; }
+
+		/// <summary>
+		/// Difficulty this instance was opened at, as an index into the dungeon's own difficulty
+		/// list. 0 is the first entry a dungeon declares.
+		/// </summary>
+		/// <remarks>
+		/// Stored per instance rather than per dungeon because the same dungeon runs at several
+		/// difficulties at once, and the ruleset has to survive the round trip through the queue:
+		/// the scene server that eventually loads this row is not the one that enqueued it and has
+		/// nothing else to read the choice from. Every dungeon declares its own list, so this is
+		/// meaningful only alongside <see cref="SceneName"/>.
+		/// </remarks>
+		public int Difficulty { get; set; }
+
+		/// <summary>
+		/// True when the owning party has hidden this instance from the dungeon finder's list.
+		/// </summary>
+		/// <remarks>
+		/// A lock on the front door, not on the instance: a private instance is still enterable by
+		/// the party that owns it, it simply stops being offered to everyone else. Public by
+		/// default, because a finder whose list is empty by default is not a finder.
+		/// </remarks>
+		public bool IsPrivate { get; set; }
 		/// <summary>Row creation timestamp (UTC).</summary>
 		public DateTime TimeCreated { get; set; }
 	}

@@ -354,6 +354,34 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Re-reads every panel's stored position and moves the live panels to match.
+		/// </summary>
+		/// <remarks>
+		/// For the case where the stored positions changed underneath the panels rather than
+		/// because of them — loading a shared UI profile is the only one today. Panels read their
+		/// position once, on first layout, so writing new coordinates into configuration alone has
+		/// no visible effect until the client restarts.
+		/// <para>
+		/// Isolated per panel, as <see cref="ResetAllPanelPositions"/> is and for the same reason:
+		/// one panel that throws must not strand the rest halfway through somebody else's layout.
+		/// </para>
+		/// </remarks>
+		public static void ReloadAllPanelPositions()
+		{
+			foreach (KeyValuePair<string, UITKControl> kvp in controls)
+			{
+				try
+				{
+					kvp.Value.ReloadStoredPosition();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"ReloadStoredPosition failed for control '{kvp.Key}'.", ex);
+				}
+			}
+		}
+
+		/// <summary>
 		/// Puts every panel back where its stylesheet places it and forgets the player's saved
 		/// arrangement.
 		/// </summary>

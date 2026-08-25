@@ -27,9 +27,22 @@ namespace FishMMO.Shared
 
 			if (!eventData.TryGet(out PlayerInteractionEventData data) || data.Interactable == null) return;
 
+			/* The template ID rides along with the open.
+			 *
+			 * Without it the panel opens knowing only which scene object it belongs to, and would
+			 * have to ask the server what dungeon that is before it could draw its own header or
+			 * its difficulty tabs — a round trip in front of a window the player has already
+			 * opened. The entrance knows; sending it costs an int. */
+			int templateID = 0;
+			if (data.Interactable is IDungeonEntrance dungeonEntrance)
+			{
+				templateID = dungeonEntrance.DungeonTemplateID;
+			}
+
 			SendToOwner(initiator, new DungeonFinderBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
+				DungeonTemplateID = templateID,
 			});
 		}
 	}

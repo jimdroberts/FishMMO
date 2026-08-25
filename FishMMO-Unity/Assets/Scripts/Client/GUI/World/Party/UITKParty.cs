@@ -280,6 +280,20 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void PartyController_OnReceivePartyInvite(long inviterCharacterID)
 		{
+			/* Declined outright, and declined rather than dropped. "Ignore party invites" has to
+			 * answer the server: an invitation that is silently discarded leaves the inviter
+			 * staring at a prompt that never resolves until the server's invitation TTL expires,
+			 * which looks to them like the other player is deliberately ignoring them — and to the
+			 * server like an invitation still outstanding, which blocks the next one. */
+			if (ClientSettings.GetGameplayToggle(ClientSettings.IgnorePartyInvitesKey))
+			{
+				Client.Broadcast(new PartyDeclineInviteBroadcast()
+				{
+					InviterCharacterID = inviterCharacterID,
+				}, Channel.Reliable);
+				return;
+			}
+
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
 			{
 				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiTooltip))

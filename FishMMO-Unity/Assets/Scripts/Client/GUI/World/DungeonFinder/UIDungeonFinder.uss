@@ -2,34 +2,44 @@
     UIDungeonFinder.uss
     Layout for the dungeon finder. Colours come from FishMMO-Theme.uss.
 
-    A preview image over a description, with the one action in a footer. The
-    image sits in a .fish-well so an unset preview reads as an empty frame
-    rather than a hole in the panel.
+    The panel reads top to bottom as the decision a player is actually making:
+    what this dungeon is, how hard they want it, what that costs and pays, and
+    only then which of the open runs to join. Sizes are written against the
+    1200x800 reference resolution declared by Assets/UI Toolkit/PanelSettings.asset.
 */
 
+/*
+    Anchored explicitly. Each panel is its own UIDocument whose root fills the
+    screen, so a root with a size but no position resolves to the top-left
+    corner.
+*/
 .dungeonfinder-root {
     position: absolute;
     left: 0;
     top: 0;
     right: 0;
     bottom: 0;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--overlay-soft);
 }
 
 .dungeonfinder-panel {
-    width: 360px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 440px;
+    max-height: 82%;
     flex-direction: column;
     flex-shrink: 0;
 }
+
+/* ── Header ─────────────────────────────────────────────── */
 
 .dungeonfinder-header {
     flex-direction: row;
     align-items: center;
     height: 44px;
     padding-left: 10px;
-    padding-right: 7px;
+    padding-right: 6px;
     flex-shrink: 0;
 }
 
@@ -46,64 +56,10 @@
     flex-grow: 1;
 }
 
-.dungeonfinder-close-btn {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
-}
-
-.dungeonfinder-body {
-    flex-direction: column;
-    padding: 10px;
-}
-
-/*
-    16:9, so a dungeon splash drops in without letterboxing. The label behind
-    it shows through only while no image is assigned.
-*/
-.dungeonfinder-image {
-    height: 150px;
-    align-items: center;
-    justify-content: center;
-    -unity-background-scale-mode: scale-and-crop;
-    flex-shrink: 0;
-}
-
-.dungeonfinder-image__label {
-    flex-grow: 0;
-}
-
-.dungeonfinder-description {
-    margin-top: 10px;
-    white-space: normal;
-    -unity-text-align: upper-left;
-    min-height: 46px;
-}
-
-.dungeonfinder-footer {
-    flex-direction: row;
-    align-items: center;
-    height: 40px;
-    padding-left: 10px;
-    padding-right: 10px;
-    flex-shrink: 0;
-}
-
-.dungeonfinder-start-btn {
-    flex-grow: 1;
-    height: 28px;
-}
-
-/* Title inside the header's stacked title block. */
-.dungeonfinder-title {
-    flex-shrink: 0;
-}
-
 /*
     A stacked title + subtitle needs its two line boxes pinned. Unity gives a
     Label a generous intrinsic height, so an unconstrained pair measures taller
-    than the header that contains it — the subtitle then overflows into
-    whatever sits below the header, which is exactly what it did.
+    than the header and the subtitle overflows into the strip below.
 */
 .dungeonfinder-header__titles > .fish-panel__title {
     height: 15px;
@@ -113,4 +69,228 @@
 .dungeonfinder-header__titles > .fish-panel__subtitle {
     height: 12px;
     flex-shrink: 0;
+}
+
+.dungeonfinder-close-btn {
+    flex-shrink: 0;
+}
+
+/* ── About the dungeon ──────────────────────────────────── */
+
+.dungeonfinder-about {
+    flex-direction: row;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-image {
+    width: 96px;
+    height: 96px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-image__label {
+    -unity-text-align: middle-center;
+}
+
+.dungeonfinder-about__text {
+    flex-direction: column;
+    flex-grow: 1;
+    /* Without this a long description widens the row instead of wrapping in it. */
+    min-width: 0;
+}
+
+.dungeonfinder-name {
+    margin-bottom: 4px;
+    flex-shrink: 0;
+    white-space: normal;
+}
+
+.dungeonfinder-description {
+    white-space: normal;
+    flex-grow: 1;
+}
+
+/* ── Difficulty tabs ────────────────────────────────────── */
+
+/*
+    Wraps, because the number of tabs is the dungeon's decision and not this
+    layout's — a raid with five difficulties must not push its last one off the
+    panel.
+*/
+.dungeonfinder-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-tab {
+    margin-right: 4px;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+/* Hidden entirely when a dungeon offers only one way to play it. */
+.dungeonfinder-tabs--single {
+    display: none;
+}
+
+/* ── Rules ──────────────────────────────────────────────── */
+
+.dungeonfinder-rules {
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-rules__text {
+    white-space: normal;
+}
+
+/* Nothing differs from the default ruleset, so there is nothing to warn about. */
+.dungeonfinder-rules--empty {
+    display: none;
+}
+
+/* ── Column strip ───────────────────────────────────────── */
+
+.dungeonfinder-columns {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    padding-left: 12px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-col {
+    flex-shrink: 0;
+}
+
+.dungeonfinder-col--leader { flex-grow: 1; }
+.dungeonfinder-col--size   { width: 60px; -unity-text-align: middle-center; }
+.dungeonfinder-col--status { width: 68px; }
+/* Matches the Join button's footprint so the captions line up with it. */
+.dungeonfinder-col--action { width: 62px; }
+
+/* ── List ───────────────────────────────────────────────── */
+
+.dungeonfinder-scroll {
+    flex-grow: 1;
+    min-height: 72px;
+}
+
+.dungeonfinder-list {
+    flex-direction: column;
+}
+
+/*
+    One instance row. The theme's .fish-row supplies the hover state and the
+    leading accent rail; this only sets the geometry. Taller than a plain list
+    row because it carries a button.
+*/
+.dungeonfinder-row {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-row__leader {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.dungeonfinder-row__size {
+    width: 60px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+}
+
+.dungeonfinder-row__status {
+    width: 68px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-row__action {
+    width: 56px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+/* The player's own party's run, so it is obvious which row is theirs. */
+.dungeonfinder-row--own {
+    background-color: var(--brand-lo);
+    border-left-color: var(--brand-500);
+}
+
+.dungeonfinder-status {
+    margin-top: 18px;
+    margin-bottom: 18px;
+    white-space: normal;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.dungeonfinder-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 38px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-public {
+    flex-shrink: 0;
+}
+
+/*
+    A UITK Toggle lays its label out as a base-field label: a fixed minimum width
+    with the input half growing to fill whatever is left, which parks the
+    checkmark far from the words it belongs to. Pinned to its content here rather
+    than in the theme, because a form full of aligned toggles genuinely wants the
+    column and a lone one in a footer does not.
+*/
+.dungeonfinder-public > .unity-base-field__label {
+    min-width: auto;
+    width: auto;
+    margin-right: 6px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
+
+
+.dungeonfinder-footer__actions {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-action {
+    height: 22px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.dungeonfinder-action--wide {
+    min-width: 132px;
 }

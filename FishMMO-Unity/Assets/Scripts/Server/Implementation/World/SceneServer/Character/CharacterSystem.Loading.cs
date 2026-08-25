@@ -725,6 +725,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						var result = await partyService.FetchAsync(characterID);
 						if (result.IsSuccess) partyData = result.Data;
+
+						/* A party belongs to one world server, and this character may have
+						 * arrived on a different one.
+						 *
+						 * Characters are global on purpose — the same character can be played on
+						 * any world server so that friends can play together wherever they are —
+						 * but a party is replicated between scene servers through the party update
+						 * pump, and that pump is scoped to a world server. Carrying a membership
+						 * across would produce a party half of whose members are updated by a pump
+						 * the other half cannot see: rosters that never converge, invitations to
+						 * instances that do not exist on the other side, and a leader nobody can
+						 * reach. Every one of those is a bug that only appears once somebody
+						 * changes shard, which is the worst kind to diagnose.
+						 *
+						 * So the membership is dropped here, at the moment of arrival, before any
+						 * of it is applied to the character. Dropped rather than migrated: the
+						 * party is still live on the world server it belongs to, and pulling it
+						 * across would take its other members with it.
+						 */
+						if (partyData.HasValue &&
+							partyData.Value.PartyID > 0 &&
+							serviceRegistry.TryGet<IPartyService>(out var partyLookupService))
+						{
+							var partyResult = await partyLookupService.FetchAsync(partyData.Value.PartyID);
+
+							if (!partyResult.IsSuccess)
+							{
+								/* Could not read the party. The membership is left alone: a
+								 * transient database fault is not evidence that the character has
+								 * changed shard, and evicting on one would break up parties for
+								 * no reason. If it really is a cross-server membership it will be
+								 * caught on the next load. */
+								await Log.Warning("CharacterSystem",
+									$"Could not read party {partyData.Value.PartyID} to check its world server for character {characterID}; leaving the membership in place.");
+							}
+							else if (partyResult.Data == null)
+							{
+								// The party is gone. Nothing to belong to.
+								await DropPartyMembershipAsync(partyData.Value, "the party no longer exists");
+								partyData = null;
+							}
+							else if (partyResult.Data.Value.WorldServerID != 0 &&
+									 partyResult.Data.Value.WorldServerID != charData.WorldServerID)
+							{
+								await DropPartyMembershipAsync(partyData.Value,
+									$"it belongs to world server {partyResult.Data.Value.WorldServerID}, not {charData.WorldServerID}");
+								partyData = null;
+							}
+						}
 					}
 					if (serviceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
 					{
@@ -2010,5 +2059,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				QuestData = questData;
 			}
 		}
+		/// <summary>
+		/// Drops a party membership this character cannot keep, during load.
+		/// </summary>
+		/// <remarks>
+		/// Delegated to the party system rather than deleting the row here, because removing a
+		/// member is not a single delete: leadership has to move first if the leaver led, and the
+		/// party itself has to be retired if nobody is left. Doing it inline would be a second,
+		/// divergent copy of rules that already exist.
+		/// <para>
+		/// A missing party system is not fatal to the load. The membership stays in the database
+		/// and the character simply loads without it applied, which is the same outcome the caller
+		/// wanted; the next load will try again.
+		/// </para>
+		/// </remarks>
+		/// <param name="membership">The membership row being dropped.</param>
+		/// <param name="reason">Why, for the log line.</param>
+		private async Task DropPartyMembershipAsync(CharacterPartyData membership, string reason)
+		{
+			if (Server == null ||
+				!Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
+			{
+				await Log.Warning("CharacterSystem",
+					$"Character {membership.CharacterID} should have been removed from party {membership.PartyID} ({reason}) but the party system is unavailable.");
+				return;
+			}
+
+			await partySystem.RemoveCharacterFromPartyAsync(
+				membership.CharacterID,
+				membership.PartyID,
+				(PartyRank)membership.Rank,
+				reason);
+		}
+
 	}
 }

@@ -663,6 +663,49 @@ OnPeriodicSave(deltaTime)
 
 ### Directory Tree
 
+## Instance Control
+
+An instance belongs to a **party**, not to whoever opened it. The scene row records both, and the
+party is the durable half: it survives its creator leaving, logging out, or handing leadership on.
+`ResolveInstanceAuthority` derives, for one viewer, who leads and whether that viewer is them.
+
+- **The viewer's own authority comes from their own party rank**, never from finding the leader in
+  the roster walk. A leader standing outside the instance — they opened it and stepped out, or have
+  not arrived yet — must not silently lose control of it, and a member must not silently gain
+  control because the leader is momentarily unresolvable.
+- **Naming the leader is a separate, best-effort question.** Character names live on the objects
+  this scene server holds, so a leader elsewhere cannot be named from here. The client is told there
+  is a leader it cannot name rather than that there is none — "no leader" is a state the party
+  system actively repairs, and displaying it for a run that has one would be alarming and wrong.
+- A run opened by an **ungrouped** character has no party, and there its owner *is* its leader. That
+  is the only case where the two differ, and also the one where they cannot disagree.
+
+Leadership therefore moves the moment the party's does, with nothing here needing to know a
+promotion happened — the panel refreshes on its own timer and reports the new answer.
+
+Kick and visibility are both re-authorised through the same helper when the request arrives; the
+client's `ViewerIsLeader` only decides what is *drawn*. `SetInstancePrivacyAsync` additionally
+re-asserts ownership inside the `UPDATE` itself, so an authorisation that went stale between the
+roster read and the write updates zero rows rather than flipping another party's dungeon.
+
+## Instance Death Rules
+
+`instanceDeathCounts` tracks deaths **per run**, not per character: leaving and coming back starts
+over, which is what makes a one-death rule a rule about this attempt. It is cleared by
+`TryLeaveInstance` and by `RemoveCharacterConnectionMapping`, so every route out of the instance and
+off this server forgets it — without the second the map would grow by one entry per character the
+process has ever hosted, and a character reconnecting into the same instance would resume a count
+from a run it had already left.
+
+Spending the last life removes **only the character who died**, through the ordinary leave-instance
+transfer rather than a disconnect. Ending a group's run over one member's mistake is a much harsher
+rule than any dungeon is trying to express, and it would make a hardcore run something any one
+member could end for everybody. `AllowResurrection` is checked at the offer *and* at the accept: the
+offer check stops a pointless prompt appearing, and the accept check is the enforcement, because an
+offer recorded a moment before the character walked into the instance would otherwise still be
+redeemable inside it.
+
+
 ```
 Character/
 ├── CharacterSystem.cs                    # Core lifecycle: initialization, deinitialize, update, main-thread queue, async work helpers
@@ -670,6 +713,7 @@ Character/
 ├── CharacterSystem.Loading.cs            # Partial: auth callback, async DB fetch, prefab instantiation, scene validation, spawn
 ├── CharacterSystem.Saving.cs             # Partial: periodic save, save-and-despawn, session claim/release, BuildCharacterData
 ├── CharacterSystem.Social.cs             # Partial: async guild/party/friend fetch, non-DB payload broadcast, targeted broadcasts
+├── CharacterSystem.Instance.cs           # Partial: instance readout, party-leader kick and visibility, difficulty death rules
 ├── CharacterMappingData.cs               # Runtime mapping caches (connection, ID, name, world, waiting load, session tokens)
 ├── CharacterSystemRuntimeData.cs         # Runtime state: atomic save processing guard (TryBeginSave/EndSave)
 ├── CharacterSystemMainThreadQueueData.cs # Per-system main-thread queue container

@@ -38,8 +38,17 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Parties are independent entities that do not belong to a specific account.
 		/// Characters join parties through the party membership relationship.
+		/// <para>
+		/// A party belongs to one world server. Characters are global and may be played on any of
+		/// them, but a party is replicated between scene servers through this database within a
+		/// single world server's pump — so a party whose members were spread across two would be
+		/// updated by pumps that cannot see one another and would never converge. Recording the
+		/// world server here is what lets a membership be dropped when a character arrives
+		/// somewhere it cannot work.
+		/// </para>
 		/// </remarks>
-		Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default);
+		/// <param name="worldServerId">World server the party will belong to.</param>
+		Task<DatabaseResult<long>> CreateAsync(long worldServerId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Fetches a party by its ID.

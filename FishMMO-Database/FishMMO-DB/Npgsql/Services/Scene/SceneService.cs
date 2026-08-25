@@ -205,12 +205,20 @@ namespace FishMMO.Database.Npgsql.Services
 			string sceneName,
 			SceneType sceneType,
 			long characterId,
+			long partyId,
+			int difficulty,
+			bool isPrivate,
 			IReadOnlyList<long> partyCharacterIds,
 			CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
 				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
+			}
+
+			if (difficulty < 0)
+			{
+				return DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, "Difficulty index cannot be negative.");
 			}
 
 			// Deduplicated, and the requester is always included: a row created for them between
@@ -233,11 +241,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			if (blocking.Count == 0)
-			{
-				// Nothing to guard against; an unconditional insert is the same statement.
-				return await EnqueueAsync(worldServerId, sceneName, sceneType, characterId, cancellationToken).ConfigureAwait(false);
-			}
+			long owningPartyId = partyId > 0 ? partyId : 0L;
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
@@ -245,6 +249,14 @@ namespace FishMMO.Database.Npgsql.Services
 				 * check and this insert. scene_server_id and scene_handle are written as 0 because
 				 * no scene server owns the row yet — DequeueAsync hands it to one, and SetReadyAsync
 				 * stamps both. */
+
+				/* Fixed parameter offsets. {0}..{10} are the row values and the blocking statuses;
+				 * the variable-length member id list starts at {11}. Held as named locals rather
+				 * than interpolated arithmetic because `{{expr}}` inside an interpolated verbatim
+				 * string is an escaped literal brace, not a value — a mistake this method has
+				 * already made once. */
+				const int FirstBlockingIndex = 11;
+
 				var ids = new System.Text.StringBuilder();
 				for (int i = 0; i < blocking.Count; ++i)
 				{
@@ -252,49 +264,77 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						ids.Append(", ");
 					}
-					// Fixed parameter offset: {0}..{5} are the row values and the blocking states.
-					ids.Append('{').Append(6 + i).Append('}');
+					ids.Append('{').Append(FirstBlockingIndex + i).Append('}');
 				}
 
-				// Placeholder indices for the two extra status parameters, which sit after the
-				// variable-length id list. Computed rather than interpolated inline: `{{expr}}` in
-				// an interpolated verbatim string is an escaped literal brace, not a value.
-				int loadingIndex = 6 + blocking.Count;
-				int readyIndex = 7 + blocking.Count;
-
-				/* The guard deliberately does NOT match on scene_name.
+				/* Two ways to already hold an instance, and both have to block.
 				 *
-				 * One instance per party, not one per party per dungeon. Scoped to the name, a
-				 * party could hold a live copy of every dungeon on the shard at once — open one,
-				 * walk out, open the next — and each abandoned copy held a full physics scene and
-				 * a scene row until its own idle timeout expired. The scene_name in the inserted
-				 * row is which dungeon this request is for; the NOT EXISTS below is "does this
-				 * party already have one open at all". */
-				var sql = $@"INSERT INTO {TableName}
-						(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created)
-					SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}
-					WHERE NOT EXISTS (
-						SELECT 1 FROM {TableName}
-						WHERE world_server_id = {{0}}
-							AND scene_type = {{3}}
-							AND character_id IN ({ids})
-							AND scene_status IN ({{2}}, {{{loadingIndex}}}, {{{readyIndex}}})
-					)
-					RETURNING id";
+				 * By member id, which catches an instance opened by somebody who is in the party
+				 * right now; and by party id, which catches one opened by somebody who no longer
+				 * is. The second is what stops a party whose original opener has left or logged
+				 * out from opening a second copy of a dungeon they are still standing in — and,
+				 * read the other way, it is what lets the remaining members still find it.
+				 *
+				 * The guard deliberately does NOT match on scene_name. One instance per party,
+				 * not one per party per dungeon: scoped to the name, a party could hold a live
+				 * copy of every dungeon on the shard at once — open one, walk out, open the next —
+				 * each holding a full physics scene and a scene row until its own idle timeout
+				 * expired. The scene_name in the inserted row is which dungeon this request is
+				 * for; the NOT EXISTS below is "does this party already have one open at all".
+				 *
+				 * It does not match on difficulty either, for the same reason. Opening the same
+				 * dungeon again on Hard is still a second instance. */
+				var heldClauses = new List<string>(2);
+				if (blocking.Count > 0)
+				{
+					heldClauses.Add($"character_id IN ({ids})");
+				}
+				if (owningPartyId > 0)
+				{
+					heldClauses.Add("(party_id <> 0 AND party_id = {6})");
+				}
 
-				var parameters = new object[8 + blocking.Count];
+				string sql;
+				if (heldClauses.Count == 0)
+				{
+					// Nothing to guard against — an ungrouped insert with no requester id. The
+					// unconditional insert is the same statement without the NOT EXISTS.
+					sql = $@"INSERT INTO {TableName}
+							(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private)
+						VALUES ({{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}})
+						RETURNING id";
+				}
+				else
+				{
+					sql = $@"INSERT INTO {TableName}
+							(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private)
+						SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}}
+						WHERE NOT EXISTS (
+							SELECT 1 FROM {TableName}
+							WHERE world_server_id = {{0}}
+								AND scene_type = {{3}}
+								AND scene_status IN ({{2}}, {{9}}, {{10}})
+								AND ({string.Join(" OR ", heldClauses)})
+						)
+						RETURNING id";
+				}
+
+				var parameters = new object[FirstBlockingIndex + blocking.Count];
 				parameters[0] = worldServerId;
 				parameters[1] = sceneName;
 				parameters[2] = (int)SceneStatus.Pending;
 				parameters[3] = (int)sceneType;
 				parameters[4] = characterId;
 				parameters[5] = DateTime.UtcNow;
+				parameters[6] = owningPartyId;
+				parameters[7] = difficulty;
+				parameters[8] = isPrivate;
+				parameters[9] = (int)SceneStatus.Loading;
+				parameters[10] = (int)SceneStatus.Ready;
 				for (int i = 0; i < blocking.Count; ++i)
 				{
-					parameters[6 + i] = blocking[i];
+					parameters[FirstBlockingIndex + i] = blocking[i];
 				}
-				parameters[6 + blocking.Count] = (int)SceneStatus.Loading;
-				parameters[7 + blocking.Count] = (int)SceneStatus.Ready;
 
 				return await ExecuteReturningOrDefaultAsync(
 					dbContext,
@@ -325,7 +365,7 @@ namespace FishMMO.Database.Npgsql.Services
 						SET scene_status = {{1}}
 						FROM scene_to_update
 						WHERE {TableName}.id = scene_to_update.id
-						RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created";
+						RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created, {TableName}.party_id, {TableName}.difficulty, {TableName}.is_private";
 
 				var pendingStatus = (int)SceneStatus.Pending;
 				var loadingStatus = (int)SceneStatus.Loading;
@@ -346,6 +386,13 @@ namespace FishMMO.Database.Npgsql.Services
 						CharacterID = reader.GetInt64(7),
 						CharacterCount = reader.GetInt32(8),
 						TimeCreated = reader.GetDateTime(9),
+						/* Carried through the dequeue, not looked up afterwards. The scene server
+						 * that dequeues a row is the one that will host the instance, and the
+						 * difficulty is what tells it which ruleset to apply — a second round trip
+						 * to fetch it would leave a window in which the scene exists with no rules. */
+						PartyID = reader.GetInt64(10),
+						Difficulty = reader.GetInt32(11),
+						IsPrivate = reader.GetBoolean(12),
 					},
 					cancellationToken).ConfigureAwait(false);
 
@@ -595,6 +642,7 @@ namespace FishMMO.Database.Npgsql.Services
 			IReadOnlyList<long> characterIds,
 			SceneType sceneType,
 			long worldServerId,
+			long partyId = 0,
 			CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0)
@@ -616,7 +664,9 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			if (ids.Count == 0)
+			long owningPartyId = partyId > 0 ? partyId : 0L;
+
+			if (ids.Count == 0 && owningPartyId == 0)
 			{
 				return DatabaseResult<IReadOnlyList<SceneData>>.Success(Array.Empty<SceneData>());
 			}
@@ -628,9 +678,16 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync<IReadOnlyList<SceneData>>(async dbContext =>
 			{
+				/* Matched by party as well as by member id, and this is what closes the re-entry
+				 * lockout. An instance is recorded against the character who opened it, so a party
+				 * whose opener has since left it — or logged out and been dropped from it — could
+				 * no longer resolve the dungeon its members were still standing in: the finder saw
+				 * nothing, opened a second instance, and split the group. Matching on party_id
+				 * finds it regardless of who created it, which is also what lets a member walk out
+				 * to the entrance and walk straight back in. */
 				var scenes = await dbContext.Scenes
 					.AsNoTracking()
-					.Where(s => ids.Contains(s.CharacterID) &&
+					.Where(s => (ids.Contains(s.CharacterID) || (owningPartyId != 0 && s.PartyID == owningPartyId)) &&
 								s.SceneType == type &&
 								s.WorldServerID == worldServerId &&
 								(s.SceneStatus == pending || s.SceneStatus == loading || s.SceneStatus == ready))
@@ -645,6 +702,113 @@ namespace FishMMO.Database.Npgsql.Services
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchJoinableInstancesAsync(
+			long worldServerId,
+			string sceneName,
+			int difficulty,
+			SceneType sceneType,
+			int maxClients,
+			int maxRows = 32,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
+			{
+				return DatabaseResult<IReadOnlyList<SceneData>>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
+			}
+
+			/* Bounded here as well as by the caller. This answers a request a client can repeat,
+			 * and the reply is serialised into a broadcast — an unbounded row count would let a
+			 * shard with many open instances produce a message large enough to be a problem in
+			 * itself, independently of how often it is asked for. */
+			int rowLimit = maxRows < 1 ? 1 : (maxRows > 128 ? 128 : maxRows);
+			int capacity = maxClients < 1 ? 1 : maxClients;
+			int type = (int)sceneType;
+			int pending = (int)SceneStatus.Pending;
+			int loading = (int)SceneStatus.Loading;
+			int ready = (int)SceneStatus.Ready;
+
+			return await ExecuteReadAsync<IReadOnlyList<SceneData>>(async dbContext =>
+			{
+				/* Instances that are still loading are listed deliberately.
+				 *
+				 * A party that has just opened a dungeon spends several seconds in Pending and
+				 * Loading, and that is exactly the window in which a straggler is most likely to
+				 * be looking for them. Hiding it would show an empty list to somebody whose group
+				 * is right there, and they would open a second copy — the split-party failure the
+				 * one-instance rule exists to prevent, arrived at through the finder instead of
+				 * around it.
+				 *
+				 * Private instances are excluded, and full ones are excluded, because neither can
+				 * be joined; offering a row whose Join button is guaranteed to be refused is
+				 * worse than not offering it. */
+				var scenes = await dbContext.Scenes
+					.AsNoTracking()
+					.Where(s => s.WorldServerID == worldServerId &&
+								s.SceneName == sceneName &&
+								s.SceneType == type &&
+								s.Difficulty == difficulty &&
+								!s.IsPrivate &&
+								s.CharacterCount < capacity &&
+								(s.SceneStatus == pending || s.SceneStatus == loading || s.SceneStatus == ready))
+					// Oldest first: a run that has been going longest is the one closest to
+					// needing a replacement, and a stable order stops rows jumping under the
+					// player's cursor between refreshes.
+					.OrderBy(s => s.ID)
+					.Take(rowLimit)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				IReadOnlyList<SceneData> data = scenes.Select(MapEntityToDto).ToList();
+				return data;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<bool>> SetInstancePrivacyAsync(
+			long sceneId,
+			long requiredPartyId,
+			long requiredCharacterId,
+			bool isPrivate,
+			CancellationToken cancellationToken = default)
+		{
+			if (sceneId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene ID.");
+			}
+
+			if (requiredPartyId <= 0 && requiredCharacterId <= 0)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "An owning party or character is required.");
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				/* Ownership is re-asserted in the UPDATE itself rather than checked first.
+				 *
+				 * The caller has already authorised the request against the party roster it holds
+				 * in memory, but that roster is a cache: a leader can be demoted, or the instance
+				 * handed to another party's row id, between the check and the write. Folding the
+				 * ownership test into the statement means a stale authorisation updates zero rows
+				 * instead of flipping somebody else's dungeon private.
+				 *
+				 * A party-owned instance is matched on the party; an ungrouped one has party_id 0
+				 * and is matched on the character who opened it. */
+				var sql = $@"UPDATE {TableName}
+					SET is_private = {{0}}
+					WHERE id = {{1}}
+						AND (({{2}} <> 0 AND party_id = {{2}}) OR (party_id = 0 AND character_id = {{3}}))";
+
+				int affected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { isPrivate, sceneId, requiredPartyId, requiredCharacterId },
+					cancellationToken).ConfigureAwait(false);
+
+				return affected > 0;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<SceneData>> FetchAsync(long sceneId, CancellationToken cancellationToken = default)
 		{
@@ -877,7 +1041,10 @@ namespace FishMMO.Database.Npgsql.Services
 				sceneType: entity.SceneType,
 				characterID: entity.CharacterID,
 				characterCount: entity.CharacterCount,
-				timeCreated: entity.TimeCreated
+				timeCreated: entity.TimeCreated,
+				partyID: entity.PartyID,
+				difficulty: entity.Difficulty,
+				isPrivate: entity.IsPrivate
 			);
 		}
 	}

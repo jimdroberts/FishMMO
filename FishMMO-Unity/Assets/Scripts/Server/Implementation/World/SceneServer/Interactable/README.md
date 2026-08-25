@@ -221,22 +221,107 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 ### Dungeon Finder
 
-`OnServerDungeonFinderBroadcastReceived(conn, msg, channel)`:
+Three separately-authorised client requests, not one. `DungeonFinderBroadcast` is now purely the
+server's message opening the panel and is **not accepted from a client at all**.
 
-1. Validates connection and character, then gates on `CharacterStateValidation.CanActOrMove` — **not** `CanAct`. Entering a dungeon is a voluntary move to another scene instance implemented as a disconnect, so in combat it would be both a cleaner escape than any teleporter and actively corrupting: the drop would be read as a combat logout, stranding the body and its session claim on this server while the character row says it is in an instance.
-2. Refuses if the character is already inside an instance — the entrance is not a way to hop between them.
-3. Acquires the ingress guard.
-4. Validates scene object is `IDungeonEntrance` in range.
-5. Validates dungeon scene exists in `WorldSceneDetailsCache` with respawn positions, and reads its `MaxClients` cap.
-6. Captures main-thread state (character ID, world server ID, party ID, dungeon name, cap, respawn details).
-7. Increments dungeon entrance achievement.
-8. Enqueues `ProcessDungeonFinderAsync` (async owns guard):
-   - Looks for this character's own instance **of this dungeon** via `ISceneService.FetchCharacterInstanceAsync`, which is scoped by world server and scene name. A character accumulates one instance row per dungeon it has opened, so matching on character and scene type alone returned an arbitrary one — asked for dungeon A while holding a row for dungeon B, the caller saw "no instance", created a second, and left A's still-running instance stranded.
-   - Rows that are `Failed`, or of an unrecognised status, are treated as absent; `Pending` and `Loading` count as usable, because the world server holds the client in its instance queue until the scene is ready.
-   - A **full** instance is refused (`DestinationFull`), never worked around. Asking for a new one instead would silently hand a party member a second, empty copy of the dungeon and separate them from the group they were trying to join.
-   - Otherwise joins a party member's instance, or enqueues a new scene via `ISceneService.EnqueueAsync`.
-   - Marshals to main thread (`EnterInstance`): re-checks `CanActOrMove` — the database work above gives combat or death time to intervene — then sets `InstanceID`, `InstancePosition`, `InstanceRotation`, enables `CharacterFlags.IsInInstance`, announces the hand-off via `ICharacterSystem.SuppressCombatLingerOnDisconnect`, and disconnects.
-   - Every refusal answers with a `SceneTransferRefusedBroadcast` naming the reason. The client closes its panel the moment it sends, so a silent return read as the button having stopped working — and the natural response, clicking again, was then swallowed by the ingress guard.
+All three share `TryResolveDungeonEntrance`, which validates that the caller is standing at a
+usable entrance and captures what the async half needs as plain values: character and world server
+IDs, party ID and rank, dungeon name, dungeon template ID, scene details, achievement template.
+The scene object handle is validated against the character's *own* scene, since a handle is only
+meaningful inside the process that allocated it.
+
+`TryResolveDifficulty` resolves the index a request names against the dungeon's own list. A
+dungeon with no template, or an empty list, offers exactly one difficulty at index 0 with default
+rules — which is how every dungeon authored before difficulties existed behaves, so none needed
+changing. An index the dungeon does not offer is **refused, never clamped**: clamping would quietly
+enter a player into a ruleset they did not choose, and on a dungeon whose top difficulty ends a run
+on the first death that is not a rounding error.
+
+#### `OnServerDungeonFinderListBroadcastReceived` — browsing
+
+1. Its **own** ingress-guard operation (`DungeonListOperation`) with a 2000 ms debounce, so
+   browsing cannot debounce the attempt to enter that follows it. The two are debounced at rates
+   two orders of magnitude apart; sharing a key would let the cheap one lock out the expensive one.
+2. Deliberately **not** gated on character state. Reading a list is not a move, and a player in
+   combat who cannot see it can see it by walking ten metres away — refusing would hide
+   information rather than prevent an action.
+3. `FetchInstanceListAsync` reads `ISceneService.FetchJoinableInstancesAsync` (public, non-full,
+   enterable rows of this dungeon at this difficulty) and resolves the opener names in one batched
+   `ICharacterService.FetchNamesAsync` rather than one query per row. A name lookup that fails does
+   not fail the list — the rows are still joinable and still describe themselves by size and state.
+4. `RemainingSeconds` is deliberately **not** sent from here: the expiry clock belongs to the scene
+   server hosting each instance, and this is not necessarily that server.
+5. **Every exit replies**, including refusals and empty lists. The panel disables its list while a
+   request is outstanding, so a silent return would leave it inert for the rest of its life.
+
+#### `OnServerDungeonFinderCreateBroadcastReceived` — opening a new run
+
+1. `TryBeginDungeonEntry` gates on `CharacterStateValidation.CanActOrMove` — **not** `CanAct`.
+   Entering a dungeon is a voluntary move to another scene instance implemented as a disconnect, so
+   in combat it would be both a cleaner escape than any teleporter and actively corrupting: the
+   drop would be read as a combat logout, stranding the body and its session claim on this server
+   while the character row says it is in an instance. It also refuses a character already inside an
+   instance — the entrance is not a way to hop between them.
+2. Capacity is the difficulty's own `MaximumPlayers` where it declares one, and the scene's
+   `MaxClients` otherwise.
+3. `ProcessDungeonCreateAsync`:
+   - Reads the party roster, and refuses with `RequirementsNotMet` if the difficulty's
+     `MinimumPartySize` is not met. Checked against the **roster**, not against who is inside, so a
+     dungeon demanding a group cannot be started by whichever member arrives first and then
+     finished alone.
+   - `ISceneService.FetchCharacterInstancesAsync` in one batched query decides between the three
+     outcomes: join what the party already holds, refuse because a different dungeon is held
+     (`PartyInstanceExists`), or create. It matches on the **owning party** as well as on member
+     IDs, which is what keeps a run resolvable after its opener has left or logged out — and what
+     lets a member walk back out to the entrance and straight back in.
+   - Matching the held instance ignores difficulty. A party holds one instance; asking for the same
+     dungeon on Hard when the party already has it open on Normal is a request to go where the
+     group is, and creating a second copy would split them.
+   - A **full** instance is refused (`DestinationFull`), never worked around. Asking for a new one
+     instead would silently hand a party member a second, empty copy of the dungeon and separate
+     them from the group they were trying to join.
+   - Opening a run **publicly while ungrouped** forms a party of one first
+     (`IPartySystem.TryCreatePartyForInstanceAsync`), because a run others may join needs a group
+     for them to join. If that fails the run is opened *private* rather than refused: the player
+     asked for a dungeon and a listing, and giving them the dungeon is much closer to what they
+     wanted than giving them neither. A private run forms nothing.
+   - `ISceneService.EnqueueForPartyAsync` folds the existence check into the insert, so the losers
+     of a simultaneous party-wide click insert nothing and join the winner. Solo characters use the
+     same guarded insert with a list of just themselves, so the rule is enforced by the database for
+     everyone.
+   - An instance created for an entry that then falls through is released (`Failed`), because a row
+     nobody entered would otherwise lock the whole party out of every dungeon until the stale-row
+     sweep removed it.
+
+#### `OnServerDungeonFinderJoinBroadcastReceived` — joining somebody else's run
+
+1. Shares the create path's guard key, so a client cannot submit one of each and race two transfers
+   of the same character against one another.
+2. `ProcessDungeonJoinAsync` validates the named instance against what the finder would actually
+   have offered — right dungeon, this world server, `SceneType.Group`, public, enterable, not full
+   — rather than trusting it. A row ID is a small integer and the panel is not the only thing that
+   can send this. Every one of those checks refuses with the same `InstanceUnavailable`, so an ID
+   cannot be probed to learn whether a particular instance exists.
+3. Privacy is a lock on the front door, not on the instance: a member of the owning party still
+   gets in, which is what keeps re-entry working for a run closed to strangers.
+4. The rules are the difficulty the instance was **opened** at, not anything the joiner asked for.
+   An index that no longer resolves is treated as a closed instance rather than as default rules.
+5. Joining another group's run **joins their party**, before the transfer. The transfer is a
+   disconnect and a reroute, so there is no "after" on this server — and a character arriving
+   inside without having joined would be a stranger in somebody's run, with no leader able to
+   remove them and no way for the finder to resolve the instance as theirs later. Refused with
+   `AlreadyInParty` for anyone in a party with somebody else; a character alone in a party of their
+   own is simply released from it.
+
+#### Entry
+
+`EnterInstance` re-checks `CanActOrMove` — the database work above gives combat or death time to
+intervene — then sets `InstanceID`, `InstancePosition`, `InstanceRotation`, enables
+`CharacterFlags.IsInInstance`, announces the hand-off via
+`ICharacterSystem.SuppressCombatLingerOnDisconnect`, and disconnects. Every refusal answers with a
+`SceneTransferRefusedBroadcast` naming the reason: the client closes its panel the moment it sends,
+so a silent return read as the button having stopped working — and the natural response, clicking
+again, was then swallowed by the ingress guard.
 
 ### Mailbox Operations
 
@@ -341,7 +426,11 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 | ECA dialogue | Trigger `DisplayDialogueAction`; confirm dialogue session starts without physical interactable |
 | Dialogue session cap | Fill `MaxActiveDialogueSessions`; confirm new sessions are rejected with warning |
 | Dungeon finder | Send `DungeonFinderBroadcast` at dungeon entrance; confirm character is assigned instance and disconnected |
-| Dungeon party conflict | Have a party member in an instance; confirm dungeon finder detects the conflict |
+| Dungeon party conflict | Have a party member in an instance of dungeon A; confirm the finder refuses dungeon B with `PartyInstanceExists` |
+| Dungeon re-entry | Leave an instance, return to the entrance, confirm the finder resolves the held run and re-enters it — then repeat after the run's *opener* has logged out, which is what the party-ID match exists for |
+| Dungeon list debounce | Hold Refresh; confirm the client greys the button and the server answers `OnCooldown` rather than falling silent |
+| Dungeon join auto-party | Join another group's listed run; confirm the joiner is added to that party, that existing members on this scene server see the roster change immediately, and that a joiner already in a multi-member party is refused with `AlreadyInParty` |
+| Dungeon difficulty rules | Open a run at a difficulty with a resource multiplier and a lives limit; confirm NPCs spawn scaled and that the configured death removes only the character who died |
 | Mail fetch | Send `MailFetchBroadcast` near mailbox; confirm `MailListBroadcast` reply |
 | Mail send | Send `MailSendBroadcast` with valid data; confirm async persistence completes |
 | Mail send invalid input | Send `MailSendBroadcast` with empty subject; confirm rejection |
@@ -487,29 +576,52 @@ OnServerDialogueChoiceBroadcastReceived(conn, msg, channel)
 ### Dungeon Finder
 
 ```
-OnServerDungeonFinderBroadcastReceived(conn, msg, channel)
+OnServerDungeonFinderListBroadcastReceived(conn, msg, channel)
 │
-├─ 1. Validate connection + character + ingress guard
-├─ 2. Validate scene object + IDungeonEntrance + range
-├─ 3. Validate dungeon scene + respawn positions
-├─ 4. Capture main-thread state (charID, worldServerID, partyID, dungeonName, respawn)
-├─ 5. Increment achievement
-└─ 6. TryEnqueueAsyncWork → ProcessDungeonFinderAsync (async owns guard)
-       │
-       ├── ISceneService.FetchCharacterInstanceAsync(characterID)
-       ├── If no existing instance:
-       │    ├── CheckCharacterPartyInstanceAsync(partyID)
-       │    │    └── ICharacterPartyService.FetchManyAsync → check each member instance
-       │    └── ISceneService.EnqueueAsync → new sceneID
-       │         └── TryEnqueueMainThread:
-       │              ├── Set InstanceID, InstancePosition, InstanceRotation
-       │              ├── EnableFlags(CharacterFlags.IsInInstance)
-       │              └── conn.Disconnect(false)
-       └── If existing instance:
-            └── TryEnqueueMainThread:
-                 ├── Set InstanceID, InstancePosition, InstanceRotation
-                 ├── EnableFlags(CharacterFlags.IsInInstance)
-                 └── conn.Disconnect(false)
+├─ 1. IngressGuard(DungeonListOperation, 2000ms)   ← own key, own rate
+├─ 2. TryResolveDungeonEntrance → context
+├─ 3. TryResolveDifficulty(templateID, msg.Difficulty)
+└─ 4. TryEnqueueAsyncWork → FetchInstanceListAsync (async owns guard)
+       ├── ISceneService.FetchJoinableInstancesAsync(world, scene, difficulty, capacity)
+       ├── ICharacterService.FetchNamesAsync(openerIDs)      ← one batched lookup
+       └── TryEnqueueMainThread → DungeonFinderListResultBroadcast
+
+OnServerDungeonFinderCreateBroadcastReceived(conn, msg, channel)
+│
+├─ 1. IngressGuard(DungeonEnterOperation)          ← shared with Join
+├─ 2. TryBeginDungeonEntry (CanActOrMove, !IsInInstance, entrance, respawns)
+├─ 3. TryResolveDifficulty → capacity, lifetime, rules
+├─ 4. Increment achievement
+└─ 5. TryEnqueueAsyncWork → ProcessDungeonCreateAsync (async owns guard)
+       ├── FetchPartyMemberIDsAsync(partyID)       ← null ⇒ refuse, never guess
+       ├── MinimumPartySize check                  → RequirementsNotMet
+       ├── ISceneService.FetchCharacterInstancesAsync(members, Group, world, partyID)
+       │    ├── holds this dungeon      → join it
+       │    ├── holds another dungeon   → PartyInstanceExists
+       │    └── holds none              → create
+       ├── (public + ungrouped) IPartySystem.TryCreatePartyForInstanceAsync
+       ├── ISceneService.EnqueueForPartyAsync(..., partyID, difficulty, isPrivate)
+       │    └── 0 ⇒ lost the race, re-search and join the winner
+       └── DispatchInstanceEntryAsync → EnterInstance
+
+OnServerDungeonFinderJoinBroadcastReceived(conn, msg, channel)
+│
+├─ 1. IngressGuard(DungeonEnterOperation)          ← shared with Create
+├─ 2. TryBeginDungeonEntry
+└─ 3. TryEnqueueAsyncWork → ProcessDungeonJoinAsync (async owns guard)
+       ├── ISceneService.FetchAsync(instanceID)
+       ├── validate: world, Group, scene name, enterable, public, capacity
+       ├── TryResolveDifficulty(instance.Difficulty)  ← the run's rules, not the joiner's
+       ├── TryLeaveOwnPartyForJoinAsync            → AlreadyInParty if grouped
+       ├── IPartySystem.TryAddCharacterToPartyAsync   ← BEFORE the transfer
+       └── DispatchInstanceEntryAsync → EnterInstance
+
+EnterInstance (main thread)
+├── re-check CanActOrMove
+├── Set InstanceID, InstancePosition, InstanceRotation
+├── EnableFlags(CharacterFlags.IsInInstance)
+├── ICharacterSystem.SuppressCombatLingerOnDisconnect
+└── conn.Disconnect(false)
 ```
 
 ### Mailbox Operations

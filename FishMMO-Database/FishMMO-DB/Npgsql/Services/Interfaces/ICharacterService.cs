@@ -70,6 +70,26 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>
 		/// A <see cref="DatabaseResult{T}"/> containing the character data, or null if not found.
 		/// </returns>
+		/// <summary>
+		/// Resolves display names for a set of character IDs in one query.
+		/// </summary>
+		/// <remarks>
+		/// For labelling rows in lists shown to other players — the dungeon finder's instance
+		/// list, principally. Projects to ID and name only, and is bounded internally as well as
+		/// by its caller, because it answers a request a client controls the timing of.
+		/// <para>
+		/// IDs that do not resolve are simply absent from the result rather than being reported;
+		/// a caller showing a list has to cope with a missing name anyway, since a character can
+		/// be deleted between the list being built and the names being read.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterIds">Characters to resolve. Duplicates and non-positive IDs are ignored.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>One entry per resolved character, in no particular order.</returns>
+		Task<DatabaseResult<IReadOnlyList<CharacterNameData>>> FetchNamesAsync(
+			IReadOnlyList<long> characterIds,
+			CancellationToken cancellationToken = default);
+
 		Task<DatabaseResult<CharacterData?>> FetchAsync(string characterName, bool? selected, CancellationToken cancellationToken = default);
 
 		/// <summary>

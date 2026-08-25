@@ -63,12 +63,13 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateAsync(long worldServerId, CancellationToken cancellationToken = default)
 		{
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var party = new PartyEntity
 				{
+					WorldServerID = worldServerId,
 					TimeCreated = DateTime.UtcNow
 				};
 				await dbContext.Parties.AddAsync(party, cancellationToken).ConfigureAwait(false);
@@ -150,7 +151,8 @@ namespace FishMMO.Database.Npgsql.Services
 		private PartyData MapEntityToDto(PartyEntity entity)
 		{
 			return new PartyData(
-				id: entity.ID);
+				id: entity.ID,
+				worldServerID: entity.WorldServerID);
 		}
 	}
 }

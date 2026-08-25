@@ -625,6 +625,61 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<CharacterNameData>>> FetchNamesAsync(
+			IReadOnlyList<long> characterIds,
+			CancellationToken cancellationToken = default)
+		{
+			var ids = new List<long>();
+			var seen = new HashSet<long>();
+			if (characterIds != null)
+			{
+				for (int i = 0; i < characterIds.Count && ids.Count < MaxNameLookupIds; ++i)
+				{
+					long characterId = characterIds[i];
+					if (characterId > 0 && seen.Add(characterId))
+					{
+						ids.Add(characterId);
+					}
+				}
+			}
+
+			if (ids.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<CharacterNameData>>.Success(Array.Empty<CharacterNameData>());
+			}
+
+			return await ExecuteReadAsync<IReadOnlyList<CharacterNameData>>(async dbContext =>
+			{
+				/* Projected to the two columns rather than materialising characters.
+				 *
+				 * The only caller is a display path — labelling rows in a browsable list — and a
+				 * character row is wide. Pulling whole entities to read one string each would put
+				 * the cost of a full character load on a query a client can ask for repeatedly. */
+				var rows = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => ids.Contains(c.ID))
+					.Select(c => new { c.ID, c.Name })
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				IReadOnlyList<CharacterNameData> data = rows
+					.Select(r => new CharacterNameData(r.ID, r.Name))
+					.ToList();
+				return data;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Ceiling on how many names one lookup will resolve.
+		/// </summary>
+		/// <remarks>
+		/// The caller is answering a client-triggered request whose row count it has already
+		/// bounded; this is the second bound, so a future caller that forgets the first cannot
+		/// turn a name lookup into an unbounded query.
+		/// </remarks>
+		private const int MaxNameLookupIds = 128;
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterData?>> FetchAsync(string characterName, bool? selected, CancellationToken cancellationToken = default)
 		{
 			if (!Authentication.IsAllowedCharacterName(characterName))

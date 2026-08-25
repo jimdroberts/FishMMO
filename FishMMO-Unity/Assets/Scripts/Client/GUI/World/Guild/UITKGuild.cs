@@ -705,6 +705,20 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void GuildController_OnReceiveGuildInvite(long inviterCharacterID)
 		{
+			/* Declined outright, and declined rather than dropped. "Ignore guild invites" has to
+			 * answer the server: an invitation that is silently discarded leaves the inviter
+			 * staring at a prompt that never resolves until the server's invitation TTL expires,
+			 * which looks to them like the other player is deliberately ignoring them — and to the
+			 * server like an invitation still outstanding, which blocks the next one. */
+			if (ClientSettings.GetGameplayToggle(ClientSettings.IgnoreGuildInvitesKey))
+			{
+				Client.Broadcast(new GuildDeclineInviteBroadcast()
+				{
+					InviterCharacterID = inviterCharacterID,
+				}, Channel.Reliable);
+				return;
+			}
+
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
 			{
 				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiTooltip))

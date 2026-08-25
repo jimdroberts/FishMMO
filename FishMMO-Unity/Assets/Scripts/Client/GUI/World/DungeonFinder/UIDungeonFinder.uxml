@@ -7,24 +7,56 @@
             <ui:VisualElement name="panel-header" class="fish-panel__header dungeonfinder-header">
                 <ui:VisualElement class="fish-panel__icon dungeonfinder-header__icon" />
                 <ui:VisualElement class="dungeonfinder-header__titles">
-                    <ui:Label text="DUNGEON FINDER" class="fish-panel__title dungeonfinder-title" />
+                    <ui:Label text="DUNGEON FINDER" class="fish-panel__title" />
                     <ui:Label name="dungeonfinder-subtitle" text="Select a dungeon"
                               class="fish-panel__subtitle" />
                 </ui:VisualElement>
                 <ui:Button name="dungeonfinder-close-btn" text="✕" class="fish-close-btn dungeonfinder-close-btn" />
             </ui:VisualElement>
 
-            <ui:VisualElement name="dungeonfinder-body" class="dungeonfinder-body">
+            <!-- The dungeon itself: artwork and description, above everything about instances. -->
+            <ui:VisualElement name="dungeonfinder-about" class="dungeonfinder-about">
                 <ui:VisualElement name="dungeonfinder-image" class="fish-preview dungeonfinder-image">
-                    <ui:Label text="NO PREVIEW" class="fish-preview__label dungeonfinder-image__label" />
+                    <ui:Label name="dungeonfinder-image-label" text="NO PREVIEW"
+                              class="fish-preview__label dungeonfinder-image__label" />
                 </ui:VisualElement>
-                <ui:Label name="dungeonfinder-description" text=""
-                          class="fish-label fish-label--secondary dungeonfinder-description" />
+                <ui:VisualElement class="dungeonfinder-about__text">
+                    <ui:Label name="dungeonfinder-name" text="" class="fish-label fish-label--title dungeonfinder-name" />
+                    <ui:Label name="dungeonfinder-description" text=""
+                              class="fish-label fish-label--secondary dungeonfinder-description" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
+            <!-- One tab per difficulty this dungeon declares. Built at runtime; the count and the
+                 names are the dungeon's, not this layout's. -->
+            <ui:VisualElement name="dungeonfinder-tabs" class="dungeonfinder-tabs" />
+
+            <ui:VisualElement name="dungeonfinder-rules" class="fish-well dungeonfinder-rules dungeonfinder-rules--empty">
+                <ui:Label name="dungeonfinder-rules-text" text="" class="fish-hint dungeonfinder-rules__text" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="dungeonfinder-columns" class="dungeonfinder-columns">
+                <ui:Label text="GROUP" class="fish-col-head dungeonfinder-col dungeonfinder-col--leader" />
+                <ui:Label text="PLAYERS" class="fish-col-head dungeonfinder-col dungeonfinder-col--size" />
+                <ui:Label text="STATUS" class="fish-col-head dungeonfinder-col dungeonfinder-col--status" />
+                <ui:Label text="" class="fish-col-head dungeonfinder-col dungeonfinder-col--action" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="dungeonfinder-scroll" class="fish-scroll dungeonfinder-scroll">
+                <ui:VisualElement name="dungeonfinder-list" class="dungeonfinder-list" />
+                <ui:Label name="dungeonfinder-status" text="Looking for open dungeons…"
+                          class="fish-empty dungeonfinder-status" />
+            </ui:ScrollView>
+
             <ui:VisualElement name="panel-footer" class="fish-panel__footer dungeonfinder-footer">
-                <ui:Button name="dungeonfinder-start-btn" text="Enter Dungeon"
-                           class="fish-button fish-button--primary dungeonfinder-start-btn" />
+                <ui:Toggle name="dungeonfinder-public" label="Open to others"
+                           class="fish-toggle dungeonfinder-public" />
+                <ui:VisualElement class="dungeonfinder-footer__actions">
+                    <ui:Button name="dungeonfinder-refresh-btn" text="Refresh"
+                               class="fish-button dungeonfinder-action" />
+                    <ui:Button name="dungeonfinder-start-btn" text="Open New Dungeon"
+                               class="fish-button fish-button--primary dungeonfinder-action dungeonfinder-action--wide" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
         </ui:VisualElement>

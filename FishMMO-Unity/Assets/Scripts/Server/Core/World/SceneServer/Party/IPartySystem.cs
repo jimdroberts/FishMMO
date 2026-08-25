@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Server.Core.World.SceneServer
@@ -44,5 +46,58 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="conn">Opaque connection object.</param>
 		/// <param name="character">The player character that disconnected.</param>
 		void CharacterSystem_OnDisconnect(TConnection conn, IPlayerCharacter character);
+
+		/// <summary>
+		/// Adds a character to an existing party without an invitation, so that joining another
+		/// group's dungeon instance also joins that group.
+		/// </summary>
+		/// <remarks>
+		/// Not a general-purpose membership API and not an invitation bypass. The only intended
+		/// caller is the dungeon finder, which reaches it only after establishing that the party
+		/// has published a joinable instance — an explicit and revocable offer by its leader — and
+		/// only for a character who has no party of their own to be removed from.
+		/// <para>
+		/// Enforces the same party size limit the invitation path does, so a full party's
+		/// instance is simply not joinable.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The joining character's connection.</param>
+		/// <param name="characterID">The joining character.</param>
+		/// <param name="partyID">Party that owns the instance being joined.</param>
+		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
+		/// <returns>True when membership was persisted, or the character was already a member.</returns>
+		Task<bool> TryAddCharacterToPartyAsync(TConnection conn, long characterID, long partyID, float healthPCT);
+
+		/// <summary>
+		/// Forms a party of one for a character opening a dungeon instance others may join.
+		/// </summary>
+		/// <remarks>
+		/// An instance is owned by a party and joining one joins that party, so an instance opened
+		/// by an ungrouped character has no group for a joiner to be added to. Rather than
+		/// refusing to let ungrouped players advertise a run at all, choosing to open one publicly
+		/// forms the party that listing implies. A private or solo run creates nothing.
+		/// </remarks>
+		/// <param name="conn">The character's connection.</param>
+		/// <param name="characterID">The character forming the party.</param>
+		/// <param name="worldServerID">World server the party will belong to.</param>
+		/// <param name="sceneName">Scene name, for the create broadcast's location field.</param>
+		/// <param name="healthPCT">Current health fraction, for the party roster.</param>
+		/// <returns>The new party ID, or 0 when it could not be created.</returns>
+		Task<long> TryCreatePartyForInstanceAsync(TConnection conn, long characterID, long worldServerID, string sceneName, float healthPCT);
+
+		/// <summary>
+		/// Drops a character out of a party it cannot belong to, with no connection involved.
+		/// </summary>
+		/// <remarks>
+		/// For a character that is still loading and has no spawned object to broadcast to —
+		/// principally one that has arrived on a world server other than the one its party belongs
+		/// to. Parties are replicated by a pump scoped to a single world server, so a membership
+		/// that crossed would never converge.
+		/// </remarks>
+		/// <param name="characterID">Character being removed.</param>
+		/// <param name="partyID">Party it is being removed from.</param>
+		/// <param name="rank">Its rank, which decides whether leadership has to move first.</param>
+		/// <param name="reason">Why, for the log line.</param>
+		Task RemoveCharacterFromPartyAsync(long characterID, long partyID, PartyRank rank, string reason);
 	}
 }

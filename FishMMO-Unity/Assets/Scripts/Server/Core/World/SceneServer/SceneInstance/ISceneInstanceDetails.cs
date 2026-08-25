@@ -95,6 +95,49 @@ namespace FishMMO.Server.Core.World.SceneServer
 		DateTime CreatedUtc { get; set; }
 
 		/// <summary>
+		/// Character the instance was created for. Zero for an open-world scene.
+		/// </summary>
+		/// <remarks>
+		/// Taken from the scene row's <c>character_id</c>, which the dungeon finder stamps when it
+		/// requests the instance. Records who opened the run, which is not the same as who leads
+		/// it: leadership is the owning party's and moves with it — see <see cref="PartyID"/>.
+		/// The owner is the fallback authority for a run that has no party at all.
+		/// </remarks>
+		long OwnerCharacterID { get; set; }
+
+		/// <summary>
+		/// Party that owns this instance, or 0 when an ungrouped character opened it.
+		/// </summary>
+		/// <remarks>
+		/// The durable identity of an instance's group, and the anchor for everything about
+		/// controlling it: the instance's leader is this party's leader, kick authority is that
+		/// leader's, and the dungeon finder resolves a party's own instance through this rather
+		/// than through whoever happened to create it — so the run stays findable after its opener
+		/// has left or logged out.
+		/// </remarks>
+		long PartyID { get; set; }
+
+		/// <summary>
+		/// Difficulty index this instance was opened at, into the dungeon's own difficulty list.
+		/// </summary>
+		/// <remarks>
+		/// Meaningful only alongside <see cref="Name"/>: every dungeon declares its own list, and
+		/// there is no global set of difficulty levels. Zero for an open-world scene and for a
+		/// dungeon that declares no difficulties.
+		/// </remarks>
+		int Difficulty { get; set; }
+
+		/// <summary>
+		/// Whether the owning party has hidden this instance from the dungeon finder's list.
+		/// </summary>
+		/// <remarks>
+		/// A lock on the front door, not on the instance. A private instance is still enterable by
+		/// the party that owns it — which is what keeps re-entry working for a run that has been
+		/// closed to strangers — it simply stops being offered to everybody else.
+		/// </remarks>
+		bool IsPrivate { get; set; }
+
+		/// <summary>
 		/// Adds to the current character count for the scene instance.
 		/// </summary>
 		/// <param name="count">Amount to add to the character count. May be negative to decrement. Implementations should clamp the resulting count to zero if necessary.</param>

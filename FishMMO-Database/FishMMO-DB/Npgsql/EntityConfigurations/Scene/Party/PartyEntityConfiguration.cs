@@ -18,6 +18,13 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.ID)
 				.ValueGeneratedOnAdd();
+
+			builder.Property(e => e.WorldServerID)
+				.IsRequired()
+				.HasDefaultValue(0L);
+
+			// Parties are looked up by world server when a shard's parties are reconciled.
+			builder.HasIndex(e => e.WorldServerID);
 		}
 	}
 }

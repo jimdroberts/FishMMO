@@ -363,6 +363,33 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                     ""initialStateCheck"": false
                 },
                 {
+                    ""name"": ""Lore"",
+                    ""type"": ""Button"",
+                    ""id"": ""f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b5"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Pet"",
+                    ""type"": ""Button"",
+                    ""id"": ""f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b6"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Options"",
+                    ""type"": ""Button"",
+                    ""id"": ""f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b7"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
                     ""name"": ""Menu"",
                     ""type"": ""Button"",
                     ""id"": ""f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b4"",
@@ -859,6 +886,39 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""d1e25b82-2d5f-42ae-9b2f-76a0862085590"",
+                    ""path"": ""<Keyboard>/l"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""Lore"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""d1e25b82-2d5f-42ae-9b2f-76a0862085591"",
+                    ""path"": ""<Keyboard>/v"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""Pet"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""d1e25b82-2d5f-42ae-9b2f-76a0862085592"",
+                    ""path"": ""<Keyboard>/o"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""Options"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""d1e25b82-2d5f-42ae-9b2f-76a08620858e"",
                     ""path"": ""<Keyboard>/escape"",
                     ""interactions"": """",
@@ -1266,6 +1326,9 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         m_Player_Achievements = m_Player.FindAction("Achievements", throwIfNotFound: true);
         m_Player_Factions = m_Player.FindAction("Factions", throwIfNotFound: true);
         m_Player_Minimap = m_Player.FindAction("Minimap", throwIfNotFound: true);
+        m_Player_Lore = m_Player.FindAction("Lore", throwIfNotFound: true);
+        m_Player_Pet = m_Player.FindAction("Pet", throwIfNotFound: true);
+        m_Player_Options = m_Player.FindAction("Options", throwIfNotFound: true);
         m_Player_Menu = m_Player.FindAction("Menu", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
@@ -1388,6 +1451,9 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Achievements;
     private readonly InputAction m_Player_Factions;
     private readonly InputAction m_Player_Minimap;
+    private readonly InputAction m_Player_Lore;
+    private readonly InputAction m_Player_Pet;
+    private readonly InputAction m_Player_Options;
     private readonly InputAction m_Player_Menu;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
@@ -1521,6 +1587,18 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @Minimap => m_Wrapper.m_Player_Minimap;
         /// <summary>
+        /// Provides access to the underlying input action "Player/Lore".
+        /// </summary>
+        public InputAction @Lore => m_Wrapper.m_Player_Lore;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Pet".
+        /// </summary>
+        public InputAction @Pet => m_Wrapper.m_Player_Pet;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Options".
+        /// </summary>
+        public InputAction @Options => m_Wrapper.m_Player_Options;
+        /// <summary>
         /// Provides access to the underlying input action "Player/Menu".
         /// </summary>
         public InputAction @Menu => m_Wrapper.m_Player_Menu;
@@ -1640,6 +1718,15 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
             @Minimap.started += instance.OnMinimap;
             @Minimap.performed += instance.OnMinimap;
             @Minimap.canceled += instance.OnMinimap;
+            @Lore.started += instance.OnLore;
+            @Lore.performed += instance.OnLore;
+            @Lore.canceled += instance.OnLore;
+            @Pet.started += instance.OnPet;
+            @Pet.performed += instance.OnPet;
+            @Pet.canceled += instance.OnPet;
+            @Options.started += instance.OnOptions;
+            @Options.performed += instance.OnOptions;
+            @Options.canceled += instance.OnOptions;
             @Menu.started += instance.OnMenu;
             @Menu.performed += instance.OnMenu;
             @Menu.canceled += instance.OnMenu;
@@ -1744,6 +1831,15 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
             @Minimap.started -= instance.OnMinimap;
             @Minimap.performed -= instance.OnMinimap;
             @Minimap.canceled -= instance.OnMinimap;
+            @Lore.started -= instance.OnLore;
+            @Lore.performed -= instance.OnLore;
+            @Lore.canceled -= instance.OnLore;
+            @Pet.started -= instance.OnPet;
+            @Pet.performed -= instance.OnPet;
+            @Pet.canceled -= instance.OnPet;
+            @Options.started -= instance.OnOptions;
+            @Options.performed -= instance.OnOptions;
+            @Options.canceled -= instance.OnOptions;
             @Menu.started -= instance.OnMenu;
             @Menu.performed -= instance.OnMenu;
             @Menu.canceled -= instance.OnMenu;
@@ -2209,6 +2305,27 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnMinimap(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Lore" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnLore(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Pet" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPet(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Options" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnOptions(InputAction.CallbackContext context);
         /// <summary>
         /// Method invoked when associated input action "Menu" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>
