@@ -723,6 +723,20 @@ Application.Quit()
 > that id skip a step it never performed. Data containers are separate — the registry calls
 > `Clear()` on each one for you.
 
+> **Behaviours are torn down before data containers, and that ordering is load-bearing.**
+> `CharacterSystem.OnDeinitialize` performs the final synchronous flush — every resident
+> character saved and every session claim released — and it needs its mapping data intact to do
+> it. Two consequences follow for anything that queues work during teardown. First, `Clear()` on
+> `AsyncWorkerData` deliberately does **not** discard the accepted backlog: its only caller is
+> this path, immediately before the drain, so discarding would throw away precisely the saves and
+> session releases the behaviours had just enqueued — and an unreleased claim leaves the character
+> Online until its lease expires, which the fail-closed duplicate-login gate turns into a
+> two-minute lockout from every server. Second, every blocking wait on this path is charged
+> against one shared budget (`UnitySyncOverAsync.BeginShutdownBudget`, 8s), including the worker
+> drain, because the total is sized to fit inside a supervisor's stop timeout — overrunning it
+> means being SIGKILLed mid-flush having accomplished nothing, which is strictly worse than
+> flushing what fits and exiting cleanly.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 **SUMMARY**
