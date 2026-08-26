@@ -20,7 +20,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// destruction of unpaid plots.</para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "HousingSystem", menuName = "FishMMO/Server/SceneServer/Housing System", order = 1)]
-	public class HousingSystem : ServerBehaviour, IHousingSystem
+	[RequiresDataContainer(typeof(HousingSystemMainThreadQueueData))]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
+	public partial class HousingSystem : ServerBehaviour, IHousingSystem
 	{
 		/// <summary>
 		/// Who may own land and housing on this server.
@@ -68,14 +70,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Housing enabled. Ownership mode: {this.ownershipMode} " +
 				$"(player: {this.AllowsPlayerOwnership}, guild: {this.AllowsGuildOwnership}).");
 
+			SubscribeToPlots();
+
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
-		/// Nothing to release: this stage holds configuration only, and subscribes to nothing.
+		/// Releases the foundation subscriptions taken during initialization.
 		/// </summary>
+		/// <remarks>
+		/// Unconditional, unlike the subscribe. The mode is read once at startup, but a static event
+		/// outlives this object either way, and unsubscribing something that was never subscribed is
+		/// free — where leaving a dead handler attached is a scene server that keeps answering claim
+		/// requests after it has been torn down.
+		/// </remarks>
 		public override void OnDeinitialize()
 		{
+			UnsubscribeFromPlots();
 		}
 	}
 }
