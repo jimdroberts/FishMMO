@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -57,6 +58,35 @@ namespace FishMMO.Database.Npgsql.Services
 				context.CharacterParties
 					.AsNoTracking()
 					.Where(p => p.PartyID == partyId));
+
+		/// <summary>
+		/// Bit set in <c>CharacterEntity.Flags</c> while a character is running out a
+		/// combat-logout timer. Mirrors the constant in <c>CharacterService</c>.
+		/// </summary>
+		private const int CombatLoggedFlagMask = 1 << 13;
+
+		/// <summary>
+		/// Compiled query for retrieving the party members that currently hold a live session.
+		/// </summary>
+		/// <remarks>
+		/// A join rather than two round trips: the alternative is fetching the roster and then
+		/// asking about each member, which is a query per member on a path that already runs once
+		/// per changed party per pump.
+		/// </remarks>
+		private static readonly Func<NpgsqlDbContext, long, DateTime, IAsyncEnumerable<long>> getOnlinePartyMemberIdsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, DateTime nowUtc) =>
+				context.CharacterParties
+					.AsNoTracking()
+					.Where(p => p.PartyID == partyId)
+					.Join(context.Characters.AsNoTracking(),
+						  p => p.CharacterID,
+						  c => c.ID,
+						  (p, c) => c)
+					.Where(c => !c.Deleted &&
+								c.SessionState != CharacterSessionState.Offline &&
+								c.SessionLeaseExpiresUtc > nowUtc &&
+								(c.Flags & CombatLoggedFlagMask) == 0)
+					.Select(c => c.ID));
 
 		/// <summary>
 		/// Compiled query for counting party members.
@@ -340,6 +370,25 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterPartyData>)members;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<long>>> FetchOnlineMemberIdsAsync(long partyId, CancellationToken cancellationToken = default)
+		{
+			if (partyId <= 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Party ID must be greater than 0.");
+			}
+
+			var nowUtc = DateTime.UtcNow;
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				var ids = await getOnlinePartyMemberIdsQuery(dbContext, partyId, nowUtc).MaterializeAsync(cancellationToken).ConfigureAwait(false);
+				return (IReadOnlyList<long>)ids;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

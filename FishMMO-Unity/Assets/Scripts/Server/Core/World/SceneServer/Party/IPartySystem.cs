@@ -93,11 +93,20 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// principally one that has arrived on a world server other than the one its party belongs
 		/// to. Parties are replicated by a pump scoped to a single world server, so a membership
 		/// that crossed would never converge.
+		/// <para>
+		/// The character's rank is not a parameter. It is re-read from the membership row, because
+		/// every caller's copy of it comes from <c>IPartyController.Rank</c> — a cache the update
+		/// pump refreshes — and whether leadership has to move is decided from that rank.
+		/// </para>
 		/// </remarks>
 		/// <param name="characterID">Character being removed.</param>
 		/// <param name="partyID">Party it is being removed from.</param>
-		/// <param name="rank">Its rank, which decides whether leadership has to move first.</param>
 		/// <param name="reason">Why, for the log line.</param>
-		Task RemoveCharacterFromPartyAsync(long characterID, long partyID, PartyRank rank, string reason);
+		/// <returns>
+		/// True when the character no longer belongs to the party — including when it never did.
+		/// False means the removal could not be attempted and the membership row still stands, so
+		/// a caller that was clearing the way for something else must not proceed.
+		/// </returns>
+		Task<bool> RemoveCharacterFromPartyAsync(long characterID, long partyID, string reason);
 	}
 }

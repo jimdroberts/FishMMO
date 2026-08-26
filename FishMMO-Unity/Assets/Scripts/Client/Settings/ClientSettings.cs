@@ -37,6 +37,15 @@ namespace FishMMO.Client
 	/// rewrites the entire file. A slider bound straight to it rewrites the file once per frame
 	/// for as long as it is held. Everything here coalesces onto a short quiet period and is
 	/// flushed on panel close, on quit, and on demand.</para>
+	///
+	/// <para><b>And why there is exactly one of them.</b> <see cref="UITKPanelPositions"/> used to
+	/// keep a second pending flag and a second deadline over the same file. Both wrote the whole of
+	/// it, so a player who dragged a window and changed a setting in the same breath got two full
+	/// serialisations of identical content — and each timer could fire inside the other's quiet
+	/// period, which is the case a debounce exists to prevent. The two intervals also disagreed, a
+	/// second against three quarters of one, so which of two simultaneous changes reached the disk
+	/// first depended on which subsystem had last been touched. Panel positions now request and
+	/// flush through here like every other setting.</para>
 	/// </remarks>
 	public static class ClientSettings
 	{
@@ -266,18 +275,26 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Marks the configuration as owing a write, to be flushed once the player settles.
 		/// </summary>
+		/// <remarks>
+		/// Each call pushes the deadline out, so a slider held for a minute writes once, when it is
+		/// released, rather than sixty times a second. The pump that watches that deadline is
+		/// created here rather than assumed to exist — see <see cref="ClientSettingsPump"/> — so
+		/// owing a write is what guarantees something is running to discharge it.
+		/// </remarks>
 		public static void RequestSave()
 		{
 			savePending = true;
 			saveDeadline = Time.unscaledTime + SaveDebounceSeconds;
+
+			ClientSettingsPump.Install();
 		}
 
 		/// <summary>
 		/// Flushes an owed write once its quiet period has elapsed.
 		/// </summary>
 		/// <remarks>
-		/// Driven from <see cref="UITKControl"/>'s per-frame hook, which every panel already runs.
-		/// The early-out is a single bool read.
+		/// Driven once per frame by <see cref="ClientSettingsPump"/>. The early-out is a single
+		/// bool read.
 		/// </remarks>
 		public static void Pump()
 		{
@@ -292,11 +309,18 @@ namespace FishMMO.Client
 		/// Writes the configuration to disk immediately, if anything is owed.
 		/// </summary>
 		/// <remarks>
-		/// Not in the editor: <see cref="Constants.GetWorkingDirectory"/> resolves to the
-		/// repository root there rather than to an install directory, so a play-mode session
-		/// would rewrite the developer's checked-out configuration. The in-memory values still
-		/// apply, so settings behave normally while playing in the editor; only the cross-session
-		/// part is skipped.
+		/// <para>Not in the editor: <see cref="Constants.GetWorkingDirectory"/> resolves to the
+		/// repository root there rather than to an install directory, so a play-mode session would
+		/// rewrite the developer's checked-out configuration. The in-memory values still apply, so
+		/// settings behave normally while playing in the editor; only the cross-session part is
+		/// skipped.</para>
+		/// <para><b>WebGL does write.</b> It used to be excluded alongside the editor, which meant a
+		/// browser client applied every setting correctly and persisted none of them.
+		/// <see cref="Constants.GetWorkingDirectory"/> already resolves to
+		/// <c>Application.persistentDataPath</c> there, which is a real writable filesystem — it is
+		/// just backed by IndexedDB rather than by a disk, and reaches IndexedDB only when the mount
+		/// is synced. <see cref="WebGLPersistentData.Sync"/> is what does that, and is an empty
+		/// method everywhere else.</para>
 		/// </remarks>
 		public static void Flush()
 		{
@@ -312,10 +336,14 @@ namespace FishMMO.Client
 				return;
 			}
 
-#if !UNITY_EDITOR && !UNITY_WEBGL
+#if !UNITY_EDITOR
 			try
 			{
 				configuration.Save();
+
+				/* After the write, not instead of it: on WebGL the save above only reached an
+				 * in-memory filesystem. Everywhere else this is a no-op. */
+				WebGLPersistentData.Sync();
 			}
 			catch (Exception ex)
 			{
@@ -387,6 +415,13 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Writes a setting and schedules a debounced save.</summary>
+		/// <remarks>
+		/// Floats are safe through this generic path: <see cref="Configuration.Set{T}"/> formats
+		/// every value with the invariant culture and gives <c>float</c> and <c>double</c> the
+		/// round-trip format specifically. That is load-bearing rather than tidy — the readers
+		/// above all parse invariantly, so a value formatted with the machine's own locale came
+		/// back as a different number on any comma-decimal system.
+		/// </remarks>
 		public static void Set<T>(string key, T value)
 		{
 			Configuration configuration = Configuration.GlobalSettings;
@@ -408,6 +443,34 @@ namespace FishMMO.Client
 			}
 			configuration.Set(key, value ?? string.Empty);
 			RequestSave();
+		}
+
+		/// <summary>
+		/// Deletes a setting and schedules a debounced save.
+		/// </summary>
+		/// <param name="key">The setting to remove.</param>
+		/// <returns>True when the setting existed and was removed.</returns>
+		/// <remarks>
+		/// A save is scheduled only when something actually changed. Panel positions are cleared one
+		/// key at a time across every registered panel, and requesting a write for each of the forty
+		/// that had nothing stored is forty pointless requests — each of which pushes the debounce
+		/// deadline further out and so delays the write that is actually owed.
+		/// </remarks>
+		public static bool Remove(string key)
+		{
+			Configuration configuration = Configuration.GlobalSettings;
+			if (configuration == null)
+			{
+				return false;
+			}
+
+			if (!configuration.Remove(key))
+			{
+				return false;
+			}
+
+			RequestSave();
+			return true;
 		}
 
 		// ── Interface scale ─────────────────────────────────────────
@@ -449,6 +512,14 @@ namespace FishMMO.Client
 			Apply("display", ClientDisplaySettings.ApplySaved);
 			Apply("audio", ClientAudioSettings.ApplySaved);
 			Apply("interface", () => UITKPanelScale.Apply(GetFloat(UIScaleKey, 1.0f, MinimumUIScale, MaximumUIScale)));
+
+			/* The theme is otherwise built by whichever panel registers first, which is correct in
+			 * a build and wrong in the editor with domain reload disabled: UITKThemeManager.Current
+			 * survives from the previous play session, so the first Register finds it already
+			 * populated and never re-reads the file. Loading it here makes the theme part of boot
+			 * like every other setting, and costs one parse of a store that is already in memory —
+			 * there are no registered panels to repaint at this point. */
+			Apply("theme", UITKThemeManager.Reload);
 		}
 
 		/// <summary>Runs one apply step, reporting rather than propagating a failure.</summary>

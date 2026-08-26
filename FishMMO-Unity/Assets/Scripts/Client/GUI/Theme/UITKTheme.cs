@@ -7,10 +7,19 @@ namespace FishMMO.Client
 	/// The set of colours a player may override, parsed once from configuration.
 	/// </summary>
 	/// <remarks>
-	/// The thirteen colour names and their storage format — <c>{Name}ColorR/G/B/A</c> as bytes —
-	/// are inherited from the theme the Canvas UI used, so a config file written by an older
-	/// client still themes this one. Nothing about those keys was Canvas-specific; they name
-	/// colours in the game, not components in a scene.
+	/// The colour names and their storage format — <c>{Name}ColorR/G/B/A</c> as bytes — are
+	/// inherited from the theme the Canvas UI used, so a config file written by an older client
+	/// still themes this one. Nothing about those keys was Canvas-specific; they name colours in
+	/// the game, not components in a scene.
+	///
+	/// Three of that set are gone: <c>TooltipTitle</c>, <c>TooltipValue</c> and
+	/// <c>TooltipStat</c>. Every colour here reaches the screen by being written onto elements
+	/// carrying a particular USS class, and no element in the client carries
+	/// <c>fish-tooltip__title</c> or <c>fish-tooltip__stat</c> — the tooltip is a single label
+	/// whose internal emphasis comes from rich-text tags emitted by shared code, which cannot
+	/// reach a client-side theme. <c>TooltipValue</c> never had a class at all. All three were
+	/// listed in the options panel as editable colours that changed nothing when edited. A
+	/// config file that still carries their keys is simply ignored.
 	///
 	/// What did not carry over is the rest of that theme: layout spacing, padding, grid spacing,
 	/// scroll sensitivity, elasticity and font auto-size bounds. Those existed because the old UI
@@ -52,17 +61,8 @@ namespace FishMMO.Client
 		/// <summary>Crosshair color.</summary>
 		public readonly Color Crosshair;
 
-		/// <summary>Tooltip title/header color.</summary>
-		public readonly Color TooltipTitle;
-
 		/// <summary>Tooltip label/description color.</summary>
 		public readonly Color TooltipLabel;
-
-		/// <summary>Tooltip value/positive-number color.</summary>
-		public readonly Color TooltipValue;
-
-		/// <summary>Tooltip stat/general-number color.</summary>
-		public readonly Color TooltipStat;
 
 		/// <summary>
 		/// True when at least one colour was actually present in configuration.
@@ -90,10 +90,7 @@ namespace FishMMO.Client
 			"Mana",
 			"Stamina",
 			"Crosshair",
-			"TooltipTitle",
 			"TooltipLabel",
-			"TooltipValue",
-			"TooltipStat",
 		};
 
 		/// <summary>
@@ -113,10 +110,7 @@ namespace FishMMO.Client
 			Mana         = Parse(configuration, 6, out bool p6);  any |= p6;
 			Stamina      = Parse(configuration, 7, out bool p7);  any |= p7;
 			Crosshair    = Parse(configuration, 8, out bool p8);  any |= p8;
-			TooltipTitle = Parse(configuration, 9, out bool p9);  any |= p9;
-			TooltipLabel = Parse(configuration, 10, out bool p10); any |= p10;
-			TooltipValue = Parse(configuration, 11, out bool p11); any |= p11;
-			TooltipStat  = Parse(configuration, 12, out bool p12); any |= p12;
+			TooltipLabel = Parse(configuration, 9, out bool p9);  any |= p9;
 
 			IsOverridden = any;
 		}
@@ -205,9 +199,12 @@ namespace FishMMO.Client
 		/// <param name="configuration">Configuration to write to.</param>
 		/// <param name="name">One of <see cref="ColorNames"/>.</param>
 		/// <remarks>
-		/// Configuration has no delete, so "no override" is expressed as an empty value — which
-		/// <c>TryGetByte</c> fails to parse, and a failed parse is exactly how <see cref="Parse"/>
-		/// already detects absence.
+		/// The keys are removed rather than emptied. Both read back as "not overridden" —
+		/// <see cref="Parse"/> detects absence by <c>TryGetByte</c> failing, and an empty value
+		/// fails to parse just as a missing key does — but only one of them leaves the file
+		/// clean. Emptying wrote four dead lines per colour, so a player who reset their theme,
+		/// or loaded a shared profile that sets no colours, ended up with forty entries in
+		/// Configuration.cfg that exist only to say nothing.
 		/// </remarks>
 		public static void Clear(Configuration configuration, string name)
 		{
@@ -216,10 +213,10 @@ namespace FishMMO.Client
 				return;
 			}
 
-			configuration.Set($"{name}ColorR", string.Empty);
-			configuration.Set($"{name}ColorG", string.Empty);
-			configuration.Set($"{name}ColorB", string.Empty);
-			configuration.Set($"{name}ColorA", string.Empty);
+			configuration.Remove($"{name}ColorR");
+			configuration.Remove($"{name}ColorG");
+			configuration.Remove($"{name}ColorB");
+			configuration.Remove($"{name}ColorA");
 		}
 	}
 }

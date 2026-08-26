@@ -72,6 +72,23 @@ namespace FishMMO.Client
 		public bool CloseOnEscape = false;
 
 		/// <summary>
+		/// True while this panel is using Escape for something of its own, so a press must be
+		/// consumed by it rather than closing anything.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="IsAlwaysOpen"/>, which means "never closable" and lets
+		/// <see cref="UIManager.CloseNext"/> move on to the next panel down. This means "the press
+		/// belongs to me right now", so nothing closes at all — moving on would close the window
+		/// behind the one the player is actually interacting with.
+		/// <para>
+		/// The one case today is the settings panel while it is listening for a key to rebind: the
+		/// row says "Escape cancels", and the Input System does not suppress that press, so without
+		/// this the same keystroke cancels the rebind and closes the settings window.
+		/// </para>
+		/// </remarks>
+		public virtual bool ConsumesEscape => false;
+
+		/// <summary>
 		/// GameObject name; used as the key in <see cref="UIManager"/>.
 		/// </summary>
 		public string Name => gameObject.name;
@@ -829,12 +846,9 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void Update()
 		{
-			/* Shared, and cheap when idle: a single bool read unless a panel has just been
-			 * dragged. Driven from here rather than from a manager of its own because every panel
-			 * already runs this and none of them may assume another one exists. */
-			UITKPanelPositions.Pump();
-			ClientSettings.Pump();
-
+			/* The debounced configuration write is NOT pumped from here any more. Two of them used
+			 * to be, once per panel per frame, which made a guarantee about the player's settings
+			 * depend on at least one panel being alive to make it — see ClientSettingsPump. */
 			PollLoseFocus();
 			OnTick();
 		}

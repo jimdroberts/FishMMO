@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Shared;
 using FishMMO.Logging;
 
 namespace FishMMO.Client
@@ -21,6 +22,21 @@ namespace FishMMO.Client
 	/// settings of whichever scene is active, so loading a scene discards it. The client loads
 	/// several — launcher, login, world, and one per world scene transfer — so a brightness set
 	/// once at boot survived only until the first load.</para>
+	///
+	/// <para><b>Brightness drives two properties, because which one is read depends on the
+	/// scene.</b> <see cref="RenderSettings.ambientLight"/> is consulted only under
+	/// <c>AmbientMode.Flat</c>. Every world scene in this project is authored
+	/// <c>AmbientMode.Skybox</c>, where ambient comes from the skybox's spherical harmonics scaled
+	/// by <see cref="RenderSettings.ambientIntensity"/> and <c>ambientLight</c> is ignored outright
+	/// — so a slider that wrote only <c>ambientLight</c> did nothing at all anywhere the player
+	/// actually plays. It appeared to work while testing, because the login and preboot scenes are
+	/// authored Flat. Both are written, so the setting has an effect whichever mode a scene uses
+	/// and stays correct if one is re-authored.</para>
+	///
+	/// <para>This is an <em>ambient</em> control and not an exposure control: it scales indirect
+	/// light, leaving direct lights and the skybox itself alone. A true gamma control would need a
+	/// URP Volume carrying a Color Adjustments override, which is a rendering asset rather than a
+	/// setting.</para>
 	/// </remarks>
 	public static class ClientDisplaySettings
 	{
@@ -142,17 +158,123 @@ namespace FishMMO.Client
 		/// <summary>Applies the saved VSync preference.</summary>
 		public static void ApplySavedVSync()
 		{
-			QualitySettings.vSyncCount = ClientSettings.GetBool(ClientSettings.VSyncKey, false) ? 1 : 0;
+			ApplyVSync(ClientSettings.GetBool(ClientSettings.VSyncKey, false));
 		}
+
+		/// <summary>
+		/// Writes a VSync preference into the active quality level.
+		/// </summary>
+		/// <param name="enabled">True to wait for the display's refresh.</param>
+		/// <remarks>
+		/// Every VSync write goes through here so it cannot happen without the editor safeguard in
+		/// <see cref="CaptureAuthoredQuality"/> having run first.
+		/// </remarks>
+		public static void ApplyVSync(bool enabled)
+		{
+			CaptureAuthoredQuality();
+			QualitySettings.vSyncCount = enabled ? 1 : 0;
+		}
+
+		/// <summary>
+		/// Switches to a quality level and puts the player's VSync preference back on top of it.
+		/// </summary>
+		/// <param name="index">Index into <see cref="QualitySettings.names"/>.</param>
+		/// <param name="applyExpensiveChanges">
+		/// True to let Unity re-create render targets and reload textures. Worth it when the player
+		/// is watching and waiting for the result; not during boot, where the stall reads as a hang.
+		/// </param>
+		/// <remarks>
+		/// <c>SetQualityLevel</c> installs that level's own authored <c>vSyncCount</c>, which is a
+		/// property of the level and has nothing to do with what the player chose — so the
+		/// preference is re-applied afterwards. Doing that here rather than at each call site is
+		/// what stops the two from being forgotten separately.
+		/// </remarks>
+		public static void ApplyQualityLevel(int index, bool applyExpensiveChanges)
+		{
+			CaptureAuthoredQuality();
+			QualitySettings.SetQualityLevel(index, applyExpensiveChanges);
+			ApplySavedVSync();
+		}
+
+#if UNITY_EDITOR
+		/// <summary>The quality level and VSync count authored in the project, before any change.</summary>
+		private static int authoredQualityLevel;
+		private static int authoredVSyncCount;
+
+		/// <summary>True once the authored values above have been captured.</summary>
+		private static bool hasAuthoredQuality;
+#endif
+
+		/// <summary>
+		/// Remembers the project's authored quality settings so play mode can put them back.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>Editor only, and not optional there.</b> <c>QualitySettings</c> is a project
+		/// asset, and a value written into it at play time stays written — exactly the trap
+		/// <see cref="UITKPanelScale"/> already documents for <c>PanelSettings</c>. Running the
+		/// client once was enough to leave <c>m_CurrentQuality</c> and the active level's
+		/// <c>vSyncCount</c> modified in <c>ProjectSettings/QualitySettings.asset</c>, so a
+		/// developer's checked-out project picked up a source-control change describing whatever
+		/// the last person to press Play happened to have saved in their own Configuration.cfg —
+		/// and committing it would ship one player's preference as everybody's default.</para>
+		/// <para>Nothing happens in a build: a player changing their own quality level is the
+		/// entire point, and there is no asset to protect.</para>
+		/// <para><b>Called from the boot phase before anything writes.</b> The first write is not
+		/// this class's — <c>MainBootstrapSystem</c> forces <c>vSyncCount</c> to zero during the
+		/// first scene's Awake so its frame-rate cap is not ignored. Capturing lazily on the first
+		/// write here would therefore record that zero as the authored value and "restore" it,
+		/// which is worse than not restoring at all. <c>ClientSettingsBootstrap.Initialize</c>
+		/// calls this at BeforeSceneLoad, ahead of both.</para>
+		/// </remarks>
+		internal static void CaptureAuthoredQuality()
+		{
+#if UNITY_EDITOR
+			if (hasAuthoredQuality)
+			{
+				return;
+			}
+
+			authoredQualityLevel = QualitySettings.GetQualityLevel();
+			authoredVSyncCount = QualitySettings.vSyncCount;
+			hasAuthoredQuality = true;
+
+			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+#endif
+		}
+
+#if UNITY_EDITOR
+		/// <summary>Puts the authored quality settings back when play mode ends.</summary>
+		private static void OnPlayModeStateChanged(UnityEditor.PlayModeStateChange change)
+		{
+			if (change != UnityEditor.PlayModeStateChange.ExitingPlayMode)
+			{
+				return;
+			}
+
+			if (hasAuthoredQuality)
+			{
+				QualitySettings.SetQualityLevel(authoredQualityLevel, false);
+				QualitySettings.vSyncCount = authoredVSyncCount;
+			}
+
+			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+
+			// The statics survive a play-mode cycle when domain reload is disabled.
+			hasAuthoredQuality = false;
+		}
+#endif
 
 		/// <summary>
 		/// Applies the saved render frame-rate cap.
 		/// </summary>
 		/// <remarks>
 		/// Deliberately runs after the bootstrap system has installed its own menu-time cap. That
-		/// cap is a default for a client with no preference; a player who has chosen one should
-		/// get theirs, and getting the order backwards is indistinguishable from the setting not
-		/// being saved at all.
+		/// cap is the default for a client with no preference — and
+		/// <see cref="ResolveSavedFrameRate"/> resolves to the same number, so running afterwards
+		/// re-applies it rather than replacing it. A player who has chosen a cap gets theirs, and
+		/// getting the order backwards is indistinguishable from the setting not being saved at
+		/// all.
 		/// </remarks>
 		public static void ApplySavedFrameRate()
 		{
@@ -168,14 +290,33 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Writes a brightness level into the scene's ambient light and remembers it.
+		/// Writes a brightness level into the scene's ambient lighting and remembers it.
 		/// </summary>
 		/// <param name="value">Brightness in the range 0..1. Clamped.</param>
 		public static void ApplyBrightness(float value)
 		{
-			float clamped = float.IsNaN(value) ? DefaultBrightness : Mathf.Clamp01(value);
-			appliedBrightness = clamped;
+			appliedBrightness = float.IsNaN(value) ? DefaultBrightness : Mathf.Clamp01(value);
+			WriteBrightnessToScene();
+		}
+
+		/// <summary>
+		/// Pushes <see cref="appliedBrightness"/> onto the active scene's lighting.
+		/// </summary>
+		/// <remarks>
+		/// Both properties, because the one that is read depends on the scene's ambient mode — see
+		/// the class remarks. Shared between the setter and the scene hook so the two cannot drift:
+		/// the hook used to write <c>ambientLight</c> alone, which meant that even once brightness
+		/// worked it stopped working again after the first scene load.
+		/// </remarks>
+		private static void WriteBrightnessToScene()
+		{
+			float clamped = appliedBrightness;
+
+			// AmbientMode.Flat reads this; every other mode ignores it.
 			RenderSettings.ambientLight = new Color(clamped, clamped, clamped, clamped);
+
+			// AmbientMode.Skybox and Trilight scale their ambient by this; Flat ignores it.
+			RenderSettings.ambientIntensity = clamped;
 		}
 
 		/// <summary>
@@ -199,13 +340,9 @@ namespace FishMMO.Client
 
 				/* applyExpensiveChanges: false. The expensive half re-creates render targets and
 				 * reloads textures, which stalls for long enough to be mistaken for a hang when it
-				 * happens during boot. The level still changes; the caller applies it properly
-				 * when the player picks one from the panel. */
-				QualitySettings.SetQualityLevel(i, false);
-
-				/* SetQualityLevel installs that level's own vSyncCount, which is authored per
-				 * level and has nothing to do with what the player chose. Put theirs back. */
-				ApplySavedVSync();
+				 * happens during boot. The level still changes; the panel applies it properly when
+				 * the player picks one. ApplyQualityLevel puts the VSync preference back. */
+				ApplyQualityLevel(i, false);
 				return;
 			}
 
@@ -235,7 +372,7 @@ namespace FishMMO.Client
 		/// <summary>Puts the player's brightness back over whatever the new scene baked in.</summary>
 		private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
 		{
-			RenderSettings.ambientLight = new Color(appliedBrightness, appliedBrightness, appliedBrightness, appliedBrightness);
+			WriteBrightnessToScene();
 		}
 
 		// ── Option lists ────────────────────────────────────────────
@@ -395,21 +532,64 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The frame-rate cap to apply: the player's saved value, or the display's own rate.
+		/// The frame-rate cap to apply, given the caps this machine offers.
 		/// </summary>
 		/// <remarks>
-		/// A saved value that is no longer offered falls back to the fastest available rather than
-		/// being honoured. That is the case where the player has moved the game to a different
-		/// monitor or the tick rate has changed: the old number is meaningless on the new hardware.
+		/// <para>Three cases, and they are deliberately different from one another.</para>
+		/// <para><b>No preference at all</b> — a fresh install — keeps the boot-time menu cap of
+		/// <see cref="MainBootstrapSystem.BootstrapTargetFrameRate"/>. This used to return the
+		/// display's fastest mode instead, which made the bootstrap cap dead on arrival: it was
+		/// installed before the first frame and replaced microseconds later by the settings apply,
+		/// so a fresh install rendered its launcher and login screens as fast as the panel allowed
+		/// and pegged a core drawing a static menu. Somebody with no opinion about frame rate
+		/// should get the modest default, not the maximum.</para>
+		/// <para><b>A saved value this machine offers</b> is honoured exactly.</para>
+		/// <para><b>A saved value it does not offer</b> falls back to the fastest available, and
+		/// not to the default: that is the player who moved the game to a different monitor, and
+		/// they did express a preference — the old number is just meaningless on the new hardware,
+		/// so the closest thing to "as fast as I asked for" is the most this display can do.</para>
 		/// </remarks>
 		public static int ResolveSavedFrameRate(List<int> choices)
 		{
 			int saved = ClientSettings.GetInt(ClientSettings.FrameRateKey, 0);
-			if (saved > 0 && choices.Contains(saved))
+			if (saved <= 0)
+			{
+				return ResolveDefaultFrameRate(choices);
+			}
+
+			if (choices.Contains(saved))
 			{
 				return saved;
 			}
+
 			return choices[choices.Count - 1];
+		}
+
+		/// <summary>
+		/// The default cap, snapped onto a rate this machine actually offers.
+		/// </summary>
+		/// <param name="choices">The selectable caps, ascending.</param>
+		/// <remarks>
+		/// The default cannot simply be returned as written. <see cref="BuildFrameRateChoices"/>
+		/// bounds the ladder below by the network tick rate and above by the display's fastest
+		/// mode, so on a 50 Hz panel — or a build whose tick rate is raised past 60 — the default
+		/// is not among the offered values, and returning it would put a number in the dropdown
+		/// that the dropdown cannot represent. The largest offered rate not exceeding the default
+		/// is the honest answer: no faster than intended, and always something the player can see
+		/// selected.
+		/// </remarks>
+		private static int ResolveDefaultFrameRate(List<int> choices)
+		{
+			int resolved = choices[0];
+			for (int i = 0; i < choices.Count; ++i)
+			{
+				if (choices[i] > MainBootstrapSystem.BootstrapTargetFrameRate)
+				{
+					break;
+				}
+				resolved = choices[i];
+			}
+			return resolved;
 		}
 	}
 }

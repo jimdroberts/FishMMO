@@ -31,8 +31,20 @@
     -unity-text-align: middle-center;
 }
 
+/*
+    A tab page that is itself the scroller.
+
+    min-height: 0 is not optional, for the reason .options-page documents further down: a flex
+    child defaults to min-height: auto, which refuses to shrink below its own content. A ScrollView
+    that will not shrink does not scroll — it grows, and since the panel is capped at 85% of the
+    viewport the growth comes out of whatever shares the column with it. That is the footer, and
+    the footer holds the only button that closes this panel. On a short viewport the Display and UI
+    tabs are long enough to reach that, and a player who opened the settings screen from the login
+    UI with no Escape binding would have had no way back to it.
+*/
 .options-scroll {
     flex-grow: 1;
+    min-height: 0;
     margin-bottom: 12px;
 }
 
@@ -65,9 +77,16 @@
     -unity-text-align: middle-right;
 }
 
+/*
+    flex-shrink: 0 for the same reason, from the other side. The header and the tab strip already
+    refuse to be compressed; the footer did not, so it was the one piece of chrome that gave way
+    when a page asked for more height than the panel had — taking the Close button with it. Both
+    halves of the fix are kept: the scroller yields first, and the footer cannot yield at all.
+*/
 .options-footer {
     flex-direction: row;
     justify-content: flex-end;
+    flex-shrink: 0;
 }
 
 .options-action {

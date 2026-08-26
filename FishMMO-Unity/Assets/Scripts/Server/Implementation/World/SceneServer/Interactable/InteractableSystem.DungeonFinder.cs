@@ -630,6 +630,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * gives up after creating the row releases it again. */
 			long createdInstanceID = 0;
 
+			/* The party this request formed, if it formed one.
+			 *
+			 * Opening a dungeon publicly forms the party the listing implies, and that only makes
+			 * sense if the listing happens. Every path below that gives up after forming one has
+			 * to give it back, or the player is left in a group of one they never asked for,
+			 * created as a side effect of a dungeon that was never opened — and, being its leader,
+			 * they then get the party frame and the leave prompt for it. */
+			long formedPartyID = 0;
+
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
@@ -768,7 +777,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					if (!isPrivate && partyID <= 0 &&
 						Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
 					{
-						long formedPartyID = await partySystem.TryCreatePartyForInstanceAsync(conn, characterID, worldServerID, sceneName, healthPCT);
+						formedPartyID = await partySystem.TryCreatePartyForInstanceAsync(conn, characterID, worldServerID, sceneName, healthPCT);
 						if (formedPartyID > 0)
 						{
 							partyID = formedPartyID;
@@ -888,6 +897,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				await DispatchInstanceEntryAsync(conn, context.Character, characterID, instanceID, respawnDetails, createdInstanceID);
 				createdInstanceID = 0;
+
+				// The listing happened, so the party it implied is real. Nothing to give back.
+				formedPartyID = 0;
 			}
 			catch (Exception ex)
 			{
@@ -897,8 +909,50 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			finally
 			{
+				/* In the finally rather than beside each refusal: a party formed for a dungeon
+				 * that did not open has to be given back on every route out, and there are six of
+				 * them. Zeroed on the success path above, so this only ever fires for a request
+				 * that gave up. */
+				await ReleaseFormedPartyAsync(characterID, formedPartyID);
+
 				EndIngressGuard(guardKey);
 			}
+		}
+
+		/// <summary>
+		/// Removes a character from a party this request formed for a dungeon that never opened.
+		/// </summary>
+		/// <param name="characterID">The character the party was formed around.</param>
+		/// <param name="formedPartyID">The party, or 0 when none was formed.</param>
+		/// <returns>Asynchronous release task.</returns>
+		/// <remarks>
+		/// The party has exactly one member by construction — it was created a moment ago for this
+		/// request — so removing them retires it, which is what the party system does when the
+		/// last member leaves. Nobody else can have joined in between: joining one requires it to
+		/// have a published instance, and the instance is the thing that failed.
+        /// <para>
+		/// Their client is not told directly. The removal marks the party updated, and the pump
+		/// notices the membership row is gone and clears the controller — the same route every
+		/// other server-side removal takes.
+		/// </para>
+		/// </remarks>
+		private async Task ReleaseFormedPartyAsync(long characterID, long formedPartyID)
+		{
+			if (formedPartyID <= 0)
+			{
+				return;
+			}
+
+			if (!Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
+			{
+				await Log.Warning("InteractableSystem",
+					$"Character {characterID} was left in party {formedPartyID}, formed for a dungeon that did not open, because the party system is unavailable.");
+				return;
+			}
+
+			await Log.Debug("InteractableSystem", $"Releasing party {formedPartyID}, formed for a dungeon that did not open.");
+
+			await partySystem.RemoveCharacterFromPartyAsync(characterID, formedPartyID, "the dungeon it was formed for did not open");
 		}
 
 		/// <summary>
@@ -1163,8 +1217,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 
-			// Alone in it, so leaving retires the party rather than breaking up a group.
-			await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, PartyRank.Leader, "joining another group's dungeon instance");
+			/* Alone in it, so leaving retires the party rather than breaking up a group.
+			 *
+			 * The result is honoured: a refusal means the membership row still stands, and the
+			 * join that follows would then persist over it — moving the character out of a party
+			 * that is being changed underneath us, without telling anyone still in it. Reported as
+			 * AlreadyInParty because that is exactly what is still true. */
+			if (!await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "joining another group's dungeon instance"))
+			{
+				TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
+				return false;
+			}
 
 			TryEnqueueMainThread(() =>
 			{

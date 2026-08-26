@@ -50,9 +50,7 @@ namespace FishMMO.Client
 		private const string CLASS_BAR_STAM     = "fish-bar__fill--stam";
 		private const string CLASS_CROSSHAIR    = "crosshair-icon";
 		private const string CLASS_TOOLTIP      = "fish-tooltip";
-		private const string CLASS_TT_TITLE     = "fish-tooltip__title";
 		private const string CLASS_TT_BODY      = "fish-tooltip__body";
-		private const string CLASS_TT_STAT      = "fish-tooltip__stat";
 		private const string CLASS_ATTR_VALUE   = "fish-attr-row__value";
 		private const string CLASS_LABEL        = "fish-label";
 		private const string CLASS_BUTTON       = "fish-button";
@@ -177,9 +175,7 @@ namespace FishMMO.Client
 
 				// Tooltip
 				SetBackground(root, CLASS_TOOLTIP, theme, "Background");
-				SetColor(root, CLASS_TT_TITLE, theme, "TooltipTitle");
 				SetColor(root, CLASS_TT_BODY, theme, "TooltipLabel");
-				SetColor(root, CLASS_TT_STAT, theme, "TooltipStat");
 			}
 			catch (Exception ex)
 			{
@@ -210,7 +206,7 @@ namespace FishMMO.Client
 			string[] colorClasses =
 			{
 				CLASS_PANEL_TITLE, CLASS_LABEL, CLASS_BUTTON, CLASS_ATTR_VALUE,
-				CLASS_CROSSHAIR, CLASS_TT_TITLE, CLASS_TT_BODY, CLASS_TT_STAT,
+				CLASS_CROSSHAIR, CLASS_TT_BODY,
 			};
 			for (int i = 0; i < colorClasses.Length; ++i)
 			{
@@ -248,10 +244,7 @@ namespace FishMMO.Client
 				case "Mana":         color = theme.Mana;         return true;
 				case "Stamina":      color = theme.Stamina;      return true;
 				case "Crosshair":    color = theme.Crosshair;    return true;
-				case "TooltipTitle": color = theme.TooltipTitle; return true;
 				case "TooltipLabel": color = theme.TooltipLabel; return true;
-				case "TooltipValue": color = theme.TooltipValue; return true;
-				case "TooltipStat":  color = theme.TooltipStat;  return true;
 				default:                                          return false;
 			}
 		}

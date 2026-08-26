@@ -402,13 +402,12 @@ namespace FishMMO.Client
 #if UNITY_EDITOR
 			PlayerInputController.MouseMode = true;
 #endif
-			/* Both writers, and unconditionally. Options changes and panel drags are debounced
-			 * onto separate quiet periods, so whichever of the two was mid-wait when the client
-			 * shut down is the one whose changes are lost. Each is a no-op when it owes nothing,
-			 * each is guarded internally against a missing store, and each skips the disk in the
-			 * editor — where the working directory is the repository, not an install. */
+			/* Unconditionally. Options changes and panel drags share one debounced write, so
+			 * whatever was mid-wait when the client shut down is written here instead of being
+			 * lost. A no-op when nothing is owed, guarded internally against a missing store, and
+			 * skipped in the editor — where the working directory is the repository, not an
+			 * install. */
 			ClientSettings.Flush();
-			UITKPanelPositions.Flush();
 			IPlayerCharacter.OnReadPayload -= OnCharacterReadPayload;
 			IPlayerCharacter.OnStartLocalClient -= OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient -= OnCharacterStopLocal;

@@ -9,6 +9,10 @@ namespace FishMMO.Client
 	/// configuration, applied at boot, and readable by anything that plays a sound.
 	/// </summary>
 	/// <remarks>
+	/// <para><b>Only Master is offered today.</b> See <see cref="PlayableChannels"/>: the other
+	/// five levels are stored and applied correctly but nothing in the client plays through them
+	/// yet, so the options panel does not show sliders that cannot be heard.</para>
+	///
 	/// <para><b>Why this is not an AudioMixer.</b> A mixer would be the natural home for per-channel
 	/// levels, but it has to exist as an asset with a matching exposed parameter per group, and a
 	/// mixer parameter set before the mixer has been loaded is silently dropped. This keeps the
@@ -33,6 +37,29 @@ namespace FishMMO.Client
 	{
 		/// <summary>Number of channels, cached so the arrays below cannot drift from the enum.</summary>
 		private static readonly int ChannelCount = Enum.GetValues(typeof(AudioChannel)).Length;
+
+		/// <summary>
+		/// The channels the client currently routes audio through, and therefore the only ones the
+		/// options panel offers.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>Master alone, because Master is the only one that reaches anything.</b> It is
+		/// applied to <see cref="AudioListener.volume"/>, which scales every sound the scene plays
+		/// whether or not the caller knew about channels. The other five have no consumer: nothing
+		/// in the client owns an <c>AudioSource</c> yet, so a Music or Effects slider would save its
+		/// value perfectly and change nothing a player could hear. A control that does nothing is
+		/// worse than a missing one — it teaches the player that the settings screen lies.</para>
+		///
+		/// <para>The rest of this class deliberately stays whole. Every channel keeps its key, its
+		/// default, its stored level and its change event, so wiring up the audio system later is
+		/// adding entries to this one array rather than rebuilding the model — and a level saved by
+		/// a build that offered more channels is still read back correctly by one that offers
+		/// fewer.</para>
+		/// </remarks>
+		public static readonly AudioChannel[] PlayableChannels =
+		{
+			AudioChannel.Master,
+		};
 
 		/// <summary>Player-facing label for each channel, indexed by <see cref="AudioChannel"/>.</summary>
 		public static readonly string[] ChannelLabels =
@@ -160,10 +187,6 @@ namespace FishMMO.Client
 		/// </remarks>
 		public static float EffectiveVolume(AudioChannel channel)
 		{
-			if (channel == AudioChannel.Master)
-			{
-				return ToAmplitude(GetVolume(AudioChannel.Master));
-			}
 			return ToAmplitude(GetVolume(channel));
 		}
 
@@ -219,27 +242,42 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Restores every channel to its default and persists the result.
+		/// Restores the offered channels to their defaults and persists the result.
 		/// </summary>
+		/// <remarks>
+		/// Scoped to <see cref="PlayableChannels"/>, which is what the button the player pressed
+		/// actually offers. Resetting the whole enum would write a key for each of the five
+		/// channels the client cannot yet play through — settings the player was never shown,
+		/// appearing in Configuration.cfg because they pressed reset on the one they were. A
+		/// channel with no stored key already resolves to <see cref="DefaultVolume"/>, so there is
+		/// nothing to put back for the ones left out.
+		/// </remarks>
 		public static void ResetToDefaults()
 		{
 			EnsureLoaded();
 
-			for (int i = 0; i < levels.Length && i < ChannelCount; ++i)
+			for (int i = 0; i < PlayableChannels.Length; ++i)
 			{
-				AudioChannel channel = (AudioChannel)i;
-				levels[i] = DefaultVolume(channel);
-				ClientSettings.Set(KeyFor(channel), levels[i]);
+				AudioChannel channel = PlayableChannels[i];
+
+				int index = (int)channel;
+				if (index < 0 || index >= levels.Length)
+				{
+					continue;
+				}
+
+				levels[index] = DefaultVolume(channel);
+				ClientSettings.Set(KeyFor(channel), levels[index]);
 			}
 
 			ClientSettings.Set(ClientSettings.AudioMuteUnfocusedKey, false);
 			ApplyMasterToListener();
 
-			for (int i = 0; i < ChannelCount; ++i)
+			for (int i = 0; i < PlayableChannels.Length; ++i)
 			{
 				try
 				{
-					OnVolumeChanged?.Invoke((AudioChannel)i);
+					OnVolumeChanged?.Invoke(PlayableChannels[i]);
 				}
 				catch (Exception ex)
 				{

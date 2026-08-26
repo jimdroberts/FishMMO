@@ -27,10 +27,10 @@ namespace FishMMO.Shared
 		public event Action<long, PartyRank, float> OnAddPartyMember;
 
 		/// <summary>
-		/// Event triggered when a party member's live health changes. Provides member ID and
-		/// health fraction (0-1).
+		/// Event triggered when the scene server pushes live state for the party members sharing
+		/// the local character's scene. See <see cref="IPartyController.OnUpdatePartyVitals"/>.
 		/// </summary>
-		public event Action<long, float> OnUpdatePartyMemberHealth;
+		public event Action<PartyMemberVitalsEntry[]> OnUpdatePartyVitals;
 
 		/// <summary>
 		/// Event triggered to validate the current set of party members.
@@ -90,7 +90,7 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<PartyAddMultipleBroadcast>(OnClientPartyAddMultipleBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
-			ClientManager.RegisterBroadcast<PartyMemberHealthUpdateBroadcast>(OnClientPartyMemberHealthUpdateBroadcastReceived);
+			ClientManager.RegisterBroadcast<PartyMemberVitalsUpdateBroadcast>(OnClientPartyMemberVitalsUpdateBroadcastReceived);
 		}
 
 		/// <summary>
@@ -108,7 +108,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<PartyAddMultipleBroadcast>(OnClientPartyAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
-				ClientManager.UnregisterBroadcast<PartyMemberHealthUpdateBroadcast>(OnClientPartyMemberHealthUpdateBroadcastReceived);
+				ClientManager.UnregisterBroadcast<PartyMemberVitalsUpdateBroadcast>(OnClientPartyMemberVitalsUpdateBroadcastReceived);
 			}
 		}
 
@@ -148,9 +148,26 @@ namespace FishMMO.Shared
 			// If this is our own character, update party ID and rank.
 			if (PlayerCharacter != null && msg.CharacterID == Character.ID)
 			{
+				/* The JOIN triggers fire on an actual join, not on every refresh.
+				 *
+				 * This handler is reached once per member of every roster payload, and the server
+				 * sends a roster payload each time anything about the party changes — somebody
+				 * joining, leaving, being promoted, logging in or logging out. Firing the triggers
+				 * unconditionally meant "the character joined a party" was raised again for every
+				 * one of those, so an achievement counting party joins climbed while the player
+				 * stood still and any ECA reaction bound to joining replayed itself all evening.
+				 *
+				 * Rank changes are deliberately NOT a join. Being promoted is not joining, and the
+				 * event data carries the rank precisely so a listener that cares can read it. */
+				bool joined = ID != msg.PartyID;
+
 				ID = msg.PartyID;
 				Rank = msg.Rank;
-				Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
+
+				if (joined)
+				{
+					Character.Invoke(onPartyJoinTriggers, new PartyEventData(Character, ID, Rank));
+				}
 			}
 
 			OnAddPartyMember?.Invoke(msg.CharacterID, msg.Rank, msg.HealthPCT);
@@ -164,6 +181,11 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg, Channel channel)
 		{
+			if (msg.Members == null)
+			{
+				return;
+			}
+
 			HashSet<long> newIds = new HashSet<long>(msg.Members.Length);
 			for (int i = 0; i < msg.Members.Length; i++)
 			{
@@ -190,6 +212,19 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			/* Leaving twice is not leaving twice.
+			 *
+			 * More than one server path sends this message for the same departure — the leave or
+			 * kick that caused it tells the client immediately, and the periodic roster pump tells
+			 * it again when it notices the membership row is gone. Without this test the LEAVE
+			 * triggers fired once for each, so an ECA reaction bound to leaving a party ran twice
+			 * for a single click, and it also ran for a character that had no party to leave. */
+			if (ID == 0 && Rank == PartyRank.None)
+			{
+				return;
+			}
+
 			ID = 0;
 			Rank = PartyRank.None;
 			OnLeaveParty?.Invoke();
@@ -208,26 +243,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Handles the live party health payload, raising one event per member.
+		/// Handles the live party vitals payload, raising it as a single event.
 		/// </summary>
-		/// <param name="msg">The broadcast message carrying member health.</param>
+		/// <param name="msg">The broadcast message carrying member state.</param>
 		/// <param name="channel">The network channel.</param>
 		/// <remarks>
-		/// Raised per member rather than as one list event so the party panel can update a single
-		/// row without walking its whole roster, and so a member the client does not know about
-		/// yet is simply ignored by the handler rather than needing a guard here.
+		/// Raised whole rather than split per member. The payload is complete for the recipient's
+		/// scene, so a roster member missing from it is a member in another zone — a fact that
+		/// only exists in the payload as a set and would be destroyed by iterating it away here.
+		/// A null <c>Members</c> is normalised to an empty array so a subscriber can treat every
+		/// delivery as an authoritative set without a null check of its own; it means "nobody
+		/// here", which is a real answer and not a missing one.
 		/// </remarks>
-		public void OnClientPartyMemberHealthUpdateBroadcastReceived(PartyMemberHealthUpdateBroadcast msg, Channel channel)
+		public void OnClientPartyMemberVitalsUpdateBroadcastReceived(PartyMemberVitalsUpdateBroadcast msg, Channel channel)
 		{
-			if (msg.Members == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < msg.Members.Length; ++i)
-			{
-				OnUpdatePartyMemberHealth?.Invoke(msg.Members[i].CharacterID, msg.Members[i].HealthPCT);
-			}
+			OnUpdatePartyVitals?.Invoke(msg.Members ?? Array.Empty<PartyMemberVitalsEntry>());
 		}
 #endif
 	}

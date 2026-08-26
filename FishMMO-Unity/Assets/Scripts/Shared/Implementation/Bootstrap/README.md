@@ -61,6 +61,7 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 - **Ownership-checked log hook release** — `Log.OnInternalLogMessage` is a single-cast static assigned by every bootstrap system's `Awake()`, so several are alive at once and the last to wake owns it. `OnDestroy()` clears it only if this instance is the current owner; clearing unconditionally silenced internal logging for every system still shutting down.
 - **Boot survives a missing `VersionConfig`** — `MainBootstrapSystem` logs the error and continues with an unknown version instead of aborting `OnPreload()`. Aborting left the load queue empty, which made every downstream phase report "done" instantly and produced a permanently black screen; carrying on lets the launcher come up and report the bad version to the player.
 - **Client frame rate capped before anything renders** — `MainBootstrapSystem.OnPreload()` sets `Application.targetFrameRate` to `BootstrapTargetFrameRate` (60) and zeroes `QualitySettings.vSyncCount`. Nothing else sets a target before a network connection exists and the default is `-1` (unlimited), so the launcher and login menus would otherwise render as fast as the GPU allows and peg a CPU core drawing a static screen. Headless servers are excluded (`#if !UNITY_SERVER`) — they do not render, and FishNet derives the server frame rate from the tick rate.
+- **The player's saved settings are applied immediately afterwards** — `OnPreload()` raises `OnApplyClientBootSettings` on the line after the two writes above. `FishMMO.Client.ClientSettingsBootstrap` subscribes to it and applies display, audio, interface and theme preferences, then creates the input bindings. A hook rather than a direct call because the applier lives in `FishMMO.Client`, which this assembly cannot reference; a hook rather than a second `RuntimeInitializeOnLoadMethod` because ordering is the whole point — anything applied *before* those two lines is silently overwritten by them. The invocation is wrapped in `try/catch`: a settings file that cannot be applied must not stop the client booting. See [Client Settings](../../../Client/Settings/README.md).
 
 ## Prerequisites
 
@@ -112,9 +113,13 @@ Ensure the initial scene in your build settings contains a `MainBootstrapSystem`
 
 ### Bootstrap Frame Rate Cap
 
-`BootstrapTargetFrameRate` is a private const (60) rather than an Inspector field — it is a
-floor for the pre-configuration window only, not a user-facing setting. Two values are
-written together in `OnPreload()`, both guarded by `#if !UNITY_SERVER`:
+`BootstrapTargetFrameRate` is a **public** const (60). It is not an Inspector field because it
+is not a per-scene tuning value, and it is public because it is read back on the client side:
+`ClientDisplaySettings.ResolveSavedFrameRate` resolves to the same number for a player who has
+no saved preference. A second copy of it in the client is how the menus end up capped at one
+rate while the settings screen reports another.
+
+Two values are written together in `OnPreload()`, both guarded by `#if !UNITY_SERVER`:
 
 | Value | Set to | Reason |
 |---|---|---|
@@ -125,15 +130,30 @@ The vSync write is not cosmetic. `ProjectSettings/QualitySettings.asset` ships t
 **Balanced** level with `vSyncCount: 1`, so on that level the cap silently did nothing and
 the menus ran uncapped regardless.
 
-Neither value survives past configuration load, and neither overrides a player's choice:
+#### What happens to these two values next
 
-| Stage | What replaces it |
-|---|---|
-| Options UI loads | `RefreshRateSettingOption.Load()` / `UITKOptions` → `Client.ApplyTargetFrameRate`, and `VSyncSettingOption.Load()` / `UITKOptions.InitializeVSync` → `QualitySettings.vSyncCount`, both from the saved `Configuration.GlobalSettings` preference |
-| Client connects | FishNet's `NetworkManager.UpdateFramerate` raises `targetFrameRate` from `ClientManager.FrameRate` |
+`OnApplyClientBootSettings` fires on the very next line, so both are revisited within the same
+`OnPreload()` call:
 
-A player who wants vSync still gets it — the options UI reapplies the saved preference when
-`UITKOptions.OnStarting()` runs, which is after bootstrap.
+| Value | Player has a saved preference | Player has none (fresh install) |
+|---|---|---|
+| Frame rate | `ClientDisplaySettings.ApplySavedFrameRate` → `Client.ApplyTargetFrameRate`, bounded below by the network tick rate and above by the display's fastest mode | **The bootstrap cap stands.** `ResolveSavedFrameRate` returns `BootstrapTargetFrameRate`, snapped onto a rate this machine offers |
+| VSync | `ClientDisplaySettings.ApplySavedVSync` restores it | Stays `0` |
+
+That second column is the point of the constant. It used to be overwritten by the display's
+fastest mode moments after being set, which made it dead on arrival — a fresh install rendered
+its launcher and login screens as fast as the panel allowed.
+
+> **FishNet does not raise the cap.** An earlier version of this document said it did.
+> `NetworkManager.UpdateFramerate` overwrites `targetFrameRate` from `ClientManager.FrameRate`
+> on every connection-state change, which turned the scene's value into a hard ceiling on what
+> a player could render at — so the client scene now ships with `ChangeFrameRate` **off** and
+> the render rate belongs entirely to this default and the player's preference. Simulation is
+> unaffected either way: gameplay runs on the fixed 30 Hz `TimeManager` tick.
+
+A player who wants vSync gets it from the boot phase, not from opening the settings screen. The
+options panel ships closed, so anything applied only by its `OnStarting()` was not in force
+until the player visited the menu — see [Client Settings](../../../Client/Settings/README.md).
 
 ### BootstrapSystem Inspector Properties
 
@@ -245,9 +265,11 @@ public class MyCustomBootstrap : BootstrapSystem
 | Duplicate start prevented | Attempt to call `StartBootstrap()` twice on same system | Warning: `BootstrapSystem tried to start multiple times. Ignoring.` |
 | Load failures do not stall boot | Point a preload entry at a missing Addressable key | `preload finished with N failed item(s). Continuing bootstrap.` and the chain still advances |
 | Missing VersionConfig does not hang | Clear the `versionConfig` reference and enter Play Mode | Error is logged, boot completes, and the launcher reports the version problem in its UI — never a black screen |
-| Frame rate cap applied | Watch console during client startup | `Client frame rate capped to 60 for bootstrap and menus (FishNet raises it on connect).` |
+| Frame rate cap applied | Watch console during client startup | `Client frame rate capped to 60 for bootstrap and menus; a saved preference replaces it below.` |
 | Cap holds on a vSync quality level | Set quality to **Balanced** (`vSyncCount: 1`), enter Play Mode, watch the launcher | Frame rate settles at ~60, not the display refresh rate or uncapped |
-| VSync preference is not clobbered | Enable VSync in Options, restart the client, reopen Options | Toggle still reads on, and `QualitySettings.vSyncCount` is `1` once the options UI has loaded |
+| VSync preference is not clobbered | Enable VSync in Options, restart the client | `QualitySettings.vSyncCount` is `1` **from boot**, before the panel is opened; the toggle still reads on when it is |
+| Fresh install keeps the menu cap | Delete `Configuration.cfg`, start the client, open Options | Frame Rate Limit reads **60 FPS** and that is what is applied |
+| Saved settings reach the boot phase | Set a brightness/volume/scale, restart, do **not** open Options | The setting is already in force |
 | Logging bridge active | Call `Debug.Log("test")` during play | Message routed through `FishMMO.Logging.Log` with source `"UNITY"` |
 | Re-entrant loop prevention | `UnityConsoleLogger` writes to `Debug.Log` | No infinite loop; `IsLoggingInternally` flag prevents re-capture |
 | Graceful shutdown (Editor) | Exit Play Mode | `Editor exiting Play Mode. Initiating shutdown...` followed by synchronous `Log.Shutdown()` |
@@ -291,6 +313,11 @@ MainBootstrapSystem.Awake()
                     │   ├── Cap the client frame rate (!UNITY_SERVER only):
                     │   │   ├── QualitySettings.vSyncCount  = 0   (else the cap is ignored)
                     │   │   └── Application.targetFrameRate = 60
+                    │   ├── OnApplyClientBootSettings?.Invoke()   (!UNITY_SERVER, isolated)
+                    │   │   └── ClientSettingsBootstrap.Apply():
+                    │   │       ├── ClientSettings.ApplyAll()  (display, audio, interface, theme)
+                    │   │       ├── ClientSettingsPump.Install()
+                    │   │       └── PlayerInputController.EnsureControlsCreated()
                     │   ├── Set GameVersion static string
                     │   ├── Register editor play-mode state handler (editor only)
                     │   ├── Register Application.wantsToQuit handler

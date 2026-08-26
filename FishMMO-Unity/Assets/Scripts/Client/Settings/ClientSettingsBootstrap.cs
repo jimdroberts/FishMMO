@@ -60,6 +60,13 @@ namespace FishMMO.Client
 			 * `applied` left true from the previous run would skip the whole of boot. */
 			applied = false;
 
+			/* Before anything writes to QualitySettings, and that ordering is the point: the very
+			 * first write is MainBootstrapSystem forcing vSyncCount to zero during the first
+			 * scene's Awake, which is after this and before any of ours. In the editor those
+			 * writes land in the checked-in QualitySettings asset, so the authored values have to
+			 * be recorded here to be restorable on play-mode exit. A no-op in a build. */
+			ClientDisplaySettings.CaptureAuthoredQuality();
+
 			ClientSettings.EnsureLoaded();
 
 			/* Subscribed before unsubscribed for the same reason: without a domain reload the
@@ -99,6 +106,13 @@ namespace FishMMO.Client
 			applied = true;
 
 			ClientSettings.ApplyAll();
+
+			/* Installed explicitly, at a point where creating a GameObject is unambiguously safe.
+			 * ClientSettings.RequestSave installs it on demand as well, which covers scenes that
+			 * come up without a bootstrap system — but that path can first run from
+			 * RuntimeInitializeLoadType.BeforeSceneLoad, where the first scene does not exist yet.
+			 * Doing it here means the normal client never depends on that. */
+			ClientSettingsPump.Install();
 
 			/* Created here rather than on world entry so the bindings exist — and the player's
 			 * saved overrides are in force — from the login screen onwards. This creates the asset

@@ -1,25 +1,36 @@
 /*
     UIParty.uss
-    Layout for the party panel. Colours come from FishMMO-Theme.uss.
+    Layout for the party panel. Colours come from FishMMO-Theme.uss; the buff
+    icons reuse the .buff-group classes from UIBuffContainer.uss.
 
-    The panel is a roster: a header carrying the party's identity and size, a
-    column strip naming what each field is, the member rows themselves, and a
-    footer of actions. The column strip matters more here than in most lists —
-    a health bar with no caption over it is just a coloured rectangle.
+    The panel is a roster of GROUPS rather than of lines. Each member is one
+    horizontal band: who they are, the three resources stacked so their relative
+    heights read at a glance, what they are contributing, and what is currently
+    being done to them. Reading down a column compares the party on one axis;
+    reading across a band tells you everything about one player.
+
+    The column strip matters more here than in most lists — three unlabelled
+    bars of different colours are just a stack of rectangles.
 */
 
 /*
     Anchored explicitly. Each panel is its own UIDocument whose root fills the
     screen, so a root with a size but no position resolves to the top-left
     corner. Left-centre matches where the uGUI party panel sat.
+
+    Wider than the roster it replaced because it now carries four columns
+    instead of three narrow ones. Sized against the 1200x800 reference
+    resolution in PanelSettings.asset, so this is a little over a third of the
+    screen's width — which is what a frame carrying six members' buffs needs,
+    and why the effects column is the one that flexes.
 */
 .party-panel {
     position: absolute;
     left: 2%;
     top: 50%;
     translate: 0 -50%;
-    width: 260px;
-    max-height: 60%;
+    width: 450px;
+    max-height: 72%;
     flex-direction: column;
     flex-shrink: 0;
 }
@@ -56,8 +67,30 @@
     flex-shrink: 0;
 }
 
+/*
+    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
+    Label a generous intrinsic height, so an unconstrained pair measures taller
+    than the header that contains it — the subtitle then overflows into
+    whatever sits below the header, which is exactly what it did.
+*/
+.party-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.party-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
 /* ── Column strip ───────────────────────────────────────── */
 
+/*
+    The four widths below are repeated on the member row's four groups. They
+    have to agree or the captions stop naming the thing under them, and USS has
+    no variables for lengths — only for colours — so the pairing is maintained
+    by hand and marked here.
+*/
 .party-columns {
     flex-direction: row;
     align-items: center;
@@ -70,15 +103,32 @@
     flex-shrink: 0;
 }
 
-.party-col--name   { flex-grow: 1; }
-.party-col--rank   { width: 54px; }
-.party-col--health { width: 62px; -unity-text-align: middle-right; }
+/*
+    Shared caption sizing; the modifiers below set the widths.
+
+    Margin and padding are zeroed explicitly. Unity's runtime theme gives a
+    Label its own margin, which the member row's four groups do not have — so
+    with the same widths on both, every caption still drifted a few pixels
+    further right than the column under it, and by the fourth one "EFFECTS" sat
+    over the gap rather than over the icons. Measured, not guessed: the strip
+    and the row now report identical x positions for all four columns.
+*/
+.party-col {
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.party-col--identity { width: 92px; }
+.party-col--bars     { width: 126px; }
+.party-col--meters   { width: 62px; }
+.party-col--effects  { flex-grow: 1; flex-shrink: 1; width: auto; }
 
 /* ── Body ───────────────────────────────────────────────── */
 
 .party-scroll {
     flex-grow: 1;
-    min-height: 60px;
+    min-height: 64px;
 }
 
 .party-member-list {
@@ -86,38 +136,255 @@
 }
 
 /*
-    One roster row. The theme's .fish-row supplies the hover state and the
+    One roster band. The theme's .fish-row supplies the hover state and the
     leading accent rail; this only sets the geometry.
+
+    Height follows from the bars: three 16px tracks and two 2px gaps is 52px,
+    plus 3px of breathing room top and bottom. Fixed rather than derived so six
+    members always occupy the same space and the panel does not resize as buffs
+    come and go.
 */
 .party-member {
     flex-direction: row;
     align-items: center;
-    height: 26px;
+    height: 58px;
     padding-left: 10px;
     padding-right: 10px;
     flex-shrink: 0;
 }
 
+/* ── Member: identity ───────────────────────────────────── */
+
+.party-member__identity {
+    width: 92px;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 6px;
+}
+
 .party-member__name {
+    height: 14px;
+    overflow: hidden;
+    -unity-text-align: middle-left;
+}
+
+/*
+    The rank marker is a badge rather than the bare asterisk the old row used.
+    An asterisk in a monochrome column is a footnote mark; leadership is the one
+    fact on this row that decides who a player has to ask for an invite or a
+    kick, and it should not have to be decoded.
+
+    A plain member's badge is made INVISIBLE rather than removed from layout.
+    Removing it lets the identity column collapse to the height of the name
+    alone, so the leader's name sits a few pixels higher than everyone else's
+    and the one column a player scans down is the one column that is not
+    aligned. An invisible badge draws nothing and keeps every name on the same
+    baseline; C# sets visibility, not display, for the same reason.
+*/
+.party-member__rank {
+    height: 13px;
+    margin-top: 3px;
+    padding-left: 5px;
+    padding-right: 5px;
+    align-self: flex-start;
+    flex-shrink: 0;
+}
+
+/* ── Member: resource bars ──────────────────────────────── */
+
+.party-member__bars {
+    width: 126px;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 8px;
+}
+
+/*
+    16px tall, stacked, health above mana above stamina. Tall enough that a
+    glance across six members compares depth rather than hue, which is the whole
+    reason a party frame has bars instead of numbers.
+*/
+.party-bar {
+    height: 16px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.party-bar--mana,
+.party-bar--stamina {
+    margin-top: 2px;
+}
+
+/* Driven from C#: only the width moves. */
+.party-bar__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+}
+
+.party-bar__label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    font-size: 9px;
+}
+
+/* ── Member: output meters ──────────────────────────────── */
+
+.party-member__meters {
+    width: 62px;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding-right: 8px;
+}
+
+.party-meter {
+    flex-direction: row;
+    align-items: center;
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.party-meter--heal {
+    margin-top: 4px;
+}
+
+.party-meter__caption {
+    width: 22px;
+    font-size: 8px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+    color: var(--abyss-300);
+    -unity-text-align: middle-left;
+    flex-shrink: 0;
+}
+
+.party-meter__value {
     flex-grow: 1;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
     overflow: hidden;
 }
 
-.party-member__rank {
-    width: 54px;
+.party-meter__value--damage { color: var(--hp); }
+.party-meter__value--heal   { color: var(--stam); }
+
+/*
+    An idle meter is drawn in the muted text colour rather than hidden. A blank
+    cell reads as "no data" when the true statement is "nothing yet this
+    encounter", and the difference matters when the number is what a player is
+    watching to decide whether somebody is contributing.
+*/
+.party-meter__value--idle {
+    color: var(--abyss-300);
+    -unity-font-style: normal;
+}
+
+/* ── Member: buffs and debuffs ──────────────────────────── */
+
+/*
+    To the right of the bars and given all the remaining width, because this is
+    the only column whose content has no fixed size.
+*/
+.party-member__effects {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/*
+    One strip of buffs above one strip of debuffs, matching the target frame,
+    so a defensive cooldown can never be pushed off screen by a long list of
+    debuffs. Both reuse .buff-list from UIBuffContainer.uss; the height caps
+    each at a single row, which is what keeps a member with fifteen effects from
+    resizing the band.
+*/
+.party-effects__strip {
+    height: 22px;
+    overflow: hidden;
     flex-shrink: 0;
 }
 
-/* Inset track; the fill inside it is driven from C#. */
-.party-member__health {
-    width: 62px;
-    height: 8px;
-    flex-shrink: 0;
+.party-effects__strip--debuff {
+    margin-top: 3px;
 }
 
-.party-member__health-fill {
-    height: 100%;
-    width: 100%;
+/*
+    Party icons are a third of the size of the target frame's, because six
+    members' worth of them share one panel. .buff-group's own margins are kept
+    so the two strips still read as the same component.
+*/
+.party-effects__strip > .buff-group {
+    width: 20px;
+    height: 20px;
+    margin-right: 3px;
+    margin-bottom: 0;
+    border-radius: 4px;
+}
+
+.party-effects__strip > .buff-group > .buff-group__label {
+    font-size: 7px;
+}
+
+/* ── Member: out of zone ────────────────────────────────── */
+
+/*
+    A member on another scene server, in another zone, or in a different dungeon
+    instance. The server sends no live state for them at all — see
+    PartyMemberVitalsUpdateBroadcast — so what is on screen is the last thing
+    this client was told, which may be minutes old.
+
+    Drawn as a greyscale facade rather than hidden or blanked. The row still has
+    to hold its place (the party has six members whether or not you can see them
+    all) and the last known values are still worth something; what must not
+    happen is the panel presenting them in the same colours as a member standing
+    next to you, because those colours are a claim that the numbers are live.
+
+    Every colour is restated here rather than relying on opacity alone. Fading
+    the band would make it dimmer without making it any less colour-coded, and a
+    dim red bar still reads as "that player is nearly dead right now".
+*/
+.party-member--away {
+    opacity: 0.72;
+}
+
+.party-member--away .fish-bar__fill--hp   { background-color: var(--hp-muted); }
+.party-member--away .fish-bar__fill--mp   { background-color: var(--mp-muted); }
+.party-member--away .fish-bar__fill--stam { background-color: var(--stam-muted); }
+
+.party-member--away .party-member__name  { color: var(--abyss-300); }
+.party-member--away .party-bar__label    { color: var(--abyss-200); }
+.party-member--away .party-meter__value  { color: var(--abyss-300); }
+
+/*
+    Buff icons are sprites, so the only way to desaturate one is to tint it.
+*/
+.party-member--away .buff-group__icon {
+    -unity-background-image-tint-color: var(--icon-muted);
+}
+
+.party-member--away .buff-group__fill {
+    background-color: var(--abyss-600);
+}
+
+/*
+    Replaces the rank badge's accent while the member is away, so leadership is
+    still legible without being the brightest thing in a greyed row.
+*/
+.party-member--away .party-member__rank {
+    background-color: var(--abyss-700);
+    border-color: var(--abyss-400);
+    color: var(--abyss-200);
 }
 
 .party-empty {
@@ -142,25 +409,4 @@
     height: 22px;
     margin-left: 2px;
     margin-right: 2px;
-}
-
-/* Shared caption sizing; the --name/--rank/--health modifiers set the widths. */
-.party-col {
-    flex-shrink: 0;
-}
-
-/*
-    A stacked title + subtitle needs its two line boxes pinned. Unity gives a
-    Label a generous intrinsic height, so an unconstrained pair measures taller
-    than the header that contains it — the subtitle then overflows into
-    whatever sits below the header, which is exactly what it did.
-*/
-.party-header__titles > .fish-panel__title {
-    height: 15px;
-    flex-shrink: 0;
-}
-
-.party-header__titles > .fish-panel__subtitle {
-    height: 12px;
-    flex-shrink: 0;
 }

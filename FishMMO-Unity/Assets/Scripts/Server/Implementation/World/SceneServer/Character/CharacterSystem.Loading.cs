@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Object;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
@@ -2085,10 +2085,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* The result is deliberately not acted on here. This runs while the character is
+			 * still loading and the caller drops the membership from the payload either way; a
+			 * refusal leaves a row that this same check finds and deletes on the character's next
+			 * load, and the party system has already logged it. */
 			await partySystem.RemoveCharacterFromPartyAsync(
 				membership.CharacterID,
 				membership.PartyID,
-				(PartyRank)membership.Rank,
 				reason);
 		}
 

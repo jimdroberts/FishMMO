@@ -125,8 +125,24 @@ drawing.
 ### Player settings
 
 Persisted in the shared `Configuration.GlobalSettings` file, the same store the in-game Options
-panel uses. The launcher loads it itself — only the Options panels did previously, and those
-live in the world scene, so nothing had read a settings file this early.
+panel uses. The launcher no longer has to load it itself: `ClientSettingsBootstrap` creates the
+store at `BeforeSceneLoad`, so it exists before the launcher scene comes up.
+`LauncherSettings.EnsureLoaded()` delegates to `ClientSettings.EnsureLoaded()` and remains as the
+entry point for scenes that come up without the boot phase.
+
+Reads and writes go through `ClientSettings` rather than touching the store directly.
+`LauncherSettings.Save()` used to call `Save()` on the `Configuration` instance, which bypassed
+two things every other write in the client honours: the editor guard — so a play-mode launcher
+session rewrote the developer's checked-out `Configuration.cfg` — and the WebGL sync, so a
+launcher setting reached an in-memory filesystem and was gone on the next page load. It also left
+the client's pending-write flag set, serialising the same file again moments later. `SetValue`
+likewise marks the write as owed, so a launcher change is no longer stranded in memory until
+something else happens to save — which matters most for the two values the updater relies on
+across a restart, `Launcher.UpdateAttemptVersion` and `Launcher.UpdateAttemptCount`.
+
+`Save()` is still immediate rather than debounced: the launcher writes at deliberate moments — a
+field committed, an update attempt recorded — and the process it is about to hand over to may not
+be this one. See [Client Settings](../Settings/README.md).
 
 | Key | Default | Effect |
 |---|---|---|

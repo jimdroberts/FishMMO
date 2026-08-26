@@ -46,7 +46,12 @@ namespace FishMMO.Client
 		private const string DescriptionKey = "UIProfile.Description";
 
 		/// <summary>Prefix shared by every per-panel position key.</summary>
-		private const string PanelKeyPrefix = "UI.Panel.";
+		/// <remarks>
+		/// Taken from the class that owns those keys rather than repeated here. A local copy of the
+		/// literal is one rename away from a profile that saves an empty layout and a load that
+		/// clears every window position without putting anything back.
+		/// </remarks>
+		private const string PanelKeyPrefix = UITKPanelPositions.KeyPrefix;
 
 		/// <summary>Longest profile name accepted, so a name cannot overflow a path.</summary>
 		private const int MaximumNameLength = 48;
@@ -100,7 +105,45 @@ namespace FishMMO.Client
 				return false;
 			}
 
+			/* Windows reserves a handful of names for devices, with or without an extension: CON.cfg
+			 * is the console, not a file. Creating one throws from deep inside File.Open and the
+			 * player would be told only that the profile "could not be written". Saying which part
+			 * of the name is the problem costs one array scan. */
+			if (IsReservedDeviceName(name))
+			{
+				reason = $"'{name}' is a name Windows reserves for a device. Choose another.";
+				return false;
+			}
+
 			return true;
+		}
+
+		/// <summary>Names Windows treats as devices rather than as files.</summary>
+		private static readonly string[] ReservedDeviceNames =
+		{
+			"CON", "PRN", "AUX", "NUL",
+			"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+			"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+		};
+
+		/// <summary>
+		/// Whether a profile name collides with a reserved Windows device name.
+		/// </summary>
+		/// <remarks>
+		/// Checked on every platform, not only Windows. Profiles are meant to be handed to other
+		/// players, and a name that is fine on Linux and unopenable on Windows is a profile that
+		/// cannot be shared — which is the only reason the format exists.
+		/// </remarks>
+		private static bool IsReservedDeviceName(string name)
+		{
+			for (int i = 0; i < ReservedDeviceNames.Length; ++i)
+			{
+				if (string.Equals(name, ReservedDeviceNames[i], StringComparison.OrdinalIgnoreCase))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -121,8 +164,22 @@ namespace FishMMO.Client
 				string[] files = Directory.GetFiles(directory, "*" + Configuration.EXTENSION);
 				for (int i = 0; i < files.Length; ++i)
 				{
+					/* The search pattern is not an exact match. On Windows "*.cfg" also returns
+					 * ".cfgbackup" and friends, a documented legacy of 8.3 short names — so a file
+					 * the profile format cannot read would be offered in the dropdown and fail on
+					 * load. The extension is re-checked here, where it is exact. */
+					if (!string.Equals(Path.GetExtension(files[i]), Configuration.EXTENSION,
+						StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
 					string name = Path.GetFileNameWithoutExtension(files[i]);
-					if (!string.IsNullOrEmpty(name))
+
+					/* And a file whose name this build would refuse to write is not offered either.
+					 * Profiles arrive by being copied into the folder by hand, so the folder can
+					 * hold names no dialog here produced. */
+					if (!string.IsNullOrEmpty(name) && IsValidName(name, out _))
 					{
 						names.Add(name);
 					}
@@ -183,10 +240,16 @@ namespace FishMMO.Client
 				return false;
 			}
 
+			/* Declared out here so the finally can reach it. Configuration owns a
+			 * ReaderWriterLockSlim, and the straight-line Dispose that used to sit after the write
+			 * was skipped whenever anything between here and there threw — leaking the lock on
+			 * exactly the paths that have already gone wrong. Load has always done this correctly;
+			 * this now matches it. */
+			Configuration profile = null;
 			try
 			{
 				string directory = ProfileDirectory;
-				Configuration profile = new Configuration(directory);
+				profile = new Configuration(directory);
 
 				profile.Set(VersionKey, CurrentVersion);
 				profile.Set(DescriptionKey, name);
@@ -216,7 +279,6 @@ namespace FishMMO.Client
 				}
 
 				profile.Save(directory, name + Configuration.EXTENSION);
-				profile.Dispose();
 
 				/* Configuration.Save reports failures to the console and returns void, so a save
 				 * that could not write — a read-only install folder is the usual reason — would
@@ -227,6 +289,12 @@ namespace FishMMO.Client
 					return false;
 				}
 
+				/* A profile is a file of its own, so the write above does not go out with the
+				 * configuration store's flush. On WebGL that leaves it in an in-memory filesystem:
+				 * present for this session, gone on the next visit — a profile that saves, appears
+				 * in the list, and is not there tomorrow. Everywhere else this is a no-op. */
+				WebGLPersistentData.Sync();
+
 				return true;
 			}
 			catch (Exception ex)
@@ -234,6 +302,10 @@ namespace FishMMO.Client
 				Log.Error("UIProfile", $"Saving UI profile '{name}' failed.", ex);
 				error = "The profile could not be written.";
 				return false;
+			}
+			finally
+			{
+				profile?.Dispose();
 			}
 		}
 
@@ -280,10 +352,23 @@ namespace FishMMO.Client
 					return false;
 				}
 
-				/* Version-gated. A profile from a future build may store a key this one would
-				 * misread; refusing it is better than applying half of it. Older versions are
-				 * accepted — every key this format has ever defined is still read the same way. */
-				profile.TryGetInt(VersionKey, out int version, 0);
+				/* The version key must be PRESENT, not merely small enough. Every profile this game
+				 * has ever written carries it, and requiring it is what stops an arbitrary .cfg
+				 * being applied as a layout: the folder is meant to be shared into, the dropdown
+				 * lists whatever .cfg it finds, and applying a file with no profile keys in it is
+				 * not a no-op — a profile is applied wholesale, so "sets no colours and no panel
+				 * positions" means "clear every colour and every panel position". Dropping an
+				 * unrelated config file into the folder and pressing Load would have wiped the
+				 * player's theme and window layout with no way back but Reset. */
+				if (!profile.TryGetInt(VersionKey, out int version, 0))
+				{
+					error = "That file is not a UI profile.";
+					return false;
+				}
+
+				/* And not one from a newer build: it may store a key this one would misread, and
+				 * refusing it is better than applying half of it. Older versions are accepted —
+				 * every key this format has ever defined is still read the same way. */
 				if (version > CurrentVersion)
 				{
 					error = "That profile was written by a newer version of the game.";
@@ -332,6 +417,10 @@ namespace FishMMO.Client
 				{
 					File.Delete(path);
 				}
+
+				// A deletion is a filesystem change like any other; see Save.
+				WebGLPersistentData.Sync();
+
 				return true;
 			}
 			catch (Exception ex)

@@ -1,5 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="../../FishMMO-Theme.uss" />
+    <Style src="../Buff/UIBuffContainer.uss" />
     <Style src="UIParty.uss" />
     <ui:VisualElement name="party-root" class="fish-panel party-panel">
 
@@ -13,9 +14,10 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="party-columns" class="party-columns">
-            <ui:Label text="MEMBER" class="fish-col-head party-col party-col--name" />
-            <ui:Label text="RANK" class="fish-col-head party-col party-col--rank" />
-            <ui:Label text="HEALTH" class="fish-col-head party-col party-col--health" />
+            <ui:Label text="MEMBER" class="fish-col-head party-col party-col--identity" />
+            <ui:Label text="VITALS" class="fish-col-head party-col party-col--bars" />
+            <ui:Label text="OUTPUT" class="fish-col-head party-col party-col--meters" />
+            <ui:Label text="EFFECTS" class="fish-col-head party-col party-col--effects" />
         </ui:VisualElement>
 
         <ui:ScrollView name="party-scroll" class="fish-scroll party-scroll">

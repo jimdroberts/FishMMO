@@ -181,11 +181,26 @@ namespace FishMMO.Client
 		/// <para><b>Pointer position, delta and scroll</b> are continuously changing analogue
 		/// controls; a rebind listening for "any control that actuated" picks one of them the
 		/// instant the mouse moves.</para>
+		///
+		/// <para><b>The keyboard's synthetic <c>anyKey</c></b> is what made Backspace unusable, and
+		/// the reason is worth writing down because nothing about it is visible from this file. The
+		/// Input System offers <c>anyKey</c> as a real, bindable control that actuates whenever any
+		/// key does; it is a <c>ButtonControl</c>, so it survives the "expected control type"
+		/// filter, and excluding <c>backspace</c> does not exclude it. Pressing Backspace during a
+		/// rebind therefore left exactly one eligible candidate — <c>anyKey</c> — and two things
+		/// followed. The rebind completed and bound the row to "Any Key", which is not a key
+		/// anybody wants an action on. And because a candidate was found,
+		/// <c>RebindingOperation</c> marked the event handled, which stops the device state from
+		/// being updated at all: <see cref="PollRebindKeys"/>'s
+		/// <c>backspaceKey.wasPressedThisFrame</c> never became true, so the clear the panel
+		/// advertises in two places could not fire. Excluding it costs nothing — an action bound to
+		/// "any key" fires on every keystroke — and restores both.</para>
 		/// </remarks>
 		private static readonly string[] ExcludedRebindControls =
 		{
 			"<Keyboard>/escape",
 			"<Keyboard>/backspace",
+			"<Keyboard>/anyKey",
 
 			"<Mouse>/leftButton",
 			"<Pointer>/press",
@@ -226,21 +241,26 @@ namespace FishMMO.Client
 		/// Player-facing labels for the themeable colours, indexed alongside
 		/// <see cref="UITKTheme.ColorNames"/>.
 		/// </summary>
+		/// <remarks>
+		/// Each label names the thing the colour actually paints, which is decided by
+		/// <see cref="UITKThemeManager"/> and not by the colour's internal name. Three of these
+		/// used to be wrong in a way the player could only discover by experiment: "Panel
+		/// Background" was <c>Primary</c>, which paints the header and footer bars, while the
+		/// panel body is <c>Background</c> — so the two obvious choices each changed the other
+		/// one's surface.
+		/// </remarks>
 		private static readonly string[] ColorLabels =
 		{
-			"Panel Background",
+			"Header & Footer",
 			"Slot Surface",
-			"Highlight",
-			"Window Background",
+			"Accent & Active Tab",
+			"Panel Background",
 			"Text",
 			"Health Bar",
 			"Mana Bar",
 			"Stamina Bar",
 			"Crosshair",
-			"Tooltip Title",
-			"Tooltip Label",
-			"Tooltip Value",
-			"Tooltip Stat",
+			"Tooltip Text",
 		};
 
 		// ── Tab state ───────────────────────────────────────────────
@@ -360,8 +380,18 @@ namespace FishMMO.Client
 		 * setting that is written twice, then three times, then four; for the interface scale,
 		 * where the handler also snaps and writes the value back, it is a feedback loop.
 		 *
-		 * Unregistering a callback that was never registered is a no-op, so the first pass is
-		 * correct without a null check of its own.
+		 * Detach() is what removes the previous one, and it null-checks. That is not defensive
+		 * tidiness: this comment used to claim that "unregistering a callback that was never
+		 * registered is a no-op, so the first pass is correct without a null check of its own",
+		 * and that is simply false. UnregisterValueChangedCallback(null) throws ArgumentException
+		 * — so the FIRST call of InitializeFrameRateLimit, on the first ever open of this panel,
+		 * threw out of OnStarting. Everything after it never ran: VSync, audio, gameplay,
+		 * interface, colours, profiles, key bindings, and every button binding at the end of
+		 * OnStarting, Close included. The panel opened as a half-built window whose controls did
+		 * nothing.
+		 *
+		 * It survived two readings of this file because it is invisible on the page — the claim
+		 * reads as true. It was found by rendering the panel with its component actually run.
 		 */
 
 		/// <summary>Change handler currently attached to the frame rate dropdown.</summary>
@@ -479,6 +509,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Removes a change handler from a control, if one is attached.
+		/// </summary>
+		/// <typeparam name="T">The control's value type.</typeparam>
+		/// <param name="control">The control to detach from. May be null.</param>
+		/// <param name="handler">The handler to remove, or null when none has been attached yet.</param>
+		/// <remarks>
+		/// The null check is the whole point. <c>UnregisterValueChangedCallback(null)</c> throws
+		/// <c>ArgumentException</c> rather than doing nothing, so passing an unset handler field —
+		/// which is exactly what the first pass over each of these controls does — took the whole
+		/// of <see cref="OnStarting"/> with it.
+		/// </remarks>
+		private static void Detach<T>(INotifyValueChanged<T> control, EventCallback<ChangeEvent<T>> handler)
+		{
+			if (control != null && handler != null)
+			{
+				control.UnregisterValueChangedCallback(handler);
+			}
+		}
+
+		/// <summary>
 		/// Re-applies state after the visual tree has been rebuilt.
 		/// </summary>
 		/// <remarks>
@@ -554,11 +604,32 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// True while a rebind is listening, so Escape cancels it instead of closing this panel.
+		/// </summary>
+		/// <remarks>
+		/// Escape is not suppressed by <c>RebindingOperation</c> — see <see cref="BeginRebind"/> —
+		/// so without this the press reaches <c>Player/CloseLastUI</c> and takes the settings
+		/// window down with the rebind it was meant to cancel. <see cref="UIManager.CloseNext"/>
+		/// consults this before closing anything, and the flag is still set at that point because
+		/// the cancel happens in <see cref="PollRebindKeys"/>, which runs in Update — after the
+		/// action callbacks that ask the question.
+		/// <para>
+		/// That ordering is the Input System's <c>ProcessEventsInDynamicUpdate</c>, its default and
+		/// what this project uses: events, and so action callbacks, are processed ahead of
+		/// <c>MonoBehaviour.Update</c>. Anyone changing <c>InputSettings.updateMode</c> should
+		/// re-check this — under a mode that runs actions after Update the rebind would already
+		/// have been cancelled by the time the question is asked, and Escape would close the panel
+		/// again.
+		/// </para>
+		/// </remarks>
+		public override bool ConsumesEscape => activeRebind != null;
+
+		/// <summary>
 		/// Drives the debounced theme reload and the display auto-revert countdown.
 		/// </summary>
 		protected override void OnTick()
 		{
-			PollClearKey();
+			PollRebindKeys();
 
 			float now = Time.unscaledTime;
 
@@ -1048,13 +1119,15 @@ namespace FishMMO.Client
 
 				/* applyExpensiveChanges: true, unlike the boot-time apply. The player asked for
 				 * this one and is looking at the result, so the texture and render-target reload
-				 * is what they are waiting for rather than an unexplained stall during startup. */
-				QualitySettings.SetQualityLevel(index, true);
+				 * is what they are waiting for rather than an unexplained stall during startup.
+				 *
+				 * Through ClientDisplaySettings rather than QualitySettings directly: it restores
+				 * the player's VSync preference over the level's own authored value, and it is
+				 * where the editor safeguard lives that stops a play-mode session rewriting the
+				 * checked-in QualitySettings asset. */
+				ClientDisplaySettings.ApplyQualityLevel(index, true);
 
-				/* SetQualityLevel installs that level's own authored vSyncCount, which has nothing
-				 * to do with what the player chose. Put theirs back, and re-seed the toggle so the
-				 * two cannot disagree. */
-				ClientDisplaySettings.ApplySavedVSync();
+				// Re-seed the toggle so it cannot disagree with what was just applied.
 				if (vsyncToggle != null)
 				{
 					vsyncToggle.SetValueWithoutNotify(QualitySettings.vSyncCount > 0);
@@ -1131,12 +1204,20 @@ namespace FishMMO.Client
 				labels.Add(frameRateOptions[i] + " FPS");
 			}
 
+			/* Detached BEFORE the choices and the index are rewritten, and that order is the whole
+			 * point. Assigning `index` assigns `value`, which raises a change event — and this
+			 * method is called again, on the SAME element, from OnScreenKeep. With the previous
+			 * handler still attached, confirming a display mode fired it and wrote the re-resolved
+			 * fallback back to the configuration file as though the player had chosen it: a saved
+			 * 240 FPS cap became a permanent 60 after one session on a 60 Hz screen, and nothing
+			 * on screen suggested the preference had been overwritten. */
+			Detach(frameRateDropdown, frameRateChanged);
+
 			frameRateDropdown.choices = labels;
 
 			int saved = ClientDisplaySettings.ResolveSavedFrameRate(frameRateOptions);
 			frameRateDropdown.index = Mathf.Max(0, frameRateOptions.IndexOf(saved));
 
-			frameRateDropdown.UnregisterValueChangedCallback(frameRateChanged);
 			frameRateChanged = (evt) =>
 			{
 				int index = frameRateDropdown.index;
@@ -1174,7 +1255,7 @@ namespace FishMMO.Client
 			vsyncToggle.RegisterValueChangedCallback((evt) =>
 			{
 				ClientSettings.Set(ClientSettings.VSyncKey, evt.newValue);
-				QualitySettings.vSyncCount = evt.newValue ? 1 : 0;
+				ClientDisplaySettings.ApplyVSync(evt.newValue);
 				RefreshGraphicsHint();
 			});
 		}
@@ -1202,11 +1283,14 @@ namespace FishMMO.Client
 		// ── Audio ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// Builds one row per audio channel and binds each to its configuration key.
+		/// Builds one row per playable audio channel and binds each to its configuration key.
 		/// </summary>
 		/// <remarks>
-		/// Generated from the <see cref="AudioChannel"/> enum, so adding a channel adds a row
-		/// without this method being touched.
+		/// Generated from <see cref="ClientAudioSettings.PlayableChannels"/> — the channels
+		/// something in the client actually plays through — and not from the whole
+		/// <see cref="AudioChannel"/> enum. Today that is Master alone; the other five levels
+		/// persist and apply correctly but have no consumer, so a slider for them would save its
+		/// value and change nothing audible. Listing a channel there is what makes its row appear.
 		/// </remarks>
 		private void InitializeAudioSettings()
 		{
@@ -1218,17 +1302,19 @@ namespace FishMMO.Client
 			{
 				audioList.Clear();
 
-				foreach (AudioChannel channel in System.Enum.GetValues(typeof(AudioChannel)))
+				for (int i = 0; i < ClientAudioSettings.PlayableChannels.Length; ++i)
 				{
-					audioList.Add(BuildAudioRow(channel));
+					audioList.Add(BuildAudioRow(ClientAudioSettings.PlayableChannels[i]));
 				}
 			}
 
 			if (muteUnfocusedToggle != null)
 			{
+				// Detached before re-seeding, for the reason InitializeInterfaceSettings documents.
+				Detach(muteUnfocusedToggle, muteUnfocusedChanged);
+
 				muteUnfocusedToggle.SetValueWithoutNotify(ClientAudioSettings.MuteWhenUnfocused);
 
-				muteUnfocusedToggle.UnregisterValueChangedCallback(muteUnfocusedChanged);
 				muteUnfocusedChanged = (evt) => ClientAudioSettings.MuteWhenUnfocused = evt.newValue;
 				muteUnfocusedToggle.RegisterValueChangedCallback(muteUnfocusedChanged);
 			}
@@ -1344,6 +1430,13 @@ namespace FishMMO.Client
 		{
 			if (uiScaleSlider != null)
 			{
+				/* Detached first. This method is called again on the same elements after a UI
+				 * profile is loaded, and assigning lowValue/highValue re-clamps the slider's
+				 * current value — which raises a change event through whatever handler is still
+				 * attached. That handler writes the value back and rescales every panel, so
+				 * re-seeding the control could act as though the player had dragged it. */
+				Detach(uiScaleSlider, uiScaleChanged);
+
 				uiScaleSlider.lowValue = ClientSettings.MinimumUIScale;
 				uiScaleSlider.highValue = ClientSettings.MaximumUIScale;
 
@@ -1351,7 +1444,6 @@ namespace FishMMO.Client
 				uiScaleSlider.SetValueWithoutNotify(scale);
 				UpdateScaleLabel(scale);
 
-				uiScaleSlider.UnregisterValueChangedCallback(uiScaleChanged);
 				uiScaleChanged = (evt) =>
 				{
 					/* Rounded to the nearest 5%. The slider is continuous and the value is shown
@@ -1373,13 +1465,15 @@ namespace FishMMO.Client
 
 			if (snapSlider != null)
 			{
+				// Detached first, for the reason above.
+				Detach(snapSlider, snapGridChanged);
+
 				snapSlider.lowValue = 0.0f;
 				snapSlider.highValue = UITKPanelPositions.MaxSnapGridSize;
 
 				snapSlider.SetValueWithoutNotify(UITKPanelPositions.SnapGridSize);
 				UpdateSnapValueLabel(UITKPanelPositions.SnapGridSize);
 
-				snapSlider.UnregisterValueChangedCallback(snapGridChanged);
 				snapGridChanged = (evt) =>
 				{
 					/* Whole points. A grid of 6.37 is not an alignment aid, and the value is shown
@@ -1549,10 +1643,7 @@ namespace FishMMO.Client
 				case "Mana":         return theme.Mana;
 				case "Stamina":      return theme.Stamina;
 				case "Crosshair":    return theme.Crosshair;
-				case "TooltipTitle": return theme.TooltipTitle;
 				case "TooltipLabel": return theme.TooltipLabel;
-				case "TooltipValue": return theme.TooltipValue;
-				case "TooltipStat":  return theme.TooltipStat;
 				default:             return Color.white;
 			}
 		}
@@ -2017,11 +2108,23 @@ namespace FishMMO.Client
 				operation = action.PerformInteractiveRebinding(bindingIndex)
 					.WithTimeout(RebindTimeoutSeconds)
 
-					/* An explicit cancel control. PerformInteractiveRebinding only arms Escape by
-					 * itself for actions whose expected control type is NOT "Button" — which is
-					 * almost none of them here — so without this a Button rebind had no cancel key
-					 * at all, and Escape's only effect was to close the whole Options panel. */
-					.WithCancelingThrough("<Keyboard>/escape");
+					/* No cancel control, deliberately — Escape is polled instead, in
+					 * PollRebindKeys. An empty string clears the one PerformInteractiveRebinding
+					 * arms by itself for actions whose expected control type is not "Button", so
+					 * every row behaves the same way whatever it is bound to.
+					 *
+					 * The reason is that a cancel control is NOT suppressed. RebindingOperation
+					 * only marks an event handled when some control in it became a candidate, and
+					 * it breaks out of that loop the moment the cancel control matches — before
+					 * anything sets the suppress flag. So Escape would cancel the rebind and then
+					 * carry on into the game, where CloseLastUI is bound to it: one press both
+					 * cancelled the rebind and closed the settings window the player was still
+					 * using, directly contradicting the "Escape cancels" hint on the row.
+					 *
+					 * Polling puts the cancel in Update, which runs after the action callbacks
+					 * have already fired — so the rebind is still live while UIManager decides
+					 * what Escape meant, and UITKOptions.ConsumesEscape can claim it. */
+					.WithCancelingThrough(string.Empty);
 
 				for (int i = 0; i < ExcludedRebindControls.Length; ++i)
 				{
@@ -2206,7 +2309,7 @@ namespace FishMMO.Client
 		/// One <c>wasPressedThisFrame</c> read per frame, and only while something is listening.
 		/// </para>
 		/// </remarks>
-		private void PollClearKey()
+		private void PollRebindKeys()
 		{
 			if (activeRebind == null)
 			{
@@ -2214,12 +2317,23 @@ namespace FishMMO.Client
 			}
 
 			Keyboard keyboard = Keyboard.current;
-			if (keyboard == null || !keyboard.backspaceKey.wasPressedThisFrame)
+			if (keyboard == null)
 			{
 				return;
 			}
 
-			ClearActiveBinding();
+			/* Escape first: cancelling and clearing are mutually exclusive, and a player holding
+			 * both wants out rather than an unbound row. */
+			if (keyboard.escapeKey.wasPressedThisFrame)
+			{
+				CancelActiveRebind();
+				return;
+			}
+
+			if (keyboard.backspaceKey.wasPressedThisFrame)
+			{
+				ClearActiveBinding();
+			}
 		}
 
 		/// <summary>

@@ -53,6 +53,10 @@ msbuild.wrn
 *.bak
 Configuration.cfg
 
+# UI profiles the Options panel writes. In the editor the client's working directory is
+# the repository root, so saving one from the settings screen lands here.
+UIProfiles/
+
 # --- .NET / NuGet ---
 project.lock.json
 *.pyc

@@ -1,6 +1,5 @@
 using UnityEngine;
 using FishMMO.Shared;
-using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -20,6 +19,12 @@ namespace FishMMO.Client
 	/// player's arrangement is still there next launch.
 	/// </para>
 	/// <para>
+	/// Reads happen here; writes go through <see cref="ClientSettings"/>. This class used to own a
+	/// debounce timer of its own, which meant two independent timers rewriting the same whole file
+	/// on their own schedules — see <see cref="ClientSettings"/> for what that cost. There is one
+	/// pending write in the client and one place that flushes it.
+	/// </para>
+	/// <para>
 	/// Coordinates are <b>panel points</b>, not screen pixels. PanelSettings is authored
 	/// ScaleWithScreenSize against a 1200x800 reference matching on width, so a stored X means the
 	/// same thing on any monitor; the visible height in points changes with aspect ratio, which is
@@ -29,7 +34,13 @@ namespace FishMMO.Client
 	public static class UITKPanelPositions
 	{
 		/// <summary>Prefix for the per-panel configuration keys.</summary>
-		private const string KeyPrefix = "UI.Panel.";
+		/// <remarks>
+		/// Public because <see cref="UIProfile"/> copies these keys wholesale into and out of a
+		/// shareable profile and has to agree with this class about which keys those are. A second
+		/// copy of the literal is one rename away from a profile that saves nothing and a load that
+		/// wipes every window position.
+		/// </remarks>
+		public const string KeyPrefix = "UI.Panel.";
 
 		/// <summary>Configuration key holding the drag snap grid, in panel points.</summary>
 		public const string SnapGridKey = "UI.SnapGridSize";
@@ -45,22 +56,6 @@ namespace FishMMO.Client
 
 		/// <summary>Largest grid the options slider offers, in panel points.</summary>
 		public const float MaxSnapGridSize = 32.0f;
-
-		/// <summary>
-		/// How long to wait after the last change before rewriting the configuration file.
-		/// </summary>
-		/// <remarks>
-		/// <see cref="Configuration.Save"/> serialises and rewrites the whole file. Dragging four
-		/// panels into place is four rewrites without this, and the player arranging their UI is
-		/// exactly the moment they are dropping panels in quick succession.
-		/// </remarks>
-		private const float SaveDebounceSeconds = 1.0f;
-
-		/// <summary>True while a write is owed to disk.</summary>
-		private static bool savePending;
-
-		/// <summary>Unscaled time at which the owed write is due.</summary>
-		private static float saveDeadline;
 
 		/// <summary>
 		/// Cached snap grid, so a drag does not parse a configuration string per pointer move.
@@ -94,11 +89,7 @@ namespace FishMMO.Client
 				float clamped = Mathf.Clamp(value, 0.0f, MaxSnapGridSize);
 				snapGridSize = clamped;
 
-				if (Configuration.GlobalSettings != null)
-				{
-					Configuration.GlobalSettings.Set(SnapGridKey, clamped);
-					RequestSave();
-				}
+				ClientSettings.Set(SnapGridKey, clamped);
 			}
 		}
 
@@ -176,14 +167,18 @@ namespace FishMMO.Client
 		/// <param name="position">Top-left, in panel points.</param>
 		public static void Store(string panelName, Vector2 position)
 		{
-			if (string.IsNullOrEmpty(panelName) || Configuration.GlobalSettings == null)
+			if (string.IsNullOrEmpty(panelName))
 			{
 				return;
 			}
 
-			Configuration.GlobalSettings.Set(KeyPrefix + panelName + ".X", position.x);
-			Configuration.GlobalSettings.Set(KeyPrefix + panelName + ".Y", position.y);
-			RequestSave();
+			/* Through ClientSettings rather than into the store directly, so a dragged panel and a
+			 * changed setting share one pending write instead of racing two of them over the same
+			 * file. It is also what applies the invariant float formatting: a position written with
+			 * the machine's own locale came back multiplied by a hundred on any comma-decimal
+			 * system, which put every window in the bottom-right corner. */
+			ClientSettings.Set(KeyPrefix + panelName + ".X", position.x);
+			ClientSettings.Set(KeyPrefix + panelName + ".Y", position.y);
 		}
 
 		/// <summary>
@@ -192,78 +187,17 @@ namespace FishMMO.Client
 		/// <param name="panelName">The panel's GameObject name.</param>
 		public static void Clear(string panelName)
 		{
-			if (string.IsNullOrEmpty(panelName) || Configuration.GlobalSettings == null)
+			if (string.IsNullOrEmpty(panelName))
 			{
 				return;
 			}
 
-			bool removedX = Configuration.GlobalSettings.Remove(KeyPrefix + panelName + ".X");
-			bool removedY = Configuration.GlobalSettings.Remove(KeyPrefix + panelName + ".Y");
-
-			if (removedX || removedY)
-			{
-				RequestSave();
-			}
-		}
-
-		/// <summary>
-		/// Marks the configuration as owing a write, to be flushed once the player settles.
-		/// </summary>
-		private static void RequestSave()
-		{
-			savePending = true;
-			saveDeadline = Time.unscaledTime + SaveDebounceSeconds;
-		}
-
-		/// <summary>
-		/// Flushes an owed write once its quiet period has elapsed.
-		/// </summary>
-		/// <remarks>
-		/// Driven from <see cref="UITKControl"/>'s per-frame hook, which every panel already runs.
-		/// The early-out is a single bool read, so the forty-odd panels that share it cost
-		/// nothing between drags.
-		/// </remarks>
-		public static void Pump()
-		{
-			if (!savePending || Time.unscaledTime < saveDeadline)
-			{
-				return;
-			}
-
-			Flush();
-		}
-
-		/// <summary>
-		/// Writes the configuration to disk immediately, if anything is owed.
-		/// </summary>
-		public static void Flush()
-		{
-			if (!savePending)
-			{
-				return;
-			}
-			savePending = false;
-
-			if (Configuration.GlobalSettings == null)
-			{
-				return;
-			}
-
-			/* Not in the editor. Constants.GetWorkingDirectory resolves to the repository root
-			 * there rather than to an install directory, and every other settings write in the
-			 * client is guarded the same way — see Client.OnDestroy and UITKOptions.FlushConfiguration.
-			 * The in-memory Set above still applies, so positions survive hide/show and scene
-			 * changes while playing in the editor; only the cross-session part is skipped. */
-#if !UNITY_EDITOR && !UNITY_WEBGL
-			try
-			{
-				Configuration.GlobalSettings.Save();
-			}
-			catch (System.Exception ex)
-			{
-				Log.Warning("UITKPanelPositions", $"Saving panel positions failed: {ex.Message}");
-			}
-#endif
+			/* ClientSettings.Remove schedules a write only when a key actually went away. That
+			 * matters here: "reset every window" walks all forty-odd panels, and most of them have
+			 * nothing stored — scheduling a write for each would push the debounce deadline out by
+			 * its full interval forty times over, delaying the write the reset actually owes. */
+			ClientSettings.Remove(KeyPrefix + panelName + ".X");
+			ClientSettings.Remove(KeyPrefix + panelName + ".Y");
 		}
 	}
 }

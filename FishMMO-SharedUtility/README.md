@@ -66,7 +66,7 @@ the Unity managed scripts. Its scope is intentionally narrow:
 FishMMO-SharedUtility/
 ├── Authentication.cs          # Username/password validators
 ├── CircularBuffer.cs          # Allocation-light ring buffer
-├── Configuration.cs           # Hierarchical key/value config tree
+├── Configuration.cs           # Flat key/value store with typed accessors + file I/O
 ├── FastActivator.cs           # Expression-tree compiled object factory
 ├── MathHelper.cs              # Vector/scalar/clamp helpers
 ├── IReference.cs              # Reference-equality interface contract
@@ -99,7 +99,7 @@ All public types live in the `FishMMO.Shared` namespace.
 |------|----------------|
 | `Authentication` | Static validators for usernames, passwords, character names — the same rules used by the LoginServer and account-creation flows. |
 | `CircularBuffer<T>` | Circular doubly-linked list — an unbounded, thread-safe container for reference types. |
-| `Configuration` | In-memory hierarchical config (`Node` tree) that can be loaded from key/value text files. |
+| `Configuration` | Thread-safe flat key/value store (`Dictionary<string, string>` behind a `ReaderWriterLockSlim`, keys case-insensitive) with typed accessors, `key=value` file I/O and environment-variable overrides. There is no node tree — an older description of this type said there was. |
 | `FastActivator<TResult>` | Compiled-expression factory — faster than `Activator.CreateInstance` and avoids reflection per-call. |
 | `MathHelper` | Numeric helpers (clamp, lerp, snapping). |
 | `RefWrapper<T>` | Wraps a value type so reference-comparison works (used for parameter capture). |
@@ -137,7 +137,32 @@ If a candidate utility imports `UnityEngine`, FishNet, or `Microsoft.EntityFrame
 
 ## Configuration
 
-None. The library is dependency-injection-free and runtime-config-free.
+None of its own — the library is dependency-injection-free and runtime-config-free. It *provides*
+the `Configuration` type that the game and servers use for theirs; a few of its guarantees are
+load-bearing enough to state here, because the client's whole settings system rests on them.
+
+**Values are written and read with `CultureInfo.InvariantCulture`**, and `float`/`double` use the
+round-trip (`"R"`) format so a stored value parses back to identical bits. `Set<T>` routes numeric
+types through that path explicitly: a generic type parameter is invisible to overload resolution,
+so a caller writing `Set(key, someFloat)` from inside another generic method reaches the generic
+overload rather than the `float` one. This used to call `value.ToString()` — the *current* culture
+— while every reader parsed invariantly, so on a comma-decimal locale `0.75f` was stored as
+`"0,75"` and read back as **75**, the comma accepted as a digit-group separator.
+
+**A value that is present but unreadable yields the caller's `defaultValue`**, not the type's
+default. Every `TryGet*` returns `false` *and* assigns the supplied fallback; they previously left
+`result` at `0`/`false`, so a truncated write or a hand edit meant zero rather than the documented
+default. Float and double parse with `NumberStyles.Float`, which rejects digit-group separators
+instead of absorbing them.
+
+**File format.** One `key=value` per line, UTF-8 without BOM (a BOM is stripped on read), `#` and
+`;` comments, split on the *first* `=` so values may contain more. Malformed lines are skipped with
+a warning rather than aborting the load. `Remove` deletes a key outright — callers that want
+"absent" should use it rather than storing an empty string.
+
+**Environment overrides.** Any read prefers `FISHMMO_CONFIG_<KEY>` (uppercased, `.`/`:`/`-` → `_`)
+over the stored value, so operators can supply secrets without committing them. Overrides are
+deliberately **not** included in `GetKeys()`, which reports what the file holds.
 
 ---
 

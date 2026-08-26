@@ -137,6 +137,24 @@
     --teal-lo:  rgba(63, 201, 192, 0.12);
     --teal-mid: rgba(63, 201, 192, 0.26);
 
+    /* ── Desaturated semantics ────────────────────────── */
+    /*
+        True greyscale of --hp / --mp / --stam: each one's Rec. 709 luminance
+        written back as a neutral. Used where a reading is being SHOWN but is
+        not being CLAIMED as current — a party member standing in another zone,
+        whose bars are the last thing this client was told rather than the last
+        thing that happened. Derived rather than picked so the three keep the
+        relative brightness the coloured versions have, which is what makes a
+        greyed row still read as three distinct resources.
+
+        USS has no filter function, so a greyscale facade has to be authored as
+        the greyscale colours themselves.
+    */
+    --hp-muted:   rgb(88, 88, 88);
+    --mp-muted:   rgb(127, 127, 127);
+    --stam-muted: rgb(140, 140, 140);
+    --icon-muted: rgb(120, 120, 120);
+
     /* ── Rarity ───────────────────────────────────────── */
     --rarity-common:    rgb(178, 196, 208);
     --rarity-uncommon:  rgb(55, 168, 107);

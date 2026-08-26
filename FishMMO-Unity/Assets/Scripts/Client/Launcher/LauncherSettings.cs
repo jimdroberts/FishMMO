@@ -317,21 +317,24 @@ namespace FishMMO.Client
 		/// Persists settings to disk. Best-effort — a read-only install directory must not be
 		/// a fatal error for a launcher that otherwise works.
 		/// </summary>
+		/// <remarks>
+		/// Through <see cref="ClientSettings"/> rather than by calling <c>Save</c> on the store
+		/// directly. The launcher shares one <see cref="Configuration"/> with the rest of the
+		/// client, and a second writer that reached the file by its own route bypassed two things
+		/// every other write honours: the editor guard, so a play-mode launcher session rewrote the
+		/// developer's checked-out Configuration.cfg, and the WebGL sync, so a launcher setting was
+		/// written into an in-memory filesystem and lost on the next page load. It also left the
+		/// client's pending-write flag set, so the same file was serialised again moments later.
+		/// <para>
+		/// Still immediate rather than debounced: the launcher writes at deliberate moments — a
+		/// field committed, an update attempt recorded — and the process it is about to hand over
+		/// to may not be this one.
+		/// </para>
+		/// </remarks>
 		public static void Save()
 		{
-			if (Configuration.GlobalSettings == null)
-			{
-				return;
-			}
-
-			try
-			{
-				Configuration.GlobalSettings.Save();
-			}
-			catch (Exception ex)
-			{
-				Log.Warning("LauncherSettings", $"Could not save launcher configuration: {ex.Message}");
-			}
+			ClientSettings.RequestSave();
+			ClientSettings.Flush();
 		}
 
 		private static string GetString(string key, string fallback)
@@ -381,7 +384,12 @@ namespace FishMMO.Client
 				Log.Warning("LauncherSettings", $"Cannot store '{key}': no configuration is loaded.");
 				return;
 			}
-			Configuration.GlobalSettings.Set(key, value);
+
+			/* Through ClientSettings, which marks the write as owed. Writing straight into the
+			 * store left a launcher change in memory only until something happened to call Save —
+			 * and the two settings the updater relies on across a restart, the attempted version
+			 * and the attempt count, are exactly the ones that must not be lost that way. */
+			ClientSettings.Set(key, value);
 		}
 	}
 }

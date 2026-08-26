@@ -41,13 +41,13 @@ namespace FishMMO.Shared
 		/// Nothing sets <see cref="Application.targetFrameRate"/> before a network
 		/// connection exists, and its default is -1 (unlimited), so the launcher and login
 		/// menus render as fast as the GPU allows and peg a CPU core to draw a static screen.
-		/// <para>This is only the pre-configuration default. The options UI persists a
-		/// "Frame Rate Limit" and a "VSync" preference and applies them when it loads —
-		/// <c>UITKOptions.InitializeFrameRateLimit</c> calls
-		/// <c>Client.ApplyTargetFrameRate</c>, and <c>UITKOptions.InitializeVSync</c> writes
-		/// <c>QualitySettings.vSyncCount</c> — which replaces both values set here with the
-		/// user's choice. The applied cap is bounded below by the network tick rate and above by
-		/// the display's fastest mode.</para>
+		/// <para>This is the default a client with no saved preference keeps, and not merely a
+		/// value that survives until the settings load. <c>ClientDisplaySettings</c> reads it back
+		/// as the no-preference default, so boot no longer replaces it with the display's fastest
+		/// mode moments after setting it — which it did, making this constant dead in every
+		/// practical sense and running the menus of a fresh install as fast as the panel allows.
+		/// A player who chooses a cap gets theirs instead; the applied value is bounded below by
+		/// the network tick rate and above by the display's fastest mode.</para>
 		/// <para>FishNet is deliberately <em>not</em> part of that chain any more. Its
 		/// <c>NetworkManager.UpdateFramerate</c> overwrites <c>Application.targetFrameRate</c>
 		/// from <c>ClientManager.FrameRate</c> on every connection-state change, so with
@@ -56,7 +56,13 @@ namespace FishMMO.Shared
 		/// the render rate entirely to this default and the player's preference. Simulation is
 		/// unaffected either way: gameplay runs on the fixed 30 Hz TimeManager tick.</para>
 		/// </remarks>
-		private const int BootstrapTargetFrameRate = 60;
+		/// <remarks>
+		/// Public because it is the client's no-preference default as well as its boot-time one,
+		/// and <c>ClientDisplaySettings.ResolveSavedFrameRate</c> has to resolve to the same
+		/// number. A second copy of it in the client is how the menus end up capped at one rate
+		/// while the settings screen reports another.
+		/// </remarks>
+		public const int BootstrapTargetFrameRate = 60;
 
 		/// <summary>
 		/// Raised during client preload, immediately after the boot-time frame rate and VSync
@@ -381,7 +387,12 @@ namespace FishMMO.Shared
 			 * nothing here survives over a choice the player has actually made. */
 			QualitySettings.vSyncCount = 0;
 			Application.targetFrameRate = BootstrapTargetFrameRate;
-			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus (FishNet raises it on connect).");
+			/* "FishNet raises it on connect" used to follow this, and has been wrong since the
+			 * client scene turned ChangeFrameRate off: nothing raises the cap but the player's own
+			 * preference, applied immediately below. A log line that describes a mechanism which no
+			 * longer exists is worse than none — it is where somebody debugging a frame-rate report
+			 * starts looking. */
+			Debug.Log($"[MainBootstrapSystem] Client frame rate capped to {BootstrapTargetFrameRate} for bootstrap and menus; a saved preference replaces it below.");
 
 			/* And immediately after, the player's own preferences — so a saved cap, VSync choice,
 			 * display mode, brightness and audio levels are in force for the whole of boot rather

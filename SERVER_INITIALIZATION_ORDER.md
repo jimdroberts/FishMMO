@@ -327,6 +327,7 @@ Each server scene contains:
 [RequiresDataContainer(typeof(PartySystemRuntimeData))]
 [RequiresDataContainer(typeof(PartyCharacterMappingData))]
 [RequiresDataContainer(typeof(PartySystemMainThreadQueueData))]
+[RequiresDataContainer(typeof(PartyCombatMeterData))]
 [RequiresDataContainer(typeof(AsyncWorkerData))]
 public class PartySystem : ServerBehaviour { }
 

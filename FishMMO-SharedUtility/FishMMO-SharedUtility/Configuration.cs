@@ -602,17 +602,64 @@ namespace FishMMO.Shared
 		/// <typeparam name="T">The type of the value.</typeparam>
 		/// <param name="name">The name of the setting.</param>
 		/// <param name="value">The value to set.</param>
+		/// <remarks>
+		/// <para><b>Every value is formatted with <see cref="CultureInfo.InvariantCulture"/>, and that
+		/// is not a nicety.</b> This used to call <c>value.ToString()</c>, which formats with the
+		/// <em>current</em> culture, while every reader below parses with the invariant one. On any
+		/// machine whose locale writes a comma as the decimal separator — most of Europe — a float
+		/// written here came back as a different number entirely: <c>0.75f</c> was stored as
+		/// <c>"0,75"</c> and read back by <see cref="TryGetFloat"/>, which accepted the comma as a
+		/// digit-group separator, as <b>75</b>. Interface scale, brightness, every audio volume and
+		/// every window position round-tripped to roughly a hundred times their value and were then
+		/// clamped to whatever bound the reader enforced. The setting looked like it had not been
+		/// saved; in fact it had been saved and misread.</para>
+		/// <para><see cref="float"/> and <see cref="double"/> take the round-trip ("R") format, so a
+		/// stored value parses back to the identical bits. Everything else that knows how to format
+		/// itself is asked to do so invariantly, which also keeps enum names, dates and negative
+		/// signs stable across locales.</para>
+		/// </remarks>
 		public void Set<T>(string name, T value)
 		{
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
-			if (value != null)
+
+			switch (value)
 			{
-				Set(name, value.ToString());
+				case null:
+					Set(name, string.Empty); // Sets the value to an empty string if the provided value is null.
+					return;
+
+				/* Routed to the non-generic overloads below, which use the round-trip format. A
+				 * generic type parameter is invisible to overload resolution at the call site, so a
+				 * caller writing Set(key, someFloat) from inside another generic method reaches this
+				 * switch rather than the float overload — and that is exactly the path the client's
+				 * settings writer takes. */
+				case float f:
+					Set(name, f);
+					return;
+				case double d:
+					Set(name, d);
+					return;
+
+				case IFormattable formattable:
+					Set(name, formattable.ToString(null, this.cultureInfo));
+					return;
+
+				default:
+					Set(name, value.ToString());
+					return;
 			}
-			else
-			{
-				Set(name, string.Empty); // Sets the value to an empty string if the provided value is null.
-			}
+		}
+
+		/// <summary>
+		/// Sets a float value for a given setting name, formatted using the <see cref="CultureInfo.InvariantCulture"/>.
+		/// The "R" (Round-trip) format specifier is used to ensure precise and consistent serialization.
+		/// </summary>
+		/// <param name="name">The name of the setting.</param>
+		/// <param name="value">The float value to set.</param>
+		public void Set(string name, float value)
+		{
+			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
+			Set(name, value.ToString("R", this.cultureInfo));
 		}
 
 		/// <summary>
@@ -738,7 +785,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return char.TryParse(setting, out result);
+				if (char.TryParse(setting, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -758,7 +814,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return byte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (byte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -778,7 +843,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return sbyte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (sbyte.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -798,7 +872,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return short.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (short.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -818,7 +901,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return ushort.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (ushort.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -838,7 +930,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return int.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (int.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -858,7 +959,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return uint.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (uint.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -878,7 +988,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return long.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (long.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -898,7 +1017,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return ulong.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (ulong.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -917,7 +1045,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return bool.TryParse(setting, out result);
+				if (bool.TryParse(setting, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -925,7 +1062,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Attempts to retrieve a float value from the configuration.
-		/// Parsing is performed using <see cref="NumberStyles.Any"/> and <see cref="CultureInfo.InvariantCulture"/>.
+		/// Parsing is performed using <see cref="NumberStyles.Float"/> and <see cref="CultureInfo.InvariantCulture"/>.
 		/// </summary>
 		/// <param name="name">The name of the setting.</param>
 		/// <param name="result">When this method returns, contains the float value from the configuration,
@@ -937,7 +1074,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return float.TryParse(setting, NumberStyles.Any, this.cultureInfo, out result);
+				if (float.TryParse(setting, NumberStyles.Float, this.cultureInfo, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;
@@ -945,7 +1091,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Attempts to retrieve a double value from the configuration.
-		/// Parsing is performed using <see cref="System.Globalization.NumberStyles.Any"/> and <see cref="System.Globalization.CultureInfo.InvariantCulture"/>.
+		/// Parsing is performed using <see cref="System.Globalization.NumberStyles.Float"/> and <see cref="System.Globalization.CultureInfo.InvariantCulture"/>.
 		/// </summary>
 		/// <param name="name">The name of the setting.</param>
 		/// <param name="result">When this method returns, contains the double value from the configuration,
@@ -957,7 +1103,16 @@ namespace FishMMO.Shared
 			if (disposed) throw new ObjectDisposedException(nameof(Configuration));
 			if (TryResolveRawValue(name, out string setting))
 			{
-				return double.TryParse(setting, NumberStyles.Any, this.cultureInfo.NumberFormat, out result);
+				if (double.TryParse(setting, NumberStyles.Float, this.cultureInfo.NumberFormat, out result))
+				{
+					return true;
+				}
+
+				/* Present but unreadable. The caller's default is a better answer than the
+				 * type's: a truncated write or a hand edit would otherwise silently mean zero
+				 * brightness, zero volume, or a toggle showing off that ships on. */
+				result = defaultValue;
+				return false;
 			}
 			result = defaultValue;
 			return false;

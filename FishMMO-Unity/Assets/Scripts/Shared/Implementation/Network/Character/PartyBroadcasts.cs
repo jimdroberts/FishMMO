@@ -112,34 +112,76 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// One party member's live health, as observed on a scene server.
+	/// One party member's live state, as observed on a scene server.
 	/// </summary>
-	public struct PartyMemberHealthEntry
+	/// <remarks>
+	/// Only sent for members the sending scene server hosts <b>in the same Unity scene as the
+	/// recipient</b>. A member the recipient cannot be standing next to — different zone,
+	/// different dungeon instance, different scene server, or offline — is absent from the
+	/// payload entirely, and the client greys their row out rather than drawing values it has no
+	/// reason to believe. Absence is therefore meaningful: see
+	/// <see cref="PartyMemberVitalsUpdateBroadcast"/>.
+	/// </remarks>
+	public struct PartyMemberVitalsEntry
 	{
 		/// <summary>Character ID of the member.</summary>
 		public long CharacterID;
 		/// <summary>The member's health fraction, 0-1.</summary>
 		public float HealthPCT;
+		/// <summary>The member's mana fraction, 0-1.</summary>
+		public float ManaPCT;
+		/// <summary>The member's stamina fraction, 0-1.</summary>
+		public float StaminaPCT;
+		/// <summary>
+		/// Damage the member has dealt in the current encounter, divided by its elapsed length.
+		/// </summary>
+		/// <remarks>
+		/// Zero once the encounter has timed out — the meter is per-encounter, not per-session,
+		/// so it must not carry a number from the last fight into the lull after it.
+		/// </remarks>
+		public float DamagePerSecond;
+		/// <summary>Healing the member has done in the current encounter, per second.</summary>
+		public float HealPerSecond;
+		/// <summary>
+		/// The buffs and debuffs the member is showing, exactly as the SERVER chose them.
+		/// </summary>
+		/// <remarks>
+		/// The same server-filtered list the target frame draws from — already stripped of
+		/// anything marked <c>HiddenFromOthers</c>, carrying no tick-domain state and no template
+		/// hooks. Buffs and debuffs travel together and are split by the client on the template's
+		/// own <c>IsDebuff</c> flag, because that flag is a property of the template rather than
+		/// of the wire format and duplicating it into two arrays would let the two disagree.
+		/// <para>
+		/// <see cref="ObservedBuffEntry.RemainingSeconds"/> is re-based to the moment this payload
+		/// was built rather than to the last observed-buff push, so the client's local countdown
+		/// starts from a current figure however long ago the buff was applied.
+		/// </para>
+		/// </remarks>
+		public ObservedBuffEntry[] Buffs;
 	}
 
 	/// <summary>
-	/// Broadcast carrying live health for the party members visible to one scene server.
+	/// Broadcast carrying live state for the party members sharing a scene with the recipient.
 	/// </summary>
 	/// <remarks>
-	/// The roster payload gets its health figure from the party database row, and that row is
-	/// written on connect and on disconnect and at no other time — so every party health bar sat
-	/// frozen at the value its owner logged in with, for the whole session. This message is sent
-	/// on the party update pump from the in-memory attribute controllers of the members the scene
-	/// server actually hosts, which is the only place a current value exists without adding a
-	/// database write per member per second.
-	///
-	/// Members on OTHER scene servers are not in this payload. Their bars keep the last figure the
-	/// roster carried; a stale bar for someone in a different zone is a far smaller problem than
-	/// a stale bar for the person standing next to you.
+	/// <para>
+	/// The roster payload (<see cref="PartyAddMultipleBroadcast"/>) gets its health figure from
+	/// the party database row, and that row is written on connect and on disconnect and at no
+	/// other time — so every party bar sat frozen at the value its owner logged in with, for the
+	/// whole session. This message is sent on the party update pump from the in-memory
+	/// controllers of the members the scene server actually hosts, which is the only place a
+	/// current value exists without a database write per member per second.
+	/// </para>
+	/// <para>
+	/// <b>The payload is complete for its scene.</b> Every member the recipient shares a scene
+	/// with appears in it, including the recipient. A client may therefore treat a roster member
+	/// missing from the latest payload as being somewhere else, which is exactly what drives the
+	/// greyed-out facade — no separate presence message, and no way for the two to disagree.
+	/// </para>
 	/// </remarks>
-	public struct PartyMemberHealthUpdateBroadcast : IBroadcast
+	public struct PartyMemberVitalsUpdateBroadcast : IBroadcast
 	{
-		/// <summary>Live health for each locally-visible party member.</summary>
-		public PartyMemberHealthEntry[] Members;
+		/// <summary>Live state for each party member sharing the recipient's scene.</summary>
+		public PartyMemberVitalsEntry[] Members;
 	}
 }

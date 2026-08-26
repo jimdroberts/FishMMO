@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using System;
@@ -1640,9 +1640,16 @@ namespace FishMMO.Client
 		public bool OnPartyChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
+
+			/* Any code in the table, not just the one this handler was originally written for.
+			 *
+			 * The party system reports more than one failure on this channel — a target already in
+			 * a party, and a target this scene server cannot reach — and hard-coding a single code
+			 * meant the second printed as the raw FISHMMO_ token in the player's chat log. The
+			 * lookup answers for whatever the server sends, which is the point of having a table
+			 * of codes rather than a chain of comparisons. */
 			if (!string.IsNullOrWhiteSpace(cmd) &&
-				 cmd.Equals(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY) &&
-				 ErrorCodes.TryGetValue(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY, out string targetErrorMsg))
+				 ErrorCodes.TryGetValue(cmd, out string targetErrorMsg))
 			{
 				AddSenderMessage(msg.Channel, msg.SenderID, targetErrorMsg);
 			}

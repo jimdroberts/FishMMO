@@ -1565,9 +1565,17 @@ out. These two commands exist so that is a decision rather than a wait. Both are
 | Command | Effect |
 |---|---|
 | `/leaveinstance` (`/exitinstance`) | Returns the character to the open world at the point it entered from. The system-level guarantee that instanced content cannot trap a player: a dungeon is expected to provide an exit teleporter, but that is content data, and a character bound to an instance is routed back into it on every login — so quitting is not an escape. Refused in combat, so it is not one either |
-| Instance panel (Escape → Dungeon) | Shows the dungeon's name and difficulty, how long it has left, and everyone in it, marking who leads. **Leadership is the owning party's leader**, so it follows a promotion rather than staying with whoever opened the run. The leader can remove others and can hide the run from the dungeon finder; anyone can leave, and everyone sees the visibility. Removal is immediate and returns the target to the open world at the point they entered from — it is not a disconnect, so they are not routed back into the instance they were just removed from |
+| Instance panel (Escape → Dungeon) | Shows the dungeon's name and difficulty, how long it has left, and everyone in it, marking who leads. **Leadership is the owning party's leader**, so it follows a promotion rather than staying with whoever opened the run — and it follows the party away from a leader who has logged out, so a run cannot be left with nobody able to manage it. The leader can remove others and can hide the run from the dungeon finder; anyone can leave, and everyone sees the visibility. Removal is immediate and returns the target to the open world at the point they entered from — it is not a disconnect, so they are not routed back into the instance they were just removed from |
 | Dungeon finder (a dungeon entrance) | Lists the runs of that dungeon currently open at the chosen difficulty, with who is running each and how full it is. Joining one enters the dungeon **and joins that group's party**, so it is refused for anyone already in a party with somebody else. Opening a new run picks a difficulty and whether to list it for strangers |
 | `/closedungeon` (`/closeinstance`) | Ends the party's current instance. From **inside**, everyone in it is returned to the open world and the scene is unloaded; from **outside**, the instance is retired only if it is empty, and the hosting scene server reclaims the scene on its own. Party leader only, since it removes everybody — a character with no party is its own leader. Refused while anyone inside is in combat, because the eviction path deliberately skips state validation (there is nothing to validate against when a lifetime cap expires) and reaching it from a command would otherwise make it an instant escape from a losing fight |
+
+Because this and the instance panel's controls are leader-only, a party whose leader logged out
+used to be unable to close, hide or manage the run it was holding — and since a party may hold
+only one instance, that locked every member out of every dungeon until the row aged out. Party
+leadership now moves off a holder who is not logged in anywhere, once they have been gone long
+enough that it cannot be confused with the gap while somebody walks through a teleporter. See
+`leadershipAbsenceGraceSeconds` on the scene server's `PartySystem` asset, which must comfortably
+exceed the slowest scene load on the shard.
 
 Commands are refused silently to anyone below `AccessLevel.Admin` — the server gives no
 indication the command exists, so an unprivileged player cannot probe for command names — but
@@ -1893,15 +1901,30 @@ and unit-test scenes) is covered by an `AfterSceneLoad` backstop; applying is id
 > were skipped without a word, panel positions were never restored, the theme loaded from nothing,
 > and a saved resolution was never applied.
 
-Brightness is re-applied on every `sceneLoaded`: `RenderSettings.ambientLight` is per-scene state
-baked into whichever scene is active, and the client loads several.
+Brightness drives **both** `RenderSettings.ambientLight` and `ambientIntensity`, because which one
+a scene reads depends on its ambient mode: `ambientLight` applies only under `AmbientMode.Flat`, and
+every world scene is authored `AmbientMode.Skybox`, where it is ignored outright. Either way it is
+re-applied on every `sceneLoaded`, since ambient is per-scene state baked into whichever scene is
+active and the client loads several.
 
-Writes are debounced. `Configuration.Save` serialises and rewrites the whole file, so a slider bound
-straight to it rewrites the file once per frame for as long as it is held. Everything coalesces onto
-a short quiet period and is flushed when the Options panel closes and when the client shuts down.
+Writes are debounced, and there is exactly **one** pending write in the client. `Configuration.Save`
+serialises and rewrites the whole file, so a slider bound straight to it rewrites the file once per
+frame for as long as it is held. Everything — settings, window positions and launcher options alike
+— coalesces onto a short quiet period, driven by a hidden `DontDestroyOnLoad` pump rather than by a
+panel's `Update`, so a scene with no panels open cannot stop the clock on a write that is already
+owed. It is forced out when the Options panel closes, on focus loss and pause, and on quit.
+
 **In the Editor the disk write is skipped** — `Constants.GetWorkingDirectory()` resolves to the
 repository root there rather than to an install directory — so settings behave normally in play mode
-but do not rewrite the checked-out file.
+but do not rewrite the checked-out file. **On WebGL it is not skipped**: the working directory is
+`Application.persistentDataPath`, an Emscripten IDBFS mount, and the write is followed by an
+explicit IndexedDB sync — without which the file is written, read back correctly all session, and
+gone by the next visit.
+
+Numbers are stored culture-invariantly. Writing with the machine's own locale while reading
+invariantly meant that on any comma-decimal system `0.75` was stored as `"0,75"` and read back as
+**75**, the comma taken as a digit-group separator — so interface scale, brightness, volumes and
+window positions all round-tripped to roughly a hundred times their value before being clamped.
 
 #### Options panel
 
@@ -1913,10 +1936,10 @@ cannot be lost by editing a scene.
 | Tab | Contents |
 |---|---|
 | **Display** | Resolution, refresh rate, fullscreen mode, quality level, brightness, frame-rate limit, VSync |
-| **Audio** | Master, Music, Sound Effects, Ambient, Interface and Voice volumes; mute when unfocused |
+| **Audio** | Master volume; mute when unfocused. The other five channels are stored and applied but not offered — nothing in the client owns an `AudioSource` yet, and a slider that saves perfectly while changing nothing audible is worse than a missing one |
 | **Gameplay** | Damage numbers, healing numbers, achievement popups, ignore party invites, ignore guild invites |
 | **Key Bindings** | Every rebindable binding in the Player action map, with conflict detection |
-| **UI** | Interface scale, window snap grid, window layout reset, the thirteen theme colours, and shareable UI profiles |
+| **UI** | Interface scale, window snap grid, window layout reset, the ten theme colours, and shareable UI profiles |
 
 **Display settings are staged, not live.** Every other setting can be undone by the control that set
 it; a display mode cannot — pick one the monitor will not show and the player cannot see the control
@@ -1933,20 +1956,20 @@ player waiting out a countdown whose prompt is no longer on screen.
 | `Refresh Rate` | *(unset)* | Hz offered at that resolution | Display refresh rate. Separate from the render cap below — deriving one from the other capped every player at their monitor's rate |
 | `Fullscreen` | `FullScreenWindow` | a `FullScreenMode` value | Stored as the enum value, **not** a dropdown index: the list is built per platform, so an index means a different mode on a build without exclusive fullscreen |
 | `Quality Level` | *(unset)* | a level name | Stored by **name**, not index — quality levels can be reordered between builds and an index would silently select a different one |
-| `Brightness` | `1.0` | 0–1 | Scene ambient light. Re-applied on every scene load |
-| `Frame Rate Limit` | display refresh rate | tick rate – display rate, capped at 500 | Floored at the network tick rate: FishNet derives ticks from the update loop, so a lower frame rate cannot deliver them on schedule |
+| `Brightness` | `1.0` | 0–1 | Scene ambient light — both `ambientLight` (Flat scenes) and `ambientIntensity` (Skybox scenes). Re-applied on every scene load |
+| `Frame Rate Limit` | `60` (the boot-time menu cap) | tick rate – display rate, capped at 500 | Floored at the network tick rate: FishNet derives ticks from the update loop, so a lower frame rate cannot deliver them on schedule. With no preference stored the bootstrap cap stands, rather than jumping to the display's fastest mode — which is what made that cap dead on arrival. A saved value the display no longer offers falls back to the fastest available, since that player *did* express a preference |
 | `VSync` | `false` | — | While on, `Application.targetFrameRate` is ignored entirely and the frame-rate limit above does nothing. The panel says so |
 | `Audio.Volume.Master` | `1.0` | 0–1 | Applied to `AudioListener.volume`. Stored as the slider position; applied as its square, so the middle of the slider lands near the middle of the perceived range |
 | `Audio.Volume.Music` | `0.6` | 0–1 | Below the rest deliberately: it is the only channel that plays continuously, and a score mixed level with combat effects buries the cues a player reacts to |
-| `Audio.Volume.Effects` / `.Ambient` / `.Interface` / `.Voice` | `1.0` / `0.8` / `0.8` / `1.0` | 0–1 | Read through `ClientAudioSettings.EffectiveVolume(channel)` by anything that plays a sound |
+| `Audio.Volume.Effects` / `.Ambient` / `.Interface` / `.Voice` | `1.0` / `0.8` / `0.8` / `1.0` | 0–1 | Read through `ClientAudioSettings.EffectiveVolume(channel)` by anything that plays a sound. Stored and applied, but **not currently offered in the panel** — see `ClientAudioSettings.PlayableChannels` |
 | `Audio.MuteWhenUnfocused` | `false` | — | Silences the client while its window has no focus. Applied on top of Master rather than by writing zero into it, so the saved level survives alt-tabbing |
 | `ShowDamage` / `ShowHeals` / `ShowAchievementCompletion` | `true` | — | Floating combat text and achievement popups |
 | `IgnorePartyInvites` / `IgnoreGuildInvites` | `false` | — | Invitations are **declined**, not dropped: an invitation silently discarded leaves the inviter staring at a prompt that never resolves and the server holding an invitation that blocks the next one |
-| `UI.Scale` | `1.0` | 0.75–1.5 | Interface scale, applied by dividing the shared `PanelSettings` reference resolution. Restored to the authored value when Editor play mode ends, so a play session cannot dirty the asset |
+| `UI.Scale` | `1.0` | 0.75–1.5 | Interface scale, applied by dividing the shared `PanelSettings` reference resolution. Restored to the authored value when Editor play mode ends, so a play session cannot dirty the asset — `QualitySettings` (current level and its `vSyncCount`) is protected the same way, for the same reason |
 | `UI.SnapGridSize` | `8` | 0–32 points | Grid that dragged panels snap to. `0` disables snapping |
 | `UI.Panel.<name>.X` / `.Y` | *(unset)* | panel points | Where the player dragged each window. Re-clamped into the viewport on restore, so a position saved on a 21:9 monitor is still reachable on a 16:9 one |
 | `InputBindingOverrides` | *(unset)* | JSON | Key binding overrides for the whole asset. A value that cannot be parsed is discarded with a log and the defaults are used — it used to abort input initialisation entirely, leaving the player in the world with no controls and no way to reach the panel that would reset them |
-| `<Name>ColorR/G/B/A` | *(unset)* | 0–255 | The thirteen themeable colours. Presence is decided by the `R` channel, so a legitimately black colour is not mistaken for an absent one |
+| `<Name>ColorR/G/B/A` | *(unset)* | 0–255 | The ten themeable colours. Presence is decided by the `R` channel, so a legitimately black colour is not mistaken for an absent one. Clearing one **removes** the keys rather than emptying them, so a reset does not leave forty dead lines in the file |
 
 #### UI profiles
 

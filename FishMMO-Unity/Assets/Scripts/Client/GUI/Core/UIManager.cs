@@ -409,7 +409,10 @@ namespace FishMMO.Client
 				}
 			}
 
-			UITKPanelPositions.Flush();
+			/* Forced to disk rather than left to the debounce. This is a recovery action — the
+			 * player reaches for it when their layout is unusable — and it must survive a client
+			 * that is closed immediately afterwards. */
+			ClientSettings.Flush();
 		}
 
 		/// <summary>
@@ -587,6 +590,21 @@ namespace FishMMO.Client
 				if (control.IsAlwaysOpen)
 				{
 					continue;
+				}
+
+				/* The panel is using Escape for something of its own — the settings screen while it
+				 * listens for a key to rebind is the case this exists for. The press is consumed
+				 * and nothing closes: moving on to the next candidate would close the window BEHIND
+				 * the one the player is interacting with, which is worse than doing nothing. The
+				 * entry stays in the list, because the panel is still visible and still
+				 * Escape-closable the moment it stops wanting the key. */
+				if (control.ConsumesEscape)
+				{
+					if (!peakOnly)
+					{
+						lastCloseFrame = UnityEngine.Time.frameCount;
+					}
+					return true;
 				}
 
 				if (peakOnly)
