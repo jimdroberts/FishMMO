@@ -220,12 +220,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					// Nothing was learned, so put the money back and record the refund.
 					CharacterCurrency.TryAdd(character, currencyTemplate, price);
+					RecordCurrencyMovement(character.ID, price, CurrencyEscrowReason.AbilityCraft, absorbed: false);
 					if (!TryPersistMerchantAttributes(character))
 					{
 						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 					}
 					return;
 				}
+
+				RecordCurrencyMovement(character.ID, price, CurrencyEscrowReason.AbilityCraft, absorbed: true);
 
 				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 				{

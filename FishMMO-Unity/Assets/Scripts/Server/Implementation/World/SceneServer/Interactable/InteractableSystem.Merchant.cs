@@ -252,9 +252,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					Log.Error("InteractableSystem", $"TryPurchaseItem: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 				}
+				RecordCurrencyMovement(character.ID, charge, CurrencyEscrowReason.MerchantPurchase, absorbed: false);
 				return false;
 			}
 
+			RecordCurrencyMovement(character.ID, charge, CurrencyEscrowReason.MerchantPurchase, absorbed: true);
 			return true;
 		}
 
@@ -585,6 +587,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * so undoing the charge would hand it over for free. The warning below records the
 			 * in-memory-only deduction instead, which is the trade-off the RISK note describes. */
 			CharacterCurrency.TrySpend(character, currencyTemplate, price);
+			RecordCurrencyMovement(charID, price, CurrencyEscrowReason.AbilityLearn, absorbed: true);
 
 			/* Enqueued AFTER the deduction, because TryPersistMerchantAttributes snapshots the
 			 * in-memory values as they stand when it is called. Enqueuing it first — which the
@@ -675,6 +678,67 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// server crashes before the in-memory state is updated.
 		/// </summary>
 		/// <returns>True if the persist was successfully enqueued, false otherwise.</returns>
+		/// <summary>
+		/// Records a completed currency movement in the escrow ledger.
+		/// </summary>
+		/// <remarks>
+		/// Called <em>after</em> the deduction has been made and persisted, never before. A hold
+		/// that exists before its deduction is durable would be returned by reconciliation and
+		/// hand back money that was never taken — currency created from nothing. Recording after
+		/// the fact can at worst lose a ledger entry, which is a reporting gap rather than an
+		/// economic one.
+		///
+		/// <para>Deliberately off the player's path. The hold and its settlement are one async
+		/// round trip that nothing waits on, so a purchase costs the player no extra latency; the
+		/// transaction has already completed in memory and been persisted by the time this runs.
+		/// A settlement that never lands leaves the row Held, and startup reconciliation returns
+		/// it — which is the correct outcome for a transaction nobody can confirm.</para>
+		/// </remarks>
+		/// <param name="characterID">The character whose currency moved.</param>
+		/// <param name="amount">Amount moved. Non-positive amounts are not recorded.</param>
+		/// <param name="reason">What the movement was for.</param>
+		/// <param name="absorbed">
+		/// True when the currency left the economy (the transaction completed), false when it was
+		/// returned to the player.
+		/// </param>
+		private void RecordCurrencyMovement(long characterID, long amount, CurrencyEscrowReason reason, bool absorbed)
+		{
+			if (characterID <= 0 || amount <= 0)
+			{
+				return;
+			}
+
+			if (!TryEnqueueAsyncWork(async () =>
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICurrencyEscrowService>(out ICurrencyEscrowService escrowService))
+				{
+					return;
+				}
+
+				DatabaseResult<long> hold = await escrowService.HoldAsync(characterID, amount, (int)reason);
+				if (!hold.IsSuccess || hold.Data <= 0)
+				{
+					Log.Warning("InteractableSystem", $"Currency ledger: could not record {amount} for CharID={characterID} ({reason}).");
+					return;
+				}
+
+				DatabaseResult<int> settle = absorbed
+					? await escrowService.AbsorbAsync(hold.Data)
+					: await escrowService.ReturnAsync(hold.Data);
+
+				if (!settle.IsSuccess || settle.Data != 1)
+				{
+					/* Left Held. Startup reconciliation will return it, which is why the amount is
+					 * only ever recorded after the real deduction has already been persisted. */
+					Log.Warning("InteractableSystem", $"Currency ledger: escrow {hold.Data} left unsettled for CharID={characterID}.");
+				}
+			}, characterID))
+			{
+				Log.Warning("InteractableSystem", $"Currency ledger: async worker rejected the record for CharID={characterID}.");
+			}
+		}
+
 		private bool TryPersistMerchantAttributes(IPlayerCharacter character)
 		{
 			if (character == null ||

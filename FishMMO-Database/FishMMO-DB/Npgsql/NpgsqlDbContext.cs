@@ -113,6 +113,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterArchetypeEntity> CharacterArchetypes { get; set; }
 		/// <summary>Character guild memberships.</summary>
 		public DbSet<CharacterGuildEntity> CharacterGuilds { get; set; }
+		/// <summary>Currency holds taken while a transaction completes.</summary>
+		public DbSet<CurrencyEscrowEntity> CurrencyEscrow { get; set; }
 		/// <summary>Guilds.</summary>
 		public DbSet<GuildEntity> Guilds { get; set; }
 		/// <summary>Guild update records.</summary>

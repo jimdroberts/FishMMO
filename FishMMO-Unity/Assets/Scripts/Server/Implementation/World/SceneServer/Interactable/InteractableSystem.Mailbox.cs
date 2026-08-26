@@ -349,6 +349,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				attachment.Currency = msg.CurrencyAttachment;
+				RecordCurrencyMovement(character.ID, msg.CurrencyAttachment, CurrencyEscrowReason.MailAttachment, absorbed: true);
 			}
 
 			// ── Item ──────────────────────────────────────────────────────────
