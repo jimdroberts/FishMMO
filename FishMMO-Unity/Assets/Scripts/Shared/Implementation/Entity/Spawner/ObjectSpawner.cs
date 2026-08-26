@@ -729,21 +729,35 @@ namespace FishMMO.Shared
 					aiController.Initialize(spawnPosition);
 				}
 
-				// Set up spawnable references and add to the spawned dictionary.
+				// Set up spawnable references before the spawn, so the object's own start
+				// callbacks see the spawner that owns it.
 				ISpawnable nobSpawnable = nob.GetComponent<ISpawnable>();
 				if (nobSpawnable != null)
 				{
 					nobSpawnable.ObjectSpawner = this;
 					nobSpawnable.SpawnableSettings = spawnableSettings;
-
-					/* Indexer, not Add. A pooled object keeps its scene-object ID across a recycle,
-					 * so a stale entry left by an object that was despawned some other way would
-					 * make Add throw and abort the spawn tick. */
-					Spawned[nobSpawnable.ID] = nobSpawnable;
 				}
 
 				// Spawn the object on the server.
 				ServerManager.Spawn(nob, null, Transform.gameObject.scene);
+
+				/* Tracked AFTER the spawn, because the key is the scene-object ID and that ID is
+				 * assigned in OnStartServer — which runs inside ServerManager.Spawn. Registering
+				 * beforehand filed every first-time instance under ID 0: repeated spawns
+				 * overwrote one another, so Spawned.Count never approached MaxSpawnCount and the
+				 * cap at the top of this method never engaged, while Despawn's
+				 * Spawned.Remove(spawnable.ID) looked up the real (negative) ID, missed, and
+				 * returned early — leaving the object spawned forever with no respawn queued.
+				 * Pooled instances keep their ID across a recycle, so only the first spawn of
+				 * each instance was affected, which is exactly the initial world population.
+				 *
+				 * Indexer, not Add. A pooled object keeps its scene-object ID across a recycle,
+				 * so a stale entry left by an object that was despawned some other way would
+				 * make Add throw and abort the spawn tick. */
+				if (nobSpawnable != null)
+				{
+					Spawned[nobSpawnable.ID] = nobSpawnable;
+				}
 
 				// If we've reached the maximum spawn count, clear respawn timers.
 				if (Spawned.Count >= MaxSpawnCount)

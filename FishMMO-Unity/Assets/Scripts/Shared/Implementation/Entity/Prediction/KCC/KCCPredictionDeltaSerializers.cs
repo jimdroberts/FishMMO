@@ -90,48 +90,74 @@ namespace FishMMO.Shared
 			DeltaSerializerOption option)
 		{
 			byte flags = 0;
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			/* Two distinct questions, which this used to conflate into one `forceWrite`.
+			 *
+			 * `mustEmit` — any option other than Unset — means the caller needs this writer to emit
+			 * SOMETHING and return true, so the reader stays aligned. It does not mean "send every
+			 * field": the flags word already tells the reader which fields are present, so unchanged
+			 * fields can still be skipped. This is exactly how FishNet's own composite writers behave
+			 * (see Writer.WriteDeltaVector3, which emits an all-unset flags byte and returns true).
+			 *
+			 * `fullSerialize` means the receiver's previous value cannot be trusted — a new observer,
+			 * or the periodic resend — so every field must go out regardless of whether it changed.
+			 *
+			 * Treating RootSerialize as "write everything" cost most of the compression: FishNet passes
+			 * RootSerialize for every reconcile that is not a periodic full resend, and for every
+			 * replicate entry after the first, so the common case was writing a full snapshot plus a
+			 * flags word. Nested primitives are handed Unset unless this is a full serialize, for the
+			 * same reason — FishNet's scalar delta writers always emit when handed a non-Unset option. */
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
+			bool mustEmit = option != DeltaSerializerOption.Unset;
+			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
 			int flagPos = writer.Position;
+			int startLength = writer.Length;
 			writer.WriteUInt8Unpacked(0);
 
-			if (forceWrite || prev.MoveAxisForward != next.MoveAxisForward)
+			if (fullSerialize || prev.MoveAxisForward != next.MoveAxisForward)
 			{
 				writer.WriteSingle(next.MoveAxisForward);
 				flags |= FORWARD_BIT;
 			}
 
-			if (forceWrite || prev.MoveAxisRight != next.MoveAxisRight)
+			if (fullSerialize || prev.MoveAxisRight != next.MoveAxisRight)
 			{
 				writer.WriteSingle(next.MoveAxisRight);
 				flags |= RIGHT_BIT;
 			}
 
-			if (writer.WriteDeltaInt32(prev.MoveFlags, next.MoveFlags, option))
+			if (writer.WriteDeltaInt32(prev.MoveFlags, next.MoveFlags, fieldOption))
 				flags |= MOVE_FLAGS_BIT;
 
-			if (writer.WriteDeltaVector3(prev.CameraPosition, next.CameraPosition, option))
+			if (writer.WriteDeltaVector3(prev.CameraPosition, next.CameraPosition, fieldOption))
 				flags |= POSITION_BIT;
 
-			if (writer.WriteDeltaQuaternion(prev.CameraRotation, next.CameraRotation, option: option))
+			if (writer.WriteDeltaQuaternion(prev.CameraRotation, next.CameraRotation, option: fieldOption))
 				flags |= ROTATION_BIT;
 
-			if (writer.WriteDeltaInt32(prev.ActivationFlags, next.ActivationFlags, option))
+			if (writer.WriteDeltaInt32(prev.ActivationFlags, next.ActivationFlags, fieldOption))
 				flags |= ACTIVATION_FLAGS_BIT;
 
-			if (writer.WriteDeltaInt64(prev.QueuedAbilityID, next.QueuedAbilityID, option))
+			if (writer.WriteDeltaInt64(prev.QueuedAbilityID, next.QueuedAbilityID, fieldOption))
 				flags |= QUEUED_ABILITY_BIT;
 
-			if (flags != 0 || forceWrite)
+			if (flags != 0 || mustEmit)
 			{
-				int endPos = writer.Position;
-				writer.Position = flagPos;
-				writer.WriteUInt8Unpacked(flags);
-				writer.Position = endPos;
+				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
+				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
+				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
+				 * Writer. A packed backfill would overrun the placeholder and corrupt the
+				 * first field written after it. */
+				writer.InsertUInt8Unpacked(flags, flagPos);
 				return true;
 			}
 
+			/* Rewind Length as well as Position. Writer.Length only ever grows — every write
+			 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
+			 * restoring Position alone left this placeholder's bytes inside the sent segment
+			 * as trailing garbage whenever nothing was written after it. */
 			writer.Position = flagPos;
+			writer.Length = startLength;
 			return false;
 		}
 
@@ -251,39 +277,68 @@ namespace FishMMO.Shared
 			DeltaSerializerOption option)
 		{
 			byte flags = 0;
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			// See CharacterReplicateDataDeltaSerializer.WriteDelta for why these are three separate
+			// values rather than one forceWrite.
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
+			bool mustEmit = option != DeltaSerializerOption.Unset;
+			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
 			int flagPos = writer.Position;
+			int startLength = writer.Length;
 			writer.WriteUInt8Unpacked(0);
 
-			if (writer.WriteDeltaBoolean(prev.FoundAnyGround, next.FoundAnyGround, option))
+			/* Booleans are written and read explicitly rather than through FishNet's
+			 * Writer.WriteDeltaBoolean / Reader.ReadDeltaBoolean pair, which is not symmetric:
+			 * WriteDeltaBoolean calls WriteBoolean and so emits a byte, while ReadDeltaBoolean is
+			 * `return !valueA;` and consumes nothing. Every boolean routed through that pair
+			 * therefore left a stray byte in the stream and, on a forced serialize where the
+			 * writer emits a value equal to the previous one, handed back the inverse of the
+			 * correct answer. Both faults are in the vendored FishNet, so they are avoided here
+			 * rather than patched there — a plugin fix would be lost on the next upgrade. */
+			if (fullSerialize || prev.FoundAnyGround != next.FoundAnyGround)
+			{
+				writer.WriteBoolean(next.FoundAnyGround);
 				flags |= FOUND_GROUND_BIT;
+			}
 
-			if (writer.WriteDeltaBoolean(prev.IsStableOnGround, next.IsStableOnGround, option))
+			if (fullSerialize || prev.IsStableOnGround != next.IsStableOnGround)
+			{
+				writer.WriteBoolean(next.IsStableOnGround);
 				flags |= STABLE_BIT;
+			}
 
-			if (writer.WriteDeltaBoolean(prev.SnappingPrevented, next.SnappingPrevented, option))
+			if (fullSerialize || prev.SnappingPrevented != next.SnappingPrevented)
+			{
+				writer.WriteBoolean(next.SnappingPrevented);
 				flags |= SNAPPING_BIT;
+			}
 
-			if (writer.WriteDeltaVector3(prev.GroundNormal, next.GroundNormal, option))
+			if (writer.WriteDeltaVector3(prev.GroundNormal, next.GroundNormal, fieldOption))
 				flags |= GROUND_NORMAL_BIT;
 
-			if (writer.WriteDeltaVector3(prev.InnerGroundNormal, next.InnerGroundNormal, option))
+			if (writer.WriteDeltaVector3(prev.InnerGroundNormal, next.InnerGroundNormal, fieldOption))
 				flags |= INNER_NORMAL_BIT;
 
-			if (writer.WriteDeltaVector3(prev.OuterGroundNormal, next.OuterGroundNormal, option))
+			if (writer.WriteDeltaVector3(prev.OuterGroundNormal, next.OuterGroundNormal, fieldOption))
 				flags |= OUTER_NORMAL_BIT;
 
-			if (flags != 0 || forceWrite)
+			if (flags != 0 || mustEmit)
 			{
-				int endPos = writer.Position;
-				writer.Position = flagPos;
-				writer.WriteUInt8Unpacked(flags);
-				writer.Position = endPos;
+				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
+				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
+				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
+				 * Writer. A packed backfill would overrun the placeholder and corrupt the
+				 * first field written after it. */
+				writer.InsertUInt8Unpacked(flags, flagPos);
 				return true;
 			}
 
+			/* Rewind Length as well as Position. Writer.Length only ever grows — every write
+			 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
+			 * restoring Position alone left this placeholder's bytes inside the sent segment
+			 * as trailing garbage whenever nothing was written after it. */
 			writer.Position = flagPos;
+			writer.Length = startLength;
 			return false;
 		}
 
@@ -299,13 +354,13 @@ namespace FishMMO.Shared
 			CharacterTransientGroundingReport result = prev;
 
 			if ((flags & FOUND_GROUND_BIT) != 0)
-				result.FoundAnyGround = reader.ReadDeltaBoolean(prev.FoundAnyGround);
+				result.FoundAnyGround = reader.ReadBoolean();
 
 			if ((flags & STABLE_BIT) != 0)
-				result.IsStableOnGround = reader.ReadDeltaBoolean(prev.IsStableOnGround);
+				result.IsStableOnGround = reader.ReadBoolean();
 
 			if ((flags & SNAPPING_BIT) != 0)
-				result.SnappingPrevented = reader.ReadDeltaBoolean(prev.SnappingPrevented);
+				result.SnappingPrevented = reader.ReadBoolean();
 
 			if ((flags & GROUND_NORMAL_BIT) != 0)
 				result.GroundNormal = reader.ReadDeltaVector3(prev.GroundNormal);
@@ -445,72 +500,98 @@ namespace FishMMO.Shared
 			DeltaSerializerOption option)
 		{
 			ushort flags = 0;
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			// See CharacterReplicateDataDeltaSerializer.WriteDelta for why these are three separate
+			// values rather than one forceWrite.
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
+			bool mustEmit = option != DeltaSerializerOption.Unset;
+			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
 			int flagPos = writer.Position;
+			int startLength = writer.Length;
 			writer.WriteUInt16(0);
 
-			if (writer.WriteDeltaVector3(prev.Position, next.Position, option))
+			if (writer.WriteDeltaVector3(prev.Position, next.Position, fieldOption))
 				flags |= POSITION_BIT;
 
-			if (writer.WriteDeltaQuaternion(prev.Rotation, next.Rotation, option: option))
+			if (writer.WriteDeltaQuaternion(prev.Rotation, next.Rotation, option: fieldOption))
 				flags |= ROTATION_BIT;
 
-			if (writer.WriteDeltaVector3(prev.BaseVelocity, next.BaseVelocity, option))
+			if (writer.WriteDeltaVector3(prev.BaseVelocity, next.BaseVelocity, fieldOption))
 				flags |= VELOCITY_BIT;
 
-			if (writer.WriteDeltaInt64(prev.CurrentPlatformID, next.CurrentPlatformID, option))
+			if (writer.WriteDeltaInt64(prev.CurrentPlatformID, next.CurrentPlatformID, fieldOption))
 				flags |= PLATFORM_ID_BIT;
 
-			if (writer.WriteDeltaVector3(prev.LastPlatformPosition, next.LastPlatformPosition, option))
+			if (writer.WriteDeltaVector3(prev.LastPlatformPosition, next.LastPlatformPosition, fieldOption))
 				flags |= LAST_PLATFORM_POS_BIT;
 
-			if (writer.WriteDeltaBoolean(prev.MustUnground, next.MustUnground, option))
+			// Booleans written explicitly — see the note in
+			// CharacterTransientGroundingReportDeltaSerializer.WriteDelta.
+			if (fullSerialize || prev.MustUnground != next.MustUnground)
+			{
+				writer.WriteBoolean(next.MustUnground);
 				flags |= MUST_UNGROUND_BIT;
+			}
 
-			if (forceWrite || prev.MustUngroundTime != next.MustUngroundTime)
+			if (fullSerialize || prev.MustUngroundTime != next.MustUngroundTime)
 			{
 				writer.WriteSingle(next.MustUngroundTime);
 				flags |= MUST_UNGROUND_TIME_BIT;
 			}
 
-			if (writer.WriteDeltaBoolean(prev.LastMovementIterationFoundAnyGround, next.LastMovementIterationFoundAnyGround, option))
+			if (fullSerialize || prev.LastMovementIterationFoundAnyGround != next.LastMovementIterationFoundAnyGround)
+			{
+				writer.WriteBoolean(next.LastMovementIterationFoundAnyGround);
 				flags |= LAST_FOUND_GROUND_BIT;
+			}
 
-			if (CharacterTransientGroundingReportDeltaSerializer.WriteDelta(writer, prev.GroundingStatus, next.GroundingStatus, option))
+			if (CharacterTransientGroundingReportDeltaSerializer.WriteDelta(writer, prev.GroundingStatus, next.GroundingStatus, fieldOption))
 				flags |= GROUNDING_BIT;
 
-			if (writer.WriteDeltaVector3(prev.AttachedRigidbodyVelocity, next.AttachedRigidbodyVelocity, option))
+			if (writer.WriteDeltaVector3(prev.AttachedRigidbodyVelocity, next.AttachedRigidbodyVelocity, fieldOption))
 				flags |= ATTACHED_RB_VEL_BIT;
 
-			if (writer.WriteDeltaBoolean(prev.IsCrouching, next.IsCrouching, option))
+			if (fullSerialize || prev.IsCrouching != next.IsCrouching)
+			{
+				writer.WriteBoolean(next.IsCrouching);
 				flags |= IS_CROUCHING_BIT;
+			}
 
-			if (writer.WriteDeltaBoolean(prev.JumpRequested, next.JumpRequested, option))
+			if (fullSerialize || prev.JumpRequested != next.JumpRequested)
+			{
+				writer.WriteBoolean(next.JumpRequested);
 				flags |= JUMP_REQUESTED_BIT;
+			}
 
-			if (forceWrite || prev.TimeSinceLastAbleToJump != next.TimeSinceLastAbleToJump)
+			if (fullSerialize || prev.TimeSinceLastAbleToJump != next.TimeSinceLastAbleToJump)
 			{
 				writer.WriteSingle(next.TimeSinceLastAbleToJump);
 				flags |= TIME_SINCE_JUMP_BIT;
 			}
 
-			if (forceWrite || prev.TimeSinceJumpRequested != next.TimeSinceJumpRequested)
+			if (fullSerialize || prev.TimeSinceJumpRequested != next.TimeSinceJumpRequested)
 			{
 				writer.WriteSingle(next.TimeSinceJumpRequested);
 				flags |= TIME_SINCE_JUMP_REQ_BIT;
 			}
 
-			if (flags != 0 || forceWrite)
+			if (flags != 0 || mustEmit)
 			{
-				int endPos = writer.Position;
-				writer.Position = flagPos;
-				writer.WriteUInt16(flags);
-				writer.Position = endPos;
+				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
+				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
+				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
+				 * Writer. A packed backfill would overrun the placeholder and corrupt the
+				 * first field written after it. */
+				writer.InsertUInt16Unpacked(flags, flagPos);
 				return true;
 			}
 
+			/* Rewind Length as well as Position. Writer.Length only ever grows — every write
+			 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
+			 * restoring Position alone left this placeholder's bytes inside the sent segment
+			 * as trailing garbage whenever nothing was written after it. */
 			writer.Position = flagPos;
+			writer.Length = startLength;
 			return false;
 		}
 
@@ -549,13 +630,13 @@ namespace FishMMO.Shared
 				result.LastPlatformPosition = reader.ReadDeltaVector3(prev.LastPlatformPosition);
 
 			if ((flags & MUST_UNGROUND_BIT) != 0)
-				result.MustUnground = reader.ReadDeltaBoolean(prev.MustUnground);
+				result.MustUnground = reader.ReadBoolean();
 
 			if ((flags & MUST_UNGROUND_TIME_BIT) != 0)
 				result.MustUngroundTime = reader.ReadSingle();
 
 			if ((flags & LAST_FOUND_GROUND_BIT) != 0)
-				result.LastMovementIterationFoundAnyGround = reader.ReadDeltaBoolean(prev.LastMovementIterationFoundAnyGround);
+				result.LastMovementIterationFoundAnyGround = reader.ReadBoolean();
 
 			if ((flags & GROUNDING_BIT) != 0)
 				result.GroundingStatus = CharacterTransientGroundingReportDeltaSerializer.ReadDelta(reader, prev.GroundingStatus);
@@ -564,10 +645,10 @@ namespace FishMMO.Shared
 				result.AttachedRigidbodyVelocity = reader.ReadDeltaVector3(prev.AttachedRigidbodyVelocity);
 
 			if ((flags & IS_CROUCHING_BIT) != 0)
-				result.IsCrouching = reader.ReadDeltaBoolean(prev.IsCrouching);
+				result.IsCrouching = reader.ReadBoolean();
 
 			if ((flags & JUMP_REQUESTED_BIT) != 0)
-				result.JumpRequested = reader.ReadDeltaBoolean(prev.JumpRequested);
+				result.JumpRequested = reader.ReadBoolean();
 
 			if ((flags & TIME_SINCE_JUMP_BIT) != 0)
 				result.TimeSinceLastAbleToJump = reader.ReadSingle();

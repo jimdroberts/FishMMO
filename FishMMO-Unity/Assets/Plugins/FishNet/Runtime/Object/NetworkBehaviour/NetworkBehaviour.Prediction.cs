@@ -422,11 +422,20 @@ namespace FishNet.Object
              * The exception is for the owner, which we send the last replicate
              * tick so the owner knows which to roll back to. */
 
-#if DO_NOT_USE
+            /* FISHMMO EDIT: delta reconcile enabled.
+             *
+             * Upstream gates this behind `#if DO_NOT_USE`, a symbol defined nowhere, and ships the
+             * full serializer instead. The reconcile half of that gate compiles cleanly; only the
+             * replicate half has bit-rotted -- it still references locals and container types that
+             * were refactored away -- so the replicate sites further down are deliberately left on
+             * the full serializer. Measured saving on reconcile is ~87% of bytes per second at
+             * tickRate 30; on replicate it would be ~11%. See PredictionBandwidthBenchmarkTests.
+             *
+             * Enabled unconditionally rather than behind a scripting define on purpose: Unity's
+             * defines are per build target, so a symbol set for the Linux server build and missed
+             * on the Windows client build would leave the two ends disagreeing about the wire
+             * format with nothing to catch it. To roll back, revert this file. */
             methodWriter.WriteDeltaReconcile(lastReconcileData, reconcileData, GetDeltaSerializeOption());
-#else
-            methodWriter.WriteReconcile<T>(reconcileData);
-#endif
             lastReconcileData = reconcileData;
 
             PooledWriter writer;
@@ -1505,16 +1514,30 @@ namespace FishNet.Object
         public void Reconcile_Reader<T>(PooledReader reader, ref T lastReconcileData) where T : IReconcileData
         {
             uint tick = IsOwner ? PredictionManager.ClientStateTick : PredictionManager.ServerStateTick;
-#if DO_NOT_USE
-            T newData = reader.ReadDeltaReconcile(lastReconciledata);
-#else
-            T newData = reader.ReadReconcile<T>();
-#endif
+            /* FISHMMO EDIT: delta reconcile enabled -- see Reconcile_Send. Upstream's gated line
+             * read `lastReconciledata`, a casing typo for the parameter below, which is one reason
+             * that branch cannot have been compiled in a long time. */
+            T newData = reader.ReadDeltaReconcile(lastReconcileData);
+
+            /* FISHMMO EDIT: the baseline advances even when the state is dropped for being old.
+             *
+             * Reconcile_Send advances its own `lastReconcileData` unconditionally after every
+             * write, so the writer's baseline moves whether or not the reader keeps the result.
+             * Upstream returned before the assignment below, which left the reader decoding every
+             * later delta against a baseline the writer had already moved past -- one dropped
+             * state and the chain is wrong for the lifetime of the object. Advancing here keeps
+             * the two in lock-step; the state is still not APPLIED as a reconcile, which is what
+             * the old-state check is actually for.
+             *
+             * The periodic absolute snapshot (once per second, and whenever an observer is added)
+             * is the backstop if the chain is broken some other way: it does not depend on this
+             * baseline at all. See CharacterReconcileDataDeltaSerializer.WriteDelta. */
+            lastReconcileData = newData;
+
             //Do not process if an old state.
             if (tick < _lastReadReconcileRemoteTick)
                 return;
 
-            lastReconcileData = newData;
             lastReconcileData.SetTick(tick);
 
             /* This does not need to log to statistics -- network traffic

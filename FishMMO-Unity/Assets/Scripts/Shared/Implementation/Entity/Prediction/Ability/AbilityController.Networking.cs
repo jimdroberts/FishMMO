@@ -189,6 +189,15 @@ namespace FishMMO.Shared
 #endif
 
 		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int ABILITY_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
 		/// Reads the ability controller's state from the network payload, including ability RNG seed, known abilities, and cooldowns.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
@@ -200,6 +209,29 @@ namespace FishMMO.Shared
 
 			// Read the AbilitySeedGenerator seed
 			abilitySeed = reader.ReadInt32();
+
+			/* Where this behaviour's data ends, whatever happens below. Every early exit seeks
+			 * here before returning so the shared payload reader is left where the next
+			 * NetworkBehaviour expects it — see WritePayload.
+			 *
+			 * The length is checked against what the reader actually holds before it is used.
+			 * This frame exists to survive a payload that cannot be trusted, which makes the
+			 * frame's own length the one value that must be validated rather than believed:
+			 * Reader.Position is a plain field with no bounds check, so a length that overflows
+			 * int (anything >= 0x80000000 casts negative) or simply overruns the buffer would
+			 * turn a recoverable abort into an out-of-range read for whoever reads next. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("AbilityController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int abilityBlockLength = (int)declaredLength;
+			int abilityBlockEnd = reader.Position + abilityBlockLength;
 
 			// Instantiate the AbilitySeedGenerator
 			abilitySeedGenerator = new DeterministicRNG(abilitySeed);
@@ -218,6 +250,7 @@ namespace FishMMO.Shared
 			else if (abilityCount > maxPayloadAbilities)
 			{
 				Log.Error("AbilityController", $"ReadPayload: ability count {abilityCount} exceeds limit {maxPayloadAbilities}. Aborting payload read.");
+				reader.Position = abilityBlockEnd;
 				return;
 			}
 
@@ -247,9 +280,12 @@ namespace FishMMO.Shared
 				if (abilityEventsCount > maxPayloadAbilityEvents)
 				{
 					Log.Error("AbilityController", $"ReadPayload: ability event count {abilityEventsCount} exceeds limit {maxPayloadAbilityEvents} for abilityID {abilityID}. Aborting payload read.");
-					// The event count is outside the valid range. Attempting to drain an
-					// adversarially large count would stall the main thread before the
-					// Reader throws. The payload is unrecoverable — abort entirely.
+					/* The event count is outside the valid range. Draining an adversarially large
+					 * count would stall the main thread before the Reader threw, and the sizes to
+					 * skip are derived from the count just rejected — so this behaviour's own
+					 * state is unrecoverable. Seeking to the framed end still hands the next
+					 * behaviour a valid stream. */
+					reader.Position = abilityBlockEnd;
 					return;
 				}
 
@@ -278,6 +314,19 @@ namespace FishMMO.Shared
 				uint currentTick = cooldownController.ResolveAuthoritativeTick(base.TimeManager.LocalTick);
 				cooldownController.Read(reader, currentTick);
 			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block — a cooldown controller present on one peer and not the other,
+			 * say — the frame still absorbs it here rather than corrupting the behaviour after
+			 * this one, and says so once instead of failing invisibly. */
+			if (reader.Position != abilityBlockEnd)
+			{
+				Log.Error("AbilityController",
+					$"ReadPayload consumed {reader.Position - (abilityBlockEnd - abilityBlockLength)} of " +
+					$"{abilityBlockLength} framed bytes. Seeking to the end of the block; the ability " +
+					"state read above may be incomplete.");
+				reader.Position = abilityBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -294,6 +343,24 @@ namespace FishMMO.Shared
 			writer.WriteInt32(abilitySeed);
 
 			//Log.Debug($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+
+			/* Everything below is framed by a byte count.
+			 *
+			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
+			 * framing — ManagedObjects.WritePayload walks the whole list into a single writer, and
+			 * the reader walks it back the same way. A reader that stops early therefore does not
+			 * merely lose its own state: every behaviour after it in NetworkBehaviours reads from
+			 * the wrong offset. On an NPC that is Interactable.ReadPayload, which would register
+			 * the object in SceneObject.Objects under a garbage ID and quietly make it
+			 * uninteractable.
+			 *
+			 * ReadPayload has three defensive aborts for counts that cannot be trusted, and no way
+			 * to drain past them — the sizes it would need to skip are themselves derived from the
+			 * count it just rejected. The length recorded here is what lets it resynchronise
+			 * instead: seek to the end of this block and hand a valid stream to whoever reads
+			 * next. See ABILITY_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(ABILITY_PAYLOAD_LENGTH_BYTES);
+			int abilityBlockStart = writer.Position;
 
 			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);
@@ -325,6 +392,9 @@ namespace FishMMO.Shared
 			{
 				cooldownController.Write(writer);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - abilityBlockStart),
+				abilityBlockStart - ABILITY_PAYLOAD_LENGTH_BYTES);
 		}
 	}
 }

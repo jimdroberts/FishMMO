@@ -437,6 +437,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
 		/// <param name="reader">The network reader to read from.</param>
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int BUFF_PAYLOAD_LENGTH_BYTES = 4;
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			const int maxPayloadBuffs = 4096;
@@ -449,6 +458,29 @@ namespace FishMMO.Shared
 			MarkObservedBuffsDirty();
 
 			uint payloadReferenceTick = reader.ReadUInt32();
+
+			/* Where this behaviour's data ends, whatever happens below. Every early exit seeks
+			 * here before returning so the shared payload reader is left where the next
+			 * NetworkBehaviour expects it — see WritePayload. The length is validated against
+			 * what the reader actually holds first: this frame exists to survive a payload that
+			 * cannot be trusted, which makes the frame's own length the one value that must be
+			 * checked rather than believed. Reader.Position is a plain field with no bounds
+			 * check, so a length that overflows int or overruns the buffer would turn a
+			 * recoverable abort into an out-of-range read for whoever reads next. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("BuffController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
+				reader.Position += remainingBytes;
+				return;
+			}
+			int buffBlockLength = (int)declaredLength;
+			int buffBlockEnd = reader.Position + buffBlockLength;
+
 			uint currentReferenceTick = GetCurrentDomainTick();
 			bool deferPayloadTranslation = currentReferenceTick == TimeManager.UNSET_TICK &&
 				payloadReferenceTick != TimeManager.UNSET_TICK;
@@ -477,23 +509,14 @@ namespace FishMMO.Shared
 			int buffCount = reader.ReadInt32();
 			if (buffCount < 0 || buffCount > maxPayloadBuffs)
 			{
+				Log.Error("BuffController",
+					$"ReadPayload: buff count {buffCount} is outside [0, {maxPayloadBuffs}]. Aborting payload read.");
 				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
-				// Reader is shared with subsequent payload fields — drain the remaining
-				// buff bytes to keep the stream position valid. Cap iterations to
-				// maxPayloadBuffs to prevent a corrupted count from hanging the tick.
-				if (buffCount > 0)
-				{
-					int drainCount = System.Math.Min(buffCount, maxPayloadBuffs);
-					for (int d = 0; d < drainCount; d++)
-					{
-						reader.ReadInt32();  // templateID
-						reader.ReadUInt32(); // expiryTick
-						reader.ReadUInt32(); // nextTickTick
-						reader.ReadInt32();  // stacks
-						reader.ReadInt32();  // tickCount
-						reader.ReadInt32();  // cumulativeTickMultiplier
-					}
-				}
+				/* Seek, do not drain. The per-entry sizes a drain would need are derived from the
+				 * count that was just rejected, so a capped drain silently desynchronised the
+				 * stream for any count above the cap; the frame written by WritePayload is the
+				 * only thing that can resynchronise it. */
+				reader.Position = buffBlockEnd;
 				return;
 			}
 			preReplicatePayloadReferenceTick = deferPayloadTranslation
@@ -520,6 +543,18 @@ namespace FishMMO.Shared
 				buff.CumulativeTickMultiplier = cumulativeTickMultiplier;
 				Apply(buff, suppressFX: false);
 			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block the frame absorbs it here rather than corrupting the behaviour
+			 * after this one, and says so once instead of failing invisibly. */
+			if (reader.Position != buffBlockEnd)
+			{
+				Log.Error("BuffController",
+					$"ReadPayload consumed {reader.Position - (buffBlockEnd - buffBlockLength)} of " +
+					$"{buffBlockLength} framed bytes. Seeking to the end of the block; the buff " +
+					"state read above may be incomplete.");
+				reader.Position = buffBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -532,22 +567,38 @@ namespace FishMMO.Shared
 		{
 			writer.WriteUInt32(GetCurrentDomainTick());
 
+			/* Everything below is framed by a byte count.
+			 *
+			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
+			 * framing, so a reader that stops early leaves every behaviour after it reading from
+			 * the wrong offset. ReadPayload used to defend against an untrustworthy buff count by
+			 * draining it, but the drain had to be capped at maxPayloadBuffs to stop an
+			 * adversarial count stalling the main thread — which left every count above that cap
+			 * desynchronising the stream anyway. A length cannot be drained past; it can be
+			 * seeked to. See BUFF_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(BUFF_PAYLOAD_LENGTH_BYTES);
+			int buffBlockStart = writer.Position;
+
 			if (buffs.Count < 1)
 			{
 				writer.WriteInt32(0);
-				return;
+			}
+			else
+			{
+				writer.WriteInt32(buffs.Count);
+				foreach (Buff buff in buffs.Values)
+				{
+					writer.WriteInt32(buff.Template.ID);
+					writer.WriteUInt32(buff.ExpiryTick);
+					writer.WriteUInt32(buff.NextTickTick);
+					writer.WriteInt32(buff.Stacks);
+					writer.WriteInt32(buff.TickCount);
+					writer.WriteInt32(buff.CumulativeTickMultiplier);
+				}
 			}
 
-			writer.WriteInt32(buffs.Count);
-			foreach (Buff buff in buffs.Values)
-			{
-				writer.WriteInt32(buff.Template.ID);
-				writer.WriteUInt32(buff.ExpiryTick);
-				writer.WriteUInt32(buff.NextTickTick);
-				writer.WriteInt32(buff.Stacks);
-				writer.WriteInt32(buff.TickCount);
-				writer.WriteInt32(buff.CumulativeTickMultiplier);
-			}
+			writer.InsertUInt32Unpacked((uint)(writer.Position - buffBlockStart),
+				buffBlockStart - BUFF_PAYLOAD_LENGTH_BYTES);
 		}
 
 		/// <inheritdoc />

@@ -467,6 +467,15 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int ATTRIBUTE_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
 		/// Reads attribute and resource attribute base values from the network payload and applies them.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
@@ -474,6 +483,26 @@ namespace FishMMO.Shared
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			const int maxPayloadAttributes = 4096;
+
+			/* Where this behaviour's data ends, whatever happens below. See WritePayload for why
+			 * the block is framed at all; in short, FishNet packs every NetworkBehaviour's spawn
+			 * payload into one buffer with no per-behaviour framing, so a reader that stops early
+			 * leaves every behaviour after it reading from the wrong offset. On an NPC prefab this
+			 * controller is read before NPC.ReadPayload, which takes the scene-object ID a client
+			 * later names when it asks to loot the corpse — so an abort here used to register that
+			 * corpse under a garbage ID and quietly make it unlootable. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("CharacterAttributeController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int attributeBlockLength = (int)declaredLength;
+			int attributeBlockEnd = reader.Position + attributeBlockLength;
 
 			int attributeCount = reader.ReadInt32();
 			if (attributeCount < 0)
@@ -484,6 +513,7 @@ namespace FishMMO.Shared
 			else if (attributeCount > maxPayloadAttributes)
 			{
 				Log.Error("CharacterAttributeController", $"ReadPayload: attribute count {attributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
+				reader.Position = attributeBlockEnd;
 				return;
 			}
 
@@ -506,6 +536,7 @@ namespace FishMMO.Shared
 			else if (resourceAttributeCount > maxPayloadAttributes)
 			{
 				Log.Error("CharacterAttributeController", $"ReadPayload: resource attribute count {resourceAttributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
+				reader.Position = attributeBlockEnd;
 				return;
 			}
 
@@ -519,6 +550,18 @@ namespace FishMMO.Shared
 					SetResourceAttribute(templateID, value, currentValue);
 				}
 			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block the frame absorbs it here rather than corrupting the behaviour
+			 * after this one, and says so once instead of failing invisibly. */
+			if (reader.Position != attributeBlockEnd)
+			{
+				Log.Error("CharacterAttributeController",
+					$"ReadPayload consumed {reader.Position - (attributeBlockEnd - attributeBlockLength)} of " +
+					$"{attributeBlockLength} framed bytes. Seeking to the end of the block; the attribute " +
+					"state read above may be incomplete.");
+				reader.Position = attributeBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -530,6 +573,22 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to serialize attribute data into.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			/* Everything below is framed by a byte count.
+			 *
+			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
+			 * framing — ManagedObjects.WritePayload walks the whole list into a single writer, and
+			 * the reader walks it back the same way. A reader that stops early therefore does not
+			 * merely lose its own state: every behaviour after it in NetworkBehaviours reads from
+			 * the wrong offset.
+			 *
+			 * ReadPayload has two defensive aborts for counts that cannot be trusted, and no way
+			 * to drain past them — the sizes it would need to skip are themselves derived from the
+			 * count it just rejected. The length recorded here is what lets it resynchronise
+			 * instead: seek to the end of this block and hand a valid stream to whoever reads
+			 * next. See ATTRIBUTE_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(ATTRIBUTE_PAYLOAD_LENGTH_BYTES);
+			int attributeBlockStart = writer.Position;
+
 			// Sort keys for deterministic wire order. WritePayload is a one-shot
 			// initialisation call, so the allocation is acceptable.
 			var sortedAttrIDs = new List<int>(Attributes.Keys);
@@ -554,6 +613,9 @@ namespace FishMMO.Shared
 				writer.WriteInt32(resourceAttribute.Value);
 				writer.WriteSingle(resourceAttribute.CurrentValue);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - attributeBlockStart),
+				attributeBlockStart - ATTRIBUTE_PAYLOAD_LENGTH_BYTES);
 		}
 
 		/// <summary>

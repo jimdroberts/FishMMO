@@ -291,6 +291,15 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private bool IsLocalOwner => base.NetworkObject != null && base.IsOwner;
 
+		/// <summary>
+		/// Width of the byte count that frames this controller's cooldown block.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int COOLDOWN_PAYLOAD_LENGTH_BYTES = 4;
+
 		public void Read(Reader reader, uint currentTick)
 		{
 			const int maxPayloadCooldowns = 4096;
@@ -299,6 +308,27 @@ namespace FishMMO.Shared
 			keysToRemove.Clear();
 
 			uint payloadReferenceTick = reader.ReadUInt32();
+
+			/* Where this block ends, whatever happens below. This runs nested inside
+			 * AbilityController's own frame, on the shared spawn payload buffer that FishNet fills
+			 * for every NetworkBehaviour with no per-behaviour framing — so an early return here
+			 * used to leave the outer reader misaligned. The length is validated against what the
+			 * reader actually holds first, because a frame that exists to survive a corrupt payload
+			 * must not trust its own length: Reader.Position is a plain field with no bounds check. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("CooldownController",
+					$"Read: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"payload. The stream cannot be resynchronised; discarding the remainder.");
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
+				reader.Position += remainingBytes;
+				return;
+			}
+			int cooldownBlockLength = (int)declaredLength;
+			int cooldownBlockEnd = reader.Position + cooldownBlockLength;
+
 			bool deferPayloadTranslation = currentTick == TimeManager.UNSET_TICK &&
 				payloadReferenceTick != TimeManager.UNSET_TICK;
 			int tickOffset = deferPayloadTranslation ? 0 :
@@ -307,23 +337,13 @@ namespace FishMMO.Shared
 			int cooldownCount = reader.ReadInt32();
 			if (cooldownCount < 0 || cooldownCount > maxPayloadCooldowns)
 			{
+				Log.Error("CooldownController",
+					$"Read: cooldown count {cooldownCount} is outside [0, {maxPayloadCooldowns}]. Aborting payload read.");
 				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
-				// Reader is shared with subsequent payload fields — drain the remaining
-				// cooldown bytes to keep the stream position valid. Without this,
-				// everything after this call reads corrupted data.
-				// Cap iterations to maxPayloadCooldowns — a corrupted count near
-				// int.MaxValue would hang the tick loop otherwise.
-				if (cooldownCount > 0)
-				{
-					Log.Warning("CooldownController", $"Payload cooldown count {cooldownCount} exceeds limit {maxPayloadCooldowns}. Draining up to {maxPayloadCooldowns} entries.");
-					int drainCount = System.Math.Min(cooldownCount, maxPayloadCooldowns);
-					for (int d = 0; d < drainCount; d++)
-					{
-						reader.ReadInt64();  // abilityID
-						reader.ReadUInt32(); // startTick
-						reader.ReadUInt32(); // durationTicks
-					}
-				}
+				/* Seek, do not drain. The per-entry sizes a drain would need come from the count
+				 * that was just rejected, so the old capped drain silently desynchronised the
+				 * stream for every count above the cap. */
+				reader.Position = cooldownBlockEnd;
 				return;
 			}
 			preReplicatePayloadReferenceTick = deferPayloadTranslation
@@ -349,6 +369,18 @@ namespace FishMMO.Shared
 
 				CooldownInstance cooldown = new CooldownInstance(startTick, durationTicks, td);
 				cooldowns[abilityID] = cooldown;
+			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block the frame absorbs it here rather than corrupting whatever the
+			 * outer reader parses next, and says so once instead of failing invisibly. */
+			if (reader.Position != cooldownBlockEnd)
+			{
+				Log.Error("CooldownController",
+					$"Read consumed {reader.Position - (cooldownBlockEnd - cooldownBlockLength)} of " +
+					$"{cooldownBlockLength} framed bytes. Seeking to the end of the block; the cooldown " +
+					"state read above may be incomplete.");
+				reader.Position = cooldownBlockEnd;
 			}
 
 			snapshotDirty = true;
@@ -387,6 +419,12 @@ namespace FishMMO.Shared
 		public void Write(Writer writer)
 		{
 			writer.WriteUInt32(GetCurrentDomainTick());
+
+			/* Everything below is framed by a byte count so Read can resynchronise after rejecting
+			 * an untrustworthy count. See COOLDOWN_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(COOLDOWN_PAYLOAD_LENGTH_BYTES);
+			int cooldownBlockStart = writer.Position;
+
 			writer.WriteInt32(cooldowns.Count);
 			foreach (KeyValuePair<long, CooldownInstance> cooldown in cooldowns)
 			{
@@ -394,6 +432,9 @@ namespace FishMMO.Shared
 				writer.WriteUInt32(cooldown.Value.StartTick);
 				writer.WriteUInt32(cooldown.Value.DurationTicks);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - cooldownBlockStart),
+				cooldownBlockStart - COOLDOWN_PAYLOAD_LENGTH_BYTES);
 		}
 
 		/// <summary>

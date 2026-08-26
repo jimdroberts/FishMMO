@@ -238,9 +238,45 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc />
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		private const int EQUIPMENT_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
+		/// Upper bound on equipped items accepted from a spawn payload. Well above the number of
+		/// equipment slots; exists so a corrupt count cannot drive an unbounded read loop.
+		/// </summary>
+		private const int MAX_PAYLOAD_EQUIPMENT = 256;
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
+			/* Where this behaviour's data ends. FishNet packs every NetworkBehaviour's spawn
+			 * payload into one buffer with no per-behaviour framing, so an abort here would leave
+			 * every behaviour after this one reading from the wrong offset. The length is validated
+			 * against what the reader holds first; Reader.Position has no bounds check. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("EquipmentController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in " +
+					"the spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int equipmentBlockLength = (int)declaredLength;
+			int equipmentBlockEnd = reader.Position + equipmentBlockLength;
+
 			int itemCount = reader.ReadInt32();
+			if (itemCount < 0 || itemCount > MAX_PAYLOAD_EQUIPMENT)
+			{
+				Log.Error("EquipmentController",
+					$"ReadPayload: item count {itemCount} is outside [0, {MAX_PAYLOAD_EQUIPMENT}]. Aborting payload read.");
+				reader.Position = equipmentBlockEnd;
+				return;
+			}
+
 			for (int i = 0; i < itemCount; ++i)
 			{
 				long id = reader.ReadInt64();
@@ -257,16 +293,35 @@ namespace FishMMO.Shared
 					item.Equippable.Equip(Character);
 				}
 			}
+
+			/* Belt and braces on the success path: the frame absorbs any shape disagreement here
+			 * rather than corrupting the behaviour after this one. */
+			if (reader.Position != equipmentBlockEnd)
+			{
+				Log.Error("EquipmentController",
+					$"ReadPayload consumed {reader.Position - (equipmentBlockEnd - equipmentBlockLength)} of " +
+					$"{equipmentBlockLength} framed bytes. Seeking to the end of the block; the equipment " +
+					"state read above may be incomplete.");
+				reader.Position = equipmentBlockEnd;
+			}
+
 			equipmentSnapshotDirty = true;
 		}
 
 		/// <inheritdoc />
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			/* Everything below is framed by a byte count so ReadPayload can resynchronise after
+			 * rejecting an untrustworthy count. See EQUIPMENT_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(EQUIPMENT_PAYLOAD_LENGTH_BYTES);
+			int equipmentBlockStart = writer.Position;
+
 			if (Items == null ||
 				Items.Count < 1)
 			{
 				writer.WriteInt32(0);
+				writer.InsertUInt32Unpacked((uint)(writer.Position - equipmentBlockStart),
+					equipmentBlockStart - EQUIPMENT_PAYLOAD_LENGTH_BYTES);
 				return;
 			}
 
@@ -283,6 +338,9 @@ namespace FishMMO.Shared
 				writer.WriteInt32(item.IsGenerated ? item.Generator.Seed : 0);
 				writer.WriteUInt32(item.IsStackable ? item.Stackable.Amount : 0);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - equipmentBlockStart),
+				equipmentBlockStart - EQUIPMENT_PAYLOAD_LENGTH_BYTES);
 		}
 
 #if !UNITY_SERVER
