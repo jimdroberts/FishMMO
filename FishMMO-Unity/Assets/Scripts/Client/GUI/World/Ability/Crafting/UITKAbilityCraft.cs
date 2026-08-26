@@ -584,10 +584,12 @@ namespace FishMMO.Client
 				Log.Debug("UITKAbilityCraft", "CurrencyTemplateID is not set.");
 				return;
 			}
+			/* CanAfford reads the BASE value, which is what the server charges against. This used
+			 * to test FinalValue — the base plus every modifier in force — so a character with a
+			 * currency-boosting buff was offered a craft the server would then refuse, and the
+			 * request simply appeared to do nothing. */
 			if (Character == null ||
-				!Character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(CurrencyTemplateID, out CharacterAttribute currency) ||
-				currency.FinalValue < price)
+				!CharacterCurrency.CanAfford(Character, CurrencyTemplateID, price))
 			{
 				return;
 			}

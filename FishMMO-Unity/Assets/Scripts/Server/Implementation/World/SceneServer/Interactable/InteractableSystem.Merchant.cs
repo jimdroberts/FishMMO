@@ -202,8 +202,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Log.Debug("InteractableSystem", "currencyTemplate is null.");
 				return false;
 			}
-			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+			/* Balance, not the attribute. CharacterCurrency reads the BASE value, which is the
+			 * distinction this path has to get right: FinalValue includes every modifier in
+			 * force, and spending against it lets a currency buff be spent as money. */
+			if (!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance))
 			{
 				return false;
 			}
@@ -216,7 +218,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/* Long arithmetic throughout. Price and quantity are both ints, and a client asking
 			 * for int.MaxValue of a costly item would overflow the product into a negative
 			 * "total" that every affordability test passes. */
-			long affordable = currency.Value / itemTemplate.Price;
+			long affordable = balance / itemTemplate.Price;
 			quantity = Math.Min(quantity, affordable);
 			if (quantity < 1)
 			{
@@ -224,20 +226,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			long total = quantity * itemTemplate.Price;
-			if (total > int.MaxValue || currency.Value < total)
+			if (total > int.MaxValue || balance < total)
 			{
 				return false;
 			}
 
 			int charge = (int)total;
 
-			// Deduct, then snapshot: the persist reads the in-memory values as they stand now.
-			currency.AddValue(-charge);
-
-			if (!TryPersistMerchantAttributes(character))
+			/* Deduct, persist, and refund if the write is refused — TrySpend owns that ordering
+			 * so it cannot drift from the other paths that do the same thing. */
+			if (!CharacterCurrency.TrySpend(character, currencyTemplate, charge, () => TryPersistMerchantAttributes(character)))
 			{
-				Log.Warning("InteractableSystem", $"TryPurchaseItem: currency persist rejected for CharID={character.ID}; refunding {charge}.");
-				currency.AddValue(charge);
+				Log.Warning("InteractableSystem", $"TryPurchaseItem: charge of {charge} refused for CharID={character.ID}.");
 				return false;
 			}
 
@@ -247,7 +247,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				/* No room, or the add was refused. Nothing was granted, so put the money back and
 				 * persist the refund — the deduction has already been enqueued and would otherwise
 				 * be the only half of the transaction the database ever sees. */
-				currency.AddValue(charge);
+				CharacterCurrency.TryAdd(character, currencyTemplate, charge);
 				if (!TryPersistMerchantAttributes(character))
 				{
 					Log.Error("InteractableSystem", $"TryPurchaseItem: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
@@ -341,9 +341,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				/* Checked before the item is removed: a character with no currency attribute
+				 * cannot be paid, and finding that out afterwards would take the item and give
+				 * nothing back. TryGetBalance answers presence as well as value. */
 				if (currencyTemplate == null ||
-					!character.TryGet(out ICharacterAttributeController attributeController) ||
-					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+					!CharacterCurrency.TryGetBalance(character, currencyTemplate, out _))
 				{
 					return;
 				}
@@ -439,7 +441,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				payout = (int)total;
 				if (payout > 0)
 				{
-					currency.AddValue(payout);
+					CharacterCurrency.TryAdd(character, currencyTemplate, payout);
 					if (!TryPersistMerchantAttributes(character))
 					{
 						Log.Error("InteractableSystem", $"MerchantSell: payout persist rejected for CharID={characterID}; the item removal is recorded but the payout is not.");
@@ -545,14 +547,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Log.Debug("InteractableSystem", "currencyTemplate is null.");
 				return;
 			}
-			/* Value, not FinalValue. AddValue below writes the base value; FinalValue is the base
-			 * plus every modifier in force, so testing one and writing the other let a character
-			 * with a currency-boosting buff spend money it did not have and go negative. Same
-			 * defect, same fix, as the item purchase path. */
+			/* CharacterCurrency reads the BASE value. FinalValue is the base plus every modifier
+			 * in force, and testing one while writing the other let a character with a
+			 * currency-boosting buff spend money it did not have — the same defect the item
+			 * purchase path had. Reading the balance explicitly rather than calling CanAfford
+			 * keeps the "no currency attribute at all" case failing, which CanAfford would treat
+			 * as affordable for a zero price. */
 			int price = priceSelector(template);
-			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-				currency.Value < price)
+			if (!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance) ||
+				balance < price)
 			{
 				Log.Debug("InteractableSystem", "Not enough currency!");
 				return;
@@ -577,8 +580,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// learn the ability or event
 			learnFunc(abilityController, new List<TTemplate> { template });
 
-			// remove the price from the characters currency
-			currency.AddValue(-price);
+			/* Deducted without a persistence callback, deliberately. TrySpend would refund a
+			 * refused write, and this path must not: the ability has already been granted above,
+			 * so undoing the charge would hand it over for free. The warning below records the
+			 * in-memory-only deduction instead, which is the trade-off the RISK note describes. */
+			CharacterCurrency.TrySpend(character, currencyTemplate, price);
 
 			/* Enqueued AFTER the deduction, because TryPersistMerchantAttributes snapshots the
 			 * in-memory values as they stand when it is called. Enqueuing it first — which the

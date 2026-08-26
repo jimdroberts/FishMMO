@@ -56,6 +56,45 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Reads a character's currency balance by template ID.
+		/// </summary>
+		/// <remarks>
+		/// For callers that hold an ID rather than the asset — the client configures its currency
+		/// as a template ID, and resolving it to a template only to look the attribute back up
+		/// would be a longer route to the same answer.
+		/// </remarks>
+		public static bool TryGetBalance(ICharacter character, int templateID, out long balance)
+		{
+			balance = 0;
+
+			if (character == null || templateID == 0)
+			{
+				return false;
+			}
+
+			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(templateID, out CharacterAttribute currency))
+			{
+				return false;
+			}
+
+			balance = currency.Value;
+			return true;
+		}
+
+		/// <summary>
+		/// True when the character holds at least <paramref name="amount"/>, by template ID.
+		/// </summary>
+		public static bool CanAfford(ICharacter character, int templateID, long amount)
+		{
+			if (amount <= 0)
+			{
+				return true;
+			}
+			return TryGetBalance(character, templateID, out long balance) && balance >= amount;
+		}
+
+		/// <summary>
 		/// True when the character holds at least <paramref name="amount"/>.
 		/// </summary>
 		/// <remarks>
