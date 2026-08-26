@@ -1,0 +1,21 @@
+{
+    "name": "FishMMO.Render.Scratch",
+    "rootNamespace": "FishMMO.RenderScratch",
+    "references": [
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

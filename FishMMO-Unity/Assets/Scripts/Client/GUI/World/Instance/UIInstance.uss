@@ -182,6 +182,15 @@
     checkmark far from the words it belongs to. Pinned to its content here rather
     than in the theme, because a form full of aligned toggles genuinely wants the
     column and a lone one in a footer does not.
+
+    overflow is opened up because pinning a label to its content leaves it about
+    three pixels wider than the text it holds, and a base-field label clips to an
+    ellipsis by default. Three pixels is not enough margin to survive the dynamic
+    font atlas resolving a glyph slightly wider than it measured, and the failure
+    is silent and intermittent: the same toggle renders "Open to others" in one
+    panel and "Open to othe..." in another. Overshoot now draws into the label's
+    own right margin instead, which is twice as wide as anything it can overshoot
+    by.
 */
 .instance-privacy > .unity-base-field__label {
     min-width: auto;
@@ -189,6 +198,8 @@
     margin-right: 6px;
     flex-grow: 0;
     flex-shrink: 0;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 

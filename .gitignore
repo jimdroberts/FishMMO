@@ -57,6 +57,10 @@ Configuration.cfg
 # the repository root, so saving one from the settings screen lands here.
 UIProfiles/
 
+# Rendered UI panel previews. Generated build output, kept out of the repo but
+# deliberately durable — /tmp does not survive a reboot.
+PanelRenders/
+
 # --- .NET / NuGet ---
 project.lock.json
 *.pyc

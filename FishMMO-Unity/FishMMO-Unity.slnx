@@ -10,6 +10,7 @@
   <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
   <Project Path="FishMMO.UnitTests.csproj" />
+  <Project Path="FishMMO.Render.Scratch.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="WebTransport.csproj" />
   <Project Path="FishNet.Demos.csproj" />
