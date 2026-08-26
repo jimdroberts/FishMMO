@@ -237,6 +237,8 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 6349228138187238843}
   _networkObjectCache: {fileID: 6349228138187238843}
+  StuckTimeout: 2.5
+  StuckWarpTimeout: 8
   SweepHits:
   - {fileID: 0}
   - {fileID: 0}
@@ -280,11 +282,13 @@ MonoBehaviour:
   AggressionDecayRate: 3
   AggressionStaleTimeout: 30
   AggressionVarietyChance: 0.15
+  TurnRate: 8
   RepathInterval: 0.5
   eyeTransform: {fileID: 0}
   LookTarget: {fileID: 0}
   RandomizeState: 0
   Waypoints: []
+  AiTickRate: 8
 --- !u!114 &2119787057571980410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -384,13 +388,19 @@ MonoBehaviour:
   _componentIndexCache: 7
   _addedNetworkObject: {fileID: 6349228138187238843}
   _networkObjectCache: {fileID: 6349228138187238843}
-  characterNameLabel: {fileID: 0}
-  characterGuildLabel: {fileID: 0}
-  meshRoot: {fileID: 0}
+  characterNameLabel: {fileID: 308152107889211198}
+  characterGuildLabel: {fileID: 8706110007537972994}
+  meshRoot: {fileID: 8610693803234203897}
   npcSeed: 0
   npcGender: 0
   IsCharmable: 0
+  MinimumRespawnTime: 30
+  MaximumRespawnTime: 60
   CorpseDecayDuration: 30
+  EmptyCorpseDecayDuration: 5
+  CorpseInteractionRange: 4
+  LootTable: {fileID: 0}
+  onInteractTriggers: []
   AttributeBonuses: {fileID: 0}
   Abilities: []
   objectSpawner: {fileID: 0}
@@ -744,6 +754,18 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 4485576106668420189}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &308152107889211198 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+    type: 3}
+  m_PrefabInstance: {fileID: 4485576106668420189}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393abe25c2024ca5a6c1dca89ead0737, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
 --- !u!1001 &4804041099325959265
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -883,6 +905,18 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 4804041099325959265}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &8706110007537972994 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+    type: 3}
+  m_PrefabInstance: {fileID: 4804041099325959265}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393abe25c2024ca5a6c1dca89ead0737, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
 --- !u!1001 &8610693803233813603
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -205,6 +205,8 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
+  StuckTimeout: 2.5
+  StuckWarpTimeout: 8
   SweepHits:
   - {fileID: 0}
   - {fileID: 0}
@@ -248,11 +250,13 @@ MonoBehaviour:
   AggressionDecayRate: 3
   AggressionStaleTimeout: 30
   AggressionVarietyChance: 0.15
+  TurnRate: 8
   RepathInterval: 0.5
   eyeTransform: {fileID: 0}
   LookTarget: {fileID: 0}
   RandomizeState: 0
   Waypoints: []
+  AiTickRate: 8
 --- !u!114 &2119787057571980410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -354,13 +358,19 @@ MonoBehaviour:
   _componentIndexCache: 5
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
-  characterNameLabel: {fileID: 0}
-  characterGuildLabel: {fileID: 0}
-  meshRoot: {fileID: 0}
+  characterNameLabel: {fileID: 2183261051225038217}
+  characterGuildLabel: {fileID: 182486481576893756}
+  meshRoot: {fileID: 1810834502184966116}
   npcSeed: 0
   npcGender: 0
   IsCharmable: 1
+  MinimumRespawnTime: 30
+  MaximumRespawnTime: 60
   CorpseDecayDuration: 30
+  EmptyCorpseDecayDuration: 5
+  CorpseInteractionRange: 4
+  LootTable: {fileID: 0}
+  onInteractTriggers: []
   AttributeBonuses: {fileID: 11400000, guid: 0f2ff92179a6d1b4c9dde7ad6a4afdb0, type: 2}
   Abilities: []
   objectSpawner: {fileID: 0}
@@ -807,6 +817,18 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2de080fd835ec6747b1b1ff8ed6870f6, type: 3}
+--- !u!114 &2183261051225038217 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+    type: 3}
+  m_PrefabInstance: {fileID: 2609186560834504426}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393abe25c2024ca5a6c1dca89ead0737, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
 --- !u!224 &2183261051225038219 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
@@ -946,6 +968,18 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: dc8cc64088072ae47872cf54e7cf6b6f, type: 3}
+--- !u!114 &182486481576893756 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+    type: 3}
+  m_PrefabInstance: {fileID: 4103170126109918815}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393abe25c2024ca5a6c1dca89ead0737, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
 --- !u!224 &182486481576893758 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: dc8cc64088072ae47872cf54e7cf6b6f,
