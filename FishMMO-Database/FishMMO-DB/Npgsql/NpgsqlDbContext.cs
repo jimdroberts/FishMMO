@@ -123,6 +123,10 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<GuildRankEntity> GuildRanks { get; set; }
 		/// <summary>Pending guild recruitment applications.</summary>
 		public DbSet<GuildApplicationEntity> GuildApplications { get; set; }
+		/// <summary>Ownership of authored plots of land.</summary>
+		public DbSet<PlotEntity> Plots { get; set; }
+		/// <summary>Plot update records.</summary>
+		public DbSet<PlotUpdateEntity> PlotUpdates { get; set; }
 		/// <summary>Character party memberships.</summary>
 		public DbSet<CharacterPartyEntity> CharacterParties { get; set; }
 		/// <summary>Parties.</summary>
