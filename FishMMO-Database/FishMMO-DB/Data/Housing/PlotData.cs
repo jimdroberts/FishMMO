@@ -34,7 +34,13 @@ namespace FishMMO.Database.Data
 		/// <summary>When the current owner claimed the plot, or null while unclaimed.</summary>
 		public readonly DateTime? TimeClaimed;
 
-		public PlotData(long id, long worldServerID, string sceneName, string plotKey, long ownerCharacterID, long ownerGuildID, DateTime? timeClaimed)
+		/// <summary>When the next tax payment falls due, or null while unowned.</summary>
+		public readonly DateTime? TaxDueUtc;
+
+		/// <summary>When the owner first failed to pay, or null while up to date.</summary>
+		public readonly DateTime? TaxDelinquentSinceUtc;
+
+		public PlotData(long id, long worldServerID, string sceneName, string plotKey, long ownerCharacterID, long ownerGuildID, DateTime? timeClaimed, DateTime? taxDueUtc = null, DateTime? taxDelinquentSinceUtc = null)
 		{
 			ID = id;
 			WorldServerID = worldServerID;
@@ -43,6 +49,8 @@ namespace FishMMO.Database.Data
 			OwnerCharacterID = ownerCharacterID;
 			OwnerGuildID = ownerGuildID;
 			TimeClaimed = timeClaimed;
+			TaxDueUtc = taxDueUtc;
+			TaxDelinquentSinceUtc = taxDelinquentSinceUtc;
 		}
 	}
 }

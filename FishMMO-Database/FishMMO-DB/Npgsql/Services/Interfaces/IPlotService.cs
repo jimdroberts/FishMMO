@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,10 +58,15 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>
 		/// 1 when this call took the plot, 0 when it was already owned or does not exist.
 		/// </returns>
+		/// <param name="taxDueUtc">When the first tax payment falls due, or null for untaxed land.</param>
 		/// <remarks>
 		/// Exactly one of the two identifiers may be non-zero.
+		///
+		/// <para>The first tax date is set by the same statement that takes the plot, so there is no
+		/// moment where land is owned but untaxed. Set separately, a crash in the gap would leave a
+		/// plot nobody ever has to pay for.</para>
 		/// </remarks>
-		Task<DatabaseResult<int>> TryClaimAsync(long plotID, long ownerCharacterID, long ownerGuildID, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> TryClaimAsync(long plotID, long ownerCharacterID, long ownerGuildID, DateTime? taxDueUtc, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Releases a plot back to the unowned pool, if the expected owner still holds it.
@@ -70,6 +76,54 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="expectedOwnerGuildID">The guild believed to own it, or zero.</param>
 		/// <returns>1 when released, 0 when somebody else owns it or it was already unowned.</returns>
 		Task<DatabaseResult<int>> ReleaseAsync(long plotID, long expectedOwnerCharacterID, long expectedOwnerGuildID, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches owned plots whose tax has fallen due.
+		/// </summary>
+		/// <param name="worldServerID">The world whose land to sweep.</param>
+		/// <param name="asOfUtc">The moment to judge against.</param>
+		/// <param name="limit">Most rows to return.</param>
+		/// <remarks>
+		/// Bounded, because a server that has been down over a billing period comes back to every
+		/// plot at once and an unbounded sweep would try to charge all of them in one pass.
+		/// </remarks>
+		Task<DatabaseResult<List<PlotData>>> FetchTaxDueAsync(long worldServerID, DateTime asOfUtc, int limit, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Moves a plot's tax date forward, if it still holds the date the caller charged against.
+		/// </summary>
+		/// <param name="plotID">The plot being charged.</param>
+		/// <param name="expectedDueUtc">The due date the caller read.</param>
+		/// <param name="nextDueUtc">The date the next payment falls due.</param>
+		/// <returns>1 when this call advanced it, 0 when somebody else already did.</returns>
+		/// <remarks>
+		/// The pin is what makes the tax safe to sweep from every scene server at once. Several may
+		/// host the same world's scenes, they all see the same plot come due, and only the one whose
+		/// expected date still matches may charge it — so a period produces one payment rather than
+		/// one per server.
+		///
+		/// <para>Called <em>before</em> the money is taken, for the same reason a plot is claimed
+		/// before it is paid for: winning the right to charge is the contended step, and a caller
+		/// that loses it must not have taken anything.</para>
+		/// </remarks>
+		Task<DatabaseResult<int>> TryAdvanceTaxAsync(long plotID, DateTime expectedDueUtc, DateTime nextDueUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Records that a tax payment was missed, without disturbing an earlier miss.
+		/// </summary>
+		/// <param name="plotID">The plot that went unpaid.</param>
+		/// <param name="delinquentSinceUtc">When the first missed payment fell due.</param>
+		/// <remarks>
+		/// Only sets the mark when there is not one already. The grace period is measured from the
+		/// <em>first</em> miss, so overwriting it on every later failure would restart the clock
+		/// each period and the plot could never be reclaimed.
+		/// </remarks>
+		Task<DatabaseResult<int>> MarkTaxDelinquentAsync(long plotID, DateTime delinquentSinceUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Clears a plot's delinquency after a successful payment.
+		/// </summary>
+		Task<DatabaseResult<int>> ClearTaxDelinquencyAsync(long plotID, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Releases every plot a guild owns.

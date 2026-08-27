@@ -77,6 +77,37 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime TimeCreated { get; set; }
 
 		/// <summary>
+		/// When the next tax payment falls due, or null while the plot is unowned.
+		/// </summary>
+		/// <remarks>
+		/// The only tax state stored. Everything else is derived from it: the plot is delinquent
+		/// once this is in the past, and reclaimable once it is further in the past than the grace
+		/// period. A stored "is delinquent" flag would be a second source of truth that could
+		/// disagree with the date beside it.
+		///
+		/// <para>Also the concurrency pin. Charging advances this date and requires it to still hold
+		/// its old value, so several scene servers sweeping the same world produce exactly one
+		/// charge per period rather than one per server.</para>
+		/// </remarks>
+		public DateTime? TaxDueUtc { get; set; }
+
+		/// <summary>
+		/// When the owner first failed to pay, or null while they are up to date.
+		/// </summary>
+		/// <remarks>
+		/// Stored rather than derived, and the reason is the pin above. <see cref="TaxDueUtc"/> has
+		/// to advance on every billing attempt — that is what stops two servers charging the same
+		/// period — so it advances whether or not the money was actually collected. A plot that
+		/// never pays would therefore keep a due date marching into the future and never look
+		/// overdue by more than one period, which is to say it would never be reclaimed at all.
+		///
+		/// <para>This is the date the grace period is measured from: set on the first missed
+		/// payment, left alone on later ones so the clock does not restart, and cleared the moment
+		/// a payment succeeds.</para>
+		/// </remarks>
+		public DateTime? TaxDelinquentSinceUtc { get; set; }
+
+		/// <summary>
 		/// When the current owner claimed the plot, or null while it is unclaimed.
 		/// </summary>
 		/// <remarks>

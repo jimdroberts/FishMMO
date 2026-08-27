@@ -66,6 +66,12 @@ namespace FishMMO.Database.Npgsql.Entities
 			// The same question asked for a guild, and the sweep that releases plots when one disbands.
 			builder.HasIndex(e => e.OwnerGuildID)
 				.HasFilter("owner_guild_id <> 0");
+
+			/* The tax sweep's only query: owned plots whose payment has come due. Filtered to rows
+			 * that have a due date at all, because unowned land is not taxed and is the majority of
+			 * the table on any server with room left to build on. */
+			builder.HasIndex(e => e.TaxDueUtc)
+				.HasFilter("tax_due_utc IS NOT NULL");
 		}
 	}
 }

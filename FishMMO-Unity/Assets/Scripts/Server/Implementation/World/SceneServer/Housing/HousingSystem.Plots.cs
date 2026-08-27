@@ -78,6 +78,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			DrainHousingMainThreadQueue(drainAll: false);
 			RetryPendingScenes();
 			SweepBuildSessions(deltaTime);
+			TickTax(deltaTime);
 		}
 
 		/// <summary>
@@ -411,7 +412,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DatabaseResult<int> claim = await plotService.TryClaimAsync(plotID, characterID, 0);
+			DatabaseResult<int> claim = await plotService.TryClaimAsync(plotID, characterID, 0, NextTaxDueUtc());
 			if (!claim.IsSuccess)
 			{
 				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} errored: {claim.ErrorMessage}");
