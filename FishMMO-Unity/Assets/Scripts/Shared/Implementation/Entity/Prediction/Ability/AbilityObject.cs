@@ -670,7 +670,8 @@ namespace FishMMO.Shared
 		/// <param name="seed">The deterministic RNG seed.</param>
 		/// <param name="spawnTick">The replicate-input tick at which this object is being spawned, used for rollback.
 		/// Must be sourced from <see cref="CharacterReplicateData.GetPredictionTick"/> to preserve type-safe tick sourcing.</param>
-		public static void Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed, PredictionTick spawnTick)
+		public static void Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo,
+			Vector3 aimOrigin, Vector3 aimDirection, int seed, PredictionTick spawnTick)
 		{
 			AbilityTemplate template = ability.Template;
 			if (template == null)
@@ -728,7 +729,7 @@ namespace FishMMO.Shared
 
 			GameObject go = Instantiate(template.AbilityObjectPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
-			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, go.transform);
+			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection, go.transform);
 			go.SetActive(false);
 
 			AbilityObject abilityObject = go.GetComponent<AbilityObject>();
@@ -750,7 +751,8 @@ namespace FishMMO.Shared
 		/// <param name="abilitySpawner">The transform acting as the spawn origin.</param>
 		/// <param name="targetInfo">The targeting information.</param>
 		/// <param name="abilityTransform">The transform of the spawned ability object to position.</param>
-		public static void SetAbilitySpawnPosition(ICharacter caster, Ability ability, Transform abilitySpawner, TargetInfo targetInfo, Transform abilityTransform)
+		public static void SetAbilitySpawnPosition(ICharacter caster, Ability ability, Transform abilitySpawner,
+			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection, Transform abilityTransform)
 		{
 			// Resolve motor transform (KCC motor for PCs, regular transform for NPCs).
 			IPlayerCharacter playerCaster = caster as IPlayerCharacter;
@@ -761,8 +763,16 @@ namespace FishMMO.Shared
 				? playerCaster.Motor.Transform.rotation
 				: caster.Transform.rotation;
 
-			// Resolve virtual camera via shared helper (eliminates duplicated PC/NPC/fallback logic).
-			AbilityController.ResolveCameraData(caster, playerCaster, out Vector3 cameraPosition, out Quaternion cameraRotation);
+			/* Aim arrives as a parameter rather than being re-resolved from the caster.
+			 *
+			 * This used to call AbilityController.ResolveCameraData, which read the live
+			 * KCCController or AIController. Both readings were wrong: a player's owner held its
+			 * exact camera while the server and observers held the quantised one, so a
+			 * deterministic spawn landed differently on each peer; and AIController disables itself
+			 * off the server, so on every client an NPC resolved to origin-zero facing +Z. The
+			 * caller passes the aim that was replicated for the tick being simulated, which is the
+			 * only value all peers agree on. */
+			Vector3 cameraPosition = aimOrigin;
 
 			switch (ability.Template.AbilitySpawnTarget)
 			{
@@ -798,7 +808,7 @@ namespace FishMMO.Shared
 					break;
 				case AbilitySpawnTarget.Camera:
 					{
-						Vector3 cameraForward = cameraRotation * Vector3.forward;
+						Vector3 cameraForward = aimDirection;
 
 						Vector3 spawnPosition = cameraPosition + cameraForward;
 
@@ -816,7 +826,7 @@ namespace FishMMO.Shared
 					break;
 				case AbilitySpawnTarget.SpawnerWithCameraRotation:
 					{
-						Vector3 cameraForward = cameraRotation * Vector3.forward;
+						Vector3 cameraForward = aimDirection;
 
 						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
 

@@ -451,7 +451,64 @@ namespace FishMMO.Shared
 			AbilityActivationReplicateData abilityInput = HandleCharacterInput();
 			input.ActivationFlags = abilityInput.ActivationFlags;
 			input.QueuedAbilityID = abilityInput.QueuedAbilityID;
+
+			PopulateAiAim(ref input);
 		}
+
+		/// <summary>
+		/// Writes an AI character's aim into the replicate stream.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Player characters get their aim from <c>KCCPlayer.PopulateInput</c> (Order 80, ahead of
+		/// this controller's 100), so this only fills the gap for AI characters, which have no
+		/// KCCPlayer at all — their movement is a server-side NavMeshAgent replicated by a
+		/// NetworkTransform.
+		/// </para>
+		/// <para>
+		/// Without this, nothing ever wrote those fields for an NPC and the aim a client used came
+		/// from <c>AIController</c> — which disables itself off the server. Every observing client
+		/// therefore resolved an NPC's aim from a default-initialised controller and spawned its
+		/// ability objects at the world origin pointing down +Z, while the server span them
+		/// correctly. Replicating the aim is what lets a client reproduce the shot the server took.
+		/// </para>
+		/// </remarks>
+		/// <param name="input">Replicate input being assembled for this tick.</param>
+		private void PopulateAiAim(ref CharacterReplicateData input)
+		{
+			if (!HasInputAuthority || PlayerCharacter != null || Character == null)
+			{
+				return;
+			}
+			if (!Character.TryGet(out IAIController ai))
+			{
+				return;
+			}
+
+			/* Only the direction is replicated. The origin is derived from the motor on every
+			 * peer -- see CharacterAimOrigin -- so an NPC and a player resolve it the same way. */
+			// Quantised on the way in, for the same reason the player path quantises — see
+			// AimDirectionCompression.
+			input.AimDirection = AimDirectionCompression.Quantize(ai.VirtualCameraRotation * Vector3.forward);
+		}
+
+		/// <summary>
+		/// Aim origin replicated for the tick currently being simulated.
+		/// </summary>
+		private Vector3 replicatedAimOrigin;
+
+		/// <summary>
+		/// Aim direction replicated for the tick currently being simulated.
+		/// </summary>
+		/// <remarks>
+		/// Cached from the replicate input rather than read back off the live controller when an
+		/// ability spawns. Every peer — owner, server and observer — then traces from the value the
+		/// wire actually carried for that tick, which is the whole point of a deterministic ability
+		/// simulation. Reading the live controller instead meant the owner used its exact local
+		/// camera while everyone else used the decoded one, and on an NPC it meant reading a
+		/// controller that does not run on clients at all.
+		/// </remarks>
+		private Vector3 replicatedAimDirection = Vector3.forward;
 
 		/// <summary>
 		/// Handles local character input for ability activation, building the replicate data for the current tick.
@@ -509,6 +566,15 @@ namespace FishMMO.Shared
 			AbilityActivationReplicateData activationData = new AbilityActivationReplicateData(
 				input.ActivationFlags, input.QueuedAbilityID);
 			activationData.SetTick(input.GetTick());
+
+			/* Aim for THIS tick. The direction is replicated; the origin is DERIVED, because a
+			 * client-supplied origin was never validated against the caster's own position and so
+			 * chose the point the server raycast from. See CharacterAimOrigin. KCCPlayer (Order 80)
+			 * has already advanced the motor for this tick by the time this runs (Order 100). */
+			replicatedAimOrigin = CharacterAimOrigin.Resolve(Character);
+			replicatedAimDirection = input.AimDirection.sqrMagnitude > 1e-12f
+				? input.AimDirection
+				: AimDirectionCompression.FallbackDirection;
 
 			HandlePrediction(ref activationData, state);
 
@@ -809,32 +875,5 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Resolves the virtual camera position and rotation for the given character.
-		/// PCs use <see cref="KCCController"/>, NPCs use <see cref="IAIController"/>,
-		/// fallback is the character's transform.
-		/// </summary>
-		/// <param name="character">The character to resolve camera data for.</param>
-		/// <param name="playerCharacter">Cached player character reference, or null for NPCs.</param>
-		/// <param name="cameraPosition">The resolved camera position.</param>
-		/// <param name="cameraRotation">The resolved camera rotation.</param>
-		internal static void ResolveCameraData(ICharacter character, IPlayerCharacter playerCharacter, out Vector3 cameraPosition, out Quaternion cameraRotation)
-		{
-			if (playerCharacter != null)
-			{
-				cameraPosition = playerCharacter.CharacterController.VirtualCameraPosition;
-				cameraRotation = playerCharacter.CharacterController.VirtualCameraRotation;
-			}
-			else if (character.TryGet(out IAIController ai))
-			{
-				cameraPosition = ai.VirtualCameraPosition;
-				cameraRotation = ai.VirtualCameraRotation;
-			}
-			else
-			{
-				cameraPosition = character.Transform.position;
-				cameraRotation = character.Transform.rotation;
-			}
-		}
 	}
 }

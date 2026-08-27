@@ -409,13 +409,15 @@ namespace FishMMO.UnitTests
 				() =>
 				{
 					CharacterReplicateData prev = default;
-					prev.CameraRotation = Quaternion.identity;
+					prev.AimDirection = Vector3.forward;
 
 					CharacterReplicateData next = prev;
-					next.MoveAxisForward = 1f;
-					next.MoveAxisRight = -0.5f;
+					/* Quantised, exactly as KCCPlayer.PopulateInput does. Move axes are carried as a
+					 * signed byte now, so -0.5 is not on the representable set and asserting on the
+					 * raw value would be asserting against a number the wire never agreed to. */
+					next.MoveAxisForward = MoveAxisCompression.Quantize(1f);
+					next.MoveAxisRight = MoveAxisCompression.Quantize(-0.5f);
 					next.MoveFlags = 7;
-					next.CameraPosition = new Vector3(4f, 5f, 6f);
 					next.ActivationFlags = 3;
 					next.QueuedAbilityID = 1234;
 

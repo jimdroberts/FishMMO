@@ -327,13 +327,22 @@ namespace FishMMO.Shared
 			{
 				if (cachedTargetController != null)
 				{
-					ResolveCameraData(Character, PlayerCharacter, out Vector3 cameraPosition, out Quaternion cameraRotation);
-
-					TargetInfo targetInfo = cachedTargetController.UpdateTarget(cameraPosition,
-																			cameraRotation * Vector3.forward,
+					/* Trace from the aim that was REPLICATED for this tick, not from whatever the
+					 * live controller holds right now.
+					 *
+					 * Reading the controller was wrong on both sides of the wire. For a player it
+					 * meant the owner traced with its exact local camera while the server and every
+					 * observer traced with the value that survived quantisation, so a deterministic
+					 * simulation produced a different shot on each peer. For an NPC it meant reading
+					 * AIController, which disables itself off the server, so every client traced
+					 * from a default-initialised controller — origin at the world origin, direction
+					 * +Z — and NPC shots went nowhere near their targets. */
+					TargetInfo targetInfo = cachedTargetController.UpdateTarget(replicatedAimOrigin,
+																			replicatedAimDirection,
 																			ability.Range);
 
-					AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo, currentSeed, activationData.GetPredictionTick());
+					AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo,
+						replicatedAimOrigin, replicatedAimDirection, currentSeed, activationData.GetPredictionTick());
 				}
 			}
 

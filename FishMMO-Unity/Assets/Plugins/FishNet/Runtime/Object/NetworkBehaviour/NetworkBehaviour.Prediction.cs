@@ -424,12 +424,16 @@ namespace FishNet.Object
 
             /* FISHMMO EDIT: delta reconcile enabled.
              *
-             * Upstream gates this behind `#if DO_NOT_USE`, a symbol defined nowhere, and ships the
-             * full serializer instead. The reconcile half of that gate compiles cleanly; only the
-             * replicate half has bit-rotted -- it still references locals and container types that
-             * were refactored away -- so the replicate sites further down are deliberately left on
-             * the full serializer. Measured saving on reconcile is ~87% of bytes per second at
-             * tickRate 30; on replicate it would be ~11%. See PredictionBandwidthBenchmarkTests.
+             * Upstream gated every delta call site behind `#if DO_NOT_USE`, a symbol defined
+             * nowhere, and shipped the full serializer instead. The reconcile half of that gate
+             * compiled cleanly apart from one casing typo; the replicate half had bit-rotted
+             * against its own callers and was replaced -- see Writer.WriteDeltaReplicate and
+             * Reader.ReadDeltaReplicate, which take the current container types and encode each
+             * packet self-contained so it survives loss on the unreliable channel replicates use.
+             *
+             * Measured at tickRate 30 with redundancy 3, per entity per observer while walking:
+             * reconcile 6750 -> 980 B/s, replicate 2550 -> 1530 B/s. See
+             * PredictionBandwidthBenchmarkTests for the framed figures including transport overhead.
              *
              * Enabled unconditionally rather than behind a scripting define on purpose: Unity's
              * defines are per build target, so a symbol set for the Linux server build and missed
@@ -946,11 +950,10 @@ namespace FishNet.Object
              * write the queueTick. */
             if (!toServer)
                 methodWriter.WriteTickUnpacked(queuedTick);
-#if DO_NOT_USE
-            methodWriter.WriteDeltaReplicate(replicatesHistory, offset, deltaOption);
-#else
-            methodWriter.WriteReplicate<T>(replicatesHistory, offset);
-#endif
+            /* FISHMMO EDIT: self-contained delta replicate -- see Writer.WriteDeltaReplicate.
+             * deltaOption is deliberately unused: each packet stands alone because entry 0 is
+             * always absolute, so there is no cross-packet baseline for FullSerialize to reset. */
+            methodWriter.WriteDeltaReplicate(replicatesHistory, offset);
             _transportManagerCache.CheckSetReliableChannel(methodWriter.Length + MAXIMUM_RPC_HEADER_SIZE, ref channel);
             PooledWriter writer = CreateRpc(hash, methodWriter, PacketId.Replicate, channel);
 
@@ -1021,11 +1024,8 @@ namespace FishNet.Object
             else
                 tick = tm.LastPacketTick.LastRemoteTick;
 
-#if DO_NOT_USE
-            receivedReplicatesCount = reader.ReadDeltaReplicate(lastReadReplicate, ref arrBuffer, tick);
-#else
-            List<ReplicateDataContainer<T>> readReplicates = reader.ReadReplicate<T>(tick);
-#endif
+            // FISHMMO EDIT: self-contained delta replicate -- see Reader.ReadDeltaReplicate.
+            List<ReplicateDataContainer<T>> readReplicates = reader.ReadDeltaReplicate<T>(tick);
 
 
             /* This does not need to log to statistics -- network traffic
@@ -1111,11 +1111,8 @@ namespace FishNet.Object
             methodWriter.WriteTickUnpacked(runTickOflastEntry);
             //Write the replicates.
             int redundancyCount = (int)Mathf.Min(_networkObjectCache.PredictionManager.RedundancyCount, queueCount);
-#if DO_NOT_USE
-            methodWriter.WriteDeltaReplicate(replicatesQueue, redundancyCount, GetDeltaSerializeOption());
-#else
-            methodWriter.WriteReplicate<T>(replicatesQueue, redundancyCount);
-#endif
+            // FISHMMO EDIT: self-contained delta replicate -- see Writer.WriteDeltaReplicate.
+            methodWriter.WriteDeltaReplicate(replicatesQueue, redundancyCount);
             PooledWriter writer = CreateRpc(hash, methodWriter, PacketId.Replicate, channel);
 
             //Exclude owner and if clientHost, also localClient.

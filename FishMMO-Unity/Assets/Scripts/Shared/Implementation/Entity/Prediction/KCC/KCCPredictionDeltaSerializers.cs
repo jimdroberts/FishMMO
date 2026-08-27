@@ -22,9 +22,12 @@ namespace FishMMO.Shared
 		/// <summary>Bit flag for move flags changes.</summary>
 		private const byte MOVE_FLAGS_BIT = 1 << 2;
 		/// <summary>Bit flag for camera position changes.</summary>
-		private const byte POSITION_BIT = 1 << 3;
-		/// <summary>Bit flag for camera rotation changes.</summary>
-		private const byte ROTATION_BIT = 1 << 4;
+		/* Retired with CharacterReplicateData.CameraPosition -- the aim origin is derived from the
+		 * motor now, see CharacterAimOrigin. Deliberately left as a gap rather than reused: every
+		 * other bit keeps the value it already had, so this cannot be confused with a live field. */
+		// private const byte POSITION_BIT = 1 << 3;
+		/// <summary>Bit flag for aim direction changes.</summary>
+		private const byte AIM_DIRECTION_BIT = 1 << 4;
 		/// <summary>Bit flag for activation flags changes.</summary>
 		private const byte ACTIVATION_FLAGS_BIT = 1 << 5;
 		/// <summary>Bit flag for queued ability ID changes.</summary>
@@ -39,11 +42,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void WriteCharacterReplicateData(this Writer writer, CharacterReplicateData value)
 		{
-			writer.WriteSingle(value.MoveAxisForward);
-			writer.WriteSingle(value.MoveAxisRight);
+			// One byte each — see MoveAxisCompression. These are input axes in [-1,1], and the pair
+			// is ClampMagnitude'd on read, so 1/127 is finer than anything downstream can use.
+			writer.WriteInt8Unpacked(MoveAxisCompression.Encode(value.MoveAxisForward));
+			writer.WriteInt8Unpacked(MoveAxisCompression.Encode(value.MoveAxisRight));
 			writer.WriteInt32(value.MoveFlags);
-			writer.WriteVector3(value.CameraPosition);
-			writer.WriteQuaternion32(value.CameraRotation);
+			// Packed yaw/pitch rather than a quaternion — see AimDirectionCompression for why the
+			// wire format has to be one the producer can commit to exactly.
+			writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.AimDirection));
 			writer.WriteInt32(value.ActivationFlags);
 			writer.WriteInt64(value.QueuedAbilityID);
 		}
@@ -55,11 +61,10 @@ namespace FishMMO.Shared
 		{
 			return new CharacterReplicateData
 			{
-				MoveAxisForward = reader.ReadSingle(),
-				MoveAxisRight = reader.ReadSingle(),
+				MoveAxisForward = MoveAxisCompression.Decode(reader.ReadInt8Unpacked()),
+				MoveAxisRight = MoveAxisCompression.Decode(reader.ReadInt8Unpacked()),
 				MoveFlags = reader.ReadInt32(),
-				CameraPosition = reader.ReadVector3(),
-				CameraRotation = reader.ReadQuaternion32(),
+				AimDirection = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked()),
 				ActivationFlags = reader.ReadInt32(),
 				QueuedAbilityID = reader.ReadInt64(),
 			};
@@ -114,26 +119,30 @@ namespace FishMMO.Shared
 			int startLength = writer.Length;
 			writer.WriteUInt8Unpacked(0);
 
+			/* Written whole rather than delta'd: the packed axis is already a single byte, so a
+			 * varint difference could only ever match it and would cost a branch to decide. */
 			if (fullSerialize || prev.MoveAxisForward != next.MoveAxisForward)
 			{
-				writer.WriteSingle(next.MoveAxisForward);
+				writer.WriteInt8Unpacked(MoveAxisCompression.Encode(next.MoveAxisForward));
 				flags |= FORWARD_BIT;
 			}
 
 			if (fullSerialize || prev.MoveAxisRight != next.MoveAxisRight)
 			{
-				writer.WriteSingle(next.MoveAxisRight);
+				writer.WriteInt8Unpacked(MoveAxisCompression.Encode(next.MoveAxisRight));
 				flags |= RIGHT_BIT;
 			}
 
 			if (writer.WriteDeltaInt32(prev.MoveFlags, next.MoveFlags, fieldOption))
 				flags |= MOVE_FLAGS_BIT;
 
-			if (writer.WriteDeltaVector3(prev.CameraPosition, next.CameraPosition, fieldOption))
-				flags |= POSITION_BIT;
-
-			if (writer.WriteDeltaQuaternion(prev.CameraRotation, next.CameraRotation, option: fieldOption))
-				flags |= ROTATION_BIT;
+			/* Delta the PACKED aim rather than the decoded vector. Yaw and pitch move in small
+			 * steps while a player turns, so the packed difference varint-packs to a byte or two
+			 * where three floats could not. Decoding is exact on both sides because the producer
+			 * already quantised the value. */
+			if (writer.WriteDeltaUInt32(AimDirectionCompression.Encode(prev.AimDirection),
+					AimDirectionCompression.Encode(next.AimDirection), fieldOption))
+				flags |= AIM_DIRECTION_BIT;
 
 			if (writer.WriteDeltaInt32(prev.ActivationFlags, next.ActivationFlags, fieldOption))
 				flags |= ACTIVATION_FLAGS_BIT;
@@ -176,19 +185,17 @@ namespace FishMMO.Shared
 			CharacterReplicateData result = prev;
 
 			if ((flags & FORWARD_BIT) != 0)
-				result.MoveAxisForward = reader.ReadSingle();
+				result.MoveAxisForward = MoveAxisCompression.Decode(reader.ReadInt8Unpacked());
 
 			if ((flags & RIGHT_BIT) != 0)
-				result.MoveAxisRight = reader.ReadSingle();
+				result.MoveAxisRight = MoveAxisCompression.Decode(reader.ReadInt8Unpacked());
 
 			if ((flags & MOVE_FLAGS_BIT) != 0)
 				result.MoveFlags = reader.ReadDeltaInt32(prev.MoveFlags);
 
-			if ((flags & POSITION_BIT) != 0)
-				result.CameraPosition = reader.ReadDeltaVector3(prev.CameraPosition);
-
-			if ((flags & ROTATION_BIT) != 0)
-				result.CameraRotation = reader.ReadDeltaQuaternion(prev.CameraRotation);
+			if ((flags & AIM_DIRECTION_BIT) != 0)
+				result.AimDirection = AimDirectionCompression.Decode(
+					reader.ReadDeltaUInt32(AimDirectionCompression.Encode(prev.AimDirection)));
 
 			if ((flags & ACTIVATION_FLAGS_BIT) != 0)
 				result.ActivationFlags = reader.ReadDeltaInt32(prev.ActivationFlags);
@@ -235,9 +242,30 @@ namespace FishMMO.Shared
 			writer.WriteBoolean(value.FoundAnyGround);
 			writer.WriteBoolean(value.IsStableOnGround);
 			writer.WriteBoolean(value.SnappingPrevented);
-			writer.WriteVector3(value.GroundNormal);
-			writer.WriteVector3(value.InnerGroundNormal);
-			writer.WriteVector3(value.OuterGroundNormal);
+			/* Normals are only written while grounded.
+			 *
+			 * KinematicCharacterMotor assigns a fresh CharacterGroundingReport on every ground
+			 * probe, so an ungrounded status carries three zero vectors by construction — there is
+			 * nothing in them to send. Skipping them also removes the one case where delta-encoding
+			 * this struct cost more than writing it whole: leaving the ground used to change all
+			 * three normals at once, which is the worst input a per-field delta can be handed.
+			 *
+			 * Packed as directions, not Vector3s. All three are unit normals, so two thirds of a
+			 * Vector3's twelve bytes encode a magnitude that is always one. The packed form is
+			 * four bytes at ~0.0055 degrees, which is finer than the Vector3 DELTA path managed
+			 * anyway — FishNet quantises those components to 0.001, about 0.1 degrees on a unit
+			 * vector — so this is more precise than what it replaces, not less.
+			 *
+			 * Precision here feeds slope classification against MaxStableSlopeAngle (60 degrees on
+			 * the player prefab); a hundredth of a degree cannot move a character across that line.
+			 * These normals are also re-derived by the motor on its next ground probe, so any error
+			 * is transient rather than accumulating. */
+			if (value.FoundAnyGround)
+			{
+				writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.GroundNormal));
+				writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.InnerGroundNormal));
+				writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.OuterGroundNormal));
+			}
 		}
 
 		/// <summary>
@@ -245,15 +273,23 @@ namespace FishMMO.Shared
 		/// </summary>
 		internal static CharacterTransientGroundingReport ReadCharacterTransientGroundingReport(this Reader reader)
 		{
-			return new CharacterTransientGroundingReport
+			CharacterTransientGroundingReport result = new CharacterTransientGroundingReport
 			{
 				FoundAnyGround = reader.ReadBoolean(),
 				IsStableOnGround = reader.ReadBoolean(),
 				SnappingPrevented = reader.ReadBoolean(),
-				GroundNormal = reader.ReadVector3(),
-				InnerGroundNormal = reader.ReadVector3(),
-				OuterGroundNormal = reader.ReadVector3(),
 			};
+
+			// Mirrors the writer: normals are on the wire only while grounded, and an ungrounded
+			// report is all-zero normals in the motor.
+			if (result.FoundAnyGround)
+			{
+				result.GroundNormal = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked());
+				result.InnerGroundNormal = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked());
+				result.OuterGroundNormal = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked());
+			}
+
+			return result;
 		}
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -313,14 +349,28 @@ namespace FishMMO.Shared
 				flags |= SNAPPING_BIT;
 			}
 
-			if (writer.WriteDeltaVector3(prev.GroundNormal, next.GroundNormal, fieldOption))
-				flags |= GROUND_NORMAL_BIT;
+			/* Delta the PACKED normals, and only while grounded.
+			 *
+			 * Yaw and pitch creep in small steps as a character walks across a slope, so the packed
+			 * difference varint-packs to a byte or two where three float components could not. An
+			 * ungrounded report has three zero normals by construction (the motor assigns a fresh
+			 * report each probe), so skipping them there costs nothing and removes the worst input
+			 * a per-field delta can be handed — all three changing at once as the character leaves
+			 * the ground. The reader zeroes them from the FoundAnyGround flag instead. */
+			if (next.FoundAnyGround)
+			{
+				if (writer.WriteDeltaUInt32(AimDirectionCompression.Encode(prev.GroundNormal),
+						AimDirectionCompression.Encode(next.GroundNormal), fieldOption))
+					flags |= GROUND_NORMAL_BIT;
 
-			if (writer.WriteDeltaVector3(prev.InnerGroundNormal, next.InnerGroundNormal, fieldOption))
-				flags |= INNER_NORMAL_BIT;
+				if (writer.WriteDeltaUInt32(AimDirectionCompression.Encode(prev.InnerGroundNormal),
+						AimDirectionCompression.Encode(next.InnerGroundNormal), fieldOption))
+					flags |= INNER_NORMAL_BIT;
 
-			if (writer.WriteDeltaVector3(prev.OuterGroundNormal, next.OuterGroundNormal, fieldOption))
-				flags |= OUTER_NORMAL_BIT;
+				if (writer.WriteDeltaUInt32(AimDirectionCompression.Encode(prev.OuterGroundNormal),
+						AimDirectionCompression.Encode(next.OuterGroundNormal), fieldOption))
+					flags |= OUTER_NORMAL_BIT;
+			}
 
 			if (flags != 0 || mustEmit)
 			{
@@ -363,13 +413,27 @@ namespace FishMMO.Shared
 				result.SnappingPrevented = reader.ReadBoolean();
 
 			if ((flags & GROUND_NORMAL_BIT) != 0)
-				result.GroundNormal = reader.ReadDeltaVector3(prev.GroundNormal);
+				result.GroundNormal = AimDirectionCompression.Decode(
+					reader.ReadDeltaUInt32(AimDirectionCompression.Encode(prev.GroundNormal)));
 
 			if ((flags & INNER_NORMAL_BIT) != 0)
-				result.InnerGroundNormal = reader.ReadDeltaVector3(prev.InnerGroundNormal);
+				result.InnerGroundNormal = AimDirectionCompression.Decode(
+					reader.ReadDeltaUInt32(AimDirectionCompression.Encode(prev.InnerGroundNormal)));
 
 			if ((flags & OUTER_NORMAL_BIT) != 0)
-				result.OuterGroundNormal = reader.ReadDeltaVector3(prev.OuterGroundNormal);
+				result.OuterGroundNormal = AimDirectionCompression.Decode(
+					reader.ReadDeltaUInt32(AimDirectionCompression.Encode(prev.OuterGroundNormal)));
+
+			/* Zero rather than carry forward. `result` starts as `prev`, so a character that was
+			 * grounded last tick and is airborne now would otherwise keep the previous tick's
+			 * normals — the writer deliberately sent none. This mirrors the motor, which discards
+			 * the whole report on an ungrounded probe. */
+			if (!result.FoundAnyGround)
+			{
+				result.GroundNormal = Vector3.zero;
+				result.InnerGroundNormal = Vector3.zero;
+				result.OuterGroundNormal = Vector3.zero;
+			}
 
 			return result;
 		}
