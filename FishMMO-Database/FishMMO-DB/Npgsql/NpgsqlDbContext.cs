@@ -127,6 +127,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PlotEntity> Plots { get; set; }
 		/// <summary>Plot update records.</summary>
 		public DbSet<PlotUpdateEntity> PlotUpdates { get; set; }
+		/// <summary>Structures built on plots.</summary>
+		public DbSet<PlotStructureEntity> PlotStructures { get; set; }
 		/// <summary>Character party memberships.</summary>
 		public DbSet<CharacterPartyEntity> CharacterParties { get; set; }
 		/// <summary>Parties.</summary>

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using FishNet.Object.Synchronizing;
+using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -288,6 +290,59 @@ namespace FishMMO.Shared
 		/// Who owns this plot, as the server last resolved it.
 		/// </summary>
 		public PlotOwner Owner { get; private set; } = PlotOwner.None;
+
+		/// <summary>
+		/// The character currently editing this plot, or zero when nobody is.
+		/// </summary>
+		/// <remarks>
+		/// Replicated so every client can see that a plot is closed, not just the owner. Building
+		/// changes the shape of the world underneath people; a plot that is being edited has to look
+		/// shut from the outside or players will walk into geometry that is appearing and vanishing
+		/// around them.
+		///
+		/// <para>Server-authoritative, and deliberately not persisted: a session is a person standing
+		/// there with the editor open. If the server dies, nobody is standing there any more, and a
+		/// stored session would leave the plot locked with no way to unlock it.</para>
+		/// </remarks>
+		private readonly SyncVar<long> builderCharacterID = new SyncVar<long>(0, new SyncTypeSettings()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Reliable,
+			ReadPermission = ReadPermission.Observers,
+			WritePermission = WritePermission.ServerOnly,
+		});
+
+		/// <summary>
+		/// The character currently editing this plot, or zero.
+		/// </summary>
+		public long BuilderCharacterID => builderCharacterID.Value;
+
+		/// <summary>
+		/// True while somebody is editing this plot.
+		/// </summary>
+		public bool IsBeingBuilt => builderCharacterID.Value != 0;
+
+		/// <summary>
+		/// True when this character may pass into the plot right now.
+		/// </summary>
+		/// <remarks>
+		/// Everyone may enter a plot that is not being edited, including land they do not own —
+		/// housing districts are part of the world, not private instances. Only an active build
+		/// session closes it, and only to everybody except the builder.
+		/// </remarks>
+		public bool AllowsEntry(long characterID)
+		{
+			return !IsBeingBuilt || builderCharacterID.Value == characterID;
+		}
+
+		/// <summary>
+		/// Opens or closes a build session. Server only.
+		/// </summary>
+		/// <param name="characterID">The editing character, or zero to close the session.</param>
+		public void SetBuilder(long characterID)
+		{
+			builderCharacterID.Value = characterID;
+		}
 
 		/// <summary>
 		/// True once the server has matched this foundation to its database row.

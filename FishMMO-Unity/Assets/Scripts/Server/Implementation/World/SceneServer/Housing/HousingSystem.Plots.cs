@@ -77,6 +77,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			DrainHousingMainThreadQueue(drainAll: false);
 			RetryPendingScenes();
+			SweepBuildSessions(deltaTime);
 		}
 
 		/// <summary>
