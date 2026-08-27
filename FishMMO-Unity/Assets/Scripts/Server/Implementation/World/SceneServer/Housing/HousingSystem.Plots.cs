@@ -79,6 +79,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			RetryPendingScenes();
 			SweepBuildSessions(deltaTime);
 			TickTax(deltaTime);
+			TickPlotSync(deltaTime);
 		}
 
 		/// <summary>
