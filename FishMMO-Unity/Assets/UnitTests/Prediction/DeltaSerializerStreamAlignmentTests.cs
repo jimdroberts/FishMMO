@@ -221,6 +221,7 @@ namespace FishMMO.UnitTests
 					next.AbilityID = prev.AbilityID + 3;
 					next.RemainingTicks = prev.RemainingTicks + 11;
 					next.PackedFlagsAndSlot = prev.PackedFlagsAndSlot ^ 0x5A;
+				next.Sequence = unchecked((byte)(prev.Sequence + 1)); // delta chain continuity
 
 					Writer writer = new Writer();
 					bool wrote = writer.WriteDelta(prev, next, DeltaSerializerOption.Unset);

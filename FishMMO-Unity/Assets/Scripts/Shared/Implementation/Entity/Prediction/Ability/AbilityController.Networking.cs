@@ -162,7 +162,7 @@ namespace FishMMO.Shared
 			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
 			if (abilityTemplate != null)
 			{
-				Ability newAbility = new Ability(msg.ID, abilityTemplate, new List<int>(msg.Events));
+				Ability newAbility = new Ability(msg.ID, abilityTemplate, msg.Events != null ? new List<int>(msg.Events) : null);
 				LearnAbility(newAbility);
 
 				OnAddAbility?.Invoke(newAbility);
@@ -179,7 +179,7 @@ namespace FishMMO.Shared
 				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.TemplateID);
 				if (abilityTemplate != null)
 				{
-					Ability newAbility = new Ability(ability.ID, abilityTemplate, new List<int>(ability.Events));
+					Ability newAbility = new Ability(ability.ID, abilityTemplate, ability.Events != null ? new List<int>(ability.Events) : null);
 					LearnAbility(newAbility);
 
 					OnAddAbility?.Invoke(newAbility);
@@ -233,11 +233,25 @@ namespace FishMMO.Shared
 			int abilityBlockLength = (int)declaredLength;
 			int abilityBlockEnd = reader.Position + abilityBlockLength;
 
-			// Instantiate the AbilitySeedGenerator
-			abilitySeedGenerator = new DeterministicRNG(abilitySeed);
-
-			// Set the initial seed
-			currentSeed = abilitySeedGenerator.Next();
+			/* The generator's CURRENT state, not a fresh one from abilitySeed. The server's
+			 * generator has advanced once per cast since it was created; a client that connects
+			 * (or reconnects) later and re-derives it from the seed starts at the server's
+			 * INITIAL currentSeed, and the first reconcile then reports a mismatch that was
+			 * never a misprediction. */
+			int payloadCurrentSeed = reader.ReadInt32();
+			uint rngS0 = reader.ReadUInt32();
+			uint rngS1 = reader.ReadUInt32();
+			uint rngS2 = reader.ReadUInt32();
+			uint rngS3 = reader.ReadUInt32();
+			if (abilitySeedGenerator == null)
+			{
+				abilitySeedGenerator = new DeterministicRNG(rngS0, rngS1, rngS2, rngS3);
+			}
+			else
+			{
+				abilitySeedGenerator.RestoreState(rngS0, rngS1, rngS2, rngS3);
+			}
+			currentSeed = payloadCurrentSeed;
 
 			//Log.Debug($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
@@ -362,6 +376,14 @@ namespace FishMMO.Shared
 			writer.Skip(ABILITY_PAYLOAD_LENGTH_BYTES);
 			int abilityBlockStart = writer.Position;
 
+			// Current seed and full generator state — see ReadPayload for why not just the seed.
+			writer.WriteInt32(currentSeed);
+			abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
+			writer.WriteUInt32(rngS0);
+			writer.WriteUInt32(rngS1);
+			writer.WriteUInt32(rngS2);
+			writer.WriteUInt32(rngS3);
+
 			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);
 			foreach (Ability ability in KnownAbilities.Values)
@@ -390,7 +412,10 @@ namespace FishMMO.Shared
 
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
-				cooldownController.Write(writer);
+				/* Cooldown entries go to the owner only. Observers never read a peer's cooldowns
+				 * (see CooldownController.Write), and the block is still written — framed, zero
+				 * count — so ReadPayload's shape is identical on every receiver. */
+				cooldownController.Write(writer, includeEntries: PayloadVisibility.IsOwner(this, conn));
 			}
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - abilityBlockStart),

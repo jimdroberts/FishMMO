@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Object.Prediction;
@@ -224,16 +224,25 @@ namespace FishMMO.Shared
 		/// A client that ignores its own UI code still learns nothing extra.
 		/// </para>
 		/// <para>
-		/// Delivery is an <c>ObserversRpc</c>, so FishNet scopes it to the connections that can
-		/// already see this NetworkObject — the same set that can target it. <c>BufferLast</c> means
-		/// a player who comes into view later receives the current list as part of the spawn,
-		/// without any join-time request of its own.
+		/// Delivery is a broadcast scoped to this NetworkObject's observers — the same set that can
+		/// target it. A player who comes into view later is served by <see cref="OnSpawnServer"/>,
+		/// which replays the current list to that one connection; the buffered-RPC behaviour the
+		/// previous <c>ObserversRpc(BufferLast)</c> provided implicitly.
 		/// </para>
 		/// </remarks>
 		private void PushObservedBuffs()
 		{
 			observedBuffsDirty = false;
 
+			BuildObservedBuffEntries();
+			BroadcastObservedBuffs(observedBuffBuffer.ToArray());
+		}
+
+		/// <summary>
+		/// Fills <see cref="observedBuffBuffer"/> with the server-filtered visible buff list.
+		/// </summary>
+		private void BuildObservedBuffEntries()
+		{
 			observedBuffBuffer.Clear();
 			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
 			uint currentTick = GetCurrentDomainTick();
@@ -263,21 +272,124 @@ namespace FishMMO.Shared
 					TotalSeconds = template.Duration,
 				});
 			}
-
-			RpcSetObservedBuffs(observedBuffBuffer.ToArray());
 		}
 
 		/// <summary>
-		/// Delivers the server-filtered observer buff list to everyone who can see this character.
+		/// Replays the current visible buff list to a client that starts observing this character
+		/// after the last change.
 		/// </summary>
+		/// <remarks>
+		/// The change-gated broadcast reaches whoever is observing when the set CHANGES; without
+		/// this, a player targeting a character they just walked up to would see an empty buff bar
+		/// until the next buff event on that character. This restores the replay-to-late-joiners
+		/// behaviour the previous <c>ObserversRpc(BufferLast)</c> carried. An empty list is skipped
+		/// because an empty bar is what the client already assumes.
+		/// </remarks>
+		public override void OnSpawnServer(NetworkConnection connection)
+		{
+			base.OnSpawnServer(connection);
+
+			if (buffs.Count == 0 || base.NetworkManager == null || base.NetworkObject == null)
+			{
+				return;
+			}
+
+			BuildObservedBuffEntries();
+			if (observedBuffBuffer.Count == 0)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(connection, new CharacterBuffsBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Buffs = observedBuffBuffer.ToArray(),
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends the server-filtered observer buff list to everyone who can see this character.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Applied locally before sending, which is what the previous <c>ObserversRpc</c> achieved
+		/// with <c>RunLocally</c>. A broadcast is never delivered back to its sender, so without the
+		/// local call the server's own <see cref="observedBuffs"/> would stay empty and anything
+		/// server side that inspects a character's visible buffs would read nothing.
+		/// </para>
+		/// <para>
+		/// Scoped to this character's observers, so interest management bounds the traffic. Sent
+		/// reliably: a dropped buff list leaves an observer showing a stale set until the next
+		/// change, which — unlike a dropped ability cast — has no self-correcting replacement.
+		/// </para>
+		/// </remarks>
 		/// <param name="entries">The visible buffs.</param>
-		[ObserversRpc(BufferLast = true, RunLocally = true)]
-		private void RpcSetObservedBuffs(ObservedBuffEntry[] entries)
+		private void BroadcastObservedBuffs(ObservedBuffEntry[] entries)
+		{
+			ApplyObservedBuffs(entries);
+
+			if (base.NetworkManager == null || base.NetworkObject == null || !base.IsServerStarted)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterBuffsBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Buffs = entries ?? System.Array.Empty<ObservedBuffEntry>(),
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>Stores a received buff list and notifies listeners.</summary>
+		private void ApplyObservedBuffs(ObservedBuffEntry[] entries)
 		{
 			observedBuffs = entries ?? System.Array.Empty<ObservedBuffEntry>();
 			ObservedBuffsReceivedTime = Time.unscaledTime;
 
 			IBuffController.OnObservedBuffsChanged?.Invoke(this);
+		}
+
+		/// <summary>True once this client has registered the shared buff handler.</summary>
+		/// <remarks>
+		/// Registered once per client rather than per character. A per-character registration would
+		/// invoke one delegate per character in the scene for every buff change anyone makes, so a
+		/// 200-player scene would run 200 handlers to deliver one update.
+		/// </remarks>
+		private static bool buffsBroadcastRegistered;
+
+		/// <summary>Registers the shared buff handler for this client.</summary>
+		internal static void RegisterBuffsBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (buffsBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			networkManager.ClientManager.RegisterBroadcast<CharacterBuffsBroadcast>(OnBuffsBroadcast);
+			buffsBroadcastRegistered = true;
+		}
+
+		/// <summary>Applies a buff broadcast to whichever character it names.</summary>
+		/// <remarks>
+		/// Unlike resources, the owner is <b>not</b> skipped. The observed list is a server-filtered
+		/// view — hidden buffs removed, durations in seconds — and it is what the owner's own UI
+		/// reads for its buff bar, so excluding the owner would leave the local player unable to see
+		/// their own buffs.
+		/// </remarks>
+		private static void OnBuffsBroadcast(CharacterBuffsBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+
+			BuffController controller = nob.GetComponent<BuffController>();
+			controller?.ApplyObservedBuffs(msg.Buffs);
 		}
 
 		#endregion
@@ -287,6 +399,15 @@ namespace FishMMO.Shared
 			base.OnStartNetwork();
 			RefreshTickDelta();
 			predictionController = GetComponent<CharacterPredictionController>();
+
+			/* Register the shared buff handler the first time any character starts on this client.
+			 * Never unregistered: ClientManager does not clear handlers on stop, so a per-character
+			 * unregister would have to be reference counted or the first despawn would switch off
+			 * buff display for every remaining character. */
+			if (base.IsClientStarted)
+			{
+				RegisterBuffsBroadcast(base.NetworkManager);
+			}
 		}
 
 		/// <summary>
@@ -579,15 +700,41 @@ namespace FishMMO.Shared
 			writer.Skip(BUFF_PAYLOAD_LENGTH_BYTES);
 			int buffBlockStart = writer.Position;
 
+			/* Filtered per connection. The owner needs the full set — its own hidden buffs are its
+			 * prediction state, restored from this payload on spawn and reconnect. Everyone else
+			 * gets the same visibility rule the broadcast path applies: HiddenFromOthers never
+			 * leaves the server. This used to write the full dictionary to every connection, which
+			 * let a packet-inspecting client read buffs no UI would ever show it. Observers no
+			 * longer simulate their peers, so they have no simulation need for the hidden entries
+			 * either — the filtered list is both the private one and the sufficient one.
+			 *
+			 * Safe to vary by connection: FishNet builds the spawn message per receiving
+			 * connection (ServerObjects.Observers calls WriteSpawn(nob, writer, conn) inside the
+			 * per-connection rebuild), so no two receivers share this buffer. */
+			bool includeHidden = PayloadVisibility.IsOwner(this, conn);
+
 			if (buffs.Count < 1)
 			{
 				writer.WriteInt32(0);
 			}
 			else
 			{
-				writer.WriteInt32(buffs.Count);
+				int visibleCount = 0;
 				foreach (Buff buff in buffs.Values)
 				{
+					if (includeHidden || buff.Template == null || !buff.Template.HiddenFromOthers)
+					{
+						visibleCount++;
+					}
+				}
+
+				writer.WriteInt32(visibleCount);
+				foreach (Buff buff in buffs.Values)
+				{
+					if (!includeHidden && buff.Template != null && buff.Template.HiddenFromOthers)
+					{
+						continue;
+					}
 					writer.WriteInt32(buff.Template.ID);
 					writer.WriteUInt32(buff.ExpiryTick);
 					writer.WriteUInt32(buff.NextTickTick);

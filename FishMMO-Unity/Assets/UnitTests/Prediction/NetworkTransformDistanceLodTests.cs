@@ -179,7 +179,12 @@ namespace FishMMO.UnitTests
 				}
 
 				checkedPrefabs++;
-				LogAssert.IsNotNull(prefab.GetComponent<NetworkTransformDistanceLod>(),
+				/* Compared to null rather than passed to IsNotNull: the assert stringifies whatever
+				 * it is handed, and NetworkBehaviour.ToString() dereferences spawn-time state that
+				 * a prefab asset does not have — so a PASSING assert throws while building its own
+				 * message. */
+				bool hasLod = prefab.GetComponent<NetworkTransformDistanceLod>() != null;
+				LogAssert.IsTrue(hasLod,
 					$"'{prefab.name}' has a NetworkTransform but no NetworkTransformDistanceLod, so it " +
 					"synchronises at full rate no matter how far away every observer is.");
 			}

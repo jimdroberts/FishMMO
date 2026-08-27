@@ -207,6 +207,15 @@ namespace FishMMO.Shared
 
 			predictionController = GetComponent<CharacterPredictionController>();
 
+			/* Register the shared death-state handler the first time any character starts on this
+			 * client. Never unregistered: ClientManager does not clear handlers on stop, so a
+			 * per-character unregister would have to be reference counted or the first despawn
+			 * would leave every remaining character unable to show a death. */
+			if (base.IsClientStarted)
+			{
+				RegisterDeathStateBroadcast(base.NetworkManager);
+			}
+
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
@@ -590,8 +599,30 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		/// <param name="dead">True on death, false when the character is revived.</param>
-		[ObserversRpc(ExcludeOwner = false)]
-		private void RpcSetDeathState(bool dead)
+		private void BroadcastDeathState(bool dead)
+		{
+			ApplyDeathState(dead);
+
+			if (base.NetworkManager == null || base.NetworkObject == null || !base.IsServerStarted)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterDeathStateBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Dead = dead,
+			}, true, FishNet.Transporting.Channel.Reliable);
+		}
+
+		/// <summary>Applies a death state locally, on the server or on a receiving client.</summary>
+		/// <remarks>
+		/// Applied locally by the sender before broadcasting, because a broadcast is never delivered
+		/// back to its own sender — the previous <c>ObserversRpc</c> reached the server through
+		/// FishNet's own dispatch, and without this the server would broadcast a death it never
+		/// applied to itself.
+		/// </remarks>
+		private void ApplyDeathState(bool dead)
 		{
 			if (Character == null)
 			{
@@ -618,6 +649,42 @@ namespace FishMMO.Shared
 					animationController.ResetDeath();
 				}
 			}
+		}
+
+		/// <summary>True once this client has registered the shared death-state handler.</summary>
+		private static bool deathStateBroadcastRegistered;
+
+		/// <summary>Registers the shared death-state handler for this client.</summary>
+		/// <remarks>
+		/// Registered once per client rather than per character, so one death costs one delegate
+		/// call rather than one per character in the scene.
+		/// </remarks>
+		internal static void RegisterDeathStateBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (deathStateBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			networkManager.ClientManager.RegisterBroadcast<CharacterDeathStateBroadcast>(OnDeathStateBroadcast);
+			deathStateBroadcastRegistered = true;
+		}
+
+		/// <summary>Applies a death-state broadcast to whichever character it names.</summary>
+		private static void OnDeathStateBroadcast(CharacterDeathStateBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+
+			CharacterDamageController controller = nob.GetComponent<CharacterDamageController>();
+			controller?.ApplyDeathState(msg.Dead);
 		}
 
 		// ───── Damage / Resistance ──────────────────────────────────────────
@@ -790,7 +857,7 @@ namespace FishMMO.Shared
 
 			// Observers pose the corpse from here; the owner and late joiners are covered by the
 			// death broadcast and the spawn payload respectively.
-			RpcSetDeathState(true);
+			BroadcastDeathState(true);
 
 			InvokeKilledIsolated(killer, Character);
 		}
@@ -954,12 +1021,12 @@ namespace FishMMO.Shared
 				animController.ResetDeath();
 			}
 
-			// Observers are holding the death pose from RpcSetDeathState(true); without the
+			// Observers are holding the death pose from BroadcastDeathState(true); without the
 			// matching clear, a resurrected character stands up on its own screen and stays a
 			// corpse on everyone else's.
 			if (base.IsServerStarted)
 			{
-				RpcSetDeathState(false);
+				BroadcastDeathState(false);
 			}
 
 			// Fire ECA resurrect triggers.

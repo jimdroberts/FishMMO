@@ -1,4 +1,6 @@
-﻿using System;
+using FishNet.Object;
+using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishNet.Object.Prediction;
@@ -246,15 +248,18 @@ namespace FishMMO.Shared
 				replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld) &&
 				activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 			{
-				// Enforce a maximum hold duration (2x normal activation time) to prevent
-				// clients from holding charged abilities indefinitely. Track hold ticks
-				// separately since remainingTicks is already 0 when the ability finished charging.
+				// Enforce a maximum hold duration (2x normal activation time, floored — see
+				// ComputeMaxHoldTicks) to prevent clients from holding charged abilities
+				// indefinitely. Track hold ticks separately since remainingTicks is already 0
+				// when the ability finished charging.
 				chargedHoldTicks++;
-				uint maxHoldTicks = (uint)(validatedAbility.ActivationTime * 2f / (float)base.TimeManager.TickDelta);
+				uint maxHoldTicks = ComputeMaxHoldTicks(validatedAbility.ActivationTime, (float)base.TimeManager.TickDelta);
 				if (chargedHoldTicks >= maxHoldTicks)
 				{
 					chargedHoldTicks = 0;
-					Cancel(ReplicateState.Invalid, true);
+					// Pass the real state: with Invalid, a replayed tick would clear the
+					// player's live localInputFlags and reset the animator mid-replay.
+					Cancel(state, true);
 				}
 				return;
 			}
@@ -262,6 +267,45 @@ namespace FishMMO.Shared
 
 			// Activation complete — spawn the ability and finish
 			FinishAbility(validatedAbility, activationData, state);
+		}
+
+		/// <summary>
+		/// Minimum charged-hold window, in seconds, applied when 2x the ability's activation
+		/// time would be shorter. See <see cref="ComputeMaxHoldTicks"/>.
+		/// </summary>
+		internal const float MinimumChargedHoldSeconds = 1f;
+
+		/// <summary>
+		/// Ticks a charged ability may be held past full charge before the server cancels it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The cap is 2x the activation time, floored at <see cref="MinimumChargedHoldSeconds"/>
+		/// and never below one tick. The floor exists because the raw formula collapses for
+		/// instant abilities: an ability authored at <c>ActivationTime = 0</c> (Punch is) produced
+		/// <c>maxHoldTicks = 0</c>, and since the hold counter increments before the comparison,
+		/// the charge was cancelled on the very first held tick — a charged event on a fast
+		/// ability was silently unusable rather than briefly holdable.
+		/// </para>
+		/// <para>
+		/// Pure and static, with <c>Math.Ceiling</c> rather than <c>Mathf</c>, because this runs
+		/// inside the predicted replicate on every peer — both sides must compute the identical
+		/// tick count or the client predicts a cancel the server does not perform.
+		/// </para>
+		/// </remarks>
+		/// <param name="activationTime">The ability's activation (charge) time in seconds.</param>
+		/// <param name="tickDelta">Fixed seconds per tick.</param>
+		/// <returns>The hold cap in ticks, always at least 1.</returns>
+		internal static uint ComputeMaxHoldTicks(float activationTime, float tickDelta)
+		{
+			if (tickDelta <= 0f)
+			{
+				return 1u;
+			}
+
+			float capSeconds = Mathf.Max(activationTime * 2f, MinimumChargedHoldSeconds);
+			uint ticks = (uint)(int)Math.Ceiling(capSeconds / (double)tickDelta);
+			return ticks < 1u ? 1u : ticks;
 		}
 
 		/// <summary>
@@ -343,6 +387,29 @@ namespace FishMMO.Shared
 
 					AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo,
 						replicatedAimOrigin, replicatedAimDirection, currentSeed, activationData.GetPredictionTick());
+
+					/* Tell observers what happened, as one message per cast.
+					 *
+					 * Observers currently learn about this spawn only because the owner's whole
+					 * input stream is relayed to them thirty times a second. That relay is what
+					 * makes 100-200 players unaffordable, and it is switched off by disabling state
+					 * forwarding — at which point this broadcast is the only thing that reaches
+					 * them. The ability simulation is deterministic, so the tuple below is all an
+					 * observer needs to reproduce the identical object for its whole lifetime.
+					 *
+					 * Safe to send while forwarding is still on: an observer receiving both paths
+					 * spawns once, because AbilityContainerAllocator treats a matching seed+tick as
+					 * a duplicate and replaces it rather than adding a second object. */
+					BroadcastAbilityActivated(ability, targetInfo, activationData.GetPredictionTick());
+				}
+				else if (base.IsServerStarted && !warnedMissingTargetController)
+				{
+					/* Silent otherwise: the seed still advances below, resources are still
+					 * consumed and the cooldown still starts, but nothing ever spawns and
+					 * observers are never told. Say so once per controller. */
+					warnedMissingTargetController = true;
+					Log.Warning("AbilityController",
+						$"'{gameObject.name}' has no ITargetController; its abilities will never spawn objects.");
 				}
 			}
 
@@ -350,6 +417,212 @@ namespace FishMMO.Shared
 			// or whether a spawn actually occurred — maintains deterministic RNG
 			// state across client and server.
 			currentSeed = abilitySeedGenerator.Next();
+		}
+
+		/// <summary>True once the missing-target-controller warning has been logged for this controller.</summary>
+		private bool warnedMissingTargetController;
+
+		/// <summary>
+		/// Sends this activation to everyone observing the caster.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Server only, and server authored. The client supplied a direction through its replicate
+		/// input; the server validated the activation, resolved the target with its own raycast, and
+		/// this reports the result. Nothing in the message is taken from the client on trust —
+		/// <c>TargetObjectID</c> in particular is the server's resolution, never a victim the client
+		/// named.
+		/// </para>
+		/// <para>
+		/// Scoped to the caster's observers, so the interest management already in place bounds this
+		/// traffic without any extra work. Sent unreliably: a lost cast is a missed visual effect on
+		/// one observer, and re-sending it late would spawn a deterministic object at the wrong tick,
+		/// which looks far worse than the miss.
+		/// </para>
+		/// </remarks>
+		private void BroadcastAbilityActivated(Ability ability, TargetInfo targetInfo, PredictionTick spawnTick)
+		{
+			if (!base.IsServerStarted || base.NetworkManager == null || base.NetworkObject == null)
+			{
+				return;
+			}
+
+			/* Nothing to reproduce: pets, self-target and prefab-less abilities spawn no world
+			 * object, and a required target that was not found spawned nothing here either. */
+			if (!AbilityObject.SpawnsWorldObject(ability.Template) ||
+				(ability.Template.RequiresTarget && targetInfo.Target == null))
+			{
+				return;
+			}
+
+			int targetObjectID = -1;
+			if (targetInfo.Target != null)
+			{
+				NetworkObject targetNob = targetInfo.Target.GetComponentInParent<NetworkObject>();
+				if (targetNob != null)
+				{
+					targetObjectID = targetNob.ObjectId;
+				}
+			}
+
+			// The pose the server spawned with — see AbilitySpawnPose for why it travels.
+			AbilitySpawnPose pose = AbilityObject.ResolveSpawnPose(Character, ability, AbilitySpawner, targetInfo,
+				replicatedAimOrigin, replicatedAimDirection);
+
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new AbilityActivatedBroadcast
+			{
+				CasterObjectID = base.NetworkObject.ObjectId,
+				AbilityID = ability.ID,
+				Seed = currentSeed,
+				SpawnTick = spawnTick.Value,
+				AimOrigin = replicatedAimOrigin,
+				PackedAimDirection = AimDirectionCompression.Encode(replicatedAimDirection),
+				TargetObjectID = targetObjectID,
+				HitPosition = targetInfo.HitPosition,
+				SpawnPosition = pose.Position,
+				SpawnRotation = pose.Rotation,
+				ServerTick = base.TimeManager.LocalTick,
+			}, true, Channel.Unreliable);
+		}
+
+		/// <summary>
+		/// Ticks an observer should fast-forward a freshly reproduced ability object by, so it
+		/// sits where the server's copy is <i>as the observer renders its peers</i>.
+		/// </summary>
+		/// <remarks>
+		/// Observers render other characters <paramref name="interpolationTicks"/> behind the
+		/// server, so the object is placed that far behind the server's copy too — a projectile
+		/// that ran level with the server would visibly lead the interpolated caster that fired
+		/// it. Negative differences (an estimate that lags the spawn) clamp to zero.
+		/// </remarks>
+		/// <param name="estimatedServerTick">The observer's estimate of the current server tick (<c>TimeManager.Tick</c>).</param>
+		/// <param name="serverSpawnTick">Server tick the object spawned on.</param>
+		/// <param name="interpolationTicks">Ticks the observer renders its peers behind the server.</param>
+		internal static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks)
+		{
+			long elapsed = (int)(estimatedServerTick - serverSpawnTick);
+			elapsed -= interpolationTicks;
+			return elapsed > 0 ? (uint)elapsed : 0u;
+		}
+
+		/// <summary>True once this client has registered the shared activation handler.</summary>
+		/// <remarks>
+		/// Registered once per client rather than per character, for the same reason the resource
+		/// handler is: a per-character registration would run one delegate per character in the
+		/// scene for every cast anyone makes.
+		/// </remarks>
+		private static bool activationBroadcastRegistered;
+
+		/// <summary>Registers the shared activation handler for this client.</summary>
+		internal static void RegisterActivationBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (activationBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			networkManager.ClientManager.RegisterBroadcast<AbilityActivatedBroadcast>(OnAbilityActivatedBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
+			activationBroadcastRegistered = true;
+		}
+
+		/// <summary>
+		/// Destroys the local copy of an ability object the server ended by collision.
+		/// </summary>
+		/// <remarks>
+		/// Runs for the owner as well as observers — the owner's predicted collision can miss a
+		/// hit the server landed just as an observer's can. A copy already gone (the local
+		/// collision or lifetime got there first) is simply not found.
+		/// </remarks>
+		private static void OnAbilityObjectDestroyedBroadcast(AbilityObjectDestroyedBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null ||
+				!controller.KnownAbilities.TryGetValue(msg.AbilityID, out Ability ability) ||
+				ability.Objects == null ||
+				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
+				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
+				abilityObject == null)
+			{
+				return;
+			}
+
+			abilityObject.DestroyAbilityObjectInternal();
+		}
+
+		/// <summary>
+		/// Reproduces a broadcast activation on an observing client.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Skipped on the server, which already spawned the object, and on the owner, which
+		/// predicted it. Everyone else rebuilds it from the seed and tick — the same inputs the
+		/// server used, so the same object.
+		/// </para>
+		/// <para>
+		/// The target is resolved back through the spawned map rather than re-raycast. Re-tracing
+		/// here would reintroduce exactly the divergence this whole design removes: an observer
+		/// holds its peers interpolated, so the same ray against stale colliders can select a
+		/// different character than the server chose.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityActivatedBroadcast(AbilityActivatedBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null || controller.Character == null)
+			{
+				return;
+			}
+			if (!controller.KnownAbilities.TryGetValue(msg.AbilityID, out Ability ability))
+			{
+				return;
+			}
+
+			Transform target = null;
+			if (msg.TargetObjectID >= 0 &&
+				nm.ClientManager.Objects.Spawned.TryGetValue(msg.TargetObjectID, out NetworkObject targetNob) &&
+				targetNob != null)
+			{
+				target = targetNob.transform;
+			}
+
+			Vector3 aimDirection = AimDirectionCompression.Decode(msg.PackedAimDirection);
+			// The server's hit point, not the target's root: Target-mode abilities spawn at it.
+			TargetInfo targetInfo = new TargetInfo(target, msg.HitPosition);
+
+			AbilityObject spawned = AbilityObject.Spawn(ability, controller.Character, controller.AbilitySpawner, targetInfo,
+				msg.AimOrigin, aimDirection, msg.Seed, new PredictionTick(msg.SpawnTick),
+				new AbilitySpawnPose(msg.SpawnPosition, msg.SpawnRotation));
+
+			/* The message took one network delay to get here, during which the server's copy
+			 * kept moving. Catch up, less the interpolation the observer renders its peers behind. */
+			if (spawned != null && nm.TimeManager != null)
+			{
+				uint fastForward = ComputeObserverFastForwardTicks(nm.TimeManager.Tick, msg.ServerTick,
+					LagCompensationTick.SpectatorInterpolationTicks);
+				spawned.FastForward(fastForward);
+			}
 		}
 
 		/// <summary>
@@ -736,23 +1009,13 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			// Server-authoritative range validation: verify the target is within
-			// the ability's effective range before allowing activation. The server
-			// enforces range again during ResolveTargetAndSpawn via raycast, but
-			// this check prevents the cast bar and resource prediction from
-			// starting when the target is clearly out of range.
-			float abilityRange = validatedAbility.Range;
-			if (abilityRange > 0f &&
-				cachedTargetController != null &&
-				cachedTargetController.Current.Target != null)
-			{
-				Vector3 targetPos = cachedTargetController.Current.Target.position;
-				float distSqr = (Character.Transform.position - targetPos).sqrMagnitude;
-				if (distSqr > abilityRange * abilityRange)
-				{
-					return false;
-				}
-			}
+			/* No target/range check here, deliberately. ITargetController.Current is not
+			 * deterministic: on the owner it is rewritten every 50 ms from the mouse ray, on the
+			 * server it is whatever the previous cast's raycast left behind, and during replay it
+			 * is simply "now". Gating on it made owner and server disagree about activations and
+			 * produced spurious denials. Range is enforced authoritatively by the raycast in
+			 * ResolveTargetAndSpawn (ability.Range is the ray length); the cheap client-side
+			 * pre-filter lives in CanActivateOptimistic. */
 			return true;
 		}
 
@@ -798,6 +1061,30 @@ namespace FishMMO.Shared
 					petController.Pet != null)
 				{
 					return false;
+				}
+
+				/* Target and range pre-filter. Client-only and best-effort: it reads the live
+				 * (mouse-driven) target, which is exactly why it cannot live in CanActivate. It
+				 * stops the cast bar and resource prediction from starting for a cast the server's
+				 * raycast will find nothing for — a required target that is missing, or a target
+				 * clearly beyond the ability's reach. */
+				if (cachedTargetController != null)
+				{
+					Transform target = cachedTargetController.Current.Target;
+					if (validatedAbility.Template.RequiresTarget && target == null)
+					{
+						return false;
+					}
+
+					float abilityRange = validatedAbility.Range;
+					if (abilityRange > 0f && target != null)
+					{
+						float distSqr = (Character.Transform.position - target.position).sqrMagnitude;
+						if (distSqr > abilityRange * abilityRange)
+						{
+							return false;
+						}
+					}
 				}
 			}
 

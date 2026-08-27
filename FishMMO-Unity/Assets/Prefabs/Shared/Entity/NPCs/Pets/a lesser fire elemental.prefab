@@ -4922,6 +4922,7 @@ GameObject:
   - component: {fileID: 1880843646148751759}
   - component: {fileID: 6308388451046359136}
   - component: {fileID: 1106315486205493162}
+  - component: {fileID: 3624680751377356232}
   m_Layer: 6
   m_Name: a lesser fire elemental
   m_TagString: Untagged
@@ -5359,6 +5360,47 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: 0}
+--- !u!114 &1106315486205493162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93091dc8efed97c08aae1898cd50ebc3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: -4468559157413045786}
+  _networkObjectCache: {fileID: -4468559157413045786}
+  bands:
+  - MaximumDistance: 20
+    Interval: 1
+  - MaximumDistance: 40
+    Interval: 3
+  - MaximumDistance: 80
+    Interval: 6
+  intervalScale: 1
+  evaluateInterval: 0.5
+  hysteresis: 0.15
+--- !u!114 &3624680751377356232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df4fb99d96455b2948ee3a658096492b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPositionHistory
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: -4468559157413045786}
+  _networkObjectCache: {fileID: 0}
+  maximumRewindMilliseconds: 500
 --- !u!1 &9198423041106670181
 GameObject:
   m_ObjectHideFlags: 0
@@ -5828,28 +5870,3 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 4103170126109918815}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1106315486205493162
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93091dc8efed97c08aae1898cd50ebc3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 255
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
-  bands:
-  - MaximumDistance: 20
-    Interval: 1
-  - MaximumDistance: 40
-    Interval: 3
-  - MaximumDistance: 80
-    Interval: 6
-  intervalScale: 1
-  evaluateInterval: 0.5
-  hysteresis: 0.15

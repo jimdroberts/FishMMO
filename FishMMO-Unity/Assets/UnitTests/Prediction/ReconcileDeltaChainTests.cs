@@ -274,12 +274,161 @@ namespace FishMMO.UnitTests
 			AssertReconcileEquals(serverBaseline, clientBaseline, "baselines after the resync");
 		}
 
+		[TearDown]
+		public void ClearGuard()
+		{
+			// A rejected read parks a flag for NetworkBehaviour.Reconcile_Reader to consume; tests
+			// that reject on purpose must not leak it into the next test.
+			FishNet.Object.ReconcileDeltaGuard.ConsumeRejection();
+		}
+
+		/// <summary>
+		/// A lost StateUpdate must not corrupt the owner: every delta after the gap is rejected,
+		/// the baseline is left alone, and FishNet is told not to reconcile from it.
+		/// </summary>
+		/// <remarks>
+		/// Before the sequence guard this scenario decoded tick 7 against the tick-5 baseline and
+		/// handed the owner a wrong position — a teleport-and-jitter burst that lasted until the
+		/// next absolute snapshot. Now the loss costs "no correction until the snapshot", which is
+		/// what a lost packet meant before delta encoding existed.
+		/// </remarks>
+		[Test]
+		public void LostPacket_RejectsEveryLaterDelta_UntilTheAbsoluteSnapshot()
+		{
+			CharacterReconcileData serverBaseline = default;
+			CharacterReconcileData clientBaseline = default;
+			CharacterReconcileData authoritative = MakeReconcileData();
+
+			for (uint tick = 1; tick <= 5; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ClientReceive(ref clientBaseline, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+				LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), $"in-order tick {tick} must be accepted");
+			}
+			CharacterReconcileData baselineBeforeLoss = clientBaseline;
+
+			// Tick 6 is LOST: the server advances its baseline, the client never sees the bytes.
+			authoritative = Advance(authoritative, 6);
+			ServerSend(ref serverBaseline, authoritative, OptionForTick(6));
+
+			int rejected = 0;
+			for (uint tick = 7; tick < ServerTickRate; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ArraySegment<byte> payload = ServerSend(ref serverBaseline, authoritative, OptionForTick(tick));
+				CharacterReconcileData returned = ClientReceive(ref clientBaseline, payload);
+
+				LogAssert.IsTrue(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(),
+					$"tick {tick} follows a gap and must be rejected, not decoded against a stale baseline");
+				LogAssert.IsTrue(ReconcileEquals(baselineBeforeLoss, returned),
+					$"a rejected delta must hand back the untouched baseline (tick {tick})");
+				rejected++;
+			}
+
+			// Tick 30: the periodic absolute snapshot resynchronises the chain.
+			authoritative = Advance(authoritative, ServerTickRate);
+			CharacterReconcileData repaired = ClientReceive(ref clientBaseline,
+				ServerSend(ref serverBaseline, authoritative, OptionForTick(ServerTickRate)));
+			LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), "an absolute snapshot is never rejected");
+			AssertReconcileEquals(authoritative, repaired, "the absolute snapshot must resync after a loss");
+
+			// And the chain continues cleanly from there.
+			for (uint tick = ServerTickRate + 1; tick <= ServerTickRate + 5; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				CharacterReconcileData received = ClientReceive(ref clientBaseline,
+					ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+				LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), $"post-resync tick {tick} must be accepted");
+				AssertReconcileEquals(authoritative, received, $"post-resync tick {tick}");
+			}
+
+			TestContext.WriteLine(
+				$"MEASURE one lost StateUpdate at tick 6: {rejected} reconciles rejected (not corrupted) " +
+				$"until the tick-{ServerTickRate} absolute snapshot; worst-case uncorrected window = " +
+				$"{(ServerTickRate - 6) * 1000 / ServerTickRate} ms");
+		}
+
+		/// <summary>
+		/// Reordered delivery is treated as a gap: the early packet is rejected, the late one is
+		/// accepted, and the chain re-establishes at the next snapshot rather than applying the
+		/// early delta against a baseline that does not yet include the late one.
+		/// </summary>
+		[Test]
+		public void ReorderedDelivery_RejectsTheEarlyPacket_AndRecovers()
+		{
+			CharacterReconcileData serverBaseline = default;
+			CharacterReconcileData clientBaseline = default;
+			CharacterReconcileData authoritative = MakeReconcileData();
+
+			for (uint tick = 1; tick <= 4; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ClientReceive(ref clientBaseline, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+			}
+
+			authoritative = Advance(authoritative, 5);
+			ArraySegment<byte> five = ServerSend(ref serverBaseline, authoritative, OptionForTick(5));
+			CharacterReconcileData authoritativeAtFive = authoritative;
+			authoritative = Advance(authoritative, 6);
+			ArraySegment<byte> six = ServerSend(ref serverBaseline, authoritative, OptionForTick(6));
+
+			// Six arrives first.
+			ClientReceive(ref clientBaseline, six);
+			LogAssert.IsTrue(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), "the early packet must be rejected");
+
+			// Then five: in sequence, accepted.
+			CharacterReconcileData received = ClientReceive(ref clientBaseline, five);
+			LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), "the late packet is next in sequence");
+			AssertReconcileEquals(authoritativeAtFive, received, "the late packet decodes exactly");
+
+			// The snapshot heals the hole six left behind.
+			authoritative = Advance(authoritative, ServerTickRate);
+			CharacterReconcileData repaired = ClientReceive(ref clientBaseline,
+				ServerSend(ref serverBaseline, authoritative, OptionForTick(ServerTickRate)));
+			AssertReconcileEquals(authoritative, repaired, "resync after a reorder");
+		}
+
+		/// <summary>
+		/// A rejected delta consumes exactly its own bytes, so whatever FishNet packed after it
+		/// in the StateUpdate is still readable.
+		/// </summary>
+		[Test]
+		public void RejectedDelta_ConsumesItsPayloadExactly()
+		{
+			CharacterReconcileData serverBaseline = default;
+			CharacterReconcileData clientBaseline = default;
+			CharacterReconcileData authoritative = MakeReconcileData();
+
+			for (uint tick = 1; tick <= 3; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ClientReceive(ref clientBaseline, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
+			}
+			authoritative = Advance(authoritative, 4);
+			ServerSend(ref serverBaseline, authoritative, OptionForTick(4)); // lost
+			authoritative = Advance(authoritative, 5);                        // lumpy: buffs, attributes, rng change
+			authoritative = Advance(authoritative, 9);                        // cooldown + ability id change
+
+			Writer writer = new Writer();
+			writer.WriteDelta(serverBaseline, authoritative, DeltaSerializerOption.RootSerialize);
+			const int Sentinel = 0x5EED;
+			writer.WriteInt32(Sentinel);
+
+			Reader reader = new Reader(writer.GetArraySegment(), null);
+			reader.ReadDelta(clientBaseline);
+			LogAssert.IsTrue(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), "the gapped delta must be rejected");
+			LogAssert.AreEqual(Sentinel, reader.ReadInt32(),
+				"a rejected delta must leave the reader positioned exactly after its own payload");
+		}
+
 		// ── Helpers ──────────────────────────────────────────────────────────
 
 		/// <summary>Moves the authoritative snapshot on by one tick's worth of plausible change.</summary>
 		private static CharacterReconcileData Advance(CharacterReconcileData d, uint tick)
 		{
 			CharacterReconcileData next = d;
+			// Every server send advances the chain sequence — CharacterPredictionController.CreateReconcile.
+			next.Sequence = unchecked((byte)(d.Sequence + 1));
 			next.Cooldowns = (CooldownReconcileEntry[])d.Cooldowns.Clone();
 			next.Buffs = (BuffReconcileEntry[])d.Buffs.Clone();
 			next.Equipment = (EquipmentReconcileEntry[])d.Equipment.Clone();

@@ -1,4 +1,4 @@
-﻿using FishNet.Object.Prediction;
+using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -107,6 +107,13 @@ namespace FishMMO.Shared
 		/// Hoisted from ReadPayload to avoid per-call allocation.
 		/// </summary>
 		private readonly List<int> readPayloadAbilityEvents = new List<int>();
+
+		/// <summary>
+		/// What this client predicted, per replicate tick, so <see cref="OnReconcile"/> can compare
+		/// the server's state for tick T against the client's state for tick T rather than against
+		/// the client's live state several ticks later. See <see cref="PredictedAbilityStateHistory"/>.
+		/// </summary>
+		private readonly PredictedAbilityStateHistory predictedStateHistory = new PredictedAbilityStateHistory();
 
 		/// <summary>
 		/// Cached <see cref="EventData"/> for <see cref="Ability.MeetsActivationConditions"/>.
@@ -299,6 +306,16 @@ namespace FishMMO.Shared
 			Character.TryGet(out cachedTargetController);
 			Character.TryGet(out cachedAnimationController);
 
+			/* Register the shared activation handler the first time any character starts on this
+			 * client. Never unregistered, for the same reason as the resource handler: ClientManager
+			 * does not clear handlers on stop, so a per-character unregister would have to be
+			 * reference counted or the first despawn would switch off ability visuals for every
+			 * remaining character. */
+			if (base.IsClientStarted)
+			{
+				RegisterActivationBroadcast(base.NetworkManager);
+			}
+
 			// Eagerly initialize the deterministic RNG so the first WritePayload,
 			// OnCreateReconcile, and ResetState paths all observe the same seed.
 			// Without this, lazy initialization races could produce a one-tick seed mismatch.
@@ -384,6 +401,7 @@ namespace FishMMO.Shared
 			// a real implementation, this call ensures cleanup.
 			lastCreatedData.Dispose();
 			hasLastCreatedData = false;
+			predictedStateHistory.Clear();
 
 			// Detach all spawned ability objects before clearing references.
 			// This allows in-flight projectiles to persist visually using their snapshots
@@ -561,6 +579,23 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc/>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
+		{
+			ReplicateInternal(ref input, state);
+
+			/* Record what this tick's simulation left behind, on every pass including replays —
+			 * a replay re-simulates the tick and its result is what the next reconcile for that
+			 * tick should be compared with. The server has nothing to compare, so it skips. */
+			if (!base.IsServerStarted)
+			{
+				predictedStateHistory.Record(input.GetTick(), currentSeed, currentAbilityID);
+			}
+		}
+
+		/// <summary>
+		/// The body of <see cref="OnReplicate"/>; split out so every early return still lands in
+		/// the per-tick history record.
+		/// </summary>
+		private void ReplicateInternal(ref CharacterReplicateData input, ReplicateState state)
 		{
 			// Convert to the internal type — all ability subsystem methods use AbilityActivationReplicateData.
 			AbilityActivationReplicateData activationData = new AbilityActivationReplicateData(
@@ -762,27 +797,38 @@ namespace FishMMO.Shared
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
 			//Log.Debug($"Reconciled: {rd.GetTick()}");
-			long previousAbilityID = currentAbilityID;
+			uint reconcileTick = rd.GetTick();
 			bool denied = rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied);
 
-			// Detect prediction mismatch: if the server's seed differs from the client's,
-			// the client mispredicted an ability activation. Destroy ability objects
-			// spawned after the reconcile tick from the mismatched ability.
-			// If a specific ability was being activated, restrict destruction to that ability.
-			// If no ability was active (rare, indicates deeper desync), fall back to full cleanup.
-			if (rd.Seed != currentSeed)
+			/* Compare like with like. This reconcile describes the server's state AFTER tick
+			 * reconcileTick; the client's live fields describe its state after its latest local
+			 * tick, which is always several ticks later (FishNet applies a reconcile only once it
+			 * is stateInterpolation+1 ticks behind local). Any cast predicted in between had
+			 * advanced currentSeed, so comparing against the live value declared a mismatch on
+			 * every cast and destroyed every owner-predicted projectile a tick after it spawned.
+			 * The history holds what the client had at reconcileTick itself. Without an entry
+			 * (first reconciles after spawn, or one older than the ring) there is nothing to
+			 * judge against and no correction is attempted. */
+			bool havePredicted = predictedStateHistory.TryGet(reconcileTick, out int predictedSeed, out long predictedAbilityID);
+
+			// Detect prediction mismatch: the client's simulation of this tick produced a
+			// different seed than the server's, so the client spawned something the server did
+			// not (or vice versa). Destroy ability objects spawned after the reconcile tick.
+			// If a specific ability was being activated, restrict destruction to that ability;
+			// otherwise fall back to a full cleanup.
+			if (havePredicted && predictedSeed != rd.Seed)
 			{
-				uint reconcileTick = rd.GetTick();
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
-				if (currentAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(currentAbilityID, out Ability mismatchedAbility))
+				if (predictedAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(predictedAbilityID, out Ability mismatchedAbility))
 				{
 					// Only destroy objects from the ability whose activation caused the seed divergence
 					mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick);
 				}
 				else
 				{
-					// No active ability to attribute the mismatch to — full cleanup as safety net
+					// Instant abilities have already cleared their ID by the end of the tick, so
+					// this is the common path for them, not a sign of deeper desync.
 					foreach (Ability ability in KnownAbilities.Values)
 					{
 						ability.DestroyAbilityObjectsAfterTick(reconcileTick);
@@ -793,18 +839,19 @@ namespace FishMMO.Shared
 			// The denial flag is authoritative and independent from RNG state.
 			// A rejected activation can occur before any seed advance, so tying
 			// this callback to seed mismatch drops legitimate denial corrections.
-			if (denied && previousAbilityID != NO_ABILITY)
+			// Judged against the predicted state at the denied tick so instant abilities —
+			// whose live ID is already cleared by the time the denial arrives — still report.
+			if (denied && havePredicted && predictedAbilityID != NO_ABILITY)
 			{
-				OnAbilityDenied?.Invoke(previousAbilityID);
+				OnAbilityDenied?.Invoke(predictedAbilityID);
 			}
 
-			// When the server's authoritative state has no active ability but the client
-			// was still predicting one, the cast bar must be cleared. This fires for
-			// cases where the server completed, interrupted, or never started the ability
-			// (e.g., ability completed in one tick before the client prediction caught up,
-			// or replicate was lost and the server never received the activation input).
-			// The denial case is handled above; this covers every other server-side ending.
-			if (!denied && previousAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
+			// When the server had no active ability at this tick but the client predicted one,
+			// the cast bar must be cleared: the server completed, interrupted, or never started
+			// the ability (e.g. the replicate was lost). Judged at the reconcile tick — against
+			// the live ID this fired on every reconcile for the first RTT of every timed cast,
+			// while the server simply had not received the activation yet.
+			if (!denied && havePredicted && predictedAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
 			{
 				OnCancel?.Invoke();
 			}
