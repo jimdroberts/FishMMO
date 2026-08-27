@@ -19,6 +19,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.ID)
 				.ValueGeneratedOnAdd();
 
+			builder.Property(e => e.WorldServerID)
+				.IsRequired();
+
 			builder.Property(e => e.SceneName)
 				.IsRequired()
 				.HasMaxLength(100);
@@ -45,8 +48,12 @@ namespace FishMMO.Database.Npgsql.Entities
 			 * server, at roughly the same moment — so without uniqueness the same plot quietly
 			 * becomes several rows with separate owners, and which one a player sees depends on
 			 * which channel they walked into. Unique here turns that race into one winner and a
-			 * conflict the loser can read. */
-			builder.HasIndex(e => new { e.SceneName, e.PlotKey })
+			 * conflict the loser can read.
+			 *
+			 * The world server leads. Every query here names one — a scene server only registers or
+			 * reads the land of the world whose scene it is hosting — so leading with that equality
+			 * predicate lets the planner seek straight to that world's rows. */
+			builder.HasIndex(e => new { e.WorldServerID, e.SceneName, e.PlotKey })
 				.IsUnique();
 
 			/* "Which plots do I own", asked per character on login and whenever the housing UI

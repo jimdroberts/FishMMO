@@ -21,8 +21,12 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<int>> RegisterAsync(string sceneName, IReadOnlyList<string> plotKeys, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> RegisterAsync(long worldServerID, string sceneName, IReadOnlyList<string> plotKeys, CancellationToken cancellationToken = default)
 		{
+			if (worldServerID <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "World server ID must be greater than zero.");
+			}
 			if (string.IsNullOrWhiteSpace(sceneName))
 			{
 				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Scene name must not be empty.");
@@ -53,22 +57,22 @@ namespace FishMMO.Database.Npgsql.Services
 				 * the same land, so conflicts are the normal case rather than an error. The
 				 * conflict has to be a no-op rather than an update: an update would write over the
 				 * ownership of a plot somebody already lives on, every time a server restarts. */
-				string sql = $@"INSERT INTO {TableName} (scene_name, plot_key, owner_character_id, owner_guild_id, version, time_created)
-					SELECT {{0}}, u.plot_key, 0, 0, 1, {{1}}
-					FROM UNNEST({{2}}::text[]) AS u(plot_key)
-					ON CONFLICT (scene_name, plot_key) DO NOTHING";
+				string sql = $@"INSERT INTO {TableName} (world_server_id, scene_name, plot_key, owner_character_id, owner_guild_id, version, time_created)
+					SELECT {{0}}, {{1}}, u.plot_key, 0, 0, 1, {{2}}
+					FROM UNNEST({{3}}::text[]) AS u(plot_key)
+					ON CONFLICT (world_server_id, scene_name, plot_key) DO NOTHING";
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { sceneName, now, keys },
+					new object[] { worldServerID, sceneName, now, keys },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<List<PlotData>>> FetchBySceneAsync(string sceneName, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<List<PlotData>>> FetchBySceneAsync(long worldServerID, string sceneName, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(sceneName))
+			if (worldServerID <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
 				return DatabaseResult<List<PlotData>>.Success(new List<PlotData>());
 			}
@@ -77,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				List<PlotEntity> plots = await dbContext.Plots
 					.AsNoTracking()
-					.Where(e => e.SceneName == sceneName)
+					.Where(e => e.WorldServerID == worldServerID && e.SceneName == sceneName)
 					.OrderBy(e => e.PlotKey)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
@@ -226,7 +230,7 @@ namespace FishMMO.Database.Npgsql.Services
 			List<PlotData> results = new List<PlotData>(plots.Count);
 			foreach (PlotEntity plot in plots)
 			{
-				results.Add(new PlotData(plot.ID, plot.SceneName, plot.PlotKey, plot.OwnerCharacterID, plot.OwnerGuildID, plot.TimeClaimed));
+				results.Add(new PlotData(plot.ID, plot.WorldServerID, plot.SceneName, plot.PlotKey, plot.OwnerCharacterID, plot.OwnerGuildID, plot.TimeClaimed));
 			}
 			return results;
 		}

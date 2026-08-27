@@ -16,6 +16,9 @@ namespace FishMMO.Database.Data
 		/// <summary>Primary key.</summary>
 		public readonly long ID;
 
+		/// <summary>The world server this land belongs to.</summary>
+		public readonly long WorldServerID;
+
 		/// <summary>The Unity scene the plot's foundation is authored in.</summary>
 		public readonly string SceneName;
 
@@ -31,9 +34,10 @@ namespace FishMMO.Database.Data
 		/// <summary>When the current owner claimed the plot, or null while unclaimed.</summary>
 		public readonly DateTime? TimeClaimed;
 
-		public PlotData(long id, string sceneName, string plotKey, long ownerCharacterID, long ownerGuildID, DateTime? timeClaimed)
+		public PlotData(long id, long worldServerID, string sceneName, string plotKey, long ownerCharacterID, long ownerGuildID, DateTime? timeClaimed)
 		{
 			ID = id;
+			WorldServerID = worldServerID;
 			SceneName = sceneName;
 			PlotKey = plotKey;
 			OwnerCharacterID = ownerCharacterID;

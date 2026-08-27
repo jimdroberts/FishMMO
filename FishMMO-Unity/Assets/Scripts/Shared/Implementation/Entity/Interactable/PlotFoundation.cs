@@ -22,22 +22,27 @@ namespace FishMMO.Shared
 	public class PlotFoundation : Interactable, IPlotFoundation
 	{
 		/// <summary>
-		/// Every foundation currently alive, grouped by the scene it belongs to.
+		/// Every foundation currently alive, grouped by the loaded scene it belongs to.
 		/// </summary>
 		/// <remarks>
-		/// Keyed by scene <em>name</em>, not by a scene handle, because several channels of the same
-		/// scene may be loaded in one process and they all describe the same land. Registration and
-		/// ownership therefore resolve once per scene name and apply to every copy.
+		/// Keyed by the scene manager's <em>handle</em>, which identifies one loaded copy of a scene
+		/// inside this process. Scene name alone will not do: a scene server may host scenes for
+		/// several world servers at once, and each world's copy is its own land with its own owners.
+		/// The handle is what the housing system resolves back to a world server.
+		///
+		/// <para>The handle is a process-local identifier and is never persisted or sent anywhere —
+		/// see <c>ISceneInstanceDetails.Handle</c>. It is used here only to group objects that are
+		/// alive in this process right now.</para>
 		/// </remarks>
 		public static class Registry
 		{
-			private static readonly Dictionary<string, List<PlotFoundation>> foundationsByScene = new Dictionary<string, List<PlotFoundation>>();
+			private static readonly Dictionary<int, List<PlotFoundation>> foundationsByScene = new Dictionary<int, List<PlotFoundation>>();
 
 			/// <summary>
-			/// Raised when a foundation joins a scene that had none, so the housing system knows
-			/// there is land here that may not have been registered with the database yet.
+			/// Raised when a foundation joins a loaded scene that had none, so the housing system
+			/// knows there is land here that may not have been registered with the database yet.
 			/// </summary>
-			public static event Action<string> OnSceneGainedFoundations;
+			public static event Action<int> OnSceneGainedFoundations;
 
 			/// <summary>
 			/// Raised when a player asks to claim a foundation.
@@ -60,16 +65,16 @@ namespace FishMMO.Shared
 					return;
 				}
 
-				string sceneName = foundation.gameObject.scene.name;
-				if (string.IsNullOrWhiteSpace(sceneName))
+				int handle = foundation.gameObject.scene.handle;
+				if (handle == 0)
 				{
 					return;
 				}
 
-				if (!foundationsByScene.TryGetValue(sceneName, out List<PlotFoundation> foundations))
+				if (!foundationsByScene.TryGetValue(handle, out List<PlotFoundation> foundations))
 				{
 					foundations = new List<PlotFoundation>();
-					foundationsByScene.Add(sceneName, foundations);
+					foundationsByScene.Add(handle, foundations);
 				}
 
 				if (foundations.Contains(foundation))
@@ -78,7 +83,7 @@ namespace FishMMO.Shared
 				}
 				foundations.Add(foundation);
 
-				OnSceneGainedFoundations?.Invoke(sceneName);
+				OnSceneGainedFoundations?.Invoke(handle);
 			}
 
 			/// <summary>
@@ -91,9 +96,8 @@ namespace FishMMO.Shared
 					return;
 				}
 
-				string sceneName = foundation.gameObject.scene.name;
-				if (string.IsNullOrWhiteSpace(sceneName) ||
-					!foundationsByScene.TryGetValue(sceneName, out List<PlotFoundation> foundations))
+				int handle = foundation.gameObject.scene.handle;
+				if (handle == 0 || !foundationsByScene.TryGetValue(handle, out List<PlotFoundation> foundations))
 				{
 					return;
 				}
@@ -101,17 +105,16 @@ namespace FishMMO.Shared
 				foundations.Remove(foundation);
 				if (foundations.Count < 1)
 				{
-					foundationsByScene.Remove(sceneName);
+					foundationsByScene.Remove(handle);
 				}
 			}
 
 			/// <summary>
-			/// The foundations authored in a scene, or an empty list when there are none.
+			/// The foundations in one loaded scene, or an empty list when there are none.
 			/// </summary>
-			public static IReadOnlyList<PlotFoundation> ForScene(string sceneName)
+			public static IReadOnlyList<PlotFoundation> ForScene(int sceneHandle)
 			{
-				if (!string.IsNullOrWhiteSpace(sceneName) &&
-					foundationsByScene.TryGetValue(sceneName, out List<PlotFoundation> foundations))
+				if (foundationsByScene.TryGetValue(sceneHandle, out List<PlotFoundation> foundations))
 				{
 					return foundations;
 				}
@@ -119,9 +122,9 @@ namespace FishMMO.Shared
 			}
 
 			/// <summary>
-			/// Every scene that currently has at least one foundation.
+			/// Every loaded scene that currently has at least one foundation.
 			/// </summary>
-			public static IReadOnlyCollection<string> Scenes => foundationsByScene.Keys;
+			public static IReadOnlyCollection<int> Scenes => foundationsByScene.Keys;
 
 			/// <summary>
 			/// Raises <see cref="OnClaimRequested"/>.
@@ -146,6 +149,57 @@ namespace FishMMO.Shared
 		[Tooltip("Cost to claim this plot, in the server's currency attribute.")]
 		[SerializeField]
 		private long price;
+
+		/// <summary>
+		/// The plot's footprint in metres, as width (X) by depth (Z).
+		/// </summary>
+		/// <remarks>
+		/// One Unity unit is one metre. Rectangular and axis-relative rather than an arbitrary
+		/// volume: everything built on a plot has to be testable against its edge cheaply and
+		/// identically on both sides of the wire, and a rectangle is the shape that makes
+		/// "is this inside?" a pair of comparisons.
+		///
+		/// <para>Authored, never stored. The footprint belongs to the scene the same way the
+		/// foundation's mesh does — the database records who owns a plot, not how big it is — so
+		/// resizing one is a scene edit and needs no migration.</para>
+		/// </remarks>
+		[Tooltip("Plot footprint in metres: width (X) by depth (Z). 1 unit = 1 metre.")]
+		[SerializeField]
+		private Vector2 dimensions = new Vector2(DefaultSize, DefaultSize);
+
+		/// <summary>
+		/// Height of the plot's claimable volume, in metres.
+		/// </summary>
+		/// <remarks>
+		/// Present so the plot is a box rather than an infinite column. A plot under a bridge should
+		/// not own the bridge, and a plot on a cliff should not own the sky above it.
+		/// </remarks>
+		[Tooltip("Height of the plot volume in metres, measured upward from the foundation.")]
+		[SerializeField]
+		private float height = DefaultHeight;
+
+		/// <summary>
+		/// Footprint used when none is authored, in metres.
+		/// </summary>
+		/// <remarks>
+		/// A placeholder, not a recommendation. The standard sizes a server should offer are a
+		/// design decision about how housing districts are laid out, and that has not been made yet.
+		/// </remarks>
+		public const float DefaultSize = 16f;
+
+		/// <summary>
+		/// Height used when none is authored, in metres.
+		/// </summary>
+		public const float DefaultHeight = 12f;
+
+		/// <summary>
+		/// Smallest footprint or height a plot may have, in metres.
+		/// </summary>
+		/// <remarks>
+		/// A plot with a zero or negative edge is a plot nothing can be inside, which would read as
+		/// every placement being out of bounds rather than as the authoring mistake it is.
+		/// </remarks>
+		public const float MinimumExtent = 1f;
 
 		/// <summary>
 		/// The canonicalised key, computed once from <see cref="plotKey"/>. Null until first read.
@@ -179,6 +233,53 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc />
 		public long Price => price < 0 ? 0 : price;
+
+		/// <summary>
+		/// The plot's footprint in metres, width (X) by depth (Z), floored at
+		/// <see cref="MinimumExtent"/>.
+		/// </summary>
+		public Vector2 Dimensions => new Vector2(
+			Mathf.Max(MinimumExtent, dimensions.x),
+			Mathf.Max(MinimumExtent, dimensions.y));
+
+		/// <summary>
+		/// The plot's height in metres, floored at <see cref="MinimumExtent"/>.
+		/// </summary>
+		public float Height => Mathf.Max(MinimumExtent, height);
+
+		/// <summary>
+		/// The plot's volume in world space.
+		/// </summary>
+		/// <remarks>
+		/// Centred on the foundation horizontally and resting on it vertically, so the foundation's
+		/// transform marks the ground at the middle of the plot — which is where a designer dragging
+		/// one into a scene would expect the pivot to be.
+		///
+		/// <para>Axis-aligned, and deliberately not rotated with the transform. A rotated plot would
+		/// make every containment test a matrix operation on a path that runs per placement, and
+		/// housing districts laid out on a grid gain nothing from arbitrary angles.</para>
+		/// </remarks>
+		public Bounds Bounds
+		{
+			get
+			{
+				Vector2 size = Dimensions;
+				float volumeHeight = Height;
+				Vector3 origin = transform.position;
+
+				return new Bounds(
+					new Vector3(origin.x, origin.y + (volumeHeight * 0.5f), origin.z),
+					new Vector3(size.x, volumeHeight, size.y));
+			}
+		}
+
+		/// <summary>
+		/// True when a world-space point falls inside this plot.
+		/// </summary>
+		public bool Contains(Vector3 worldPosition)
+		{
+			return Bounds.Contains(worldPosition);
+		}
 
 		/// <inheritdoc />
 		public long PlotID { get; private set; }
@@ -231,6 +332,25 @@ namespace FishMMO.Shared
 			}
 
 			Registry.Register(this);
+		}
+
+		/// <summary>
+		/// Draws the plot's footprint so its extent is visible while authoring.
+		/// </summary>
+		/// <remarks>
+		/// Plots are placed at edit time and never at runtime, so the scene view is the only place
+		/// their boundaries are ever seen. Without this a designer would be sizing a volume they
+		/// cannot look at.
+		/// </remarks>
+		private void OnDrawGizmos()
+		{
+			Bounds bounds = Bounds;
+
+			Gizmos.color = new Color(0.2f, 0.8f, 0.4f, 0.25f);
+			Gizmos.DrawCube(bounds.center, bounds.size);
+
+			Gizmos.color = new Color(0.2f, 0.8f, 0.4f, 0.9f);
+			Gizmos.DrawWireCube(bounds.center, bounds.size);
 		}
 
 		/// <summary>

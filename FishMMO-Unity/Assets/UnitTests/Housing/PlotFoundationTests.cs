@@ -46,12 +46,32 @@ namespace FishMMO.UnitTests
 
 			PlotFoundation foundation = go.AddComponent<PlotFoundation>();
 
+			SetField(foundation, "plotKey", plotKey);
+			SetField(foundation, "price", price);
+
+			return foundation;
+		}
+
+		/// <summary>
+		/// Sets one of the component's authored fields.
+		/// </summary>
+		private static void SetField(PlotFoundation foundation, string name, object value)
+		{
 			typeof(PlotFoundation)
-				.GetField("plotKey", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-				.SetValue(foundation, plotKey);
-			typeof(PlotFoundation)
-				.GetField("price", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-				.SetValue(foundation, price);
+				.GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+				.SetValue(foundation, value);
+		}
+
+		/// <summary>
+		/// Builds a foundation of a given footprint at a given position.
+		/// </summary>
+		private PlotFoundation CreateSizedFoundation(Vector3 position, float width, float depth, float height)
+		{
+			PlotFoundation foundation = CreateFoundation("plot");
+			foundation.transform.position = position;
+
+			SetField(foundation, "dimensions", new Vector2(width, depth));
+			SetField(foundation, "height", height);
 
 			return foundation;
 		}
@@ -145,6 +165,86 @@ namespace FishMMO.UnitTests
 		public void APrice_IsReportedAsAuthored()
 		{
 			Assert.AreEqual(250, CreateFoundation("plot", 250).Price);
+		}
+		/// <summary>
+		/// One Unity unit is one metre, so an authored footprint is reported in metres unchanged.
+		/// </summary>
+		[Test]
+		public void Dimensions_AreReportedAsAuthored()
+		{
+			PlotFoundation foundation = CreateSizedFoundation(Vector3.zero, 24f, 16f, 10f);
+
+			Assert.AreEqual(new Vector2(24f, 16f), foundation.Dimensions);
+			Assert.AreEqual(10f, foundation.Height);
+		}
+
+		/// <summary>
+		/// A zero or negative edge would make every point fall outside the plot, which reads as
+		/// every placement being out of bounds rather than as the authoring mistake it is.
+		/// </summary>
+		[TestCase(0f, 0f, 0f)]
+		[TestCase(-5f, -5f, -5f)]
+		public void NonPositiveExtents_AreFlooredAtTheMinimum(float width, float depth, float height)
+		{
+			PlotFoundation foundation = CreateSizedFoundation(Vector3.zero, width, depth, height);
+
+			Assert.AreEqual(PlotFoundation.MinimumExtent, foundation.Dimensions.x);
+			Assert.AreEqual(PlotFoundation.MinimumExtent, foundation.Dimensions.y);
+			Assert.AreEqual(PlotFoundation.MinimumExtent, foundation.Height);
+		}
+
+		/// <summary>
+		/// The transform marks the ground at the centre of the plot, so the volume is centred
+		/// horizontally on it and rests on top of it.
+		/// </summary>
+		[Test]
+		public void Bounds_AreCentredOnTheFoundationAndRestOnIt()
+		{
+			PlotFoundation foundation = CreateSizedFoundation(new Vector3(10f, 5f, -20f), 20f, 10f, 8f);
+			Bounds bounds = foundation.Bounds;
+
+			Assert.AreEqual(new Vector3(10f, 9f, -20f), bounds.center);
+			Assert.AreEqual(new Vector3(20f, 8f, 10f), bounds.size);
+			Assert.AreEqual(5f, bounds.min.y, 0.0001f, "the plot should rest on the foundation, not straddle it");
+		}
+
+		[Test]
+		public void Contains_AcceptsAPointInsideThePlot()
+		{
+			PlotFoundation foundation = CreateSizedFoundation(Vector3.zero, 20f, 20f, 10f);
+
+			Assert.IsTrue(foundation.Contains(new Vector3(5f, 1f, -5f)));
+		}
+
+		/// <summary>
+		/// The plot is a box, not an infinite column: a plot on a cliff must not own the sky above
+		/// it, and one under a bridge must not own the bridge.
+		/// </summary>
+		[Test]
+		public void Contains_RejectsAPointAboveThePlot()
+		{
+			PlotFoundation foundation = CreateSizedFoundation(Vector3.zero, 20f, 20f, 10f);
+
+			Assert.IsFalse(foundation.Contains(new Vector3(0f, 50f, 0f)));
+		}
+
+		[Test]
+		public void Contains_RejectsAPointBeyondTheEdge()
+		{
+			PlotFoundation foundation = CreateSizedFoundation(Vector3.zero, 20f, 20f, 10f);
+
+			Assert.IsFalse(foundation.Contains(new Vector3(11f, 1f, 0f)));
+		}
+
+		/// <summary>
+		/// Below the foundation is outside it, so a basement dug under a plot is not on the plot.
+		/// </summary>
+		[Test]
+		public void Contains_RejectsAPointBelowTheFoundation()
+		{
+			PlotFoundation foundation = CreateSizedFoundation(new Vector3(0f, 10f, 0f), 20f, 20f, 10f);
+
+			Assert.IsFalse(foundation.Contains(new Vector3(0f, 5f, 0f)));
 		}
 	}
 }

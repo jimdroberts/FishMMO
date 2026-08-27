@@ -25,6 +25,21 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public long Version { get; set; }
 
+		/// <summary>
+		/// The world server this land belongs to.
+		/// </summary>
+		/// <remarks>
+		/// Part of the plot's identity, not a detail of it. Several world servers run the same
+		/// scenes from the same build, so a plot keyed only by scene and key would be one row shared
+		/// between them — and a player who bought a house on one world would find it already owned
+		/// on every other. Each world has its own land.
+		///
+		/// <para>Not the scene <em>server</em>: those come and go, and several may host copies of one
+		/// world's scene at once. Not a scene instance either — channels are several live copies of
+		/// one scene and a plot looks the same in all of them.</para>
+		/// </remarks>
+		public long WorldServerID { get; set; }
+
 		/// <summary>The Unity scene the plot's foundation is authored in.</summary>
 		public string SceneName { get; set; }
 

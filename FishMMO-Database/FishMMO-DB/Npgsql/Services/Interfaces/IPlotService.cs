@@ -18,6 +18,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>
 		/// Ensures a row exists for every foundation authored in a scene.
 		/// </summary>
+		/// <param name="worldServerID">The world server whose land this is.</param>
 		/// <param name="sceneName">The scene the foundations belong to.</param>
 		/// <param name="plotKeys">Canonicalised keys of the foundations found in the scene.</param>
 		/// <returns>The number of plots that did not previously exist.</returns>
@@ -25,13 +26,17 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Idempotent, because every scene server hosting a channel of the scene runs it on load and
 		/// they all describe the same land. Plots that already exist keep the ownership they have —
 		/// registration must never disturb it, or a restart would evict whoever lives there.
+		///
+		/// <para>Scoped to one world server. The same scene runs on every world, and registering it
+		/// unscoped would give them all a single shared row per plot — one player's house appearing
+		/// as already-owned land to everybody on every other world.</para>
 		/// </remarks>
-		Task<DatabaseResult<int>> RegisterAsync(string sceneName, IReadOnlyList<string> plotKeys, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> RegisterAsync(long worldServerID, string sceneName, IReadOnlyList<string> plotKeys, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Fetches every plot in a scene, owned or not.
+		/// Fetches every plot in one world server's copy of a scene, owned or not.
 		/// </summary>
-		Task<DatabaseResult<List<PlotData>>> FetchBySceneAsync(string sceneName, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<List<PlotData>>> FetchBySceneAsync(long worldServerID, string sceneName, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Fetches every plot a character owns, across all scenes.

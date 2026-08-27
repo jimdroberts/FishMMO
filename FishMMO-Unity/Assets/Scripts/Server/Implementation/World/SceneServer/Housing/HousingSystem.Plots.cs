@@ -25,13 +25,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private CharacterAttributeTemplate currencyTemplate;
 
 		/// <summary>
-		/// Scenes whose foundations have already been registered and resolved.
+		/// Loaded scenes whose foundations have already been registered and resolved.
 		/// </summary>
 		/// <remarks>
-		/// Registration is idempotent in the database, but doing it once per scene rather than once
-		/// per foundation keeps a scene holding fifty plots to a single round trip instead of fifty.
+		/// Registration is idempotent in the database, but doing it once per loaded scene rather
+		/// than once per foundation keeps a scene holding fifty plots to a single round trip instead
+		/// of fifty.
 		/// </remarks>
-		private readonly HashSet<string> resolvedScenes = new HashSet<string>();
+		private readonly HashSet<int> resolvedScenes = new HashSet<int>();
+
+		/// <summary>
+		/// Loaded scenes holding foundations that could not yet be matched to a world server.
+		/// </summary>
+		/// <remarks>
+		/// A foundation registers itself from <c>Awake</c>, during scene load, and the scene server
+		/// records the instance separately — so which happens first is not something either side
+		/// controls. Rather than depend on that ordering, a scene that cannot be resolved yet waits
+		/// here and is retried until its instance appears.
+		/// </remarks>
+		private readonly HashSet<int> pendingScenes = new HashSet<int>();
 
 		/// <summary>
 		/// Maximum queued main-thread actions processed per frame.
@@ -59,11 +71,67 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Runs queued main-thread work.
+		/// Runs queued main-thread work and retries any scene still waiting on its world server.
 		/// </summary>
 		protected override void OnUpdate(float deltaTime)
 		{
 			DrainHousingMainThreadQueue(drainAll: false);
+			RetryPendingScenes();
+		}
+
+		/// <summary>
+		/// Re-attempts resolution for scenes whose instance details were not available yet.
+		/// </summary>
+		private void RetryPendingScenes()
+		{
+			if (pendingScenes.Count < 1)
+			{
+				return;
+			}
+
+			// Copied, because a successful resolve mutates the set being walked.
+			int[] handles = new int[pendingScenes.Count];
+			pendingScenes.CopyTo(handles);
+
+			foreach (int handle in handles)
+			{
+				/* A scene that has since unloaded takes its foundations with it, so it stops being
+				 * pending rather than being retried forever. */
+				if (PlotFoundation.Registry.ForScene(handle).Count < 1)
+				{
+					pendingScenes.Remove(handle);
+					continue;
+				}
+
+				ResolveScene(handle);
+			}
+		}
+
+		/// <summary>
+		/// Finds the world server and scene name behind a loaded scene handle.
+		/// </summary>
+		/// <remarks>
+		/// The world server is part of a plot's identity, and a scene server can host scenes for
+		/// several worlds at once, so it has to be read per loaded scene rather than assumed.
+		/// </remarks>
+		private bool TryResolveWorld(int sceneHandle, out long worldServerID, out string sceneName)
+		{
+			worldServerID = 0;
+			sceneName = null;
+
+			if (Server?.DataContainerRegistry == null ||
+				!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out ISceneInstanceMappingData mappingData) ||
+				mappingData.SceneInstanceByHandle == null ||
+				!mappingData.SceneInstanceByHandle.TryGetValue(sceneHandle, out ISceneInstanceDetails details) ||
+				details == null)
+			{
+				return false;
+			}
+
+			worldServerID = details.WorldServerID;
+			sceneName = details.Name;
+
+			return worldServerID > 0 && !string.IsNullOrWhiteSpace(sceneName);
 		}
 
 		/// <summary>
@@ -77,9 +145,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/* Scenes already loaded before this system initialised still need resolving. The event
 			 * only fires on the transition from no foundations to some, so a scene that finished
 			 * loading first would otherwise never be picked up. */
-			foreach (string sceneName in new List<string>(PlotFoundation.Registry.Scenes))
+			foreach (int sceneHandle in new List<int>(PlotFoundation.Registry.Scenes))
 			{
-				ResolveScene(sceneName);
+				ResolveScene(sceneHandle);
 			}
 		}
 
@@ -91,6 +159,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			PlotFoundation.Registry.OnSceneGainedFoundations -= Registry_OnSceneGainedFoundations;
 			PlotFoundation.Registry.OnClaimRequested -= Registry_OnClaimRequested;
 			resolvedScenes.Clear();
+			pendingScenes.Clear();
 
 			// Anything still queued is a purchase half-finished; run it rather than drop it.
 			DrainHousingMainThreadQueue(drainAll: true);
@@ -99,25 +168,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Registers a newly-populated scene's foundations and reads their ownership back.
 		/// </summary>
-		private void Registry_OnSceneGainedFoundations(string sceneName)
+		private void Registry_OnSceneGainedFoundations(int sceneHandle)
 		{
-			ResolveScene(sceneName);
+			ResolveScene(sceneHandle);
 		}
 
 		/// <summary>
-		/// Ensures every foundation in a scene has a row, then applies the stored ownership to it.
+		/// Ensures every foundation in a loaded scene has a row, then applies its stored ownership.
 		/// </summary>
-		private void ResolveScene(string sceneName)
+		private void ResolveScene(int sceneHandle)
 		{
-			if (string.IsNullOrWhiteSpace(sceneName) || !resolvedScenes.Add(sceneName))
+			if (resolvedScenes.Contains(sceneHandle))
 			{
 				return;
 			}
 
-			IReadOnlyList<PlotFoundation> foundations = PlotFoundation.Registry.ForScene(sceneName);
+			IReadOnlyList<PlotFoundation> foundations = PlotFoundation.Registry.ForScene(sceneHandle);
 			if (foundations.Count < 1)
 			{
-				resolvedScenes.Remove(sceneName);
+				return;
+			}
+
+			if (!TryResolveWorld(sceneHandle, out long worldServerID, out string sceneName))
+			{
+				/* The scene server has not recorded this instance yet. Wait rather than guess: a
+				 * plot registered against the wrong world is land that belongs to the wrong
+				 * players. */
+				pendingScenes.Add(sceneHandle);
 				return;
 			}
 
@@ -132,16 +209,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (keys.Count < 1)
 			{
-				resolvedScenes.Remove(sceneName);
+				pendingScenes.Remove(sceneHandle);
 				return;
 			}
 
-			if (!TryEnqueueAsyncWork(() => ResolveSceneAsync(sceneName, keys)))
+			resolvedScenes.Add(sceneHandle);
+			pendingScenes.Remove(sceneHandle);
+
+			if (!TryEnqueueAsyncWork(() => ResolveSceneAsync(sceneHandle, worldServerID, sceneName, keys)))
 			{
 				/* Nothing registered, so nothing may be claimed here. Dropping the marker lets a
-				 * later foundation joining this scene try again rather than leaving the land
-				 * permanently unclaimable. */
-				resolvedScenes.Remove(sceneName);
+				 * later attempt try again rather than leaving the land permanently unclaimable. */
+				resolvedScenes.Remove(sceneHandle);
+				pendingScenes.Add(sceneHandle);
 				Log.Warning("HousingSystem", $"Could not enqueue plot registration for scene '{sceneName}'.");
 			}
 		}
@@ -149,7 +229,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Registers a scene's plots and pushes the resulting rows back onto its foundations.
 		/// </summary>
-		private async Task ResolveSceneAsync(string sceneName, List<string> keys)
+		private async Task ResolveSceneAsync(int sceneHandle, long worldServerID, string sceneName, List<string> keys)
 		{
 			if (!TryGetDbService(out IPlotService plotService))
 			{
@@ -157,7 +237,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DatabaseResult<int> registered = await plotService.RegisterAsync(sceneName, keys);
+			DatabaseResult<int> registered = await plotService.RegisterAsync(worldServerID, sceneName, keys);
 			if (!registered.IsSuccess)
 			{
 				Log.Error("HousingSystem", $"Plot registration for '{sceneName}' failed: {registered.ErrorMessage}");
@@ -165,10 +245,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			if (registered.Data > 0)
 			{
-				Log.Debug("HousingSystem", $"Registered {registered.Data} new plot(s) in '{sceneName}'.");
+				Log.Debug("HousingSystem", $"Registered {registered.Data} new plot(s) in '{sceneName}' for world {worldServerID}.");
 			}
 
-			DatabaseResult<List<PlotData>> plots = await plotService.FetchBySceneAsync(sceneName);
+			DatabaseResult<List<PlotData>> plots = await plotService.FetchBySceneAsync(worldServerID, sceneName);
 			if (!plots.IsSuccess || plots.Data == null)
 			{
 				Log.Error("HousingSystem", $"Could not read plots for '{sceneName}': {plots.ErrorMessage}");
@@ -176,14 +256,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Unity objects may only be touched on the main thread.
-			if (!TryEnqueueHousingMainThread(() => ApplyResolvedPlots(sceneName, plots.Data)))
+			if (!TryEnqueueHousingMainThread(() => ApplyResolvedPlots(sceneHandle, sceneName, plots.Data)))
 			{
 				Log.Warning("HousingSystem", $"Could not apply resolved plots for '{sceneName}'.");
 			}
 		}
 
 		/// <summary>
-		/// Matches database rows to the foundations authored in a scene.
+		/// Matches database rows to the foundations in a loaded scene.
 		/// </summary>
 		/// <remarks>
 		/// A foundation with no matching row keeps a plot ID of zero and stays unclaimable. That is
@@ -191,7 +271,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// foundation's key never reached the database, and letting it look claimable would only
 		/// move the failure to the moment somebody tries to pay.
 		/// </remarks>
-		private void ApplyResolvedPlots(string sceneName, List<PlotData> plots)
+		private void ApplyResolvedPlots(int sceneHandle, string sceneName, List<PlotData> plots)
 		{
 			Dictionary<string, PlotData> byKey = new Dictionary<string, PlotData>(plots.Count);
 			foreach (PlotData plot in plots)
@@ -203,7 +283,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			int resolved = 0;
-			foreach (PlotFoundation foundation in PlotFoundation.Registry.ForScene(sceneName))
+			foreach (PlotFoundation foundation in PlotFoundation.Registry.ForScene(sceneHandle))
 			{
 				if (foundation == null || string.IsNullOrEmpty(foundation.PlotKey))
 				{
@@ -261,6 +341,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (foundation.PlotID <= 0)
 			{
 				Log.Warning("HousingSystem", $"CharID={player.ID} tried to claim an unresolved plot ('{foundation.PlotKey}').");
+				return;
+			}
+
+			/* The plot was resolved for the world server hosting this scene, and the player is
+			 * standing in it, so these agree in every ordinary case. Checked anyway because the
+			 * failure is silent and expensive if they ever do not: a character would buy land on a
+			 * world they are not playing on, and never see the house they paid for. */
+			if (!TryResolveWorld(foundation.GameObject.scene.handle, out long worldServerID, out _) ||
+				worldServerID != player.WorldServerID)
+			{
+				Log.Warning("HousingSystem",
+					$"CharID={player.ID} (world {player.WorldServerID}) tried to claim plot {foundation.PlotID}, which belongs to world {worldServerID}.");
 				return;
 			}
 
