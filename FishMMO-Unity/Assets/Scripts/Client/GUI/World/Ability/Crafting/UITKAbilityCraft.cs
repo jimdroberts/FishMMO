@@ -584,12 +584,24 @@ namespace FishMMO.Client
 				Log.Debug("UITKAbilityCraft", "CurrencyTemplateID is not set.");
 				return;
 			}
+
+			/* Resolved to a template here rather than passing the raw ID. CharacterCurrency speaks
+			 * in templates only, and this panel is configured with an ID, so the conversion has to
+			 * happen somewhere — doing it at the one call site that needs it is cheaper than a
+			 * parallel ID-shaped API that exists for a single caller. */
+			CharacterAttributeTemplate currencyTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(CurrencyTemplateID);
+			if (currencyTemplate == null)
+			{
+				Log.Debug("UITKAbilityCraft", $"CurrencyTemplateID {CurrencyTemplateID} did not resolve to a template.");
+				return;
+			}
+
 			/* CanAfford reads the BASE value, which is what the server charges against. This used
 			 * to test FinalValue — the base plus every modifier in force — so a character with a
 			 * currency-boosting buff was offered a craft the server would then refuse, and the
 			 * request simply appeared to do nothing. */
 			if (Character == null ||
-				!CharacterCurrency.CanAfford(Character, CurrencyTemplateID, price))
+				!CharacterCurrency.CanAfford(Character, currencyTemplate, price))
 			{
 				return;
 			}
