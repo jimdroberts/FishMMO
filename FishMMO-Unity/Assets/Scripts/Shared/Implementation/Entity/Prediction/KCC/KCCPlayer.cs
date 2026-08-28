@@ -45,13 +45,6 @@ namespace FishMMO.Shared
 		private KCCPlatform currentPlatform;
 
 		/// <summary>
-		/// The last known position of the current platform.
-		/// Included in reconcile data to ensure platform velocity is computed
-		/// correctly during replay. Without this, replay computes stale deltas.
-		/// </summary>
-		private Vector3 lastPlatformPosition;
-
-		/// <summary>
 		/// Platform ID received from reconcile when the actual <see cref="KCCPlatform"/>
 		/// is not yet resolvable from <see cref="SceneObject.Objects"/>.
 		/// This happens during scene-transfer or spawn ordering races where character
@@ -72,11 +65,25 @@ namespace FishMMO.Shared
 		private bool hasLastCreatedData;
 
 		/// <summary>
-		/// Maximum tick difference for observer movement prediction.
-		/// At high RTT (e.g., 200ms at 30 tick/s = 6+ ticks of buffered data),
-		/// a window of 1 causes movement to visually stutter on observers.
-		/// Widen to match expected RTT in ticks.
+		/// How many ticks past the last real input an observing client may keep re-simulating that
+		/// input before it stops carrying it forward.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Currently inert.</b> The block that reads this only runs for a non-owner, non-server
+		/// peer, and a client is never handed another character's replicate input while state
+		/// forwarding is off — <c>Replicate_NonAuthoritative</c> returns before invoking the
+		/// replicate body, and forwarding is 0 on all 39 networked objects in this project.
+		/// Observers see other players through <c>NetworkTransform</c> instead. So changing this
+		/// value has no effect today; it becomes live only if forwarding is enabled.
+		/// </para>
+		/// <para>
+		/// The value would then want to be near the client's buffered-input depth — about 6 ticks at
+		/// 200ms and tick rate 30 — because a window of 1 lets an observed character stall for a tick
+		/// whenever an input is late. It is a plain public field serialized on all nine character
+		/// prefabs, so raising it means editing those prefabs, not this default.
+		/// </para>
+		/// </remarks>
 		public uint ObserverPredictionWindowTicks = 1;
 
 		/// <inheritdoc/>
@@ -92,7 +99,6 @@ namespace FishMMO.Shared
 			pendingPlatformID = platform != null ? platform.ID : 0;
 			if (currentPlatform != null)
 			{
-				lastPlatformPosition = currentPlatform.transform.position;
 			}
 		}
 
@@ -174,7 +180,59 @@ namespace FishMMO.Shared
 		/// is a constant. See <see cref="PopulateInput"/> for why the raw fallback is not used.
 		/// </remarks>
 		private static readonly Vector3 QuantizedFallbackAim =
-			AimDirectionCompression.Quantize(AimDirectionCompression.FallbackDirection);
+			AimDirectionCompression.QuantizedFallbackDirection;
+
+		/// <summary>
+		/// How far behind server-present this client is rendering its peers: half the round trip plus
+		/// the interpolation buffer it deliberately holds, split into whole ticks and a 1/256 tick
+		/// remainder.
+		/// </summary>
+		/// <remarks>
+		/// Computed here because this is the only peer that knows both terms. See
+		/// <see cref="CharacterReplicateData.ViewOffsetTicks"/> for why the server cannot derive it,
+		/// and <see cref="LagCompensationTick"/> for the cap applied to it on arrival.
+		/// </remarks>
+		private void ResolveViewOffset(out byte wholeTicks, out byte fraction)
+		{
+			wholeTicks = (byte)LagCompensationTick.SpectatorInterpolationTicks;
+			fraction = 0;
+
+			FishNet.Managing.Timing.TimeManager timeManager = base.TimeManager;
+			if (timeManager == null)
+			{
+				return;
+			}
+
+			double tickDelta = timeManager.TickDelta;
+			if (tickDelta <= 0d)
+			{
+				return;
+			}
+
+			/* RoundTripTime is milliseconds; half of it is the one-way trip the server's state took
+			 * to reach this client. Kept as a REAL number rather than rounded up to a whole tick:
+			 * the fractional part is carried in its own byte, because the interpolated view this is
+			 * describing does not sit on a tick boundary either. */
+			double oneWaySeconds = timeManager.HalfRoundTripTime / 1000d;
+			double ticks = (oneWaySeconds / tickDelta) + LagCompensationTick.SpectatorInterpolationTicks;
+
+			if (ticks < 0d)
+			{
+				ticks = 0d;
+			}
+			if (ticks > byte.MaxValue)
+			{
+				ticks = byte.MaxValue;
+			}
+
+			double whole = System.Math.Floor(ticks);
+			wholeTicks = (byte)whole;
+
+			// 1/256 of a tick is 0.13 ms at tick rate 30 — far finer than the estimate feeding it.
+			int scaled = (int)System.Math.Round((ticks - whole) * 256d);
+			fraction = (byte)(scaled < 0 ? 0 : scaled > 255 ? 255 : scaled);
+		}
+
 
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
@@ -214,6 +272,7 @@ namespace FishMMO.Shared
 			input.MoveAxisForward = MoveAxisCompression.Quantize(kccInput.MoveAxisForward);
 			input.MoveAxisRight = MoveAxisCompression.Quantize(kccInput.MoveAxisRight);
 			input.MoveFlags = kccInput.MoveFlags;
+			ResolveViewOffset(out input.ViewOffsetTicks, out input.ViewOffsetFraction);
 			/* The aim ORIGIN is deliberately not carried. It used to travel as CameraPosition,
 			 * taken from this client verbatim and never checked against the character, which let a
 			 * modified client choose the point the server raycast for victims from. Every peer now
@@ -310,15 +369,23 @@ namespace FishMMO.Shared
 			Vector3 platformVelocity = Vector3.zero;
 			if (currentPlatform != null)
 			{
-				// Use the platform's deterministically-cached per-tick velocity rather than
-				// computing (currentPosition - lastPlatformPosition)/dt locally. FishNet does
-				// not guarantee a deterministic tick order across NetworkObjects, so reading
-				// the platform's transform directly could observe an updated or pre-update
-				// position depending on whether the platform's [Replicate] ran first. The
-				// cached value is the velocity from the platform's most recently completed
-				// tick and is identical on server and client.
-				platformVelocity = currentPlatform.LastCompletedTickVelocity;
-				lastPlatformPosition = currentPlatform.transform.position;
+				/* Use the platform's deterministically-cached per-tick velocity rather than
+				 * differencing its transform locally. FishNet does not guarantee a deterministic
+				 * tick order across NetworkObjects, so reading the platform's transform directly
+				 * could observe an updated or pre-update position depending on whether the platform
+				 * stepped first.
+				 *
+				 * Ask for the velocity of the tick being simulated, not the platform's present one.
+				 * The platform never replays — it has no owner, so no reconcile reaches a client and
+				 * nothing rolls it back — so during a reconcile that replays k ticks every replayed
+				 * tick would otherwise inherit the same frozen present-tick value where the server
+				 * used each tick's own, bending the replayed path at every direction reversal. The
+				 * ring covers 64 ticks; beyond that, or on the live tick, the present value is the
+				 * right answer anyway. */
+				if (!currentPlatform.TryGetVelocityForTick(input.GetTick(), out platformVelocity))
+				{
+					platformVelocity = currentPlatform.LastCompletedTickVelocity;
+				}
 			}
 			Motor.SetPlatformVelocity(platformVelocity);
 
@@ -358,7 +425,6 @@ namespace FishMMO.Shared
 		{
 			KinematicCharacterMotorState motorState = CharacterController.GetState();
 			motorState.CurrentPlatformID = currentPlatform != null ? currentPlatform.ID : 0;
-			motorState.LastPlatformPosition = lastPlatformPosition;
 			reconcileData.MotorState = motorState;
 		}
 
@@ -393,7 +459,6 @@ namespace FishMMO.Shared
 				pendingPlatformID = 0;
 			}
 
-			lastPlatformPosition = rd.MotorState.LastPlatformPosition;
 		}
 
 		/// <summary>
@@ -408,7 +473,6 @@ namespace FishMMO.Shared
 			hasLastCreatedData = false;
 			currentPlatform = null;
 			pendingPlatformID = 0;
-			lastPlatformPosition = Vector3.zero;
 		}
 
 		/// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reflection;
 using NUnit.Framework;
 using FishMMO.Shared;
@@ -256,7 +256,7 @@ namespace FishMMO.UnitTests
 
 			try
 			{
-				bool moved = (bool)rewind.Invoke(history, new object[] { 103u });
+				bool moved = (bool)rewind.Invoke(history, new object[] { new RewindTarget(103u) });
 				LogAssert.IsTrue(moved, "Rewinding to a recorded tick must displace the transform.");
 				LogAssert.IsTrue(Mathf.Abs(go.transform.position.z - 3f) < 0.001f,
 					$"Rewound to tick 103 the transform should sit at z=3, got z={go.transform.position.z}.");
@@ -298,7 +298,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsNotNull(recordTick, "RecordTick must exist.");
 
 			go.transform.position = new Vector3(0f, 0f, 4f);
-			rewind.Invoke(history, new object[] { 101u });
+			rewind.Invoke(history, new object[] { new RewindTarget(101u) });
 
 			recordTick.Invoke(history, null);
 

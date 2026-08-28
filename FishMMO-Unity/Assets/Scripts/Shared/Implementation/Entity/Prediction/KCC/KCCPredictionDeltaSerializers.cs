@@ -1,4 +1,4 @@
-using FishNet.Serializing;
+﻿using FishNet.Serializing;
 using KinematicCharacterController;
 using UnityEngine;
 
@@ -7,10 +7,14 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Custom delta serializers for <see cref="CharacterReplicateData"/>.
 	/// <para>
-	/// <b>Delta serializer</b>: Writes a 1-byte bitmask (7 bits for 7 fields)
-	/// followed by delta-encoded values for only the changed fields.
-	/// On idle ticks where the player stands still and no ability input, this sends 1 byte.
-	/// On a typical walking tick, this sends ~7 bytes.
+	/// <b>Delta serializer</b>: Writes a 1-byte bitmask followed by delta-encoded values for only
+	/// the changed fields. Seven bits are in use — bit 3 is a retired gap, see the constants — for
+	/// the seven fields of <see cref="CharacterReplicateData"/>.
+	/// <para>
+	/// An idle tick costs the bitmask alone. For real figures rather than an estimate, run
+	/// <c>PredictionBandwidthBenchmarkTests</c>, which measures this type against the production
+	/// serializers; byte counts written into a comment go stale the first time a field is added.
+	/// </para>
 	/// </para>
 	/// </summary>
 	public static class CharacterReplicateDataDeltaSerializer
@@ -32,10 +36,9 @@ namespace FishMMO.Shared
 		private const byte ACTIVATION_FLAGS_BIT = 1 << 5;
 		/// <summary>Bit flag for queued ability ID changes.</summary>
 		private const byte QUEUED_ABILITY_BIT = 1 << 6;
+		/// <summary>Bit flag for the client's view-offset changes.</summary>
+		private const byte VIEW_OFFSET_BIT = 1 << 7;
 
-		/// <summary>
-		/// Registers the custom delta serializers at runtime, before any scene loads.
-		/// </summary>
 		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="CharacterReplicateData"/>.
 		/// Extension method discovered by FishNet codegen via naming convention.
@@ -47,6 +50,10 @@ namespace FishMMO.Shared
 			writer.WriteInt8Unpacked(MoveAxisCompression.Encode(value.MoveAxisForward));
 			writer.WriteInt8Unpacked(MoveAxisCompression.Encode(value.MoveAxisRight));
 			writer.WriteInt32(value.MoveFlags);
+			// Two bytes: how far behind present this client renders its peers, whole ticks plus a
+			// 1/256 remainder, for lag compensation.
+			writer.WriteUInt8Unpacked(value.ViewOffsetTicks);
+			writer.WriteUInt8Unpacked(value.ViewOffsetFraction);
 			// Packed yaw/pitch rather than a quaternion — see AimDirectionCompression for why the
 			// wire format has to be one the producer can commit to exactly.
 			writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.AimDirection));
@@ -64,6 +71,8 @@ namespace FishMMO.Shared
 				MoveAxisForward = MoveAxisCompression.Decode(reader.ReadInt8Unpacked()),
 				MoveAxisRight = MoveAxisCompression.Decode(reader.ReadInt8Unpacked()),
 				MoveFlags = reader.ReadInt32(),
+				ViewOffsetTicks = reader.ReadUInt8Unpacked(),
+				ViewOffsetFraction = reader.ReadUInt8Unpacked(),
 				AimDirection = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked()),
 				ActivationFlags = reader.ReadInt32(),
 				QueuedAbilityID = reader.ReadInt64(),
@@ -136,6 +145,19 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MoveFlags, next.MoveFlags, fieldOption))
 				flags |= MOVE_FLAGS_BIT;
 
+			/* Written explicitly rather than through a delta primitive: it is one byte, and the
+			 * broken WriteDeltaBoolean/ReadDeltaBoolean pair is a standing reminder that a
+			 * primitive whose reader consumes a different number of bytes than its writer emits is
+			 * indistinguishable from a working one until the stream is already misaligned. */
+			if (fullSerialize ||
+				prev.ViewOffsetTicks != next.ViewOffsetTicks ||
+				prev.ViewOffsetFraction != next.ViewOffsetFraction)
+			{
+				writer.WriteUInt8Unpacked(next.ViewOffsetTicks);
+				writer.WriteUInt8Unpacked(next.ViewOffsetFraction);
+				flags |= VIEW_OFFSET_BIT;
+			}
+
 			/* Delta the PACKED aim rather than the decoded vector. Yaw and pitch move in small
 			 * steps while a player turns, so the packed difference varint-packs to a byte or two
 			 * where three floats could not. Decoding is exact on both sides because the producer
@@ -153,10 +175,10 @@ namespace FishMMO.Shared
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
-				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
-				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
-				 * Writer. A packed backfill would overrun the placeholder and corrupt the
-				 * first field written after it. */
+				 * cannot silently change size. The placeholder here is a single byte written by
+				 * WriteUInt8Unpacked and backfilled by InsertUInt8Unpacked; a packed backfill of a
+				 * wider placeholder could overrun it and corrupt the first field written after it,
+				 * which is why the fixed-width Insert helpers are used throughout. */
 				writer.InsertUInt8Unpacked(flags, flagPos);
 				return true;
 			}
@@ -193,6 +215,12 @@ namespace FishMMO.Shared
 			if ((flags & MOVE_FLAGS_BIT) != 0)
 				result.MoveFlags = reader.ReadDeltaInt32(prev.MoveFlags);
 
+			if ((flags & VIEW_OFFSET_BIT) != 0)
+			{
+				result.ViewOffsetTicks = reader.ReadUInt8Unpacked();
+				result.ViewOffsetFraction = reader.ReadUInt8Unpacked();
+			}
+
 			if ((flags & AIM_DIRECTION_BIT) != 0)
 				result.AimDirection = AimDirectionCompression.Decode(
 					reader.ReadDeltaUInt32(AimDirectionCompression.Encode(prev.AimDirection)));
@@ -212,7 +240,10 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Delta serializer</b>: Writes a 1-byte bitmask (6 bits for 6 fields)
 	/// followed by delta-encoded values for only the changed fields.
-	/// When grounding status is stable and unchanged, this sends 1 byte instead of 39.
+	/// When the grounding status is stable and unchanged this writer declines entirely and sends
+	/// NOTHING — the parent's flags word records its absence. It only emits a bitmask when something
+	/// changed, or when a caller forces it, and nothing forces it today: the root reconcile routes
+	/// FullSerialize through its own absolute path and passes Unset down here.
 	/// </para>
 	/// </summary>
 	public static class CharacterTransientGroundingReportDeltaSerializer
@@ -231,9 +262,6 @@ namespace FishMMO.Shared
 		private const byte OUTER_NORMAL_BIT = 1 << 5;
 
 		/// <summary>
-		/// Registers the custom delta serializers at runtime.
-		/// </summary>
-		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="CharacterTransientGroundingReport"/>.
 		/// Called from <see cref="WriteKinematicCharacterMotorState"/> for its nested GroundingStatus.
 		/// </summary>
@@ -244,9 +272,12 @@ namespace FishMMO.Shared
 			writer.WriteBoolean(value.SnappingPrevented);
 			/* Normals are only written while grounded.
 			 *
-			 * KinematicCharacterMotor assigns a fresh CharacterGroundingReport on every ground
-			 * probe, so an ungrounded status carries three zero vectors by construction — there is
-			 * nothing in them to send. Skipping them also removes the one case where delta-encoding
+			 * An ungrounded status carries three zero normals — but NOT by construction. The motor
+			 * assigns a fresh report on every ground probe and immediately seeds its GroundNormal
+			 * with the character's up vector, so an airborne motor holds (0,1,0) there; it is
+			 * KCCController.GetState that zeroes all three when FoundAnyGround is false, precisely
+			 * so the value this writer diffs against is the value the reader reconstructs. Do not
+			 * remove that without changing this. Skipping them also removes the one case where delta-encoding
 			 * this struct cost more than writing it whole: leaving the ground used to change all
 			 * three normals at once, which is the worst input a per-field delta can be handed.
 			 *
@@ -281,7 +312,8 @@ namespace FishMMO.Shared
 			};
 
 			// Mirrors the writer: normals are on the wire only while grounded, and an ungrounded
-			// report is all-zero normals in the motor.
+			// snapshot is all-zero normals — see the note in the writer, and KCCController.GetState,
+			// which is what makes that true.
 			if (result.FoundAnyGround)
 			{
 				result.GroundNormal = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked());
@@ -353,10 +385,12 @@ namespace FishMMO.Shared
 			 *
 			 * Yaw and pitch creep in small steps as a character walks across a slope, so the packed
 			 * difference varint-packs to a byte or two where three float components could not. An
-			 * ungrounded report has three zero normals by construction (the motor assigns a fresh
-			 * report each probe), so skipping them there costs nothing and removes the worst input
-			 * a per-field delta can be handed — all three changing at once as the character leaves
-			 * the ground. The reader zeroes them from the FoundAnyGround flag instead. */
+			 * ungrounded snapshot has three zero normals because KCCController.GetState zeroes them
+			 * (the motor itself seeds GroundNormal with the character's up vector), so skipping them
+			 * there costs nothing and removes the worst input a per-field delta can be handed — all
+			 * three changing at once as the character leaves the ground. The reader zeroes them from
+			 * the FoundAnyGround flag instead, which matches the baseline the writer diffed against
+			 * only because the producer normalised it. */
 			if (next.FoundAnyGround)
 			{
 				if (writer.WriteDeltaUInt32(AimDirectionCompression.Encode(prev.GroundNormal),
@@ -375,10 +409,10 @@ namespace FishMMO.Shared
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
-				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
-				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
-				 * Writer. A packed backfill would overrun the placeholder and corrupt the
-				 * first field written after it. */
+				 * cannot silently change size. The placeholder here is a single byte written by
+				 * WriteUInt8Unpacked and backfilled by InsertUInt8Unpacked; a packed backfill of a
+				 * wider placeholder could overrun it and corrupt the first field written after it,
+				 * which is why the fixed-width Insert helpers are used throughout. */
 				writer.InsertUInt8Unpacked(flags, flagPos);
 				return true;
 			}
@@ -426,8 +460,9 @@ namespace FishMMO.Shared
 
 			/* Zero rather than carry forward. `result` starts as `prev`, so a character that was
 			 * grounded last tick and is airborne now would otherwise keep the previous tick's
-			 * normals — the writer deliberately sent none. This mirrors the motor, which discards
-			 * the whole report on an ungrounded probe. */
+			 * normals — the writer deliberately sent none. This matches the writer's own baseline
+			 * because KCCController.GetState zeroes an ungrounded snapshot's normals; the motor
+			 * does not (it seeds GroundNormal with the character's up vector). */
 			if (!result.FoundAnyGround)
 			{
 				result.GroundNormal = Vector3.zero;
@@ -445,8 +480,9 @@ namespace FishMMO.Shared
 	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (14 bits for 14 fields)
 	/// followed by delta-encoded values for only the changed fields.
 	/// On a typical grounded walking tick, only Position, Rotation, BaseVelocity, and
-	/// GroundingStatus change — sending ~25 bytes instead of ~127.
-	/// On an idle tick where the character stands still, this sends 2 bytes.
+	/// GroundingStatus change. On an idle tick where the character stands still this writer declines
+	/// and sends nothing at all. Measured figures live in <c>PredictionBandwidthBenchmarkTests</c>
+	/// rather than here, where they cannot go stale silently.
 	/// </para>
 	/// <para>
 	/// The nested <see cref="CharacterTransientGroundingReport"/> uses its own
@@ -463,8 +499,10 @@ namespace FishMMO.Shared
 		private const ushort VELOCITY_BIT = 1 << 2;
 		/// <summary>Bit flag for CurrentPlatformID changes.</summary>
 		private const ushort PLATFORM_ID_BIT = 1 << 3;
-		/// <summary>Bit flag for LastPlatformPosition changes.</summary>
-		private const ushort LAST_PLATFORM_POS_BIT = 1 << 4;
+		/* Bit 4 is retired. It carried LastPlatformPosition, a field nothing ever read: platform
+		 * velocity comes from KCCPlatform.LastCompletedTickVelocity, so the Vector3 in every full
+		 * snapshot and the delta in every reconcile bought nothing. The bit is left as a gap rather
+		 * than renumbered so a stale build cannot silently reinterpret a later field. */
 		/// <summary>Bit flag for MustUnground changes.</summary>
 		private const ushort MUST_UNGROUND_BIT = 1 << 5;
 		/// <summary>Bit flag for MustUngroundTime changes.</summary>
@@ -485,9 +523,6 @@ namespace FishMMO.Shared
 		private const ushort TIME_SINCE_JUMP_REQ_BIT = 1 << 13;
 
 		/// <summary>
-		/// Registers the custom delta serializers at runtime.
-		/// </summary>
-		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="KinematicCharacterMotorState"/>.
 		/// Nested <see cref="CharacterTransientGroundingReport"/> uses its full serializer.
 		/// Extension method discovered by FishNet codegen via naming convention.
@@ -505,7 +540,6 @@ namespace FishMMO.Shared
 			writer.WriteQuaternion64(value.Rotation);
 			writer.WriteVector3(value.BaseVelocity);
 			writer.WriteInt64(value.CurrentPlatformID);
-			writer.WriteVector3(value.LastPlatformPosition);
 			writer.WriteBoolean(value.MustUnground);
 			writer.WriteSingle(value.MustUngroundTime);
 			writer.WriteBoolean(value.LastMovementIterationFoundAnyGround);
@@ -528,7 +562,6 @@ namespace FishMMO.Shared
 				Rotation = reader.ReadQuaternion64(),
 				BaseVelocity = reader.ReadVector3(),
 				CurrentPlatformID = reader.ReadInt64(),
-				LastPlatformPosition = reader.ReadVector3(),
 				MustUnground = reader.ReadBoolean(),
 				MustUngroundTime = reader.ReadSingle(),
 				LastMovementIterationFoundAnyGround = reader.ReadBoolean(),
@@ -555,10 +588,6 @@ namespace FishMMO.Shared
 		/// Writes a 2-byte bitmask indicating which of the 14 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
-		/// <summary>
-		/// Delta writer for <see cref="CharacterReplicateData"/>. Writes a 1-byte bitmask
-		/// followed by delta-encoded values for only the changed fields.
-		/// </summary>
 		/// <param name="writer">Writer to serialize to.</param>
 		/// <param name="prev">Previous replicate data.</param>
 		/// <param name="next">Current replicate data.</param>
@@ -577,6 +606,27 @@ namespace FishMMO.Shared
 			bool mustEmit = option != DeltaSerializerOption.Unset;
 			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
+			/* Leading mode byte, and an absolute snapshot on FullSerialize.
+			 *
+			 * This type declares IReconcileData, so it advertises that it can be a ROOT reconcile —
+			 * and the project rule for a root is that FullSerialize must produce a payload a peer
+			 * holding no baseline can decode. FishNet's scalar deltas are difference-based, so
+			 * "every field present" is not that. Today it is only ever nested inside
+			 * CharacterReconcileData, whose serializer routes FullSerialize through its own absolute
+			 * path and never passes anything but Unset down here, so the branch below is unreachable
+			 * in production. It exists so that promoting this type to a root cannot silently ship the
+			 * exact bug the mode byte was invented to prevent. One byte per reconcile, to the owner
+			 * only. */
+			int modePos = writer.Position;
+			int modeLength = writer.Length;
+			if (fullSerialize)
+			{
+				writer.WriteUInt8Unpacked(MODE_FULL_SNAPSHOT);
+				WriteKinematicCharacterMotorState(writer, next);
+				return true;
+			}
+			writer.WriteUInt8Unpacked(MODE_DELTA);
+
 			int flagPos = writer.Position;
 			int startLength = writer.Length;
 			writer.WriteUInt16(0);
@@ -592,9 +642,6 @@ namespace FishMMO.Shared
 
 			if (writer.WriteDeltaInt64(prev.CurrentPlatformID, next.CurrentPlatformID, fieldOption))
 				flags |= PLATFORM_ID_BIT;
-
-			if (writer.WriteDeltaVector3(prev.LastPlatformPosition, next.LastPlatformPosition, fieldOption))
-				flags |= LAST_PLATFORM_POS_BIT;
 
 			// Booleans written explicitly — see the note in
 			// CharacterTransientGroundingReportDeltaSerializer.WriteDelta.
@@ -661,19 +708,22 @@ namespace FishMMO.Shared
 			 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
 			 * restoring Position alone left this placeholder's bytes inside the sent segment
 			 * as trailing garbage whenever nothing was written after it. */
-			writer.Position = flagPos;
-			writer.Length = startLength;
+			// Back past the mode byte too, so "bytes iff true" still holds.
+			writer.Position = modePos;
+			writer.Length = modeLength;
 			return false;
 		}
+
+		/// <summary>Leading byte: the payload is a delta against the reader's previous snapshot.</summary>
+		private const byte MODE_DELTA = 0;
+
+		/// <summary>Leading byte: the payload is an absolute snapshot. See <see cref="WriteDelta"/>.</summary>
+		private const byte MODE_FULL_SNAPSHOT = 1;
 
 		/// <summary>
 		/// Delta reader for <see cref="KinematicCharacterMotorState"/>.
 		/// Reads the bitmask and reconstructs only the changed fields from their deltas,
 		/// carrying forward unchanged fields from the previous value.
-		/// </summary>
-		/// <summary>
-		/// Delta reader for <see cref="KinematicCharacterMotorState"/>. Reads the bitmask and
-		/// reconstructs only the changed fields from their deltas.
 		/// </summary>
 		/// <param name="reader">Reader to deserialize from.</param>
 		/// <param name="prev">Previous motor state.</param>
@@ -682,6 +732,13 @@ namespace FishMMO.Shared
 			Reader reader,
 			KinematicCharacterMotorState prev)
 		{
+			// Mode first — see WriteDelta. An absolute snapshot ignores prev entirely.
+			byte mode = reader.ReadUInt8Unpacked();
+			if (mode == MODE_FULL_SNAPSHOT)
+			{
+				return ReadKinematicCharacterMotorState(reader);
+			}
+
 			ushort flags = reader.ReadUInt16();
 			KinematicCharacterMotorState result = prev;
 
@@ -696,9 +753,6 @@ namespace FishMMO.Shared
 
 			if ((flags & PLATFORM_ID_BIT) != 0)
 				result.CurrentPlatformID = reader.ReadDeltaInt64(prev.CurrentPlatformID);
-
-			if ((flags & LAST_PLATFORM_POS_BIT) != 0)
-				result.LastPlatformPosition = reader.ReadDeltaVector3(prev.LastPlatformPosition);
 
 			if ((flags & MUST_UNGROUND_BIT) != 0)
 				result.MustUnground = reader.ReadBoolean();

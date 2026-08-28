@@ -172,7 +172,12 @@ namespace FishMMO.Shared.Core
 		/// Removes all non-permanent buffs from the character, optionally suppressing removal events.
 		/// </summary>
 		/// <param name="ignoreInvokeRemove">If true, does not invoke OnRemoveBuff/OnRemoveDebuff events.</param>
-		void RemoveAll(bool ignoreInvokeRemove = false);
+		/// <param name="includePermanent">
+		/// True to remove permanent buffs as well. Default false so gameplay dispels leave them
+		/// alone; the lifecycle callers pass true, because a pooled object inheriting the previous
+		/// occupant's permanent buff also inherits its attribute modifiers.
+		/// </param>
+		void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false);
 
 		/// <summary>
 		/// Creates a reconcile snapshot of all active buffs.

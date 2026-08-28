@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
@@ -55,6 +55,23 @@ namespace FishMMO.Shared
 		public uint PendingReplicateTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
 
 		/// <summary>
+		/// The view offset carried by the most recent replicate input — how many ticks behind
+		/// server-present the owning client was rendering its peers.
+		/// </summary>
+		/// <remarks>
+		/// Read by <see cref="LagCompensationTick"/> to decide how far to rewind a hit query. Cached
+		/// from the replicate rather than read off a live controller for the usual reason: the value
+		/// has to be the one that belongs to the tick being simulated, including during a replay.
+		/// Zero for a server-driven character, which compensates nothing.
+		/// </remarks>
+		public byte CurrentViewOffsetTicks { get; private set; }
+
+		/// <summary>
+		/// The sub-tick remainder of <see cref="CurrentViewOffsetTicks"/>, in 1/256ths of a tick.
+		/// </summary>
+		public byte CurrentViewOffsetFraction { get; private set; }
+
+		/// <summary>
 		/// Cached array of <see cref="IPredictableController"/> components, sorted by <see cref="IPredictableController.Order"/>.
 		/// Built once in Awake; dynamic additions after Awake will not participate.
 		/// </summary>
@@ -74,8 +91,6 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private bool serverDrivenInput;
 
-		/// <summary>Last <see cref="CharacterReconcileData.Sequence"/> sent by this server object.</summary>
-		private byte reconcileSequence;
 
 		/// <summary>
 		/// True when this peer is the one responsible for producing this character's replicate
@@ -367,6 +382,8 @@ namespace FishMMO.Shared
 		private void Replicate(CharacterReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			CurrentReplicateTickSnapshot = input.GetTick();
+			CurrentViewOffsetTicks = input.ViewOffsetTicks;
+			CurrentViewOffsetFraction = input.ViewOffsetFraction;
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			for (int i = 0; i < controllers.Length; i++)
 			{
@@ -393,9 +410,8 @@ namespace FishMMO.Shared
 				{
 					controllers[i].OnCreateReconcile(ref data);
 				}
-				// Chain sequence for the delta reader's loss detection — see CharacterReconcileData.Sequence.
-				reconcileSequence = unchecked((byte)(reconcileSequence + 1));
-				data.Sequence = reconcileSequence;
+				// CharacterReconcileData.Sequence is stamped by FishNet when the reconcile is actually
+				// written (ReconcileSequenceStamper), so a tick whose send is skipped does not count.
 				Reconcile(data);
 			}
 		}

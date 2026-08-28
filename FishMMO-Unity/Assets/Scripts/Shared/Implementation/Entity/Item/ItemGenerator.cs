@@ -169,7 +169,20 @@ namespace FishMMO.Shared
 				ItemAttributeTemplateDatabase db = equippable.RandomAttributeDatabases[rng];
 				rng = random.Next(0, db.Attributes.Count);
 				ItemAttributeTemplate attributeTemplate = db.Attributes.Values.ToList()[rng];
-				attributes.Add(attributeTemplate.Name, new ItemAttribute(attributeTemplate.ID, random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue)));
+
+				/* Every draw is independent, so the same template can come up twice — and
+				 * Dictionary.Add throws on a duplicate key. That exception escaped Item's
+				 * constructor, and this constructor runs from EquipmentController.ReadPayload and
+				 * from the equipment reconcile, so a duplicate roll took out the rest of the spawn
+				 * payload or the reconcile body. Draw the value regardless of whether the slot is
+				 * taken: the RNG stream has to advance identically on every peer, or the item this
+				 * seed describes stops being the same item everywhere. */
+				int rolledValue = random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue);
+				if (attributes.ContainsKey(attributeTemplate.Name))
+				{
+					continue;
+				}
+				attributes.Add(attributeTemplate.Name, new ItemAttribute(attributeTemplate.ID, rolledValue));
 			}
 		}
 

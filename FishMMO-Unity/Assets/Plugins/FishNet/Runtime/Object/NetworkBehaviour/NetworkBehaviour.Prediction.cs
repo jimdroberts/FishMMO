@@ -194,6 +194,12 @@ namespace FishNet.Object
         /// </summary>
         private int _remainingReconcileResends;
         /// <summary>
+        /// FISHMMO EDIT. Count of reconciles actually written by <see cref="Server_SendReconcileRpc{T}"/>,
+        /// handed to <see cref="ReconcileSequenceStamper{T}"/> so a project delta chain can number the
+        /// states the reader will really see. See the note in Server_SendReconcileRpc.
+        /// </summary>
+        private byte _reconcileSendSequence;
+        /// <summary>
         /// Last replicate tick read from remote. This can be the server reading a client or the other way around.
         /// </summary>
         private uint _lastReplicateReadRemoteTick = TimeManager.UNSET_TICK;
@@ -431,14 +437,32 @@ namespace FishNet.Object
              * Reader.ReadDeltaReplicate, which take the current container types and encode each
              * packet self-contained so it survives loss on the unreliable channel replicates use.
              *
-             * Measured at tickRate 30 with redundancy 3, per entity per observer while walking:
-             * reconcile 6750 -> 980 B/s, replicate 2550 -> 1530 B/s. See
+             * Measured at tickRate 30 with redundancy 3 while walking, as SERIALIZER bytes per
+             * entity: reconcile 6750 -> 980 B/s, replicate 2550 -> 1530 B/s. Those are not
+             * per-observer costs in this project: with state forwarding off (the branch below), a
+             * reconcile goes to the OWNER only and a replicate goes owner->server only. They would
+             * scale per observer only if forwarding were switched on. See
              * PredictionBandwidthBenchmarkTests for the framed figures including transport overhead.
              *
              * Enabled unconditionally rather than behind a scripting define on purpose: Unity's
              * defines are per build target, so a symbol set for the Linux server build and missed
              * on the Windows client build would leave the two ends disagreeing about the wire
              * format with nothing to catch it. To roll back, revert this file. */
+            /* FISHMMO EDIT: number the reconcile HERE, at the moment it is known to be written.
+             *
+             * The project's delta reader rejects a delta whose sequence is not baseline+1. That
+             * sequence used to be stamped in CreateReconcile, which runs every tick, while this
+             * method returns early (no resends left, no owner) without advancing lastReconcileData.
+             * Every skipped send therefore looked like a lost datagram to the reader and cost the
+             * owner up to a second of rejected reconciles -- right after any >RedundancyCount-tick
+             * input gap, and on every spawn. Counting sends keeps the number in step with the
+             * baseline the reader actually holds. */
+            if (ReconcileSequenceStamper<T>.Stamp != null)
+            {
+                _reconcileSendSequence = unchecked((byte)(_reconcileSendSequence + 1));
+                reconcileData = ReconcileSequenceStamper<T>.Stamp(reconcileData, _reconcileSendSequence);
+            }
+
             methodWriter.WriteDeltaReconcile(lastReconcileData, reconcileData, GetDeltaSerializeOption());
             lastReconcileData = reconcileData;
 
@@ -1514,6 +1538,13 @@ namespace FishNet.Object
             /* FISHMMO EDIT: delta reconcile enabled -- see Reconcile_Send. Upstream's gated line
              * read `lastReconciledata`, a casing typo for the parameter below, which is one reason
              * that branch cannot have been compiled in a long time. */
+            /* FISHMMO EDIT: clear before the read, not only after it. ReconcileDeltaGuard is a
+             * static, set from inside a delta reader and consumed by the statement below, so a
+             * second reconcile type whose reader set the flag without a matching consume would
+             * otherwise reject the NEXT type's payload instead of its own. Only one type sets it
+             * today; this makes that a property of the code rather than of the current type list. */
+            ReconcileDeltaGuard.ConsumeRejection();
+
             T newData = reader.ReadDeltaReconcile(lastReconcileData);
 
             /* FISHMMO EDIT: a delta whose baseline this reader does not hold is REJECTED.
@@ -1593,6 +1624,16 @@ namespace FishNet.Object
     /// immediately before it returns; consumed (and cleared) by the very next
     /// <c>Reconcile_Reader</c> statement, so it can never leak across two reads.
     /// </remarks>
+    public static class ReconcileSequenceStamper<T>
+    {
+        /// <summary>
+        /// FISHMMO EDIT. Optional project hook: given the reconcile about to be written and the
+        /// per-behaviour count of reconciles written so far, returns the reconcile carrying that
+        /// number. Null (the default) means the type has no sequence field.
+        /// </summary>
+        public static System.Func<T, byte, T> Stamp;
+    }
+
     public static class ReconcileDeltaGuard
     {
         private static bool _rejectLastRead;

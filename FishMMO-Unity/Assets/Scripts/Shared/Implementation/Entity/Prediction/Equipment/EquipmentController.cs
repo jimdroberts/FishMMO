@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -453,11 +453,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Takes an item out of an equipment slot: modifiers off, slot null, listeners told.</summary>
-		private void DetachFromSlot(Item item, byte slot)
+		/// <param name="item">The item leaving the slot.</param>
+		/// <param name="slot">The slot being cleared.</param>
+		/// <param name="applyAttributeModifiers">
+		/// True to run the normal unequip, which removes the item's generated attribute modifiers.
+		/// False to clear the slot without touching attributes — used by the observer path, which
+		/// never added them in the first place. See <see cref="ApplyObservedSlot"/>.
+		/// </param>
+		private void DetachFromSlot(Item item, byte slot, bool applyAttributeModifiers = true)
 		{
 			if (item.IsEquippable)
 			{
-				item.Equippable.Unequip();
+				if (applyAttributeModifiers)
+				{
+					item.Equippable.Unequip();
+				}
+				else
+				{
+					ClearEquippedCharacterSilently(item);
+				}
 			}
 			OnItemUnequipped?.Invoke(item, (ItemSlot)slot);
 			SetItemSlot(null, slot);
@@ -678,9 +692,44 @@ namespace FishMMO.Shared
 					stackSize = reader.ReadUInt32();
 				}
 
-				Item item = new Item(id, seed, templateID, stackSize);
+				/* Resolve the template BEFORE constructing the item.
+				 *
+				 * Item's constructor stores whatever BaseItemTemplate.Get returns and then reads
+				 * Template.MaxStackSize and Template.Generate unconditionally, so an id with no
+				 * template throws inside the constructor — and this is a spawn payload, so the throw
+				 * escapes ReadPayload, past the frame that exists to keep the stream aligned, and
+				 * kills the read of every remaining behaviour on this object and of every object
+				 * still in the spawn packet.
+				 *
+				 * Item templates are immutable assets registered before anything spawns, so a miss
+				 * is not a version skew to tolerate quietly — it is corruption of this payload or a
+				 * template that failed to load. Say so, and skip the entry: the bytes were already
+				 * consumed above, so the stream stays aligned and the character simply appears
+				 * without that piece. */
+				BaseItemTemplate template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+				if (template == null)
+				{
+					Log.Error("EquipmentController",
+						$"ReadPayload: no BaseItemTemplate is registered for id {templateID} (slot {slot}). " +
+						"Skipping the item; this character will render without it.");
+					continue;
+				}
 
-				SetItemSlot(item, slot);
+				Item item = new Item(id, seed, template, stackSize);
+
+				/* A refused slot must not be equipped. ItemContainer.SetItemSlot documents that its
+				 * return value is a genuine refusal, and the slot arrived off the wire with no range
+				 * check — so an out-of-range slot applied the item's generated attribute modifiers to
+				 * the character while the item itself lived in no container, leaving nothing that
+				 * could ever unequip it. The frame recovers the stream; it cannot recover that. */
+				if (!SetItemSlot(item, slot))
+				{
+					Log.Error("EquipmentController",
+						$"ReadPayload: slot {slot} was refused for template {templateID}. " +
+						"Skipping the item rather than equipping one no container holds.");
+					continue;
+				}
+
 				if (item.IsEquippable)
 				{
 					item.Equippable.Equip(Character);
@@ -913,7 +962,7 @@ namespace FishMMO.Shared
 				{
 					return;
 				}
-				DetachFromSlot(current, (byte)slot);
+				DetachFromSlot(current, (byte)slot, applyAttributeModifiers: false);
 				return;
 			}
 
@@ -932,14 +981,14 @@ namespace FishMMO.Shared
 					$"Observed equipment broadcast named unknown template {templateID} for slot {slot}; clearing the slot.");
 				if (current != null)
 				{
-					DetachFromSlot(current, (byte)slot);
+					DetachFromSlot(current, (byte)slot, applyAttributeModifiers: false);
 				}
 				return;
 			}
 
 			if (current != null)
 			{
-				DetachFromSlot(current, (byte)slot);
+				DetachFromSlot(current, (byte)slot, applyAttributeModifiers: false);
 			}
 
 			Item item = new Item(0, seed, template, 1);
@@ -949,7 +998,16 @@ namespace FishMMO.Shared
 			}
 			if (item.IsEquippable)
 			{
-				item.Equippable.Equip(Character);
+				/* Silently, like the owner's acknowledgement path: this is another character's
+				 * sheet, and the server already sends its authoritative ExternalModifier in
+				 * CharacterAttributesBroadcast. Calling Equip here ran ItemGenerator.ApplyAttributes
+				 * and added the item's bonuses ON TOP of that total, so a watching client saw the
+				 * peer's maximum jump on every equip and only converged when the next attribute
+				 * diff happened to be non-empty. Equipment-derived attributes are server-only; the
+				 * observer's interest in an equip is the mesh. The matching detach above is silent
+				 * for the same reason — removing a modifier this path never added would drift the
+				 * sheet the other way. */
+				SetEquippedCharacterSilently(item);
 			}
 			OnItemEquipped?.Invoke(item, (ItemSlot)slot);
 		}

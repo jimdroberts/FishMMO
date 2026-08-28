@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -291,7 +291,19 @@ namespace FishMMO.UnitTests
 			walking.Position = standing.Position + new Vector3(0.12f, 0f, 0.04f);
 			walking.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
 			walking.Rotation = Quaternion.Euler(0f, 22f, 0f);
-			AssertSaving(Measure("KinematicCharacterMotorState", "walking", standing, walking), 75.0);
+			/* Floor lowered from 75% to 72% on 2026-08-28, deliberately and once.
+			 *
+			 * KinematicCharacterMotorStateDeltaSerializer now writes a leading mode byte and routes
+			 * FullSerialize through an absolute snapshot, because the type declares IReconcileData
+			 * and so advertises that it can be a root reconcile — and a root whose "full" payload is
+			 * still a difference against a baseline the receiver may not hold is the exact bug the
+			 * mode byte exists to prevent. The byte is unreachable overhead today (the type is only
+			 * ever nested, and its parent never passes anything but Unset down), which is why the
+			 * cost shows up here as pure loss: one byte on a ~22 byte delta.
+			 *
+			 * If this floor needs to move again, check that it is a real regression first — the
+			 * message below names the usual cause, and it is still the right thing to look at. */
+			AssertSaving(Measure("KinematicCharacterMotorState", "walking", standing, walking), 72.0);
 
 			KinematicCharacterMotorState jumping = walking;
 			jumping.Position = walking.Position + new Vector3(0.12f, 0.4f, 0.04f);
@@ -301,7 +313,9 @@ namespace FishMMO.UnitTests
 			jumping.GroundingStatus.FoundAnyGround = false;
 			jumping.GroundingStatus.IsStableOnGround = false;
 			jumping.GroundingStatus.GroundNormal = Vector3.zero;
-			AssertSaving(Measure("KinematicCharacterMotorState", "jumping", walking, jumping), 70.0);
+			// Lowered from 70% with the walking floor above, and for the same one reason: the mode
+			// byte. See the note there before moving either again.
+			AssertSaving(Measure("KinematicCharacterMotorState", "jumping", walking, jumping), 66.0);
 		}
 
 		// ── CharacterAttributeResourceState ──────────────────────────────────
@@ -691,7 +705,6 @@ namespace FishMMO.UnitTests
 			s.Position = new Vector3(112.5f, 30.9f, -47.25f);
 			s.Rotation = Quaternion.Euler(0f, 20f, 0f);
 			s.BaseVelocity = Vector3.zero;
-			s.LastPlatformPosition = Vector3.zero;
 			s.AttachedRigidbodyVelocity = Vector3.zero;
 			s.MustUngroundTime = 0f;
 			s.TimeSinceLastAbleToJump = 0f;

@@ -74,6 +74,7 @@ GameObject:
   - component: {fileID: 6308388451046359136}
   - component: {fileID: 251157398792487894}
   - component: {fileID: 7246315852314852023}
+  - component: {fileID: 133104273134037835}
   m_Layer: 6
   m_Name: HumanBanker
   m_TagString: Untagged
@@ -1043,3 +1044,26 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 7599432074871062846}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &133104273134037835
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
+  Type: 10
+  Visibility: 0
+  Icon: {fileID: 0}
+  Tint: {r: 1, g: 1, b: 1, a: 1}
+  Label: Bank
+  IconSize: 14
+  ClampToEdge: 0
+  Priority: 0
+  ShowOnMinimap: 1
+  ShowOnWorldMap: 1
+  MarkerAnchor: {fileID: 0}
