@@ -15,9 +15,18 @@ namespace FishMMO.Shared
 	/// cached relevance inputs (combat, party, guild) used to rank it for each viewer.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Doubles as the object's <see cref="IObserverSendFilter"/>. <see cref="ShouldSend"/> runs
 	/// once per observer per unreliable RPC, so it is a dictionary lookup and a modulo — nothing
 	/// that allocates or walks a collection.
+	/// </para>
+	/// <para>
+	/// Two things can slow an observer down: the viewer's full-rate cap (this entry's own
+	/// intervals, assigned by <see cref="ObserverStreamingRegistry"/>) and the observer's distance
+	/// from the object (<see cref="NetworkTransformDistanceLod"/> on the same GameObject). They
+	/// are combined by taking the <b>larger</b> interval, never by gating one behind the other:
+	/// two independent modulo gates only coincide once in N×M ticks and would starve the observer.
+	/// </para>
 	/// </remarks>
 	public sealed class ObserverStreamingEntry : IObserverSendFilter
 	{
@@ -52,6 +61,7 @@ namespace FishMMO.Shared
 		public int LimitedObserverCount => intervalsByClientId.Count;
 
 		private readonly DistanceCondition distanceCondition;
+		private readonly NetworkTransformDistanceLod distanceLod;
 		private readonly Dictionary<int, byte> intervalsByClientId = new Dictionary<int, byte>();
 		private IPartyController partyController;
 		private IGuildController guildController;
@@ -70,7 +80,18 @@ namespace FishMMO.Shared
 			BaseRange = distanceCondition != null ? distanceCondition.GetMaximumDistance() : 0f;
 			AppliedRange = BaseRange;
 			Position = networkObject.transform.position;
+			distanceLod = networkObject.GetComponent<NetworkTransformDistanceLod>();
 		}
+
+		/// <summary>Test seam: builds an entry with an explicit distance LOD (or none).</summary>
+		internal ObserverStreamingEntry(NetworkObject networkObject, ICharacter character, NetworkTransformDistanceLod distanceLod)
+			: this(networkObject, character)
+		{
+			this.distanceLod = distanceLod;
+		}
+
+		/// <summary>True when a <see cref="NetworkTransformDistanceLod"/> also shapes this object's sends.</summary>
+		public bool HasDistanceLod => distanceLod != null;
 
 		/// <summary>True when this character's visibility range can be changed at runtime.</summary>
 		public bool HasDistanceCondition => distanceCondition != null;
@@ -139,21 +160,42 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>Send interval currently applied to an observer; 1 when unlimited.</summary>
+		/// <summary>Send interval assigned to an observer by the viewer cap; 1 when unlimited.</summary>
 		public byte GetInterval(NetworkConnection connection)
 		{
 			return connection != null && intervalsByClientId.TryGetValue(connection.ClientId, out byte interval) ? interval : (byte)1;
 		}
 
+		/// <summary>
+		/// Send interval an observer actually receives: the larger of the cap interval and the
+		/// distance LOD interval, so the two policies compose instead of multiplying.
+		/// </summary>
+		public byte GetEffectiveInterval(NetworkConnection connection)
+		{
+			byte cap = GetInterval(connection);
+			byte lod = distanceLod != null ? distanceLod.GetInterval(connection) : (byte)1;
+			return cap > lod ? cap : lod;
+		}
+
 		/// <inheritdoc/>
 		public bool ShouldSend(NetworkObject networkObject, NetworkConnection connection, Channel channel)
 		{
-			// The owner always hears about its own character; only spectators are shaped.
-			if (connection == null || connection == networkObject.Owner)
+			/* Reliable sends are never shaped: the settle after a stop must reach everyone. FishNet
+			 * only consults the filter for unreliable RPCs, but the contract is enforced here too
+			 * so a caller invoking it directly gets the same answer. */
+			if (channel != Channel.Unreliable || connection == null)
 			{
 				return true;
 			}
-			if (!intervalsByClientId.TryGetValue(connection.ClientId, out byte interval))
+			/* The owner always hears about its own character; only spectators are shaped. (A
+			 * NetworkTransform that its owner would discard is already excluded before the filter
+			 * runs — see NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs.) */
+			if (connection == networkObject.Owner)
+			{
+				return true;
+			}
+			byte interval = GetEffectiveInterval(connection);
+			if (interval <= 1)
 			{
 				return true;
 			}

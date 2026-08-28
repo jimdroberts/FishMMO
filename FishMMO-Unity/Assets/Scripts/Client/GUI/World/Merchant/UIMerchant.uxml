@@ -9,6 +9,7 @@
                 <ui:Label name="merchant-subtitle" text="" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="merchant-count" text="0" class="fish-badge merchant-count" />
+            <ui:Button name="close-button" class="fish-close-btn merchant-close-btn" text="✕" />
         </ui:VisualElement>
         <ui:VisualElement name="merchant-tabs" class="merchant-tabs">
             <ui:Button name="merchant-tab-items" text="Items" class="fish-tab merchant-tab" />

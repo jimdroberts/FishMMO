@@ -35,6 +35,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the guild name label element.</summary>
 		private const string GUILD_LABEL_NAME = "guild-name";
 
+		/// <summary>Name of the header close button element.</summary>
+		private const string CLOSE_BTN_NAME = "close-button";
+
 		/// <summary>Name of the container that holds the generated member rows.</summary>
 		private const string MEMBER_LIST_NAME = "guild-member-list";
 
@@ -441,6 +444,15 @@ namespace FishMMO.Client
 			if (root == null)
 			{
 				return;
+			}
+
+			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
+			 * against a freshly cloned tree, so this is a new element each time and the
+			 * handler cannot accumulate the way a subscription to a static event would. */
+			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
+			if (closeButton != null)
+			{
+				closeButton.clicked += Hide;
 			}
 
 			guildLabel = root.Q<Label>(GUILD_LABEL_NAME);

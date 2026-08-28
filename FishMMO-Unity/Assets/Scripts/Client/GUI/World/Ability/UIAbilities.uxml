@@ -9,6 +9,7 @@
                 <ui:Label name="ability-subtitle" text="" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="ability-count" text="0" class="fish-badge ability-count" />
+            <ui:Button name="close-button" class="fish-close-btn ability-close-btn" text="✕" />
         </ui:VisualElement>
         <ui:VisualElement name="ability-tabs" class="ability-tabs">
             <ui:Button name="ability-tab-abilities" text="Abilities" class="fish-tab ability-tab" />

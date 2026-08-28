@@ -40,50 +40,69 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the furthest <see cref="GameObject"/> from the context within <see cref="Radius"/>.
 		/// </summary>
-		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
+		/// <param name="eventData">The event driving the selection.</param>
 		/// <returns>An enumerable containing the furthest <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			// Physics queries are non-deterministic across client/server.
-			// Suppress during prediction replay to prevent target divergence.
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			if (!IsAuthoritativePeer(eventData))
 			{
 				yield break;
 			}
 
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
-			EnsureHitBuffer();
-			Vector3 origin = context.transform.position;
-			int hitCount = RewoundOverlapSphere(eventData, context, origin, Radius, hits, TargetLayer);
-			GameObject furthest = null;
-			float maxDist = float.MinValue;
-			for (int i = 0; i < hitCount; i++)
+
+			List<GameObject> results = new List<GameObject>();
+			GatherRewound(eventData, context, results, Gather);
+
+			for (int i = 0; i < results.Count; ++i)
 			{
-				Collider hit = hits[i];
-				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, eventData))
-				{
-					float dist = Vector3.Distance(origin, hit.transform.position);
-					if (dist > maxDist)
-					{
-						maxDist = dist;
-						furthest = hit.gameObject;
-					}
-				}
+				yield return results[i];
 			}
-			if (furthest != null)
-				yield return furthest;
 		}
 
 		/// <summary>
-		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// Queries and ranks inside the caller's rewind scope, so the distance that decides the
+		/// answer is measured in the same world the candidates came from.
+		/// </summary>
+		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
+		{
+			EnsureHitBuffer();
+			List<GameObject> candidates = new List<GameObject>();
+			List<TargetRank> ranks = new List<TargetRank>();
+
+			Vector3 origin = context.transform.position;
+			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
+			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+
+			for (int i = 0; i < hitCount; i++)
+			{
+				Collider hit = hits[i];
+				if (hit == null || hit.gameObject == context || !AreConditionsMet(hit.gameObject, eventData))
+				{
+					continue;
+				}
+				candidates.Add(hit.gameObject);
+				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject, Vector3.Distance(origin, hit.transform.position)));
+			}
+
+			int furthest = TargetOrdering.FurthestIndex(ranks);
+			if (furthest >= 0)
+			{
+				results.Add(candidates[ranks[furthest].Index]);
+			}
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
+		/// by this selector rather than by the broadphase.
 		/// </summary>
 		private void EnsureHitBuffer()
 		{
-			int maxHits = Mathf.Max(1, MaxHits);
-			if (hits == null || hits.Length != maxHits)
+			int size = QueryBufferSize(MaxHits);
+			if (hits == null || hits.Length != size)
 			{
-				hits = new Collider[maxHits];
+				hits = new Collider[size];
 			}
 		}
 	}

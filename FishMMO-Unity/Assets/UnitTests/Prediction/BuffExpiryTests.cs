@@ -18,25 +18,29 @@ namespace FishMMO.UnitTests
 	/// reconcile delta-serialiser:
 	///
 	///   1. Fresh apply  — Buff(templateID, currentTick, tickDelta)
-	///                     Called by BuffController.Apply(BaseBuffTemplate, PredictionTick) on both
-	///                     server and observers (via state-forwarded Replicate), driven by
-	///                     the same input.GetPredictionTick() from CharacterReplicateData. ExpiryTick
-	///                     is computed internally from the template duration, so the apply
-	///                     tick must match on both sides.
+	///                     Called by BuffController.Apply(BaseBuffTemplate, PredictionTick) on the
+	///                     server and on the OWNING client, driven by the same
+	///                     input.GetPredictionTick() from CharacterReplicateData. ExpiryTick is
+	///                     computed internally from the template duration, so the apply tick must
+	///                     match on both sides.
 	///
 	///   2. Restore      — Buff(templateID, expiryTick, nextTickTick, tickDelta, stacks, tickCount)
-	///                     Called by BuffController.ReadPayload and RestoreFromReconcile.
-	///                     Absolute network ticks are written by the server and read verbatim
-	///                     by the client — tick-space is shared, so no translation is required.
+	///                     Called by BuffController.ReadPayload (owner shape only) and
+	///                     RestoreFromReconcile. Absolute network ticks are written by the server
+	///                     and read verbatim by the owner — tick-space is shared, so no translation
+	///                     is required.
 	///
-	/// FishNet Prediction V2 state forwarding (enabled by default on every NetworkObject)
-	/// delivers <c>CharacterReconcileData.Buffs</c> to every observer, so observers receive
-	/// the authoritative buff snapshot the same way the owner does. The legacy observer
-	/// broadcast path (CharacterObserverBuffAdd/RemoveBroadcast) has been deleted because it
-	/// was a duplicate, lower-fidelity channel: it used <c>TimeManager.LocalTick</c> as the
-	/// apply tick, which diverges from the source character's tick by an arbitrary session
-	/// offset. A regression sentinel below pins the math of that divergence so any future
-	/// re-introduction of a LocalTick-based apply path is caught immediately.
+	/// State forwarding is authored OFF on every prefab in this project, so
+	/// <c>CharacterReconcileData</c> — buffs included — reaches the OWNER and nobody else. It never
+	/// reached observers for players even when the FishNet default was on, because a player object
+	/// has an owner; now it reaches no observer for any object. What observers get instead is the
+	/// server-built display list (BuffController.ObservedBuffs), in seconds rather than ticks,
+	/// carried by the spawn payload's observer block and by CharacterBuffsBroadcast. The legacy
+	/// observer broadcast path (CharacterObserverBuffAdd/RemoveBroadcast) was deleted because it
+	/// used <c>TimeManager.LocalTick</c> as the apply tick, which diverges from the source
+	/// character's tick by an arbitrary session offset. A regression sentinel below pins the math of
+	/// that divergence so any future re-introduction of a LocalTick-based apply path is caught
+	/// immediately.
 	///
 	/// Core invariants enforced:
 	///   - HasExpired:                (int)(currentTick - ExpiryTick) >= 0  — signed wrap-safe.

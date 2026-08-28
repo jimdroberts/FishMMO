@@ -209,6 +209,17 @@ namespace FishMMO.Shared
 		public bool IsServer => isServer;
 
 		/// <summary>
+		/// True once this object has ended, whether by lifetime, collision or eviction.
+		/// </summary>
+		/// <remarks>
+		/// The GameObject survives until Unity collects it at end of frame, so a destroyed object
+		/// can still be reached through the ability's container map within the same frame. Anything
+		/// enumerating live objects — the spawn payload's in-flight list, for one — has to test
+		/// this rather than just the null check.
+		/// </remarks>
+		internal bool IsDestroyed => destroyed;
+
+		/// <summary>
 		/// Cached reference to the object's GameObject.
 		/// </summary>
 		public GameObject GameObject { get; private set; }
@@ -456,10 +467,10 @@ namespace FishMMO.Shared
 		/// Uses the snapshot for OnDestroy events when the live Ability is unavailable.
 		/// </summary>
 		/// <param name="dispatchDestroyEvents">
-		/// False to skip the OnDestroy ECA events. Used when the object is being <i>replaced</i>
-		/// rather than ended — a duplicate spawn superseded by <see cref="AbilityContainerAllocator"/>,
-		/// or an observer fast-forwarded past the object's lifetime — where an explosion or proc
-		/// would play at the wrong moment.
+		/// False to skip the OnDestroy ECA events. Used when the object is being <i>evicted</i>
+		/// rather than ended — a container claimed by a different cast in
+		/// <see cref="AbilityContainerAllocator"/>, or an observer fast-forwarded past the object's
+		/// lifetime — where an explosion or proc would play at the wrong moment.
 		/// </param>
 		/// <param name="notifyObservers">
 		/// True to tell this caster's observers to destroy their copy. Only meaningful on the
@@ -582,7 +593,12 @@ namespace FishMMO.Shared
 		/// The concrete runtime type is preserved — event handlers can recover
 		/// <see cref="IPlayerCharacter"/> via <c>is</c>/<c>as</c> when needed.
 		/// </param>
-		private static void InitializeAbilityObject(
+		/// <returns>
+		/// The object that now represents this spawn: <paramref name="abilityObject"/> when it was
+		/// initialised, the object already simulating this exact spawn when one was found (the
+		/// newcomer is destroyed), or null when nothing could be initialised.
+		/// </returns>
+		private static AbilityObject InitializeAbilityObject(
 			AbilityObject abilityObject,
 			Ability ability,
 			ICharacter caster,
@@ -598,19 +614,26 @@ namespace FishMMO.Shared
 					$"InitializeAbilityObject: double-init detected for ability '{ability?.Template?.name}' "
 					+ $"(ID {ability?.ID}). Destroying orphaned object.");
 				Destroy(abilityObject.gameObject);
-				return;
+				return null;
+			}
+
+			/* Claim the container BEFORE any setup. SetupCoreFields subscribes the object to
+			 * TimeManager.OnTick, and a duplicate spawn that is about to be abandoned must never
+			 * be wired up — it would tick once before being collected. */
+			if (!AbilityContainerAllocator.TryAllocate(ability, seed, spawnTick,
+					out int containerID,
+					out Dictionary<int, AbilityObject> spawnedAbilityObjects,
+					out AbilityObject existingRoot))
+			{
+				/* This exact spawn (same seed, same tick) is already simulating. Keep it — it may
+				 * already have been fast-forwarded to where the server holds it — and throw away
+				 * the copy that just arrived. See AbilityContainerAllocator. */
+				Destroy(abilityObject.gameObject);
+				return existingRoot;
 			}
 
 			SetupCoreFields(abilityObject, ability, caster, seed, spawnTick);
 
-			if (ability.Objects == null)
-			{
-				ability.Objects = new Dictionary<int, Dictionary<int, AbilityObject>>();
-			}
-
-			AbilityContainerAllocator.Allocate(ability, seed, spawnTick, out int containerID, out Dictionary<int, AbilityObject> spawnedAbilityObjects);
-
-			ability.Objects.Add(containerID, spawnedAbilityObjects);
 			abilityObject.ContainerID = containerID;
 
 			// Allocate the root object's ID from the shared counter so that
@@ -627,6 +650,8 @@ namespace FishMMO.Shared
 			{
 				obj.GameObject.SetActive(true);
 			}
+
+			return abilityObject;
 		}
 
 		/// <summary>
@@ -680,11 +705,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Allocates a deterministic container ID for the spawned ability object.
-		/// Derives the first candidate from seed and spawnTick, then probes linearly when
-		/// the slot is occupied by a different active spawn. A same seed+tick entry is a
-		/// duplicate retry and is destroyed/replaced; a different seed+tick entry is a real
-		/// hash collision and must remain alive.
+		/// Runs the ability's OnPreSpawn and OnSpawn ECA events for a freshly initialised object,
+		/// threading the spawn tick and the object's deterministic RNG through the event data so
+		/// prediction-aware actions use the replicate tick rather than a local clock.
 		/// </summary>
 		private static void DispatchSpawnEvents(
 			Ability ability,
@@ -824,7 +847,12 @@ namespace FishMMO.Shared
 		/// Pose to spawn at, when the caller already holds the authoritative one (an observer
 		/// reproducing a broadcast). Null resolves it locally via <see cref="ResolveSpawnPose"/>.
 		/// </param>
-		/// <returns>The spawned root object, or null when the ability spawns nothing (pet, self, no prefab, missing required target).</returns>
+		/// <returns>
+		/// The root object representing this spawn, or null when the ability spawns nothing (pet,
+		/// self, no prefab, missing required target). When an identical spawn (same seed and tick)
+		/// is already simulating, that existing object is returned and the new instance is
+		/// discarded — see <see cref="AbilityContainerAllocator"/>.
+		/// </returns>
 		public static AbilityObject Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo,
 			Vector3 aimOrigin, Vector3 aimDirection, int seed, PredictionTick spawnTick, AbilitySpawnPose? pose = null)
 		{
@@ -894,8 +922,11 @@ namespace FishMMO.Shared
 				abilityObject = go.AddComponent<AbilityObject>();
 			}
 
-			InitializeAbilityObject(abilityObject, ability, caster, abilitySpawner, targetInfo, seed, spawnTick);
-			return abilityObject.initialized ? abilityObject : null;
+			/* The returned object is not always the one instantiated above: an identical spawn
+			 * already simulating is kept and this copy is destroyed, in which case the existing
+			 * one comes back so the caller (an observer reproducing a broadcast) can still
+			 * fast-forward it rather than silently losing the correction. */
+			return InitializeAbilityObject(abilityObject, ability, caster, abilitySpawner, targetInfo, seed, spawnTick);
 		}
 
 		/// <summary>

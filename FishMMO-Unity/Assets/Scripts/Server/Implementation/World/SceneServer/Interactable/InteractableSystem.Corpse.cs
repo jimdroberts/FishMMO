@@ -478,8 +478,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 
-			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+			if (!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance))
 			{
 				return false;
 			}
@@ -487,7 +486,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/* The character's currency attribute is an int, so the take is capped by the room
 			 * left in it. Adding first and checking afterwards would wrap the balance, which is
 			 * currency duplication rather than merely a lost drop. */
-			long capacity = (long)int.MaxValue - currency.Value;
+			long capacity = (long)int.MaxValue - balance;
 			if (capacity < 1)
 			{
 				Log.Warning("InteractableSystem", $"CharID={character.ID} cannot accept corpse currency: balance is already at the maximum.");
@@ -500,12 +499,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 
-			currency.AddValue((int)amount);
+			if (!CharacterCurrency.TryAdd(character, currencyTemplate, amount))
+			{
+				// The take already came off the corpse, so it has to go back.
+				corpse.ReturnLootCurrency(amount);
+				return false;
+			}
 
 			if (!TryPersistMerchantAttributes(character))
 			{
 				Log.Warning("InteractableSystem", $"Corpse currency persist rejected for CharID={character.ID}; returning {amount} to corpse {corpse.ID}.");
-				currency.AddValue(-(int)amount);
+
+				/* Undoing the grant, not a purchase. TrySpend is the deduct path and the balance
+				 * demonstrably covers it, having just been increased by this amount.
+				 *
+				 * The corpse is only credited if that deduct actually happened. Returning the
+				 * currency to the corpse after a refused deduct would leave it on the character
+				 * AND on the corpse, which is the duplication this whole ordering exists to
+				 * prevent — a drop stranded on a character is the acceptable failure, so the
+				 * refused case keeps it there and says so. */
+				if (!CharacterCurrency.TrySpend(character, currencyTemplate, amount))
+				{
+					Log.Error("InteractableSystem", $"Corpse currency rollback refused for CharID={character.ID}; {amount} stays on the character and is NOT returned to corpse {corpse.ID}, because crediting both would duplicate it.");
+					return false;
+				}
+
 				corpse.ReturnLootCurrency(amount);
 				return false;
 			}

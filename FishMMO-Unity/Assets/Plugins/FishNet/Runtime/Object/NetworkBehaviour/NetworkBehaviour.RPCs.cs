@@ -357,6 +357,13 @@ namespace FishNet.Object
 
             PooledWriter writer = lCreateRpc(channel);
             SetNetworkConnectionCache(excludeServer, excludeOwner);
+            /* FISHMMO EDIT: a behaviour may declare that its owner discards every unbuffered
+             * ObserversRpc it sends (NetworkTransform does when it is server-authoritative with
+             * SendToOwner off). Excluding the owner here, on any channel, is what the receive-side
+             * guard would have done at the cost of the bytes. Buffered RPCs are left alone: the
+             * owner needs those. Owner.IsValid covers an owner that disconnected mid-tick. */
+            if (!bufferLast && !excludeOwner && ExcludeOwnerFromUnbufferedObserversRpcs && Owner.IsValid)
+                _networkConnectionCache.Add(Owner);
             /* FISHMMO EDIT: per-observer level of detail. Observers the object's send filter
              * declines this tick join the exclusion list, exactly as the owner or clientHost
              * would. Only unreliable, non-buffered RPCs are eligible — see IObserverSendFilter. */
@@ -478,6 +485,14 @@ namespace FishNet.Object
         /// <summary>
         /// Adds excluded connections to ExcludedRpcConnections.
         /// </summary>
+        /* FISHMMO EDIT: see SendObserversRpc. False for every behaviour except those whose owner
+         * would discard the RPC on receipt; NetworkTransform overrides it. */
+        /// <summary>
+        /// True when this behaviour's owner should be excluded from every unbuffered ObserversRpc it
+        /// sends, because the owner would discard the message on receipt anyway.
+        /// </summary>
+        public virtual bool ExcludeOwnerFromUnbufferedObserversRpcs => false;
+
         private void SetNetworkConnectionCache(bool addClientHost, bool addOwner)
         {
             _networkConnectionCache.Clear();

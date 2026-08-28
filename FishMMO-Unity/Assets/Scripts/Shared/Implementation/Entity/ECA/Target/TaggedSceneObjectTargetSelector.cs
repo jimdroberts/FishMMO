@@ -60,6 +60,14 @@ namespace FishMMO.Shared
 			GameObject context = GetContext(eventData);
 			UnityEngine.SceneManagement.Scene? scene = (context != null && context.scene.IsValid()) ? context.scene : (UnityEngine.SceneManagement.Scene?)null;
 
+			/* Ordered before anything is yielded, because FirstOnly otherwise means "whichever object
+			 * FindGameObjectsWithTag listed first" — a peer-dependent and run-dependent answer for
+			 * something a designer authored as a specific choice. Sorting by network identity, then by
+			 * name for un-networked scene objects (which is what these usually are), makes "the first
+			 * one" mean the same object everywhere. */
+			List<GameObject> candidates = new List<GameObject>();
+			List<TargetRank> ranks = new List<TargetRank>();
+
 			for (int i = 0; i < matches.Length; ++i)
 			{
 				GameObject candidate = matches[i];
@@ -67,7 +75,15 @@ namespace FishMMO.Shared
 				if (scene.HasValue && candidate.scene != scene.Value) continue;
 				if (!AreConditionsMet(candidate, eventData)) continue;
 
-				yield return candidate;
+				candidates.Add(candidate);
+				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, candidate, 0f));
+			}
+
+			TargetOrdering.SortStable(ranks);
+
+			for (int i = 0; i < ranks.Count; ++i)
+			{
+				yield return candidates[ranks[i].Index];
 				if (FirstOnly) yield break;
 			}
 		}

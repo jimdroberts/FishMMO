@@ -15,7 +15,18 @@ namespace FishMMO.Shared
 	/// Abstract base class for all networked character entities in the game.
 	/// Provides core properties, behaviour registration, flag management, and prefab/model instantiation.
 	/// </summary>
+	/// <remarks>
+	/// <b>Why the distance LOD is required.</b> State forwarding is off on every character, so a
+	/// <c>NetworkTransform</c> is the only thing that carries a character's position to anyone
+	/// observing it — and an unfiltered <c>NetworkTransform</c> sends every observer every update at
+	/// full tick rate regardless of distance. <see cref="NetworkTransformDistanceLod"/> is what
+	/// installs the per-observer send filter that bands those updates by distance; without it a
+	/// character is the single largest line in every observer's budget. It in turn requires the
+	/// <c>NetworkTransform</c> itself, so this one attribute pins the whole interpolated transport
+	/// onto every character that ships.
+	/// </remarks>
 	[RequireComponent(typeof(NetworkObject))]
+	[RequireComponent(typeof(NetworkTransformDistanceLod))]
 	public abstract class BaseCharacter : NetworkBehaviour, ICharacter
 	{
 #if !UNITY_SERVER

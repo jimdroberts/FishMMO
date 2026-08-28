@@ -128,6 +128,16 @@
     flex-shrink: 0;
 }
 
+/* Sizing only — .fish-close-btn carries the colours, border and hover. */
+.achievement-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+    margin-left: 8px;
+}
+
+
 /*
     Shown when the list behind it has nothing in it. A blank scroll area reads
     as a panel that failed to load; a sentence reads as a panel that loaded and
