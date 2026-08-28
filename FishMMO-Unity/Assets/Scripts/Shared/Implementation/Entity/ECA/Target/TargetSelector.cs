@@ -54,6 +54,30 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="eventData">The current event data.</param>
 		/// <returns>A GameObject to use as a spatial reference, or null.</returns>
+
+		/// <summary>
+		/// Runs an overlap query against where characters were when the caster's client saw them.
+		/// </summary>
+		/// <remarks>
+		/// Delegates to <see cref="LagCompensatedQuery"/>, which is shared with the ECA actions that
+		/// resolve hits without going through a selector. The query is eager and the rewind closes
+		/// before any result is yielded — selectors are iterators, and holding characters displaced
+		/// across <c>yield return</c> would run the consumer's damage and ECA work against a stale
+		/// world.
+		/// </remarks>
+		protected static int RewoundOverlapSphere(
+			EventData eventData, GameObject context, Vector3 center, float radius,
+			Collider[] hits, LayerMask mask)
+			=> LagCompensatedQuery.OverlapSphere(eventData, context, center, radius, hits, mask);
+
+		/// <summary>
+		/// Runs a raycast against where characters were when the caster's client saw them.
+		/// </summary>
+		protected static int RewoundRaycast(
+			EventData eventData, GameObject context, Vector3 origin, Vector3 direction, float distance,
+			RaycastHit[] hits, LayerMask mask)
+			=> LagCompensatedQuery.Raycast(eventData, context, origin, direction, distance, hits, mask);
+
 		protected static GameObject GetContext(EventData eventData)
 		{
 			if (eventData == null) return null;

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using FishNet.Serializing;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -65,6 +66,17 @@ namespace FishMMO.Shared
 		// Bits 11..15 are reserved for future fields. The flag mask is a ushort (16 bits);
 		// 11 are currently in use. When adding new fields, take the next bit and update
 		// both WriteDelta and ReadDelta in lock-step.
+
+		/// <summary>
+		/// Leading byte: the rest of the payload is a delta against the reader's previous snapshot.
+		/// </summary>
+		private const byte MODE_DELTA = 0;
+
+		/// <summary>
+		/// Leading byte: the rest of the payload is an absolute snapshot and does not depend on the
+		/// reader's previous value. See <see cref="WriteDelta"/> for why this mode has to exist.
+		/// </summary>
+		private const byte MODE_FULL_SNAPSHOT = 1;
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime via <see cref="GenericDeltaWriter{T}"/> and <see cref="GenericDeltaReader{T}"/>.
@@ -163,6 +175,39 @@ namespace FishMMO.Shared
 			writer.WriteUInt32(value.RngS1);
 			writer.WriteUInt32(value.RngS2);
 			writer.WriteUInt32(value.RngS3);
+
+			// Chain sequence — see CharacterReconcileData.Sequence. Written last so older readers
+			// of the absolute form would have read every field before reaching it.
+			writer.WriteUInt8Unpacked(value.Sequence);
+		}
+
+		/// <summary>
+		/// Validates an array count read from the wire against the cap its writer enforces.
+		/// </summary>
+		/// <remarks>
+		/// Every array in this payload is written as <c>Math.Min(length, cap)</c>, so a count above
+		/// the cap cannot have been produced by <see cref="WriteCharacterReconcileData"/> and means
+		/// the stream is already misaligned. The count field is a <c>ushort</c>, so an unchecked
+		/// count would allocate and then attempt to read up to 65535 entries — for buffs that is
+		/// 65535 × 6 reads walking off the end of the buffer. Reporting once and abandoning the
+		/// rest of the read is the containable failure; the alternative is an out-of-range throw
+		/// deep inside a reconcile.
+		/// </remarks>
+		/// <param name="count">Count read from the wire.</param>
+		/// <param name="cap">Maximum the writer can emit.</param>
+		/// <param name="field">Field name, for the log line.</param>
+		/// <returns>True when the count is usable.</returns>
+		private static bool IsValidArrayCount(int count, int cap, string field)
+		{
+			if (count <= cap)
+			{
+				return true;
+			}
+
+			Log.Error("CharacterReconcileDataDeltaSerializer",
+				$"ReadCharacterReconcileData: {field} count {count} exceeds the writer's cap of {cap}. " +
+				"The reconcile stream is corrupt; abandoning the remainder of this payload.");
+			return false;
 		}
 
 		/// <summary>
@@ -183,6 +228,10 @@ namespace FishMMO.Shared
 
 			// Cooldowns
 			ushort cdCount = reader.ReadUInt16();
+			if (!IsValidArrayCount(cdCount, MaxArrayEntries, "cooldown"))
+			{
+				return result;
+			}
 			if (cdCount > 0)
 			{
 				result.Cooldowns = new CooldownReconcileEntry[cdCount];
@@ -199,6 +248,10 @@ namespace FishMMO.Shared
 
 			// Buffs
 			ushort buffCount = reader.ReadUInt16();
+			if (!IsValidArrayCount(buffCount, MaxArrayEntries, "buff"))
+			{
+				return result;
+			}
 			if (buffCount > 0)
 			{
 				result.Buffs = new BuffReconcileEntry[buffCount];
@@ -218,6 +271,10 @@ namespace FishMMO.Shared
 
 			// Equipment
 			ushort equipCount = reader.ReadUInt16();
+			if (!IsValidArrayCount(equipCount, EquipmentReconcileEntry.MaxEntries, "equipment"))
+			{
+				return result;
+			}
 			if (equipCount > 0)
 			{
 				result.Equipment = new EquipmentReconcileEntry[equipCount];
@@ -235,6 +292,10 @@ namespace FishMMO.Shared
 
 			// Attributes
 			ushort attrCount = reader.ReadUInt16();
+			if (!IsValidArrayCount(attrCount, MaxArrayEntries, "attribute"))
+			{
+				return result;
+			}
 			if (attrCount > 0)
 			{
 				result.Attributes = new AttributeReconcileEntry[attrCount];
@@ -254,6 +315,8 @@ namespace FishMMO.Shared
 			result.RngS1 = reader.ReadUInt32();
 			result.RngS2 = reader.ReadUInt32();
 			result.RngS3 = reader.ReadUInt32();
+
+			result.Sequence = reader.ReadUInt8Unpacked();
 
 			return result;
 		}
@@ -287,54 +350,107 @@ namespace FishMMO.Shared
 			DeltaSerializerOption option)
 		{
 			ushort flags = 0;
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			// See CharacterReplicateDataDeltaSerializer.WriteDelta for why these are three separate
+			// values rather than one forceWrite.
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
+			bool mustEmit = option != DeltaSerializerOption.Unset;
+			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
-			int flagPos = writer.Position;
-			writer.WriteUInt16(0);
-
-			if (writer.WriteDelta(prev.MotorState, next.MotorState, option))
-				flags |= MOTOR_STATE_BIT;
-
-			if (writer.WriteDeltaInt64(prev.AbilityID, next.AbilityID, option))
-				flags |= ABILITY_ID_BIT;
-
-			if (writer.WriteDeltaUInt32(prev.RemainingTicks, next.RemainingTicks, option))
-				flags |= REMAINING_TICKS_BIT;
-
-			if (writer.WriteDeltaInt32(prev.Seed, next.Seed, option))
-				flags |= SEED_BIT;
-
-			if (writer.WriteDelta(prev.ResourceState, next.ResourceState, option))
-				flags |= RESOURCE_BIT;
-
-			if (writer.WriteDeltaInt32(prev.PackedFlagsAndSlot, next.PackedFlagsAndSlot, option))
-				flags |= PACKED_FLAGS_BIT;
-
-			if (CooldownReconcileEntry.WriteArrayDelta(writer, prev.Cooldowns, next.Cooldowns, option))
-				flags |= COOLDOWN_BIT;
-
-			if (BuffReconcileEntry.WriteArrayDelta(writer, prev.Buffs, next.Buffs, option))
-				flags |= BUFF_BIT;
-
-			if (WriteRngStateDelta(writer, prev, next, option))
-				flags |= RNG_STATE_BIT;
-
-			if (AttributeReconcileEntry.WriteArrayDelta(writer, prev.Attributes, next.Attributes, option))
-				flags |= ATTRIBUTE_BIT;
-
-			if (EquipmentReconcileEntry.WriteArrayDelta(writer, prev.Equipment, next.Equipment, option))
-				flags |= EQUIPMENT_BIT;
-
-			if (flags != 0 || forceWrite)
+			/* A full serialize is written as an ABSOLUTE snapshot, not as a delta against prev.
+			 *
+			 * This is the difference between a delta chain that works and one that cannot. FishNet's
+			 * scalar delta primitives are difference-based — Writer.WriteDifference8_16_32 writes
+			 * valueB - valueA and the reader adds that onto ITS previous value — so a payload is only
+			 * decodable by a peer holding the same baseline the writer used. FullSerialize was meant to
+			 * be the escape hatch for a peer that has no such baseline (an observer added part-way
+			 * through the object's life, whose lastReconcileData is still default while the server's has
+			 * moved on), but forcing every field through a difference-based writer does not produce a
+			 * self-contained payload — it just guarantees every field is present, still relative to a
+			 * baseline the receiver does not have. That observer would decode garbage forever.
+			 *
+			 * Routing FullSerialize through the full serializer fixes it: the payload is absolute, the
+			 * receiver ignores its own prev, and its baseline is correct from that point on. Because
+			 * FishNet also emits FullSerialize once per second (GetDeltaSerializeOption: localTick %
+			 * tickRate == 0), this doubles as a periodic resync that repairs any drift rather than
+			 * letting it accumulate for the lifetime of the object.
+			 *
+			 * The mode byte is what lets ReadDelta tell the two apart, since delta readers receive no
+			 * DeltaSerializerOption. One byte per reconcile is a cheap price for the property. */
+			if (fullSerialize)
 			{
-				int endPos = writer.Position;
-				writer.Position = flagPos;
-				writer.WriteUInt16(flags);
-				writer.Position = endPos;
+				writer.WriteUInt8Unpacked(MODE_FULL_SNAPSHOT);
+				WriteCharacterReconcileData(writer, next);
 				return true;
 			}
 
-			writer.Position = flagPos;
+			/* Remembered so the nothing-changed exit below can hand back the mode and sequence
+			 * bytes too. Rewinding only to the flags word left the mode byte in the stream while
+			 * returning false — harmless in production, where FishNet always passes RootSerialize
+			 * and the rewind is never taken, but a delta writer's contract is bytes iff true. */
+			int modePos = writer.Position;
+			int modeLength = writer.Length;
+			writer.WriteUInt8Unpacked(MODE_DELTA);
+
+			/* The chain sequence rides every delta, outside the flags word, so the reader can
+			 * verify its baseline BEFORE it decodes anything against it. One byte per reconcile
+			 * (30 B/s to the owner) buys exact loss detection on the unreliable state channel. */
+			writer.WriteUInt8Unpacked(next.Sequence);
+
+			int flagPos = writer.Position;
+			int startLength = writer.Length;
+			writer.WriteUInt16(0);
+
+			if (writer.WriteDelta(prev.MotorState, next.MotorState, fieldOption))
+				flags |= MOTOR_STATE_BIT;
+
+			if (writer.WriteDeltaInt64(prev.AbilityID, next.AbilityID, fieldOption))
+				flags |= ABILITY_ID_BIT;
+
+			if (writer.WriteDeltaUInt32(prev.RemainingTicks, next.RemainingTicks, fieldOption))
+				flags |= REMAINING_TICKS_BIT;
+
+			if (writer.WriteDeltaInt32(prev.Seed, next.Seed, fieldOption))
+				flags |= SEED_BIT;
+
+			if (writer.WriteDelta(prev.ResourceState, next.ResourceState, fieldOption))
+				flags |= RESOURCE_BIT;
+
+			if (writer.WriteDeltaInt32(prev.PackedFlagsAndSlot, next.PackedFlagsAndSlot, fieldOption))
+				flags |= PACKED_FLAGS_BIT;
+
+			if (CooldownReconcileEntry.WriteArrayDelta(writer, prev.Cooldowns, next.Cooldowns, fieldOption))
+				flags |= COOLDOWN_BIT;
+
+			if (BuffReconcileEntry.WriteArrayDelta(writer, prev.Buffs, next.Buffs, fieldOption))
+				flags |= BUFF_BIT;
+
+			if (WriteRngStateDelta(writer, prev, next, fieldOption))
+				flags |= RNG_STATE_BIT;
+
+			if (AttributeReconcileEntry.WriteArrayDelta(writer, prev.Attributes, next.Attributes, fieldOption))
+				flags |= ATTRIBUTE_BIT;
+
+			if (EquipmentReconcileEntry.WriteArrayDelta(writer, prev.Equipment, next.Equipment, fieldOption))
+				flags |= EQUIPMENT_BIT;
+
+			if (flags != 0 || mustEmit)
+			{
+				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
+				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
+				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
+				 * Writer. A packed backfill would overrun the placeholder and corrupt the
+				 * first field written after it. */
+				writer.InsertUInt16Unpacked(flags, flagPos);
+				return true;
+			}
+
+			/* Rewind Length as well as Position, and back past the mode and sequence bytes.
+			 * Writer.Length only ever grows — every write does Length = Max(Length, Position) —
+			 * and GetArraySegment sends 0..Length, so restoring Position alone left placeholder
+			 * bytes inside the sent segment as trailing garbage whenever nothing was written
+			 * after them. */
+			writer.Position = modePos;
+			writer.Length = modeLength;
 			return false;
 		}
 
@@ -353,9 +469,12 @@ namespace FishMMO.Shared
 			CharacterReconcileData next,
 			DeltaSerializerOption option)
 		{
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			/* Only fullSerialize forces the words out. This is a leaf writer whose presence is
+			 * signalled by RNG_STATE_BIT in the caller's flags word, so on a RootSerialize it can
+			 * still decline and let the caller leave the bit clear. */
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
 
-			if (!forceWrite &&
+			if (!fullSerialize &&
 				prev.RngS0 == next.RngS0 &&
 				prev.RngS1 == next.RngS1 &&
 				prev.RngS2 == next.RngS2 &&
@@ -371,6 +490,35 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>True while a sequence gap is being ridden out, so the log line fires once per gap.</summary>
+		private static bool chainBreakLogged;
+
+		/// <summary>
+		/// Consumes a delta payload's remaining bytes without applying them, keeping the shared
+		/// state reader aligned for whatever follows this behaviour's reconcile.
+		/// </summary>
+		/// <remarks>
+		/// Decodes into a throwaway against <paramref name="prev"/>: the nested delta readers are
+		/// the only things that know each field's wire width, and running them is cheaper than
+		/// duplicating that knowledge here. The result is discarded, and the RNG words and arrays
+		/// are read the same way the accepting path reads them.
+		/// </remarks>
+		private static void DrainDeltaPayload(Reader reader, CharacterReconcileData prev)
+		{
+			ushort flags = reader.ReadUInt16();
+			if ((flags & MOTOR_STATE_BIT) != 0) reader.ReadDelta(prev.MotorState);
+			if ((flags & ABILITY_ID_BIT) != 0) reader.ReadDeltaInt64(prev.AbilityID);
+			if ((flags & REMAINING_TICKS_BIT) != 0) reader.ReadDeltaUInt32(prev.RemainingTicks);
+			if ((flags & SEED_BIT) != 0) reader.ReadDeltaInt32(prev.Seed);
+			if ((flags & RESOURCE_BIT) != 0) reader.ReadDelta(prev.ResourceState);
+			if ((flags & PACKED_FLAGS_BIT) != 0) reader.ReadDeltaInt32(prev.PackedFlagsAndSlot);
+			if ((flags & COOLDOWN_BIT) != 0) CooldownReconcileEntry.ReadArrayDelta(reader, prev.Cooldowns);
+			if ((flags & BUFF_BIT) != 0) BuffReconcileEntry.ReadArrayDelta(reader, prev.Buffs);
+			if ((flags & RNG_STATE_BIT) != 0) { reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); }
+			if ((flags & ATTRIBUTE_BIT) != 0) AttributeReconcileEntry.ReadArrayDelta(reader, prev.Attributes);
+			if ((flags & EQUIPMENT_BIT) != 0) EquipmentReconcileEntry.ReadArrayDelta(reader, prev.Equipment);
+		}
+
 		/// <summary>
 		/// Delta reader for <see cref="CharacterReconcileData"/>.
 		/// Reads the bitmask and reconstructs only the changed fields.
@@ -383,8 +531,46 @@ namespace FishMMO.Shared
 			Reader reader,
 			CharacterReconcileData prev)
 		{
+			/* Mode first — see WriteDelta. A full snapshot is absolute and self-contained, so prev
+			 * is deliberately ignored; a delta is relative to prev. */
+			byte mode = reader.ReadUInt8Unpacked();
+			if (mode == MODE_FULL_SNAPSHOT)
+			{
+				return ReadCharacterReconcileData(reader);
+			}
+			if (mode != MODE_DELTA)
+			{
+				Log.Error("CharacterReconcileDataDeltaSerializer",
+					$"ReadDelta: unknown payload mode {mode}. The reconcile stream is corrupt; " +
+					"returning the previous snapshot unchanged.");
+				return prev;
+			}
+
+			byte sequence = reader.ReadUInt8Unpacked();
+			if (sequence != unchecked((byte)(prev.Sequence + 1)))
+			{
+				/* The baseline this delta was built against is not the one this peer holds — a
+				 * StateUpdate datagram was lost or reordered. Decoding would apply a wrong state,
+				 * so the payload is consumed and discarded and FishNet is told not to reconcile
+				 * from it (ReconcileDeltaGuard). The baseline stays where it is; every further
+				 * delta is rejected the same way until the next absolute snapshot — at most one
+				 * second — resynchronises the chain. Logged once per gap, not per rejected packet. */
+				if (!chainBreakLogged)
+				{
+					chainBreakLogged = true;
+					Log.Debug("CharacterReconcileDataDeltaSerializer",
+						$"ReadDelta: reconcile sequence {sequence} does not follow baseline {prev.Sequence}; " +
+						"a state update was lost. Ignoring reconciles until the next absolute snapshot.");
+				}
+				DrainDeltaPayload(reader, prev);
+				FishNet.Object.ReconcileDeltaGuard.RejectLastRead();
+				return prev;
+			}
+			chainBreakLogged = false;
+
 			ushort flags = reader.ReadUInt16();
 			CharacterReconcileData result = prev;
+			result.Sequence = sequence;
 
 			if ((flags & MOTOR_STATE_BIT) != 0)
 				result.MotorState = reader.ReadDelta(prev.MotorState);

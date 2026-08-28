@@ -44,8 +44,19 @@ namespace FishMMO.Client
 		public const float MinimumBrightness = 0.0f;
 		/// <summary>Highest brightness the slider offers.</summary>
 		public const float MaximumBrightness = 1.0f;
-		/// <summary>Brightness used when the player has never chosen one.</summary>
-		public const float DefaultBrightness = 1.0f;
+		/// <summary>
+		/// Brightness used when the player has never chosen one.
+		/// </summary>
+		/// <remarks>
+		/// Mid-scale rather than maximum. This scales indirect light (see the class remarks), so
+		/// 1.0 is the top of the slider with no headroom left to raise it — a player who finds the
+		/// world too bright can only go down, and one who finds it too dark has nowhere to go. Half
+		/// way leaves adjustment in both directions.
+		///
+		/// Only applies to a player who has never set a brightness; an existing saved value is
+		/// read in preference to this and is not overwritten.
+		/// </remarks>
+		public const float DefaultBrightness = 0.5f;
 
 		/// <summary>
 		/// The brightness currently in force, kept so a scene load can put it back without

@@ -162,7 +162,7 @@ namespace FishMMO.Shared
 			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
 			if (abilityTemplate != null)
 			{
-				Ability newAbility = new Ability(msg.ID, abilityTemplate, new List<int>(msg.Events));
+				Ability newAbility = new Ability(msg.ID, abilityTemplate, msg.Events != null ? new List<int>(msg.Events) : null);
 				LearnAbility(newAbility);
 
 				OnAddAbility?.Invoke(newAbility);
@@ -179,7 +179,7 @@ namespace FishMMO.Shared
 				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.TemplateID);
 				if (abilityTemplate != null)
 				{
-					Ability newAbility = new Ability(ability.ID, abilityTemplate, new List<int>(ability.Events));
+					Ability newAbility = new Ability(ability.ID, abilityTemplate, ability.Events != null ? new List<int>(ability.Events) : null);
 					LearnAbility(newAbility);
 
 					OnAddAbility?.Invoke(newAbility);
@@ -187,6 +187,15 @@ namespace FishMMO.Shared
 			}
 		}
 #endif
+
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int ABILITY_PAYLOAD_LENGTH_BYTES = 4;
 
 		/// <summary>
 		/// Reads the ability controller's state from the network payload, including ability RNG seed, known abilities, and cooldowns.
@@ -201,11 +210,48 @@ namespace FishMMO.Shared
 			// Read the AbilitySeedGenerator seed
 			abilitySeed = reader.ReadInt32();
 
-			// Instantiate the AbilitySeedGenerator
-			abilitySeedGenerator = new DeterministicRNG(abilitySeed);
+			/* Where this behaviour's data ends, whatever happens below. Every early exit seeks
+			 * here before returning so the shared payload reader is left where the next
+			 * NetworkBehaviour expects it — see WritePayload.
+			 *
+			 * The length is checked against what the reader actually holds before it is used.
+			 * This frame exists to survive a payload that cannot be trusted, which makes the
+			 * frame's own length the one value that must be validated rather than believed:
+			 * Reader.Position is a plain field with no bounds check, so a length that overflows
+			 * int (anything >= 0x80000000 casts negative) or simply overruns the buffer would
+			 * turn a recoverable abort into an out-of-range read for whoever reads next. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("AbilityController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int abilityBlockLength = (int)declaredLength;
+			int abilityBlockEnd = reader.Position + abilityBlockLength;
 
-			// Set the initial seed
-			currentSeed = abilitySeedGenerator.Next();
+			/* The generator's CURRENT state, not a fresh one from abilitySeed. The server's
+			 * generator has advanced once per cast since it was created; a client that connects
+			 * (or reconnects) later and re-derives it from the seed starts at the server's
+			 * INITIAL currentSeed, and the first reconcile then reports a mismatch that was
+			 * never a misprediction. */
+			int payloadCurrentSeed = reader.ReadInt32();
+			uint rngS0 = reader.ReadUInt32();
+			uint rngS1 = reader.ReadUInt32();
+			uint rngS2 = reader.ReadUInt32();
+			uint rngS3 = reader.ReadUInt32();
+			if (abilitySeedGenerator == null)
+			{
+				abilitySeedGenerator = new DeterministicRNG(rngS0, rngS1, rngS2, rngS3);
+			}
+			else
+			{
+				abilitySeedGenerator.RestoreState(rngS0, rngS1, rngS2, rngS3);
+			}
+			currentSeed = payloadCurrentSeed;
 
 			//Log.Debug($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
@@ -218,6 +264,7 @@ namespace FishMMO.Shared
 			else if (abilityCount > maxPayloadAbilities)
 			{
 				Log.Error("AbilityController", $"ReadPayload: ability count {abilityCount} exceeds limit {maxPayloadAbilities}. Aborting payload read.");
+				reader.Position = abilityBlockEnd;
 				return;
 			}
 
@@ -247,9 +294,12 @@ namespace FishMMO.Shared
 				if (abilityEventsCount > maxPayloadAbilityEvents)
 				{
 					Log.Error("AbilityController", $"ReadPayload: ability event count {abilityEventsCount} exceeds limit {maxPayloadAbilityEvents} for abilityID {abilityID}. Aborting payload read.");
-					// The event count is outside the valid range. Attempting to drain an
-					// adversarially large count would stall the main thread before the
-					// Reader throws. The payload is unrecoverable — abort entirely.
+					/* The event count is outside the valid range. Draining an adversarially large
+					 * count would stall the main thread before the Reader threw, and the sizes to
+					 * skip are derived from the count just rejected — so this behaviour's own
+					 * state is unrecoverable. Seeking to the framed end still hands the next
+					 * behaviour a valid stream. */
+					reader.Position = abilityBlockEnd;
 					return;
 				}
 
@@ -278,6 +328,19 @@ namespace FishMMO.Shared
 				uint currentTick = cooldownController.ResolveAuthoritativeTick(base.TimeManager.LocalTick);
 				cooldownController.Read(reader, currentTick);
 			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block — a cooldown controller present on one peer and not the other,
+			 * say — the frame still absorbs it here rather than corrupting the behaviour after
+			 * this one, and says so once instead of failing invisibly. */
+			if (reader.Position != abilityBlockEnd)
+			{
+				Log.Error("AbilityController",
+					$"ReadPayload consumed {reader.Position - (abilityBlockEnd - abilityBlockLength)} of " +
+					$"{abilityBlockLength} framed bytes. Seeking to the end of the block; the ability " +
+					"state read above may be incomplete.");
+				reader.Position = abilityBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -294,6 +357,32 @@ namespace FishMMO.Shared
 			writer.WriteInt32(abilitySeed);
 
 			//Log.Debug($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+
+			/* Everything below is framed by a byte count.
+			 *
+			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
+			 * framing — ManagedObjects.WritePayload walks the whole list into a single writer, and
+			 * the reader walks it back the same way. A reader that stops early therefore does not
+			 * merely lose its own state: every behaviour after it in NetworkBehaviours reads from
+			 * the wrong offset. On an NPC that is Interactable.ReadPayload, which would register
+			 * the object in SceneObject.Objects under a garbage ID and quietly make it
+			 * uninteractable.
+			 *
+			 * ReadPayload has three defensive aborts for counts that cannot be trusted, and no way
+			 * to drain past them — the sizes it would need to skip are themselves derived from the
+			 * count it just rejected. The length recorded here is what lets it resynchronise
+			 * instead: seek to the end of this block and hand a valid stream to whoever reads
+			 * next. See ABILITY_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(ABILITY_PAYLOAD_LENGTH_BYTES);
+			int abilityBlockStart = writer.Position;
+
+			// Current seed and full generator state — see ReadPayload for why not just the seed.
+			writer.WriteInt32(currentSeed);
+			abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
+			writer.WriteUInt32(rngS0);
+			writer.WriteUInt32(rngS1);
+			writer.WriteUInt32(rngS2);
+			writer.WriteUInt32(rngS3);
 
 			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);
@@ -323,8 +412,14 @@ namespace FishMMO.Shared
 
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
-				cooldownController.Write(writer);
+				/* Cooldown entries go to the owner only. Observers never read a peer's cooldowns
+				 * (see CooldownController.Write), and the block is still written — framed, zero
+				 * count — so ReadPayload's shape is identical on every receiver. */
+				cooldownController.Write(writer, includeEntries: PayloadVisibility.IsOwner(this, conn));
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - abilityBlockStart),
+				abilityBlockStart - ABILITY_PAYLOAD_LENGTH_BYTES);
 		}
 	}
 }

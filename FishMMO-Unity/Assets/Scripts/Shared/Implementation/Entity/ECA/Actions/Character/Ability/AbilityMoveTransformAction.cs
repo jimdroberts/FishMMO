@@ -6,7 +6,8 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Action that moves a transform in a specified direction based on ability speed.
+	/// Action that moves an ability object along a straight line from its spawn pose, at the
+	/// ability's speed, evaluated in closed form from the object's integer tick count.
 	/// </summary>
 	[Serializable]
 	public class AbilityMoveTransformAction : BaseAction
@@ -26,8 +27,26 @@ namespace FishMMO.Shared
 		{
 			if (eventData.TryGet(out AbilityTickEventData tickData) && tickData.AbilityObject != null)
 			{
-				Transform abilityTransform = tickData.AbilityObject.Transform;
-				abilityTransform.position += abilityTransform.rotation * MoveDirection * tickData.AbilityObject.Speed * tickData.DeltaTime;
+				AbilityObject abilityObject = tickData.AbilityObject;
+
+				/* Closed form, not accumulation.
+				 *
+				 * `position += rotation * dir * speed * dt` is reproducible only while every peer
+				 * takes exactly the same number of steps with exactly the same float state, and it
+				 * drifts over a long lifetime as the sum accumulates rounding. Evaluating from the
+				 * spawn pose and an integer tick count is reproducible from the spawn tuple alone —
+				 * which is precisely what an observer that rebuilt this object from
+				 * AbilityActivatedBroadcast holds — and yields the same position for the same tick
+				 * regardless of how the peer arrived at that tick. Tick rate is still baked into the
+				 * trajectory (ElapsedTicks * DeltaTime), so it must stay fixed; that was already true. */
+				float elapsedSeconds = abilityObject.ElapsedTicks * tickData.DeltaTime;
+				// AbilityObject.Transform is cached in Awake; fall back to the component's own
+				// transform so an object that has not been through Awake (edit-mode construction)
+				// evaluates the same closed form rather than dereferencing null.
+				Transform abilityTransform = abilityObject.Transform != null ? abilityObject.Transform : abilityObject.transform;
+				abilityTransform.position =
+					abilityObject.SpawnPosition +
+					abilityObject.SpawnRotation * MoveDirection * (abilityObject.Speed * elapsedSeconds);
 			}
 			else
 			{
