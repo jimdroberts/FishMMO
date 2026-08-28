@@ -40,50 +40,76 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the nearest <see cref="GameObject"/> to the context within <see cref="Radius"/>.
 		/// </summary>
-		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
+		/// <param name="eventData">The event driving the selection.</param>
 		/// <returns>An enumerable containing the nearest <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			// Physics queries are non-deterministic across client/server.
-			// Suppress during prediction replay to prevent target divergence.
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			if (!IsAuthoritativePeer(eventData))
 			{
 				yield break;
 			}
 
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
-			EnsureHitBuffer();
-			Vector3 origin = context.transform.position;
-			int hitCount = RewoundOverlapSphere(eventData, context, origin, Radius, hits, TargetLayer);
-			GameObject nearest = null;
-			float minDist = float.MaxValue;
-			for (int i = 0; i < hitCount; i++)
+
+			List<GameObject> results = new List<GameObject>();
+			GatherRewound(eventData, context, results, Gather);
+
+			for (int i = 0; i < results.Count; ++i)
 			{
-				Collider hit = hits[i];
-				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, eventData))
-				{
-					float dist = Vector3.Distance(origin, hit.transform.position);
-					if (dist < minDist)
-					{
-						minDist = dist;
-						nearest = hit.gameObject;
-					}
-				}
+				yield return results[i];
 			}
-			if (nearest != null)
-				yield return nearest;
 		}
 
 		/// <summary>
-		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// Queries and ranks inside the caller's rewind scope.
+		/// </summary>
+		/// <remarks>
+		/// The ranking is the part that moved. It used to happen after
+		/// <see cref="LagCompensatedQuery"/> had already closed its scope, so the candidate set came
+		/// from where the caster saw those characters and the distances came from where they are now —
+		/// two different worlds, differing by the peer's speed times its latency. At 300&#160;ms that
+		/// is metres, which is enough to pick a different character as "nearest" than the one the
+		/// caster was looking at.
+		/// </remarks>
+		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
+		{
+			EnsureHitBuffer();
+			List<GameObject> candidates = new List<GameObject>();
+			List<TargetRank> ranks = new List<TargetRank>();
+
+			Vector3 origin = context.transform.position;
+			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
+			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+
+			for (int i = 0; i < hitCount; i++)
+			{
+				Collider hit = hits[i];
+				if (hit == null || hit.gameObject == context || !AreConditionsMet(hit.gameObject, eventData))
+				{
+					continue;
+				}
+				candidates.Add(hit.gameObject);
+				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject, Vector3.Distance(origin, hit.transform.position)));
+			}
+
+			int nearest = TargetOrdering.NearestIndex(ranks);
+			if (nearest >= 0)
+			{
+				results.Add(candidates[ranks[nearest].Index]);
+			}
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
+		/// by this selector rather than by the broadphase.
 		/// </summary>
 		private void EnsureHitBuffer()
 		{
-			int maxHits = Mathf.Max(1, MaxHits);
-			if (hits == null || hits.Length != maxHits)
+			int size = QueryBufferSize(MaxHits);
+			if (hits == null || hits.Length != size)
 			{
-				hits = new Collider[maxHits];
+				hits = new Collider[size];
 			}
 		}
 	}

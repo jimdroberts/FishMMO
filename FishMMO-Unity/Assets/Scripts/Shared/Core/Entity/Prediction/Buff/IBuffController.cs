@@ -60,16 +60,24 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Separate from <see cref="Buffs"/> on purpose. <see cref="Buffs"/> is simulation state:
-		/// on a client it is only correct for the character that client owns, because the ongoing
-		/// corrections that keep it correct arrive through the owner-only reconcile. For anyone
-		/// else it is whatever the spawn payload happened to contain, frozen. Rendering another
-		/// player's buffs from it would show a snapshot taken when they came into view.
+		/// Separate from <see cref="Buffs"/> on purpose. <see cref="Buffs"/> is simulation state,
+		/// and a client only simulates the character it owns: state forwarding is off, so an
+		/// observer runs neither Replicate nor OnReconcile for anybody else. A buff written into an
+		/// observer's dictionary would therefore never tick, never expire, and hold its attribute
+		/// modifiers on that observer's local copy of the character for as long as it stayed in
+		/// view. So nothing writes one: for a character a client does not own, <see cref="Buffs"/>
+		/// is empty and THIS is the whole picture.
 		/// </para>
 		/// <para>
-		/// This list is pushed by the server on every structural change, already filtered by
-		/// <see cref="BaseBuffTemplate.HiddenFromOthers"/>, and carries no tick-domain state and no
-		/// template hooks — a client cannot act on it, only draw it.
+		/// Assembled on the server, already filtered by
+		/// <see cref="BaseBuffTemplate.HiddenFromOthers"/>, and delivered two ways that produce the
+		/// same result: the spawn payload for a client that starts observing, and
+		/// <c>CharacterBuffsBroadcast</c> for a change while it is watching. It carries no
+		/// tick-domain state and no template hooks — a client cannot act on it, only draw it.
+		/// </para>
+		/// <para>
+		/// The owner is not sent this list; it builds its own locally from its simulation, so the
+		/// self-target frame reads the same shape as any other target for zero bytes.
 		/// </para>
 		/// </remarks>
 		IReadOnlyList<ObservedBuffEntry> ObservedBuffs { get; }

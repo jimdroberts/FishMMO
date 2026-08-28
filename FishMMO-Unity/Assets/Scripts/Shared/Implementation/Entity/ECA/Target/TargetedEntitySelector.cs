@@ -70,8 +70,10 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			// Replicate ticks run on every peer; resolving a hit there would apply it client-side.
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			/* Server only. The old guard refused any event carrying a replicate tick, on the theory
+			 * that such an event is a client replay — but the server's own ability dispatches carry
+			 * one too, so a targeted ability resolved nowhere. See TargetSelector.IsAuthoritativePeer. */
+			if (!IsAuthoritativePeer(eventData))
 			{
 				yield break;
 			}

@@ -348,21 +348,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!TryEnqueueAsyncWork(async () =>
 			{
-				if (!TryGetDbService(out ICurrencyEscrowService escrowService))
+				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
 					return;
 				}
 
-				DatabaseResult<long> hold = await escrowService.HoldAsync(characterID, amount, (int)CurrencyEscrowReason.LandTax);
-				if (!hold.IsSuccess || hold.Data <= 0)
-				{
-					return;
-				}
+				DatabaseResult record = await ledgerService.RecordAsync(
+					characterID,
+					amount,
+					(int)CurrencyMovementReason.LandTax,
+					(int)CurrencyMovementState.Absorbed);
 
-				await escrowService.AbsorbAsync(hold.Data);
+				if (!record.IsSuccess)
+				{
+					Log.Warning("HousingSystem",
+						$"Currency ledger: could not record {amount} (land tax) for CharID={characterID}. {record.ErrorMessage}");
+				}
 			}, characterID))
 			{
-				Log.Warning("HousingSystem", $"Currency ledger: could not record land tax for CharID={characterID}.");
+				Log.Warning("HousingSystem", $"Currency ledger: async worker rejected the record for CharID={characterID}.");
 			}
 		}
 	}

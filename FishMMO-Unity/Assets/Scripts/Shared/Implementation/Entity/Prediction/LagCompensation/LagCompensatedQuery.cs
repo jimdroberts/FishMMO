@@ -36,15 +36,26 @@ namespace FishMMO.Shared
 
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 
+			int count;
 			if (TryResolveRewind(eventData, out ICharacter caster, out uint rewindTick))
 			{
 				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
 				{
-					return physicsScene.OverlapSphere(center, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
+					count = physicsScene.OverlapSphere(center, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
 				}
 			}
+			else
+			{
+				count = physicsScene.OverlapSphere(center, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
+			}
 
-			return physicsScene.OverlapSphere(center, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
+			/* Ordered before it is handed back, so buffer order stops being an input to anything.
+			 * Callers cap at a MaxHits, take the first match, or roll an index against this array; all
+			 * three were reading a broadphase ordering that is neither reproducible across runs nor
+			 * agreed between peers. Sorting here fixes every caller at once rather than asking each to
+			 * remember. */
+			TargetOrdering.SortColliders(hits, count);
+			return count;
 		}
 
 		/// <summary>Raycast resolved against the caster's view of the world.</summary>
@@ -63,15 +74,23 @@ namespace FishMMO.Shared
 
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 
+			int count;
 			if (TryResolveRewind(eventData, out ICharacter caster, out uint rewindTick))
 			{
 				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
 				{
-					return physicsScene.Raycast(origin, direction, hits, distance, mask, QueryTriggerInteraction.UseGlobal);
+					count = physicsScene.Raycast(origin, direction, hits, distance, mask, QueryTriggerInteraction.UseGlobal);
 				}
 			}
+			else
+			{
+				count = physicsScene.Raycast(origin, direction, hits, distance, mask, QueryTriggerInteraction.UseGlobal);
+			}
 
-			return physicsScene.Raycast(origin, direction, hits, distance, mask, QueryTriggerInteraction.UseGlobal);
+			// Ordered along the ray: the only reading a line effect can act on, and the one Unity's
+			// non-allocating overload explicitly does not provide.
+			TargetOrdering.SortRaycastHits(hits, count);
+			return count;
 		}
 
 		/// <summary>Resolves the caster and the tick its client was rendering peers at.</summary>

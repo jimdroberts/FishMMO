@@ -9,6 +9,7 @@
                 <ui:Label name="faction-subtitle" text="" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="faction-count" text="0" class="fish-badge faction-count" />
+            <ui:Button name="close-button" class="fish-close-btn faction-close-btn" text="✕" />
         </ui:VisualElement>
         <ui:ScrollView name="faction-scroll" class="fish-scroll faction-scroll">
             <ui:VisualElement name="faction-list" class="faction-list" />

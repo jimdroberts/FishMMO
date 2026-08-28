@@ -10,6 +10,7 @@
                 <ui:Label name="friend-subtitle" text="No friends added" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="friend-online-count" text="0" class="fish-badge friend-online-count" />
+            <ui:Button name="close-button" class="fish-close-btn friend-close-btn" text="✕" />
         </ui:VisualElement>
 
         <ui:ScrollView name="friend-scroll" class="fish-scroll friend-scroll">

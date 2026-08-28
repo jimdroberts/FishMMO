@@ -13,6 +13,17 @@ namespace FishMMO.Shared
 	public class RandomTargetSelector : TargetSelector
 	{
 		/// <summary>
+		/// Salt distinguishing this selector's stream from any other consumer of the same event.
+		/// </summary>
+		/// <remarks>
+		/// A constant, deliberately. The seed must be a function of things every peer agrees on —
+		/// the initiator's network id and the event's tick — and nothing else. Anything drawn from
+		/// local state (a frame count, an instance id, a list length) would put the two peers on
+		/// different streams, which is the entire failure this exists to prevent.
+		/// </remarks>
+		private const int RandomSelectionSalt = 0x5241_4E44; // "RAND"
+
+		/// <summary>
 		/// Radius to search for targets.
 		/// </summary>
 		[Tooltip("Radius to search for targets.")]
@@ -40,46 +51,105 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns a random <see cref="GameObject"/> from all within <see cref="Radius"/> of the context.
 		/// </summary>
-		/// <param name="context">The <see cref="GameObject"/> to search from.</param>
+		/// <param name="eventData">The event driving the selection.</param>
 		/// <returns>An enumerable containing one random <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			// Physics queries are non-deterministic across client/server.
-			// Suppress during prediction replay to prevent target divergence.
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			if (!IsAuthoritativePeer(eventData))
 			{
 				yield break;
 			}
 
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
-			EnsureHitBuffer();
-			Vector3 origin = context.transform.position;
-			int hitCount = RewoundOverlapSphere(eventData, context, origin, Radius, hits, TargetLayer);
-			List<GameObject> candidates = new List<GameObject>();
-			for (int i = 0; i < hitCount; i++)
+
+			List<GameObject> results = new List<GameObject>();
+			GatherRewound(eventData, context, results, Gather);
+
+			for (int i = 0; i < results.Count; ++i)
 			{
-				Collider hit = hits[i];
-				if (hit != null && hit.gameObject != context && AreConditionsMet(hit.gameObject, eventData))
-					candidates.Add(hit.gameObject);
-			}
-			if (candidates.Count > 0)
-			{
-				DeterministicRNG rng = eventData?.RNG ?? DeterministicRNG.Shared;
-				int idx = rng.Range(0, candidates.Count);
-				yield return candidates[idx];
+				yield return results[i];
 			}
 		}
 
+		/// <summary>Builds the candidate set, orders it, then draws one index from it.</summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The order is half of the determinism.</b> A reproducible index into an unordered list is
+		/// still an arbitrary choice — the index means a different character depending on what order
+		/// the broadphase happened to fill the buffer in. Sorting by network identity first is what
+		/// makes "index 3" name the same character on every peer and on every run.
+		/// </para>
+		/// <para>
+		/// <b>The generator is the other half.</b> This used to fall back to
+		/// <see cref="DeterministicRNG.Shared"/> whenever the event carried no generator, which is
+		/// every event type except an ability collision. That instance is seeded from
+		/// <c>Environment.TickCount</c> and is shared by the whole process, so the roll was neither
+		/// reproducible nor agreed on. An event that was not handed a generator now derives one from
+		/// its own identity; an event that was keeps it.
+		/// </para>
+		/// </remarks>
+		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
+		{
+			EnsureHitBuffer();
+			List<GameObject> candidates = new List<GameObject>();
+			List<TargetRank> ranks = new List<TargetRank>();
+
+			Vector3 origin = context.transform.position;
+			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
+			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+
+			for (int i = 0; i < hitCount; i++)
+			{
+				Collider hit = hits[i];
+				if (hit == null || hit.gameObject == context || !AreConditionsMet(hit.gameObject, eventData))
+				{
+					continue;
+				}
+				candidates.Add(hit.gameObject);
+				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject, Vector3.Distance(origin, hit.transform.position)));
+			}
+
+			TargetOrdering.SortStable(ranks);
+			TargetOrdering.ApplyMaxHits(ranks, MaxHits);
+
+			if (ranks.Count == 0)
+			{
+				return;
+			}
+
+			DeterministicRNG rng = ResolveRNG(eventData);
+			int index = rng.Range(0, ranks.Count);
+			results.Add(candidates[ranks[index].Index]);
+		}
+
 		/// <summary>
-		/// Ensures the reusable collider buffer matches <see cref="MaxHits"/>.
+		/// The generator this selection draws from: the event's own when one was threaded onto it,
+		/// otherwise a stream derived from the event's identity under this selector's salt.
+		/// </summary>
+		private DeterministicRNG ResolveRNG(EventData eventData)
+		{
+			if (eventData == null)
+			{
+				return new DeterministicRNG(EventData.DeriveSeed(0, 0u, RandomSelectionSalt));
+			}
+			if (eventData.HasExplicitRNG)
+			{
+				return eventData.RNG;
+			}
+			return eventData.DeriveRNG(RandomSelectionSalt);
+		}
+
+		/// <summary>
+		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
+		/// by this selector rather than by the broadphase.
 		/// </summary>
 		private void EnsureHitBuffer()
 		{
-			int maxHits = Mathf.Max(1, MaxHits);
-			if (hits == null || hits.Length != maxHits)
+			int size = QueryBufferSize(MaxHits);
+			if (hits == null || hits.Length != size)
 			{
-				hits = new Collider[maxHits];
+				hits = new Collider[size];
 			}
 		}
 	}

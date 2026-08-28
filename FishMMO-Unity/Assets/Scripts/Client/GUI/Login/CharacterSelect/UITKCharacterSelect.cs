@@ -752,6 +752,30 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Puts this panel back on screen for a player backing out of a screen downstream of it.
+		/// </summary>
+		/// <remarks>
+		/// The selection that took the player away from here is over the moment they come back,
+		/// so the wait it armed has to be cleared with them. <see cref="OnClick_SelectCharacter"/>
+		/// locks Connect and arms <see cref="replyGuard"/>, and the reply that normally clears it
+		/// is a broadcast like any other: if it is lost, the panel the player has just returned to
+		/// comes back with a dead Connect button and then announces, half a minute later, that the
+		/// server did not respond to a request the player has already abandoned.
+		/// <para>
+		/// Only the panel state is reset. The character list itself is kept — it still describes
+		/// the same account — so the rows are on screen the moment this returns rather than after
+		/// another round trip. See <see cref="OnQuitToLogin"/> for the case where the list must go.
+		/// </para>
+		/// </remarks>
+		public void ReturnFromDownstreamPanel()
+		{
+			SetConnectButtonLocked(false);
+			SetDeleteButtonLocked(false);
+
+			Show();
+		}
+
+		/// <summary>
 		/// Stops the character list coroutine and returns to the login screen.
 		/// </summary>
 		public void OnClick_QuitToLogin()

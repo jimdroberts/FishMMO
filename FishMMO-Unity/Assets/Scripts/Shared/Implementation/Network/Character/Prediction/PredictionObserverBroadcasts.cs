@@ -1,4 +1,5 @@
 using FishNet.Broadcast;
+using FishNet.CodeGenerating;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -56,8 +57,8 @@ namespace FishMMO.Shared
 	/// The ability simulation is deterministic — <c>AbilityObject</c> is a plain MonoBehaviour driven
 	/// by the tick delta from a seeded RNG — so an observer given the same spawn tuple produces the
 	/// same object the server did, and it costs nothing further on the wire for its whole lifetime.
-	/// Today that tuple reaches observers only because the owner's entire input stream is relayed to
-	/// them thirty times a second. This carries the same information as one message per cast.
+	/// State forwarding is off for every character, so this message (and the spawn payload, for a
+	/// late joiner) is the only way an observer ever learns about a cast.
 	/// </para>
 	/// <para>
 	/// <b>Server authored.</b> The client sends intent through its replicate input; the server
@@ -65,7 +66,18 @@ namespace FishMMO.Shared
 	/// is taken from the client on trust — in particular <see cref="TargetObjectID"/> is the server's
 	/// own resolution, never a victim the client named.
 	/// </para>
+	/// <para>
+	/// <b>Wire format</b> is hand written (<see cref="AbilityObserverBroadcastSerializers"/>) and
+	/// shaped by <see cref="SpawnMode"/>: a Camera spawn carries the aim origin and the packed aim
+	/// direction and the observer re-derives the pose with the server's own formula; every other
+	/// mode carries the pose itself and no aim at all. The spawn tick travels as a 16-bit offset
+	/// from <see cref="ServerTick"/> with a full-width fallback. Sent <b>reliably</b>: a cast is a
+	/// rare, event-driven message and a lost one used to be a projectile an observer never saw.
+	/// The only unreliable use is the second and later per-tick spawns of a channelled ability,
+	/// where the first spawn of the channel is reliable and the rest are one visual each.
+	/// </para>
 	/// </remarks>
+	[UseGlobalCustomSerializer]
 	public struct AbilityActivatedBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the casting character.</summary>
@@ -77,49 +89,14 @@ namespace FishMMO.Shared
 		/// <summary>Deterministic RNG seed the ability object was spawned with.</summary>
 		/// <remarks>
 		/// The whole reason an observer can reproduce the cast rather than be told about it every
-		/// tick. Must match what the server used or the two simulations diverge immediately.
+		/// tick. Must match what the server used or the two simulations diverge immediately. It is
+		/// also half of the container id (<c>AbilityContainerAllocator</c>), which is why the
+		/// destroy message below can name an object by id alone.
 		/// </remarks>
 		public int Seed;
 
 		/// <summary>Replicate tick the ability was spawned on.</summary>
 		public uint SpawnTick;
-
-		/// <summary>World-space point the ability was aimed from.</summary>
-		/// <remarks>
-		/// Sent rather than derived. An observer could compute the caster's eye position, but it
-		/// holds that caster interpolated — several hundred milliseconds behind — so deriving it
-		/// would place the ability where the caster used to be.
-		/// </remarks>
-		public Vector3 AimOrigin;
-
-		/// <summary>Aim direction, packed as yaw and pitch by <see cref="AimDirectionCompression"/>.</summary>
-		public uint PackedAimDirection;
-
-		/// <summary>
-		/// NetworkObject id the server resolved as the target, or -1 when the ability has none.
-		/// </summary>
-		public int TargetObjectID;
-
-		/// <summary>World-space point the server's target raycast hit (or the ray end when nothing was hit).</summary>
-		/// <remarks>
-		/// <see cref="AbilitySpawnTarget.Target"/> spawns at this point. An observer cannot derive
-		/// it — its own raycast runs against interpolated colliders — and the target's root
-		/// position is not the same point.
-		/// </remarks>
-		public Vector3 HitPosition;
-
-		/// <summary>World position the server spawned the object at.</summary>
-		/// <remarks>
-		/// Sent for the same reason as <see cref="AimOrigin"/>, and for every spawn target rather
-		/// than just the camera one: PointBlank, Forward and Spawner poses come off the caster's
-		/// motor and spawner transforms, which an observer holds several hundred milliseconds
-		/// behind. Since the trajectory is a closed form from the spawn pose, a locally resolved
-		/// pose would keep the observer's object on a parallel, offset line for its whole life.
-		/// </remarks>
-		public Vector3 SpawnPosition;
-
-		/// <summary>World rotation the server spawned the object with. See <see cref="SpawnPosition"/>.</summary>
-		public Quaternion SpawnRotation;
 
 		/// <summary>Server <c>TimeManager.LocalTick</c> at the moment of the spawn.</summary>
 		/// <remarks>
@@ -130,6 +107,46 @@ namespace FishMMO.Shared
 		/// outlives it by the same amount.
 		/// </remarks>
 		public uint ServerTick;
+
+		/// <summary>The template's <see cref="AbilitySpawnTarget"/>, which decides what else is carried.</summary>
+		public byte SpawnMode;
+
+		/// <summary>
+		/// NetworkObject id the server resolved as the target, or -1 when the ability has none.
+		/// </summary>
+		public int TargetObjectID;
+
+		/// <summary>World-space point the ability was aimed from. <b>Camera mode only.</b></summary>
+		/// <remarks>
+		/// Sent rather than derived. An observer could compute the caster's eye position, but it
+		/// holds that caster interpolated — several hundred milliseconds behind — so deriving it
+		/// would place the ability where the caster used to be. A Camera spawn's pose is a pure
+		/// function of this and the aim direction, so for that mode the pose itself is omitted.
+		/// </remarks>
+		public Vector3 AimOrigin;
+
+		/// <summary>Aim direction, packed by <see cref="AimDirectionCompression"/>. <b>Camera mode only.</b></summary>
+		public uint PackedAimDirection;
+
+		/// <summary>World position the server spawned the object at. <b>Every mode except Camera.</b></summary>
+		/// <remarks>
+		/// PointBlank, Forward and Spawner poses come off the caster's motor and spawner transforms,
+		/// which an observer holds several hundred milliseconds behind, and a Target pose is the
+		/// server's raycast hit, which an observer cannot reproduce against interpolated colliders.
+		/// Since the trajectory is a closed form from the spawn pose, a locally resolved pose would
+		/// keep the observer's object on a parallel, offset line for its whole life.
+		/// </remarks>
+		public Vector3 SpawnPosition;
+
+		/// <summary>World rotation the server spawned the object with. <b>Every mode except Camera.</b></summary>
+		/// <remarks>
+		/// Travels through FishNet's 64-bit quaternion packing. The 32-bit form was measured at 0.59
+		/// degrees of error on a representative cast rotation — half a metre of visible drift on a
+		/// 50 m projectile — which is more than a viewer should see even though hits are resolved on
+		/// the server and only the visual is at stake. The owner never reads this: it predicts with
+		/// its own exact pose.
+		/// </remarks>
+		public Quaternion SpawnRotation;
 	}
 
 	/// <summary>
@@ -138,8 +155,10 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// Lifetime expiry is deterministic and needs no message, but collisions are resolved on each
 	/// client against interpolated characters: a client can miss a hit the server landed and keep
-	/// a ghost flying to the end of its lifetime. Sent unreliably — a lost message costs one
-	/// observer a ghost that still expires on its own.
+	/// a ghost flying to the end of its lifetime. Sent reliably — it is one small message per
+	/// collision-ended object, and a lost one is a ghost that flies on for the rest of its life.
+	/// The container id is a pure function of (seed, spawn tick) on every peer, so the pair below
+	/// names the same object everywhere.
 	/// </remarks>
 	public struct AbilityObjectDestroyedBroadcast : IBroadcast
 	{
@@ -154,6 +173,47 @@ namespace FishMMO.Shared
 
 		/// <summary>Object id within the container (identical on every peer).</summary>
 		public int ObjectID;
+	}
+
+	/// <summary>
+	/// Tells observers that a character learned an ability, so they can draw its casts.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// An observer's knowledge of a peer's abilities arrives in the spawn payload and nowhere
+	/// else. An ability learned <i>after</i> an observer started observing was therefore invisible
+	/// to it forever: <c>OnAbilityActivatedBroadcast</c> could not resolve the ability id, and
+	/// every cast of that ability was dropped without drawing anything. The activation message
+	/// deliberately does not carry the template — casts are frequent and learns are rare, so the
+	/// bytes belong here, once, rather than on every cast.
+	/// </para>
+	/// <para>
+	/// <b>Not a grant.</b> The receiving side files this in the controller's observer-only
+	/// transient store, never in <c>KnownAbilities</c>, which gates activation and is populated
+	/// exclusively from server-authoritative paths. Nothing a client learns from this message can
+	/// let it cast anything.
+	/// </para>
+	/// <para>
+	/// The event ids travel because they are what makes the reproduction move: an ability's
+	/// OnTick events carry the trajectory, and an ability rebuilt without them would spawn a
+	/// projectile that sits still. Sent reliably to observers except the owner, which has its own
+	/// <c>AbilityAddBroadcast</c>.
+	/// </para>
+	/// </remarks>
+	[UseGlobalCustomSerializer]
+	public struct AbilityLearnedObserverBroadcast : IBroadcast
+	{
+		/// <summary>NetworkObject id of the character that learned the ability.</summary>
+		public int CasterObjectID;
+
+		/// <summary>The ability instance id, matching <c>AbilityActivatedBroadcast.AbilityID</c>.</summary>
+		public long AbilityID;
+
+		/// <summary><see cref="AbilityTemplate"/> id the ability was built from.</summary>
+		public int TemplateID;
+
+		/// <summary>Crafted event template ids attached to the ability. May be null or empty.</summary>
+		public int[] Events;
 	}
 
 	/// <summary>
@@ -178,22 +238,6 @@ namespace FishMMO.Shared
 
 		/// <summary>The buffs this character's observers are allowed to see.</summary>
 		public ObservedBuffEntry[] Buffs;
-	}
-
-	/// <summary>
-	/// Tells observers which presentation mode a character is using.
-	/// </summary>
-	/// <remarks>
-	/// Clients need this to enable or disable their own <c>NetworkTransform</c> to match the server,
-	/// since a transform left running while state is forwarded would fight the simulated position.
-	/// </remarks>
-	public struct PredictionModeBroadcast : IBroadcast
-	{
-		/// <summary>NetworkObject id of the character whose mode changed.</summary>
-		public int CharacterObjectID;
-
-		/// <summary>The new mode, as a <c>PredictionMode</c> value.</summary>
-		public byte Mode;
 	}
 
 	/// <summary>

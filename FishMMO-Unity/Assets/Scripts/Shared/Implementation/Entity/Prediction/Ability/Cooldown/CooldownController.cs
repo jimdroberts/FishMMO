@@ -241,10 +241,32 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Restores cooldowns from authoritative reconcile state.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The owner always reconciles — this is the authority for its own cooldown simulation, and
+		/// the correction that removes a cooldown it mispredicted.
+		/// </para>
+		/// <para>
+		/// A non-owner only reconciles a forwarded object, because that is the only mode in which
+		/// it runs the ability simulation at all and therefore the only mode in which a peer's
+		/// cooldowns mean anything to it. With forwarding off an observer never receives this
+		/// reconcile, so the guard states the contract rather than defending against a message that
+		/// cannot arrive — and it keeps the reconcile path aligned with what the spawn payload
+		/// already decided: <c>AbilityController.WritePayload</c> writes the cooldown block with
+		/// <c>includeEntries: isOwner</c>, framed with a zero count for everyone else, because
+		/// observers never read a peer's cooldowns. Without this guard the two paths disagreed about
+		/// the same fact the moment forwarding was switched on. See <see cref="ObserverSyncMode"/>.
+		/// </para>
+		/// </remarks>
 		/// <param name="rd">Unified reconcile payload.</param>
 		/// <param name="channel">Transport channel.</param>
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
+			if (!base.IsOwner && !ObserverSyncMode.ObserversConsumeReconcile(base.NetworkObject))
+			{
+				return;
+			}
+
 			RestoreFromReconcile(rd.Cooldowns);
 		}
 

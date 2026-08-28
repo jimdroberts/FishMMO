@@ -112,7 +112,7 @@ buffController.RemoveRandom(rng, includeBuffs: true, includeDebuffs: true);
    - `OnRemoveStack(Buff buff, ICharacter target)` — Effect when a stack is removed.
    - `OnTick(Buff buff, ICharacter target)` — Periodic effect each tick interval.
 4. Optionally override `SecondaryTooltip(Utf16ValueStringBuilder)` for custom tooltip content.
-5. Optionally override `OnApplyFX(Buff, ICharacter)` for custom visual effects.
+5. Optionally override `OnApplyFX(Buff, ICharacter)` (returns the instance) and `OnRemoveFX(GameObject, ICharacter)` for custom visual effects. `OnApplyFX` is also called with a **null buff** for an observed buff, because observers hold no `Buff` instance for another character.
 
 **Important**: Ensure `OnApply`/`OnRemove` and `OnApplyStack`/`OnRemoveStack` are symmetric — every effect applied must be fully reversed on removal to avoid modifier leaks.
 
@@ -234,7 +234,8 @@ The buff system is consumed by and interacts with:
 
 ### Notes
 
-- **FX Prefabs**: `BaseBuffTemplate.OnApplyFX` instantiates `FXPrefab` as a child of the character's `MeshRoot` (or `Transform`). FX prefabs are expected to be self-destroying — they manage their own lifetime and clean up after their effect ends.
+- **FX Prefabs**: `BaseBuffTemplate.OnApplyFX` instantiates `FXPrefab` as a child of the character's `MeshRoot` (or `Transform`) and returns it. `BuffController` owns the instance's lifetime: **one per template** (not per stack, not per re-application), destroyed through `OnRemoveFX` when the buff expires, is dispelled, is removed by reconcile, or the character is torn down, and re-created from `IModelReadyHandler.OnModelReady` after a model (re)load destroys it. FX prefabs may still self-destruct; they no longer have to.
+- **Observer FX**: an observer never simulates another character's buffs, so its FX is driven by the diff of the server-sent `ObservedBuffs` list — added templates spawn, removed templates despawn. The owner drives FX from its own simulation instead, so it never spawns a second copy from its locally built observed list.
 
 ## Usage Examples
 
@@ -322,7 +323,7 @@ Apply(template, currentTick)
   │            → ++Stacks
   │            → ResetDuration
   │   └── No  → ResetDuration only
-  └── Template.OnApplyFX(buff, Character)        // Client-side FX instantiation
+  └── SpawnBuffFX(template, buff)               // Client-side, one tracked instance per template
 ```
 
 **Restoration flow** (`Apply(Buff buff)`) — for DB load / network sync:
