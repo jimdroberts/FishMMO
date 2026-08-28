@@ -197,9 +197,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				 * currency-boosting buff craft against currency it did not have and go negative by
 				 * exactly the size of the buff. The merchant purchase and ability-learning paths
 				 * were already fixed for this; the crafting path was not. */
-				if (!character.TryGet(out ICharacterAttributeController attributeController) ||
-					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency) ||
-					currency.Value < price)
+				if (!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance) ||
+					balance < price)
 				{
 					return;
 				}
@@ -208,15 +207,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				 * and for the same reason. The deduction used to be in-memory only: nothing on this
 				 * path ever enqueued a character attribute write, so the price of a crafted ability
 				 * survived only until the next periodic character save and was lost outright if the
-				 * server went down before it. TryPersistMerchantAttributes snapshots the in-memory
-				 * values as they stand when it is called, which is why it has to run after the
-				 * deduction rather than before it. */
-				currency.AddValue(-price);
-
-				if (!TryPersistMerchantAttributes(character))
+				 * server went down before it. TrySpend owns that ordering, and the refund when the
+				 * write is refused, so it cannot drift from the paths that do the same thing.
+				 *
+				 * Guarded on a positive price because TrySpend rejects a non-positive amount by
+				 * contract — a free craft is not a spend, and calling it anyway would refuse every
+				 * craft in the game: every ability and ability-event template ships at Price 0.
+				 *
+				 * A free craft therefore skips the persist as well. That is one step further than
+				 * the code this replaced, which deducted zero and then still gated the craft on
+				 * the attribute write succeeding; with nothing deducted there is nothing to write,
+				 * so a refused write is no longer a reason to refuse the ability. */
+				if (price > 0 &&
+					!CharacterCurrency.TrySpend(character, currencyTemplate, price, () => TryPersistMerchantAttributes(character)))
 				{
-					Log.Warning("InteractableSystem", $"AbilityCraft: currency persist rejected for CharID={character.ID}; refunding {price}.");
-					currency.AddValue(price);
+					Log.Warning("InteractableSystem", $"AbilityCraft: charge of {price} refused for CharID={character.ID}.");
 					return;
 				}
 
@@ -224,13 +229,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (newAbility == null)
 				{
 					// Nothing was learned, so put the money back and record the refund.
-					currency.AddValue(price);
+					CharacterCurrency.TryAdd(character, currencyTemplate, price);
 					if (!TryPersistMerchantAttributes(character))
 					{
 						Log.Error("InteractableSystem", $"AbilityCraft: refund persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 					}
+					RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: false);
 					return;
 				}
+
+				RecordCurrencyMovement(character.ID, price, CurrencyMovementReason.AbilityCraft, absorbed: true);
 
 				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 				{
