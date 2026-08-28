@@ -52,6 +52,23 @@ namespace FishMMO.Shared
 		public int MaxSpawnCount = 1;
 
 		/// <summary>
+		/// When true, at most one live instance of each entry in <see cref="Spawnables"/> may exist
+		/// at a time.
+		/// </summary>
+		/// <remarks>
+		/// Off by default, because the normal case is a spawner filling a zone with several of the
+		/// same creature. Turn it on where each entry names a distinct individual — a zone listing
+		/// several named NPCs would otherwise draw the same one repeatedly and stand two copies of
+		/// it side by side, since the spawn index is chosen without regard to what is already alive.
+		///
+		/// This caps each entry at one, not the spawner: MaxSpawnCount still governs the total, so
+		/// with this on the effective ceiling is the smaller of MaxSpawnCount and the number of
+		/// assigned spawnables.
+		/// </remarks>
+		[Tooltip("Allow at most one live instance of each spawnable. Off by default. Turn on when every entry is a distinct individual that should never be duplicated.")]
+		public bool UniqueSpawnables = false;
+
+		/// <summary>
 		/// The type of spawn selection (Linear, Random, Weighted).
 		/// </summary>
 		public ObjectSpawnType SpawnType = ObjectSpawnType.Linear;
@@ -567,6 +584,63 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// True when a live instance spawned from these settings already exists.
+		/// </summary>
+		/// <param name="spawnableSettings">The settings to look for among the live objects.</param>
+		/// <returns>True when one is already alive.</returns>
+		private bool IsSpawnableLive(SpawnableSettings spawnableSettings)
+		{
+			if (spawnableSettings == null)
+			{
+				return false;
+			}
+
+			foreach (ISpawnable spawned in Spawned.Values)
+			{
+				/* Reference equality against the settings object the spawn was created from, which
+				 * SpawnObject assigns below. Comparing the prefab instead would treat two entries
+				 * that share a prefab but differ in their overrides as the same spawnable. */
+				if (spawned != null &&
+					ReferenceEquals(spawned.SpawnableSettings, spawnableSettings))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Moves <paramref name="spawnIndex"/> onto a spawnable that has no live instance.
+		/// </summary>
+		/// <param name="spawnIndex">The chosen index, adjusted in place when it is already taken.</param>
+		/// <returns>False when every assigned spawnable is already alive.</returns>
+		/// <remarks>
+		/// Searches forward from the chosen index rather than re-rolling, so the configured spawn
+		/// type still decides where the search starts and a full list cannot spin.
+		/// </remarks>
+		private bool TryResolveUniqueSpawnIndex(ref int spawnIndex)
+		{
+			for (int offset = 0; offset < Spawnables.Count; ++offset)
+			{
+				int candidate = (spawnIndex + offset) % Spawnables.Count;
+
+				SpawnableSettings candidateSettings = Spawnables[candidate];
+				if (candidateSettings == null ||
+					candidateSettings.NetworkObject == null)
+				{
+					continue;
+				}
+
+				if (!IsSpawnableLive(candidateSettings))
+				{
+					spawnIndex = candidate;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Spawns a new object in the world using the selected spawnable settings and position logic.
 		/// </summary>
 		public void SpawnObject()
@@ -584,7 +658,19 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			SpawnableSettings spawnableSettings = Spawnables[GetSpawnIndex()];
+			int spawnIndex = GetSpawnIndex();
+
+			/* One live instance per entry, when asked for. The spawn index is chosen from the
+			 * configured spawn type alone and knows nothing about what is already alive, so without
+			 * this a list of distinct individuals happily spawns the same one twice. */
+			if (UniqueSpawnables &&
+				!TryResolveUniqueSpawnIndex(ref spawnIndex))
+			{
+				// Every assigned spawnable is already alive; nothing left that may be spawned.
+				return;
+			}
+
+			SpawnableSettings spawnableSettings = Spawnables[spawnIndex];
 			if (spawnableSettings == null ||
 				spawnableSettings.NetworkObject == null)
 			{
@@ -643,21 +729,35 @@ namespace FishMMO.Shared
 					aiController.Initialize(spawnPosition);
 				}
 
-				// Set up spawnable references and add to the spawned dictionary.
+				// Set up spawnable references before the spawn, so the object's own start
+				// callbacks see the spawner that owns it.
 				ISpawnable nobSpawnable = nob.GetComponent<ISpawnable>();
 				if (nobSpawnable != null)
 				{
 					nobSpawnable.ObjectSpawner = this;
 					nobSpawnable.SpawnableSettings = spawnableSettings;
-
-					/* Indexer, not Add. A pooled object keeps its scene-object ID across a recycle,
-					 * so a stale entry left by an object that was despawned some other way would
-					 * make Add throw and abort the spawn tick. */
-					Spawned[nobSpawnable.ID] = nobSpawnable;
 				}
 
 				// Spawn the object on the server.
 				ServerManager.Spawn(nob, null, Transform.gameObject.scene);
+
+				/* Tracked AFTER the spawn, because the key is the scene-object ID and that ID is
+				 * assigned in OnStartServer — which runs inside ServerManager.Spawn. Registering
+				 * beforehand filed every first-time instance under ID 0: repeated spawns
+				 * overwrote one another, so Spawned.Count never approached MaxSpawnCount and the
+				 * cap at the top of this method never engaged, while Despawn's
+				 * Spawned.Remove(spawnable.ID) looked up the real (negative) ID, missed, and
+				 * returned early — leaving the object spawned forever with no respawn queued.
+				 * Pooled instances keep their ID across a recycle, so only the first spawn of
+				 * each instance was affected, which is exactly the initial world population.
+				 *
+				 * Indexer, not Add. A pooled object keeps its scene-object ID across a recycle,
+				 * so a stale entry left by an object that was despawned some other way would
+				 * make Add throw and abort the spawn tick. */
+				if (nobSpawnable != null)
+				{
+					Spawned[nobSpawnable.ID] = nobSpawnable;
+				}
 
 				// If we've reached the maximum spawn count, clear respawn timers.
 				if (Spawned.Count >= MaxSpawnCount)

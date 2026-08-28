@@ -189,11 +189,23 @@ namespace FishMMO.Shared
 			}
 #endif
 			KCCInputReplicateData kccInput = OnHandleCharacterInput();
-			input.MoveAxisForward = kccInput.MoveAxisForward;
-			input.MoveAxisRight = kccInput.MoveAxisRight;
+			/* Quantised here, not on read — same rule as the aim below. The owner predicts from
+			 * this struct, so it has to commit to the axis value the wire can carry or it
+			 * simulates a slightly different movement magnitude from everyone else. */
+			input.MoveAxisForward = MoveAxisCompression.Quantize(kccInput.MoveAxisForward);
+			input.MoveAxisRight = MoveAxisCompression.Quantize(kccInput.MoveAxisRight);
 			input.MoveFlags = kccInput.MoveFlags;
-			input.CameraPosition = kccInput.CameraPosition;
-			input.CameraRotation = kccInput.CameraRotation;
+			/* The aim ORIGIN is deliberately not carried. It used to travel as CameraPosition,
+			 * taken from this client verbatim and never checked against the character, which let a
+			 * modified client choose the point the server raycast for victims from. Every peer now
+			 * derives it from the motor instead -- see CharacterAimOrigin. Only the DIRECTION is
+			 * still the client's to choose, and that is bounded to a unit vector by its encoding. */
+			/* Quantise HERE, not on read. The owner predicts from this same struct, so storing the
+			 * raw camera forward would have the owner simulate a direction the wire cannot carry
+			 * while the server and every observer simulate the decoded one — the ability system is
+			 * deterministic, so that divergence showed up as a slightly different shot on every
+			 * cast. See AimDirectionCompression. */
+			input.AimDirection = AimDirectionCompression.Quantize(kccInput.CameraRotation * Vector3.forward);
 		}
 
 		/// <inheritdoc/>
@@ -225,7 +237,8 @@ namespace FishMMO.Shared
 
 			KCCInputReplicateData kccInput = new KCCInputReplicateData(
 				input.MoveAxisForward, input.MoveAxisRight, input.MoveFlags,
-				input.CameraPosition, input.CameraRotation);
+				CharacterAimOrigin.Resolve(Motor, transform),
+				AimDirectionCompression.ToRotation(input.AimDirection));
 			kccInput.SetTick(input.GetTick());
 
 			// Observer prediction must run BEFORE the IsActualData gate.
@@ -248,7 +261,9 @@ namespace FishMMO.Shared
 								kccInput.MoveFlags = lastCreatedData.MoveFlags;
 								KCCMoveFlagsHelper.ClearOneShotFlags(ref kccInput.MoveFlags);
 								kccInput.MoveFlags.EnableBit(KCCMoveFlags.IsActualData);
-								kccInput.CameraPosition = lastCreatedData.CameraPosition;
+								/* CameraPosition is NOT carried forward: it is derived from the
+								 * motor for the current tick above, and copying the previous
+								 * tick's origin would aim from where the character used to be. */
 								kccInput.CameraRotation = lastCreatedData.CameraRotation;
 								kccInput.MoveAxisForward = lastCreatedData.MoveAxisForward;
 								kccInput.MoveAxisRight = lastCreatedData.MoveAxisRight;

@@ -453,6 +453,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
 		/// <param name="reader">The network reader to read from.</param>
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		private const int FACTION_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
+		/// Upper bound on factions accepted from a spawn payload. Far above any realistic
+		/// faction roster; exists so a corrupt count cannot drive an unbounded read loop.
+		/// </summary>
+		private const int MAX_PAYLOAD_FACTIONS = 4096;
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			Factions.Clear();
@@ -460,9 +471,36 @@ namespace FishMMO.Shared
 			Neutral.Clear();
 			Hostile.Clear();
 
+			/* Where this behaviour's data ends. FishNet packs every NetworkBehaviour's spawn
+			 * payload into one buffer with no per-behaviour framing, so an abort here would leave
+			 * every behaviour after this one reading from the wrong offset — on an NPC prefab this
+			 * controller is read immediately before NPC.ReadPayload, which carries the scene-object
+			 * ID a client later names to loot the corpse. The length is validated against what the
+			 * reader holds first; Reader.Position is a plain field with no bounds check. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("FactionController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in " +
+					"the spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int factionBlockLength = (int)declaredLength;
+			int factionBlockEnd = reader.Position + factionBlockLength;
+
 			int factionCount = reader.ReadInt32();
+			if (factionCount > MAX_PAYLOAD_FACTIONS)
+			{
+				Log.Error("FactionController",
+					$"ReadPayload: faction count {factionCount} exceeds limit {MAX_PAYLOAD_FACTIONS}. Aborting payload read.");
+				reader.Position = factionBlockEnd;
+				return;
+			}
 			if (factionCount < 1)
 			{
+				reader.Position = factionBlockEnd;
 				return;
 			}
 
@@ -487,6 +525,17 @@ namespace FishMMO.Shared
 				 * read. It reads the state this loop just installed rather than listening for it. */
 				SetFaction(factionID, value, skipEvent: true);
 			}
+
+			/* Belt and braces on the success path: the frame absorbs any shape disagreement here
+			 * rather than corrupting the behaviour after this one. */
+			if (reader.Position != factionBlockEnd)
+			{
+				Log.Error("FactionController",
+					$"ReadPayload consumed {reader.Position - (factionBlockEnd - factionBlockLength)} of " +
+					$"{factionBlockLength} framed bytes. Seeking to the end of the block; the faction " +
+					"state read above may be incomplete.");
+				reader.Position = factionBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -496,6 +545,11 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			/* Everything below is framed by a byte count so ReadPayload can resynchronise after
+			 * rejecting an untrustworthy count. See FACTION_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(FACTION_PAYLOAD_LENGTH_BYTES);
+			int factionBlockStart = writer.Position;
+
 			// Write the factions for the clients
 			writer.WriteInt32(Factions.Count);
 			foreach (Faction faction in Factions.Values)
@@ -503,6 +557,9 @@ namespace FishMMO.Shared
 				writer.WriteInt32(faction.Template.ID);
 				writer.WriteInt32(faction.Value);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - factionBlockStart),
+				factionBlockStart - FACTION_PAYLOAD_LENGTH_BYTES);
 		}
 
 		/// <summary>

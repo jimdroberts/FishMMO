@@ -24,6 +24,36 @@ namespace FishMMO.UnitTests.AI
 		/// <summary>
 		/// Loads the pet archetypes.
 		/// </summary>
+		/// <summary>
+		/// Assigns the template IDs that the runtime asset loader normally assigns.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="CachedScriptableObject{T}.ID"/> has a private setter and is only ever written
+		/// inside <c>AddToCache</c>, which the addressables bootstrap calls at runtime. Under
+		/// EditMode nothing calls it, so every template's ID sits at 0 — and
+		/// <see cref="PetPrefabs_HaveAnAttributeDatabaseWithHealth"/> compares those IDs against the
+		/// controller's <c>HealthResourceTemplateID</c>, which is a real deterministic hash. The
+		/// comparison could therefore never succeed for any pet, no matter how the prefab was
+		/// authored; the test was reporting a content fault that did not exist.
+		///
+		/// Registering them here reproduces what production does. The ID is
+		/// <c>(typeName + assetName).GetDeterministicHashCode()</c>, so the values this produces are
+		/// the same ones a running game would.
+		/// </remarks>
+		[OneTimeSetUp]
+		public void RegisterAttributeTemplateIds()
+		{
+			foreach (string guid in AssetDatabase.FindAssets("t:CharacterAttributeTemplate"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				CharacterAttributeTemplate attribute = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(path);
+				if (attribute != null)
+				{
+					attribute.AddToCache(attribute.name);
+				}
+			}
+		}
+
 		[OneTimeSetUp]
 		public void LoadPetArchetypes()
 		{

@@ -9,8 +9,30 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// The colour names and their storage format — <c>{Name}ColorR/G/B/A</c> as bytes — are
 	/// inherited from the theme the Canvas UI used, so a config file written by an older client
-	/// still themes this one. Nothing about those keys was Canvas-specific; they name colours in
-	/// the game, not components in a scene.
+	/// still themes this one.
+	///
+	/// <b>But only half of it does.</b> That inheritance was taken on the reading that the keys
+	/// name colours in the game rather than components in a scene, and for
+	/// <c>Text</c>, <c>Health</c>, <c>Mana</c>, <c>Stamina</c>, <c>Crosshair</c> and
+	/// <c>TooltipLabel</c> that holds — a health bar is red in any skin. It does not hold for the
+	/// four surface colours. <c>Primary</c>, <c>Secondary</c>, <c>Highlight</c> and
+	/// <c>Background</c> named Canvas widgets and carry that skin's greys, and applying them to
+	/// this one repaints every panel in the palette of a UI that no longer exists. A player who
+	/// once set what that panel called "Window Background" gets a grey client, having asked for
+	/// nothing of the sort.
+	///
+	/// So the surface four are honoured only from a config this skin has written, marked by
+	/// <see cref="VersionKey"/>. Older entries are left on disk and ignored; setting any colour
+	/// in the options panel stamps the version and brings the whole set back into force. The
+	/// stamp exists because there is no other way to tell a value this skin was given from one
+	/// it merely inherited — both are four bytes under the same key.
+	///
+	/// <b>This was dormant until the store got an owner.</b> <c>Configuration.GlobalSettings</c>
+	/// used to be created by whichever of two unrelated places asked for it first, and in a
+	/// client started past the launcher neither did — so the theme parsed nothing and every panel
+	/// kept its stylesheet colours. Making <see cref="ClientSettings"/> the single owner is what
+	/// first put these keys into effect, which is why a config years old could turn a UI grey the
+	/// day the loading order was fixed.
 	///
 	/// Three of that set are gone: <c>TooltipTitle</c>, <c>TooltipValue</c> and
 	/// <c>TooltipStat</c>. Every colour here reaches the screen by being written onto elements
@@ -77,6 +99,11 @@ namespace FishMMO.Client
 		private readonly bool[] present = new bool[ColorNames.Length];
 
 		/// <summary>
+		/// Whether the surface colours in this configuration were written by this skin.
+		/// </summary>
+		private readonly bool surfacesHonoured;
+
+		/// <summary>
 		/// Configuration key prefixes, in the order <see cref="present"/> stores them.
 		/// </summary>
 		public static readonly string[] ColorNames =
@@ -94,12 +121,38 @@ namespace FishMMO.Client
 		};
 
 		/// <summary>
+		/// Configuration key marking which skin last wrote the colour set.
+		/// </summary>
+		public const string VersionKey = "UIThemeVersion";
+
+		/// <summary>
+		/// The current skin's version. Absent or lower means the surface colours in the file
+		/// belong to a skin this one shares no palette with.
+		/// </summary>
+		public const int Version = 1;
+
+		/// <summary>
+		/// How many leading entries of <see cref="ColorNames"/> paint UI surfaces rather than
+		/// things in the game. These are the ones a pre-<see cref="Version"/> config cannot
+		/// meaningfully set, and they are deliberately first in the array so the test is a
+		/// comparison rather than a lookup.
+		/// </summary>
+		private const int SurfaceColorCount = 4;
+
+		/// <summary>
 		/// Builds a theme by parsing every colour entry from configuration once.
 		/// </summary>
 		/// <param name="configuration">Configuration to read from. May be null.</param>
 		public UITKTheme(Configuration configuration)
 		{
 			bool any = false;
+
+			/* Read before any colour is: it decides whether the surface four are read at all. A
+			 * file with no stamp is either pre-UITK or has never had a colour set, and neither
+			 * has an opinion about this skin's surfaces worth honouring. */
+			int version = 0;
+			configuration?.TryGetInt(VersionKey, out version, 0);
+			surfacesHonoured = version >= Version;
 
 			Primary      = Parse(configuration, 0, out bool p0);  any |= p0;
 			Secondary    = Parse(configuration, 1, out bool p1);  any |= p1;
@@ -150,6 +203,14 @@ namespace FishMMO.Client
 				return Color.white;
 			}
 
+			/* Ignored rather than erased. The player may have a client on another machine that
+			 * still reads them, and a value this one declines to apply is not a value it is
+			 * entitled to delete. */
+			if (index < SurfaceColorCount && !surfacesHonoured)
+			{
+				return Color.white;
+			}
+
 			string name = ColorNames[index];
 
 			/* The R channel decides presence for the whole group. A partially written group is
@@ -185,6 +246,11 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			/* Stamped on every write, not just a surface one. The stamp says "this skin owns the
+			 * colours in this file", and a player who sets a health bar colour has just made that
+			 * true of the whole set. */
+			configuration.Set(VersionKey, Version);
 
 			Color32 c = color;
 			configuration.Set($"{name}ColorR", c.r);

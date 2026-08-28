@@ -39,6 +39,12 @@ namespace FishMMO.Shared.Core
 		void Write(Writer writer);
 
 		/// <summary>
+		/// Writes cooldown data, or an empty framed block when <paramref name="includeEntries"/>
+		/// is false (non-owner connections have no use for a peer's cooldowns).
+		/// </summary>
+		void Write(Writer writer, bool includeEntries);
+
+		/// <summary>
 		/// Removes all cooldowns that have expired as of <paramref name="currentTick"/>.
 		/// Called from the Replicate loop. Safe during replay because the same tick
 		/// value produces the same expiration decisions deterministically.
