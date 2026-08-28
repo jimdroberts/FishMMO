@@ -307,13 +307,13 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 7250114663715075110}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
-  HealthResourceTemplateID: 0
-  HealthRegenerationTemplateID: 0
-  ManaResourceTemplateID: 0
-  ManaRegenerationTemplateID: 0
-  StaminaResourceTemplateID: 0
-  StaminaRegenerationTemplateID: 0
-  regenTickRate: 5
+  HealthResourceTemplateID: -2113468379
+  HealthRegenerationTemplateID: 1880892706
+  ManaResourceTemplateID: 1606168262
+  ManaRegenerationTemplateID: -2144672577
+  StaminaResourceTemplateID: 2142067754
+  StaminaRegenerationTemplateID: -251416119
+  regenTickRate: 1
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0

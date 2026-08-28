@@ -284,7 +284,7 @@ MonoBehaviour:
   ManaRegenerationTemplateID: -2144672577
   StaminaResourceTemplateID: 2142067754
   StaminaRegenerationTemplateID: -251416119
-  regenTickRate: 5
+  regenTickRate: 1
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0

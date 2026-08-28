@@ -145,9 +145,52 @@ namespace FishMMO.Shared
 		/// Time in seconds between resource regeneration ticks.
 		/// Configurable per character type (e.g., NPCs may use a different rate than players).
 		/// </summary>
+		/// <remarks>
+		/// One second, not five. Drain is per-tick and smooth, so a five second pulse made recovery
+		/// arrive in a handful of visible jumps — 100 stamina came back as five 20-point steps, the
+		/// first of which was up to five seconds after the bar emptied. That asymmetry is what read
+		/// as the regen system being frozen (issue #151).
+		/// <para>
+		/// The pulse got finer, not stronger: see <see cref="REGEN_AUTHORING_WINDOW_SECONDS"/>.
+		/// </para>
+		/// </remarks>
 		[SerializeField]
 		[Tooltip("Time in seconds between resource regeneration ticks.")]
-		private float regenTickRate = 5.0f;
+		private float regenTickRate = 1.0f;
+
+		/// <summary>
+		/// The window, in seconds, that a regeneration template's value is authored against.
+		/// </summary>
+		/// <remarks>
+		/// Regen templates hold whole numbers — Stamina Regeneration is 20, Mana Regeneration is 1 —
+		/// and those were amounts per five second pulse, so the real rates are 4/s and 0.2/s. This
+		/// makes that implicit contract explicit and divides by it, so changing
+		/// <see cref="regenTickRate"/> changes only how finely regen is delivered and never how
+		/// much of it arrives.
+		/// <para>
+		/// It is a constant rather than a rescale of the template assets because the rates are not
+		/// all representable as whole numbers at the new cadence: stamina would be 4 per pulse, but
+		/// mana would be 0.2, and the field is an int. Rescaling the assets would have silently
+		/// multiplied mana regeneration by five.
+		/// </para>
+		/// </remarks>
+		private const float REGEN_AUTHORING_WINDOW_SECONDS = 5.0f;
+
+		/// <summary>
+		/// How long a resource stops regenerating after it was last spent, in seconds.
+		/// </summary>
+		/// <remarks>
+		/// Regen used to run while a resource was being consumed, so holding sprint drew stamina at
+		/// 5/s while regen returned 4/s and the bar barely moved — the cost of sprinting was very
+		/// nearly refunded as it was paid. Spending a resource now suppresses its own regeneration
+		/// briefly, so the drain is the drain.
+		/// <para>
+		/// Scoped per resource: spending stamina does not stop mana coming back. One second is long
+		/// enough that continuous use fully suppresses regen without the pause being noticeable
+		/// once the player stops.
+		/// </para>
+		/// </remarks>
+		private const float REGEN_CONSUMPTION_LOCKOUT_SECONDS = 1.0f;
 
 		/// <summary>
 		/// Propagation depth counter for batched attribute graph updates.
@@ -650,6 +693,9 @@ namespace FishMMO.Shared
 			nextRegenTick = 0u;
 			hasNextRegenTick = false;
 			lastProcessedRegenTick = 0u;
+			// Sampled state is meaningless for the next occupant of a pooled object.
+			lastObservedResourceValues.Clear();
+			lastConsumedResourceTicks.Clear();
 			hasLastProcessedRegenTick = false;
 
 			// Reset propagation state.
@@ -1061,6 +1107,8 @@ namespace FishMMO.Shared
 			if (regenTickInterval == 0u || Math.Abs(td - regenIntervalSourceTickDelta) > 1e-10)
 			{
 				regenTickInterval = (uint)Math.Max(1, (int)Math.Ceiling(regenTickRate / td));
+				// Derived from the same TickDelta so the lockout is a real second at any tick rate.
+				regenConsumptionLockoutTicks = (uint)Math.Max(1, (int)Math.Ceiling(REGEN_CONSUMPTION_LOCKOUT_SECONDS / td));
 				regenIntervalSourceTickDelta = td;
 			}
 		}
@@ -1136,6 +1184,33 @@ namespace FishMMO.Shared
 		private CharacterAttribute cachedHealthRegen;
 		private CharacterAttribute cachedManaRegen;
 		private CharacterAttribute cachedStaminaRegen;
+
+		/// <summary>
+		/// Last observed value of each tracked resource, keyed by template ID, used to notice that
+		/// it was spent.
+		/// </summary>
+		/// <remarks>
+		/// Consumption is detected by sampling rather than reported by the spender. Stamina is spent
+		/// from <see cref="KCCController"/>, mana and health from ECA actions, abilities and damage,
+		/// and threading a tick through every one of those call sites would be a much wider change
+		/// than the rule needs — a resource that went down was spent, whoever spent it.
+		/// <para>
+		/// A reconcile lowering a value counts too, and should: the server reducing a resource means
+		/// it really was spent, and the owner mispredicting is exactly when the two must agree.
+		/// </para>
+		/// </remarks>
+		private readonly Dictionary<int, float> lastObservedResourceValues = new Dictionary<int, float>();
+
+		/// <summary>
+		/// Tick at which each tracked resource was last seen to decrease, keyed by template ID.
+		/// </summary>
+		private readonly Dictionary<int, uint> lastConsumedResourceTicks = new Dictionary<int, uint>();
+
+		/// <summary>
+		/// <see cref="REGEN_CONSUMPTION_LOCKOUT_SECONDS"/> converted to ticks, recomputed alongside
+		/// <see cref="regenTickInterval"/>.
+		/// </summary>
+		private uint regenConsumptionLockoutTicks;
 
 		/// <summary>
 		/// Resolves and caches regeneration dependency attribute references for health, mana, and stamina.
@@ -1243,6 +1318,13 @@ namespace FishMMO.Shared
 			lastProcessedRegenTick = tick;
 			hasLastProcessedRegenTick = true;
 
+			/* Sampled on every accepted tick, not only on pulse ticks. A sprint burst that starts
+			 * and ends between two pulses still has to suppress the pulse that follows it, and
+			 * comparing only at pulse time would miss it entirely. */
+			NoteResourceConsumption(HealthResourceTemplateID, tick);
+			NoteResourceConsumption(ManaResourceTemplateID, tick);
+			NoteResourceConsumption(StaminaResourceTemplateID, tick);
+
 			// Schedule the first pulse one full interval ahead of the first processed tick.
 			// This is also overwritten by ApplyResourceState on reconcile so the client
 			// fires at exactly the same absolute tick as the server.
@@ -1284,10 +1366,54 @@ namespace FishMMO.Shared
 					return;
 				}
 
-				RegenerateResource(HealthResourceTemplateID, cachedHealthRegen, 1);
-				RegenerateResource(ManaResourceTemplateID, cachedManaRegen, 1);
-				RegenerateResource(StaminaResourceTemplateID, cachedStaminaRegen, 1);
+				RegenerateResource(HealthResourceTemplateID, cachedHealthRegen, 1, tick);
+				RegenerateResource(ManaResourceTemplateID, cachedManaRegen, 1, tick);
+				RegenerateResource(StaminaResourceTemplateID, cachedStaminaRegen, 1, tick);
 			}
+		}
+
+		/// <summary>
+		/// Records that a resource was spent this tick, if its value went down since the last one.
+		/// </summary>
+		/// <remarks>
+		/// Only decreases count. Regeneration itself raises the value, so an increase must never be
+		/// read as consumption or a resource would suppress its own recovery forever.
+		/// </remarks>
+		/// <param name="resourceTemplateID">Resource to sample; 0 means absent on this entity.</param>
+		/// <param name="tick">The tick being processed.</param>
+		private void NoteResourceConsumption(int resourceTemplateID, uint tick)
+		{
+			if (resourceTemplateID == 0 ||
+				!resourceAttributes.TryGetValue(resourceTemplateID, out CharacterResourceAttribute resource))
+			{
+				return;
+			}
+
+			float current = resource.CurrentValue;
+
+			if (lastObservedResourceValues.TryGetValue(resourceTemplateID, out float previous) &&
+				current < previous)
+			{
+				lastConsumedResourceTicks[resourceTemplateID] = tick;
+			}
+
+			lastObservedResourceValues[resourceTemplateID] = current;
+		}
+
+		/// <summary>
+		/// True while a resource is still inside the no-regeneration window that spending it opened.
+		/// </summary>
+		/// <param name="resourceTemplateID">Resource being considered for regeneration.</param>
+		/// <param name="tick">The tick being processed.</param>
+		private bool IsWithinConsumptionLockout(int resourceTemplateID, uint tick)
+		{
+			if (!lastConsumedResourceTicks.TryGetValue(resourceTemplateID, out uint consumedTick))
+			{
+				return false;
+			}
+
+			// Wrap-safe signed comparison, matching the tick arithmetic in Regenerate.
+			return (int)(tick - consumedTick) < (int)regenConsumptionLockoutTicks;
 		}
 
 		/// <summary>
@@ -1316,13 +1442,25 @@ namespace FishMMO.Shared
 		/// <param name="resourceTemplateID">The template ID of the resource to regenerate.</param>
 		/// <param name="cachedRegen">The cached regeneration dependency attribute (resolved at init).</param>
 		/// <param name="intervals">The number of regen-tick intervals to process.</param>
-		private void RegenerateResource(int resourceTemplateID, CharacterAttribute cachedRegen, int intervals)
+		private void RegenerateResource(int resourceTemplateID, CharacterAttribute cachedRegen, int intervals, uint tick)
 		{
 			if (resourceTemplateID != 0 &&
 				cachedRegen != null &&
 				resourceAttributes.TryGetValue(resourceTemplateID, out CharacterResourceAttribute resource))
 			{
-				int totalRegenAmount = cachedRegen.FinalValue * intervals;
+				// Spending a resource holds off its own regeneration; the others are unaffected.
+				if (IsWithinConsumptionLockout(resourceTemplateID, tick))
+				{
+					return;
+				}
+
+				/* The template value is an amount per REGEN_AUTHORING_WINDOW_SECONDS, so it is
+				 * converted to a rate before being applied over this pulse. This is what keeps the
+				 * finer cadence from being a buff: the same amount arrives per second, in smaller
+				 * and more frequent pieces. Float, because the per-pulse share of a whole-numbered
+				 * template value usually is not one — mana's 1 per five seconds is 0.2 per second. */
+				float perSecond = cachedRegen.FinalValue / REGEN_AUTHORING_WINDOW_SECONDS;
+				float totalRegenAmount = perSecond * regenTickRate * intervals;
 				// WARNING — replay side-effect contract:
 				// The monotonic guard in Regenerate() prevents this path from being reached
 				// during replay: replayed ticks satisfy (tick ≤ lastProcessedRegenTick) and
