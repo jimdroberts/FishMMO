@@ -173,12 +173,35 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Cached reference to the character's health resource attribute.
-		/// Lazily initialized on first access; throws if missing.
+		/// Lazily initialized on first access.
 		/// </summary>
 		private CharacterResourceAttribute resourceInstance;
+
+		/// <summary>
+		/// Whether the missing-health error has already been reported for the current failure.
+		/// </summary>
+		/// <remarks>
+		/// The lookup is retried on every access, but reported only once. Those are deliberately
+		/// separate: the resolve has to keep trying because health can arrive after this component
+		/// does — a client reads <see cref="IsAlive"/> before reconcile has populated the attribute
+		/// controller — so latching the failure itself would leave a character permanently dead-ish
+		/// over what was only a timing gap.
+		///
+		/// <para>Reported once because the alternative is unbounded. <see cref="IsAlive"/> is read
+		/// from AI target selection, inventory checks and input handling, all per tick, so a single
+		/// entity with no health attribute logged roughly 28 lines a second: a scene server holding
+		/// three misconfigured NPCs wrote 153 MB in five and a half minutes, and a client logged
+		/// ~39,000 copies in one session. One bad entity could fill a disk.</para>
+		///
+		/// <para>Cleared once the attribute resolves, so a genuinely new failure later is still
+		/// reported rather than being swallowed by a flag set hours earlier.</para>
+		/// </remarks>
+		private bool loggedMissingResource;
+
 		/// <summary>
 		/// Gets the cached health resource attribute for this character.
-		/// Returns null and logs an error if the attribute controller or health attribute is missing.
+		/// Returns null when the attribute controller or health attribute is missing, reporting the
+		/// first occurrence only.
 		/// </summary>
 		public CharacterResourceAttribute ResourceInstance
 		{
@@ -189,7 +212,18 @@ namespace FishMMO.Shared
 					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
 						!attributeController.TryGetHealthAttribute(out resourceInstance))
 					{
-						Log.Error("CharacterDamageController", $"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute.");
+						if (!loggedMissingResource)
+						{
+							loggedMissingResource = true;
+							Log.Error("CharacterDamageController",
+								$"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute. " +
+								"Further occurrences on this object are suppressed until it resolves.");
+						}
+					}
+					else
+					{
+						// Resolved — re-arm so a later, different failure is not silently swallowed.
+						loggedMissingResource = false;
 					}
 				}
 				return resourceInstance;
@@ -1055,6 +1089,10 @@ namespace FishMMO.Shared
 
 			base.ResetState(asServer);
 			resourceInstance = null;
+			/* Re-armed with the cache it guards. A pooled object respawns as a different character,
+			 * and leaving this set would suppress the new occupant's own misconfiguration behind a
+			 * flag raised by the previous one. */
+			loggedMissingResource = false;
 			combatTimerActive = false;
 			lastCombatTick = 0;
 			Character?.DisableFlags(CharacterFlags.IsInCombat);
