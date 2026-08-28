@@ -521,22 +521,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!TryEnqueueAsyncWork(async () =>
 			{
-				if (!TryGetDbService(out ICurrencyEscrowService escrowService))
+				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
 				{
 					return;
 				}
 
-				DatabaseResult<long> hold = await escrowService.HoldAsync(characterID, amount, (int)CurrencyEscrowReason.LandPurchase);
-				if (!hold.IsSuccess || hold.Data <= 0)
-				{
-					Log.Warning("HousingSystem", $"Currency ledger: could not record {amount} for CharID={characterID}.");
-					return;
-				}
+				DatabaseResult record = await ledgerService.RecordAsync(
+					characterID,
+					amount,
+					(int)CurrencyMovementReason.LandPurchase,
+					(int)CurrencyMovementState.Absorbed);
 
-				DatabaseResult<int> settle = await escrowService.AbsorbAsync(hold.Data);
-				if (!settle.IsSuccess || settle.Data != 1)
+				if (!record.IsSuccess)
 				{
-					Log.Warning("HousingSystem", $"Currency ledger: escrow {hold.Data} left unsettled for CharID={characterID}.");
+					Log.Warning("HousingSystem",
+						$"Currency ledger: could not record {amount} (land purchase) for CharID={characterID}. {record.ErrorMessage}");
 				}
 			}, characterID))
 			{
