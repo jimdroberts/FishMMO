@@ -417,7 +417,7 @@ namespace FishMMO.Database.Npgsql
 		}
 
 		/// <summary>
-		/// Reports whether the database schema still matches the entity model.
+		/// Reports whether this database has applied every migration the entity model expects.
 		/// </summary>
 		/// <remarks>
 		/// Migrations are generated per developer and applied locally rather than shared through
@@ -426,22 +426,19 @@ namespace FishMMO.Database.Npgsql
 		/// first symptom is a query failing at runtime for a column that does not exist — which
 		/// surfaces far from the cause, as missing data rather than as a schema problem.
 		/// <para>
-		/// Two distinct states are worth catching, and they need different fixes:
+		/// This catches one of the two ways that happens: <b>pending migrations</b>, where the
+		/// migration exists and this database has not run it. Fix with
+		/// <c>dotnet ef database update</c>.
 		/// </para>
-		/// <list type="bullet">
-		/// <item><description><b>Pending migrations</b> — migrations exist that the database has
-		/// not run. Fix with <c>dotnet ef database update</c>.</description></item>
-		/// <item><description><b>Model drift</b> — the entity model has changed since the last
-		/// migration was created, so no migration for it exists yet. This is the case a pending
-		/// check alone misses, and the one that occurs after pulling someone else's entity change.
-		/// Fix with <c>dotnet ef migrations add &lt;name&gt;</c> followed by
-		/// <c>database update</c>.</description></item>
-		/// </list>
 		/// <para>
-		/// Drift detection reads EF's own model differ. That is a less stable API surface than the
-		/// rest of this class, so a failure to evaluate it is reported as
-		/// <see cref="SchemaValidationResult.DriftCheckFailed"/> rather than thrown: a diagnostic
-		/// that cannot run must not stop a server that would otherwise be fine.
+		/// It does <b>not</b> catch <b>model drift</b> — an entity changed with no migration
+		/// generated for it, which leaves nothing pending and a schema that is quietly wrong. A
+		/// drift check lived here and never worked once: it compared the migration snapshot's
+		/// model against the live one, but EF builds <c>ModelSnapshot.Model</c> with an empty
+		/// convention set, so <c>GetRelationalModel()</c> threw on every startup. EF Core 5 has no
+		/// supported way to rebuild that model at runtime, so the check was removed rather than
+		/// left reporting a failure forever. See issue #162; drift belongs in CI, where a
+		/// scaffolded migration can be asserted empty.
 		/// </para>
 		/// </remarks>
 		/// <param name="cancellationToken">Cancellation token.</param>
@@ -464,59 +461,12 @@ namespace FishMMO.Database.Npgsql
 					return SchemaValidationResult.Unavailable($"could not read migration history: {ex.Message}");
 				}
 
-				bool driftCheckFailed = false;
-				string? driftCheckFailureReason = null;
-				bool modelChanged = false;
-				try
-				{
-					modelChanged = HasModelDrift(context);
-				}
-				catch (Exception ex)
-				{
-					// EF internals moved, or the snapshot could not be finalized. Report the
-					// pending-migration result we do have rather than failing the caller — but
-					// keep the reason. Discarding it left a caller that checked DriftCheckFailed
-					// unable to learn anything beyond the fact that something went wrong.
-					driftCheckFailed = true;
-					driftCheckFailureReason = ex.Message;
-				}
-
-				return new SchemaValidationResult(pending, modelChanged, driftCheckFailed, null, driftCheckFailureReason);
+				return new SchemaValidationResult(pending, null);
 			}
 			catch (Exception ex)
 			{
 				return SchemaValidationResult.Unavailable(ex.Message);
 			}
-		}
-
-		/// <summary>
-		/// Returns true when the entity model differs from the most recent migration's snapshot.
-		/// </summary>
-		private static bool HasModelDrift(NpgsqlDbContext context)
-		{
-			var migrationsAssembly = Microsoft.EntityFrameworkCore.Infrastructure
-				.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrationsAssembly>(context);
-
-			var snapshot = migrationsAssembly.ModelSnapshot;
-			if (snapshot == null)
-			{
-				// No migrations have ever been created. There is nothing to compare against, so
-				// this is not drift — CanConnect and the pending list already cover that case.
-				return false;
-			}
-
-			var differ = Microsoft.EntityFrameworkCore.Infrastructure
-				.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrationsModelDiffer>(context);
-
-			var snapshotModel = snapshot.Model;
-			if (snapshotModel is Microsoft.EntityFrameworkCore.Metadata.IMutableModel mutableSnapshot)
-			{
-				snapshotModel = mutableSnapshot.FinalizeModel();
-			}
-
-			return differ.HasDifferences(
-				snapshotModel.GetRelationalModel(),
-				context.Model.GetRelationalModel());
 		}
 
 		/// <summary>
