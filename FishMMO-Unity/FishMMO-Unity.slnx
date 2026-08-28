@@ -3,13 +3,13 @@
   <Project Path="FishMMO.Shared.csproj" />
   <Project Path="FishMMO.Server.csproj" />
   <Project Path="FishNet.Runtime.csproj" />
+  <Project Path="FishMMO.UnitTests.csproj" />
   <Project Path="KinematicCharacterController.csproj" />
   <Project Path="FishMMO.Shared.WorldSceneDetails.Editor.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="FishNet.Codegen.Cecil.csproj" />
   <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
   <Project Path="GameKit.Dependencies.csproj" />
-  <Project Path="FishMMO.UnitTests.csproj" />
   <Project Path="FishMMO.Render.Scratch.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="WebTransport.csproj" />
