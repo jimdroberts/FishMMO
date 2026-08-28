@@ -216,6 +216,10 @@ GameObject:
   - component: {fileID: 3444804090579496595}
   - component: {fileID: 8478061901066445689}
   - component: {fileID: 5707120537050968959}
+  - component: {fileID: 4045262949971562825}
+  - component: {fileID: 4006195415377614682}
+  - component: {fileID: 310937357791982003}
+  - component: {fileID: 914209994446621583}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -257,8 +261,8 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
-  _enableStateForwarding: 1
-  _networkTransform: {fileID: 0}
+  _enableStateForwarding: 0
+  _networkTransform: {fileID: 4006195415377614682}
   _ownerInterpolation: 1
   _ownerSmoothedProperties: 3
   _adaptiveInterpolation: 3
@@ -436,6 +440,7 @@ MonoBehaviour:
   StaminaResourceTemplateID: 2142067754
   StaminaRegenerationTemplateID: -251416119
   regenTickRate: 5
+  observedResourcePushInterval: 6
 --- !u!114 &1643789448904715060
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -635,9 +640,9 @@ MonoBehaviour:
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  characterNameLabel: {fileID: 0}
+  characterGuildLabel: {fileID: 0}
   meshRoot: {fileID: 2976285799004961102}
-  characterNameLabel: {fileID: 2817084262407755495}
-  characterGuildLabel: {fileID: 3362407936794280637}
   equipmentViewCamera: {fileID: 0}
 --- !u!136 &4989737185595066850
 CapsuleCollider:
@@ -846,6 +851,108 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 0}
+--- !u!114 &4045262949971562825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df4fb99d96455b2948ee3a658096492b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPositionHistory
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  maximumRewindMilliseconds: 500
+--- !u!114 &4006195415377614682
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Transforming.NetworkTransform
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  _componentConfiguration: 0
+  _synchronizeParent: 0
+  _packing:
+    Position: 1
+    Rotation: 1
+    Scale: 0
+  _interpolation: 2
+  _extrapolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  _clientAuthoritative: 1
+  _sendToOwner: 1
+  _interval: 1
+  _synchronizePosition: 1
+  _positionSensitivity: 0.001
+  _positionSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeRotation: 1
+  _rotationSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeScale: 1
+  _scaleSensitivity: 0.001
+  _scaleSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+--- !u!114 &310937357791982003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93091dc8efed97c08aae1898cd50ebc3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.NetworkTransformDistanceLod
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+  bands:
+  - MaximumDistance: 20
+    Interval: 1
+  - MaximumDistance: 40
+    Interval: 3
+  - MaximumDistance: 80
+    Interval: 6
+  intervalScale: 1
+  evaluateInterval: 0.5
+  hysteresis: 0.15
+--- !u!114 &914209994446621583
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishNet.Runtime::FishNet.Observing.NetworkObserver
+  _overrideType: 1
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: a42dd55b9b0e2524f8d7d2d0f621d179, type: 2}
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0
@@ -1070,18 +1177,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: dc8cc64088072ae47872cf54e7cf6b6f, type: 3}
---- !u!114 &3362407936794280637 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
-    type: 3}
-  m_PrefabInstance: {fileID: 1499871529757219294}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9541d86e2fd84c1d9990edf0852d74ab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!224 &3362407936794280639 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: dc8cc64088072ae47872cf54e7cf6b6f,
@@ -1216,18 +1311,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2de080fd835ec6747b1b1ff8ed6870f6, type: 3}
---- !u!114 &2817084262407755495 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
-    type: 3}
-  m_PrefabInstance: {fileID: 2117107678736878980}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9541d86e2fd84c1d9990edf0852d74ab, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!224 &2817084262407755493 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,

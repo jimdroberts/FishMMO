@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Object.Prediction;
@@ -224,16 +224,25 @@ namespace FishMMO.Shared
 		/// A client that ignores its own UI code still learns nothing extra.
 		/// </para>
 		/// <para>
-		/// Delivery is an <c>ObserversRpc</c>, so FishNet scopes it to the connections that can
-		/// already see this NetworkObject — the same set that can target it. <c>BufferLast</c> means
-		/// a player who comes into view later receives the current list as part of the spawn,
-		/// without any join-time request of its own.
+		/// Delivery is a broadcast scoped to this NetworkObject's observers — the same set that can
+		/// target it. A player who comes into view later is served by <see cref="OnSpawnServer"/>,
+		/// which replays the current list to that one connection; the buffered-RPC behaviour the
+		/// previous <c>ObserversRpc(BufferLast)</c> provided implicitly.
 		/// </para>
 		/// </remarks>
 		private void PushObservedBuffs()
 		{
 			observedBuffsDirty = false;
 
+			BuildObservedBuffEntries();
+			BroadcastObservedBuffs(observedBuffBuffer.ToArray());
+		}
+
+		/// <summary>
+		/// Fills <see cref="observedBuffBuffer"/> with the server-filtered visible buff list.
+		/// </summary>
+		private void BuildObservedBuffEntries()
+		{
 			observedBuffBuffer.Clear();
 			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
 			uint currentTick = GetCurrentDomainTick();
@@ -263,21 +272,124 @@ namespace FishMMO.Shared
 					TotalSeconds = template.Duration,
 				});
 			}
-
-			RpcSetObservedBuffs(observedBuffBuffer.ToArray());
 		}
 
 		/// <summary>
-		/// Delivers the server-filtered observer buff list to everyone who can see this character.
+		/// Replays the current visible buff list to a client that starts observing this character
+		/// after the last change.
 		/// </summary>
+		/// <remarks>
+		/// The change-gated broadcast reaches whoever is observing when the set CHANGES; without
+		/// this, a player targeting a character they just walked up to would see an empty buff bar
+		/// until the next buff event on that character. This restores the replay-to-late-joiners
+		/// behaviour the previous <c>ObserversRpc(BufferLast)</c> carried. An empty list is skipped
+		/// because an empty bar is what the client already assumes.
+		/// </remarks>
+		public override void OnSpawnServer(NetworkConnection connection)
+		{
+			base.OnSpawnServer(connection);
+
+			if (buffs.Count == 0 || base.NetworkManager == null || base.NetworkObject == null)
+			{
+				return;
+			}
+
+			BuildObservedBuffEntries();
+			if (observedBuffBuffer.Count == 0)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(connection, new CharacterBuffsBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Buffs = observedBuffBuffer.ToArray(),
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends the server-filtered observer buff list to everyone who can see this character.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Applied locally before sending, which is what the previous <c>ObserversRpc</c> achieved
+		/// with <c>RunLocally</c>. A broadcast is never delivered back to its sender, so without the
+		/// local call the server's own <see cref="observedBuffs"/> would stay empty and anything
+		/// server side that inspects a character's visible buffs would read nothing.
+		/// </para>
+		/// <para>
+		/// Scoped to this character's observers, so interest management bounds the traffic. Sent
+		/// reliably: a dropped buff list leaves an observer showing a stale set until the next
+		/// change, which — unlike a dropped ability cast — has no self-correcting replacement.
+		/// </para>
+		/// </remarks>
 		/// <param name="entries">The visible buffs.</param>
-		[ObserversRpc(BufferLast = true, RunLocally = true)]
-		private void RpcSetObservedBuffs(ObservedBuffEntry[] entries)
+		private void BroadcastObservedBuffs(ObservedBuffEntry[] entries)
+		{
+			ApplyObservedBuffs(entries);
+
+			if (base.NetworkManager == null || base.NetworkObject == null || !base.IsServerStarted)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterBuffsBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Buffs = entries ?? System.Array.Empty<ObservedBuffEntry>(),
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>Stores a received buff list and notifies listeners.</summary>
+		private void ApplyObservedBuffs(ObservedBuffEntry[] entries)
 		{
 			observedBuffs = entries ?? System.Array.Empty<ObservedBuffEntry>();
 			ObservedBuffsReceivedTime = Time.unscaledTime;
 
 			IBuffController.OnObservedBuffsChanged?.Invoke(this);
+		}
+
+		/// <summary>True once this client has registered the shared buff handler.</summary>
+		/// <remarks>
+		/// Registered once per client rather than per character. A per-character registration would
+		/// invoke one delegate per character in the scene for every buff change anyone makes, so a
+		/// 200-player scene would run 200 handlers to deliver one update.
+		/// </remarks>
+		private static bool buffsBroadcastRegistered;
+
+		/// <summary>Registers the shared buff handler for this client.</summary>
+		internal static void RegisterBuffsBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (buffsBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			networkManager.ClientManager.RegisterBroadcast<CharacterBuffsBroadcast>(OnBuffsBroadcast);
+			buffsBroadcastRegistered = true;
+		}
+
+		/// <summary>Applies a buff broadcast to whichever character it names.</summary>
+		/// <remarks>
+		/// Unlike resources, the owner is <b>not</b> skipped. The observed list is a server-filtered
+		/// view — hidden buffs removed, durations in seconds — and it is what the owner's own UI
+		/// reads for its buff bar, so excluding the owner would leave the local player unable to see
+		/// their own buffs.
+		/// </remarks>
+		private static void OnBuffsBroadcast(CharacterBuffsBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+
+			BuffController controller = nob.GetComponent<BuffController>();
+			controller?.ApplyObservedBuffs(msg.Buffs);
 		}
 
 		#endregion
@@ -287,6 +399,15 @@ namespace FishMMO.Shared
 			base.OnStartNetwork();
 			RefreshTickDelta();
 			predictionController = GetComponent<CharacterPredictionController>();
+
+			/* Register the shared buff handler the first time any character starts on this client.
+			 * Never unregistered: ClientManager does not clear handlers on stop, so a per-character
+			 * unregister would have to be reference counted or the first despawn would switch off
+			 * buff display for every remaining character. */
+			if (base.IsClientStarted)
+			{
+				RegisterBuffsBroadcast(base.NetworkManager);
+			}
 		}
 
 		/// <summary>
@@ -437,6 +558,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
 		/// <param name="reader">The network reader to read from.</param>
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int BUFF_PAYLOAD_LENGTH_BYTES = 4;
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			const int maxPayloadBuffs = 4096;
@@ -449,6 +579,29 @@ namespace FishMMO.Shared
 			MarkObservedBuffsDirty();
 
 			uint payloadReferenceTick = reader.ReadUInt32();
+
+			/* Where this behaviour's data ends, whatever happens below. Every early exit seeks
+			 * here before returning so the shared payload reader is left where the next
+			 * NetworkBehaviour expects it — see WritePayload. The length is validated against
+			 * what the reader actually holds first: this frame exists to survive a payload that
+			 * cannot be trusted, which makes the frame's own length the one value that must be
+			 * checked rather than believed. Reader.Position is a plain field with no bounds
+			 * check, so a length that overflows int or overruns the buffer would turn a
+			 * recoverable abort into an out-of-range read for whoever reads next. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("BuffController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
+				reader.Position += remainingBytes;
+				return;
+			}
+			int buffBlockLength = (int)declaredLength;
+			int buffBlockEnd = reader.Position + buffBlockLength;
+
 			uint currentReferenceTick = GetCurrentDomainTick();
 			bool deferPayloadTranslation = currentReferenceTick == TimeManager.UNSET_TICK &&
 				payloadReferenceTick != TimeManager.UNSET_TICK;
@@ -477,23 +630,14 @@ namespace FishMMO.Shared
 			int buffCount = reader.ReadInt32();
 			if (buffCount < 0 || buffCount > maxPayloadBuffs)
 			{
+				Log.Error("BuffController",
+					$"ReadPayload: buff count {buffCount} is outside [0, {maxPayloadBuffs}]. Aborting payload read.");
 				preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
-				// Reader is shared with subsequent payload fields — drain the remaining
-				// buff bytes to keep the stream position valid. Cap iterations to
-				// maxPayloadBuffs to prevent a corrupted count from hanging the tick.
-				if (buffCount > 0)
-				{
-					int drainCount = System.Math.Min(buffCount, maxPayloadBuffs);
-					for (int d = 0; d < drainCount; d++)
-					{
-						reader.ReadInt32();  // templateID
-						reader.ReadUInt32(); // expiryTick
-						reader.ReadUInt32(); // nextTickTick
-						reader.ReadInt32();  // stacks
-						reader.ReadInt32();  // tickCount
-						reader.ReadInt32();  // cumulativeTickMultiplier
-					}
-				}
+				/* Seek, do not drain. The per-entry sizes a drain would need are derived from the
+				 * count that was just rejected, so a capped drain silently desynchronised the
+				 * stream for any count above the cap; the frame written by WritePayload is the
+				 * only thing that can resynchronise it. */
+				reader.Position = buffBlockEnd;
 				return;
 			}
 			preReplicatePayloadReferenceTick = deferPayloadTranslation
@@ -520,6 +664,18 @@ namespace FishMMO.Shared
 				buff.CumulativeTickMultiplier = cumulativeTickMultiplier;
 				Apply(buff, suppressFX: false);
 			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block the frame absorbs it here rather than corrupting the behaviour
+			 * after this one, and says so once instead of failing invisibly. */
+			if (reader.Position != buffBlockEnd)
+			{
+				Log.Error("BuffController",
+					$"ReadPayload consumed {reader.Position - (buffBlockEnd - buffBlockLength)} of " +
+					$"{buffBlockLength} framed bytes. Seeking to the end of the block; the buff " +
+					"state read above may be incomplete.");
+				reader.Position = buffBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -532,22 +688,64 @@ namespace FishMMO.Shared
 		{
 			writer.WriteUInt32(GetCurrentDomainTick());
 
+			/* Everything below is framed by a byte count.
+			 *
+			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
+			 * framing, so a reader that stops early leaves every behaviour after it reading from
+			 * the wrong offset. ReadPayload used to defend against an untrustworthy buff count by
+			 * draining it, but the drain had to be capped at maxPayloadBuffs to stop an
+			 * adversarial count stalling the main thread — which left every count above that cap
+			 * desynchronising the stream anyway. A length cannot be drained past; it can be
+			 * seeked to. See BUFF_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(BUFF_PAYLOAD_LENGTH_BYTES);
+			int buffBlockStart = writer.Position;
+
+			/* Filtered per connection. The owner needs the full set — its own hidden buffs are its
+			 * prediction state, restored from this payload on spawn and reconnect. Everyone else
+			 * gets the same visibility rule the broadcast path applies: HiddenFromOthers never
+			 * leaves the server. This used to write the full dictionary to every connection, which
+			 * let a packet-inspecting client read buffs no UI would ever show it. Observers no
+			 * longer simulate their peers, so they have no simulation need for the hidden entries
+			 * either — the filtered list is both the private one and the sufficient one.
+			 *
+			 * Safe to vary by connection: FishNet builds the spawn message per receiving
+			 * connection (ServerObjects.Observers calls WriteSpawn(nob, writer, conn) inside the
+			 * per-connection rebuild), so no two receivers share this buffer. */
+			bool includeHidden = PayloadVisibility.IsOwner(this, conn);
+
 			if (buffs.Count < 1)
 			{
 				writer.WriteInt32(0);
-				return;
+			}
+			else
+			{
+				int visibleCount = 0;
+				foreach (Buff buff in buffs.Values)
+				{
+					if (includeHidden || buff.Template == null || !buff.Template.HiddenFromOthers)
+					{
+						visibleCount++;
+					}
+				}
+
+				writer.WriteInt32(visibleCount);
+				foreach (Buff buff in buffs.Values)
+				{
+					if (!includeHidden && buff.Template != null && buff.Template.HiddenFromOthers)
+					{
+						continue;
+					}
+					writer.WriteInt32(buff.Template.ID);
+					writer.WriteUInt32(buff.ExpiryTick);
+					writer.WriteUInt32(buff.NextTickTick);
+					writer.WriteInt32(buff.Stacks);
+					writer.WriteInt32(buff.TickCount);
+					writer.WriteInt32(buff.CumulativeTickMultiplier);
+				}
 			}
 
-			writer.WriteInt32(buffs.Count);
-			foreach (Buff buff in buffs.Values)
-			{
-				writer.WriteInt32(buff.Template.ID);
-				writer.WriteUInt32(buff.ExpiryTick);
-				writer.WriteUInt32(buff.NextTickTick);
-				writer.WriteInt32(buff.Stacks);
-				writer.WriteInt32(buff.TickCount);
-				writer.WriteInt32(buff.CumulativeTickMultiplier);
-			}
+			writer.InsertUInt32Unpacked((uint)(writer.Position - buffBlockStart),
+				buffBlockStart - BUFF_PAYLOAD_LENGTH_BYTES);
 		}
 
 		/// <inheritdoc />

@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Managing.Scened;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using UnityEngine;
@@ -119,6 +119,56 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Keys the scene server configuration may set to tune per-observer streaming. Each is
+		/// optional; absent keys leave <see cref="ObserverStreamingPolicy"/> at its defaults.
+		/// </summary>
+		private static readonly string[] ObserverStreamingConfigurationKeys =
+		{
+			"ObserverFullRateCap",
+			"ObserverCombatWeight",
+			"ObserverPartyWeight",
+			"ObserverGuildWeight",
+			"ObserverDistanceWeight",
+			"ObserverDensityRadius",
+			"ObserverLowDensity",
+			"ObserverHighDensity",
+			"ObserverRangeScaleAtHighDensity",
+			"ObserverMinimumRange",
+			"ObserverRescheduleTicks",
+			"ObserverLodBands",
+		};
+
+		/// <summary>
+		/// Pushes any observer-streaming keys present in the server configuration into
+		/// <see cref="ObserverStreamingPolicy"/>. See that type for what each key means.
+		/// </summary>
+		private void ApplyObserverStreamingConfiguration()
+		{
+			if (Server.Configuration == null)
+			{
+				return;
+			}
+
+			foreach (string key in ObserverStreamingConfigurationKeys)
+			{
+				if (!Server.Configuration.TryGetString(key, out string value))
+				{
+					continue;
+				}
+				if (!ObserverStreamingPolicy.ApplySetting(key, value))
+				{
+					_ = Log.Warning("SceneServerSystem", $"Ignoring malformed observer streaming setting {key}={value}");
+				}
+			}
+
+			_ = Log.Info("SceneServerSystem",
+				$"Observer streaming: cap={ObserverStreamingPolicy.FullRateObserverCap} " +
+				$"density={ObserverStreamingPolicy.LowDensity}..{ObserverStreamingPolicy.HighDensity}@{ObserverStreamingPolicy.DensityRadius}m " +
+				$"scale={ObserverStreamingPolicy.RangeScaleAtHighDensity} minRange={ObserverStreamingPolicy.MinimumRange}m " +
+				$"reschedule={ObserverStreamingPolicy.RescheduleIntervalTicks} ticks");
+		}
+
+		/// <summary>
 		/// Initializes the system and registers it in the database without blocking the Unity
 		/// main thread.
 		/// </summary>
@@ -134,6 +184,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				_ = Log.Error("SceneServerSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
+
+			ApplyObserverStreamingConfiguration();
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneServerSystemMainThreadQueueData>(out _))
 			{

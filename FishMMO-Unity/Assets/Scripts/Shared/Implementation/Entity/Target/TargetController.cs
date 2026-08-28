@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.InputSystem;
 using System;
 using System.Collections.Generic;
@@ -197,9 +197,12 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			bool hasHit = Physics.Raycast(ray, out hit, distance, LayerMask);
 #else
-			bool hasHit = PlayerCharacter != null
-				? PlayerCharacter.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask)
-				: Physics.Raycast(ray, out hit, distance, LayerMask);
+			/* The character's OWN physics scene, for NPCs as well as players. A scene server hosts
+			 * several scenes with local physics; the previous NPC fallback to the global
+			 * Physics.Raycast traced the default scene, so an NPC's target ray never met the
+			 * colliders around it. */
+			PhysicsScene physicsScene = ResolvePhysicsScene();
+			bool hasHit = physicsScene.Raycast(origin, direction, out hit, distance, LayerMask);
 #endif
 			if (hasHit)
 			{
@@ -215,14 +218,7 @@ namespace FishMMO.Shared
 					Physics.Raycast(ray, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
 #else
 					ray = new Ray(newRayOrigin, direction);
-					if (PlayerCharacter != null)
-					{
-						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
-					}
-					else
-					{
-						Physics.Raycast(ray, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
-					}
+					physicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
 #endif
 				}
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
@@ -236,5 +232,20 @@ namespace FishMMO.Shared
 			}
 			return Current;
 		}
+
+#if UNITY_SERVER
+		/// <summary>
+		/// The physics scene this character lives in: the KCC motor's for players, the owning
+		/// Unity scene's for everything else.
+		/// </summary>
+		private PhysicsScene ResolvePhysicsScene()
+		{
+			if (PlayerCharacter != null)
+			{
+				return PlayerCharacter.Motor.PhysicsScene;
+			}
+			return gameObject.scene.IsValid() ? gameObject.scene.GetPhysicsScene() : Physics.defaultPhysicsScene;
+		}
+#endif
 	}
 }

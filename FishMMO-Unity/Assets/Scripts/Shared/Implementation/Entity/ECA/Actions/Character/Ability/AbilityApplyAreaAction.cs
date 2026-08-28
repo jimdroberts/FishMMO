@@ -41,25 +41,29 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data containing context for the action.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			// Physics queries are non-deterministic across client/server.
-			// Suppress during prediction replay to prevent target divergence.
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
-			{
-				return;
-			}
-
 			if (RadiusValue == null || MaxHitsValue == null)
 			{
 				Log.Warning("AbilityApplyAreaAction", "RadiusValue or MaxHitsValue provider is null.");
 				return;
 			}
 
-			if (eventData.TryGet(out AbilityCollisionEventData abilityEventData))
+			if (eventData != null && eventData.TryGet(out AbilityCollisionEventData abilityEventData))
 			{
 				AbilityObject abilityObject = abilityEventData.AbilityObject;
 
 				if (abilityObject != null)
 				{
+					/* Server only. Physics queries are not deterministic across peers, so this
+					 * must run exactly once, where hits are authoritative. It used to gate on the
+					 * attached tick being a replicate-domain tick instead — but the server's own
+					 * spawn and self-target dispatches carry replicate ticks too, so any area effect
+					 * wired to OnSpawn/OnPreSpawn never ran anywhere. Clients receive the results
+					 * through the usual authoritative paths. */
+					if (!abilityObject.IsServer)
+					{
+						return;
+					}
+
 					int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 					float radius = RadiusValue.GetValue(initiator, eventData);
 
@@ -68,10 +72,12 @@ namespace FishMMO.Shared
 						hits = new Collider[maxHits];
 					}
 
-					PhysicsScene physicsScene = abilityObject.GameObject.scene.GetPhysicsScene();
-
 					Vector3 center = abilityObject.Transform.position;
-					int hitCount = physicsScene.OverlapSphere(center, radius, hits, TargetLayerMask, QueryTriggerInteraction.UseGlobal);
+					/* Resolved against where the caster's client saw these characters, not where
+					 * they are now. The ability object's own position needs no compensation: its
+					 * motion is deterministic, so every peer already agrees on it. */
+					int hitCount = LagCompensatedQuery.OverlapSphere(
+						eventData, abilityObject.GameObject, center, radius, hits, TargetLayerMask);
 					var onHitEvents = abilityObject.OnHitEvents;
 					if (onHitEvents == null)
 					{

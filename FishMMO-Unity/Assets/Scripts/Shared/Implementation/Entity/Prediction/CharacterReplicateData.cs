@@ -31,14 +31,24 @@ namespace FishMMO.Shared
 		public int MoveFlags;
 
 		/// <summary>
-		/// Camera position for this input frame.
+		/// Aim direction for this input frame, as a unit vector.
 		/// </summary>
-		public Vector3 CameraPosition;
-
-		/// <summary>
-		/// Camera rotation for this input frame.
-		/// </summary>
-		public Quaternion CameraRotation;
+		/// <remarks>
+		/// <para>
+		/// Always store a value that has been through <see cref="AimDirectionCompression.Quantize"/>.
+		/// This is input to a deterministic simulation, so the producer must commit to the value the
+		/// wire can carry rather than to whatever it holds locally — otherwise the owner predicts
+		/// with one direction while the server and observers simulate with the decoded one, and
+		/// every cast diverges by the quantisation error.
+		/// </para>
+		/// <para>
+		/// Replaced a full <c>Quaternion CameraRotation</c>. Nothing ever read the roll: movement
+		/// takes <c>rotation * Vector3.forward</c> to build its planar basis and the ability path
+		/// takes the same forward as its trace direction, so the rotation carried a degree of
+		/// freedom that no consumer used and that could not be represented exactly.
+		/// </para>
+		/// </remarks>
+		public Vector3 AimDirection;
 
 		// ── Ability input ──
 

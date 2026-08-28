@@ -189,7 +189,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 53569501}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -241,7 +241,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -316,7 +316,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 56729160}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -368,7 +368,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -441,6 +441,7 @@ MonoBehaviour:
         YOffset: 0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
         LootTableOverride: {fileID: 0}
         ArchetypeOverride: {fileID: 0}
         AdditionalAbilities: []
@@ -459,6 +460,7 @@ MonoBehaviour:
         YOffset: 0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
         LootTableOverride: {fileID: 0}
         ArchetypeOverride: {fileID: 0}
         AdditionalAbilities: []
@@ -477,6 +479,7 @@ MonoBehaviour:
         YOffset: 0
         AttributeBonusOverride: {fileID: 0}
         CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
         LootTableOverride: {fileID: 0}
         ArchetypeOverride: {fileID: 0}
         AdditionalAbilities: []
@@ -1616,13 +1619,17 @@ MonoBehaviour:
         MaximumRespawnTime: 0
         SpawnChance: 0.5
         YOffset: 0
-        AttributeBonusOverride: {fileID: 0}
+        AttributeBonusOverride: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb,
+          type: 2}
         CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
         LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 11400000, guid: b80bc0482ed9646928250918c4f9a266,
+          type: 2}
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
+        FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
+          type: 2}
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142849
@@ -1634,13 +1641,17 @@ MonoBehaviour:
         MaximumRespawnTime: 0
         SpawnChance: 0.5
         YOffset: 0
-        AttributeBonusOverride: {fileID: 0}
+        AttributeBonusOverride: {fileID: 11400000, guid: 0f2ff92179a6d1b4c9dde7ad6a4afdb0,
+          type: 2}
         CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
         LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7,
+          type: 2}
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
+        FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
+          type: 2}
         MinimumScale: 1
         MaximumScale: 1
     - rid: 1701798270728142850
@@ -1652,13 +1663,17 @@ MonoBehaviour:
         MaximumRespawnTime: 0
         SpawnChance: 0.5
         YOffset: 0
-        AttributeBonusOverride: {fileID: 0}
+        AttributeBonusOverride: {fileID: 11400000, guid: 7c33d6280baf6d94b8eee0548a749deb,
+          type: 2}
         CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
         LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 11400000, guid: 22ada2cd43c7cc5fd72bdebffe7d7275,
+          type: 2}
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
+        FactionOverride: {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66,
+          type: 2}
         MinimumScale: 1
         MaximumScale: 1
 --- !u!114 &784079646
@@ -2322,7 +2337,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 999801835}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -2374,7 +2389,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -2458,6 +2473,7 @@ Terrain:
   m_AllowAutoConnect: 1
   m_EnableHeightmapRayTracing: 1
   m_EnableTreesAndDetailsRayTracing: 0
+  m_EnableHeightmapLODFrustumCulling: 1
   m_TreeMotionVectorModeOverride: 3
 --- !u!4 &1011847575
 Transform:
@@ -3430,6 +3446,7 @@ MonoBehaviour:
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   DungeonImage: {fileID: 0}
   DungeonName: Test Dungeon
+  Template: {fileID: 0}
   AchievementTemplate: {fileID: 0}
 --- !u!1 &1572371891
 GameObject:
@@ -4179,7 +4196,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1669474602}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -4231,7 +4248,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -4947,7 +4964,7 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1913477580}
   m_Enabled: 1
-  serializedVersion: 12
+  serializedVersion: 13
   m_Type: 2
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2.5
@@ -4999,7 +5016,7 @@ Light:
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ForceVisible: 0
-  m_ShadowRadius: 0
+  m_ShapeRadius: 0
   m_ShadowAngle: 0
   m_LightUnit: 1
   m_LuxAtDistance: 1
@@ -5625,7 +5642,7 @@ MonoBehaviour:
   goalOffsets:
   - {x: 0, y: 0, z: 5}
   - {x: 0, y: 0, z: -5}
-  platformCollider: {fileID: 0}
+  platformCollider: {fileID: 3628764436253696412}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

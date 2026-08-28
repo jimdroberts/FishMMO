@@ -166,9 +166,18 @@ namespace FishMMO.Shared
 			this.gameObject.name = characterName.Trim();
 
 #if !UNITY_SERVER
-			// If on client, update the character's name label if present
+			/* "if present" applies to the label as well as the character.
+			 *
+			 * CharacterNameLabel is assigned from a prefab's label object and is left null
+			 * on a character that has none — every NPC prefab in the project ships that way,
+			 * and three of them (Banker, General Merchant, Ability Crafter) carry this
+			 * component. Testing only the character therefore threw a NullReferenceException
+			 * per named NPC on the client, out of the middle of naming.
+			 *
+			 * This is the same omission Interactable.Awake had against CharacterGuildLabel. */
 			ICharacter character = transform.GetComponent<ICharacter>();
-			if (character != null)
+			if (character != null &&
+				character.CharacterNameLabel != null)
 			{
 				character.CharacterNameLabel.text = this.gameObject.name;
 			}
