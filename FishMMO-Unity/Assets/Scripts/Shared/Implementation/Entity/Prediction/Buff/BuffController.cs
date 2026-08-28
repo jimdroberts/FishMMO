@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Object.Prediction;
@@ -497,6 +497,15 @@ namespace FishMMO.Shared
 			}
 
 			if (PayloadVisibility.IsOwner(this, connection))
+			{
+				return;
+			}
+
+			/* The same gate every other observer push carries. A forwarded object delivers buffs
+			 * through the reconcile and its observers build FX from the simulation dictionary, so
+			 * this list would be a second, competing source for the same state — the one place the
+			 * broadcast and reconcile transports were not held mutually exclusive. */
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
 			{
 				return;
 			}
@@ -1107,7 +1116,7 @@ namespace FishMMO.Shared
 		{
 			// Payload sync is authoritative. Clear any previous local state first so
 			// stale buffs from an earlier spawn, scene, or character state do not survive.
-			RemoveAll(ignoreInvokeRemove: true);
+			RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
 			cachedSnapshot = null;
 			snapshotDirty = true;
 			MarkObservedBuffsDirty();
@@ -1391,8 +1400,10 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public uint GetCurrentDomainTick()
 		{
-			// base.TimeManager dereferences _networkObjectCache, which is null until the
-			// NetworkObject is initialized (e.g. while ReadPayload runs during spawn sync).
+			// base.TimeManager dereferences _networkObjectCache, which is null on a controller that
+			// has never been spawned — a pooled instance before its first spawn, or a test. It is
+			// NOT null while a client reads a spawn payload: ObjectCaching.Iterate calls
+			// nob.InitializeEarly, which assigns the cache on every behaviour, before ReadPayload.
 			// Guard through the null-safe NetworkObject accessor so we report "no domain yet"
 			// (lastReplicateTick, UNSET pre-first-replicate) instead of throwing. This is the
 			// signal ReadPayload uses to defer payload translation until the first replicate.
@@ -1582,9 +1593,17 @@ namespace FishMMO.Shared
 					// Include tick payload so actions triggered by buff apply can use the deterministic tick.
 					// replicateDomainTick is guaranteed replicate-domain by both entry points, so this is a
 					// legitimate (and the only) PredictionTick fabrication in the apply path.
-					BuffEventData bed = new BuffEventData(Character, buffInstance);
-					bed.Add(new TickEventData(Character, new PredictionTick(replicateDomainTick)));
-					Character.Invoke(onBuffApplyTriggers, bed);
+					/* ECA triggers only on the authoritative peer. Actions are free to damage, grant
+					 * items or move a character, and only ten of the fifty-five action types gate
+					 * themselves with EcaAuthority — so dispatching on the owning client ran the
+					 * rest of them a second time, locally. The static OnAddBuff/OnAddDebuff events
+					 * above are UI and stay on every peer. */
+					if (IsAuthoritativePeer)
+					{
+						BuffEventData bed = new BuffEventData(Character, buffInstance);
+						bed.Add(new TickEventData(Character, new PredictionTick(replicateDomainTick)));
+						Character.Invoke(onBuffApplyTriggers, bed);
+					}
 				}
 			}
 
@@ -1594,7 +1613,12 @@ namespace FishMMO.Shared
 			 * initiator leaves existing attribution intact. */
 			buffInstance.SetCaster(caster);
 
-			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
+			/* Only an EXISTING buff stacks. A new one already applied its modifier through
+			 * Buff.Apply in the isNew branch above, so stacking it here as well applied the value
+			 * twice on the very first cast — a MaxStacks=3 buff landed at 2x and reached 4x at full
+			 * stacks. MaxStacks is the total number of applications, which is what
+			 * ObservedBuffEntry.Stacks documents ("0 = one application"). */
+			if (!isNew && template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
 				buffInstance.AddStack(Character);
 				structuralChange = true;
@@ -1803,7 +1827,11 @@ namespace FishMMO.Shared
 					{
 						IBuffController.OnRemoveBuff?.Invoke(this, buffInstance);
 					}
-					Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buffInstance));
+					// Authoritative peer only — see the note on the apply triggers.
+					if (IsAuthoritativePeer)
+					{
+						Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buffInstance));
+					}
 				}
 			}
 		}
@@ -1850,7 +1878,14 @@ namespace FishMMO.Shared
 		/// Removes all non-permanent buffs from the character, cleaning up all stack modifiers.
 		/// </summary>
 		/// <param name="ignoreInvokeRemove">If true, does not invoke OnRemoveBuff/OnRemoveDebuff events.</param>
-		public void RemoveAll(bool ignoreInvokeRemove = false)
+		/// <param name="includePermanent">
+		/// True to remove permanent buffs as well. Default false, so gameplay dispels leave them
+		/// alone; the two lifecycle callers (<see cref="ResetState"/> and <see cref="ReadPayload"/>)
+		/// pass true because a pooled object must not inherit the previous occupant's buffs — and a
+		/// permanent buff carries attribute modifiers, so leaving one behind leaked them into the
+		/// next character to use that instance.
+		/// </param>
+		public void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false)
 		{
 			snapshotDirty = true;
 			MarkObservedBuffsDirty();
@@ -1861,7 +1896,7 @@ namespace FishMMO.Shared
 			foreach (var pair in buffs)
 			{
 				Buff buff = pair.Value;
-				if (buff == null || buff.Template == null || !buff.Template.IsPermanent)
+				if (buff == null || buff.Template == null || includePermanent || !buff.Template.IsPermanent)
 				{
 					removeAllBuffer.Add(pair.Key);
 				}
@@ -1875,6 +1910,15 @@ namespace FishMMO.Shared
 					BaseBuffTemplate template = buff.Template;
 					if (!TryRemoveBuffEffects(buff, key, nameof(RemoveAll)))
 					{
+						/* The buff stays tracked so its attribute modifiers are not orphaned — but on
+						 * a lifecycle teardown the FX must go regardless. This object is about to be
+						 * pooled and respawned as somebody else, and a visual effect has no modifier
+						 * to orphan; leaving it running would hang the previous occupant's aura on
+						 * the next character to use this instance. */
+						if (includePermanent)
+						{
+							DespawnBuffFX(key);
+						}
 						continue;
 					}
 					buffs.Remove(key);
@@ -1890,7 +1934,11 @@ namespace FishMMO.Shared
 						{
 							IBuffController.OnRemoveBuff?.Invoke(this, buff);
 						}
-						Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buff));
+						// Authoritative peer only — see the note on the apply triggers.
+						if (IsAuthoritativePeer)
+						{
+							Character.Invoke(onBuffRemoveTriggers, new BuffEventData(Character, buff));
+						}
 					}
 				}
 			}
@@ -2090,12 +2138,10 @@ namespace FishMMO.Shared
 				}
 				DespawnBuffFX(removed.Template.ID);
 
-				BuffEventData eventData = new BuffEventData(Character, removed);
-				if (reconcileTick != TimeManager.UNSET_TICK)
-				{
-					eventData.Add(new TickEventData(Character, new PredictionTick(reconcileTick)));
-				}
-				Character.Invoke(onBuffRemoveTriggers, eventData);
+				/* No ECA dispatch here. This path runs only on the owning client (a reconcile is sent
+				 * to the owner alone), and the server already fired these triggers when it removed
+				 * the buff. Invoking them again here ran every non-self-gating action a second time
+				 * on the client. The static UI events above still fire on this peer. */
 			}
 			reconcileRemovedEvents.Clear();
 
@@ -2115,12 +2161,7 @@ namespace FishMMO.Shared
 				 * Tracked per template, so a buff that merely survived the diff does not restart. */
 				SpawnBuffFX(added.Template, added);
 
-				BuffEventData eventData = new BuffEventData(Character, added);
-				if (reconcileTick != TimeManager.UNSET_TICK)
-				{
-					eventData.Add(new TickEventData(Character, new PredictionTick(reconcileTick)));
-				}
-				Character.Invoke(onBuffApplyTriggers, eventData);
+				// No ECA dispatch here either — see the note on the removal loop above.
 			}
 			reconcileAddedEvents.Clear();
 		}
@@ -2141,11 +2182,15 @@ namespace FishMMO.Shared
 			lastObservedPushTick = TimeManager.UNSET_TICK;
 			lastObservedRemaining.Clear();
 
-			RemoveAll(ignoreInvokeRemove: true);
+			RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
 
-			/* RemoveAll clears the FX of everything it removed; permanent buffs survive it, and an
-			 * observer has no simulated buffs to remove at all. Both still have FX to tear down:
-			 * this object may be pooled and respawned as somebody else entirely. */
+			/* RemoveAll despawns the FX of everything it removes, and with includePermanent it now
+			 * removes permanent buffs too — so nothing survives it by design. This is still here for
+			 * the cases it cannot reach: an OBSERVER has no simulated buffs at all (its FX are driven
+			 * from the observed list by SyncObservedBuffFX, not from `buffs`), and an FX whose
+			 * template was unloaded leaves an instance keyed to a buff that is already gone. This
+			 * object may be pooled and respawned as somebody else entirely, so the teardown is
+			 * unconditional. */
 			DespawnAllBuffFX();
 			observedBuffs = System.Array.Empty<ObservedBuffEntry>();
 		}

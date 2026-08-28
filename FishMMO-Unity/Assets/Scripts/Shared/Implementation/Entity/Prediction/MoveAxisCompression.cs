@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -48,7 +48,12 @@ namespace FishMMO.Shared
 		/// Unpacks an axis previously produced by <see cref="Encode"/>.
 		/// </summary>
 		/// <param name="packed">The packed representation.</param>
-		/// <returns>An axis value in [-1, 1].</returns>
+		/// <returns>
+		/// An axis value in [-1, 1] for anything <see cref="Encode"/> can produce, which clamps to
+		/// ±127. A raw −128 off the wire decodes to −1.008; the pair is <c>ClampMagnitude</c>'d by
+		/// <c>KCCController.SetInputs</c> before it reaches the motor, so the overshoot cannot become
+		/// movement, but do not treat this return as pre-clamped.
+		/// </returns>
 		public static float Decode(sbyte packed) => packed / Steps;
 
 		/// <summary>

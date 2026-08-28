@@ -26,9 +26,16 @@ The Target Selector system is the **targeting layer** of FishMMO's ECA (Event-Co
 | Platform | Status | Notes |
 | --- | --- | --- |
 | Windows / Linux / macOS (Editor) | Supported | Primary authoring environment. |
-| Standalone Players (Win / Linux / macOS) | Supported | Selectors execute in client and server builds. |
+| Standalone Players (Win / Linux / macOS) | Supported | Builds compile everywhere, but see the authority note below — most selectors yield nothing on a client. |
 | Headless Linux Server | Supported | Selectors run on the SceneServer for authoritative target resolution. |
-| Android / iOS / WebGL | Supported | Only the client-side selector evaluations run on these platforms. |
+| Android / iOS / WebGL | Supported | As above: only the five peer-agnostic selectors evaluate on a client. |
+
+**Authority.** Nine of the fifteen selectors — every one that runs a physics query, plus `AllCharacters`
+and `TargetedEntity` — open with `IsAuthoritativePeer` (`EcaAuthority.IsServer`) and `yield break` on a
+client. They exist to resolve hits authoritatively, and a client asking the same question against
+interpolated peer positions would answer differently. The five that DO run on both peers are
+`Initiator`, `Event`, `Children`, `NamedSceneObject` and `TaggedSceneObject`; only those need to agree
+across peers, and `TargetOrdering` is what makes them agree.
 
 Requirements: Unity 6.3 LTS with FishNet. Selectors depend only on the shared FishMMO entity layer; no platform-specific APIs.
 
@@ -62,7 +69,7 @@ Entity/ECA/Target/
 | `InitiatorTargetSelector` | Returns the initiator's `GameObject`. |
 | `EventTargetSelector` | Returns the target already present on the `EventData`. |
 | `NearestTargetSelector` / `FurthestTargetSelector` | Single closest / furthest valid candidate within a radius, excluding the context object. |
-| `RandomTargetSelector` | One random valid candidate within a radius, drawn from `EventData.RNG` so server and client agree. |
+| `RandomTargetSelector` | One random valid candidate within a radius, drawn from `EventData.RNG`. Server-only (see the authority note), so the RNG buys run-to-run reproducibility, not client/server agreement. |
 | `AreaTargetSelector` / `ConeTargetSelector` / `LineTargetSelector` | Geometric queries around the context point. |
 | `ChainTargetSelector` | Walks target to target, accumulating a chain up to a configured hop count. |
 | `NamedSceneObjectTargetSelector` / `TaggedSceneObjectTargetSelector` | Asset-safe scene lookup by name or tag, resolved at fire time. |
@@ -187,12 +194,12 @@ public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 ### Random
 | Selector | Yields |
 |---|---|
-| `RandomTargetSelector` | One random candidate within `Radius`. Uses `eventData.RNG` when present for deterministic client/server agreement. |
+| `RandomTargetSelector` | One random candidate within `Radius`. Uses `eventData.RNG` when present, else a stream derived from the event's identity, for reproducible selection. Server-only. |
 
 ### Scene-wide / hierarchy
 | Selector | Yields |
 |---|---|
-| `AllCharactersTargetSelector` | Every `ICharacter` in the context's scene (toggles for inactive / unspawned). |
+| `AllCharactersTargetSelector` | Every `ICharacter` in the **context's** scene — not the active scene (toggles for inactive / unspawned). Server-only. |
 | `ChildrenTargetSelector` | Direct children of the context's transform. |
 
 ### Scene lookup (asset-safe scene references)
@@ -219,7 +226,9 @@ Set `Trigger.TargetSelector = InitiatorTargetSelector`. The caster is the only t
 Two ways:
 1. Two actions on the same trigger:
    - Action A: `ApplyDamageAction` with no `TargetSelector` (uses event Target).
-   - Action B: `ApplyDamageAction` with `NearestTargetSelector` (configure to chain — use `AreaTargetSelector` with `MaxHits=4` for "4 nearest").
+   - Action B: `ApplyDamageAction` with `AreaTargetSelector` and `MaxHits=4`. The cap is applied after a
+     nearest-first sort, so it really does mean "the 4 nearest". (Before the 2026-08-28 audit it sorted by
+     network identity and the cap kept the four lowest ObjectIds regardless of distance.)
 2. One action with `ChainTargetSelector` on the trigger.
 
 ### "AoE around the impact point"
@@ -277,6 +286,14 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
 
 - `RandomTargetSelector` and any value provider that rolls (`RandomRangeValue`, `RandomRangeFloatValue`, `ApplyDispelAction`) read `EventData.RNG`. Always seed `RNG` on `EventData` for events that originate from a deterministic context (ability casts, collisions). Selectors do **not** propagate or fork RNG state — `EventData.Fork` shares the same RNG reference so all downstream targets draw from one deterministic stream.
 - Avoid `UnityEngine.Random` inside custom selectors. Use `eventData.RNG` instead.
+- **Ordering is part of determinism.** Any selector that caps, takes "the first", or rolls an index must
+  impose a total order first — `TargetOrdering.SortByDistance` when the cap should mean "nearest",
+  `SortStable` when it should mean "a stable set". Ties fall through to network ObjectId, then a hash of
+  the name, then a hash of the authored world position. Never break a tie on `GetInstanceID()`: it is a
+  per-process number and puts two same-named scene objects in a different order on each peer.
+- **Query wide, cap late.** Size the physics buffer with `TargetSelector.QueryBufferSize(MaxHits)`, never
+  at `MaxHits` — a buffer the size of the cap lets the broadphase choose which candidates the sort ever
+  sees, in its own order.
 
 ---
 

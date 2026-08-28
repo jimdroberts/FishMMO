@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FishNet.CodeGenerating;
@@ -187,19 +187,35 @@ namespace FishNet.Serializing
         /// </summary>
         private void WriteDeltaSingle(UDeltaPrecisionType dpt, float value, bool unsigned)
         {
+            /* FISHMMO EDIT: round, do not floor.
+             *
+             * This quantises the MAGNITUDE of a difference, and flooring it biased every delta
+             * toward the previous value — the error never cancelled, it accumulated. A character at
+             * 5 m/s and tick rate 30 loses 0.00066 m per tick per axis, so by the 29th tick before
+             * the next absolute snapshot the reader's position trails the server's by about 1.9 cm,
+             * then snaps forward. Rounding halves that (measured 1.9 cm -> 0.97 cm over 29 ticks)
+             * and removes the guarantee that the error points the same way. It does not eliminate
+             * it: a constant per-tick difference rounds identically every tick, so some bias
+             * survives, and the once-per-second absolute snapshot is still what bounds it.
+             *
+             * Cannot overflow the chosen width: GetDeltaPrecisionType selects UInt8 only while the
+             * scaled value is strictly below byte.MaxValue, and UInt16 likewise, so the rounded
+             * result is at most the maximum the width holds. The clamps below make that a property
+             * of this method rather than of a threshold defined elsewhere. */
+            double scaled = value * DOUBLE_ACCURACY;
             if (dpt.FastContains(UDeltaPrecisionType.UInt8))
             {
                 if (unsigned)
-                    WriteUInt8Unpacked((byte)Math.Floor(value * DOUBLE_ACCURACY));
+                    WriteUInt8Unpacked((byte)Math.Min(byte.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
                 else
-                    WriteInt8Unpacked((sbyte)Math.Floor(value * DOUBLE_ACCURACY));
+                    WriteInt8Unpacked((sbyte)Math.Min(sbyte.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
             }
             else if (dpt.FastContains(UDeltaPrecisionType.UInt16))
             {
                 if (unsigned)
-                    WriteUInt16Unpacked((ushort)Math.Floor(value * DOUBLE_ACCURACY));
+                    WriteUInt16Unpacked((ushort)Math.Min(ushort.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
                 else
-                    WriteInt16Unpacked((short)Math.Floor(value * DOUBLE_ACCURACY));
+                    WriteInt16Unpacked((short)Math.Min(short.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
             }
             // Anything else is unpacked.
             else
@@ -526,6 +542,10 @@ namespace FishNet.Serializing
         public bool WriteDeltaTransformProperties(TransformProperties valueA, TransformProperties valueB, DeltaSerializerOption option = DeltaSerializerOption.Unset)
         {
             int startPosition = Position;
+            /* FISHMMO EDIT: remember Length too. Skip() grows Length and nothing shrinks it, so
+             * rewinding Position alone left the placeholder byte inside GetArraySegment() as
+             * trailing garbage whenever this was the last thing written into the writer. */
+            int startLength = Length;
             Skip(1);
 
             byte allFlags = 0;
@@ -545,6 +565,7 @@ namespace FishNet.Serializing
             else
             {
                 Position = startPosition;
+                Length = startLength;
                 return false;
             }
         }
@@ -570,7 +591,17 @@ namespace FishNet.Serializing
         /// </summary>
         private bool IsQuaternionChanged(Quaternion valueA, Quaternion valueB)
         {
-            const float minimumChange = 0.0025f;
+            /* FISHMMO EDIT: 0.0025 was coarse enough to lose a slow turn entirely.
+             *
+             * The caller advances its baseline to valueB whether or not anything was written (see
+             * Reconcile_Send), so a change below this threshold is not deferred — it is DISCARDED,
+             * and the next comparison starts from the new value. A player turning slower than about
+             * 0.29 degrees per tick therefore never had its rotation sent at all, and the owner was
+             * reconciled to an increasingly stale heading until the once-per-second absolute
+             * snapshot corrected it with a visible snap. The threshold now sits just under the
+             * codec's own resolution, so the only changes dropped are ones the wire could not have
+             * represented anyway. */
+            const float minimumChange = 0.0001f;
 
             if (Mathf.Abs(valueA.x - valueB.x) > minimumChange)
                 return true;
@@ -594,6 +625,8 @@ namespace FishNet.Serializing
             byte allFlags = 0;
 
             int startPosition = Position;
+            // FISHMMO EDIT: see WriteDeltaTransformProperties -- rewind Length with Position.
+            int startLength = Length;
             Skip(1);
 
             if (WriteUDeltaSingle(valueA.x, valueB.x))
@@ -608,6 +641,7 @@ namespace FishNet.Serializing
             }
 
             Position = startPosition;
+            Length = startLength;
             return false;
         }
 
@@ -617,6 +651,8 @@ namespace FishNet.Serializing
             byte allFlags = 0;
 
             int startPosition = Position;
+            // FISHMMO EDIT: see WriteDeltaTransformProperties -- rewind Length with Position.
+            int startLength = Length;
             Skip(1);
 
             if (WriteUDeltaSingle(valueA.x, valueB.x))
@@ -633,6 +669,7 @@ namespace FishNet.Serializing
             }
 
             Position = startPosition;
+            Length = startLength;
             return false;
         }
 
@@ -775,8 +812,11 @@ namespace FishNet.Serializing
          * measured 85B -> 51B for a three-entry walking packet.
          *
          * Note the baselines here are the writer's exact values while the reader's are its decoded
-         * ones, so lossy field codecs (Quaternion32) drift across entries within a packet. It is
-         * bounded to n-1 steps and reset by the absolute entry 0 of every packet. */
+         * ones, so any LOSSY field codec would drift across entries within a packet -- bounded to
+         * n-1 steps and reset by the absolute entry 0 of every packet. Neither replicate type in
+         * this project has such a field today: CharacterReplicateData is two quantised move axes, a
+         * packed aim direction, flags and an ability id, all exact on the wire, and KCCPlatform's
+         * replicate is empty. The caveat is here for the next type, not for a current one. */
         internal void WriteDeltaReplicate<T>(RingBuffer<ReplicateDataContainer<T>> values, int offset) where T : IReplicateData, new()
         {
             int collectionCount = values.Count;

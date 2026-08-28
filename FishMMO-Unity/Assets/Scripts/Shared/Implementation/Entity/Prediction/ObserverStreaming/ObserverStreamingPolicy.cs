@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -114,6 +114,67 @@ namespace FishMMO.Shared
 		/// <summary>Absolute floor on any scaled range, in metres, so combat never happens out of sight.</summary>
 		public static float MinimumRange { get; set; } = 25f;
 
+		/// <summary>
+		/// Radius, in metres, inside which a character's transform is sent to an observer at FULL
+		/// rate regardless of any distance or cap throttling.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is what makes lag compensation honest. A throttled transform reaches the observer
+		/// every 3, 6 or 8 ticks, and the client interpolates across that gap — so what it renders is
+		/// a position that existed on no server tick, and no rewind can reproduce it. Inside this
+		/// radius the observer receives every tick, so the pose it saw IS a tick sample and the
+		/// rewind lands exactly on it.
+		/// </para>
+		/// <para>
+		/// It is a floor, not the whole rule: <see cref="ResolveEngagementRange"/> widens it to cover
+		/// a character's own longest ability, up to <see cref="EngagementRangeCeiling"/>. Everything
+		/// beyond keeps the bandwidth saving, which is where most of it lives — exempting a 40 m disc
+		/// out of a 100 m observer range leaves 84% of the observed area still throttled.
+		/// </para>
+		/// </remarks>
+		public static float EngagementRange { get; set; } = 40f;
+
+		/// <summary>
+		/// Hard ceiling on the engagement radius: no attack or ability in this project reaches
+		/// further, so nothing beyond it can ever need tick-exact compensation.
+		/// </summary>
+		public static float EngagementRangeCeiling { get; set; } = 100f;
+
+		/// <summary>
+		/// Metres added to a character's longest ability range when resolving its engagement radius,
+		/// covering the ground both parties can close during the compensation window.
+		/// </summary>
+		/// <remarks>
+		/// The rewind reaches up to <c>LagCompensationTick.MaximumCompensationTicks</c> into the past;
+		/// at a closing speed of roughly 12 m/s that is a few metres, and a target that is about to
+		/// come into range needs to already be at full rate when it does.
+		/// </remarks>
+		public static float EngagementRangeMargin { get; set; } = 10f;
+
+		/// <summary>
+		/// The full-rate radius for an observer whose longest usable ability reaches
+		/// <paramref name="longestAbilityRange"/>.
+		/// </summary>
+		/// <remarks>
+		/// Melee characters keep almost all of the LOD saving; a long-range caster pays for exactly
+		/// the reach it has. Note that every ability authored today resolves to a range of 0
+		/// (<c>Ability.Range</c> is <c>Speed * LifeTime</c>, and no template sets Speed), so the
+		/// floor is currently doing all the work — this widens automatically once ranges are authored.
+		/// </remarks>
+		/// <param name="longestAbilityRange">Longest range among the character's known abilities.</param>
+		/// <returns>The radius inside which throttling is suspended.</returns>
+		public static float ResolveEngagementRange(float longestAbilityRange)
+		{
+			float wanted = longestAbilityRange > 0f ? longestAbilityRange + EngagementRangeMargin : 0f;
+			float range = wanted > EngagementRange ? wanted : EngagementRange;
+			if (range > EngagementRangeCeiling)
+			{
+				range = EngagementRangeCeiling;
+			}
+			return range < 0f ? 0f : range;
+		}
+
 		/// <summary>Range changes smaller than this, in metres, are not applied — avoids churning the observer rebuild.</summary>
 		public static float RangeChangeThreshold { get; set; } = 2f;
 
@@ -225,6 +286,9 @@ namespace FishMMO.Shared
 			switch (key)
 			{
 				case "ObserverFullRateCap": return TryInt(value, v => FullRateObserverCap = Math.Max(0, v));
+				case "ObserverEngagementRange": return TryFloat(value, v => EngagementRange = Mathf.Max(0f, v));
+				case "ObserverEngagementRangeCeiling": return TryFloat(value, v => EngagementRangeCeiling = Mathf.Max(0f, v));
+				case "ObserverEngagementRangeMargin": return TryFloat(value, v => EngagementRangeMargin = Mathf.Max(0f, v));
 				case "ObserverCombatWeight": return TryFloat(value, v => CombatWeight = v);
 				case "ObserverPartyWeight": return TryFloat(value, v => PartyWeight = v);
 				case "ObserverGuildWeight": return TryFloat(value, v => GuildWeight = v);
