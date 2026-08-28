@@ -29,12 +29,12 @@ namespace FishMMO.Database.Npgsql
 	public interface INpgsqlDbContextFactory : IDbContextFactory, IDbContextFactoryMonitoring
 	{
 		/// <summary>
-		/// Reports whether the database schema still matches the entity model.
+		/// Reports whether this database has applied every migration the entity model expects.
 		/// </summary>
 		/// <remarks>
 		/// Exposed here so a server can check it during startup. See
-		/// <see cref="SchemaValidationResult"/> for what the states mean and why this reports
-		/// rather than throws.
+		/// <see cref="SchemaValidationResult"/> for what the states mean, why this reports rather
+		/// than throws, and why it does not detect model drift.
 		/// </remarks>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>What was found. Never throws.</returns>
