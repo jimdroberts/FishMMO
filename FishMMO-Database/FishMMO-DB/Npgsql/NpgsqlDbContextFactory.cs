@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -508,15 +508,62 @@ namespace FishMMO.Database.Npgsql
 			var differ = Microsoft.EntityFrameworkCore.Infrastructure
 				.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrationsModelDiffer>(context);
 
-			var snapshotModel = snapshot.Model;
-			if (snapshotModel is Microsoft.EntityFrameworkCore.Metadata.IMutableModel mutableSnapshot)
+			return differ.HasDifferences(
+				BuildSnapshotRelationalModel(context, snapshot),
+				context.Model.GetRelationalModel());
+		}
+
+		/// <summary>
+		/// Rebuilds the migration snapshot's model with this provider's conventions, so it can be
+		/// compared against the live model.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>ModelSnapshot.Model</c> cannot be used directly. EF builds it with an <em>empty</em>
+		/// convention set, so the relational conventions never run and no relational model is
+		/// attached — <c>GetRelationalModel()</c> on it throws <c>"The database model hasn't been
+		/// initialized"</c>. That is what made this check fail on every startup while reporting
+		/// only that something had gone wrong, which is the least useful thing a schema check can
+		/// say.
+		/// </para>
+		/// <para>
+		/// EF's own tooling solves this with <c>SnapshotModelProcessor</c>, and EF 6 added
+		/// <c>IModelRuntimeInitializer</c> for it. Neither exists here: the first ships in the
+		/// design-time package, which a server does not load, and the second postdates EF Core 5.
+		/// What is left is to do what both of them do — re-run the snapshot's own model definition
+		/// through the provider's conventions.
+		/// </para>
+		/// <para>
+		/// <c>BuildModel</c> is protected, hence the reflection. It is a stable shape — every
+		/// generated snapshot overrides it — but if a future EF renames it this returns null and
+		/// the caller reports an unevaluated check rather than a false clean bill of health.
+		/// </para>
+		/// </remarks>
+		private static Microsoft.EntityFrameworkCore.Metadata.IRelationalModel BuildSnapshotRelationalModel(
+			NpgsqlDbContext context,
+			object snapshot)
+		{
+			var buildModel = snapshot.GetType().GetMethod(
+				"BuildModel",
+				System.Reflection.BindingFlags.Instance |
+				System.Reflection.BindingFlags.NonPublic |
+				System.Reflection.BindingFlags.Public);
+
+			if (buildModel == null)
 			{
-				snapshotModel = mutableSnapshot.FinalizeModel();
+				throw new InvalidOperationException(
+					"ModelSnapshot.BuildModel could not be located, so the snapshot model cannot be " +
+					"rebuilt with provider conventions.");
 			}
 
-			return differ.HasDifferences(
-				snapshotModel.GetRelationalModel(),
-				context.Model.GetRelationalModel());
+			var conventionSet = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions
+				.GetService<Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure.IConventionSetBuilder>(context)
+				.CreateConventionSet();
+
+			var modelBuilder = new ModelBuilder(conventionSet);
+			buildModel.Invoke(snapshot, new object[] { modelBuilder });
+
+			return modelBuilder.FinalizeModel().GetRelationalModel();
 		}
 
 		/// <summary>
