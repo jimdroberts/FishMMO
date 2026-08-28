@@ -99,8 +99,13 @@ namespace FishMMO.UnitTests
 			KCCPlatform.ReconcileData actual,
 			string because)
 		{
+			/* Position rides FishNet's quantised float delta writer, so it is compared with the
+			 * same 0.05 tolerance ReconcileDeltaChainTests uses for the character motor state.
+			 * The tolerance is not slack: the per-tick quantisation error is ~0.001, so a chain
+			 * that never resynchronised would exceed it well inside these 60 ticks. Passing is
+			 * what shows the periodic absolute snapshot is bounding the drift. */
 			LogAssert.IsTrue(
-				(expected.Position - actual.Position).sqrMagnitude < 1e-6f,
+				Vector3.Distance(expected.Position, actual.Position) <= 0.05f,
 				$"{because}: position expected {expected.Position:F4} but decoded {actual.Position:F4}");
 			LogAssert.AreEqual(expected.GoalIndex, actual.GoalIndex, $"{because}: goal index");
 		}
