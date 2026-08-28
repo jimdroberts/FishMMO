@@ -431,7 +431,11 @@ namespace FishMMO.Shared
 
 			//Log.Debug($"Received NPC RNG Seed {npcSeed}");
 
-			// Clients still need to generate the attribute modifier values locally.
+			/* Clients still draw the attribute values from npcRNG so the model index drawn below
+			 * matches the server's stream, but they must NOT apply them: CharacterAttributeController
+			 * has already read the server's ExternalModifier (bonus + instance difficulty + buffs)
+			 * from its own payload block, which precedes this one on every NPC prefab, and
+			 * SetModifier would replace it with the bonus alone. */
 			AddNPCAttributes(false);
 
 #if !UNITY_SERVER
@@ -1073,6 +1077,12 @@ namespace FishMMO.Shared
 				else
 				{
 					value = attribute.Max;
+				}
+
+				if (!asServer)
+				{
+					// RNG consumed above; the modifier itself arrived in the attribute payload.
+					continue;
 				}
 
 				if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))

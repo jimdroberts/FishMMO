@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Component.Observing;
 using FishNet.Connection;
 using FishNet.Object;
@@ -172,6 +172,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		public byte GetEffectiveInterval(NetworkConnection connection)
 		{
+			/* An engaged observer is exempt from BOTH throttles. The cap is scored by relevance and
+			 * knows nothing about distance, so taking the max below would have happily throttled a
+			 * character standing next to its attacker back to every 2nd tick and left lag
+			 * compensation rewinding to a pose that was never rendered. */
+			if (distanceLod != null && distanceLod.IsEngaged(connection))
+			{
+				return 1;
+			}
+
 			byte cap = GetInterval(connection);
 			byte lod = distanceLod != null ? distanceLod.GetInterval(connection) : (byte)1;
 			return cap > lod ? cap : lod;

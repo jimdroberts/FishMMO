@@ -116,6 +116,38 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// A stack applies only the attribute half of the composite, never the state flags.
+		/// </summary>
+		/// <remarks>
+		/// Without these two overrides the base class routes stacking to <see cref="OnApply"/> and
+		/// <see cref="OnRemove"/>, so removing ONE stack of a multi-stack composite ran
+		/// <c>DisableStateFlags</c> and cleared the crowd-control flag while the buff was still
+		/// active with stacks remaining. <see cref="StateBuffTemplate"/> carries the same pair for
+		/// the same reason. Attribute modifiers do stack, and symmetrically, so they stay.
+		/// </remarks>
+		/// <param name="buff">The buff instance gaining a stack.</param>
+		/// <param name="target">The character receiving the buff.</param>
+		public override void OnApplyStack(Buff buff, ICharacter target)
+		{
+			if (target == null) return;
+
+			// Flags are already enabled by the base apply; a stack only adds its attributes.
+			ApplyAttributeModifiers(target, 1);
+		}
+
+		/// <summary>
+		/// Removes one stack's attribute modifiers, leaving the state flags to <see cref="OnRemove"/>.
+		/// </summary>
+		/// <param name="buff">The buff instance losing a stack.</param>
+		/// <param name="target">The character losing the stack.</param>
+		public override void OnRemoveStack(Buff buff, ICharacter target)
+		{
+			if (target == null) return;
+
+			ApplyAttributeModifiers(target, -1);
+		}
+
+		/// <summary>
 		/// Applies resource tick effects scaled by (1 + Stacks).
 		/// </summary>
 		/// <param name="buff">The buff instance.</param>

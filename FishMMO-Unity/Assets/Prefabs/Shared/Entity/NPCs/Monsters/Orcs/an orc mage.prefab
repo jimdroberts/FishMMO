@@ -72,6 +72,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6495375483384920727}
   - component: {fileID: 49462260382753988}
+  - component: {fileID: 545689852689658496}
   - component: {fileID: -4468559157413045786}
   - component: {fileID: 6437443601116110890}
   - component: {fileID: 2119787057571980410}
@@ -1028,3 +1029,26 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 4103170126109918815}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &545689852689658496
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
+  Type: 12
+  Visibility: 0
+  Icon: {fileID: 0}
+  Tint: {r: 1, g: 1, b: 1, a: 1}
+  Label: 
+  IconSize: 10
+  ClampToEdge: 0
+  Priority: 0
+  ShowOnMinimap: 1
+  ShowOnWorldMap: 1
+  MarkerAnchor: {fileID: 0}

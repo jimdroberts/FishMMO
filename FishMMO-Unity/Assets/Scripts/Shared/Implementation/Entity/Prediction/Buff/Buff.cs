@@ -258,7 +258,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns true when this buff has expired at the given tick.
 		/// Uses a signed cast for overflow-safe wrap-around comparison; safe for any
-		/// duration &lt; 2^31 ticks (~810 days at 30 tps).
+		/// duration &lt; 2^31 ticks (~828 days at 30 tps).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool HasExpired(uint currentTick) =>

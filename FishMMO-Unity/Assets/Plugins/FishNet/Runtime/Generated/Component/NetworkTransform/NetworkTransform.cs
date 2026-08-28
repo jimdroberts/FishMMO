@@ -420,7 +420,10 @@ namespace FishNet.Component.Transforming
          * A server-authoritative transform with SendToOwner off still sent
          * ObserversUpdateClientAuthoritativeTransform to its owner every tick -- the owner's
          * handler is the first thing to return (see the guard at the top of that RPC), so every
-         * one of those packets was ~630 B/s per moving player of pure waste. NetworkBehaviour
+         * one of those packets was pure waste -- about 390 B/s per moving player at tick rate 30
+         * (a 2 byte RpcLink header plus ~11 bytes of changed position and rotation; an earlier note
+         * said 630 B/s by assuming the 10 byte unlinked header, which this path does not use).
+         * NetworkBehaviour
          * consults this property when it builds an ObserversRpc exclusion list, which is the
          * same list the ExcludeOwner attribute flag feeds, so the owner is skipped at the send
          * rather than at the receive. Buffered RPCs (interval, SendToOwner changes) are never

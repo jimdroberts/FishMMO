@@ -34,7 +34,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public readonly int NameKey;
 
-		/// <summary>Last-resort local tiebreak — the Unity instance id.</summary>
+		/// <summary>
+		/// Tiebreak for un-networked candidates that share a name: a stable hash of the candidate's
+		/// authored world position, which both peers load from the same scene. (This used to be the
+		/// Unity instance id, which is a per-process number and put two same-named scene objects in a
+		/// different order on each peer.)
+		/// </summary>
 		public readonly int SecondaryKey;
 
 		/// <summary>Distance from the query origin, measured in the same world the query ran in.</summary>
@@ -89,7 +94,7 @@ namespace FishMMO.Shared
 			if (candidate != null)
 			{
 				nameKey = StableNameKey(candidate.name);
-				secondaryKey = candidate.GetInstanceID();
+				secondaryKey = StablePositionKey(candidate.transform.position);
 				// GetComponentInParent so a hit on a child collider still resolves to the character's
 				// own NetworkObject — otherwise two colliders on the same character would sort as if
 				// they were unrelated objects.
@@ -448,6 +453,25 @@ namespace FishMMO.Shared
 		/// using it as a cross-peer sort key would order the same two scene objects differently on the
 		/// client and on the server. FNV-1a over the UTF-16 code units has no such freedom.
 		/// </remarks>
+		/// <summary>
+		/// Stable hash of a world position at millimetre resolution, identical on every peer that
+		/// loaded the same authored scene. Used to separate un-networked candidates that share a name.
+		/// </summary>
+		public static int StablePositionKey(Vector3 position)
+		{
+			unchecked
+			{
+				int x = Mathf.RoundToInt(position.x * 1000f);
+				int y = Mathf.RoundToInt(position.y * 1000f);
+				int z = Mathf.RoundToInt(position.z * 1000f);
+				int hash = (int)2166136261;
+				hash = (hash ^ x) * 16777619;
+				hash = (hash ^ y) * 16777619;
+				hash = (hash ^ z) * 16777619;
+				return hash;
+			}
+		}
+
 		public static int StableNameKey(string name)
 		{
 			if (string.IsNullOrEmpty(name))

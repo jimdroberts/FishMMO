@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Managing.Timing;
@@ -80,6 +80,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		[SerializeField]
 		private bool immortal = false;
+
+		/// <summary>
+		/// The <see cref="immortal"/> value as authored on the prefab, captured before anything can
+		/// change it at runtime so <see cref="ResetState"/> can restore it rather than force false.
+		/// </summary>
+		private bool authoredImmortal;
+
+		/// <summary>True once <see cref="authoredImmortal"/> has been captured.</summary>
+		private bool hasAuthoredImmortal;
 		/// <summary>
 		/// Gets or sets whether the character is immortal (cannot be damaged or killed).
 		/// </summary>
@@ -241,6 +250,15 @@ namespace FishMMO.Shared
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
+
+			/* Capture the authored immortal value once, on the first spawn, before anything runtime
+			 * can change it — ResetState restores this rather than forcing false. Guarded by the
+			 * flag so a second spawn cannot capture a value some system set at runtime. */
+			if (!hasAuthoredImmortal)
+			{
+				authoredImmortal = immortal;
+				hasAuthoredImmortal = true;
+			}
 
 			predictionController = GetComponent<CharacterPredictionController>();
 
@@ -556,26 +574,34 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Resolves the best available tick for combat timer evaluation.
-		/// Prefers the prediction controller's replicate-domain tick when available,
-		/// falling back to the raw TimeManager LocalTick.
+		/// Resolves the tick the combat timer is stamped and evaluated in: always the LOCAL tick.
 		/// </summary>
+		/// <remarks>
+		/// One domain, not "the best available". This used to prefer the replicate-domain snapshot
+		/// and fall back to the local tick, which meant the domain depended on where the call came
+		/// from — <c>EnterCombat</c> reached from inside a replicate (a buff's damage-over-time tick)
+		/// stamped a replicate tick, while the same call from an ability object's own OnTick
+		/// subscription stamped whichever snapshot happened to be set. Worse, the expiry check in
+		/// <c>TimeManager_OnTick</c> read the same resolver, so which domain it compared against was
+		/// decided by whether this behaviour's OnTick subscription ran before or after
+		/// <c>CharacterPredictionController</c>'s — i.e. by component order on the prefab.
+		/// <para>
+		/// The two domains differ on the server by the client's queued-input depth, so mixing them
+		/// shortened a lagging player's combat window by exactly that much. The local tick is the
+		/// right one here: the combat timer is a server-side wall-clock-ish window, not part of the
+		/// replayed simulation, and nothing reconciles it.
+		/// </para>
+		/// </remarks>
 		private uint ResolveCurrentCombatTick()
 		{
-			if (predictionController != null)
-			{
-				if (predictionController.CurrentReplicateTickSnapshot != TimeManager.UNSET_TICK)
-				{
-					return predictionController.CurrentReplicateTickSnapshot;
-				}
-				if (predictionController.CurrentLocalTickSnapshot != TimeManager.UNSET_TICK)
-				{
-					return predictionController.CurrentLocalTickSnapshot;
-				}
-			}
 			if (base.TimeManager != null)
 			{
 				return base.TimeManager.LocalTick;
+			}
+			if (predictionController != null &&
+				predictionController.CurrentLocalTickSnapshot != TimeManager.UNSET_TICK)
+			{
+				return predictionController.CurrentLocalTickSnapshot;
 			}
 			return TimeManager.UNSET_TICK;
 		}
@@ -588,6 +614,18 @@ namespace FishMMO.Shared
 		public void EnterCombat()
 		{
 			if (Character == null)
+			{
+				return;
+			}
+
+			/* Server only, and never from a replay.
+			 *
+			 * The owning client reaches this through its predicted damage-over-time ticks, and a
+			 * reconcile replays those — so a replayed tick stamped lastCombatTick with a tick in the
+			 * PAST and the client's combat state expired earlier than the server's. Combat state is
+			 * server-authoritative (it reaches other peers through the death/vitals broadcasts), so
+			 * the client has no business advancing or rewinding it locally. */
+			if (!base.IsServerStarted)
 			{
 				return;
 			}
@@ -1237,6 +1275,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void CompleteHeal()
 		{
+			// Server-authoritative, like Kill. Every current caller is server-side; the guard stops
+			// the next one from healing on a client and being corrected by the reconcile.
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+
 			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
 			{
 				float toHeal = ResourceInstance.FinalValue - ResourceInstance.CurrentValue;
@@ -1247,6 +1292,12 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public void Revive(ICharacter resurrector, int amount)
 		{
+			// Server-authoritative, like Kill — see CompleteHeal.
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+
 			if (ResourceInstance == null || amount <= 0) return;
 
 			/* Clearing the flag is part of reviving, not a step callers are trusted to remember.
@@ -1310,7 +1361,10 @@ namespace FishMMO.Shared
 			combatTimerActive = false;
 			lastCombatTick = 0;
 			Character?.DisableFlags(CharacterFlags.IsInCombat);
-			immortal = false;
+			/* Restore what the PREFAB authored, not false. Forcing false here silently un-immortalised
+			 * every prefab authored Immortal (a training dummy, an invulnerable quest NPC) the first
+			 * time its pooled instance was reused. Runtime changes still do not survive. */
+			immortal = hasAuthoredImmortal ? authoredImmortal : immortal;
 		}
 	}
 }
