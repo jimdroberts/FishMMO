@@ -174,12 +174,37 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Cached reference to the character's health resource attribute.
-		/// Lazily initialized on first access; throws if missing.
+		/// Lazily initialized on first access.
 		/// </summary>
 		private CharacterResourceAttribute resourceInstance;
+
+		/// <summary>
+		/// Whether the missing-health report has already been made for the current failure.
+		/// </summary>
+		/// <remarks>
+		/// The lookup is retried on every access but reported only once, and those are deliberately
+		/// separate decisions. The resolve has to keep trying because health can arrive after this
+		/// component does — a client reads <see cref="IsAlive"/> before reconcile has populated the
+		/// attribute controller — so latching the failure itself would leave a character reporting
+		/// as dead over what was only a timing gap.
+		/// <para>
+		/// Reported once because the alternative is unbounded. <see cref="IsAlive"/> is read from AI
+		/// target selection, inventory checks and input handling, all per tick, so one entity with
+		/// no health attribute logged roughly 28 lines a second: a scene server holding three
+		/// misconfigured NPCs wrote 153 MB in five and a half minutes, and a client logged ~39,000
+		/// copies in one session (issue #157). One bad entity could fill a disk.
+		/// </para>
+		/// <para>
+		/// Cleared once the attribute resolves, so a genuinely new failure later is still reported
+		/// rather than swallowed by a flag set hours earlier.
+		/// </para>
+		/// </remarks>
+		private bool loggedMissingResource;
+
 		/// <summary>
 		/// Gets the cached health resource attribute for this character.
-		/// Returns null and logs an error if the attribute controller or health attribute is missing.
+		/// Returns null when the attribute controller or health attribute is missing, reporting the
+		/// first occurrence only.
 		/// </summary>
 		public CharacterResourceAttribute ResourceInstance
 		{
@@ -190,7 +215,18 @@ namespace FishMMO.Shared
 					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
 						!attributeController.TryGetHealthAttribute(out resourceInstance))
 					{
-						Log.Error("CharacterDamageController", $"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute.");
+						if (!loggedMissingResource)
+						{
+							loggedMissingResource = true;
+							Log.Error("CharacterDamageController",
+								$"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute. " +
+								"It cannot be damaged or killed. Further occurrences on this object are suppressed until it resolves.");
+						}
+					}
+					else
+					{
+						// Re-arm so a later, different failure is not silently swallowed.
+						loggedMissingResource = false;
 					}
 				}
 				return resourceInstance;
@@ -1006,6 +1042,16 @@ namespace FishMMO.Shared
 			if (Immortal) return;
 			if (!base.IsServerStarted) return;
 
+			/* No health resource means there is nothing this death could be the end of.
+			 *
+			 * Damage already refuses on a null ResourceInstance, so a misconfigured entity could
+			 * not be worn down — but Kill never consulted it, so the same entity could still be
+			 * killed outright and run the whole death path: flagged dead, OnKilled dispatched, ECA
+			 * triggers fired and, for an NPC, a corpse built and a loot table rolled. A corpse for
+			 * something that was never alive. Refusing here mirrors the guard Damage has and keeps
+			 * the two paths agreeing about what a health-less entity can have happen to it. */
+			if (ResourceInstance == null) return;
+
 			// Already dead — prevent duplicate OnKilled events and ECA triggers.
 			if (Character.IsFlagged(CharacterFlags.IsDead)) return;
 
@@ -1257,6 +1303,10 @@ namespace FishMMO.Shared
 
 			base.ResetState(asServer);
 			resourceInstance = null;
+			/* Re-armed with the cache it guards. A pooled object respawns as a different character,
+			 * and leaving this set would suppress the new occupant's own misconfiguration behind a
+			 * flag raised by the previous one. */
+			loggedMissingResource = false;
 			combatTimerActive = false;
 			lastCombatTick = 0;
 			Character?.DisableFlags(CharacterFlags.IsInCombat);
