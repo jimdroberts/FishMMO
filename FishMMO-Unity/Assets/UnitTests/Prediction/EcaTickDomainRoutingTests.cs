@@ -469,7 +469,7 @@ namespace FishMMO.UnitTests
 			public void Apply(Buff buff, bool suppressFX = false) { }
 			public void Remove(int buffID) { }
 			public void RemoveRandom(DeterministicRNG rng, bool includeBuffs = false, bool includeDebuffs = false) { }
-			public void RemoveAll(bool ignoreInvokeRemove = false) { }
+			public void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false) { }
 			public BuffReconcileEntry[] CreateReconcileSnapshot() => null;
 			public void RestoreFromReconcile(BuffReconcileEntry[] entries, uint reconcileTick) { }
 		}

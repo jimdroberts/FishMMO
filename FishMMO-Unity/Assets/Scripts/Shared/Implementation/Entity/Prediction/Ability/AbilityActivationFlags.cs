@@ -5,9 +5,12 @@
 	/// Stored as bit positions in an int and manipulated via IntBitExtensions.
 	/// <para>
 	/// Bit position 0 (IsActualData) is used as a sentinel to distinguish real input from
-	/// FishNet's default-filled replicate data. When the Replicate method receives data
-	/// without this bit set, it returns immediately. This allows bit 0 to double as a
-	/// "data present" marker without consuming an extra field in the replicate struct.
+	/// FishNet's default-filled replicate data. Data without this bit set does NOT stop the
+	/// replicate: <c>AbilityController.ReplicateInternal</c> clears the queued ability, carries the
+	/// held flag over from the replicated state, and goes on simulating — a tick with no new input
+	/// still has to advance an active cast, its cooldowns and its resource drain, or the owner and
+	/// the server diverge whenever a packet is late. This lets bit 0 double as a "data present"
+	/// marker without consuming an extra field in the replicate struct.
 	/// </para>
 	/// <para>
 	/// <b>Constraint:</b> All enum values are bit positions and must remain in the
@@ -54,5 +57,19 @@
 		/// false-fires on zero-duration abilities that complete before the reconcile tick.
 		/// </summary>
 		Denied,
+
+		/// <summary>
+		/// Server-authoritative "no object was spawned at this tick" flag.
+		/// </summary>
+		/// <remarks>
+		/// Distinct from <see cref="Denied"/>, which means the activation was refused outright. This
+		/// means the activation ran to completion — cost paid, cooldown started, seed advanced — and
+		/// still produced nothing, because the server's own target resolution came up empty for an
+		/// ability that requires a target. The owner, resolving against its own view of the world,
+		/// had already spawned an object: the seeds match and there is no denial, so nothing told it
+		/// to take that object back and it flew its full lifetime hitting nothing. This flag is what
+		/// tells it. It does not fire <c>OnAbilityDenied</c> — the cast was not denied.
+		/// </remarks>
+		NoSpawn,
 	}
 }

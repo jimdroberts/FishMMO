@@ -490,7 +490,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private uint GetCurrentDomainTick()
 		{
-			// base.TimeManager dereferences _networkObjectCache, which is null until the
+			// base.TimeManager dereferences _networkObjectCache, which is null on a controller that
+			// has never been spawned (a pooled instance before its first spawn, or a test) — not
+			// during a client's payload read, where InitializeEarly has already assigned it. Null until the
 			// NetworkObject is initialized. Guard through the null-safe NetworkObject accessor
 			// so we report "no domain yet" (lastReplicateTick) instead of throwing during
 			// pre-spawn payload writes.

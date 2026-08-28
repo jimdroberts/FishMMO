@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 // FISHMMO EDIT: List/CollectionCaches/Channel for the self-contained delta replicate reader below.
 using System.Collections.Generic;
 using FishNet.Transporting;
@@ -403,8 +403,8 @@ namespace FishNet.Serializing
         /// <remarks>
         /// FISHMMO EDIT. Mirrors <c>Reader.ReadReplicate</c> exactly -- same count byte, same tick
         /// back-dating, same container construction -- differing only in that entries after the
-        /// first are deltas against the entry before them within this packet. The overload above
-        /// it is upstream's, which returns an int and takes a <c>ref T[]</c>; the prediction call
+        /// first are deltas against the entry before them within this packet. The overload BELOW
+        /// this one is upstream's, which returns an int and takes a <c>ref T[]</c>; the prediction call
         /// site needs a <c>List&lt;ReplicateDataContainer&lt;T&gt;&gt;</c>, which is one of the
         /// reasons that overload no longer compiles against its own caller.
         /// </remarks>

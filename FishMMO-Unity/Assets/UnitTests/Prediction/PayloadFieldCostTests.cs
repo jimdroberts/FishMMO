@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
@@ -156,8 +156,6 @@ namespace FishMMO.UnitTests
 				}, "3 unit vectors, 3 Vector3 deltas");
 			Record("CharacterReconcile", "MotorState.AttachedRbVelocity", b,
 				v => { v.MotorState.AttachedRigidbodyVelocity = new Vector3(1f, 0f, 1f); return v; }, "usually zero");
-			Record("CharacterReconcile", "MotorState.LastPlatformPosition", b,
-				v => { v.MotorState.LastPlatformPosition = new Vector3(5f, 1f, 5f); return v; }, "usually zero");
 			Record("CharacterReconcile", "ResourceState.Health", b,
 				v => { v.ResourceState.Health -= 12f; return v; }, "float, always full width");
 			Record("CharacterReconcile", "ResourceState.NextRegenTick", b,

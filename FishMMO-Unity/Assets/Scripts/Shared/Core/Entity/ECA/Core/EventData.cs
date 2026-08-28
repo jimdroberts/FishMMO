@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -225,9 +225,19 @@ namespace FishMMO.Shared.Core
 		public void SetTarget(GameObject target)
 		{
 			Target = target;
+			/* GetComponentInParent, not TryGetComponent.
+			 *
+			 * A selector yields the GameObject a physics query hit, which is a COLLIDER — and
+			 * TargetOrdering.Rank already resolves a hit to its owning NetworkObject through the
+			 * parents for exactly that reason. Resolving the character only on the hit object itself
+			 * meant the two disagreed about what a candidate is: a character whose collider sits on a
+			 * child (a hit zone, a ragdoll bone) ranked as the character and then arrived here with a
+			 * null TargetCharacter, so every action that resolves through it silently did nothing.
+			 * Benign on today's prefabs, where the capsule is on the root, and a trap for the first
+			 * one that is not. */
 			TargetCharacter = target != null && target.TryGetComponent(out ICharacter character)
 				? character
-				: null;
+				: target != null ? target.GetComponentInParent<ICharacter>() : null;
 		}
 
 		/// <summary>

@@ -1,4 +1,4 @@
-using FishNet.Object;
+﻿using FishNet.Object;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -198,6 +198,48 @@ namespace FishMMO.Shared
 		/// <param name="tick">Tick to resolve, in the server's local tick domain.</param>
 		/// <param name="snapshot">The resolved transform.</param>
 		/// <returns>True when history covers the requested tick.</returns>
+		/// <summary>
+		/// Resolves the recorded pose at a fractional point in the past.
+		/// </summary>
+		/// <remarks>
+		/// The whole-tick overload below is what actually reads the ring; this blends the two samples
+		/// the target sits between. A client's view of a peer comes from interpolation and lands
+		/// between ticks, so resolving only on tick boundaries reproduced a pose it never rendered.
+		/// With a zero fraction the bounds collapse and this is exactly the whole-tick result.
+		/// </remarks>
+		/// <param name="target">The point in the past to resolve.</param>
+		/// <param name="snapshot">The pose at that point.</param>
+		/// <returns>True when both bounding ticks are still held.</returns>
+		public bool TryResolve(RewindTarget target, out Snapshot snapshot)
+		{
+			snapshot = default;
+			if (!target.IsValid)
+			{
+				return false;
+			}
+
+			target.GetBounds(out uint olderTick, out uint newerTick, out float alpha);
+			if (olderTick == newerTick)
+			{
+				return TryResolve(newerTick, out snapshot);
+			}
+
+			/* Both bounds must be held. Falling back to the newer one alone would silently return a
+			 * pose up to a full tick ahead of the target, which is the error this overload exists to
+			 * remove. */
+			if (!TryResolve(olderTick, out Snapshot older) ||
+				!TryResolve(newerTick, out Snapshot newer))
+			{
+				return false;
+			}
+
+			snapshot = new Snapshot(
+				newerTick,
+				Vector3.Lerp(older.Position, newer.Position, alpha),
+				Quaternion.Slerp(older.Rotation, newer.Rotation, alpha));
+			return true;
+		}
+
 		public bool TryResolve(uint tick, out Snapshot snapshot)
 		{
 			snapshot = default;
@@ -248,13 +290,13 @@ namespace FishMMO.Shared
 		/// Displaces this character's transform to where it was at <paramref name="tick"/>.
 		/// </summary>
 		/// <returns>True when the character was moved and needs restoring.</returns>
-		internal bool Rewind(uint tick)
+		internal bool Rewind(RewindTarget target)
 		{
 			if (isRewound)
 			{
 				return false;
 			}
-			if (!TryResolve(tick, out Snapshot snapshot))
+			if (!TryResolve(target, out Snapshot snapshot))
 			{
 				return false;
 			}

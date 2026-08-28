@@ -639,7 +639,18 @@ namespace KinematicCharacterController
 			_initialSimulationPosition = position;
 			_initialSimulationRotation = rotation;
 			_transientPosition = position;
-			_transientRotation = rotation;
+			/* FISHMMO EDIT: through the property, not the field.
+			 *
+			 * The TransientRotation setter is what refreshes _characterUp/_characterForward/
+			 * _characterRight; assigning _transientRotation directly leaves all three describing the
+			 * PREVIOUS rotation until UpdatePhase2 self-assigns the property at the end of the next
+			 * simulation. ApplyState reaches this method on every reconcile, and between here and
+			 * UpdatePhase2 sit the movement basis (KCCController.SetInputs projects onto
+			 * Motor.CharacterUp) and the aim origin — so a reconciled rotation was simulated against
+			 * the axes of the rotation it replaced. Invisible while characters are yaw-only with
+			 * BonusOrientationMethod None, which is every player prefab today, and a real desync the
+			 * moment any of them uses gravity-aligned orientation. SetRotation already does this. */
+			TransientRotation = rotation;
 
 			if (bypassInterpolation)
 			{
@@ -658,7 +669,8 @@ namespace KinematicCharacterController
 			_initialSimulationRotation = rotation;
 			_transientPosition = position;
 			_movePositionTarget = position;
-			_transientRotation = rotation;
+			// FISHMMO EDIT: through the property — see SetPositionAndRotation.
+			TransientRotation = rotation;
 			BaseVelocity = velocity;
 			_attachedRigidbodyVelocity = velocity;
 

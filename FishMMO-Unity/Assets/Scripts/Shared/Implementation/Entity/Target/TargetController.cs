@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using System;
 using System.Collections.Generic;
@@ -224,13 +224,13 @@ namespace FishMMO.Shared
 			 * live positions, so rewinding its targets would move them away from where it aimed) and
 			 * for connections whose tick bookkeeping is not established yet. */
 			if (base.IsServerInitialized &&
-				LagCompensationTick.TryResolve(Character, base.TimeManager, out uint rewindTick))
+				LagCompensationTick.TryResolve(Character, base.TimeManager, out RewindTarget rewindTarget))
 			{
 				/* The caster is excluded: it aims from where it is now, not where it was. A nested
 				 * scope is refused rather than stacked by the registry, so an acquisition made from
 				 * inside another rewind runs against that one instead of stranding characters in the
 				 * past. Disposal restores every displaced character, including if the trace throws. */
-				using (LagCompensationRegistry.Rewind(gameObject.scene, rewindTick, Character))
+				using (LagCompensationRegistry.Rewind(gameObject.scene, rewindTarget, Character))
 				{
 					return Trace(physicsScene, origin, direction, distance);
 				}

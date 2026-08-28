@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using KinematicCharacterController;
 using FishMMO.Shared.Core;
@@ -223,11 +223,17 @@ namespace FishMMO.Shared
 		public bool IsJumping { get; private set; }
 
 		/// <summary>
-		/// Tracks whether the motor has completed its first ground probe. On the very first tick
-		/// after spawn or teleport, the motor's ground probe distance is forced to the minimum
-		/// (0.005f) because LastMovementIterationFoundAnyGround is false. Seeding this flag
-		/// forces a full-radius probe on the first tick, preventing the character from appearing
-		/// airborne/jumping for 1-3 frames.
+		/// Tracks whether the motor has completed its first ground probe. When it is false,
+		/// <c>BeforeCharacterUpdate</c> forces <c>LastMovementIterationFoundAnyGround</c> true so the
+		/// motor selects the full-radius probe distance instead of the 0.005 minimum, which stops a
+		/// freshly spawned or teleported character reading as airborne for 1-3 frames.
+		/// <para>
+		/// NOTE: <c>ApplyState</c> clears this on EVERY reconcile, not only on spawn or teleport, so
+		/// the first replayed tick after any reconcile probes at the full radius and overwrites the
+		/// <c>LastMovementIterationFoundAnyGround</c> value the reconcile just restored. An airborne
+		/// owner can therefore snap to ground on a tick where the server did not. Gating the reset on
+		/// an actual teleport is an open item from the 2026-08-28 audit.
+		/// </para>
 		/// </summary>
 		private bool hasDoneInitialGroundProbe = false;
 
@@ -332,16 +338,71 @@ namespace FishMMO.Shared
 		/// <param name="state">The motor state to apply.</param>
 		public void ApplyState(KinematicCharacterMotorState state)
 		{
-			// Reset initial ground probe on state restore (teleport / reconcile).
-			hasDoneInitialGroundProbe = false;
+			/* hasDoneInitialGroundProbe is deliberately NOT reset here.
+			 *
+			 * It used to be, on the grounds that this is called for a teleport as well as a
+			 * reconcile — but a reconcile is the overwhelmingly common case, and clearing the flag
+			 * makes BeforeCharacterUpdate force LastMovementIterationFoundAnyGround true on the next
+			 * tick, overwriting the value this very method just restored from the server. The first
+			 * replayed tick then chose the full-radius ground probe where the server had used the
+			 * 0.005 minimum, so an airborne owner could snap to ground where the server did not, be
+			 * corrected, and repeat. Teleports go through ResetGroundProbe() instead. */
 
 			// Take any state needed for the controller here
+			bool wasCrouching = isCrouching;
 			isCrouching = state.IsCrouching;
 			jumpRequested = state.JumpRequested;
 			timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
 			timeSinceJumpRequested = state.TimeSinceJumpRequested;
 
+			/* Restore the collider to match the restored crouch state.
+			 *
+			 * Only the two input TRANSITIONS in AfterCharacterUpdate resize the capsule, so a
+			 * reconcile that flipped isCrouching without a matching transition left the collider at
+			 * the wrong height permanently — and self-sustainingly, because with crouchInputDown now
+			 * equal to isCrouching neither transition can ever fire again. The owner then simulated
+			 * collisions, step handling and ground probing against a capsule the server did not
+			 * have, and the aim origin moved with it (CharacterAimOrigin reads Capsule.height). */
+			if (wasCrouching != isCrouching)
+			{
+				ApplyCapsuleDimensions(isCrouching);
+			}
+
 			Motor.ApplyState(state);
+		}
+
+		/// <summary>
+		/// Sizes the motor capsule for the crouched or standing pose.
+		/// </summary>
+		/// <remarks>
+		/// Shared by the crouch input transitions and by <see cref="ApplyState"/>, so a reconciled
+		/// crouch flag and the collider can never disagree.
+		/// </remarks>
+		/// <param name="crouched">True for the crouched capsule, false for the full one.</param>
+		private void ApplyCapsuleDimensions(bool crouched)
+		{
+			if (crouched)
+			{
+				Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight,
+					CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
+			}
+			else
+			{
+				Motor.SetCapsuleDimensions(Motor.Capsule.radius, FullCapsuleHeight, CapsuleBaseOffset);
+			}
+		}
+
+		/// <summary>
+		/// Forces a full-radius ground probe on the next motor update, so a character that has just
+		/// been placed does not read as airborne for a frame or three.
+		/// </summary>
+		/// <remarks>
+		/// Call this for a teleport or a fresh spawn — NOT for a reconcile, which restores
+		/// <c>LastMovementIterationFoundAnyGround</c> authoritatively and must not have it forced.
+		/// </remarks>
+		public void ResetGroundProbe()
+		{
+			hasDoneInitialGroundProbe = false;
 		}
 
 		/// <summary>
@@ -351,6 +412,34 @@ namespace FishMMO.Shared
 		public KinematicCharacterMotorState GetState()
 		{
 			KinematicCharacterMotorState baseState = Motor.GetState();
+
+			/* Canonicalise the ungrounded grounding normals to zero, at the PRODUCER.
+			 *
+			 * The motor does not leave them zero: every UpdatePhase1 assigns a fresh report and
+			 * immediately seeds it with the character's up vector
+			 * (KinematicCharacterMotor: GroundingStatus.GroundNormal = _characterUp), and ProbeGround
+			 * only overwrites that when it actually finds ground. So an airborne snapshot carried
+			 * (0,1,0) as its GroundNormal while Inner and Outer really were zero.
+			 *
+			 * The wire format omits all three normals when FoundAnyGround is false and the reader
+			 * reconstructs them as zero, which is correct for a value nothing reads while airborne —
+			 * but it left the two peers holding DIFFERENT baselines for the delta chain. The next
+			 * landing then encoded a difference against (0,1,0) that the reader added onto (0,0,0),
+			 * and the two vectors sit on opposite sides of the packed encoding (0xFFFF0000 against
+			 * the zero-vector fallback 0x80000000), so the decoded normal came out roughly a quarter
+			 * turn wrong until the next absolute snapshot — which, having the same asymmetry,
+			 * re-established the mismatch rather than repairing it.
+			 *
+			 * Zeroing here makes the value the writer diffs against the value the reader holds, which
+			 * is the same rule the aim direction follows. It cannot disturb the local simulation: the
+			 * motor overwrites GroundingStatus wholesale at the top of its next update, and nothing
+			 * reads LastGroundingStatus.GroundNormal. */
+			if (!baseState.GroundingStatus.FoundAnyGround)
+			{
+				baseState.GroundingStatus.GroundNormal = Vector3.zero;
+				baseState.GroundingStatus.InnerGroundNormal = Vector3.zero;
+				baseState.GroundingStatus.OuterGroundNormal = Vector3.zero;
+			}
 
 			// Apply state from controller here.
 			baseState.IsCrouching = isCrouching;
@@ -362,7 +451,8 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// This is called every frame by ExamplePlayer in order to tell the character what its inputs are
+		/// Applies one tick of replicated input. Called from <c>KCCPlayer.OnReplicate</c>, once per
+		/// replicated or replayed tick — not per frame, despite the upstream sample's name for it.
 		/// </summary>
 		public void SetInputs(ref KCCInputReplicateData inputs)
 		{
@@ -718,7 +808,22 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void HandleJumping(ref Vector3 currentVelocity, AbilityType abilityType, float deltaTime)
 		{
-			timeSinceJumpRequested += deltaTime;
+			/* Saturate instead of accumulating forever.
+			 *
+			 * This starts at float.MaxValue, where adding deltaTime is a no-op, so the field is
+			 * constant and costs nothing on the wire — until the first jump resets it to 0, after
+			 * which it changed every tick for the rest of the session and put 4 bytes in every
+			 * reconcile (120 B/s per player) to express "still much greater than the grace window".
+			 * The only reader compares it against JumpPreGroundingGraceTime, so anything past that
+			 * is indistinguishable; parking it at MaxValue restores the quiet state. */
+			if (timeSinceJumpRequested < float.MaxValue)
+			{
+				timeSinceJumpRequested += deltaTime;
+				if (timeSinceJumpRequested > JumpPreGroundingGraceTime + 1f)
+				{
+					timeSinceJumpRequested = float.MaxValue;
+				}
+			}
 			if (jumpRequested)
 			{
 				// See if we actually are allowed to jump
@@ -789,16 +894,16 @@ namespace FishMMO.Shared
 							}
 						}
 
-						// Handle uncrouching
+						// Handle crouch transitions (the first branch crouches, the second tries to uncrouch)
 						if (!isCrouching && crouchInputDown)
 						{
 							isCrouching = true;
-							Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
+							ApplyCapsuleDimensions(crouched: true);
 						}
 						else if (isCrouching && !crouchInputDown)
 						{
 							// Do an overlap test with the character's standing height to see if there are any obstructions
-							Motor.SetCapsuleDimensions(Motor.Capsule.radius, FullCapsuleHeight, CapsuleBaseOffset);
+							ApplyCapsuleDimensions(crouched: false);
 							if (Motor.CharacterOverlap(
 								Motor.TransientPosition,
 								Motor.TransientRotation,
@@ -810,7 +915,7 @@ namespace FishMMO.Shared
 								// This is offset to ensure the crouch goes towards the feet
 								// instead of towards the head. Otherwise we can't uncrouch!
 								//MeshRoot.localScale = new Vector3(1f, CrouchedCapsuleHeight / FullCapsuleHeight, 1f);
-								Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
+								ApplyCapsuleDimensions(crouched: true);
 							}
 							else
 							{

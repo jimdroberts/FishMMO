@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Component.Transforming;
 using FishNet.Connection;
 using FishNet.Object;
@@ -151,6 +151,11 @@ namespace FishMMO.Shared
 			public byte Interval;
 			/// <summary>Pass number this observer was last seen on, for pruning departed observers.</summary>
 			public uint Pass;
+			/// <summary>
+			/// True while this observer is close enough to attack the object, so its transform is
+			/// sent every tick and lag compensation can rewind to a real tick sample.
+			/// </summary>
+			public bool Engaged;
 		}
 
 		private readonly Dictionary<int, ObserverLod> lodByClientId = new Dictionary<int, ObserverLod>();
@@ -308,7 +313,17 @@ namespace FishMMO.Shared
 						continue;
 					}
 
-					BandObserver(connection.ClientId, (observerObject.transform.position - position).sqrMagnitude);
+					/* The radius comes from the OBSERVER's reach, not this object's: the question is
+					 * whether that client could attack this character, and so whether its view of it
+					 * has to be tick-exact. */
+					float engagementRange = ObserverStreamingPolicy.ResolveEngagementRange(
+						observerObject.TryGetComponent(out AbilityController observerAbilities)
+							? observerAbilities.LongestKnownAbilityRange
+							: 0f);
+
+					BandObserver(connection.ClientId,
+						(observerObject.transform.position - position).sqrMagnitude,
+						engagementRange * engagementRange);
 				}
 			}
 
@@ -331,16 +346,43 @@ namespace FishMMO.Shared
 		/// Bands one observer for the current pass. Split out of <see cref="Evaluate"/> so tests can
 		/// drive it without a spawned NetworkObject and live connections.
 		/// </summary>
-		internal void BandObserver(int clientId, float sqrDistance)
+		internal void BandObserver(int clientId, float sqrDistance, float engagementSqrDistance = 0f)
 		{
 			lodByClientId.TryGetValue(clientId, out ObserverLod lod);
 			int previousBand = lod.Pass == 0 ? -1 : lod.Band;
 			int band = ResolveBand(bands, hysteresis, sqrDistance, previousBand);
 
+			/* Inside the observer's engagement radius nothing is throttled.
+			 *
+			 * A throttled transform arrives every 3, 6 or 8 ticks and the client interpolates across
+			 * the gap, so the pose it renders existed on no server tick and lag compensation cannot
+			 * reproduce it however precise the rewind. Full rate makes the rendered pose a tick
+			 * sample again. Deliberately checked against the raw distance rather than the banded one:
+			 * the bands carry hysteresis, and a target flickering between engaged and throttled at
+			 * the boundary is exactly the case where the compensation has to be right.
+			 * See ObserverStreamingPolicy.EngagementRange. */
+			bool engaged = engagementSqrDistance > 0f && sqrDistance <= engagementSqrDistance;
+
 			lod.Band = band;
-			lod.Interval = IntervalForBand(bands, band, intervalScale);
+			lod.Interval = engaged ? (byte)1 : IntervalForBand(bands, band, intervalScale);
+			lod.Engaged = engaged;
 			lod.Pass = pass;
 			lodByClientId[clientId] = lod;
+		}
+
+		/// <summary>
+		/// True while this object is close enough to <paramref name="connection"/> for that client to
+		/// attack it, so no throttle of any kind may apply.
+		/// </summary>
+		/// <remarks>
+		/// Read by <c>ObserverStreamingEntry</c> as well, because the per-observer CAP throttles
+		/// independently of distance and would otherwise reintroduce the gap this closes.
+		/// </remarks>
+		public bool IsEngaged(NetworkConnection connection)
+		{
+			return connection != null &&
+				lodByClientId.TryGetValue(connection.ClientId, out ObserverLod lod) &&
+				lod.Engaged;
 		}
 
 		/// <summary>Band an observer is currently held in, or -1 when it is not tracked.</summary>

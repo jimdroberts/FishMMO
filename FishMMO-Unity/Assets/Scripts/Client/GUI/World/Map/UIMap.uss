@@ -1,0 +1,305 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIMap.uss
+    World Map Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+    Marker styling lives in UIMapShared.uss, loaded by both map panels.
+
+    LOAD ORDER in UXML (required):
+        <Style src="../../FishMMO-Theme.uss" />
+        <Style src="UIMapShared.uss" />
+        <Style src="UIMap.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Large — 860x600 of a 1200x800 screen. A world map is read rather
+    than glanced at, and a small one defeats the point of having a
+    second map at all: the minimap already covers "what is near me".
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+/* Centred. Absolute because dragging writes left/top. */
+.map-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 860px;
+    height: 600px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.map-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 48px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.map-header__text {
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.map-header__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-header__subtitle {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════ */
+
+.map-body {
+    flex-direction: row;
+    flex-grow: 1;
+    padding: 8px;
+    overflow: hidden;
+}
+
+.map-surface-column {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/*
+    The map itself. Clipped, because the surface draws a quad the size of the element and the
+    markers are absolutely positioned inside it; without the clip a marker at the edge draws over
+    the side bar.
+*/
+.map-view {
+    flex-grow: 1;
+    overflow: hidden;
+    border-width: 1px;
+    border-color: var(--map-frame);
+    border-radius: 3px;
+    background-color: var(--map-surface);
+}
+
+/* Readouts under the map: the region and the coordinates under the pointer. */
+.map-status {
+    flex-direction: row;
+    align-items: center;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+
+.map-status__region {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-status__spacer {
+    flex-grow: 1;
+}
+
+.map-status__coords {
+    font-size: 11px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   SIDE BAR
+   ═══════════════════════════════════════════════════════════ */
+
+.map-side {
+    width: 230px;
+    flex-shrink: 0;
+    flex-direction: column;
+    margin-left: 8px;
+    overflow: hidden;
+}
+
+.map-section {
+    flex-direction: column;
+    padding: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+/*
+    The notes section takes whatever is left. Its scroll view is the only thing on the panel that
+    can grow without bound, so it is the only thing that should absorb the spare height.
+*/
+.map-section--grow {
+    flex-grow: 1;
+    margin-bottom: 0;
+    overflow: hidden;
+}
+
+.map-section__title {
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.map-filters {
+    flex-direction: column;
+}
+
+.map-filter {
+    margin-top: 2px;
+    margin-bottom: 2px;
+    font-size: 11px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   NOTES
+   ═══════════════════════════════════════════════════════════ */
+
+.map-note-scroll {
+    flex-grow: 1;
+    min-height: 60px;
+}
+
+.map-note-list {
+    flex-direction: column;
+}
+
+.map-note-row {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.map-note-row__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 6px;
+    border-width: 1px;
+    border-color: var(--shadow-text-hard);
+}
+
+.map-note-row__title {
+    flex: 1;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-note-row__button {
+    width: 20px;
+    height: 18px;
+    min-width: 20px;
+    padding: 0;
+    margin-left: 2px;
+    font-size: 10px;
+}
+
+.map-note-editor {
+    flex-direction: column;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.map-note-field {
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+
+.map-note-field--body {
+    height: 44px;
+}
+
+.map-note-colors {
+    flex-direction: row;
+    margin-bottom: 6px;
+}
+
+/*
+    A colour swatch. Its background colour is written from the note palette in C#, because USS
+    cannot index a palette and duplicating the six values here would be a second place for them to
+    disagree with the pins actually drawn on the map.
+*/
+.map-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    margin-right: 4px;
+    border-width: 1px;
+    border-color: var(--swatch-border);
+}
+
+.map-swatch--selected {
+    border-width: 2px;
+    border-color: var(--white);
+}
+
+.map-note-add {
+    height: 24px;
+    font-size: 11px;
+}
+
+.map-note-hint {
+    margin-top: 4px;
+    font-size: 10px;
+    white-space: normal;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.map-footer {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.map-footer__explored {
+    font-size: 11px;
+}
+
+.map-footer__spacer {
+    flex-grow: 1;
+}
+
+.map-footer__button {
+    height: 22px;
+    font-size: 10px;
+    margin-right: 10px;
+}
+
+.map-footer__zoom {
+    width: 160px;
+    flex-shrink: 0;
+}

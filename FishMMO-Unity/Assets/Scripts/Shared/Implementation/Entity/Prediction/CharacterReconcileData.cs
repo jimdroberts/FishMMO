@@ -138,7 +138,9 @@ namespace FishMMO.Shared
 		public uint RngS3;
 
 		/// <summary>
-		/// Server-side send counter, one increment per reconcile created, wrapping at 255.
+		/// Server-side send counter, one increment per reconcile actually WRITTEN by
+		/// <c>Server_SendReconcileRpc</c> (stamped there through <c>ReconcileSequenceStamper</c>),
+		/// wrapping at 255. Reconciles that are created but not sent do not advance it.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -148,7 +150,9 @@ namespace FishMMO.Shared
 		/// received — a wrong position applied to the owner for up to a second, until the periodic
 		/// absolute snapshot. The reader now requires <c>prev.Sequence + 1</c> and rejects the
 		/// packet otherwise, so a loss costs "no correction until the next snapshot" instead of
-		/// "a wrong correction for up to a second".
+		/// "a wrong correction for up to a second". Only a datagram loss (or a client-side state
+		/// drop) can break the chain: the server's baseline and this counter both advance only on
+		/// states that were written.
 		/// </para>
 		/// <para>
 		/// A counter rather than a fingerprint of the previous state, because FishNet's Vector3

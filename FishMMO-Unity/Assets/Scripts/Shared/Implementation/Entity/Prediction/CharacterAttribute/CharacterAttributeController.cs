@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishNet.Connection;
@@ -520,6 +520,79 @@ namespace FishMMO.Shared
 		private const int ATTRIBUTE_PAYLOAD_LENGTH_BYTES = 4;
 
 		/// <summary>
+		/// External modifiers exactly as the spawn payload delivered them, keyed by template ID,
+		/// held until every behaviour on this object has finished reading. See
+		/// <see cref="ReassertPayloadModifiers"/>.
+		/// </summary>
+		private readonly Dictionary<int, int> payloadAttributeModifiers = new Dictionary<int, int>();
+
+		/// <summary>
+		/// Resource external modifiers and current values from the spawn payload, keyed by template
+		/// ID. See <see cref="ReassertPayloadModifiers"/>.
+		/// </summary>
+		private readonly Dictionary<int, (int Modifier, float CurrentValue)> payloadResourceModifiers = new Dictionary<int, (int, float)>();
+
+		/// <summary>
+		/// Re-installs the external modifiers the spawn payload carried, discarding anything the
+		/// behaviours read after this one added on top of them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The payload's <c>ExternalModifier</c> is the server's TOTAL — it already contains the
+		/// contribution of every buff and every equipped item, because the server computed it by
+		/// applying them. Buffs and equipment are then restored from their own payload blocks, which
+		/// are read after this one on every character prefab, and both of those restores add their
+		/// contribution again: <c>BuffController.ReadPayload</c> calls <c>Apply</c>, which runs
+		/// <c>AttributeBuffTemplate.OnApply → AddModifier</c>, and <c>EquipmentController.ReadPayload</c>
+		/// equips each item, which runs <c>ItemGenerator.ApplyAttributes → AddModifier</c>. Every
+		/// buffed or equipped attribute therefore arrived doubled.
+		/// </para>
+		/// <para>
+		/// Re-asserting is used rather than suppressing those adds because the adds have to keep
+		/// happening: <c>ItemGenerator</c> removes a modifier by adding its negation on unequip, so
+		/// an equip whose add was suppressed would subtract on unequip something it never added and
+		/// drift the attribute negative. Letting both restores run and then overwriting the total is
+		/// symmetric — it is the same thing the owner's reconcile does with <c>SetModifierDirect</c>,
+		/// which is why the owner used to self-heal within a tick and an observer, who receives no
+		/// reconcile, kept the doubled maximum until the server next pushed that attribute.
+		/// </para>
+		/// <para>
+		/// Runs from <see cref="OnStartNetwork"/>, which FishNet invokes from a later loop than the
+		/// one that reads payloads (<c>ObjectCaching.Iterate</c> reads every cached object's payload,
+		/// then initializes them), so every behaviour on this object has finished reading by now.
+		/// </para>
+		/// </remarks>
+		private void ReassertPayloadModifiers()
+		{
+			if (payloadAttributeModifiers.Count == 0 &&
+				payloadResourceModifiers.Count == 0)
+			{
+				return;
+			}
+
+			foreach (KeyValuePair<int, int> entry in payloadAttributeModifiers)
+			{
+				if (Attributes.TryGetValue(entry.Key, out CharacterAttribute attribute))
+				{
+					attribute.SetModifier(entry.Value);
+				}
+			}
+
+			foreach (KeyValuePair<int, (int Modifier, float CurrentValue)> entry in payloadResourceModifiers)
+			{
+				if (ResourceAttributes.TryGetValue(entry.Key, out CharacterResourceAttribute attribute))
+				{
+					// Modifier first: it moves the maximum the current value is clamped against.
+					attribute.SetModifier(entry.Value.Modifier);
+					attribute.SetCurrentValue(entry.Value.CurrentValue);
+				}
+			}
+
+			payloadAttributeModifiers.Clear();
+			payloadResourceModifiers.Clear();
+		}
+
+		/// <summary>
 		/// Reads attribute and resource attribute base values from the network payload and applies them.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
@@ -527,6 +600,9 @@ namespace FishMMO.Shared
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			const int maxPayloadAttributes = 4096;
+
+			payloadAttributeModifiers.Clear();
+			payloadResourceModifiers.Clear();
 
 			/* Where this behaviour's data ends, whatever happens below. See WritePayload for why
 			 * the block is framed at all; in short, FishNet packs every NetworkBehaviour's spawn
@@ -569,6 +645,9 @@ namespace FishMMO.Shared
 					int value = reader.ReadInt32();
 					int modifier = reader.ReadInt32();
 					SetAttribute(templateID, value, modifier);
+					// Kept so the buff and equipment restores that follow cannot leave this
+					// attribute doubled. See ReassertPayloadModifiers.
+					payloadAttributeModifiers[templateID] = modifier;
 				}
 			}
 
@@ -594,6 +673,7 @@ namespace FishMMO.Shared
 					float currentValue = reader.ReadSingle();
 					int modifier = reader.ReadInt32();
 					SetResourceAttribute(templateID, value, currentValue, modifier);
+					payloadResourceModifiers[templateID] = (modifier, currentValue);
 				}
 			}
 
@@ -686,6 +766,17 @@ namespace FishMMO.Shared
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
+
+			payloadAttributeModifiers.Clear();
+			payloadResourceModifiers.Clear();
+
+			/* The observer push baselines belong to the previous occupant of a pooled object. Left
+			 * behind, the first resource push after a respawn is rate-gated against that character's
+			 * numbers and the first attribute diff is measured against its sheet, so a genuinely
+			 * changed value can be suppressed as "unchanged". ObservedResourcePushScheduler.Reset
+			 * existed for exactly this and was called from nowhere. */
+			resourcePushScheduler.Reset();
+			lastPushedAttributes = null;
 
 			// Reset regen state.
 			regenTickInterval = 0u;
@@ -1061,6 +1152,9 @@ namespace FishMMO.Shared
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
+
+			// Undo the doubling that the buff and equipment payload restores leave behind.
+			ReassertPayloadModifiers();
 
 			// Compute the integer regen interval so both client and server agree on
 			// exactly which ticks produce a regen pulse. Recomputed on demand by
@@ -1541,7 +1635,10 @@ namespace FishMMO.Shared
 			float previousCurrent = resource.CurrentValue;
 			int previousMax = resource.FinalValue;
 
-			resource.SetFinal(maxValue);
+			/* Derive the modifier rather than only stamping the final — see
+			 * CharacterAttribute.SetFinalDerivingModifier. Stamping alone left the authoritative
+			 * maximum one AddModifier away from being recomputed out of existence. */
+			resource.SetFinalDerivingModifier(maxValue);
 			PropagateToParents(resource);
 			resource.SetCurrentValue(currentValue, false);
 
