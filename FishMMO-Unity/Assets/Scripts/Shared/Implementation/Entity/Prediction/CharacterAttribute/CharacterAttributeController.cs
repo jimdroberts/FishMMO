@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishNet.Connection;
+using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -467,6 +468,15 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Four bytes, written unpacked so the width is fixed and the slot can be reserved before
+		/// the length is known. A packed integer would vary in size and could not be backfilled.
+		/// </remarks>
+		private const int ATTRIBUTE_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
 		/// Reads attribute and resource attribute base values from the network payload and applies them.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
@@ -474,6 +484,26 @@ namespace FishMMO.Shared
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			const int maxPayloadAttributes = 4096;
+
+			/* Where this behaviour's data ends, whatever happens below. See WritePayload for why
+			 * the block is framed at all; in short, FishNet packs every NetworkBehaviour's spawn
+			 * payload into one buffer with no per-behaviour framing, so a reader that stops early
+			 * leaves every behaviour after it reading from the wrong offset. On an NPC prefab this
+			 * controller is read before NPC.ReadPayload, which takes the scene-object ID a client
+			 * later names when it asks to loot the corpse — so an abort here used to register that
+			 * corpse under a garbage ID and quietly make it unlootable. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("CharacterAttributeController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in the " +
+					"spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int attributeBlockLength = (int)declaredLength;
+			int attributeBlockEnd = reader.Position + attributeBlockLength;
 
 			int attributeCount = reader.ReadInt32();
 			if (attributeCount < 0)
@@ -484,6 +514,7 @@ namespace FishMMO.Shared
 			else if (attributeCount > maxPayloadAttributes)
 			{
 				Log.Error("CharacterAttributeController", $"ReadPayload: attribute count {attributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
+				reader.Position = attributeBlockEnd;
 				return;
 			}
 
@@ -506,6 +537,7 @@ namespace FishMMO.Shared
 			else if (resourceAttributeCount > maxPayloadAttributes)
 			{
 				Log.Error("CharacterAttributeController", $"ReadPayload: resource attribute count {resourceAttributeCount} exceeds limit {maxPayloadAttributes}. Aborting payload read.");
+				reader.Position = attributeBlockEnd;
 				return;
 			}
 
@@ -519,6 +551,18 @@ namespace FishMMO.Shared
 					SetResourceAttribute(templateID, value, currentValue);
 				}
 			}
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the
+			 * shape of this block the frame absorbs it here rather than corrupting the behaviour
+			 * after this one, and says so once instead of failing invisibly. */
+			if (reader.Position != attributeBlockEnd)
+			{
+				Log.Error("CharacterAttributeController",
+					$"ReadPayload consumed {reader.Position - (attributeBlockEnd - attributeBlockLength)} of " +
+					$"{attributeBlockLength} framed bytes. Seeking to the end of the block; the attribute " +
+					"state read above may be incomplete.");
+				reader.Position = attributeBlockEnd;
+			}
 		}
 
 		/// <summary>
@@ -530,6 +574,22 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to serialize attribute data into.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			/* Everything below is framed by a byte count.
+			 *
+			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
+			 * framing — ManagedObjects.WritePayload walks the whole list into a single writer, and
+			 * the reader walks it back the same way. A reader that stops early therefore does not
+			 * merely lose its own state: every behaviour after it in NetworkBehaviours reads from
+			 * the wrong offset.
+			 *
+			 * ReadPayload has two defensive aborts for counts that cannot be trusted, and no way
+			 * to drain past them — the sizes it would need to skip are themselves derived from the
+			 * count it just rejected. The length recorded here is what lets it resynchronise
+			 * instead: seek to the end of this block and hand a valid stream to whoever reads
+			 * next. See ATTRIBUTE_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(ATTRIBUTE_PAYLOAD_LENGTH_BYTES);
+			int attributeBlockStart = writer.Position;
+
 			// Sort keys for deterministic wire order. WritePayload is a one-shot
 			// initialisation call, so the allocation is acceptable.
 			var sortedAttrIDs = new List<int>(Attributes.Keys);
@@ -554,6 +614,9 @@ namespace FishMMO.Shared
 				writer.WriteInt32(resourceAttribute.Value);
 				writer.WriteSingle(resourceAttribute.CurrentValue);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - attributeBlockStart),
+				attributeBlockStart - ATTRIBUTE_PAYLOAD_LENGTH_BYTES);
 		}
 
 		/// <summary>
@@ -940,6 +1003,17 @@ namespace FishMMO.Shared
 			// exactly which ticks produce a regen pulse. Recomputed on demand by
 			// EnsureRegenIntervalCurrent() if TickDelta changes at runtime.
 			EnsureRegenIntervalCurrent();
+
+			/* Register the shared resource handler the first time any character starts on this
+			 * client. It is never unregistered: ClientManager does not clear broadcast handlers when
+			 * a client stops, so a matching unregister would have to be reference counted across
+			 * every character in the scene to avoid the first one to despawn silently switching off
+			 * health bars for all the rest. The handler resolves its target through the spawned
+			 * map, so it is inert while nothing is spawned. */
+			if (base.IsClientStarted)
+			{
+				RegisterResourcesBroadcast(base.NetworkManager);
+			}
 		}
 
 		/// <summary>
@@ -1428,10 +1502,209 @@ namespace FishMMO.Shared
 		/// the sorted-by-template-ID non-resource attribute snapshot.
 		/// </summary>
 		/// <param name="reconcileData">Mutable unified reconcile payload.</param>
+		#region Observed resources.
+
+		/// <summary>
+		/// Ticks between pushes of this character's resources to observers.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Peer health does not need the tick rate. A health bar is read by a human, and six ticks
+		/// at 30&#160;Hz is five updates a second — faster than anyone can perceive a bar moving,
+		/// and a fifth of what streaming it through reconcile costs.
+		/// </para>
+		/// <para>
+		/// This is a rate limit, not a schedule: a push only happens when a value actually changed,
+		/// so an idle character at full health sends nothing at all.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Ticks between resource pushes to observers. 6 at tick rate 30 is five updates a second.")]
+		[Range(1, 30)]
+		[SerializeField]
+		private byte observedResourcePushInterval = 6;
+
+		/// <summary>Last state actually sent, so unchanged resources cost nothing.</summary>
+		private CharacterAttributeResourceState lastPushedResources;
+
+		/// <summary>False until the first push, which always happens regardless of change.</summary>
+		private bool hasPushedResources;
+
+		/// <summary>Earliest tick the next push may occur on.</summary>
+		private uint nextResourcePushTick;
+
+		/// <summary>
+		/// Sends this character's resources to observers, rate limited and change gated.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why this exists.</b> Observers learn a peer's health only from the reconcile stream,
+		/// and that stream is relayed to them only while state forwarding is on. With forwarding
+		/// disabled — which is what makes 100-200 players affordable — a peer's
+		/// <see cref="CharacterAttributeController"/> would never be updated on anyone else's
+		/// client, and <c>UITKTarget</c> reads exactly that to draw a target's health bar. Enemy
+		/// health would freeze at whatever it held when the character spawned.
+		/// </para>
+		/// <para>
+		/// Deliberately the same shape as <c>BuffController.PushObservedBuffs</c>: pushed from
+		/// <see cref="OnCreateReconcile"/>, which runs once per tick, server only, and outside the
+		/// <c>[Replicate]</c> method — so the RPC can never be dispatched from inside a replay of a
+		/// past tick.
+		/// </para>
+		/// </remarks>
+		private void MaybePushObservedResources()
+		{
+			if (!base.IsServerStarted || base.TimeManager == null)
+			{
+				return;
+			}
+
+			uint tick = base.TimeManager.LocalTick;
+			if (hasPushedResources && tick < nextResourcePushTick)
+			{
+				return;
+			}
+
+			CharacterAttributeResourceState state = GetResourceState();
+
+			/* Observers do not simulate regeneration, so the regen tick is noise to them — and it
+			 * advances constantly, which would defeat the change gate below and turn this back into
+			 * a per-interval stream. */
+			state.NextRegenTick = 0u;
+
+			if (hasPushedResources && !ResourcesDifferForObservers(lastPushedResources, state))
+			{
+				return;
+			}
+
+			nextResourcePushTick = tick + observedResourcePushInterval;
+			lastPushedResources = state;
+			hasPushedResources = true;
+
+			BroadcastObservedResources(state);
+		}
+
+		/// <summary>
+		/// True when two resource states differ by enough for an observer to notice.
+		/// </summary>
+		/// <remarks>
+		/// Compared at whole units because that is what a health bar renders. Sub-unit regeneration
+		/// drift would otherwise mark every interval dirty and push continuously.
+		/// </remarks>
+		private static bool ResourcesDifferForObservers(
+			CharacterAttributeResourceState a, CharacterAttributeResourceState b)
+		{
+			return Mathf.RoundToInt(a.Health) != Mathf.RoundToInt(b.Health) ||
+				   Mathf.RoundToInt(a.Mana) != Mathf.RoundToInt(b.Mana) ||
+				   Mathf.RoundToInt(a.Stamina) != Mathf.RoundToInt(b.Stamina) ||
+				   a.MaxHealth != b.MaxHealth ||
+				   a.MaxMana != b.MaxMana ||
+				   a.MaxStamina != b.MaxStamina;
+		}
+
+		/// <summary>
+		/// Sends the current resources to this character's observers.
+		/// </summary>
+		/// <remarks>
+		/// Scoped to <c>NetworkObject.Observers</c>, so it reaches exactly the clients that can see
+		/// this character and no one else — the interest management already in place therefore
+		/// bounds this traffic for free.
+		/// </remarks>
+		private void BroadcastObservedResources(CharacterAttributeResourceState state)
+		{
+			if (base.NetworkManager == null || base.NetworkObject == null)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterResourcesBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				// Whole units: the same precision the change gate compares at. See the broadcast type.
+				Health = Mathf.RoundToInt(state.Health),
+				MaxHealth = state.MaxHealth,
+				Mana = Mathf.RoundToInt(state.Mana),
+				MaxMana = state.MaxMana,
+				Stamina = Mathf.RoundToInt(state.Stamina),
+				MaxStamina = state.MaxStamina,
+			}, true, Channel.Unreliable);
+		}
+
+		/// <summary>True once this client has registered the shared broadcast handler.</summary>
+		/// <remarks>
+		/// Registered once per client rather than once per character. The obvious alternative —
+		/// every character registering its own handler and discarding messages whose id does not
+		/// match — makes each broadcast cost one delegate invocation per character in the scene,
+		/// so a 200-player scene would run 200 handlers to deliver one health update. Registering
+		/// once and resolving the id through the spawned-object map is O(1) instead.
+		/// </remarks>
+		private static bool resourcesBroadcastRegistered;
+
+		/// <summary>Registers the shared resource handler for this client.</summary>
+		internal static void RegisterResourcesBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (resourcesBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			networkManager.ClientManager.RegisterBroadcast<CharacterResourcesBroadcast>(OnResourcesBroadcast);
+			resourcesBroadcastRegistered = true;
+		}
+
+		/// <summary>
+		/// Applies a broadcast to whichever character it names.
+		/// </summary>
+		/// <remarks>
+		/// The owner is skipped: it already has these values from its own reconcile, which is
+		/// authoritative and arrives every tick. Applying a coarser copy on top could stutter the
+		/// player's own bar backwards between reconciles.
+		/// </remarks>
+		private static void OnResourcesBroadcast(CharacterResourcesBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+			if (nob.IsOwner)
+			{
+				return;
+			}
+
+			CharacterAttributeController controller = nob.GetComponent<CharacterAttributeController>();
+			if (controller == null)
+			{
+				return;
+			}
+
+			controller.ApplyResourceState(new CharacterAttributeResourceState
+			{
+				Health = msg.Health,
+				MaxHealth = msg.MaxHealth,
+				Mana = msg.Mana,
+				MaxMana = msg.MaxMana,
+				Stamina = msg.Stamina,
+				MaxStamina = msg.MaxStamina,
+				NextRegenTick = 0u,
+			});
+		}
+
+		#endregion
+
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
 			reconcileData.ResourceState = GetResourceState();
 			reconcileData.Attributes = CreateAttributeSnapshot();
+
+			/* Observers receive resources through their own rate-limited RPC rather than through
+			 * this reconcile, because the reconcile stops reaching them once state forwarding is
+			 * disabled. Pushed from here for the same reason BuffController pushes here: it is once
+			 * per tick, server only, and outside the [Replicate] method. */
+			MaybePushObservedResources();
 		}
 
 		/// <summary>

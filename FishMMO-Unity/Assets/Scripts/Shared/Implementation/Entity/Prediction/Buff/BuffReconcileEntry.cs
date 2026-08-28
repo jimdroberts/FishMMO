@@ -129,9 +129,14 @@ namespace FishMMO.Shared
 			if (prev == null && next == null)
 				return false;
 
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			/* Only a full serialize forces the whole array out. This writer's presence is signalled
+			 * by a bit in the caller's flags word, so on a RootSerialize it can still take the
+			 * index-delta path — or decline entirely — and let the caller leave the bit clear.
+			 * Treating RootSerialize as a full serialize meant every reconcile that was not a
+			 * periodic resend shipped every array in full. */
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
 
-			if (!forceWrite && ReferenceEquals(prev, next))
+			if (!fullSerialize && ReferenceEquals(prev, next))
 				return false;
 
 			int prevCount = prev?.Length ?? 0;
@@ -144,9 +149,10 @@ namespace FishMMO.Shared
 
 			// Index-delta path: same length, single pass — reserve changedCount,
 			// write entries, then patch the header. Avoids double-iterating the array.
-			if (!forceWrite && prevCount == nextCount)
+			if (!fullSerialize && prevCount == nextCount)
 			{
 				int countPos = writer.Position;
+				int startLength = writer.Length;
 				writer.WriteUInt16(0); // placeholder for packed header
 
 				int changedCount = 0;
@@ -162,14 +168,21 @@ namespace FishMMO.Shared
 
 				if (changedCount == 0)
 				{
-					writer.Position = countPos; // rewind — nothing changed
+					/* Rewind Length as well as Position. Writer.Length only ever grows — every write
+					 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
+					 * restoring Position alone left this placeholder's two bytes inside the sent
+					 * segment as trailing garbage whenever nothing was written after it. */
+					writer.Position = countPos;
+					writer.Length = startLength;
 					return false;
 				}
 
-				int endPos = writer.Position;
-				writer.Position = countPos;
-				writer.WriteUInt16(BuildHeader(changedCount, true));
-				writer.Position = endPos;
+				/* Insert rather than seek-write-seek: InsertUInt16Unpacked is fixed at two bytes and
+				 * cannot silently change width, whereas WriteUInt16 is only unpacked today because of
+				 * a standing 'todo: should be using WritePackedWhole' in FishNet's Writer. If that todo
+				 * is ever acted on, a packed backfill would overrun the placeholder and corrupt the
+				 * first bytes of the entry that follows. */
+				writer.InsertUInt16Unpacked(BuildHeader(changedCount, true), countPos);
 				return true;
 			}
 
