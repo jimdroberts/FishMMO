@@ -231,17 +231,28 @@ Each server scene contains:
     • appsettings.json + appsettings.{env}.json + environment variables
 → Database = new Database.Database(dbConfig)
 → VerifyDatabaseSchema()
-    • ValidateSchemaAsync on a thread-pool thread — NOT awaited, NOT fatal
-    • Reports pending migrations and model drift, with the command that fixes each
-    • A check that cannot run at all logs a warning; it never stops startup
+    • ValidateSchemaAsync started on a thread-pool thread — NOT awaited here
+    • Runs concurrently with behaviour initialization; joined by
+      DatabaseSchemaPermitsStartup() just before the transport opens (4.6)
+    • Reports pending migrations, with the command that applies them
+    • Pending migrations REFUSE startup; a check that cannot run at all only warns
 ```
 
-> The schema check is deliberately fire-and-forget. Migrations are generated per developer and
-> applied locally, so pulling an entity change brings no migration with it — the server starts
-> and authenticates perfectly and the mismatch surfaces much later as a query failing on a
-> column that does not exist, which reaches a player as missing data rather than as a schema
-> problem. A server whose schema is stale still serves everything that does not touch the
-> changed tables, so refusing to start would be a worse outcome than a loud log line.
+> The schema check overlaps behaviour initialization so it costs no startup latency, but it is
+> joined before the transport opens rather than being fire-and-forget. Migrations are generated
+> per developer and applied locally, so pulling an entity change brings no migration with it —
+> the server starts and authenticates perfectly and the mismatch surfaces much later as a query
+> failing on a column that does not exist, which reaches a player as missing data rather than as
+> a schema problem. Pending migrations are fatal because a server behind the migration set does
+> not fail loudly: every write it accepts meanwhile is made against a schema the model does not
+> agree with, so refusing to open the transport stops that damage before it starts. A check that
+> could not run at all leaves the schema *unverified* rather than known-bad, and a failed
+> diagnostic must not take down a server that is otherwise fine — so that path only warns.
+>
+> **Model drift is not detected.** An entity changed with no migration generated for it leaves
+> nothing pending and passes this check. The drift check that used to run here never worked once
+> and was removed (issue #162); generate a migration whenever you change an entity, because
+> nothing will remind you.
 
 **4.3 Address Provider, Account Manager, and Network Configuration**
 ```
@@ -405,6 +416,10 @@ public override ServerComponentInitializationStatus InitializeOnce()
 
 **4.6 Physics and Network Start** *(inside the initialization coroutine's completion path)*
 ```
+→ DatabaseSchemaPermitsStartup()
+    • Joins the schema check started in 4.2
+    • Pending migrations → Log.Error + QuitWithFailure(); the transport never opens
+    • Check unavailable, or the task itself faulted → Log.Warning and proceed
 → KinematicCharacterSystem.EnsureCreation()
 → KinematicCharacterSystem.Settings.AutoSimulation = false
 → NetworkWrapper.StartServer()
