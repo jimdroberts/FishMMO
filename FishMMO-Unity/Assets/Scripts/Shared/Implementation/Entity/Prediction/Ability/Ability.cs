@@ -681,7 +681,15 @@ namespace FishMMO.Shared
 		/// while we are iterating it; the outer loop handles dictionary cleanup instead.
 		/// </summary>
 		/// <param name="tick">The reconcile tick. Objects spawned after this tick are destroyed.</param>
-		public void DestroyAbilityObjectsAfterTick(uint tick)
+		/// <param name="includeTick">
+		/// Also destroy objects spawned exactly ON <paramref name="tick"/>. Off by default, and it
+		/// must stay that way for the ordinary mismatch path: FishNet replays from
+		/// <c>tick + 1</c>, so an object spawned at <c>tick</c> is one the replay cannot recreate,
+		/// and removing a spawn the server actually performed would delete it permanently. Only
+		/// the caller that has established the server did NOT spawn at this tick may pass true —
+		/// see <c>AbilityController.ShouldDestroySpawnsAtReconcileTick</c>.
+		/// </param>
+		public void DestroyAbilityObjectsAfterTick(uint tick, bool includeTick = false)
 		{
 			if (Objects == null)
 			{
@@ -696,7 +704,9 @@ namespace FishMMO.Shared
 
 				foreach (KeyValuePair<int, AbilityObject> objEntry in containerEntry.Value)
 				{
-					if (objEntry.Value != null && IsSpawnTickAfter(objEntry.Value.SpawnTick, tick))
+					if (objEntry.Value != null &&
+						(IsSpawnTickAfter(objEntry.Value.SpawnTick, tick) ||
+						 (includeTick && objEntry.Value.SpawnTick.Value == tick)))
 					{
 						// Null the Ability back-reference so DestroyAbilityObjectInternal
 						// skips RemoveAbilityObject (we handle dict removal below).

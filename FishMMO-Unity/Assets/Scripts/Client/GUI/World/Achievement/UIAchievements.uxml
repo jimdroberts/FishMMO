@@ -9,6 +9,7 @@
                 <ui:Label name="achievement-subtitle" text="" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="achievement-count" text="0" class="fish-badge achievement-count" />
+            <ui:Button name="close-button" class="fish-close-btn achievement-close-btn" text="✕" />
         </ui:VisualElement>
         <ui:VisualElement name="achievement-categories" class="achievement-categories" />
         <ui:ScrollView name="achievement-scroll" class="fish-scroll achievement-scroll">

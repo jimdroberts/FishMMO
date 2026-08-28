@@ -844,7 +844,7 @@ namespace FishMMO.UnitTests
 				// the spawn pipeline does instead of reaching for the backing field.
 				controller.InitializeOnce(new MockCharacter(42));
 
-				Writer writer = WriteFramedTickPayload(serverReferenceTick, w =>
+				Writer writer = WriteFramedBuffPayload(serverReferenceTick, w =>
 				{
 					w.WriteInt32(1);
 					w.WriteInt32(template.ID);
@@ -898,7 +898,7 @@ namespace FishMMO.UnitTests
 				BuffController controller = gameObject.AddComponent<BuffController>();
 				SetPrivateField(controller, "tickDelta", TickDelta30);
 
-				Writer writer = WriteFramedTickPayload(serverReferenceTick, w => w.WriteInt32(0));
+				Writer writer = WriteFramedBuffPayload(serverReferenceTick, w => w.WriteInt32(0));
 
 				var reader = new Reader(writer.GetArraySegment(), null);
 				controller.ReadPayload(null, reader);
@@ -1009,6 +1009,27 @@ namespace FishMMO.UnitTests
 		/// <param name="referenceTick">Writer-domain reference tick.</param>
 		/// <param name="writeBlock">Writes the framed portion: entry count followed by entries.</param>
 		/// <returns>A writer positioned at the end of the completed payload.</returns>
+		/// <summary>
+		/// Frames a BUFF payload: the shared frame, opened with the owner's shape flag.
+		/// </summary>
+		/// <remarks>
+		/// BuffController's framed block starts with a shape byte — the owner is sent the simulation
+		/// (absolute ticks, hidden buffs, tick counters), every other connection the display list in
+		/// seconds. Tick translation only exists for the first, so every buff payload written here is
+		/// the owner's. CooldownController's frame has no such byte, which is why this is a buff-only
+		/// wrapper rather than a change to the shared framer.
+		/// </remarks>
+		private static Writer WriteFramedBuffPayload(uint referenceTick, Action<Writer> writeBlock)
+		{
+			const byte BuffSimulationShape = 0;
+
+			return WriteFramedTickPayload(referenceTick, w =>
+			{
+				w.WriteUInt8Unpacked(BuffSimulationShape);
+				writeBlock(w);
+			});
+		}
+
 		private static Writer WriteFramedTickPayload(uint referenceTick, Action<Writer> writeBlock)
 		{
 			const int PayloadLengthBytes = 4;

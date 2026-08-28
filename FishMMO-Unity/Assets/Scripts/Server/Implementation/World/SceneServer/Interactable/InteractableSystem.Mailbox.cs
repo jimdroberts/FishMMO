@@ -325,30 +325,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// ── Currency ──────────────────────────────────────────────────────
 			if (msg.CurrencyAttachment > 0)
 			{
+				/* CharacterCurrency reads the BASE value, so a buffed character cannot mail
+				 * currency it does not have. The balance is read explicitly rather than left to
+				 * TrySpend because the shortfall needs its own reason code — TrySpend refuses
+				 * an unaffordable spend and a refused persist identically. */
 				if (currencyTemplate == null ||
-					!character.TryGet(out ICharacterAttributeController attributeController) ||
-					!attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+					!CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance))
 				{
 					return false;
 				}
 
-				// Value, not FinalValue — AddValue writes the base, so testing the modified total
-				// would let a buffed character mail currency it does not have.
-				if (currency.Value < msg.CurrencyAttachment)
+				if (balance < msg.CurrencyAttachment)
 				{
 					reason = MailFailureReason.NotEnoughCurrency;
 					return false;
 				}
 
-				currency.AddValue(-msg.CurrencyAttachment);
-				attachment.Currency = msg.CurrencyAttachment;
-
-				if (!TryPersistMerchantAttributes(character))
+				if (!CharacterCurrency.TrySpend(character, currencyTemplate, msg.CurrencyAttachment, () => TryPersistMerchantAttributes(character)))
 				{
-					currency.AddValue(msg.CurrencyAttachment);
+					// TrySpend has already refunded; the attachment must not claim what was never taken.
 					attachment.Currency = 0;
 					return false;
 				}
+
+				attachment.Currency = msg.CurrencyAttachment;
+				RecordCurrencyMovement(character.ID, msg.CurrencyAttachment, CurrencyMovementReason.MailAttachment, absorbed: true);
 			}
 
 			// ── Item ──────────────────────────────────────────────────────────
@@ -473,14 +474,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			if (attachment.Currency > 0 &&
 				currencyTemplate != null &&
-				character.TryGet(out ICharacterAttributeController attributeController) &&
-				attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+				CharacterCurrency.TryAdd(character, currencyTemplate, attachment.Currency))
 			{
-				currency.AddValue(attachment.Currency);
 				if (!TryPersistMerchantAttributes(character))
 				{
 					Log.Error("InteractableSystem", $"Mail refund: currency persist rejected for CharID={character.ID}; in-memory balance is correct but the DB holds the deduction.");
 				}
+
+				/* Balances the Absorbed row written when the mail was accepted. Without this the
+				 * ledger reports every failed send as currency that left the economy, and the
+				 * sink totals the table exists to produce drift upward with each one. */
+				RecordCurrencyMovement(character.ID, attachment.Currency, CurrencyMovementReason.MailAttachment, absorbed: false);
 			}
 
 			if (attachment.ItemTemplateID != 0 &&
@@ -928,15 +932,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			if (attachment.CurrencyAmount > 0 &&
 				currencyTemplate != null &&
-				character.TryGet(out ICharacterAttributeController attributeController) &&
-				attributeController.TryGetAttribute(currencyTemplate, out CharacterAttribute currency))
+				CharacterCurrency.TryGetBalance(character, currencyTemplate, out long balance))
 			{
 				// Clamped to the headroom left in an int balance, exactly as corpse currency is.
-				long capacity = (long)int.MaxValue - currency.Value;
+				long capacity = (long)int.MaxValue - balance;
 				int amount = (int)Math.Min(capacity, attachment.CurrencyAmount);
-				if (amount > 0)
+				if (amount > 0 &&
+					CharacterCurrency.TryAdd(character, currencyTemplate, amount))
 				{
-					currency.AddValue(amount);
 					granted = true;
 					if (!TryPersistMerchantAttributes(character))
 					{

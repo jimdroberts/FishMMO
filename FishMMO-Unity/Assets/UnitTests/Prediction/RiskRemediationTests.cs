@@ -39,6 +39,12 @@ namespace FishMMO.UnitTests
 		/// "not the owner" — the same answer FishNet's EmptyConnection and any observer get.
 		/// The owner path needs a spawned object with a valid owning connection, which an
 		/// EditMode test cannot construct; the filtered direction is the security-relevant one.
+		/// <para>
+		/// A non-owner's block is now the display list rather than the simulation, so the visible
+		/// buff lands in <c>ObservedBuffs</c> and the simulation dictionary stays empty — see
+		/// BuffObserverStateTests for why that shape matters. The property asserted here is
+		/// unchanged: a hidden buff never leaves the server.
+		/// </para>
 		/// </remarks>
 		[Test]
 		public void BuffPayload_OmitsHiddenBuffs_ForNonOwnerConnections()
@@ -84,12 +90,14 @@ namespace FishMMO.UnitTests
 
 				TestContext.WriteLine(
 					$"MEASURE buff payload to non-owner: {sender.Buffs.Count} live on server → " +
-					$"{receiver.Buffs.Count} on the wire ({writer.Length} B)");
+					$"{receiver.ObservedBuffs.Count} on the wire ({writer.Length} B)");
 
-				LogAssert.IsTrue(receiver.Buffs.ContainsKey(visible.ID),
+				LogAssert.AreEqual(0, receiver.Buffs.Count,
+					"A non-owner must not be handed simulation state it will never tick.");
+				LogAssert.AreEqual(1, receiver.ObservedBuffs.Count,
+					"The visible buff must survive the payload round trip as an observed entry.");
+				LogAssert.AreEqual(visible.ID, receiver.ObservedBuffs[0].TemplateID,
 					"The visible buff must survive the payload round trip.");
-				LogAssert.IsFalse(receiver.Buffs.ContainsKey(hidden.ID),
-					"A HiddenFromOthers buff must never be written into a non-owner's spawn payload.");
 				LogAssert.AreEqual(0, reader.Remaining,
 					"The framed block must be consumed exactly; a count/entry mismatch would desync every behaviour after this one.");
 			}

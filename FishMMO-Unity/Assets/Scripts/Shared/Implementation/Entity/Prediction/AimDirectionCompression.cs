@@ -76,9 +76,30 @@ namespace FishMMO.Shared
 			yawTurns -= Mathf.Floor(yawTurns);
 			uint yaw = (uint)Mathf.RoundToInt(yawTurns * YawStepsPerTurn) & 0xFFFFu;
 
-			// Pitch from the horizontal plane, [-pi/2, +pi/2] mapped onto [0,1].
-			float pitchNormalised = (Mathf.Asin(Mathf.Clamp(direction.y, -1f, 1f)) / PitchSpan) + 0.5f;
+			/* Pitch from the horizontal plane, via Atan2 against the horizontal magnitude rather
+			 * than Asin of y.
+			 *
+			 * The two agree mathematically, but Asin is numerically flat near +/-1: for the 32
+			 * pitch indices closest to straight up and straight down, Asin(Sin(theta)) did not
+			 * return theta in float, so Encode(Decode(p)) came back as a different index. That
+			 * mattered far more than it looks, because the reconcile delta for ground normals
+			 * derives its baseline by re-encoding — the writer from the raw motor value, the reader
+			 * from its own decoded one — so any disagreement was added straight onto the result.
+			 * Atan2 stays exact as the horizontal magnitude collapses to zero. */
+			float horizontal = Mathf.Sqrt((direction.x * direction.x) + (direction.z * direction.z));
+			float pitchNormalised = (Mathf.Atan2(direction.y, horizontal) / PitchSpan) + 0.5f;
 			uint pitch = (uint)Mathf.Clamp(Mathf.RoundToInt(pitchNormalised * 65535f), 0, 65535);
+
+			/* Straight up and straight down have no yaw to speak of, so pin it.
+			 *
+			 * At the poles every yaw describes the same direction, and Decode returns a vector with
+			 * no horizontal component at all — so a re-encode can only ever answer yaw 0. Encoding
+			 * yaw 0 here as well is what makes the round trip a fixed point instead of a value that
+			 * changes the first time it is re-encoded. */
+			if (pitch == 0u || pitch == 65535u)
+			{
+				yaw = 0u;
+			}
 
 			return yaw | (pitch << 16);
 		}
@@ -93,7 +114,11 @@ namespace FishMMO.Shared
 			float yawRadians = (packed & 0xFFFFu) / YawStepsPerTurn * (2f * Mathf.PI);
 			float pitchRadians = (((packed >> 16) & 0xFFFFu) / 65535f - 0.5f) * PitchSpan;
 
-			float cosPitch = Mathf.Cos(pitchRadians);
+			/* Never negative. Cos(+/-pi/2) is -4.371139e-08 in float, not zero, and that sign is
+			 * enough to rotate the recovered yaw by half a turn on the next re-encode — which, for
+			 * the perfectly flat ground normal (0,1,0), is the single most common value in the
+			 * game. Clamping makes a pole decode to exactly (0,+/-1,0). */
+			float cosPitch = Mathf.Max(0f, Mathf.Cos(pitchRadians));
 			return new Vector3(
 				Mathf.Sin(yawRadians) * cosPitch,
 				Mathf.Sin(pitchRadians),
