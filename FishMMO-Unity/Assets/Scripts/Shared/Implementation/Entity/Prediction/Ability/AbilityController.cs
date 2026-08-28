@@ -1,4 +1,4 @@
-﻿using FishNet.Object.Prediction;
+using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -107,6 +107,13 @@ namespace FishMMO.Shared
 		/// Hoisted from ReadPayload to avoid per-call allocation.
 		/// </summary>
 		private readonly List<int> readPayloadAbilityEvents = new List<int>();
+
+		/// <summary>
+		/// What this client predicted, per replicate tick, so <see cref="OnReconcile"/> can compare
+		/// the server's state for tick T against the client's state for tick T rather than against
+		/// the client's live state several ticks later. See <see cref="PredictedAbilityStateHistory"/>.
+		/// </summary>
+		private readonly PredictedAbilityStateHistory predictedStateHistory = new PredictedAbilityStateHistory();
 
 		/// <summary>
 		/// Cached <see cref="EventData"/> for <see cref="Ability.MeetsActivationConditions"/>.
@@ -299,6 +306,16 @@ namespace FishMMO.Shared
 			Character.TryGet(out cachedTargetController);
 			Character.TryGet(out cachedAnimationController);
 
+			/* Register the shared activation handler the first time any character starts on this
+			 * client. Never unregistered, for the same reason as the resource handler: ClientManager
+			 * does not clear handlers on stop, so a per-character unregister would have to be
+			 * reference counted or the first despawn would switch off ability visuals for every
+			 * remaining character. */
+			if (base.IsClientStarted)
+			{
+				RegisterActivationBroadcast(base.NetworkManager);
+			}
+
 			// Eagerly initialize the deterministic RNG so the first WritePayload,
 			// OnCreateReconcile, and ResetState paths all observe the same seed.
 			// Without this, lazy initialization races could produce a one-tick seed mismatch.
@@ -384,6 +401,7 @@ namespace FishMMO.Shared
 			// a real implementation, this call ensures cleanup.
 			lastCreatedData.Dispose();
 			hasLastCreatedData = false;
+			predictedStateHistory.Clear();
 
 			// Detach all spawned ability objects before clearing references.
 			// This allows in-flight projectiles to persist visually using their snapshots
@@ -451,7 +469,64 @@ namespace FishMMO.Shared
 			AbilityActivationReplicateData abilityInput = HandleCharacterInput();
 			input.ActivationFlags = abilityInput.ActivationFlags;
 			input.QueuedAbilityID = abilityInput.QueuedAbilityID;
+
+			PopulateAiAim(ref input);
 		}
+
+		/// <summary>
+		/// Writes an AI character's aim into the replicate stream.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Player characters get their aim from <c>KCCPlayer.PopulateInput</c> (Order 80, ahead of
+		/// this controller's 100), so this only fills the gap for AI characters, which have no
+		/// KCCPlayer at all — their movement is a server-side NavMeshAgent replicated by a
+		/// NetworkTransform.
+		/// </para>
+		/// <para>
+		/// Without this, nothing ever wrote those fields for an NPC and the aim a client used came
+		/// from <c>AIController</c> — which disables itself off the server. Every observing client
+		/// therefore resolved an NPC's aim from a default-initialised controller and spawned its
+		/// ability objects at the world origin pointing down +Z, while the server span them
+		/// correctly. Replicating the aim is what lets a client reproduce the shot the server took.
+		/// </para>
+		/// </remarks>
+		/// <param name="input">Replicate input being assembled for this tick.</param>
+		private void PopulateAiAim(ref CharacterReplicateData input)
+		{
+			if (!HasInputAuthority || PlayerCharacter != null || Character == null)
+			{
+				return;
+			}
+			if (!Character.TryGet(out IAIController ai))
+			{
+				return;
+			}
+
+			/* Only the direction is replicated. The origin is derived from the motor on every
+			 * peer -- see CharacterAimOrigin -- so an NPC and a player resolve it the same way. */
+			// Quantised on the way in, for the same reason the player path quantises — see
+			// AimDirectionCompression.
+			input.AimDirection = AimDirectionCompression.Quantize(ai.VirtualCameraRotation * Vector3.forward);
+		}
+
+		/// <summary>
+		/// Aim origin replicated for the tick currently being simulated.
+		/// </summary>
+		private Vector3 replicatedAimOrigin;
+
+		/// <summary>
+		/// Aim direction replicated for the tick currently being simulated.
+		/// </summary>
+		/// <remarks>
+		/// Cached from the replicate input rather than read back off the live controller when an
+		/// ability spawns. Every peer — owner, server and observer — then traces from the value the
+		/// wire actually carried for that tick, which is the whole point of a deterministic ability
+		/// simulation. Reading the live controller instead meant the owner used its exact local
+		/// camera while everyone else used the decoded one, and on an NPC it meant reading a
+		/// controller that does not run on clients at all.
+		/// </remarks>
+		private Vector3 replicatedAimDirection = Vector3.forward;
 
 		/// <summary>
 		/// Handles local character input for ability activation, building the replicate data for the current tick.
@@ -505,10 +580,36 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
+			ReplicateInternal(ref input, state);
+
+			/* Record what this tick's simulation left behind, on every pass including replays —
+			 * a replay re-simulates the tick and its result is what the next reconcile for that
+			 * tick should be compared with. The server has nothing to compare, so it skips. */
+			if (!base.IsServerStarted)
+			{
+				predictedStateHistory.Record(input.GetTick(), currentSeed, currentAbilityID);
+			}
+		}
+
+		/// <summary>
+		/// The body of <see cref="OnReplicate"/>; split out so every early return still lands in
+		/// the per-tick history record.
+		/// </summary>
+		private void ReplicateInternal(ref CharacterReplicateData input, ReplicateState state)
+		{
 			// Convert to the internal type — all ability subsystem methods use AbilityActivationReplicateData.
 			AbilityActivationReplicateData activationData = new AbilityActivationReplicateData(
 				input.ActivationFlags, input.QueuedAbilityID);
 			activationData.SetTick(input.GetTick());
+
+			/* Aim for THIS tick. The direction is replicated; the origin is DERIVED, because a
+			 * client-supplied origin was never validated against the caster's own position and so
+			 * chose the point the server raycast from. See CharacterAimOrigin. KCCPlayer (Order 80)
+			 * has already advanced the motor for this tick by the time this runs (Order 100). */
+			replicatedAimOrigin = CharacterAimOrigin.Resolve(Character);
+			replicatedAimDirection = input.AimDirection.sqrMagnitude > 1e-12f
+				? input.AimDirection
+				: AimDirectionCompression.FallbackDirection;
 
 			HandlePrediction(ref activationData, state);
 
@@ -696,27 +797,38 @@ namespace FishMMO.Shared
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
 			//Log.Debug($"Reconciled: {rd.GetTick()}");
-			long previousAbilityID = currentAbilityID;
+			uint reconcileTick = rd.GetTick();
 			bool denied = rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied);
 
-			// Detect prediction mismatch: if the server's seed differs from the client's,
-			// the client mispredicted an ability activation. Destroy ability objects
-			// spawned after the reconcile tick from the mismatched ability.
-			// If a specific ability was being activated, restrict destruction to that ability.
-			// If no ability was active (rare, indicates deeper desync), fall back to full cleanup.
-			if (rd.Seed != currentSeed)
+			/* Compare like with like. This reconcile describes the server's state AFTER tick
+			 * reconcileTick; the client's live fields describe its state after its latest local
+			 * tick, which is always several ticks later (FishNet applies a reconcile only once it
+			 * is stateInterpolation+1 ticks behind local). Any cast predicted in between had
+			 * advanced currentSeed, so comparing against the live value declared a mismatch on
+			 * every cast and destroyed every owner-predicted projectile a tick after it spawned.
+			 * The history holds what the client had at reconcileTick itself. Without an entry
+			 * (first reconciles after spawn, or one older than the ring) there is nothing to
+			 * judge against and no correction is attempted. */
+			bool havePredicted = predictedStateHistory.TryGet(reconcileTick, out int predictedSeed, out long predictedAbilityID);
+
+			// Detect prediction mismatch: the client's simulation of this tick produced a
+			// different seed than the server's, so the client spawned something the server did
+			// not (or vice versa). Destroy ability objects spawned after the reconcile tick.
+			// If a specific ability was being activated, restrict destruction to that ability;
+			// otherwise fall back to a full cleanup.
+			if (havePredicted && predictedSeed != rd.Seed)
 			{
-				uint reconcileTick = rd.GetTick();
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
-				if (currentAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(currentAbilityID, out Ability mismatchedAbility))
+				if (predictedAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(predictedAbilityID, out Ability mismatchedAbility))
 				{
 					// Only destroy objects from the ability whose activation caused the seed divergence
 					mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick);
 				}
 				else
 				{
-					// No active ability to attribute the mismatch to — full cleanup as safety net
+					// Instant abilities have already cleared their ID by the end of the tick, so
+					// this is the common path for them, not a sign of deeper desync.
 					foreach (Ability ability in KnownAbilities.Values)
 					{
 						ability.DestroyAbilityObjectsAfterTick(reconcileTick);
@@ -727,18 +839,19 @@ namespace FishMMO.Shared
 			// The denial flag is authoritative and independent from RNG state.
 			// A rejected activation can occur before any seed advance, so tying
 			// this callback to seed mismatch drops legitimate denial corrections.
-			if (denied && previousAbilityID != NO_ABILITY)
+			// Judged against the predicted state at the denied tick so instant abilities —
+			// whose live ID is already cleared by the time the denial arrives — still report.
+			if (denied && havePredicted && predictedAbilityID != NO_ABILITY)
 			{
-				OnAbilityDenied?.Invoke(previousAbilityID);
+				OnAbilityDenied?.Invoke(predictedAbilityID);
 			}
 
-			// When the server's authoritative state has no active ability but the client
-			// was still predicting one, the cast bar must be cleared. This fires for
-			// cases where the server completed, interrupted, or never started the ability
-			// (e.g., ability completed in one tick before the client prediction caught up,
-			// or replicate was lost and the server never received the activation input).
-			// The denial case is handled above; this covers every other server-side ending.
-			if (!denied && previousAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
+			// When the server had no active ability at this tick but the client predicted one,
+			// the cast bar must be cleared: the server completed, interrupted, or never started
+			// the ability (e.g. the replicate was lost). Judged at the reconcile tick — against
+			// the live ID this fired on every reconcile for the first RTT of every timed cast,
+			// while the server simply had not received the activation yet.
+			if (!denied && havePredicted && predictedAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
 			{
 				OnCancel?.Invoke();
 			}
@@ -809,32 +922,5 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Resolves the virtual camera position and rotation for the given character.
-		/// PCs use <see cref="KCCController"/>, NPCs use <see cref="IAIController"/>,
-		/// fallback is the character's transform.
-		/// </summary>
-		/// <param name="character">The character to resolve camera data for.</param>
-		/// <param name="playerCharacter">Cached player character reference, or null for NPCs.</param>
-		/// <param name="cameraPosition">The resolved camera position.</param>
-		/// <param name="cameraRotation">The resolved camera rotation.</param>
-		internal static void ResolveCameraData(ICharacter character, IPlayerCharacter playerCharacter, out Vector3 cameraPosition, out Quaternion cameraRotation)
-		{
-			if (playerCharacter != null)
-			{
-				cameraPosition = playerCharacter.CharacterController.VirtualCameraPosition;
-				cameraRotation = playerCharacter.CharacterController.VirtualCameraRotation;
-			}
-			else if (character.TryGet(out IAIController ai))
-			{
-				cameraPosition = ai.VirtualCameraPosition;
-				cameraRotation = ai.VirtualCameraRotation;
-			}
-			else
-			{
-				cameraPosition = character.Transform.position;
-				cameraRotation = character.Transform.rotation;
-			}
-		}
 	}
 }

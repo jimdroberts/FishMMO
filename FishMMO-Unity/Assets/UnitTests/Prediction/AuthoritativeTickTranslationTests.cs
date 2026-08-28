@@ -844,15 +844,16 @@ namespace FishMMO.UnitTests
 				// the spawn pipeline does instead of reaching for the backing field.
 				controller.InitializeOnce(new MockCharacter(42));
 
-				var writer = new Writer();
-				writer.WriteUInt32(serverReferenceTick);
-				writer.WriteInt32(1);
-				writer.WriteInt32(template.ID);
-				writer.WriteUInt32(serverReferenceTick + durationTicks);
-				writer.WriteUInt32(TimeManager.UNSET_TICK);
-				writer.WriteInt32(0);
-				writer.WriteInt32(0);
-				writer.WriteInt32(0);
+				Writer writer = WriteFramedTickPayload(serverReferenceTick, w =>
+				{
+					w.WriteInt32(1);
+					w.WriteInt32(template.ID);
+					w.WriteUInt32(serverReferenceTick + durationTicks);
+					w.WriteUInt32(TimeManager.UNSET_TICK);
+					w.WriteInt32(0);
+					w.WriteInt32(0);
+					w.WriteInt32(0);
+				});
 
 				var reader = new Reader(writer.GetArraySegment(), null);
 				controller.ReadPayload(null, reader);
@@ -897,9 +898,7 @@ namespace FishMMO.UnitTests
 				BuffController controller = gameObject.AddComponent<BuffController>();
 				SetPrivateField(controller, "tickDelta", TickDelta30);
 
-				var writer = new Writer();
-				writer.WriteUInt32(serverReferenceTick);
-				writer.WriteInt32(0);
+				Writer writer = WriteFramedTickPayload(serverReferenceTick, w => w.WriteInt32(0));
 
 				var reader = new Reader(writer.GetArraySegment(), null);
 				controller.ReadPayload(null, reader);
@@ -934,12 +933,13 @@ namespace FishMMO.UnitTests
 				CooldownController controller = gameObject.AddComponent<CooldownController>();
 				SetPrivateField(controller, "cachedTickDelta", TickDelta30);
 
-				var writer = new Writer();
-				writer.WriteUInt32(serverReferenceTick);
-				writer.WriteInt32(1);
-				writer.WriteInt64(abilityID);
-				writer.WriteUInt32(serverReferenceTick);
-				writer.WriteUInt32(durationTicks);
+				Writer writer = WriteFramedTickPayload(serverReferenceTick, w =>
+				{
+					w.WriteInt32(1);
+					w.WriteInt64(abilityID);
+					w.WriteUInt32(serverReferenceTick);
+					w.WriteUInt32(durationTicks);
+				});
 
 				var reader = new Reader(writer.GetArraySegment(), null);
 				controller.Read(reader, TimeManager.UNSET_TICK);
@@ -979,9 +979,7 @@ namespace FishMMO.UnitTests
 				CooldownController controller = gameObject.AddComponent<CooldownController>();
 				SetPrivateField(controller, "cachedTickDelta", TickDelta30);
 
-				var writer = new Writer();
-				writer.WriteUInt32(serverReferenceTick);
-				writer.WriteInt32(0);
+				Writer writer = WriteFramedTickPayload(serverReferenceTick, w => w.WriteInt32(0));
 
 				var reader = new Reader(writer.GetArraySegment(), null);
 				controller.Read(reader, TimeManager.UNSET_TICK);
@@ -994,6 +992,36 @@ namespace FishMMO.UnitTests
 			{
 				UnityEngine.Object.DestroyImmediate(gameObject);
 			}
+		}
+
+		/// <summary>
+		/// Builds a tick-anchored payload in the production wire format: the reference tick, then
+		/// a four-byte block length, then the block itself. Shared by <see cref="BuffController"/>
+		/// and <see cref="CooldownController"/>, which use an identical layout.
+		/// </summary>
+		/// <remarks>
+		/// The length frame is not decoration — it is what lets <c>ReadPayload</c> resynchronise the
+		/// shared spawn stream after rejecting an untrustworthy buff count, since FishNet packs every
+		/// NetworkBehaviour's payload into one buffer with no per-behaviour framing. A hand-built
+		/// payload that omits it is simply not the format the reader parses, so these tests mirror
+		/// the production writer here rather than open-coding a stale layout.
+		/// </remarks>
+		/// <param name="referenceTick">Writer-domain reference tick.</param>
+		/// <param name="writeBlock">Writes the framed portion: entry count followed by entries.</param>
+		/// <returns>A writer positioned at the end of the completed payload.</returns>
+		private static Writer WriteFramedTickPayload(uint referenceTick, Action<Writer> writeBlock)
+		{
+			const int PayloadLengthBytes = 4;
+
+			Writer writer = new Writer();
+			writer.WriteUInt32(referenceTick);
+			writer.Skip(PayloadLengthBytes);
+			int blockStart = writer.Position;
+
+			writeBlock(writer);
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - blockStart), blockStart - PayloadLengthBytes);
+			return writer;
 		}
 
 		private static void SetPrivateField<T>(object instance, string fieldName, T value)

@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using FishNet.Managing.Timing;
 using System.Collections.Generic;
 using System.Linq;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -73,6 +74,9 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private bool serverDrivenInput;
 
+		/// <summary>Last <see cref="CharacterReconcileData.Sequence"/> sent by this server object.</summary>
+		private byte reconcileSequence;
+
 		/// <summary>
 		/// True when this peer is the one responsible for producing this character's replicate
 		/// input for the current tick. AI characters answer "the server"; everyone else answers
@@ -106,14 +110,31 @@ namespace FishMMO.Shared
 		{
 			base.OnStartNetwork();
 
-			// State forwarding is REQUIRED for non-owner observers to receive reconciles and stay in sync.
-			// Without it, only the owning client + server run the predicted state machine; observers will desync.
-			if (base.NetworkObject != null && !base.NetworkObject.EnableStateForwarding)
+			/* State forwarding off is the INTENDED configuration for playable characters, not a
+			 * misconfiguration. It used to warn here that "predicted observers will desync", which
+			 * was true of the old design: observers ran the predicted state machine from the
+			 * owner's relayed input, so cutting the relay left them simulating nothing.
+			 *
+			 * Observers no longer predict their peers. Position arrives via NetworkTransform,
+			 * resources via CharacterResourcesBroadcast, buffs via CharacterBuffsBroadcast,
+			 * equipment via its own broadcasts, and ability casts via AbilityActivatedBroadcast. The owner
+			 * still predicts itself and still receives every reconcile — Server_SendReconcileRpc
+			 * writes to the owner in both modes.
+			 *
+			 * What genuinely breaks is forwarding off with nothing to replicate position, so that
+			 * is what is checked now. Without it a character simulates correctly for its owner and
+			 * stands still for everyone else, while server-resolved damage keeps landing — a
+			 * failure that presents as a content bug rather than a networking one. */
+			if (base.NetworkObject != null &&
+				!base.NetworkObject.EnableStateForwarding &&
+				GetComponent<FishNet.Component.Transforming.NetworkTransform>() == null)
 			{
 				FishMMO.Logging.Log.Warning(
 					"CharacterPredictionController",
-					$"State forwarding is disabled on NetworkObject '{base.NetworkObject.name}'. Predicted observers will desync. " +
-					"Enable 'State Forwarding' on the NetworkObject's Prediction settings.");
+					$"'{base.NetworkObject.name}' has state forwarding disabled but no NetworkTransform. " +
+					"Observers will receive no position updates for it at all: it will appear frozen " +
+					"while still taking and dealing damage. Add a NetworkTransform and assign it to " +
+					"the NetworkObject's Prediction settings.");
 			}
 
 			/* An AI character must be ownerless so the server is FishNet's controller for it.
@@ -135,6 +156,26 @@ namespace FishMMO.Shared
 				base.TimeManager.OnPreTick += TimeManager_OnPreTick;
 				base.TimeManager.OnTick += TimeManager_OnTick;
 			}
+		}
+
+		/// <summary>
+		/// Registers this character for per-observer streaming (density-scaled range and the
+		/// full-rate observer cap). See <see cref="ObserverStreamingRegistry"/>.
+		/// </summary>
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+			if (TryGetComponent(out ICharacter character))
+			{
+				ObserverStreamingRegistry.Register(base.NetworkObject, character);
+			}
+		}
+
+		/// <summary>Removes this character from per-observer streaming.</summary>
+		public override void OnStopServer()
+		{
+			ObserverStreamingRegistry.Unregister(base.NetworkObject);
+			base.OnStopServer();
 		}
 
 		/// <summary>
@@ -273,6 +314,9 @@ namespace FishMMO.Shared
 				{
 					controllers[i].OnCreateReconcile(ref data);
 				}
+				// Chain sequence for the delta reader's loss detection — see CharacterReconcileData.Sequence.
+				reconcileSequence = unchecked((byte)(reconcileSequence + 1));
+				data.Sequence = reconcileSequence;
 				Reconcile(data);
 			}
 		}

@@ -125,53 +125,64 @@ namespace FishMMO.Shared
 			byte flags = 0;
 
 			int flagPos = writer.Position;
+			int startLength = writer.Length;
 			writer.WriteUInt8Unpacked(0);
 
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			// See CharacterReplicateDataDeltaSerializer.WriteDelta for why these are three separate
+			// values rather than one forceWrite.
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
+			bool mustEmit = option != DeltaSerializerOption.Unset;
+			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
-			if (writer.WriteDeltaInt32((int)prev.NextRegenTick, (int)next.NextRegenTick, option))
+			if (writer.WriteDeltaInt32((int)prev.NextRegenTick, (int)next.NextRegenTick, fieldOption))
 				flags |= NEXT_REGEN_TICK_BIT;
 
-			if (forceWrite || Mathf.Abs(prev.Health - next.Health) > FLOAT_EPSILON)
+			if (fullSerialize || Mathf.Abs(prev.Health - next.Health) > FLOAT_EPSILON)
 			{
 				writer.WriteSingle(next.Health);
 				flags |= HEALTH_BIT;
 			}
 
-			if (writer.WriteDeltaInt32(prev.MaxHealth, next.MaxHealth, option))
+			if (writer.WriteDeltaInt32(prev.MaxHealth, next.MaxHealth, fieldOption))
 				flags |= MAX_HEALTH_BIT;
 
-			if (forceWrite || Mathf.Abs(prev.Mana - next.Mana) > FLOAT_EPSILON)
+			if (fullSerialize || Mathf.Abs(prev.Mana - next.Mana) > FLOAT_EPSILON)
 			{
 				writer.WriteSingle(next.Mana);
 				flags |= MANA_BIT;
 			}
 
-			if (writer.WriteDeltaInt32(prev.MaxMana, next.MaxMana, option))
+			if (writer.WriteDeltaInt32(prev.MaxMana, next.MaxMana, fieldOption))
 				flags |= MAX_MANA_BIT;
 
-			if (forceWrite || Mathf.Abs(prev.Stamina - next.Stamina) > FLOAT_EPSILON)
+			if (fullSerialize || Mathf.Abs(prev.Stamina - next.Stamina) > FLOAT_EPSILON)
 			{
 				writer.WriteSingle(next.Stamina);
 				flags |= STAMINA_BIT;
 			}
 
-			if (writer.WriteDeltaInt32(prev.MaxStamina, next.MaxStamina, option))
+			if (writer.WriteDeltaInt32(prev.MaxStamina, next.MaxStamina, fieldOption))
 				flags |= MAX_STAMINA_BIT;
 
-			// When forceWrite is true, we must emit the bitmask even if flags==0
-			// (all values equal) so the reader knows a delta was written. When
-			// !forceWrite and flags==0, rewind past the placeholder bitmask byte.
-			if (flags != 0 || forceWrite)
+			// When mustEmit is true, emit the bitmask even if flags==0 (all values equal) so the
+			// reader knows a delta was written. When Unset and flags==0, rewind past the placeholder.
+			if (flags != 0 || mustEmit)
 			{
-				int endPos = writer.Position;
-				writer.Position = flagPos;
-				writer.WriteUInt8Unpacked(flags);
-				writer.Position = endPos;
+				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
+				 * cannot silently change size, whereas WriteUInt16 is only unpacked today
+				 * because of a standing 'todo: should be using WritePackedWhole' in FishNet's
+				 * Writer. A packed backfill would overrun the placeholder and corrupt the
+				 * first field written after it. */
+				writer.InsertUInt8Unpacked(flags, flagPos);
 				return true;
 			}
 
+			/* Rewind Length as well as Position. Writer.Length only ever grows — every write
+			 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
+			 * restoring Position alone left this placeholder's bytes inside the sent segment
+			 * as trailing garbage whenever nothing was written after it. */
 			writer.Position = flagPos;
+			writer.Length = startLength;
 			return false;
 		}
 

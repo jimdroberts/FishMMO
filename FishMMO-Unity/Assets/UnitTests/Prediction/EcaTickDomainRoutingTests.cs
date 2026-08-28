@@ -489,6 +489,7 @@ namespace FishMMO.UnitTests
 			public void OnStopCharacter() { }
 			public void Read(Reader reader, uint currentTick) { }
 			public void Write(Writer writer) { }
+			public void Write(Writer writer, bool includeEntries) { }
 			public void ExpireElapsed(uint currentTick) { }
 
 			public bool IsOnCooldown(long id, uint currentTick)

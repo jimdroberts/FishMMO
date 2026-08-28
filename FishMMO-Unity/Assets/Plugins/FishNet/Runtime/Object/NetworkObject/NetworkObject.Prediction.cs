@@ -1,4 +1,4 @@
-﻿#define NEW_RECONCILE_TEST
+#define NEW_RECONCILE_TEST
 using System;
 using FishNet.Component.Prediction;
 using FishNet.Component.Transforming;
@@ -102,6 +102,41 @@ namespace FishNet.Object
         [Tooltip("True to forward replicate and reconcile states to all clients. This is ideal with games where you want all clients and server to run the same inputs. False to only use prediction on the owner, and synchronize to spectators using other means such as a NetworkTransform.")]
         [SerializeField]
         private bool _enableStateForwarding = true;
+
+        /* FISHMMO EDIT: runtime state-forwarding switch.
+         *
+         * Upstream exposes this only as a serialized field read once during
+         * InitializePredictionEarly, so a scene could pick a mode but never change it. FishMMO
+         * needs both: the open world runs spectators interpolated because relaying every owner's
+         * input to every observer is what makes 100-200 players unaffordable, while a PvP arena can
+         * afford to pay for forwarded peers to get exact positions.
+         *
+         * Safe to flip at runtime because every send path reads the property live rather than
+         * caching it -- Replicate_SendNonAuthoritative opens with a check, and
+         * Server_SendReconcileRpc reads it per send to choose between writing to the owner and
+         * looping over observers. The one thing InitializePredictionEarly does that is NOT re-run
+         * is ConfigureForPrediction on the assigned NetworkTransform, and that only clears
+         * _clientAuthoritative and _sendToOwner, which must be false in either mode.
+         *
+         * Set this from the server. Flipping it on a client changes nothing, because the server
+         * decides what it sends.
+         *
+         * Turning forwarding ON also stamps ObserverAddedTick for the NEXT tick. Reconcile deltas
+         * are encoded against a per-behaviour baseline that only the owner has been receiving while
+         * forwarding was off; without a reset, every observer would decode up to a second of deltas
+         * against a baseline it never saw, until the periodic full serialize repaired it.
+         * GetDeltaSerializeOption already answers FullSerialize when ObserverAddedTick equals the
+         * sending tick -- the same mechanism a genuinely new observer uses -- so stamping the next
+         * tick bounds the stale window to at most one reconcile. */
+        public void SetStateForwarding(bool value)
+        {
+            if (_enableStateForwarding == value)
+                return;
+            _enableStateForwarding = value;
+
+            if (value && IsServerStarted && TimeManager != null)
+                ObserverAddedTick = TimeManager.LocalTick + 1;
+        }
         /// <summary>
         /// NetworkTransform to configure for prediction. Specifying this is optional.
         /// </summary>
