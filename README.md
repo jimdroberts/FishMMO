@@ -593,14 +593,16 @@ export FISHMMO_DB_PASSWORD=super_secret
 
 > Rows written before this change keep whatever offset they were written with. `last_pulse` corrects itself on the next heartbeat; historical `time_created` values do not.
 
-**Schema drift is reported at startup.** Migrations are generated per developer and applied locally rather than shared through source control, so pulling someone else's entity change brings no migration with it and nothing applies one on your behalf — the server starts and authenticates perfectly, and the mismatch surfaces much later as a query failing on a column that does not exist, which typically reaches a player as *missing data* rather than as a schema problem. `NpgsqlDbContextFactory.ValidateSchemaAsync` reports two distinct states, and `Server.VerifyDatabaseSchema` logs whichever applies with the command that fixes it:
+**Unapplied migrations are caught at startup.** Migrations are generated per developer and applied locally rather than shared through source control, so pulling someone else's entity change brings no migration with it and nothing applies one on your behalf — the server starts and authenticates perfectly, and the mismatch surfaces much later as a query failing on a column that does not exist, which typically reaches a player as *missing data* rather than as a schema problem. `NpgsqlDbContextFactory.ValidateSchemaAsync` reports what it finds and `Server.VerifyDatabaseSchema` logs it with the command that fixes it:
 
-| State | Meaning | Fix |
-|---|---|---|
-| **Pending migrations** | Migrations exist that this database has not run | `dotnet ef database update` |
-| **Model drift** | The entity model changed after the newest migration was created, so no migration covers it yet | `dotnet ef migrations add <name>`, then `database update` |
+| State | Meaning | Startup | Fix |
+|---|---|---|---|
+| **Pending migrations** | Migrations exist that this database has not run | **Refused** | `dotnet ef database update` |
+| **Check unavailable** | The migration history could not be read at all | Proceeds, warns | Depends on the reason logged |
 
-The check is deliberately neither awaited nor fatal. A server whose schema is stale still serves everything that does not touch the changed tables, and refusing to start would be a worse outcome than a loud log line. It costs one query and reports within a second or so of startup; a check that cannot run at all is a warning, never a crash.
+Pending migrations are fatal on purpose. A server running against a database that is behind the migration set does not fail loudly — it fails as missing player data, and every write it accepts meanwhile is made against a schema the model does not agree with. A check that could not run at all is only a warning: that leaves the schema unverified rather than known-bad, and a failed *diagnostic* should not take down a server that is otherwise fine. The check runs concurrently with behaviour initialization and is joined just before the transport opens, so it costs no startup latency.
+
+> **Model drift is not detected.** An entity changed with no migration generated for it leaves nothing pending, so this check passes and the schema is quietly wrong. A drift check lived here and never worked once — EF builds `ModelSnapshot.Model` with an empty convention set, so the relational model its differ needs is never attached and the comparison threw on every startup. EF Core 5 exposes no supported way to rebuild it at runtime, so the check was removed rather than left reporting a failure forever ([#162](https://github.com/tindolt/FishMMO/issues/162)). **Generate a migration whenever you change an entity** — nothing will remind you. Catching this properly belongs in CI, where the design-time package is available and a scaffolded migration can be asserted empty.
 
 ---
 
