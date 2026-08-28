@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -6,9 +6,12 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Action that applies damage to a target character using a configurable value provider and a given damage attribute type.
-	/// Runs on both client and server for deterministic prediction; the server's
-	/// authoritative state is enforced via the prediction reconcile pipeline.
+	/// Action that applies damage to a target character using a configurable value provider and a
+	/// given damage attribute type.
+	/// <para>
+	/// SERVER ONLY. <see cref="Execute"/> returns immediately on any other peer — damage is not
+	/// predicted, and the owner learns the result through the reconcile and the combat broadcasts.
+	/// </para>
 	/// </summary>
 	[Serializable]
 	public class ApplyDamageAction : BaseAction
@@ -29,8 +32,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Applies damage to the target character using the computed value and attribute template.
-		/// Runs deterministically on both client and server; the server reconcile pipeline
-		/// corrects any client-side misprediction.
+		/// Server only — see the note on the class.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target information.</param>

@@ -233,6 +233,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Destroy()
 		{
+			/* Unequip BEFORE detaching the handlers.
+			 *
+			 * Equippable.Destroy() unequips, which raises OnUnequip, and this item's own handler is
+			 * what calls ItemGenerator.RemoveAttributes. Detaching first meant that event fired into
+			 * an empty invocation list, so every generated modifier an equipped item had applied
+			 * stayed on the character's ExternalModifier after the item was destroyed. Clients
+			 * happen to recover from the next spawn payload; the server has nothing that re-asserts
+			 * it, so a pooled character carried the previous occupant's gear bonuses. */
+			if (Equippable != null)
+			{
+				Equippable.Destroy();
+			}
 			if (Generator != null)
 			{
 				if (IsEquippable)
@@ -241,11 +253,6 @@ namespace FishMMO.Shared
 					Equippable.OnUnequip -= ItemEquippable_OnUnequip;
 				}
 				Generator.Destroy();
-			}
-			if (Equippable != null)
-			{
-
-				Equippable.Destroy();
 			}
 			// Zeroing the stack is part of destruction, not an optimisation. Destroy() used to
 			// detach the components and raise OnDestroy while leaving Stackable.Amount intact, so

@@ -110,9 +110,11 @@ namespace FishMMO.Shared
 
 #if UNITY_SERVER
 			// Server-authoritative requirements validation.
-			// The client can send any template ID in ReadPayload — the server must
-			// independently verify the character qualifies for the archetype before
-			// granting its rewards (abilities, items, buffs, titles, attributes).
+			// Not because a client payload reaches this: ReadPayload only runs server-side for a
+			// PREDICTED spawn, and no prefab in this project enables predicted spawning. It is here
+			// because every other caller — archetype selection, admin tooling, content scripts —
+			// reaches SetArchetype with an id the server has not checked, and the rewards
+			// (abilities, items, buffs, titles, attributes) are granted below.
 			if (base.IsServerStarted)
 			{
 				if (!template.MeetsRequirements(PlayerCharacter))

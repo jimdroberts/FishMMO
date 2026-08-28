@@ -174,6 +174,51 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for the keybinding override blob written by the input system.</summary>
 		public const string InputBindingOverridesKey = "InputBindingOverrides";
 
+		// ── Map ─────────────────────────────────────────────────────
+
+		/// <summary>Configuration key for the minimap's zoom, as the view's half-extent in metres.</summary>
+		public const string MinimapZoomKey = "Map.MinimapZoom";
+
+		/// <summary>Configuration key for whether the minimap turns with the character.</summary>
+		public const string MinimapRotatesKey = "Map.MinimapRotates";
+
+		/// <summary>Configuration key for how many times a second the minimap is re-rendered.</summary>
+		/// <remarks>
+		/// Exposed to the player because it is a real, adjustable cost: the minimap is an extra
+		/// overhead render of the world, and a machine that is struggling gets a meaningful frame
+		/// back by dropping it to fifteen. Thirty is the default because below that the map visibly
+		/// stutters as the character moves, and above it nothing looks better.
+		/// </remarks>
+		public const string MinimapFrameRateKey = "Map.MinimapFrameRate";
+
+		/// <summary>Configuration key for whether the maps show numeric coordinates.</summary>
+		public const string MapShowCoordinatesKey = "Map.ShowCoordinates";
+
+		/// <summary>Slowest minimap refresh the player may choose, in frames per second.</summary>
+		public const int MinimapFrameRateMinimum = 5;
+
+		/// <summary>Fastest minimap refresh the player may choose, in frames per second.</summary>
+		/// <remarks>
+		/// Capped rather than left open. Beyond sixty the setting buys nothing — the UI cannot
+		/// present frames faster than it draws them — and it turns a performance control into a
+		/// way to spend the frame budget on a two-hundred-pixel square.
+		/// </remarks>
+		public const int MinimapFrameRateMaximum = 60;
+
+		/// <summary>Default minimap refresh, in frames per second.</summary>
+		public const int MinimapFrameRateDefault = 30;
+
+		/// <summary>How many times a second the minimap is re-rendered, clamped into range.</summary>
+		public static int MinimapFrameRate =>
+			Mathf.Clamp(GetInt(MinimapFrameRateKey, MinimapFrameRateDefault),
+						MinimapFrameRateMinimum, MinimapFrameRateMaximum);
+
+		/// <summary>Whether the minimap turns with the character rather than staying north-up.</summary>
+		public static bool MinimapRotates => GetBool(MinimapRotatesKey, false);
+
+		/// <summary>Whether the maps show numeric coordinates, subject to the Cartography tier.</summary>
+		public static bool MapShowCoordinates => GetBool(MapShowCoordinatesKey, true);
+
 		// ── Bounds ──────────────────────────────────────────────────
 
 		/// <summary>Smallest interface scale offered, as a multiplier of the authored size.</summary>

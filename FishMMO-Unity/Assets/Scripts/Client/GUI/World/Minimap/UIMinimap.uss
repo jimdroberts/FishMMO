@@ -1,7 +1,23 @@
-﻿/*
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     UIMinimap.uss
-    Anchors the minimap to the top-right corner of the screen.
+    Heads-up minimap  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+    Marker styling lives in ../Map/UIMapShared.uss, because the world
+    map draws the same markers and the two must not drift apart.
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
+
+
+/* ═══════════════════════════════════════════════════════════
+   ROOT
+   ═══════════════════════════════════════════════════════════ */
 
 /*
     Transparent, full-viewport wrapper: it exists only to anchor the frame to the corner, so it must
@@ -18,16 +34,118 @@
     justify-content: flex-start;
 }
 
+/*
+    Taller than it is wide, unlike the square frame this replaced: the map itself is still square,
+    and the header and footer are the region readout and the controls that used not to exist.
+*/
 .minimap-frame {
     width: 200px;
-    height: 200px;
     margin: 8px;
     padding: 4px;
     border-radius: 4px;
+    flex-direction: column;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.minimap-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 18px;
+    flex-shrink: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+/*
+    Truncated rather than wrapped. A region name that wraps pushes the map down by a line, so the
+    map would change size depending on where the player is standing.
+*/
+.minimap-location {
+    flex-shrink: 1;
+    font-size: 11px;
+    -unity-font-style: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.minimap-coordinates {
+    flex-shrink: 0;
+    margin-left: 6px;
+    font-size: 10px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Square, and fixed. The map view's aspect ratio has to match the overhead camera's, which is
+    square because the render texture is; letting the body stretch would show a square photograph
+    in a rectangular frame and every marker would sit slightly off its terrain.
+*/
+.minimap-body {
+    width: 192px;
+    height: 192px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: var(--map-frame);
+    background-color: var(--map-surface);
 }
 
 .minimap-view {
     flex-grow: 1;
-    -unity-background-scale-mode: scale-and-crop;
-    background-color: var(--black);
+    overflow: hidden;
+}
+
+/*
+    The north indicator. Absolutely positioned over the map's top-right corner and counter-rotated
+    by C# when the map turns with the character, so it always points at world north.
+*/
+.minimap-compass {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--text-bright);
+    text-shadow: 1px 1px 2px var(--shadow-text-hard);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.minimap-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+
+.minimap-button {
+    height: 18px;
+    min-width: 26px;
+    padding-left: 6px;
+    padding-right: 6px;
+    font-size: 10px;
+    margin: 0;
+}
+
+.minimap-button--map {
+    flex-grow: 1;
+    margin-left: 4px;
+    margin-right: 4px;
+    letter-spacing: 1px;
 }

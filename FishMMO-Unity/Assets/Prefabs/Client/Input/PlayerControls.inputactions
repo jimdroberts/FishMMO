@@ -276,6 +276,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "WorldMap",
+                    "type": "Button",
+                    "id": "f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1c7",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Lore",
                     "type": "Button",
                     "id": "f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b5",
@@ -794,6 +803,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "Minimap",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c4f1a7e2-8b3d-4a91-9c22-1f5e6d7a8b90",
+                    "path": "<Keyboard>/n",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "WorldMap",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

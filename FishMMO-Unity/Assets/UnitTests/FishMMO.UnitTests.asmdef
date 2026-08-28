@@ -5,6 +5,7 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "FishMMO.Shared",
+        "FishMMO.Client",
         "FishNet.Runtime",
         "KinematicCharacterController",
         "Unity.TextMeshPro"

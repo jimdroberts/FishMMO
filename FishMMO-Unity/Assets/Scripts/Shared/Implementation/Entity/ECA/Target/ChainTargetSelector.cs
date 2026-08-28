@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 		/// The layer mask used to filter which <see cref="GameObject"/>s can be selected as chain targets.
 		/// </summary>
 		[Tooltip("The layer mask used to filter which GameObjects can be selected as chain targets.")]
-		public LayerMask TargetLayer;
+		public LayerMask TargetLayer = ~0;
 
 		/// <summary>
 		/// The maximum number of colliders to consider per OverlapSphere query.
@@ -49,8 +49,8 @@ namespace FishMMO.Shared
 		/// Each subsequent target is the closest unselected <see cref="GameObject"/> within <see cref="ChainRadius"/> of the previous one.
 		/// The chain will contain at most <see cref="ChainLength"/> targets.
 		/// </summary>
-		/// <param name="context">The starting <see cref="GameObject"/> for the chain selection. Must not be null.</param>
-		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with <paramref name="context"/>.</returns>
+		/// <param name="eventData">The event driving the selection; its context object starts the chain.</param>
+		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with the context object.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
 			/* Server only. The old guard here refused any event carrying a replicate tick, which
@@ -143,10 +143,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void EnsureHitBuffer()
 		{
-			int maxHits = Mathf.Max(1, MaxHits);
-			if (hits == null || hits.Length != maxHits)
+			/* Wider than MaxHits on purpose — see TargetSelector.QueryBufferSize. A buffer sized at
+			 * exactly MaxHits let the broadphase truncate the candidates in its own order before the
+			 * nearest-link ranking ran, so a busy radius produced a different chain on each cast. */
+			int bufferSize = QueryBufferSize(MaxHits);
+			if (hits == null || hits.Length != bufferSize)
 			{
-				hits = new Collider[maxHits];
+				hits = new Collider[bufferSize];
 			}
 		}
 	}

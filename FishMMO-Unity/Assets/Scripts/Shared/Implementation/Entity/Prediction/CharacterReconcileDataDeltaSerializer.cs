@@ -332,6 +332,18 @@ namespace FishMMO.Shared
 			GenericReader<CharacterReconcileData>.SetRead(ReadCharacterReconcileData);
 			GenericDeltaWriter<CharacterReconcileData>.SetWrite(WriteDelta);
 			GenericDeltaReader<CharacterReconcileData>.SetRead(ReadDelta);
+			/* The chain sequence is stamped by FishNet at SEND time (FISHMMO EDIT in
+			 * Server_SendReconcileRpc), not when the reconcile is created: CreateReconcile runs
+			 * every tick but the send is skipped whenever no resends remain, and a number that
+			 * advances on unsent states reads as a lost datagram on the client. */
+			FishNet.Object.ReconcileSequenceStamper<CharacterReconcileData>.Stamp = StampSequence;
+		}
+
+		/// <summary>Writes the send-time chain number into the reconcile. See <see cref="RegisterSerializers"/>.</summary>
+		internal static CharacterReconcileData StampSequence(CharacterReconcileData data, byte sequence)
+		{
+			data.Sequence = sequence;
+			return data;
 		}
 
 		/// <summary>

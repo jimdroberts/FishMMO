@@ -1135,7 +1135,7 @@ Camera:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1180360724}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_ClearFlags: 2
   m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
@@ -1720,6 +1720,7 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   ReleasesCursor: 0
   CloseOnEscape: 0
+  WorldSceneDetails: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35, type: 2}
   MinimapCamera: {fileID: 1180360727}
   AdditionalLayers:
     serializedVersion: 2
@@ -2484,6 +2485,81 @@ MonoBehaviour:
   ReleasesCursor: 0
   CloseOnEscape: 0
   HealthAttributeID: -2113468379
+--- !u!1 &7712001001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7712001002}
+  - component: {fileID: 7712001003}
+  - component: {fileID: 7712001004}
+  m_Layer: 5
+  m_Name: UIMap
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7712001002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7712001001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7712001003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7712001001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
+  m_PanelSettings: {fileID: 11400000, guid: b4f97f2eb547b52149cd75073347f1af, type: 2}
+  m_ParentUI: {fileID: 0}
+  sourceAsset: {fileID: 9197481963319205126, guid: 6a35c3b4fb394855aefa0cb7bdf7201f,
+    type: 3}
+  m_SortingOrder: 100
+  m_Position: 0
+  m_WorldSpaceSizeMode: 1
+  m_WorldSpaceWidth: 1920
+  m_WorldSpaceHeight: 1080
+  m_PivotReferenceSize: 0
+  m_Pivot: 0
+  m_WorldSpaceCollider: {fileID: 0}
+--- !u!114 &7712001004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7712001001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ceb5d232d5c4b598a1c430d4eb1ef6f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.UITKMap
+  Document: {fileID: 7712001003}
+  StartOpen: 0
+  IsAlwaysOpen: 0
+  CloseOnQuitToMenu: 1
+  ReleasesCursor: 1
+  CloseOnEscape: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2530,6 +2606,7 @@ SceneRoots:
   - {fileID: 1700100002}
   - {fileID: 1700100012}
   - {fileID: 1700100022}
+  - {fileID: 7712001002}
 --- !u!1 &1330066012
 GameObject:
   m_ObjectHideFlags: 0

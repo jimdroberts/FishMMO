@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -31,7 +31,9 @@ namespace FishMMO.Shared
 	/// harder to represent exactly.
 	/// </para>
 	/// <para>
-	/// Resolution is 360/65536 ≈ 0.0055° of yaw and 180/65536 ≈ 0.0027° of pitch — about 5 mm of
+	/// Resolution is 360/65536 ≈ 0.0055° of yaw and 180/65535 ≈ 0.0027° of pitch (yaw wraps, so its
+	/// last step joins the first; pitch spans pole to pole inclusive, so it has one fewer interval) —
+	/// about 5 mm of
 	/// lateral error at 50 m, comfortably below the precision any aiming decision depends on.
 	/// </para>
 	/// </remarks>
@@ -44,6 +46,20 @@ namespace FishMMO.Shared
 		/// merely wrong in a visible, debuggable way.
 		/// </remarks>
 		public static readonly Vector3 FallbackDirection = Vector3.forward;
+
+		/// <summary>
+		/// <see cref="FallbackDirection"/> after a round trip through the packer — the vector every
+		/// peer actually ends up simulating when an aim is missing.
+		/// </summary>
+		/// <remarks>
+		/// Not the same vector as <see cref="FallbackDirection"/>: encoding rounds the pitch to index
+		/// 32768 rather than its exact half-step, so the decoded forward carries a tiny non-zero y.
+		/// Substituting the RAW fallback has the substituting peer simulate a direction the wire
+		/// cannot carry while every peer that received it simulates the decoded one — the same
+		/// quantise-at-the-producer rule the aim itself follows, in the one case where nothing else
+		/// is going right anyway. Computed once; <c>Quantize</c> is a full round trip.
+		/// </remarks>
+		public static readonly Vector3 QuantizedFallbackDirection = Quantize(FallbackDirection);
 
 		private const float YawStepsPerTurn = 65536f;
 		private const float PitchSpan = Mathf.PI;
