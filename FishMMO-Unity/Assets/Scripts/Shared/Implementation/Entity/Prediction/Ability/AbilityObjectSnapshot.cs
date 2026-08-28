@@ -3,7 +3,10 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Immutable snapshot of ability data captured at spawn time.
+	/// Immutable snapshot of ability data, captured lazily at the moment an object is
+	/// <i>detached</i> from its ability (<see cref="Ability.DetachAllAbilityObjects"/>), not at
+	/// spawn. If events were removed from the ability between spawn and detach the snapshot
+	/// reflects the ability as it was at detach.
 	/// Allows an <see cref="AbilityObject"/> to persist and function independently
 	/// after the owning character disconnects, dies, or is otherwise cleaned up.
 	/// When the live <see cref="Ability"/> reference becomes null (e.g., after detach),

@@ -9,6 +9,8 @@ using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing.Helping;
 using GameKit.Dependencies.Utilities;
+// FISHMMO EDIT: RingBuffer for the self-contained delta replicate writer below.
+using GameKit.Dependencies.Utilities.Types;
 using UnityEngine;
 
 namespace FishNet.Serializing
@@ -751,6 +753,82 @@ namespace FishNet.Serializing
         /// Writes a delta reconcile.
         /// </summary>
         internal void WriteDeltaReconcile<T>(T lastReconcile, T value, DeltaSerializerOption option = DeltaSerializerOption.Unset) => WriteDelta(lastReconcile, value, option);
+
+        /* FISHMMO EDIT: self-contained delta replicate.
+         *
+         * The two WriteDeltaReplicate overloads further down take `List<T>` / `BasicQueue<T>` where
+         * T : IReplicateData, but the prediction call sites now hold
+         * RingBuffer<ReplicateDataContainer<T>> and BasicQueue<ReplicateDataContainer<T>>. They no
+         * longer compile against their own callers and are left untouched; these two are the
+         * replacements, and they differ from upstream in one deliberate way.
+         *
+         * Upstream encoded entry 0 against the entry BEFORE the window -- data the reader may never
+         * have seen. Replicates are sent on Channel.Unreliable and carry RedundancyCount past
+         * inputs precisely so a dropped packet does not cost the inputs it contained; chaining
+         * across packets throws that away, because one loss leaves the reader without the baseline
+         * the next packet was encoded against and every entry after it decodes to garbage.
+         *
+         * So each packet is self-contained: entry 0 is written absolutely, entries 1..n-1 are
+         * deltas against the entry before them WITHIN this packet. Losing a packet costs exactly
+         * that packet. The saving is barely affected because the bytes being saved are the
+         * redundancy entries, which are near-identical to their neighbours by construction --
+         * measured 85B -> 51B for a three-entry walking packet.
+         *
+         * Note the baselines here are the writer's exact values while the reader's are its decoded
+         * ones, so lossy field codecs (Quaternion32) drift across entries within a packet. It is
+         * bounded to n-1 steps and reset by the absolute entry 0 of every packet. */
+        internal void WriteDeltaReplicate<T>(RingBuffer<ReplicateDataContainer<T>> values, int offset) where T : IReplicateData, new()
+        {
+            int collectionCount = values.Count;
+            byte count = (byte)(collectionCount - offset);
+            WriteUInt8Unpacked(count);
+
+            bool first = true;
+            T prev = default;
+            for (int i = offset; i < collectionCount; i++)
+            {
+                ReplicateDataContainer<T> container = values[i];
+                WriteDeltaReplicateEntry(container, ref prev, ref first);
+            }
+        }
+
+        /// <summary>
+        /// Writes a self-contained delta replicate from a queue. See the note on the RingBuffer overload.
+        /// </summary>
+        internal void WriteDeltaReplicate<T>(BasicQueue<ReplicateDataContainer<T>> values, int redundancyCount) where T : IReplicateData, new()
+        {
+            int collectionCount = values.Count;
+            byte count = (byte)redundancyCount;
+            WriteUInt8Unpacked(count);
+
+            bool first = true;
+            T prev = default;
+            for (int i = collectionCount - redundancyCount; i < collectionCount; i++)
+            {
+                ReplicateDataContainer<T> container = values[i];
+                WriteDeltaReplicateEntry(container, ref prev, ref first);
+            }
+        }
+
+        /// <summary>
+        /// Writes one replicate entry: the first absolutely, the rest as a delta against the one
+        /// before it, each followed by its channel. Mirrors WriteReplicateDataContainer's framing.
+        /// </summary>
+        private void WriteDeltaReplicateEntry<T>(ReplicateDataContainer<T> container, ref T prev, ref bool first) where T : IReplicateData, new()
+        {
+            if (first)
+            {
+                Write<T>(container.Data);
+                first = false;
+            }
+            else
+            {
+                WriteDelta(prev, container.Data, DeltaSerializerOption.RootSerialize);
+            }
+
+            WriteChannel(container.Channel);
+            prev = container.Data;
+        }
 
         /// <summary>
         /// Writes a delta replicate using a list.

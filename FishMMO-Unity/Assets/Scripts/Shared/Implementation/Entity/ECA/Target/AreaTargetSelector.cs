@@ -51,10 +51,8 @@ namespace FishMMO.Shared
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
-			var scene = context.scene;
-			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 center = context.transform.position;
-			int hitCount = physicsScene.OverlapSphere(center, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+			int hitCount = RewoundOverlapSphere(eventData, context, center, Radius, hits, TargetLayer);
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];

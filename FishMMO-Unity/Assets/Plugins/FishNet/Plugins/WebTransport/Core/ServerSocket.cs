@@ -178,6 +178,34 @@ namespace FishNet.Transporting.WebTransport.Server
 		private IntPtr pinnedCallbacksPtr = IntPtr.Zero;
 
 		/// <summary>
+		/// Maps a native context token to the socket that owns it, so the static
+		/// [AOT.MonoPInvokeCallback] trampolines below can find their server. IL2CPP
+		/// cannot marshal an instance method to native code, so those entry points have
+		/// no other route back to the instance.
+		/// </summary>
+		private static readonly System.Collections.Concurrent.ConcurrentDictionary<IntPtr, ServerSocket> nativeSockets =
+			new System.Collections.Concurrent.ConcurrentDictionary<IntPtr, ServerSocket>();
+
+		/// <summary>
+		/// Source of the token handed to the native library as its callback context.
+		/// A counter rather than a GCHandle so a callback arriving after teardown
+		/// resolves to nothing instead of dereferencing freed memory.
+		/// </summary>
+		private static long nativeContextCounter;
+
+		/// <summary>
+		/// This socket's key in <see cref="nativeSockets"/>, or zero when unregistered.
+		/// </summary>
+		private IntPtr nativeContext = IntPtr.Zero;
+
+		// Rooted for the process lifetime so the GC cannot collect the delegates while
+		// the native library holds their function pointers.
+		private static readonly NativeCallbacks.ServerConnectDelegate nativeStaticOnConnect = NativeOnConnect;
+		private static readonly NativeCallbacks.ServerDisconnectDelegate nativeStaticOnDisconnect = NativeOnDisconnect;
+		private static readonly NativeCallbacks.ServerStreamDataDelegate nativeStaticOnStreamData = NativeOnStreamData;
+		private static readonly NativeCallbacks.ServerDatagramDelegate nativeStaticOnDatagram = NativeOnDatagram;
+
+		/// <summary>
 		/// Finalizer -- drains the incoming event queue without invoking actions.
 		/// The .NET finalizer runs on an arbitrary thread, not the Unity main thread.
 		/// The queued actions call FishNet transport callbacks which must execute
@@ -203,6 +231,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
 				this.pinnedCallbacksPtr = IntPtr.Zero;
 			}
+			ReleaseNativeContext();
 			// serverHandle is a SafeHandle; its own finalizer will release it
 			// via ReleaseHandle (which has the IsLibraryDeinitialized guard).
 		}
@@ -243,6 +272,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
 				this.pinnedCallbacksPtr = IntPtr.Zero;
 			}
+			ReleaseNativeContext();
 
 			GC.SuppressFinalize(this);
 		}
@@ -301,13 +331,23 @@ namespace FishNet.Transporting.WebTransport.Server
 			this.maximumClients = maximumClients;
 			ResetQueues();
 
+			/* The table must hold the STATIC trampolines, not the instance handlers.
+			 * IL2CPP refuses to marshal a delegate over an instance method to native code
+			 * and throws where the table is written to unmanaged memory. The server
+			 * currently builds under Mono so this never fired here, but it is the same
+			 * defect that stopped the IL2CPP client connecting, and it would surface the
+			 * moment the server is built with IL2CPP. The context token below carries the
+			 * identity that the instance receiver used to supply. */
+			this.nativeContext = new IntPtr(System.Threading.Interlocked.Increment(ref nativeContextCounter));
+			nativeSockets[this.nativeContext] = this;
+
 			// Pin callback delegates (struct field roots managed delegates).
 			this.pinnedCallbacks = new NativeCallbacks.ServerCallbacks
 			{
-				OnConnect = new NativeCallbacks.ServerConnectDelegate(HandleNativeConnect),
-				OnDisconnect = new NativeCallbacks.ServerDisconnectDelegate(HandleNativeDisconnect),
-				OnStreamData = new NativeCallbacks.ServerStreamDataDelegate(HandleNativeStreamData),
-				OnDatagram = new NativeCallbacks.ServerDatagramDelegate(HandleNativeDatagram),
+				OnConnect = nativeStaticOnConnect,
+				OnDisconnect = nativeStaticOnDisconnect,
+				OnStreamData = nativeStaticOnStreamData,
+				OnDatagram = nativeStaticOnDatagram,
 			};
 
 			// Copy the callback table to unmanaged memory so that the native
@@ -347,7 +387,7 @@ namespace FishNet.Transporting.WebTransport.Server
 				(uint)maximumClients,
 				string.IsNullOrEmpty(this.allowedOrigins) ? null : this.allowedOrigins,
 				this.pinnedCallbacksPtr,
-				IntPtr.Zero);
+				this.nativeContext);
 			if (this.serverHandle == null || this.serverHandle.IsInvalid)
 			{
 				transport.NetworkManager?.LogError(
@@ -359,6 +399,7 @@ namespace FishNet.Transporting.WebTransport.Server
 					System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
 					this.pinnedCallbacksPtr = IntPtr.Zero;
 				}
+				ReleaseNativeContext();
 				base.SetConnectionState(LocalConnectionState.Stopped, true);
 				return false;
 			}
@@ -378,6 +419,7 @@ namespace FishNet.Transporting.WebTransport.Server
 					System.Runtime.InteropServices.Marshal.FreeHGlobal(this.pinnedCallbacksPtr);
 					this.pinnedCallbacksPtr = IntPtr.Zero;
 				}
+				ReleaseNativeContext();
 				base.SetConnectionState(LocalConnectionState.Stopped, true);
 				return false;
 			}
@@ -687,6 +729,58 @@ namespace FishNet.Transporting.WebTransport.Server
 		#endregion
 
 		#region Native Callbacks (invoked from QUIC worker threads)
+
+		/// <summary>
+		/// Resolves the socket a native callback belongs to from its context token.
+		/// A miss is normal: the native library may complete a callback that was already
+		/// in flight when the socket tore down and removed its token.
+		/// </summary>
+		private static bool TryGetNativeSocket(IntPtr context, out ServerSocket socket)
+		{
+			return nativeSockets.TryGetValue(context, out socket) && socket != null;
+		}
+
+		/// <summary>
+		/// Drops this socket's context token so no further native callback can reach it.
+		/// Called only after the native server has been destroyed, so a callback still in
+		/// flight during teardown can complete against a live socket.
+		/// </summary>
+		private void ReleaseNativeContext()
+		{
+			if (this.nativeContext != IntPtr.Zero)
+			{
+				nativeSockets.TryRemove(this.nativeContext, out _);
+				this.nativeContext = IntPtr.Zero;
+			}
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(NativeCallbacks.ServerConnectDelegate))]
+		private static void NativeOnConnect(IntPtr context, ulong connectionId, IntPtr remoteAddress)
+		{
+			if (TryGetNativeSocket(context, out ServerSocket socket))
+				socket.HandleNativeConnect(context, connectionId, remoteAddress);
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(NativeCallbacks.ServerDisconnectDelegate))]
+		private static void NativeOnDisconnect(IntPtr context, ulong connectionId, int errorCode)
+		{
+			if (TryGetNativeSocket(context, out ServerSocket socket))
+				socket.HandleNativeDisconnect(context, connectionId, errorCode);
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(NativeCallbacks.ServerStreamDataDelegate))]
+		private static void NativeOnStreamData(IntPtr context, ulong connectionId, ulong streamId, IntPtr dataPtr, int length)
+		{
+			if (TryGetNativeSocket(context, out ServerSocket socket))
+				socket.HandleNativeStreamData(context, connectionId, streamId, dataPtr, length);
+		}
+
+		[AOT.MonoPInvokeCallback(typeof(NativeCallbacks.ServerDatagramDelegate))]
+		private static void NativeOnDatagram(IntPtr context, ulong connectionId, IntPtr dataPtr, int length)
+		{
+			if (TryGetNativeSocket(context, out ServerSocket socket))
+				socket.HandleNativeDatagram(context, connectionId, dataPtr, length);
+		}
 
 		/// <summary>
 		/// Called by the native library when a new client connects.

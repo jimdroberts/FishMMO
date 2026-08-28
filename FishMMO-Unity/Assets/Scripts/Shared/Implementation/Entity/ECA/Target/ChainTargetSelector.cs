@@ -62,21 +62,66 @@ namespace FishMMO.Shared
 
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
+
+			/* The whole chain is walked EAGERLY, under a single rewind scope, and only then
+			 * yielded. Two reasons, both learned the expensive way:
+			 *
+			 * 1. One scope, not one per link. Every link used to open its own rewind through
+			 *    LagCompensatedQuery — N links cost N x (displace every character + two
+			 *    Physics.SyncTransforms passes). The registry refuses nested scopes, so one outer
+			 *    scope here means the whole walk runs against a single consistent rewound world.
+			 *
+			 * 2. No yields while the world is displaced. Selectors are iterators, and the
+			 *    consumer between yields is the damage/ECA pipeline — running that against
+			 *    rewound colliders would apply effects to a world hundreds of milliseconds
+			 *    stale. Materialising first means the scope is closed before any consumer runs.
+			 *
+			 * A side effect of walking inside the scope is that link RANKING now reads rewound
+			 * positions, matching the query that produced the candidates — the old code selected
+			 * from the rewound world but ranked by live distance. Conditions are evaluated inside
+			 * the scope for the same consistency reason; they gate the traversal itself. */
+			List<GameObject> chain = new List<GameObject>(Mathf.Max(1, ChainLength));
+
+			if (LagCompensatedQuery.TryResolveRewind(eventData, out FishMMO.Shared.Core.ICharacter caster, out uint rewindTick))
+			{
+				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
+				{
+					BuildChain(eventData, context, chain);
+				}
+			}
+			else
+			{
+				BuildChain(eventData, context, chain);
+			}
+
+			for (int i = 0; i < chain.Count; i++)
+			{
+				yield return chain[i];
+			}
+		}
+
+		/// <summary>
+		/// Walks the chain from the context, appending each accepted link to <paramref name="results"/>.
+		/// Runs entirely inside the caller's rewind scope (or uncompensated when there is none).
+		/// </summary>
+		private void BuildChain(EventData eventData, GameObject context, List<GameObject> results)
+		{
 			EnsureHitBuffer();
-			var scene = context.scene;
-			PhysicsScene physicsScene = scene.GetPhysicsScene();
+			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 			HashSet<GameObject> selected = new HashSet<GameObject>();
 			GameObject current = context;
 			for (int i = 0; i < ChainLength && current != null; i++)
 			{
 				if (!AreConditionsMet(current, eventData))
 				{
-					current = null;
 					break;
 				}
 				selected.Add(current);
-				yield return current;
+				results.Add(current);
 				Vector3 center = current.transform.position;
+				// Direct query on purpose: the caller already holds the rewind scope, so routing
+				// through LagCompensatedQuery would just re-resolve the tick and be refused as a
+				// nested scope.
 				int hitCount = physicsScene.OverlapSphere(center, ChainRadius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
 				GameObject next = null;
 				float minDist = float.MaxValue;

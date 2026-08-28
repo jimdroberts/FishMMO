@@ -138,6 +138,28 @@ namespace FishMMO.Shared
 		public uint RngS3;
 
 		/// <summary>
+		/// Server-side send counter, one increment per reconcile created, wrapping at 255.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The delta chain's loss detector. Reconciles ride the unreliable <c>StateUpdate</c>
+		/// datagram and each delta is encoded against the previous state the server SENT. A lost
+		/// datagram used to leave every later delta decoding against a baseline the client never
+		/// received — a wrong position applied to the owner for up to a second, until the periodic
+		/// absolute snapshot. The reader now requires <c>prev.Sequence + 1</c> and rejects the
+		/// packet otherwise, so a loss costs "no correction until the next snapshot" instead of
+		/// "a wrong correction for up to a second".
+		/// </para>
+		/// <para>
+		/// A counter rather than a fingerprint of the previous state, because FishNet's Vector3
+		/// delta quantises to a millimetre and the two sides' baselines legitimately drift apart
+		/// by rounding between absolute snapshots — any hash of float fields would fire
+		/// constantly. One byte, sent in both the delta and the absolute form.
+		/// </para>
+		/// </remarks>
+		public byte Sequence;
+
+		/// <summary>
 		/// Extracts the activation flags from the lower 16 bits of <see cref="PackedFlagsAndSlot"/>.
 		/// This is a computed property — each access performs a bitmask operation.
 		/// </summary>

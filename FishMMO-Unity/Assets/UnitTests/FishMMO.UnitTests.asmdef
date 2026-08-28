@@ -6,6 +6,7 @@
         "UnityEditor.TestRunner",
         "FishMMO.Shared",
         "FishNet.Runtime",
+        "KinematicCharacterController",
         "Unity.TextMeshPro"
     ],
     "includePlatforms": [
