@@ -18,7 +18,26 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The image displayed during scene transitions.
 		/// </summary>
+		/// <remarks>
+		/// Resolved at cache-rebuild time from <see cref="MapDefinition"/>, falling back to the
+		/// legacy field on <c>WorldSceneSettings</c> for a scene that has not been baked since the
+		/// image moved. Kept as its own field rather than read through the definition so the
+		/// loading screen — which runs before any map subsystem exists — does not have to
+		/// dereference an asset that may legitimately be absent.
+		/// </remarks>
 		public Sprite SceneTransitionImage;
+
+		/// <summary>
+		/// The scene's map, player-facing name and authored landmarks.
+		/// </summary>
+		/// <remarks>
+		/// Null for a scene with no map definition, which is normal: the world map derives its
+		/// extents from <see cref="Boundaries"/> in that case and draws without a background
+		/// image. Nothing on the server reads this, and the definition holds its map texture as an
+		/// addressable reference precisely so that a dedicated server build does not pull
+		/// megabytes of map art in through this field.
+		/// </remarks>
+		public WorldMapDefinition MapDefinition;
 
 		/// <summary>
 		/// Dictionary of initial spawn positions for characters entering the scene.

@@ -110,7 +110,10 @@ namespace FishMMO.Shared
 				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject, Vector3.Distance(origin, hit.transform.position)));
 			}
 
-			TargetOrdering.SortStable(ranks);
+			/* Nearest first, identity as the tiebreak, so a MaxHits cap keeps the closest candidates
+			 * rather than the lowest ObjectIds (the previous SortStable ranked by identity alone and
+			 * the distance passed to Rank was never consulted). */
+			TargetOrdering.SortByDistance(ranks);
 			TargetOrdering.ApplyMaxHits(ranks, MaxHits);
 
 			if (ranks.Count == 0)

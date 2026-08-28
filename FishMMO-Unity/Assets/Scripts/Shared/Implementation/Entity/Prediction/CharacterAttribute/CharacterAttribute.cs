@@ -188,6 +188,34 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Installs an authoritative final value AND back-solves <see cref="ExternalModifier"/> so a
+		/// later recompute reproduces it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="SetFinal"/> writes <c>finalValue</c> directly, which is what the resource
+		/// reconcile wants — the server's number must not be overwritten by a local formula pass.
+		/// But it leaves <c>value</c> and <c>externalModifier</c> untouched, and those are what
+		/// <see cref="CalculateFinalValue"/> reads. Resource attributes carry neither of them in the
+		/// reconcile, so the very next thing that called <c>UpdateValues</c> on the resource — any
+		/// <see cref="AddModifier"/> from a buff, an equip or an unequip — recomputed the final from
+		/// state the reconcile had never corrected and threw the authoritative maximum away.
+		/// </para>
+		/// <para>
+		/// Choosing the modifier that closes the gap makes the two agree: the value is right now, and
+		/// it is still right after the next recompute. The clamp is applied deliberately rather than
+		/// bypassed, so this peer lands on exactly the number the server's own clamped
+		/// <c>CalculateFinalValue</c> produced for the same template.
+		/// </para>
+		/// </remarks>
+		/// <param name="newFinal">The authoritative final value.</param>
+		public void SetFinalDerivingModifier(int newFinal)
+		{
+			externalModifier = newFinal - value - formulaModifier;
+			finalValue = CalculateFinalValue();
+		}
+
+		/// <summary>
 		/// Gets the total modifier value (formula-derived + external).
 		/// </summary>
 		public int Modifier { get { return formulaModifier + externalModifier; } }
@@ -218,16 +246,17 @@ namespace FishMMO.Shared
 		public float FinalValueAsPct { get { return finalValue * 0.01f; } }
 
 		/// <summary>
-		/// Gets the parent attributes (attributes that depend on this attribute).
+		/// Parents of this attribute (the attributes that depend on it), keyed by Template.ID.
 		/// </summary>
-		/// <summary>
-		/// Parents of this attribute, keyed by Template.ID. <see cref="SortedDictionary{TKey,TValue}"/>
-		/// with the default <c>int</c> comparer guarantees ascending-ID iteration order across
-		/// all platforms, runtimes, and rehash events — required for prediction determinism
-		/// so the formula evaluation cascade produces bit-identical results on server and
-		/// client during reconcile replay. Keying by ID (not name) also survives template
-		/// renames without affecting binary sort order.
-		/// </summary>
+		/// <remarks>
+		/// <see cref="SortedDictionary{TKey,TValue}"/> with the default <c>int</c> comparer
+		/// guarantees ascending-ID iteration across all platforms, runtimes and rehash events, so
+		/// listeners observe the cascade in a stable order. It is NOT what makes the arithmetic
+		/// deterministic — <c>ApplyChildren</c> accumulates <c>int</c>s, and integer addition is
+		/// associative, so no iteration order can change the value it produces. Do not unsort it on
+		/// the strength of that; the notification order is the reason it is a SortedDictionary.
+		/// Keying by ID rather than name also survives template renames without affecting sort order.
+		/// </remarks>
 		public SortedDictionary<int, CharacterAttribute> Parents { get { return parents; } }
 
 		/// <summary>

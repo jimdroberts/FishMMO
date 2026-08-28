@@ -1,4 +1,4 @@
-using FishNet.CodeGenerating;
+﻿using FishNet.CodeGenerating;
 using FishNet.Object.Prediction;
 using UnityEngine;
 
@@ -29,6 +29,41 @@ namespace FishMMO.Shared
 		/// Each flag is a bit position defined by <see cref="KCCMoveFlags"/>.
 		/// </summary>
 		public int MoveFlags;
+
+		/// <summary>
+		/// How many ticks behind server-present this client was rendering its peers when it produced
+		/// this input. Lag compensation rewinds by this much.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The server cannot work this out for itself. It is one-way latency plus the interpolation
+		/// buffer, and FishNet exposes no per-connection latency server-side — the value that used to
+		/// be used, <c>ReplicateTick.LocalTickDifference</c>, is stamped with the current server tick
+		/// immediately before the replicate body runs, so it read 0 on every tick that carried real
+		/// input and every player was compensated the same fixed two ticks whatever their ping.
+		/// </para>
+		/// <para>
+		/// The client does know: it has <c>TimeManager.RoundTripTime</c> and its own interpolation
+		/// setting. Client-supplied, so the server treats it as a claim rather than a fact —
+		/// <see cref="LagCompensationTick"/> caps it, and <c>CharacterPositionHistory</c> refuses a
+		/// tick outside its window outright, so an inflated value buys no compensation rather than
+		/// the maximum available. One byte, which at 30 Hz covers 8.5 seconds of claimed view lag.
+		/// </para>
+		/// </remarks>
+		public byte ViewOffsetTicks;
+
+		/// <summary>
+		/// The sub-tick remainder of the view offset, in 1/256ths of a tick.
+		/// </summary>
+		/// <remarks>
+		/// The whole-tick part alone quantises the rewind to a tick boundary, and the client's view
+		/// of a peer does not sit on one: NetworkTransform interpolation blends between two received
+		/// snapshots, so what it renders is a fraction of the way between two ticks. At 6 m/s one
+		/// tick is 20 cm — the difference between a hit and a miss on a capsule. This byte is what
+		/// lets the server resolve to the same fractional point, through
+		/// <see cref="RewindTarget"/> and <c>CharacterPositionHistory</c>'s interpolating resolve.
+		/// </remarks>
+		public byte ViewOffsetFraction;
 
 		/// <summary>
 		/// Aim direction for this input frame, as a unit vector.

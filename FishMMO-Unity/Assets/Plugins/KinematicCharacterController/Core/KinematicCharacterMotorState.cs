@@ -6,8 +6,16 @@ using UnityEngine;
 namespace KinematicCharacterController
 {
 	/// <summary>
-	/// Represents the entire state of a character motor that is pertinent for simulation.
-	/// Includes all fields read during Replicate so reconcile can fully restore state.
+	/// Represents the state of a character motor that is carried in the reconcile.
+	/// <para>
+	/// NOT everything the simulation reads. Known omissions that can affect a replay: the capsule
+	/// dimensions (so a reconciled <c>IsCrouching</c> flip leaves the collider at the wrong height —
+	/// <c>KCCController.ApplyState</c> does not resize it), the attached-rigidbody references that
+	/// gate the mount/dismount velocity impulses, the platform velocity, and
+	/// <c>KCCController.hasDoneInitialGroundProbe</c>, which <c>ApplyState</c> actively resets on
+	/// every reconcile. <c>LastGroundingStatus</c> is omitted safely — the motor re-derives it at the
+	/// top of its next update, before any consumer.
+	/// </para>
 	/// </summary>
 	[Serializable]
 	[UseGlobalCustomSerializer]
@@ -32,12 +40,6 @@ namespace KinematicCharacterController
 		/// Scene object ID of the platform the character is standing on. Zero if none.
 		/// </summary>
 		public long CurrentPlatformID;
-
-		/// <summary>
-		/// Last known position of the current platform, used to compute platform velocity during replay.
-		/// Without this field, reconcile replay computes incorrect platform delta and causes permanent desync.
-		/// </summary>
-		public Vector3 LastPlatformPosition;
 
 		/// <summary>
 		/// Whether the motor must force-unground on the next update.

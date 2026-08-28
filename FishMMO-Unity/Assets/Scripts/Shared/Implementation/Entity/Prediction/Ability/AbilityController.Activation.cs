@@ -1,4 +1,4 @@
-using FishNet.Object;
+﻿using FishNet.Object;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -375,12 +375,9 @@ namespace FishMMO.Shared
 				// The Held ability hotkey was released or the character can no longer activate the ability
 				if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
-					// Cooldown only on non-replay execution — during reconcile replay
-					// the server's authoritative cooldown state is already restored.
-					if (!state.ContainsReplayed())
-					{
-						AddCooldown(validatedAbility, activationData.GetPredictionTick());
-					}
+					// Applied on replay too — see the remarks on FinishAbility: a reconcile for a
+					// tick before the release wipes this cooldown, and only the replay restores it.
+					AddCooldown(validatedAbility, activationData.GetPredictionTick());
 					// Reset ability data
 					Cancel(state);
 					return;
@@ -399,9 +396,10 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Resolves targeting, spawns the ability object, and unconditionally advances
-		/// the deterministic RNG seed. Camera data is resolved via <see cref="ResolveCameraData"/>.
-		/// During reconcile replay the visual spawn is skipped but the seed is still
-		/// advanced to keep client/server RNG in lockstep.
+		/// the deterministic RNG seed. Aim comes from the REPLICATED input cached in
+		/// <c>ReplicateInternal</c> (<c>replicatedAimOrigin</c>/<c>replicatedAimDirection</c>), never
+		/// from a live controller — see the note in the body. During reconcile replay the visual
+		/// spawn is skipped but the seed is still advanced to keep client/server RNG in lockstep.
 		/// </summary>
 		private void ResolveTargetAndSpawn(Ability ability, AbilityActivationReplicateData activationData, ReplicateState state, bool isChannelTick = false)
 		{
@@ -426,8 +424,21 @@ namespace FishMMO.Shared
 																			replicatedAimDirection,
 																			ability.Range);
 
-					AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo,
+					AbilityObject spawned = AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo,
 						replicatedAimOrigin, replicatedAimDirection, currentSeed, activationData.GetPredictionTick());
+
+					/* The server resolved no object where the owner may well have.
+					 *
+					 * Spawn returns null when the ability requires a target and this peer's trace
+					 * found none. The owner traces against its own view and can easily disagree, and
+					 * nothing else in the reconcile expresses the difference: the seed still advances
+					 * below, the cost and cooldown still apply, and no denial is raised — so the
+					 * owner's object had no reason to be rolled back and flew its full lifetime
+					 * hitting nothing. Flagging it lets the reconcile take that object back. */
+					if (spawned == null && base.IsServerStarted)
+					{
+						serverSpawnedNothing = true;
+					}
 
 					/* Tell observers what happened, as one message per cast.
 					 *
@@ -817,37 +828,42 @@ namespace FishMMO.Shared
 		{
 			ResolveTargetAndSpawn(validatedAbility, activationData, state, isChannelTick: true);
 
-			// Channeled abilities consume resources every tick, but only on non-replay execution.
-			if (!state.ContainsReplayed())
-			{
-				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
-			}
+			// Channeled abilities consume resources every tick, on replay too — see FinishAbility:
+			// the reconcile restored the pre-tick resource value, so the replay must re-drain it.
+			validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 		}
 
 		/// <summary>
 		/// Completes an ability activation: spawns the final ability object, consumes resources,
 		/// adds cooldown, and resets ability state.
-		/// Resource consumption and cooldown are skipped during reconcile replay because the
-		/// server's authoritative state was already restored — re-applying them would
-		/// double-subtract resources and restart the cooldown timer.
 		/// </summary>
+		/// <remarks>
+		/// Resource consumption and the cooldown are applied on replay as well. A reconcile
+		/// restores the server's state <b>at the reconcile tick</b>, and for roughly one RTT after
+		/// a cast the owner keeps receiving reconciles for ticks that PRECEDE the cast — each of
+		/// which wipes the predicted cooldown and refunds the cost. The replay of the cast tick
+		/// is the only thing that can put them back, and it is not a double application: the
+		/// restore already removed them, <see cref="CooldownInstance"/> is keyed by ability and
+		/// immutable so re-adding it is idempotent, and a reconcile at or after the cast tick never
+		/// replays the cast at all. (Skipping them on replay made the cooldown overlay and the
+		/// resource bar flicker back for one RTT per cast and let a second press predict a second,
+		/// server-denied cast.)
+		/// </remarks>
 		private void FinishAbility(Ability validatedAbility, AbilityActivationReplicateData activationData, ReplicateState state)
 		{
 			// Spawn the final ability object (skipped during replay; seed still advanced).
 			ResolveTargetAndSpawn(validatedAbility, activationData, state);
 
-			// Resource consumption and cooldown only on non-replay execution.
-			if (!state.ContainsReplayed())
+			//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
+			validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
+			AddCooldown(validatedAbility, activationData.GetPredictionTick());
+
+			// Server-side ECA triggers fire once per real tick; the server never replays.
+			if (!state.ContainsReplayed() && base.IsServerStarted)
 			{
-				//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
-				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
-				AddCooldown(validatedAbility, activationData.GetPredictionTick());
-				if (base.IsServerStarted)
-				{
-					AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
-					aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
-					Character.Invoke(onAbilityCompleteTriggers, aed);
-				}
+				AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
+				aed.Add(new TickEventData(Character, activationData.GetPredictionTick()));
+				Character.Invoke(onAbilityCompleteTriggers, aed);
 			}
 
 			// Reset ability data
@@ -1361,8 +1377,13 @@ namespace FishMMO.Shared
 				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
 				float cooldown = ability.Cooldown * cooldownReduction;
 
+				// The cooldown controller caches the tick delta once OnStartNetwork has run (and a
+				// test can seed it); fall back to the TimeManager only when it does not hold one.
+				float tickDelta = cachedCooldownController is CooldownController cooldownController
+					? cooldownController.TickDelta
+					: (float)base.TimeManager.TickDelta;
 				// PredictionTick implicitly converts to uint for CooldownInstance.
-				cachedCooldownController.AddCooldown(ability.ID, new CooldownInstance(currentTick, cooldown, (float)base.TimeManager.TickDelta));
+				cachedCooldownController.AddCooldown(ability.ID, new CooldownInstance(currentTick, cooldown, tickDelta));
 			}
 		}
 

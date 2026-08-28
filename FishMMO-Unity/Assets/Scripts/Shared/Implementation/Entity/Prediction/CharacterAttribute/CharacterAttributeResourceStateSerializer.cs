@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using FishNet.Serializing;
 
 namespace FishMMO.Shared
@@ -103,18 +103,21 @@ namespace FishMMO.Shared
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <remarks>
-		/// Float fields (Health, Mana, Stamina) use raw <c>WriteSingle</c>
-		/// with manual equality checks because FishNet does not expose a public
-		/// <c>WriteDeltaSingle</c> for scalar floats. Int/uint fields (NextRegenTick,
-		/// MaxHealth, MaxMana, MaxStamina) use <c>WriteDeltaInt32</c> which benefits
-		/// from varint delta encoding.
+		/// Float fields (Health, Mana, Stamina) use raw <c>WriteSingle</c> — four exact bytes —
+		/// deliberately, not for want of an API. <c>Writer.WriteUDeltaSingle</c> and
+		/// <c>Reader.ReadUDeltaSingle</c> are public, but they are LOSSY: the writer floors a scaled
+		/// difference and the reader adds it onto its own copy, so a resource encoded that way
+		/// accumulates error against the server's exact value for as long as the delta chain runs.
+		/// These values decide death and whether an ability can be paid for. Int/uint fields
+		/// (NextRegenTick, MaxHealth, MaxMana, MaxStamina) use <c>WriteDeltaInt32</c>, which is a
+		/// varint difference and exact.
 		///
 		/// Float comparisons use a small epsilon (<see cref="FLOAT_EPSILON"/>) to avoid
 		/// false-positive deltas from cross-platform floating-point representation drift.
 		/// Values differing by less than 0.001 are treated as equal.
 		///
-		/// If FishNet adds a public float-delta API in the future, the float fields
-		/// should be migrated for better compression on small regen increments.
+		/// A float field is only worth moving to the delta primitive if it stops being something a
+		/// gameplay decision reads exactly.
 		/// </remarks>
 		private static bool WriteDelta(
 			Writer writer,

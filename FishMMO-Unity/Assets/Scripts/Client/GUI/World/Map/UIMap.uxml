@@ -1,0 +1,92 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIMap.uxml   —   FishMMO world map                           ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):               ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions         ║
+    ║    2. UIMapShared.uss    — marker styling, shared w/ minimap   ║
+    ║    3. UIMap.uss          — sizes, flex, spacing               ║
+    ║                                                              ║
+    ║  Class naming convention:                                     ║
+    ║    fish-*  Visual theme class  (FishMMO-Theme.uss)            ║
+    ║    map-*   Layout class        (UIMap.uss)                    ║
+    ║                                                              ║
+    ║  The map surface is built in C# and mounted into #map-view.   ║
+    ║  The filter toggles, colour swatches and note rows are built  ║
+    ║  in C# too, from MapFilters and the note store — a UXML copy   ║
+    ║  of a list whose length is data would go stale immediately.    ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIMapShared.uss" />
+    <Style src="UIMap.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel map-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header map-header">
+            <ui:VisualElement name="header-text" class="map-header__text">
+                <ui:Label name="header-title" class="fish-panel__title map-header__title" text="WORLD MAP" />
+                <ui:Label name="header-subtitle" class="fish-panel__subtitle map-header__subtitle" text="" />
+            </ui:VisualElement>
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <!-- ── BODY : the map, and the side bar ─────────────── -->
+        <ui:VisualElement name="map-body" class="map-body">
+
+            <ui:VisualElement name="map-surface-column" class="map-surface-column">
+                <ui:VisualElement name="map-view" class="map-view" />
+
+                <ui:VisualElement name="map-status" class="map-status">
+                    <ui:Label name="map-region" class="fish-label fish-label--accent map-status__region" text="" />
+                    <ui:VisualElement name="map-status-spacer" class="map-status__spacer" />
+                    <ui:Label name="map-cursor-position" class="fish-label fish-label--caption fish-label--numeric map-status__coords" text="" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="map-side" class="map-side">
+
+                <!-- Legend and filters -->
+                <ui:VisualElement name="map-legend-section" class="fish-section map-section">
+                    <ui:Label class="fish-label fish-label--title map-section__title" text="SHOW" />
+                    <ui:VisualElement name="map-filters" class="map-filters" />
+                </ui:VisualElement>
+
+                <!-- Notes -->
+                <ui:VisualElement name="map-notes-section" class="fish-section map-section map-section--grow">
+                    <ui:Label class="fish-label fish-label--title map-section__title" text="NOTES" />
+
+                    <ui:ScrollView name="map-note-scroll" class="fish-scroll map-note-scroll"
+                                   vertical-scroller-visibility="Auto"
+                                   horizontal-scroller-visibility="Hidden"
+                                   mode="Vertical">
+                        <ui:VisualElement name="map-note-list" class="map-note-list" />
+                    </ui:ScrollView>
+
+                    <ui:VisualElement name="map-note-editor" class="map-note-editor">
+                        <ui:TextField name="map-note-title" class="fish-input map-note-field" placeholder-text="Title" />
+                        <ui:TextField name="map-note-text" class="fish-input map-note-field map-note-field--body" placeholder-text="Note" multiline="true" />
+                        <ui:VisualElement name="map-note-colors" class="map-note-colors" />
+                        <ui:Button name="map-note-add" class="fish-button fish-button--primary map-note-add" text="PIN NOTE" />
+                        <ui:Label name="map-note-hint" class="fish-hint map-note-hint" text="" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ── FOOTER : zoom and progress ───────────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer map-footer">
+            <ui:Label name="map-explored" class="fish-label fish-label--caption map-footer__explored" text="" />
+            <ui:VisualElement name="map-footer-spacer" class="map-footer__spacer" />
+            <ui:Button name="map-recenter" class="fish-button fish-button--ghost map-footer__button" text="CENTRE ON ME" />
+            <ui:Slider name="map-zoom" class="fish-slider map-footer__zoom" low-value="30" high-value="500" direction="Horizontal" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

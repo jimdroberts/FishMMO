@@ -1,4 +1,4 @@
-using FishMMO.Shared.Core;
+﻿using FishMMO.Shared.Core;
 using FishNet.Managing.Timing;
 using UnityEngine;
 
@@ -37,9 +37,9 @@ namespace FishMMO.Shared
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 
 			int count;
-			if (TryResolveRewind(eventData, out ICharacter caster, out uint rewindTick))
+			if (TryResolveRewind(eventData, out ICharacter caster, out RewindTarget target))
 			{
-				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
+				using (LagCompensationRegistry.Rewind(context.scene, target, caster))
 				{
 					count = physicsScene.OverlapSphere(center, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
 				}
@@ -75,9 +75,9 @@ namespace FishMMO.Shared
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 
 			int count;
-			if (TryResolveRewind(eventData, out ICharacter caster, out uint rewindTick))
+			if (TryResolveRewind(eventData, out ICharacter caster, out RewindTarget target))
 			{
-				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
+				using (LagCompensationRegistry.Rewind(context.scene, target, caster))
 				{
 					count = physicsScene.Raycast(origin, direction, hits, distance, mask, QueryTriggerInteraction.UseGlobal);
 				}
@@ -94,10 +94,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Resolves the caster and the tick its client was rendering peers at.</summary>
-		public static bool TryResolveRewind(EventData eventData, out ICharacter caster, out uint rewindTick)
+		public static bool TryResolveRewind(EventData eventData, out ICharacter caster, out RewindTarget target)
 		{
 			caster = eventData?.Initiator;
-			rewindTick = 0u;
+			target = RewindTarget.None;
 
 			TimeManager timeManager = caster?.NetworkObject?.TimeManager;
 			if (timeManager == null)
@@ -105,7 +105,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			return LagCompensationTick.TryResolve(caster, timeManager, out rewindTick);
+			return LagCompensationTick.TryResolve(caster, timeManager, out target);
 		}
 	}
 }

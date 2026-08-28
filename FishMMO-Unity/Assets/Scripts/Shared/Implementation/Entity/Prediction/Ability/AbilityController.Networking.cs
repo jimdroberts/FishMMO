@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -543,9 +543,13 @@ namespace FishMMO.Shared
 			 * framing — ManagedObjects.WritePayload walks the whole list into a single writer, and
 			 * the reader walks it back the same way. A reader that stops early therefore does not
 			 * merely lose its own state: every behaviour after it in NetworkBehaviours reads from
-			 * the wrong offset. On an NPC that is Interactable.ReadPayload, which would register
-			 * the object in SceneObject.Objects under a garbage ID and quietly make it
-			 * uninteractable.
+			 * the wrong offset.
+			 *
+			 * Today nothing on any shipped prefab reads a payload after this controller — on the
+			 * NPC prefabs SceneObjectNamer, the Interactable and NPC itself all precede it, and on
+			 * the playable prefabs the behaviours that follow override neither payload method — so
+			 * the frame currently protects against a reordering rather than a live corruption. It
+			 * stays because component order is authored per prefab and nothing enforces it.
 			 *
 			 * ReadPayload has three defensive aborts for counts that cannot be trusted, and no way
 			 * to drain past them — the sizes it would need to skip are themselves derived from the

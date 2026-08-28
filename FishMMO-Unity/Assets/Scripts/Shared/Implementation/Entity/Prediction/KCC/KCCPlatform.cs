@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Object.Prediction;
 using FishNet.Component.Prediction;
 using FishNet.Connection;
@@ -110,15 +110,57 @@ namespace FishMMO.Shared
 		private List<Vector3> goals = new();
 
 		/// <summary>
-		/// Velocity of the platform during its most recently completed <see cref="PerformReplicate"/>
-		/// tick, in world units per second. Players riding the platform read this value so the
-		/// inherited platform velocity is independent of whether the player's NetworkBehaviour
-		/// ticks before or after this platform within the same network tick (FishNet does not
-		/// guarantee a deterministic OnTick order across separate NetworkObjects). Lag is at most
-		/// one tick (acceptable for moving-platform inheritance) but the value is consistent
-		/// between server and client because it is computed inside the deterministic [Replicate].
+		/// Velocity of the platform during its most recently completed <see cref="Step"/>, in world
+		/// units per second. Players riding the platform read this value so the inherited platform
+		/// velocity is independent of whether the player's NetworkBehaviour ticks before or after
+		/// this platform within the same network tick (FishNet does not guarantee a deterministic
+		/// OnTick order across separate NetworkObjects). Lag is at most one tick (acceptable for
+		/// moving-platform inheritance) but the value is consistent between server and client
+		/// because both compute it from the same deterministic <see cref="Step"/> — the server from
+		/// inside its <c>[Replicate]</c>, a client directly from its tick.
 		/// </summary>
 		public Vector3 LastCompletedTickVelocity { get; private set; }
+
+		/// <summary>Ticks of platform velocity kept for riders replaying a reconcile.</summary>
+		private const int VelocityHistoryLength = 64;
+
+		/// <summary>Per-tick velocity ring, indexed by <c>tick % VelocityHistoryLength</c>.</summary>
+		private readonly Vector3[] velocityHistory = new Vector3[VelocityHistoryLength];
+
+		/// <summary>The tick each <see cref="velocityHistory"/> slot holds, to detect a stale slot.</summary>
+		private readonly uint[] velocityHistoryTicks = new uint[VelocityHistoryLength];
+
+		/// <summary>
+		/// The velocity this platform produced on a specific tick.
+		/// </summary>
+		/// <remarks>
+		/// A rider replaying k ticks after a reconcile needs the velocity of each replayed tick, not
+		/// the platform's present one. The platform itself never replays — it has no owner and no
+		/// reconcile reaches a client — so without this every replayed tick inherited one frozen
+		/// value and the rider's replayed path bent at each direction reversal.
+		/// </remarks>
+		/// <param name="tick">The tick to look up.</param>
+		/// <param name="velocity">The velocity produced on that tick, when still held.</param>
+		/// <returns>True when the tick is still in the ring.</returns>
+		public bool TryGetVelocityForTick(uint tick, out Vector3 velocity)
+		{
+			int slot = (int)(tick % VelocityHistoryLength);
+			if (velocityHistoryTicks[slot] == tick)
+			{
+				velocity = velocityHistory[slot];
+				return true;
+			}
+			velocity = Vector3.zero;
+			return false;
+		}
+
+		/// <summary>Records the velocity produced on <paramref name="tick"/>.</summary>
+		private void RecordTickVelocity(uint tick, Vector3 velocity)
+		{
+			int slot = (int)(tick % VelocityHistoryLength);
+			velocityHistoryTicks[slot] = tick;
+			velocityHistory[slot] = velocity;
+		}
 
 		/// <summary>
 		/// Network collision component used to detect player entry and exit on the platform.
@@ -213,11 +255,14 @@ namespace FishMMO.Shared
 		/// position and run a full lap out of phase with the server, for the lifetime of the scene.
 		/// </para>
 		/// <para>
-		/// Per-tick movement needs no wire at all: <see cref="PerformReplicate"/> is autonomous and
-		/// deterministic — <c>MoveTowards</c> by a fixed <c>TimeManager.TickDelta</c> step — and it
-		/// snaps exactly onto each waypoint on arrival, so float drift is bounded within one leg and
-		/// reset at every corner. Fourteen bytes once per observer, instead of a reconcile every
-		/// tick to every observer.
+		/// Per-tick movement needs no wire at all: <see cref="Step"/> is autonomous and deterministic
+		/// — <c>MoveTowards</c> by a fixed <c>TimeManager.TickDelta</c> step — and it snaps exactly
+		/// onto each waypoint on arrival, so float drift is bounded within one leg and reset at every
+		/// corner. Both peers run it: the server from its <c>[Replicate]</c>, a client directly from
+		/// <c>TimeManager_OnTick</c>, because FishNet will not invoke an ownerless, non-forwarded
+		/// replicate body on a client (which is why the platform stood still on every client until
+		/// the 2026-08-28 audit). Fourteen bytes once per observer, instead of a reconcile every tick
+		/// to every observer.
 		/// </para>
 		/// <para>
 		/// <c>goals</c> is built in <c>Awake</c> from the authored scene position, which is identical
@@ -248,10 +293,32 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// The server drives the platform through the predicted <see cref="PerformReplicate"/>.
+		/// A client cannot: with state forwarding off and no owner, FishNet's
+		/// <c>Replicate_NonAuthoritative</c> returns before it invokes the replicate body, no
+		/// reconcile is ever sent (see <see cref="ReadPayload"/>), and this object carries no
+		/// NetworkTransform — so left to the replicate the platform never moved on any client
+		/// while it moved on the server, and riders diverged every tick. The client runs the
+		/// same deterministic step directly, from the state the spawn payload handed it.
+		/// </remarks>
 		protected override void TimeManager_OnTick()
 		{
-			PerformReplicate(default);
-			CreateReconcile();
+			if (base.IsServerStarted)
+			{
+				PerformReplicate(default);
+				CreateReconcile();
+			}
+			else
+			{
+				Step((float)TimeManager.TickDelta);
+			}
+
+			// Keyed by the tick that just ran, so a rider replaying it can ask for the same value.
+			if (TimeManager != null)
+			{
+				RecordTickVelocity(TimeManager.LocalTick, LastCompletedTickVelocity);
+			}
 		}
 
 		/// <inheritdoc/>
@@ -267,7 +334,21 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void PerformReplicate(ReplicateData rd, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
-			float delta = (float)TimeManager.TickDelta;
+			Step((float)TimeManager.TickDelta);
+		}
+
+		/// <summary>
+		/// One deterministic tick of platform movement: <c>MoveTowards</c> the current goal by
+		/// <paramref name="delta"/> × <c>moveRate</c>, snap onto the goal on arrival and advance
+		/// the goal index. Shared by the server's replicate and the client's direct tick.
+		/// </summary>
+		/// <param name="delta">Fixed tick step in seconds.</param>
+		internal void Step(float delta)
+		{
+			if (goals.Count == 0)
+			{
+				return;
+			}
 
 			Vector3 from = transform.position;
 			Vector3 goal = goals[goalIndex];
@@ -301,8 +382,9 @@ namespace FishMMO.Shared
 		{
 			transform.position = rd.Position;
 			goalIndex = rd.GoalIndex;
-			// LastCompletedTickVelocity is intentionally not reconciled — it will be refreshed
-			// on the next PerformReplicate (which runs once per replayed tick).
+			/* LastCompletedTickVelocity is intentionally not reconciled — the next Step refreshes it.
+			 * Note this reconcile only runs on the server: with no owner and forwarding off nothing
+			 * is sent, and no client ever replays this object. */
 		}
 
 		/// <inheritdoc/>

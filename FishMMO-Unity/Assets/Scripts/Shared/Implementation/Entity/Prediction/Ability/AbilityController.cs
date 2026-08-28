@@ -1,4 +1,4 @@
-using FishNet.Object.Prediction;
+﻿using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -64,6 +64,53 @@ namespace FishMMO.Shared
 		/// Cleared after each <see cref="OnCreateReconcile"/>.
 		/// </summary>
 		private bool wasDenied;
+
+		/// <summary>Cached longest range among <c>KnownAbilities</c>; see <see cref="LongestKnownAbilityRange"/>.</summary>
+		private float longestKnownAbilityRange;
+
+		/// <summary>True when <see cref="longestKnownAbilityRange"/> needs recomputing.</summary>
+		private bool longestKnownAbilityRangeDirty = true;
+
+		/// <summary>
+		/// The longest range among this character's known abilities — how far it can reach, and so
+		/// how far out its observer needs tick-exact transforms for lag compensation to be honest.
+		/// </summary>
+		/// <remarks>
+		/// Recomputed only when the known set changes, because it is read per observer per LOD
+		/// evaluation. Note <c>Ability.Range</c> is <c>Speed * LifeTime</c> and no ability template
+		/// currently authors a Speed, so this is 0 for all present content and
+		/// <c>ObserverStreamingPolicy.EngagementRange</c>'s floor is what applies.
+		/// </remarks>
+		public float LongestKnownAbilityRange
+		{
+			get
+			{
+				if (longestKnownAbilityRangeDirty)
+				{
+					longestKnownAbilityRange = 0f;
+					if (KnownAbilities != null)
+					{
+						foreach (Ability ability in KnownAbilities.Values)
+						{
+							if (ability != null && ability.Range > longestKnownAbilityRange)
+							{
+								longestKnownAbilityRange = ability.Range;
+							}
+						}
+					}
+					longestKnownAbilityRangeDirty = false;
+				}
+				return longestKnownAbilityRange;
+			}
+		}
+
+		/// <summary>
+		/// Set when the server completed an activation that produced no ability object, so the
+		/// reconcile can tell the owner to take back the object it spawned for that tick.
+		/// Cleared after each <see cref="OnCreateReconcile"/>, like <see cref="wasDenied"/>.
+		/// See <see cref="AbilityActivationFlags.NoSpawn"/>.
+		/// </summary>
+		internal bool serverSpawnedNothing;
 
 		/// <summary>
 		/// The ID of the next ability to activate after the current one, or NO_ABILITY if none.
@@ -390,6 +437,7 @@ namespace FishMMO.Shared
 			// Clear the server-side denial sentinel so a respawn/possession does not
 			// carry over a stale Denied bit into the next reconcile.
 			wasDenied = false;
+			serverSpawnedNothing = false;
 			Cancel();
 
 			// Ensure no stale slot locks remain after state reset.
@@ -415,6 +463,7 @@ namespace FishMMO.Shared
 			ClearObservedAbilities();
 
 			KnownAbilities.Clear();
+			longestKnownAbilityRangeDirty = true;
 			KnownBaseAbilities.Clear();
 			KnownAbilityEvents.Clear();
 			KnownAbilityOnTickEvents.Clear();
@@ -618,7 +667,10 @@ namespace FishMMO.Shared
 			replicatedAimOrigin = CharacterAimOrigin.Resolve(Character);
 			replicatedAimDirection = input.AimDirection.sqrMagnitude > 1e-12f
 				? input.AimDirection
-				: AimDirectionCompression.FallbackDirection;
+				// The QUANTISED fallback: KCCPlayer.PopulateInput writes that vector for a missing
+				// aim, so substituting the raw one here would have this peer simulate a direction
+				// slightly different from the one the owner committed to. See the remarks on it.
+				: AimDirectionCompression.QuantizedFallbackDirection;
 
 			HandlePrediction(ref activationData, state);
 
@@ -784,6 +836,11 @@ namespace FishMMO.Shared
 				flags.EnableBit(AbilityActivationFlags.Denied);
 				wasDenied = false;
 			}
+			if (serverSpawnedNothing)
+			{
+				flags.EnableBit(AbilityActivationFlags.NoSpawn);
+				serverSpawnedNothing = false;
+			}
 
 			if ((flags & ~0xFFFF) != 0)
 				Log.Warning("AbilityController", $"replicatedFlags 0x{flags:X} exceeds 16-bit Pack range");
@@ -853,8 +910,9 @@ namespace FishMMO.Shared
 
 			/* True when the server demonstrably did NOT spawn at the reconcile tick while this
 			 * client did, so the object spawned exactly ON that tick has to go too. */
+			bool serverSpawnedNothingAtTick = rd.UnpackFlags.IsFlagged(AbilityActivationFlags.NoSpawn);
 			bool destroyAtTick = ShouldDestroySpawnsAtReconcileTick(denied, havePredicted, predictedSeed,
-				havePrevious, previousSeed, rd.Seed);
+				havePrevious, previousSeed, rd.Seed, serverSpawnedNothingAtTick);
 
 			// Detect prediction mismatch: the client's simulation of this tick produced a
 			// different seed than the server's, so the client spawned something the server did
@@ -960,18 +1018,32 @@ namespace FishMMO.Shared
 		/// <param name="havePrevious">A history entry exists for the tick before the reconcile tick.</param>
 		/// <param name="previousSeed">The client's seed after simulating the tick before the reconcile tick.</param>
 		/// <param name="serverSeed">The server's seed after the reconcile tick.</param>
+		/// <param name="serverSpawnedNothing">
+		/// The server set <see cref="AbilityActivationFlags.NoSpawn"/> for this tick: it completed an
+		/// activation and produced no object. The seeds AGREE in this case — the seed advances
+		/// whether or not a spawn happened — so this has to be judged before the matching-seed exit
+		/// below, or the owner's object is confirmed by the very fact that both sides advanced.
+		/// </param>
 		internal static bool ShouldDestroySpawnsAtReconcileTick(
 			bool denied,
 			bool havePredicted,
 			int predictedSeed,
 			bool havePrevious,
 			int previousSeed,
-			int serverSeed)
+			int serverSeed,
+			bool serverSpawnedNothing = false)
 		{
 			// Nothing to compare against.
 			if (!havePredicted)
 			{
 				return false;
+			}
+
+			/* The server ran the activation and spawned nothing. Anything the client spawned at T is
+			 * unconfirmed regardless of seed agreement. */
+			if (serverSpawnedNothing)
+			{
+				return true;
 			}
 
 			/* Client and server agree about tick T. Whatever happened at T happened on both, so
@@ -1049,9 +1121,9 @@ namespace FishMMO.Shared
 		/// per-character seed from <see cref="playerSeedGenerator"/>; clients initialize
 		/// from the last payload/reconcile seed without advancing the shared static RNG.
 		/// Sets <see cref="currentSeed"/> to the first generated value.
-		/// Called from <see cref="ResetState"/>, <see cref="CreateReconcile"/>, and
-		/// <see cref="WritePayload"/> — all three paths must produce identical results
-		/// when the generator is null, so the logic is centralized here.
+		/// Called from <c>OnStartNetwork</c>, <see cref="ResetState"/>, <c>OnCreateReconcile</c> and
+		/// <c>WritePayload</c> — every path must produce identical results when the generator is
+		/// null, so the logic is centralized here.
 		/// </summary>
 		private void EnsureAbilitySeedGenerator()
 		{

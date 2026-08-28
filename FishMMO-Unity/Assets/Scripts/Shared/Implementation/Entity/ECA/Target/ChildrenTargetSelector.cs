@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -15,8 +15,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns all direct children of the context <see cref="GameObject"/>.
 		/// </summary>
-		/// <param name="context">The parent <see cref="GameObject"/> whose children to select.</param>
-		/// <returns>An enumerable of all direct child <see cref="GameObject"/>s, or empty if context is null.</returns>
+		/// <param name="eventData">The event driving the selection; its context object is the parent.</param>
+		/// <returns>An enumerable of all direct child <see cref="GameObject"/>s, or empty if there is no context.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
 			GameObject context = GetContext(eventData);

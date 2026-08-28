@@ -1,4 +1,4 @@
-using FishNet.Object;
+﻿using FishNet.Object;
 
 namespace FishMMO.Shared
 {
@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 	/// <b>Why this type exists.</b> The two systems overlap completely. Turning forwarding on
 	/// without silencing the broadcasts does not merely pay for both — for equipment and buffs it
 	/// produces conflicting writes, because the reconcile path and the broadcast path build
-	/// different objects for the same slot and spawn independent effect instances for the same buff.
+	/// different objects for the same slot and build items carrying different identities for the same slot.
 	/// Every push site and every reconcile consumer asks this type whose turn it is, so the flag is
 	/// a real switch rather than a trap for whoever flips it.
 	/// </para>
