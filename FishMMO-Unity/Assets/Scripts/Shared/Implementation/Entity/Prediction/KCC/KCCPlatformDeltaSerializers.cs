@@ -1,4 +1,4 @@
-using FishNet.Serializing;
+﻿using FishNet.Serializing;
 using FishMMO.Logging;
 using UnityEngine;
 
@@ -149,6 +149,12 @@ namespace FishMMO.Shared
 			 * only decodable by a peer holding the same baseline the writer used. Forcing every
 			 * field through them does not produce a self-contained payload; it just guarantees
 			 * every field is present, still relative to a baseline the receiver may not have.
+			 *
+			 * NOTE (2026-08-28 audit): none of this reaches the wire today. With no owner and state
+			 * forwarding off, Server_SendReconcileRpc returns before writing anything, so this
+			 * reconcile serializer is dead code — a client advances the platform by calling
+			 * KCCPlatform.Step directly from its own tick. It is kept, correct and tested, against
+			 * forwarding being enabled later; the reasoning below is what it would need to do then.
 			 *
 			 * That matters more here than anywhere else. A platform is a scene object that starts
 			 * ticking when the scene loads and never stops, so EVERY client connects to a chain

@@ -19,6 +19,7 @@
   <Project Path="QuickOutline.csproj" />
   <Project Path="FishMMO.Client.Security.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
+  <Project Path="FishMMO.Shared.Map.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />

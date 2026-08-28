@@ -1,0 +1,123 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIMapShared.uss
+    Map marker styling  —  shared by the minimap and the world map
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO color literals — every colour is a --map-* token from FishMMO-Theme.uss.
+
+    Loaded by BOTH UIMinimap.uxml and UIMap.uxml. That is the point of the file:
+    the two panels draw the same markers through the same UITKMapView, and a
+    per-panel copy of these rules is how the same creature ends up a different
+    colour depending on which map the player is looking at.
+
+    The type modifier classes are generated in C# from MapMarkerType — the class
+    name is the enum member lowercased, prefixed with map-marker--. A type added
+    to the enum without a rule here still draws, in the fallback colour below;
+    it is a missing style, not a missing marker.
+
+    Every marker is drawn as a coloured dot because the project ships no marker
+    art yet. Assigning a Sprite on a MapMarker or a point of interest replaces
+    the dot with that sprite, tinted by the marker's own colour, with no change
+    needed here.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   MARKER
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    Positioned absolutely by C#, which writes left/top in pixels and a -50%/-50% translate so those
+    coordinates address the marker's centre rather than its top-left corner.
+*/
+.map-marker {
+    position: absolute;
+    flex-direction: row;
+    align-items: center;
+}
+
+/*
+    The dot. Its size is written per-marker in C# (a landmark is larger than a note), so no width
+    or height is declared here — only the shape, the outline and the fallback colour.
+
+    The outline is not decoration. A marker is drawn over terrain of arbitrary brightness, and a
+    plain coloured dot disappears against ground of a similar tone; a dark ring gives every marker
+    an edge against sand and snow as well as against water.
+*/
+.map-marker__icon {
+    border-radius: 50%;
+    border-width: 1px;
+    border-color: var(--shadow-text-hard);
+    background-color: var(--map-npc);
+    flex-shrink: 0;
+}
+
+.map-marker__label {
+    margin-left: 3px;
+    font-size: 10px;
+    color: var(--text-bright);
+    text-shadow: 1px 1px 2px var(--shadow-text-hard);
+    white-space: nowrap;
+}
+
+/*
+    A marker pinned to the frame edge because its object is outside the view. Shrunk and dimmed:
+    it is a direction, not a position, and drawing it at full weight puts a permanent ring of
+    bright dots around the map that competes with everything actually on it.
+*/
+.map-marker--clamped {
+    opacity: 0.7;
+}
+
+.map-marker--clamped .map-marker__icon {
+    scale: 0.75 0.75;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   MARKER TYPES
+   ═══════════════════════════════════════════════════════════ */
+
+/*
+    The player's own character. Larger and ringed in white so it is findable at a glance on a busy
+    map — this is the one marker a player looks for deliberately rather than notices.
+*/
+.map-marker--self .map-marker__icon {
+    background-color: var(--map-self);
+    border-color: var(--brand-500);
+    border-width: 2px;
+}
+
+.map-marker--partymember .map-marker__icon { background-color: var(--map-party); }
+.map-marker--guildmember .map-marker__icon { background-color: var(--map-guild); }
+.map-marker--friendlyplayer .map-marker__icon { background-color: var(--map-friendly); }
+.map-marker--neutralplayer .map-marker__icon { background-color: var(--map-neutral); }
+.map-marker--hostileplayer .map-marker__icon { background-color: var(--map-hostile); }
+
+.map-marker--npc .map-marker__icon { background-color: var(--map-npc); }
+.map-marker--vendor .map-marker__icon { background-color: var(--map-vendor); }
+.map-marker--questgiver .map-marker__icon { background-color: var(--map-questgiver); }
+.map-marker--trainer .map-marker__icon { background-color: var(--map-trainer); }
+.map-marker--service .map-marker__icon { background-color: var(--map-service); }
+.map-marker--resource .map-marker__icon { background-color: var(--map-resource); }
+.map-marker--enemy .map-marker__icon { background-color: var(--map-enemy); }
+.map-marker--interactable .map-marker__icon { background-color: var(--map-interactable); }
+.map-marker--teleporter .map-marker__icon { background-color: var(--map-teleporter); }
+
+/*
+    Landmarks and notes are squared off rather than round. They are places on the map rather than
+    things in the world, and the shape difference separates them from the creature markers at a
+    size where colour alone does not.
+*/
+.map-marker--landmark .map-marker__icon {
+    background-color: var(--map-landmark);
+    border-radius: 2px;
+}
+
+.map-marker--note .map-marker__icon {
+    background-color: var(--map-note);
+    border-radius: 2px;
+}

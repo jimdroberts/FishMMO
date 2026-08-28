@@ -16,6 +16,12 @@ namespace FishMMO.Client
 	/// </summary>
 	public class PlayerInputController : MonoBehaviour
 	{
+
+		/// <summary>
+		/// The last orientation method sent to the server, so the per-frame input pass only sends the
+		/// ServerRpc when the value actually changes. Null until the first send.
+		/// </summary>
+		private OrientationMethod? lastSentOrientationMethod;
 		// ── Static mouse-mode & global input state ─────────────────────────
 
 		/// <summary>
@@ -262,6 +268,7 @@ namespace FishMMO.Client
 			Controls.Player.Achievements.performed += OnAchievementsPerformed;
 			Controls.Player.Factions.performed += OnFactionsPerformed;
 			Controls.Player.Minimap.performed += OnMinimapPerformed;
+			Controls.Player.WorldMap.performed += OnWorldMapPerformed;
 			Controls.Player.Lore.performed += OnLorePerformed;
 			Controls.Player.Pet.performed += OnPetPerformed;
 			Controls.Player.Options.performed += OnOptionsPerformed;
@@ -309,6 +316,7 @@ namespace FishMMO.Client
 			Controls.Player.Achievements.performed -= OnAchievementsPerformed;
 			Controls.Player.Factions.performed -= OnFactionsPerformed;
 			Controls.Player.Minimap.performed -= OnMinimapPerformed;
+			Controls.Player.WorldMap.performed -= OnWorldMapPerformed;
 			Controls.Player.Lore.performed -= OnLorePerformed;
 			Controls.Player.Pet.performed -= OnPetPerformed;
 			Controls.Player.Options.performed -= OnOptionsPerformed;
@@ -345,6 +353,7 @@ namespace FishMMO.Client
 			UIManager.Hide("UIBuff");
 			UIManager.Hide("UIDebuff");
 			UIManager.Hide("UIMinimap");
+			UIManager.Hide("UIMap");
 		}
 
 		/// <summary>
@@ -470,7 +479,20 @@ namespace FishMMO.Client
 				Vector3 lookInputVector = new Vector3(lookInput.x, lookInput.y, 0f);
 
 				Character.KCCPlayer.UpdateCamera(-mouseScrollInput, lookInputVector);
-				Character.KCCPlayer.SetOrientationMethod(Character.KCCPlayer.CharacterController.OrientationMethod);
+
+				/* Only when it actually changes.
+				 *
+				 * This is a ServerRpc, and it sat in LateUpdate re-sending the value it had just read
+				 * back off the controller — 120 messages per second per player at 120 FPS, every one
+				 * of them carrying an enum the server already had. The orientation method changes
+				 * when the player toggles a camera mode, which is not a per-frame event. */
+				OrientationMethod orientationMethod = Character.KCCPlayer.CharacterController.OrientationMethod;
+				if (!lastSentOrientationMethod.HasValue ||
+					lastSentOrientationMethod.Value != orientationMethod)
+				{
+					lastSentOrientationMethod = orientationMethod;
+					Character.KCCPlayer.SetOrientationMethod(orientationMethod);
+				}
 			}
 			else
 			{
@@ -800,6 +822,22 @@ namespace FishMMO.Client
 		{
 			if (TypingIntoField) return;
 			UIManager.ToggleVisibility("UIMinimap");
+		}
+
+		/// <summary>
+		/// Callback for the world map shortcut.
+		/// </summary>
+		/// <remarks>
+		/// A key of its own rather than sharing the minimap's. The two are different things — one
+		/// hides a permanent HUD element, the other opens a window — and binding both to M would
+		/// make the common action (open the map) also perform the rare and confusing one (make the
+		/// minimap disappear). The minimap's own MAP button opens the same panel for players who
+		/// never learn the key.
+		/// </remarks>
+		private void OnWorldMapPerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+			UIManager.ToggleVisibility("UIMap");
 		}
 
 		/*

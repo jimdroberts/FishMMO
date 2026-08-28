@@ -1,9 +1,48 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIMinimap.uxml   —   FishMMO heads-up minimap                ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):               ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions         ║
+    ║    2. UIMinimap.uss      — sizes, flex, spacing               ║
+    ║    3. UIMapShared.uss    — marker styling, shared with UIMap  ║
+    ║                                                              ║
+    ║  The map surface itself is NOT authored here. UITKMinimap     ║
+    ║  builds a UITKMapView in C# and mounts it into #minimap-view, ║
+    ║  because the same element is mounted into the world map and   ║
+    ║  a UXML copy of it would be a second thing to keep in step.   ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIMinimap.uss" />
+    <Style src="../Map/UIMapShared.uss" />
+
     <ui:VisualElement name="minimap-root" class="minimap-root" picking-mode="Ignore">
         <ui:VisualElement name="minimap-frame" class="fish-panel minimap-frame">
-            <ui:VisualElement name="minimap-view" class="minimap-view" />
+
+            <!-- ── HEADER : where the player is ─────────────────── -->
+            <ui:VisualElement name="minimap-header" class="minimap-header">
+                <ui:Label name="minimap-location" class="fish-label minimap-location" text="" />
+                <ui:Label name="minimap-coordinates" class="fish-label fish-label--caption fish-label--numeric minimap-coordinates" text="" />
+            </ui:VisualElement>
+
+            <!-- ── BODY : the map surface, plus the compass ─────── -->
+            <ui:VisualElement name="minimap-body" class="minimap-body">
+                <ui:VisualElement name="minimap-view" class="minimap-view" />
+                <ui:Label name="minimap-compass" class="minimap-compass" text="N" picking-mode="Ignore" />
+            </ui:VisualElement>
+
+            <!-- ── FOOTER : zoom, and the way into the world map ── -->
+            <ui:VisualElement name="minimap-footer" class="minimap-footer">
+                <ui:Button name="minimap-zoom-out" class="fish-button fish-button--ghost minimap-button" text="−" tooltip="Zoom out" />
+                <ui:Button name="minimap-map-button" class="fish-button minimap-button minimap-button--map" text="MAP" tooltip="Open the world map" />
+                <ui:Button name="minimap-zoom-in" class="fish-button fish-button--ghost minimap-button" text="+" tooltip="Zoom in" />
+            </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
+
 </ui:UXML>

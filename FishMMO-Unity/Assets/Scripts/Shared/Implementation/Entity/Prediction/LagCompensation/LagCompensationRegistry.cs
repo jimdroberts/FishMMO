@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
 using UnityEngine;
@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 	/// scope rather than a pair of calls.
 	/// </para>
 	/// <code>
-	/// using (LagCompensationRegistry.Rewind(scene, tick, caster))
+	/// using (LagCompensationRegistry.Rewind(scene, target, caster))
 	/// {
 	///     hitCount = physicsScene.OverlapSphere(center, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
 	/// }
@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 		/// <param name="scene">Scene whose characters should be rewound.</param>
 		/// <param name="tick">Server tick to resolve against.</param>
 		/// <param name="exclude">Character to leave in place — normally the caster.</param>
-		public static RewindScope Rewind(Scene scene, uint tick, ICharacter exclude = null)
+		public static RewindScope Rewind(Scene scene, RewindTarget target, ICharacter exclude = null)
 		{
 			if (scopeOpen)
 			{
@@ -128,7 +128,7 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				if (history.Rewind(tick))
+				if (history.Rewind(target))
 				{
 					rewound.Add(history);
 				}

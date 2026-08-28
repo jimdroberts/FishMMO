@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -112,12 +112,12 @@ namespace FishMMO.Shared
 		/// <param name="gather">The query and ranking to run under the scope.</param>
 		protected static void GatherRewound(EventData eventData, GameObject context, List<GameObject> results, GatherTargets gather)
 		{
-			if (LagCompensatedQuery.TryResolveRewind(eventData, out ICharacter caster, out uint rewindTick))
+			if (LagCompensatedQuery.TryResolveRewind(eventData, out ICharacter caster, out RewindTarget target))
 			{
 				/* A nested Rewind is refused by the registry rather than stacked, so a selector
 				 * invoked from inside somebody else's scope (a region action fanning out over several
 				 * characters in one tick) runs against that outer rewind instead of corrupting it. */
-				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
+				using (LagCompensationRegistry.Rewind(context.scene, target, caster))
 				{
 					gather(eventData, context, results);
 				}

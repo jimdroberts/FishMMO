@@ -182,6 +182,48 @@
     --shadow-text-hard: rgba(0, 0, 0, 0.95);
     --shadow-text-soft: rgba(0, 0, 0, 0.90);
 
+    /* ── Map ──────────────────────────────────────────────
+       Marker colours for the minimap and the world map, and the fog that covers
+       ground the character has not walked.
+
+       A palette of its own rather than reuse of the resource and rarity colours.
+       A map marker is read at fourteen points against terrain of every possible
+       hue, in a glance, while the player is doing something else — so the set has
+       to be separable at small size from each other AND from grass, sand, stone
+       and water. The rarity ramp is tuned for text on a dark panel and fails both
+       tests: its common grey vanishes on rock, and its rare blue is the same
+       colour as the sea.
+
+       The relationship colours deliberately follow the convention players already
+       have from every other MMO — own arrow white, group green, guild teal,
+       hostile red — because a map is the last place to be original about which
+       dot is the enemy.
+
+       Fog is nearly opaque and very slightly blue rather than pure black: an
+       unexplored area should read as unlit distance, and true black against a
+       dark map reads as a hole in the rendering.                              */
+    --map-self:         rgb(255, 255, 255);
+    --map-party:        rgb(85, 199, 122);
+    --map-guild:        rgb(63, 201, 192);
+    --map-friendly:     rgb(120, 190, 240);
+    --map-neutral:      rgb(224, 200, 128);
+    --map-hostile:      rgb(224, 82, 82);
+    --map-npc:          rgb(190, 205, 216);
+    --map-vendor:       rgb(224, 178, 92);
+    --map-questgiver:   rgb(255, 214, 80);
+    --map-trainer:      rgb(163, 106, 224);
+    --map-service:      rgb(150, 185, 210);
+    --map-resource:     rgb(140, 210, 120);
+    --map-enemy:        rgb(214, 108, 72);
+    --map-interactable: rgb(178, 196, 208);
+    --map-teleporter:   rgb(126, 168, 255);
+    --map-landmark:     rgb(236, 220, 180);
+    --map-note:         rgb(250, 216, 90);
+    --map-fog:          rgba(3, 7, 11, 0.94);
+    --map-surface:      rgb(6, 12, 17);
+    --map-grid:         rgba(88, 179, 241, 0.14);
+    --map-frame:        rgba(88, 179, 241, 0.30);
+
     /* ── Extras ───────────────────────────────────────── */
     --black: rgb(0, 0, 0);
     --white: rgb(255, 255, 255);

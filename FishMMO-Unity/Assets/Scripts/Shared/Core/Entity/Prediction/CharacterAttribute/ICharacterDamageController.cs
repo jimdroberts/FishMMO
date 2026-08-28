@@ -87,7 +87,8 @@ namespace FishMMO.Shared.Core
 		void CompleteHeal();
 
 		/// <summary>
-		/// Revives (resurrects) a dead character, setting health to the given amount.
+		/// Revives (resurrects) a dead character, ADDING the given amount to its health.
+		/// Equivalent to setting it only when the character is at zero, which a dead one is.
 		/// Unlike Heal(), this works when CurrentValue is 0. Resets death animation.
 		/// </summary>
 		/// <param name="resurrector">The character performing the resurrection, or null.</param>

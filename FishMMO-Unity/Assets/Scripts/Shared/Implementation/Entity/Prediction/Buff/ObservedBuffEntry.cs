@@ -1,4 +1,4 @@
-namespace FishMMO.Shared
+﻿namespace FishMMO.Shared
 {
 	/// <summary>
 	/// One buff on another character, as the SERVER has chosen to show it to observers.
@@ -25,13 +25,24 @@ namespace FishMMO.Shared
 		/// <summary>The buff template's cached ID.</summary>
 		public int TemplateID;
 
-		/// <summary>Stack count above the base application (0 = one application).</summary>
+		/// <summary>
+		/// Stack count above the base application: 0 means one application, 2 means three.
+		/// </summary>
+		/// <remarks>
+		/// True again as of the 2026-08-28 audit. A freshly applied stacking buff used to run both
+		/// the new-buff branch and the stack branch, so it arrived here reporting 1 while having
+		/// applied its modifier twice; <c>MaxStacks</c> is the total number of applications.
+		/// </remarks>
 		public int Stacks;
 
 		/// <summary>Seconds remaining when the server sent this, or 0 for a permanent buff.</summary>
 		public float RemainingSeconds;
 
-		/// <summary>The buff's full duration in seconds, or 0 for a permanent buff.</summary>
+		/// <summary>
+		/// The buff's full authored duration in seconds, straight from the template — including for a
+		/// permanent buff, whose authored Duration is reported as-is. Only <c>RemainingSeconds</c> is
+		/// 0 for a permanent buff.
+		/// </summary>
 		public float TotalSeconds;
 	}
 }
