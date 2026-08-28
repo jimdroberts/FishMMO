@@ -54,11 +54,9 @@ namespace FishMMO.Shared
 			GameObject context = GetContext(eventData);
 			if (context == null) yield break;
 			EnsureHitBuffer();
-			var scene = context.scene;
-			PhysicsScene physicsScene = scene.GetPhysicsScene();
 			Vector3 origin = context.transform.position;
 			Vector3 direction = context.transform.forward;
-			int hitCount = physicsScene.Raycast(origin, direction, hits, Length, TargetLayer, QueryTriggerInteraction.UseGlobal);
+			int hitCount = RewoundRaycast(eventData, context, origin, direction, Length, hits, TargetLayer);
 			for (int i = 0; i < hitCount; i++)
 			{
 				RaycastHit hit = hits[i];

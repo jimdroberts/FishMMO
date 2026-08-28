@@ -166,7 +166,7 @@ namespace FishMMO.Installer
 		/// <summary>
 		/// Default Unity Editor version to install.
 		/// </summary>
-		public const string UnityDefaultVersion = "6000.3.2f1";
+		public const string UnityDefaultVersion = "6000.4.10f1";
 
 		/// <summary>
 		/// Available Unity modules that can be installed alongside the editor.

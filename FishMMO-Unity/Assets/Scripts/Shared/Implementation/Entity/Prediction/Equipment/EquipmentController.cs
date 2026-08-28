@@ -52,6 +52,16 @@ namespace FishMMO.Shared
 		private EquipmentReconcileEntry[] cachedEquipmentSnapshot;
 		private bool equipmentSnapshotDirty = true;
 
+		/// <summary>
+		/// Reusable slot-index set for <see cref="RestoreFromReconcile"/>.
+		/// </summary>
+		/// <remarks>
+		/// Preallocated because reconcile runs on every differing tick on the owner's hottest
+		/// path — the same reason the buff and cooldown controllers pool their reconcile sets.
+		/// Cleared on entry so it never carries state between calls.
+		/// </remarks>
+		private readonly HashSet<int> reconcileSlots = new HashSet<int>();
+
 		/// <inheritdoc />
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
@@ -139,15 +149,9 @@ namespace FishMMO.Shared
 			int slotCount = Items != null ? Items.Count : 0;
 			if (slotCount == 0) return;
 
-			// Build current state map: slot → item (null if empty)
-			Item[] currentItems = new Item[slotCount];
-			for (int i = 0; i < slotCount; i++)
-			{
-				currentItems[i] = Items[i];
-			}
-
-			// Build reconcile state set for fast lookup
-			HashSet<int> reconcileSlots = new HashSet<int>();
+			// Build reconcile state set for fast lookup. Pooled — this runs on every differing
+			// reconcile tick on the owner, so a per-call HashSet is garbage at tick rate.
+			reconcileSlots.Clear();
 			if (entries != null)
 			{
 				for (int i = 0; i < entries.Length; i++)
@@ -158,16 +162,23 @@ namespace FishMMO.Shared
 
 			bool changed = false;
 
-			// 1. Unequip items in slots that server says are empty
+			/* 1. Unequip items in slots that server says are empty.
+			 *
+			 * Items is read directly rather than through a defensive copy: the slot list is fixed
+			 * size (one entry per ItemSlot enum value, never resized), each iteration reads its
+			 * slot before the SetItemSlot below mutates it, and SetItemSlot touches only that one
+			 * index. The old Item[] copy existed to guard against iteration-under-mutation that
+			 * cannot occur here, at the cost of an array allocation per reconcile. */
 			for (int i = 0; i < slotCount; i++)
 			{
-				if (currentItems[i] != null && !reconcileSlots.Contains(i))
+				Item existing = Items[i];
+				if (existing != null && !reconcileSlots.Contains(i))
 				{
-					if (currentItems[i].IsEquippable)
+					if (existing.IsEquippable)
 					{
-						currentItems[i].Equippable.Unequip();
+						existing.Equippable.Unequip();
 					}
-					OnItemUnequipped?.Invoke(currentItems[i], (ItemSlot)i);
+					OnItemUnequipped?.Invoke(existing, (ItemSlot)i);
 					SetItemSlot(null, i);
 					changed = true;
 				}
@@ -238,9 +249,45 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc />
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		private const int EQUIPMENT_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
+		/// Upper bound on equipped items accepted from a spawn payload. Well above the number of
+		/// equipment slots; exists so a corrupt count cannot drive an unbounded read loop.
+		/// </summary>
+		private const int MAX_PAYLOAD_EQUIPMENT = 256;
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
+			/* Where this behaviour's data ends. FishNet packs every NetworkBehaviour's spawn
+			 * payload into one buffer with no per-behaviour framing, so an abort here would leave
+			 * every behaviour after this one reading from the wrong offset. The length is validated
+			 * against what the reader holds first; Reader.Position has no bounds check. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("EquipmentController",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in " +
+					"the spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int equipmentBlockLength = (int)declaredLength;
+			int equipmentBlockEnd = reader.Position + equipmentBlockLength;
+
 			int itemCount = reader.ReadInt32();
+			if (itemCount < 0 || itemCount > MAX_PAYLOAD_EQUIPMENT)
+			{
+				Log.Error("EquipmentController",
+					$"ReadPayload: item count {itemCount} is outside [0, {MAX_PAYLOAD_EQUIPMENT}]. Aborting payload read.");
+				reader.Position = equipmentBlockEnd;
+				return;
+			}
+
 			for (int i = 0; i < itemCount; ++i)
 			{
 				long id = reader.ReadInt64();
@@ -257,16 +304,35 @@ namespace FishMMO.Shared
 					item.Equippable.Equip(Character);
 				}
 			}
+
+			/* Belt and braces on the success path: the frame absorbs any shape disagreement here
+			 * rather than corrupting the behaviour after this one. */
+			if (reader.Position != equipmentBlockEnd)
+			{
+				Log.Error("EquipmentController",
+					$"ReadPayload consumed {reader.Position - (equipmentBlockEnd - equipmentBlockLength)} of " +
+					$"{equipmentBlockLength} framed bytes. Seeking to the end of the block; the equipment " +
+					"state read above may be incomplete.");
+				reader.Position = equipmentBlockEnd;
+			}
+
 			equipmentSnapshotDirty = true;
 		}
 
 		/// <inheritdoc />
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			/* Everything below is framed by a byte count so ReadPayload can resynchronise after
+			 * rejecting an untrustworthy count. See EQUIPMENT_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(EQUIPMENT_PAYLOAD_LENGTH_BYTES);
+			int equipmentBlockStart = writer.Position;
+
 			if (Items == null ||
 				Items.Count < 1)
 			{
 				writer.WriteInt32(0);
+				writer.InsertUInt32Unpacked((uint)(writer.Position - equipmentBlockStart),
+					equipmentBlockStart - EQUIPMENT_PAYLOAD_LENGTH_BYTES);
 				return;
 			}
 
@@ -283,6 +349,9 @@ namespace FishMMO.Shared
 				writer.WriteInt32(item.IsGenerated ? item.Generator.Seed : 0);
 				writer.WriteUInt32(item.IsStackable ? item.Stackable.Amount : 0);
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - equipmentBlockStart),
+				equipmentBlockStart - EQUIPMENT_PAYLOAD_LENGTH_BYTES);
 		}
 
 #if !UNITY_SERVER
