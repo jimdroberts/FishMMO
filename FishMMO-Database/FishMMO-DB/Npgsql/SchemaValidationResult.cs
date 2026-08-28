@@ -9,23 +9,22 @@ namespace FishMMO.Database.Npgsql
 	/// Produced by <see cref="NpgsqlDbContextFactory.ValidateSchemaAsync"/>. Deliberately a
 	/// report rather than a thrown exception: whether a schema mismatch should stop a server or
 	/// merely warn depends on the server, and that call belongs to the caller.
+	/// <para>
+	/// This reports <b>pending migrations only</b>. It does not detect model drift — an entity
+	/// changed with no migration generated for it. That check existed here and never worked: EF
+	/// builds <c>ModelSnapshot.Model</c> with an empty convention set, so the relational model the
+	/// differ needs is never attached and the comparison threw on every single startup. EF Core 5
+	/// exposes no supported way to rebuild it (<c>SnapshotModelProcessor</c> is design-time only;
+	/// <c>IModelRuntimeInitializer</c> and <c>HasPendingModelChanges</c> both postdate it), so the
+	/// check was removed rather than left reporting a failure forever. See issue #162. Drift is
+	/// caught by scaffolding a migration and asserting it is empty, which belongs in CI where the
+	/// design-time package is available.
+	/// </para>
 	/// </remarks>
 	public sealed class SchemaValidationResult
 	{
 		/// <summary>Migrations that exist but have not been applied to this database.</summary>
 		public string[] PendingMigrations { get; }
-
-		/// <summary>
-		/// True when the entity model has changed since the newest migration was created, so no
-		/// migration covering the change exists yet.
-		/// </summary>
-		public bool ModelChangedSinceLastMigration { get; }
-
-		/// <summary>
-		/// True when drift could not be evaluated. The pending-migration list is still valid;
-		/// only the model comparison was skipped.
-		/// </summary>
-		public bool DriftCheckFailed { get; }
 
 		/// <summary>
 		/// Why the check could not run at all, or null when it ran. When set, every other
@@ -34,36 +33,25 @@ namespace FishMMO.Database.Npgsql
 		public string? UnavailableReason { get; }
 
 		/// <summary>
-		/// True when the check ran, every part of it was evaluated, and it found nothing wrong.
+		/// True when the check ran and found no pending migrations.
 		/// </summary>
 		/// <remarks>
-		/// <see cref="DriftCheckFailed"/> is part of this deliberately. A drift check that could
-		/// not run has not established that the schema matches — reporting that state as
-		/// up-to-date turns "unknown" into a positive all-clear, which is the one answer worse
-		/// than saying nothing.
+		/// This is narrower than "the schema matches the entity model", and deliberately so. An
+		/// entity changed without a migration generated leaves nothing pending and still reports
+		/// up to date here — see the remarks on the class for why that gap is not closed at
+		/// runtime.
 		/// </remarks>
 		public bool IsUpToDate =>
 			UnavailableReason == null &&
-			!DriftCheckFailed &&
-			PendingMigrations.Length == 0 &&
-			!ModelChangedSinceLastMigration;
-
-		/// <summary>
-		/// Why the drift check could not be evaluated, or null. Only meaningful when
-		/// <see cref="DriftCheckFailed"/> is set.
-		/// </summary>
-		public string? DriftCheckFailureReason { get; }
+			PendingMigrations.Length == 0;
 
 		/// <summary>
 		/// Creates a result.
 		/// </summary>
-		public SchemaValidationResult(string[] pendingMigrations, bool modelChangedSinceLastMigration, bool driftCheckFailed, string? unavailableReason, string? driftCheckFailureReason = null)
+		public SchemaValidationResult(string[] pendingMigrations, string? unavailableReason)
 		{
 			PendingMigrations = pendingMigrations ?? Array.Empty<string>();
-			ModelChangedSinceLastMigration = modelChangedSinceLastMigration;
-			DriftCheckFailed = driftCheckFailed;
 			UnavailableReason = unavailableReason;
-			DriftCheckFailureReason = driftCheckFailureReason;
 		}
 
 		/// <summary>
@@ -71,7 +59,7 @@ namespace FishMMO.Database.Npgsql
 		/// </summary>
 		/// <param name="reason">Why nothing could be determined.</param>
 		public static SchemaValidationResult Unavailable(string? reason) =>
-			new SchemaValidationResult(Array.Empty<string>(), false, false, reason ?? "unknown");
+			new SchemaValidationResult(Array.Empty<string>(), reason ?? "unknown");
 
 		/// <summary>
 		/// Builds an operator-facing description of what is wrong and the command that fixes it,
@@ -87,18 +75,7 @@ namespace FishMMO.Database.Npgsql
 			if (UnavailableReason != null)
 			{
 				return $"Database schema check could not run ({UnavailableReason}). " +
-					"Proceeding, but a schema mismatch would not be detected.";
-			}
-
-			if (DriftCheckFailed && PendingMigrations.Length == 0 && !ModelChangedSinceLastMigration)
-			{
-				string why = string.IsNullOrWhiteSpace(DriftCheckFailureReason)
-					? string.Empty
-					: $" ({DriftCheckFailureReason})";
-
-				return $"Database schema drift check could not be evaluated{why}, so a mismatch between " +
-					"the entity model and the database would not be detected. No migrations are pending. " +
-					"Treat this as an unverified schema rather than a clean one.";
+					"Proceeding, but an unapplied migration would not be detected.";
 			}
 
 			if (IsUpToDate)
@@ -106,14 +83,9 @@ namespace FishMMO.Database.Npgsql
 				return null;
 			}
 
-			string detail = ModelChangedSinceLastMigration
-				? "The entity model has changed since the last migration was created, so no migration covers it yet. " +
-				  "Run: dotnet ef migrations add <name> -p FishMMO-Database/FishMMO-DB -s FishMMO-Database/FishMMO-DB-Migrator -o ../../Migrations"
-				: $"This database has not applied {PendingMigrations.Length} migration(s): {string.Join(", ", PendingMigrations)}.";
-
-			string update = "Then apply with: dotnet ef database update -p FishMMO-Database/FishMMO-DB -s FishMMO-Database/FishMMO-DB-Migrator";
-
-			return "Database schema does not match the entity model. " + detail + " " + update +
+			return "Database schema does not match the entity model. " +
+				$"This database has not applied {PendingMigrations.Length} migration(s): {string.Join(", ", PendingMigrations)}. " +
+				"Apply with: dotnet ef database update -p FishMMO-Database/FishMMO-DB -s FishMMO-Database/FishMMO-DB-Migrator" +
 				" Until this is done, queries touching the changed tables will fail at runtime — " +
 				"which typically surfaces as missing data rather than as a schema error.";
 		}
