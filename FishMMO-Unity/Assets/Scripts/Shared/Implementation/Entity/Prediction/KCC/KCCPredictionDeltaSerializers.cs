@@ -495,7 +495,14 @@ namespace FishMMO.Shared
 		public static void WriteKinematicCharacterMotorState(this Writer writer, KinematicCharacterMotorState value)
 		{
 			writer.WriteVector3(value.Position);
-			writer.WriteQuaternion32(value.Rotation);
+			/* 64-bit packing. This is the once-per-second full snapshot the delta chain resets to,
+			 * and the owner REPLAYS from it: KCCController.UpdateRotation slerps from
+			 * Motor.TransientRotation, so an error injected here decays over several ticks rather
+			 * than being overwritten, and Motor.CharacterUp — derived from this rotation — is the
+			 * basis the movement input is projected onto. The 32-bit form measured 0.43 degrees
+			 * mean and 1.24 degrees worst, which is the same class of owner-versus-server drift the
+			 * aim quantisation was introduced to remove. Four bytes once a second per player. */
+			writer.WriteQuaternion64(value.Rotation);
 			writer.WriteVector3(value.BaseVelocity);
 			writer.WriteInt64(value.CurrentPlatformID);
 			writer.WriteVector3(value.LastPlatformPosition);
@@ -518,7 +525,7 @@ namespace FishMMO.Shared
 			return new KinematicCharacterMotorState
 			{
 				Position = reader.ReadVector3(),
-				Rotation = reader.ReadQuaternion32(),
+				Rotation = reader.ReadQuaternion64(),
 				BaseVelocity = reader.ReadVector3(),
 				CurrentPlatformID = reader.ReadInt64(),
 				LastPlatformPosition = reader.ReadVector3(),

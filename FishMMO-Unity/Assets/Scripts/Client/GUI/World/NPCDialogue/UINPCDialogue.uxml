@@ -9,6 +9,7 @@
                 <ui:Label name="dialogue-speaker" text="Speaker" class="fish-panel__title dialogue-speaker" />
                 <ui:Label name="dialogue-role" text="" class="fish-panel__subtitle dialogue-role" />
             </ui:VisualElement>
+            <ui:Button name="close-button" class="fish-close-btn dialogue-close-btn" text="✕" />
         </ui:VisualElement>
 
         <ui:VisualElement name="dialogue-body" class="dialogue-body">

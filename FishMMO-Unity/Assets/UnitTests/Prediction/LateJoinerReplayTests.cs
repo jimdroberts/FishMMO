@@ -17,15 +17,17 @@ namespace FishMMO.UnitTests
 	/// The broadcast conversions removed FishNet's <c>ObserversRpc(BufferLast)</c> semantics, and
 	/// with them the implicit "new observers get the current value" replay. Each broadcast channel
 	/// now needs an explicit answer for late joiners: resources and death ride the spawn payload,
-	/// while the observed buff list and the prediction mode are replayed from
-	/// <c>OnSpawnServer</c>. These tests fail if either replay is removed.
+	/// while the observed buff list is replayed from <c>OnSpawnServer</c>. These tests fail if
+	/// that replay is removed.
 	/// </para>
 	/// <para>
-	/// The third guard covers the runtime forwarding switch: reconcile deltas are encoded against
-	/// a baseline only the owner has been receiving while forwarding was off, so turning
-	/// forwarding on must force the next reconcile to be an absolute snapshot. The vendored
-	/// <c>NetworkObject.SetStateForwarding</c> does that by stamping <c>ObserverAddedTick</c>,
-	/// which is asserted at source level because the branch requires a spawned server object.
+	/// The second guard covers the vendored runtime forwarding switch, which no runtime code calls
+	/// any more (state forwarding is authored OFF on every prefab and stays off): reconcile deltas
+	/// are encoded against a baseline only the owner has been receiving while forwarding was off,
+	/// so if anything ever turned forwarding on it must force the next reconcile to be an absolute
+	/// snapshot. <c>NetworkObject.SetStateForwarding</c> does that by stamping
+	/// <c>ObserverAddedTick</c>, asserted at source level because the branch needs a spawned
+	/// server object.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -57,19 +59,6 @@ namespace FishMMO.UnitTests
 				"current observed buff list to a client that starts observing after the last " +
 				"change. Without it, a targeted character shows an empty buff bar until its next " +
 				"buff event — the regression the old ObserversRpc(BufferLast) masked.");
-		}
-
-		/// <summary>
-		/// A late-joining observer must learn a non-default prediction mode at spawn.
-		/// </summary>
-		[Test]
-		public void PredictionModeController_ReplaysMode_ToLateJoiners()
-		{
-			LogAssert.IsTrue(DeclaresOnSpawnServer(typeof(PredictionModeController)),
-				"PredictionModeController must override OnSpawnServer(NetworkConnection) to " +
-				"replay the current mode. Without it, a client that walks into a forwarded arena " +
-				"keeps its NetworkTransform enabled against a server transform that sends " +
-				"nothing, and fights the forwarded simulation.");
 		}
 
 		/// <summary>

@@ -326,9 +326,9 @@ namespace FishMMO.UnitTests
 				(ReplicatePacketBytes + RpcHeaderBytes) * ServerTickRate +
 				(ReconcilePayloadBytes + RpcHeaderBytes) * ServerTickRate;
 
-			// Discrete: position via NetworkTransform under the existing distance LOD, abilities
-			// as events. Reconcile disappears from the per-observer bill entirely — with
-			// forwarding off it is written once, to the owner.
+			// Discrete: position via NetworkTransform under the per-observer distance LOD (middle
+			// band, an observer 20-40 m away), abilities as events. Reconcile disappears from the
+			// per-observer bill entirely — with forwarding off it is written once, to the owner.
 			const int LodBand = 3;
 			double transform = (NetworkTransformBytes + RpcHeaderBytes) * (double)ServerTickRate / LodBand;
 

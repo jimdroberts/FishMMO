@@ -42,6 +42,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool TryExecute(ICharacter initiator, EventData eventData)
 		{
+			/* Server only, but reported as success elsewhere. The resource is authoritative state and
+			 * reaches clients through the attribute reconcile pipeline, so a client must not spend it
+			 * a second time. Returning FALSE here would be worse than not gating at all: paired with
+			 * StopChainOnFailure it would abort the rest of the chain on every client, taking the
+			 * non-authoritative steps (FX, dialogue, UI) down with it. "Not this peer's decision" is
+			 * not the same as "the cost could not be paid". */
+			if (!EcaAuthority.IsServer(initiator, eventData))
+			{
+				return true;
+			}
+
 			if (ResourceTemplateID == 0)
 			{
 				Log.Warning("ConsumeResourceAction", "ResourceTemplateID is not set.");

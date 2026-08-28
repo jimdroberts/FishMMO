@@ -33,6 +33,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Time required to activate the ability.
 		/// </summary>
+		/// <remarks>
+		/// Clamped at zero in the inspector. An ability's activation window is
+		/// <c>ceil(ActivationTime / TickDelta)</c> assigned to an unsigned tick counter, so a
+		/// negative value authored here does not mean "instant" — it produces a negative ceiling
+		/// that wraps to a cast of roughly four billion ticks that never finishes. Zero is a
+		/// legitimate value and means instant; anything below it is only ever a typo.
+		/// </remarks>
+		[Min(0)]
 		public float ActivationTime;
 
 		/// <summary>

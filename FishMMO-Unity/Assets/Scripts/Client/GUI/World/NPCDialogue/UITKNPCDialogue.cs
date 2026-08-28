@@ -40,6 +40,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the speaker label element.</summary>
 		private const string SPEAKER_NAME = "dialogue-speaker";
 
+		/// <summary>Name of the header close button element.</summary>
+		private const string CLOSE_BTN_NAME = "close-button";
+
 		/// <summary>Name of the dialogue body text element.</summary>
 		private const string TEXT_NAME = "dialogue-text";
 
@@ -80,6 +83,15 @@ namespace FishMMO.Client
 			if (root == null)
 			{
 				return;
+			}
+
+			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
+			 * against a freshly cloned tree, so this is a new element each time and the
+			 * handler cannot accumulate the way a subscription to a static event would. */
+			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
+			if (closeButton != null)
+			{
+				closeButton.clicked += Hide;
 			}
 
 			speakerLabel = root.Q<Label>(SPEAKER_NAME);

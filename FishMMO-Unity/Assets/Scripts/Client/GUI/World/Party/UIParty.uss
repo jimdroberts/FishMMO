@@ -67,6 +67,16 @@
     flex-shrink: 0;
 }
 
+/* Sizing only — .fish-close-btn carries the colours, border and hover. */
+.party-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+    margin-left: 8px;
+}
+
+
 /*
     A stacked title + subtitle needs its two line boxes pinned. Unity gives a
     Label a generous intrinsic height, so an unconstrained pair measures taller

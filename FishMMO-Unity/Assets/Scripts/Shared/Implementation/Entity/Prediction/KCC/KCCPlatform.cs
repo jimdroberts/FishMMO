@@ -203,9 +203,39 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <para>
+		/// Position and goal index are the platform's whole simulation state, and they are carried
+		/// here rather than by a reconcile because state forwarding is off on every object in this
+		/// project. With forwarding off a scene object has no owner to send a reconcile to
+		/// (<c>Server_SendReconcileRpc</c> returns immediately when <c>!Owner.IsValid</c>), so a
+		/// client that arrives mid-cycle would otherwise start the platform from its authored
+		/// position and run a full lap out of phase with the server, for the lifetime of the scene.
+		/// </para>
+		/// <para>
+		/// Per-tick movement needs no wire at all: <see cref="PerformReplicate"/> is autonomous and
+		/// deterministic — <c>MoveTowards</c> by a fixed <c>TimeManager.TickDelta</c> step — and it
+		/// snaps exactly onto each waypoint on arrival, so float drift is bounded within one leg and
+		/// reset at every corner. Fourteen bytes once per observer, instead of a reconcile every
+		/// tick to every observer.
+		/// </para>
+		/// <para>
+		/// <c>goals</c> is built in <c>Awake</c> from the authored scene position, which is identical
+		/// on every peer, and <c>Awake</c> runs before this — so assigning the live position here
+		/// cannot disturb the waypoints it was derived from.
+		/// </para>
+		/// </remarks>
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
 			ID = reader.ReadInt64();
+			transform.position = reader.ReadVector3();
+
+			byte readGoalIndex = reader.ReadUInt8Unpacked();
+			/* A goal index the local goal list cannot address means the scene asset and the server
+			 * disagree about this platform's route. Restarting the cycle is wrong by at most one
+			 * leg; indexing past the end throws inside the replicate on the very next tick. */
+			goalIndex = readGoalIndex < goals.Count ? readGoalIndex : (byte)0;
+
 			SceneObject.Register(this, true);
 		}
 
@@ -213,6 +243,8 @@ namespace FishMMO.Shared
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
 			writer.WriteInt64(ID);
+			writer.WriteVector3(transform.position);
+			writer.WriteUInt8Unpacked(goalIndex);
 		}
 
 		/// <inheritdoc/>

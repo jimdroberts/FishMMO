@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Managing.Timing;
 using FishNet.Object;
+using FishNet.Transporting;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -173,12 +174,37 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Cached reference to the character's health resource attribute.
-		/// Lazily initialized on first access; throws if missing.
+		/// Lazily initialized on first access.
 		/// </summary>
 		private CharacterResourceAttribute resourceInstance;
+
+		/// <summary>
+		/// Whether the missing-health report has already been made for the current failure.
+		/// </summary>
+		/// <remarks>
+		/// The lookup is retried on every access but reported only once, and those are deliberately
+		/// separate decisions. The resolve has to keep trying because health can arrive after this
+		/// component does — a client reads <see cref="IsAlive"/> before reconcile has populated the
+		/// attribute controller — so latching the failure itself would leave a character reporting
+		/// as dead over what was only a timing gap.
+		/// <para>
+		/// Reported once because the alternative is unbounded. <see cref="IsAlive"/> is read from AI
+		/// target selection, inventory checks and input handling, all per tick, so one entity with
+		/// no health attribute logged roughly 28 lines a second: a scene server holding three
+		/// misconfigured NPCs wrote 153 MB in five and a half minutes, and a client logged ~39,000
+		/// copies in one session (issue #157). One bad entity could fill a disk.
+		/// </para>
+		/// <para>
+		/// Cleared once the attribute resolves, so a genuinely new failure later is still reported
+		/// rather than swallowed by a flag set hours earlier.
+		/// </para>
+		/// </remarks>
+		private bool loggedMissingResource;
+
 		/// <summary>
 		/// Gets the cached health resource attribute for this character.
-		/// Returns null and logs an error if the attribute controller or health attribute is missing.
+		/// Returns null when the attribute controller or health attribute is missing, reporting the
+		/// first occurrence only.
 		/// </summary>
 		public CharacterResourceAttribute ResourceInstance
 		{
@@ -189,7 +215,18 @@ namespace FishMMO.Shared
 					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
 						!attributeController.TryGetHealthAttribute(out resourceInstance))
 					{
-						Log.Error("CharacterDamageController", $"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute.");
+						if (!loggedMissingResource)
+						{
+							loggedMissingResource = true;
+							Log.Error("CharacterDamageController",
+								$"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute. " +
+								"It cannot be damaged or killed. Further occurrences on this object are suppressed until it resolves.");
+						}
+					}
+					else
+					{
+						// Re-arm so a later, different failure is not silently swallowed.
+						loggedMissingResource = false;
 					}
 				}
 				return resourceInstance;
@@ -214,6 +251,7 @@ namespace FishMMO.Shared
 			if (base.IsClientStarted)
 			{
 				RegisterDeathStateBroadcast(base.NetworkManager);
+				RegisterCombatEventBroadcast(base.NetworkManager);
 			}
 
 			if (base.TimeManager != null)
@@ -242,6 +280,180 @@ namespace FishMMO.Shared
 			base.OnStopNetwork();
 		}
 
+		// ───── Combat events (floating numbers) ─────────────────────────────
+
+		/// <summary>
+		/// Raised on a client for each combat event the server reported against a character.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Deliberately separate from <see cref="ICharacterDamageController.OnDamaged"/>. That event
+		/// fires wherever the arithmetic happens: on the server for everything, and additionally on
+		/// the owning client for its own predicted damage-over-time ticks. Feeding floating text
+		/// from it produced no numbers at all for the common case — an ability's hit is resolved
+		/// only on the server, whose events reach no client — and duplicate numbers for the case it
+		/// did cover, since the owner re-ran its own ticks on every reconcile replay.
+		/// </para>
+		/// <para>
+		/// This event is raised only from the server's report, so a number appears exactly once, for
+		/// the amount that actually landed, on every client that can see the target.
+		/// </para>
+		/// <para>
+		/// Arguments: source (may be null for environmental damage or an unobserved attacker),
+		/// target, amount, damage type (null for heals), and the kind.
+		/// </para>
+		/// </remarks>
+		public static event Action<ICharacter, ICharacter, int, DamageAttributeTemplate, CombatEventKind> OnCombatEventReceived;
+
+		/// <summary>Per-tick merge buffer for events landing on this character. Server only.</summary>
+		private readonly CombatEventCoalescer combatEvents = new CombatEventCoalescer();
+
+		/// <summary>Scratch list for <see cref="FlushCombatEvents"/>. Server work is single threaded.</summary>
+		private static readonly List<CombatEventCoalescer.Entry> combatEventFlushBuffer = new List<CombatEventCoalescer.Entry>();
+
+		/// <summary>True once the shared client handler has been registered on this process.</summary>
+		private static bool combatEventBroadcastRegistered;
+
+		/// <summary>
+		/// Records a landed hit or heal for this tick's report to observers.
+		/// </summary>
+		/// <remarks>
+		/// Server only: this is the authoritative amount, after resistances and after the early
+		/// returns for immortal, dead and fully-resisted. Merged rather than sent immediately so a
+		/// multi-target ability that hits the same character several times in one tick, or a
+		/// stack of damage-over-time effects expiring together, costs one entry per (source, type)
+		/// rather than one message each.
+		/// </remarks>
+		private void QueueCombatEvent(ICharacter source, CombatEventKind kind, DamageAttributeTemplate damageAttribute, int amount)
+		{
+			if (!base.IsServerStarted || amount <= 0)
+			{
+				return;
+			}
+
+			int sourceObjectID = 0;
+			if (source != null && source.NetworkObject != null)
+			{
+				sourceObjectID = source.NetworkObject.ObjectId;
+			}
+
+			int damageTemplateID = damageAttribute != null ? damageAttribute.ID : 0;
+			combatEvents.Add(sourceObjectID, kind, damageTemplateID, amount);
+		}
+
+		/// <summary>
+		/// Sends this tick's merged combat events to everyone who can see this character.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Sent to the target's observers, which includes its owner — a player wants to see the
+		/// damage landing on them, and it is the server's number rather than the one they predicted.
+		/// </para>
+		/// <para>
+		/// Unreliable. A lost number is a number nobody sees; resending it late would place stale
+		/// text over a character that has since moved, which reads worse than the gap. The health
+		/// bar it corresponds to has its own delivery path and is not affected by a loss here.
+		/// </para>
+		/// <para>
+		/// An attacker standing outside the target's observer set — sniping from beyond the
+		/// streaming range — is not covered here and would need its own send. That case does not
+		/// arise while ability range is inside observer range.
+		/// </para>
+		/// </remarks>
+		private void FlushCombatEvents()
+		{
+			if (!base.IsServerStarted || combatEvents.Count < 1)
+			{
+				return;
+			}
+
+			FishNet.Object.NetworkObject nob = base.NetworkObject;
+			if (nob == null || !nob.IsSpawned || nob.NetworkManager == null)
+			{
+				combatEvents.Clear();
+				return;
+			}
+
+			combatEventFlushBuffer.Clear();
+			combatEvents.Flush(combatEventFlushBuffer);
+
+			for (int i = 0; i < combatEventFlushBuffer.Count; ++i)
+			{
+				CombatEventCoalescer.Entry entry = combatEventFlushBuffer[i];
+				nob.NetworkManager.ServerManager.Broadcast(nob, new CombatEventBroadcast()
+				{
+					TargetObjectID = nob.ObjectId,
+					SourceObjectID = entry.SourceObjectID,
+					Amount = entry.Amount,
+					Kind = (byte)entry.Kind,
+					DamageTemplateID = entry.DamageTemplateID,
+				}, true, Channel.Unreliable);
+			}
+
+			combatEventFlushBuffer.Clear();
+		}
+
+		/// <summary>
+		/// Registers the process-wide client handler for <see cref="CombatEventBroadcast"/>.
+		/// </summary>
+		/// <remarks>
+		/// Registered once and never removed, for the same reason as the death-state handler: the
+		/// ClientManager does not clear handlers on stop, so a per-character unregister would leave
+		/// every remaining character unable to show combat numbers after the first despawn.
+		/// </remarks>
+		private static void RegisterCombatEventBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (combatEventBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			combatEventBroadcastRegistered = true;
+			networkManager.ClientManager.RegisterBroadcast<CombatEventBroadcast>(OnCombatEventBroadcast);
+		}
+
+		/// <summary>Turns a server combat report into the client-side event the UI listens to.</summary>
+		/// <remarks>
+		/// A target that is not spawned here is dropped: the character left this client's view
+		/// between the hit and the message, so there is nowhere to draw the number. An unresolved
+		/// SOURCE is not a reason to drop — environmental damage has none, and an attacker outside
+		/// this client's view still produces a number over the victim it can see.
+		/// </remarks>
+		private static void OnCombatEventBroadcast(CombatEventBroadcast msg, Channel channel)
+		{
+			if (OnCombatEventReceived == null)
+			{
+				return;
+			}
+
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || !nm.ClientManager.Objects.Spawned.TryGetValue(msg.TargetObjectID, out FishNet.Object.NetworkObject targetNob) ||
+				targetNob == null)
+			{
+				return;
+			}
+
+			ICharacter target = targetNob.GetComponent<ICharacter>();
+			if (target == null)
+			{
+				return;
+			}
+
+			ICharacter source = null;
+			if (msg.SourceObjectID != 0 &&
+				nm.ClientManager.Objects.Spawned.TryGetValue(msg.SourceObjectID, out FishNet.Object.NetworkObject sourceNob) &&
+				sourceNob != null)
+			{
+				source = sourceNob.GetComponent<ICharacter>();
+			}
+
+			CombatEventKind kind = (CombatEventKind)msg.Kind;
+			DamageAttributeTemplate damageAttribute = kind == CombatEventKind.Damage && msg.DamageTemplateID != 0
+				? DamageAttributeTemplate.Get<DamageAttributeTemplate>(msg.DamageTemplateID)
+				: null;
+
+			OnCombatEventReceived?.Invoke(source, target, msg.Amount, damageAttribute, kind);
+		}
+
 		// ───── Combat Timer ─────────────────────────────────────────────────
 
 		/// <summary>
@@ -251,6 +463,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void TimeManager_OnTick()
 		{
+			/* Ahead of the combat-timer early return: events are queued by damage that may have
+			 * landed on a character whose combat timer is not running (a heal out of combat, a
+			 * hazard that does not engage), and those numbers still have to be reported. */
+			FlushCombatEvents();
+
 			if (!combatTimerActive || Character == null)
 			{
 				return;
@@ -778,7 +995,21 @@ namespace FishMMO.Shared
 			 * nothing. */
 			RecordCombatContribution(attacker, CombatContributionKind.Damage);
 
-			ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
+			/* Queued for this tick's observer message before the local event, because the local
+			 * event no longer reaches anybody's floating text — see QueueCombatEvent. */
+			QueueCombatEvent(attacker, CombatEventKind.Damage, damageAttribute, amount);
+
+			/* Suppressed on a replayed tick along with the triggers below.
+			 *
+			 * This used to fire ahead of the ignoreAchievements guard, so a reconcile that replayed
+			 * ten ticks re-raised every damage-over-time tick inside them, and anything listening —
+			 * the client's floating combat text most visibly — repeated the whole burst on every
+			 * reconcile. Server-side listeners (party meters, pets, aggression) are unaffected by
+			 * the move: the server never replays. */
+			if (!ignoreAchievements)
+			{
+				ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
+			}
 
 			if (!ignoreAchievements)
 			{
@@ -810,6 +1041,16 @@ namespace FishMMO.Shared
 		{
 			if (Immortal) return;
 			if (!base.IsServerStarted) return;
+
+			/* No health resource means there is nothing this death could be the end of.
+			 *
+			 * Damage already refuses on a null ResourceInstance, so a misconfigured entity could
+			 * not be worn down — but Kill never consulted it, so the same entity could still be
+			 * killed outright and run the whole death path: flagged dead, OnKilled dispatched, ECA
+			 * triggers fired and, for an NPC, a corpse built and a loot table rolled. A corpse for
+			 * something that was never alive. Refusing here mirrors the guard Damage has and keeps
+			 * the two paths agreeing about what a health-less entity can have happen to it. */
+			if (ResourceInstance == null) return;
 
 			// Already dead — prevent duplicate OnKilled events and ECA triggers.
 			if (Character.IsFlagged(CharacterFlags.IsDead)) return;
@@ -967,7 +1208,14 @@ namespace FishMMO.Shared
 				PropagateCombatContribution(healer);
 			}
 
-			ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
+			// See the matching call in Damage for why this precedes the local event.
+			QueueCombatEvent(healer, CombatEventKind.Heal, null, amount);
+
+			// Suppressed on a replayed tick for the same reason as the damage path above.
+			if (!ignoreAchievements)
+			{
+				ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
+			}
 
 			if (!ignoreAchievements)
 			{
@@ -1055,6 +1303,10 @@ namespace FishMMO.Shared
 
 			base.ResetState(asServer);
 			resourceInstance = null;
+			/* Re-armed with the cache it guards. A pooled object respawns as a different character,
+			 * and leaving this set would suppress the new occupant's own misconfiguration behind a
+			 * flag raised by the previous one. */
+			loggedMissingResource = false;
 			combatTimerActive = false;
 			lastCombatTick = 0;
 			Character?.DisableFlags(CharacterFlags.IsInCombat);

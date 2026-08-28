@@ -383,6 +383,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private readonly Dictionary<int, List<IPlayerCharacter>> vitalsSceneGroups = new Dictionary<int, List<IPlayerCharacter>>();
 
+		/// <summary>
+		/// Last observed-buff set sent for each character, as a content signature.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Keyed by character id and holding a signature rather than the array itself, because the
+		/// arrays are rebuilt from a shared scratch buffer every pump and retaining one would retain
+		/// a buffer that is about to be overwritten.
+		/// </para>
+		/// <para>
+		/// Cleared for a character when they leave the scene server (<see cref="OnCharacterLeave"/>
+		/// territory, alongside the combat meter), so a character who returns is sent their buffs
+		/// again rather than inheriting a signature from a previous session and having their first
+		/// payload silently omit the array.
+		/// </para>
+		/// </remarks>
+		private readonly Dictionary<long, int> lastSentBuffSignature = new Dictionary<long, int>();
+
 		/// <summary>Spare member lists returned by <see cref="vitalsSceneGroups"/> between uses.</summary>
 		private readonly Stack<List<IPlayerCharacter>> vitalsGroupPool = new Stack<List<IPlayerCharacter>>();
 
@@ -977,24 +995,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				IPlayerCharacter member = members[i];
 
+				ObservedBuffEntry[] buffs = BuildObservedBuffs(member, now);
+
+				/* The buff array is the bulk of this payload and it rarely changes, so it is sent
+				 * only when the visible set actually differs from what this member last had sent.
+				 *
+				 * The rest of the entry still goes out every pump even when nothing moved. That is
+				 * deliberate: the client greys a member out by counting the pumps they were ABSENT
+				 * from (UITKParty.VitalsMisses), so dropping an unchanged member from the payload
+				 * would read as "they went away" rather than "nothing happened". Omitting just the
+				 * array keeps that signal intact while removing what actually costs bytes. */
+				bool buffsChanged = HasObservedBuffSetChanged(member.ID, buffs);
+
 				PartyMemberVitalsEntry entry = new PartyMemberVitalsEntry()
 				{
 					CharacterID = member.ID,
-					Buffs = BuildObservedBuffs(member, now),
+					BuffsChanged = buffsChanged,
+					Buffs = buffsChanged ? buffs : null,
 				};
 
 				if (member.TryGet(out ICharacterAttributeController attributeController))
 				{
-					entry.HealthPCT = attributeController.GetHealthResourceAttributeCurrentPercentage();
-					entry.ManaPCT = attributeController.GetManaResourceAttributeCurrentPercentage();
-					entry.StaminaPCT = attributeController.GetStaminaResourceAttributeCurrentPercentage();
+					/* Quantised to a byte apiece. These drive a bar and a percentage readout, so
+					 * 1/255 is finer than anything the panel can draw, and it replaces four bytes
+					 * per value with one. */
+					entry.HealthPCT = PartyVitalsQuantiser.FractionToByte(attributeController.GetHealthResourceAttributeCurrentPercentage());
+					entry.ManaPCT = PartyVitalsQuantiser.FractionToByte(attributeController.GetManaResourceAttributeCurrentPercentage());
+					entry.StaminaPCT = PartyVitalsQuantiser.FractionToByte(attributeController.GetStaminaResourceAttributeCurrentPercentage());
 				}
 
 				if (meterData != null)
 				{
 					PartyCombatMeterSample sample = meterData.GetSample(member.ID, now, encounterTimeoutSeconds, meterMinimumWindowSeconds);
-					entry.DamagePerSecond = sample.DamagePerSecond;
-					entry.HealPerSecond = sample.HealPerSecond;
+					// Whole points per second; the meter is displayed rounded and clamps at 65535.
+					entry.DamagePerSecond = PartyVitalsQuantiser.RateToUInt16(sample.DamagePerSecond);
+					entry.HealPerSecond = PartyVitalsQuantiser.RateToUInt16(sample.HealPerSecond);
 				}
 
 				vitalsEntryBuffer.Add(entry);
@@ -1012,6 +1047,64 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			for (int i = 0; i < members.Count; ++i)
 			{
 				Server.NetworkWrapper.Broadcast(members[i].Owner, broadcast, true, Channel.Reliable);
+			}
+		}
+
+		/// <summary>
+		/// True when <paramref name="buffs"/> differs from the set last sent for this character,
+		/// recording the new set as sent.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The signature deliberately ignores <see cref="ObservedBuffEntry.RemainingSeconds"/>'s
+		/// exact value and keeps only whole seconds. Remaining time falls continuously, so hashing
+		/// it at full precision would report a change on every single pump and the gate would never
+		/// close — while a viewer reading a duration off an icon cannot see finer than a second
+		/// anyway. Stacks and the template set are compared exactly, because those are the changes
+		/// a player is actually watching for.
+		/// </para>
+		/// <para>
+		/// Order-sensitive by construction: <c>BuildObservedBuffs</c> walks a
+		/// <c>SortedDictionary</c>, so an unchanged set always hashes identically.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterID">Character the buffs belong to.</param>
+		/// <param name="buffs">The set about to be sent, or null when the character has none.</param>
+		/// <returns>True when the array must be included in this payload.</returns>
+		private bool HasObservedBuffSetChanged(long characterID, ObservedBuffEntry[] buffs)
+		{
+			int signature = ComputeObservedBuffSignature(buffs);
+
+			if (lastSentBuffSignature.TryGetValue(characterID, out int previous) && previous == signature)
+			{
+				return false;
+			}
+
+			lastSentBuffSignature[characterID] = signature;
+			return true;
+		}
+
+		/// <summary>Content signature of an observed-buff set. See <see cref="HasObservedBuffSetChanged"/>.</summary>
+		internal static int ComputeObservedBuffSignature(ObservedBuffEntry[] buffs)
+		{
+			if (buffs == null || buffs.Length < 1)
+			{
+				return 0;
+			}
+
+			unchecked
+			{
+				// 17/31 rather than a plain sum, so a stack moving between two buffs still differs.
+				int hash = 17;
+				hash = (hash * 31) + buffs.Length;
+				for (int i = 0; i < buffs.Length; ++i)
+				{
+					hash = (hash * 31) + buffs[i].TemplateID;
+					hash = (hash * 31) + buffs[i].Stacks;
+					hash = (hash * 31) + Mathf.FloorToInt(buffs[i].RemainingSeconds);
+				}
+				// Never collides with the "no buffs at all" signature above.
+				return hash == 0 ? 1 : hash;
 			}
 		}
 
@@ -1837,6 +1930,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				meterData.Forget(character.ID);
 			}
+
+			/* Same reasoning as the meter above: a stale signature would make this character's
+			 * first payload after they return omit their buff array, leaving their party's icons
+			 * empty until something about their buffs happened to change. */
+			lastSentBuffSignature.Remove(character.ID);
 
 			if (Server?.Database?.ServiceRegistry == null)
 			{

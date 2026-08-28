@@ -316,8 +316,12 @@ namespace FishMMO.UnitTests
 		 * Vector3, 1-byte bool/byte, length-prefixed arrays), in declaration order. */
 		private static void WriteResources(Writer w, CharacterResourcesBroadcast m)
 		{ w.WriteInt32(m.CharacterObjectID); w.WriteInt32(m.Health); w.WriteInt32(m.MaxHealth); w.WriteInt32(m.Mana); w.WriteInt32(m.MaxMana); w.WriteInt32(m.Stamina); w.WriteInt32(m.MaxStamina); }
+		/* The activation broadcast has a hand-written, mode-shaped wire format
+		 * (AbilityObserverBroadcastSerializers). This used to model it field by field and
+		 * serialised seven of eleven fields -- no header byte, no ServerTick, and never the spawn
+		 * pose -- so it under-reported the real message. Call the production writer instead. */
 		private static void WriteActivation(Writer w, AbilityActivatedBroadcast m)
-		{ w.WriteInt32(m.CasterObjectID); w.WriteInt64(m.AbilityID); w.WriteInt32(m.Seed); w.WriteUInt32(m.SpawnTick); w.WriteVector3(m.AimOrigin); w.WriteUInt32(m.PackedAimDirection); w.WriteInt32(m.TargetObjectID); }
+		{ w.WriteAbilityActivatedBroadcast(m); }
 		private static void WriteBuffs(Writer w, CharacterBuffsBroadcast m)
 		{ w.WriteInt32(m.CharacterObjectID); w.WriteInt32(m.Buffs.Length); foreach (ObservedBuffEntry e in m.Buffs) { w.WriteInt32(e.TemplateID); w.WriteInt32(e.Stacks); w.WriteSingle(e.RemainingSeconds); w.WriteSingle(e.TotalSeconds); } }
 
@@ -326,7 +330,20 @@ namespace FishMMO.UnitTests
 		{
 			int resources = Bytes(w => WriteResources(w, new CharacterResourcesBroadcast { CharacterObjectID = 40, Health = 812, MaxHealth = 1200, Mana = 240, MaxMana = 800, Stamina = 310, MaxStamina = 400 }));
 			int resourcesFloatForm = Bytes(w => { w.WriteInt32(40); w.WriteSingle(812f); w.WriteInt32(1200); w.WriteSingle(240f); w.WriteInt32(800); w.WriteSingle(310f); w.WriteInt32(400); });
-			int activation = Bytes(w => WriteActivation(w, new AbilityActivatedBroadcast { CasterObjectID = 40, AbilityID = 8_842_001_337L, Seed = -1_713_468_379, SpawnTick = 123_456, AimOrigin = new Vector3(112.5f, 32.6f, -47.2f), PackedAimDirection = AimDirectionCompression.Encode(new Vector3(0.3f, -0.1f, 0.95f)), TargetObjectID = 77 }));
+			AbilityActivatedBroadcast activationMessage = new AbilityActivatedBroadcast
+			{
+				CasterObjectID = 40, AbilityID = 8_842_001_337L, Seed = -1_713_468_379,
+				SpawnTick = 123_450, ServerTick = 123_456, TargetObjectID = 77,
+				SpawnMode = (byte)AbilitySpawnTarget.Camera,
+				AimOrigin = new Vector3(112.5f, 32.6f, -47.2f),
+				PackedAimDirection = AimDirectionCompression.Encode(new Vector3(0.3f, -0.1f, 0.95f)),
+				SpawnPosition = new Vector3(113.1f, 32.6f, -46.4f),
+				SpawnRotation = Quaternion.Euler(12f, 200f, 0f),
+			};
+			int activation = Bytes(w => WriteActivation(w, activationMessage));
+			AbilityActivatedBroadcast posedMessage = activationMessage;
+			posedMessage.SpawnMode = (byte)AbilitySpawnTarget.Forward;
+			int activationPosed = Bytes(w => WriteActivation(w, posedMessage));
 			int buffs1 = Bytes(w => WriteBuffs(w, new CharacterBuffsBroadcast { CharacterObjectID = 40, Buffs = new[] { new ObservedBuffEntry { TemplateID = 200, Stacks = 1, RemainingSeconds = 12.4f, TotalSeconds = 30f } } }));
 			int buffs4 = Bytes(w => WriteBuffs(w, new CharacterBuffsBroadcast { CharacterObjectID = 40, Buffs = new[] { new ObservedBuffEntry { TemplateID = 200, Stacks = 1, RemainingSeconds = 12.4f, TotalSeconds = 30f }, new ObservedBuffEntry { TemplateID = 201, Stacks = 3, RemainingSeconds = 5f, TotalSeconds = 10f }, new ObservedBuffEntry { TemplateID = 202, Stacks = 0, RemainingSeconds = 0f, TotalSeconds = 0f }, new ObservedBuffEntry { TemplateID = 203, Stacks = 2, RemainingSeconds = 44f, TotalSeconds = 60f } } }));
 			int death = Bytes(w => { w.WriteInt32(40); w.WriteBoolean(true); });
@@ -335,7 +352,8 @@ namespace FishMMO.UnitTests
 			Record("bc.resources", resources);
 			Record("bc.resourcesFloatForm", resourcesFloatForm);
 			Record("bc.resourcesHzMax", TickRate / 6.0); // observedResourcePushInterval = 6
-			Record("bc.activation", activation);
+			Record("bc.activationCamera", activation);
+			Record("bc.activationPosed", activationPosed);
 			Record("bc.buffs1", buffs1);
 			Record("bc.buffs4", buffs4);
 			Record("bc.death", death);

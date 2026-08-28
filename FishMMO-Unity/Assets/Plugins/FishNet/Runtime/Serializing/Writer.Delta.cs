@@ -897,7 +897,23 @@ namespace FishNet.Serializing
 
             if (del == null)
             {
-                NetworkManager.LogError($"Write delta method not found for {typeof(T).FullName}. Use a supported type or create a custom serializer.");
+                /* FISHMMO EDIT: warning, not error -- see issue #159.
+                 *
+                 * This sits on the per-tick prediction path, so a single unregistered type logs
+                 * once per tick for as long as the scene is loaded. Measured at 14,442 occurrences
+                 * in a four-minute session, each carrying a full Unity stack trace: roughly 13 log
+                 * lines apiece, and most of a 10 MB log that then hid everything else in it.
+                 *
+                 * LevelLoggingConfiguration is set to Error in all three modes (headless, GUI and
+                 * development), and CanLog compares (byte)Warning(2) <= (byte)Error(1), so at the
+                 * configured level this now costs nothing at all. Raising the level to Warning
+                 * brings it back when somebody is actually looking for it.
+                 *
+                 * Severity, not a throttle: a missing delta serializer is a developer-time
+                 * omission, not a runtime failure the operator can act on. The guard against
+                 * shipping one is DeltaSerializerRegistrationTests, which fails the build rather
+                 * than waiting for somebody to read a log. */
+                NetworkManager.LogWarning($"Write delta method not found for {typeof(T).FullName}. Use a supported type or create a custom serializer.");
 
                 return false;
             }

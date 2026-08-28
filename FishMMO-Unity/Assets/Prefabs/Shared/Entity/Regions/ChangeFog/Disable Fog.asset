@@ -9,16 +9,32 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 213d5298be872814185dcc6651fe5f1f, type: 3}
+  m_Script: {fileID: 11500000, guid: 62f8d1c6638ea504ea07e6ebae41a595, type: 3}
   m_Name: Disable Fog
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
-  _addedNetworkObject: {fileID: 0}
-  _networkObjectCache: {fileID: 0}
-  Parent: {fileID: 0}
-  Collider: {fileID: 0}
-  Terrain: {fileID: 0}
-  OnRegionEnter: []
-  OnRegionStay: []
-  OnRegionExit: []
-  GizmoColor: {r: 0, g: 1, b: 1, a: 1}
+  TargetSelector:
+    rid: -2
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 5000000000000000000
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 5000000000000000000
+      type: {class: ChangeFogAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        FogSettings:
+          Enabled: 0
+          ChangeRate: 1
+          Mode: 2
+          Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+          Density: 0
+          StartDistance: 0
+          EndDistance: 0
