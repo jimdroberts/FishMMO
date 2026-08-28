@@ -22,10 +22,18 @@ namespace FishMMO.UnitTests
 	/// <c>AbilityObject.OnCollisionEnter</c> resolves a spawned volume against character colliders
 	/// and is gated on <c>isServer</c>; and the <c>TargetSelector</c> family resolves through
 	/// <c>physicsScene.OverlapSphere</c> (Area, Cone, Chain, Nearest, Furthest, Random) or
-	/// <c>physicsScene.Raycast</c> (Line). Both run on the server against the server's current
-	/// positions. Spawn-time events cannot resolve damage at all — they carry a
-	/// <c>TickEventData</c> with <c>IsReplicateTick</c> true and <c>AbilityApplyAreaAction</c>
-	/// returns early on those — so there is no client-side damage path to diverge.
+	/// <c>physicsScene.Raycast</c> (Line). Both run on the server, and both now resolve against
+	/// where the caster's client saw its peers rather than against the server's present.
+	/// </para>
+	/// <para>
+	/// <b>Correction to what this comment used to say.</b> It claimed spawn-time events cannot
+	/// resolve damage because they carry a <c>TickEventData</c> with <c>IsReplicateTick</c> true
+	/// and <c>AbilityApplyAreaAction</c> returns early on those. Neither half held. The server's
+	/// own self-target and spawn dispatches carry replicate ticks too, so that guard suppressed
+	/// the server as well and the effect happened nowhere — which is why the action now gates on
+	/// the peer instead, and why every physics selector does too. There is still no client-side
+	/// damage path to diverge, but that is because the effects are server-gated, not because the
+	/// tick domain rules them out.
 	/// </para>
 	/// <para>
 	/// <b>What is modelled and what is measured.</b> The staleness of an interpolated peer is

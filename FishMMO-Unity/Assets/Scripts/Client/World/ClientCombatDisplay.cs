@@ -86,8 +86,12 @@ namespace FishMMO.Client
 			 * off did nothing until the client was restarted. */
 			ClientSettings.OnGameplayChanged += RefreshConfig;
 
-			ICharacterDamageController.OnDamaged += OnDamaged;
-			ICharacterDamageController.OnHealed += OnHealed;
+			/* Numbers come from the server's combat report, not from the local OnDamaged/OnHealed
+			 * events. Those fire wherever the arithmetic runs: on the server for every ability hit,
+			 * which reaches no client at all, and on the owning client for its own predicted
+			 * damage-over-time ticks, which repeat on every reconcile replay. The report fires once,
+			 * on every client that can see the target, carrying the amount that actually landed. */
+			CharacterDamageController.OnCombatEventReceived += OnCombatEvent;
 			ICharacterDamageController.OnKilled += OnKilled;
 			ICharacterDamageController.OnResurrected += OnResurrected;
 			IAchievementController.OnCompleteAchievement += OnAchievement;
@@ -100,8 +104,7 @@ namespace FishMMO.Client
 		{
 			ClientSettings.OnGameplayChanged -= RefreshConfig;
 
-			ICharacterDamageController.OnDamaged -= OnDamaged;
-			ICharacterDamageController.OnHealed -= OnHealed;
+			CharacterDamageController.OnCombatEventReceived -= OnCombatEvent;
 			ICharacterDamageController.OnKilled -= OnKilled;
 			ICharacterDamageController.OnResurrected -= OnResurrected;
 			IAchievementController.OnCompleteAchievement -= OnAchievement;
@@ -219,6 +222,17 @@ namespace FishMMO.Client
 			return value.ToString();
 		}
 
+		/// <summary>Routes one server-reported combat event to the right floating number.</summary>
+		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind)
+		{
+			if (kind == CombatEventKind.Heal)
+			{
+				OnHealed(source, target, amount);
+				return;
+			}
+			OnDamaged(source, target, amount, dmg);
+		}
+
 		private void OnDamaged(ICharacter attacker, ICharacter target, int amount, DamageAttributeTemplate dmg)
 		{
 			EnsureConfig();
@@ -226,7 +240,11 @@ namespace FishMMO.Client
 			var pos = target.Transform.position;
 			pos.y += GetDisplayHeight(target);
 			int fx = 0; fx.EnableBit(LabelEffect.FloatRandom); fx.EnableBit(LabelEffect.FadeOut);
-			UITKLabelMaker.Display3D(ToDisplayString(amount), pos, dmg.DisplayColor, 2.0f, 1.0f, false, fx);
+			/* Typeless damage still gets a number. Environmental and "true" damage carry no damage
+			 * attribute, and the report is free to arrive before this client has resolved the
+			 * template, so the colour falls back rather than the number being skipped. */
+			Color damageColor = dmg != null ? dmg.DisplayColor : new TinyColor(255, 64, 64).ToUnityColor();
+			UITKLabelMaker.Display3D(ToDisplayString(amount), pos, damageColor, 2.0f, 1.0f, false, fx);
 		}
 
 		private void OnHealed(ICharacter healer, ICharacter healed, int amount)

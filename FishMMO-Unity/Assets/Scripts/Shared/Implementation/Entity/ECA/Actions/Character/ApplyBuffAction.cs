@@ -69,6 +69,18 @@ namespace FishMMO.Shared
 			// Prediction-path (direct Apply) is only safe when the tick belongs to the target controller domain.
 			bool isPredictionPath = hasTickData && tickData.IsReplicateTick && tickData.IsForCharacter(target);
 
+			/* Server only — EXCEPT the owner-prediction path above, which is the one branch that is
+			 * meant to run on a client. That branch requires a replicate tick sourced from the very
+			 * character the buff lands on, which is exactly the case where the client is simulating
+			 * its own future and the reconcile will correct it. Every other branch writes state the
+			 * client has no business inventing: a cross-character debuff, a raw authoritative tick,
+			 * or an event with no tick at all, all of which stamp the target's controller with a
+			 * value only the server can be right about. */
+			if (!isPredictionPath && !EcaAuthority.IsServer(initiator, eventData))
+			{
+				return;
+			}
+
 			// For cross-character authoritative application, the target controller chooses
 			// its own domain stamp. The initiator's replicate tick is in the INITIATOR's domain
 			// and must not be written directly into target-owned buff state.

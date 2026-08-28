@@ -4986,7 +4986,7 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
-  _enableStateForwarding: 1
+  _enableStateForwarding: 0
   _networkTransform: {fileID: 0}
   _ownerInterpolation: 1
   _ownerSmoothedProperties: 255
@@ -5122,7 +5122,7 @@ MonoBehaviour:
   ManaRegenerationTemplateID: -2144672577
   StaminaResourceTemplateID: 2142067754
   StaminaRegenerationTemplateID: -251416119
-  regenTickRate: 5
+  regenTickRate: 1
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5270,7 +5270,7 @@ MonoBehaviour:
   _enableTeleport: 0
   _teleportThreshold: 1
   _clientAuthoritative: 0
-  _sendToOwner: 1
+  _sendToOwner: 0
   _interval: 1
   _synchronizePosition: 1
   _positionSensitivity: 0.001

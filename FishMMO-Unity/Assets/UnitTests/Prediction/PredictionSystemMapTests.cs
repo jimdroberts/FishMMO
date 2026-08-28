@@ -102,7 +102,6 @@ namespace FishMMO.UnitTests
 				(typeof(CharacterResourcesBroadcast),  "health / mana / stamina", "<=5Hz, on change"),
 				(typeof(CharacterBuffsBroadcast),      "server-filtered buff list", "on change + spawn replay"),
 				(typeof(AbilityActivatedBroadcast),    "ability cast + resolved target", "per cast"),
-				(typeof(PredictionModeBroadcast),      "interpolated vs forwarded", "on mode change + spawn replay"),
 				(typeof(CharacterDeathStateBroadcast), "death / revive pose", "on change (payload covers late join)"),
 			};
 
@@ -252,91 +251,6 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(6.0 * (6 * 1000.0 / tickRate) / 1000.0 < 1.5,
 				"Even the coarsest band must keep samples close enough to interpolate smoothly.");
-		}
-		/// <summary>
-		/// The runtime mode switch moves both halves together.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// The failure this guards is asymmetric and both directions are bad. Forwarding on with the
-		/// transform still enabled pays for position twice — once through the relayed input stream
-		/// and again through the transform. Forwarding off with the transform disabled sends
-		/// observers nothing at all, so the character stands still for everyone but its owner while
-		/// continuing to deal and take damage, which presents as a content bug rather than a
-		/// networking one.
-		/// </para>
-		/// <para>
-		/// Exercised through the client-side apply path, which is the half reachable without a live
-		/// server. The server half additionally calls <c>NetworkObject.SetStateForwarding</c>, whose
-		/// effect is immediate because every send path reads the property live.
-		/// </para>
-		/// </remarks>
-		[Test]
-		public void PredictionMode_SwitchesTransformAndForwardingTogether()
-		{
-			GameObject go = new GameObject("ModeProbe");
-			try
-			{
-				FishNet.Component.Transforming.NetworkTransform nt =
-					go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
-				PredictionModeController controller = go.AddComponent<PredictionModeController>();
-
-				MethodInfo apply = typeof(PredictionModeController)
-					.GetMethod("ApplyModeFromServer", BindingFlags.Instance | BindingFlags.NonPublic);
-				LogAssert.IsNotNull(apply, "ApplyModeFromServer must exist; it is the client-side path.");
-
-				apply.Invoke(controller, new object[] { PredictionMode.Forwarded });
-				LogAssert.IsTrue(!nt.enabled,
-					"Forwarded mode must disable the NetworkTransform, or position is paid for twice.");
-				LogAssert.AreEqual(PredictionMode.Forwarded, controller.Mode, "Mode must be recorded.");
-
-				apply.Invoke(controller, new object[] { PredictionMode.Interpolated });
-				LogAssert.IsTrue(nt.enabled,
-					"Interpolated mode must enable the NetworkTransform, or observers receive no position at all.");
-				LogAssert.AreEqual(PredictionMode.Interpolated, controller.Mode, "Mode must be recorded.");
-
-				TestContext.WriteLine(
-					"MEASURE mode switch verified: Forwarded -> transform off, Interpolated -> transform on");
-			}
-			finally
-			{
-				UnityEngine.Object.DestroyImmediate(go);
-			}
-		}
-
-		/// <summary>
-		/// A client cannot change its own presentation mode.
-		/// </summary>
-		/// <remarks>
-		/// The mode decides what the <em>server</em> sends, so a client setting it would achieve
-		/// nothing while appearing to work — the transform would toggle locally and the traffic
-		/// would not change. Refusing loudly is better than a silent no-op.
-		/// </remarks>
-		[Test]
-		public void PredictionMode_CannotBeSetByAClient()
-		{
-			GameObject go = new GameObject("ModeAuthorityProbe");
-			try
-			{
-				go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
-				PredictionModeController controller = go.AddComponent<PredictionModeController>();
-
-				PredictionMode before = controller.Mode;
-
-				// IsServerStarted is false on a bare component, so this takes the refusal path.
-				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
-				controller.SetMode(PredictionMode.Forwarded);
-				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
-
-				LogAssert.AreEqual(before, controller.Mode,
-					"SetMode off the server must not change the mode; only the server decides what it sends.");
-
-				TestContext.WriteLine("MEASURE client-side SetMode correctly refused");
-			}
-			finally
-			{
-				UnityEngine.Object.DestroyImmediate(go);
-			}
 		}
 	}
 }

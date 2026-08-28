@@ -10,6 +10,7 @@
                 <ui:Label name="guild-subtitle" text="Not in a guild" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="guild-count" text="0" class="fish-badge guild-count" />
+            <ui:Button name="close-button" class="fish-close-btn guild-close-btn" text="✕" />
         </ui:VisualElement>
 
         <!--

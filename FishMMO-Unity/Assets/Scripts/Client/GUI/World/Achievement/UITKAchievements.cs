@@ -15,6 +15,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the category button container.</summary>
 		private const string CATEGORY_LIST_NAME = "achievement-categories";
 
+		/// <summary>Name of the header close button element.</summary>
+		private const string CLOSE_BTN_NAME = "close-button";
+
 		/// <summary>Name of the achievement description container.</summary>
 		private const string DESC_LIST_NAME = "achievement-descriptions";
 
@@ -79,6 +82,15 @@ namespace FishMMO.Client
 			if (root == null)
 			{
 				return;
+			}
+
+			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
+			 * against a freshly cloned tree, so this is a new element each time and the
+			 * handler cannot accumulate the way a subscription to a static event would. */
+			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
+			if (closeButton != null)
+			{
+				closeButton.clicked += Hide;
 			}
 
 			categoryList = root.Q(CATEGORY_LIST_NAME);

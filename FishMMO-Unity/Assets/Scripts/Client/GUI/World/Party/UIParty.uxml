@@ -11,6 +11,7 @@
                 <ui:Label name="party-subtitle" text="Not in a party" class="fish-panel__subtitle" />
             </ui:VisualElement>
             <ui:Label name="party-count" text="0/6" class="fish-badge party-count" />
+            <ui:Button name="close-button" class="fish-close-btn party-close-btn" text="✕" />
         </ui:VisualElement>
 
         <ui:VisualElement name="party-columns" class="party-columns">

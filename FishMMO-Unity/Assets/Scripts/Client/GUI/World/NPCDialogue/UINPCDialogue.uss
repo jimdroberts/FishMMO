@@ -45,6 +45,16 @@
     flex-grow: 1;
 }
 
+/* Sizing only — .fish-close-btn carries the colours, border and hover. */
+.dialogue-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+    margin-left: 8px;
+}
+
+
 .dialogue-body {
     flex-direction: row;
     padding: 12px;
