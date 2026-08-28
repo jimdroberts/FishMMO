@@ -181,8 +181,32 @@ namespace FishMMO.Shared
 #endif
 
 		/// <summary>
-		/// Updates and returns the TargetInfo for the current target, performing a raycast from the given origin and direction.
+		/// Updates and returns the <see cref="TargetInfo"/> for the current target, tracing from the
+		/// given origin and direction.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Lag compensated on the server.</b> This is the acquisition step for every targeted
+		/// ability: <c>AbilityController.ResolveTargetAndSpawn</c> calls it from the replicated aim,
+		/// and <see cref="TargetedEntitySelector"/> then resolves the ability onto whatever it
+		/// decided. A ray is infinitely thin, so it has no width to absorb the gap between where a
+		/// client renders its peers and where the server holds them — measured at 0.64&#160;m for a
+		/// 40&#160;ms connection and 2.2&#160;m at 300&#160;ms, against character capsules 0.6&#160;m
+		/// across. Uncompensated, a laggy player's ray simply misses the character they aimed at.
+		/// Rewinding the scene for the caster's view puts the ray back where it was pointed.
+		/// </para>
+		/// <para>
+		/// <b>One physics scene, both peers.</b> The server branch used to be behind
+		/// <c>#if UNITY_SERVER</c>, which is undefined in the editor the scene server is developed
+		/// in — so in that configuration the server took the client branch and traced the
+		/// <i>default</i> physics scene, which for a multi-scene server holds none of the colliders
+		/// around the character. Asking the character which scene it is in answers correctly on
+		/// every peer and in every build, and it is what makes the owner and the server trace the
+		/// same geometry. The aim itself already matches: <c>KCCPlayer</c> quantises the direction
+		/// through <c>AimDirectionCompression</c> before it enters the replicate, so the owner
+		/// simulates with the value the server will receive rather than with its raw camera.
+		/// </para>
+		/// </remarks>
 		/// <param name="origin">The origin of the ray.</param>
 		/// <param name="direction">The direction of the ray.</param>
 		/// <param name="maxDistance">The maximum distance for the raycast.</param>
@@ -192,60 +216,91 @@ namespace FishMMO.Shared
 			Last = Current;
 
 			float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
-			Ray ray = new Ray(origin, direction);
-			RaycastHit hit;
-#if !UNITY_SERVER
-			bool hasHit = Physics.Raycast(ray, out hit, distance, LayerMask);
-#else
-			/* The character's OWN physics scene, for NPCs as well as players. A scene server hosts
-			 * several scenes with local physics; the previous NPC fallback to the global
-			 * Physics.Raycast traced the default scene, so an NPC's target ray never met the
-			 * colliders around it. */
 			PhysicsScene physicsScene = ResolvePhysicsScene();
-			bool hasHit = physicsScene.Raycast(origin, direction, out hit, distance, LayerMask);
-#endif
-			if (hasHit)
+
+			/* Compensation is a server-side query against authoritative history and is deliberately
+			 * not part of the deterministic simulation — a client has no history to rewind and must
+			 * not try. TryResolve also declines for server-driven characters (an NPC brain aims at
+			 * live positions, so rewinding its targets would move them away from where it aimed) and
+			 * for connections whose tick bookkeeping is not established yet. */
+			if (base.IsServerInitialized &&
+				LagCompensationTick.TryResolve(Character, base.TimeManager, out uint rewindTick))
 			{
-				// If the raycast hits the character itself, shoot another ray through the character to find the next target.
-				IPlayerCharacter hitPlayerCharacter = hit.transform.GetComponent<IPlayerCharacter>();
-				if (hitPlayerCharacter != null &&
-					hitPlayerCharacter.ID == Character.ID)
+				/* The caster is excluded: it aims from where it is now, not where it was. A nested
+				 * scope is refused rather than stacked by the registry, so an acquisition made from
+				 * inside another rewind runs against that one instead of stranding characters in the
+				 * past. Disposal restores every displaced character, including if the trace throws. */
+				using (LagCompensationRegistry.Rewind(gameObject.scene, rewindTick, Character))
 				{
-					// Adjust the ray origin slightly forward in the direction so the ray starts inside the character.
-					Vector3 newRayOrigin = hit.point + direction.normalized * 0.1f;
-#if !UNITY_SERVER
-					ray = new Ray(newRayOrigin, direction);
-					Physics.Raycast(ray, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
-#else
-					ray = new Ray(newRayOrigin, direction);
-					physicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Max(0.0f), LayerMask);
-#endif
+					return Trace(physicsScene, origin, direction, distance);
 				}
-				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
-				//Log.Debug("hit: " + hit.transform.name + " pos: " + hit.point);
-				Current = new TargetInfo(hit.transform, hit.point);
 			}
-			else
+
+			return Trace(physicsScene, origin, direction, distance);
+		}
+
+		/// <summary>
+		/// Performs the acquisition trace and writes <see cref="Current"/>.
+		/// </summary>
+		/// <remarks>
+		/// <b>A miss clears the target.</b> Every path that does not end on a collider writes an
+		/// empty <see cref="TargetInfo"/> — including the second trace, the one fired through the
+		/// caster's own capsule, whose result used to be dropped on the floor. Leaving the previous
+		/// acquisition in place on a miss is how a cast that hit nothing lands on whoever the
+		/// <i>previous</i> cast was aimed at, which is both wrong and unattributable.
+		/// </remarks>
+		private TargetInfo Trace(PhysicsScene physicsScene, Vector3 origin, Vector3 direction, float distance)
+		{
+			Ray ray = new Ray(origin, direction);
+
+			if (!physicsScene.Raycast(origin, direction, out RaycastHit hit, distance, LayerMask))
 			{
-				// If no target is hit, set Current to null and use the ray's endpoint.
 				Current = new TargetInfo(null, ray.GetPoint(distance));
+				return Current;
 			}
+
+			// A ray that starts inside the caster hits the caster. Push through it and take whatever
+			// is behind, rather than reporting that a character targeted itself.
+			IPlayerCharacter hitPlayerCharacter = hit.transform.GetComponent<IPlayerCharacter>();
+			if (hitPlayerCharacter != null &&
+				Character != null &&
+				hitPlayerCharacter.ID == Character.ID)
+			{
+				Vector3 newRayOrigin = hit.point + direction.normalized * 0.1f;
+				float remaining = (distance - hit.distance).Max(0.0f);
+				if (!physicsScene.Raycast(newRayOrigin, direction, out hit, remaining, LayerMask))
+				{
+					Current = new TargetInfo(null, ray.GetPoint(distance));
+					return Current;
+				}
+			}
+
+			Current = new TargetInfo(hit.transform, hit.point);
 			return Current;
 		}
 
-#if UNITY_SERVER
 		/// <summary>
 		/// The physics scene this character lives in: the KCC motor's for players, the owning
 		/// Unity scene's for everything else.
 		/// </summary>
+		/// <remarks>
+		/// Resolved at runtime rather than compiled per build target, so an editor-hosted scene
+		/// server traces the same colliders a headless one does.
+		/// </remarks>
 		private PhysicsScene ResolvePhysicsScene()
 		{
-			if (PlayerCharacter != null)
+			if (PlayerCharacter != null && PlayerCharacter.Motor != null)
 			{
-				return PlayerCharacter.Motor.PhysicsScene;
+				// Validity checked because the motor's scene is only populated once it has
+				// initialised; tracing a default PhysicsScene hits nothing at all, which would read
+				// as "you are aiming at empty air" rather than as the not-ready-yet that it is.
+				PhysicsScene motorScene = PlayerCharacter.Motor.PhysicsScene;
+				if (motorScene.IsValid())
+				{
+					return motorScene;
+				}
 			}
 			return gameObject.scene.IsValid() ? gameObject.scene.GetPhysicsScene() : Physics.defaultPhysicsScene;
 		}
-#endif
 	}
 }

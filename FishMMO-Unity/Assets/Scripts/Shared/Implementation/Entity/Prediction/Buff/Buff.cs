@@ -97,6 +97,20 @@ namespace FishMMO.Shared
 		public bool IsReplaying { get; private set; }
 
 		/// <summary>
+		/// True while the tick currently executing on this buff runs on the authoritative
+		/// simulation (the server). False on every client, replayed or not.
+		/// </summary>
+		/// <remarks>
+		/// With state forwarding off, only the owning client (prediction) and the server tick a
+		/// buff. The owner's tick keeps predicted health responsive, but everything that is not a
+		/// pure resource mutation — ECA tick triggers, threat, kill credit, achievements — must
+		/// happen exactly once, on the server. <see cref="IsReplaying"/> alone cannot express that:
+		/// the owner's first, non-replayed pass is still not authoritative. Set by
+		/// <see cref="TryTick"/> from the value the controller passes.
+		/// </remarks>
+		public bool IsAuthoritative { get; private set; } = true;
+
+		/// <summary>
 		/// The character to credit for this buff's periodic effects, or null when there is nobody
 		/// left to credit.
 		/// </summary>
@@ -279,10 +293,16 @@ namespace FishMMO.Shared
 		/// True when this tick is part of a prediction replay. Exposed to templates via
 		/// <see cref="IsReplaying"/> so effects that raise events can suppress them.
 		/// </param>
+		/// <param name="isAuthoritative">
+		/// True when the caller is the server. Exposed to templates via <see cref="IsAuthoritative"/>
+		/// so ECA triggers and other non-idempotent side effects run on the server only. Defaults
+		/// to true for direct callers; <see cref="BuffController.Tick"/> always passes its own
+		/// server state explicitly.
+		/// </param>
 		/// <returns>True if tick state changed (snapshot must be marked dirty).</returns>
 		// AggressiveInlining intentionally absent: the try/catch prevents the JIT from
 		// inlining this method regardless, so the attribute would be silently ignored.
-		public bool TryTick(ICharacter target, uint currentTick, float tickDelta, bool isReplaying = false)
+		public bool TryTick(ICharacter target, uint currentTick, float tickDelta, bool isReplaying = false, bool isAuthoritative = true)
 		{
 			if (Template == null || NextTickTick == TimeManager.UNSET_TICK)
 			{
@@ -290,6 +310,7 @@ namespace FishMMO.Shared
 			}
 
 			IsReplaying = isReplaying;
+			IsAuthoritative = isAuthoritative;
 
 			uint tickRateTicks = DurationToTicks(Template.TickRate, tickDelta);
 			if (tickRateTicks == 0u)

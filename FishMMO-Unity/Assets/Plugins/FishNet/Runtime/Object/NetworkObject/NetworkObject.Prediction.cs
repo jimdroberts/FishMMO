@@ -105,11 +105,17 @@ namespace FishNet.Object
 
         /* FISHMMO EDIT: runtime state-forwarding switch.
          *
+         * UNUSED AT RUNTIME. FishMMO's policy is that state forwarding stays OFF everywhere:
+         * every prefab with a NetworkObject is authored with _enableStateForwarding: 0 (asserted
+         * by PrefabNetworkAuthoringTests), observers are fed by server-to-client broadcasts and a
+         * per-observer NetworkTransform LOD, and the PredictionModeController that used to flip
+         * this was deleted. The method is kept because tests reference it and because the
+         * reasoning below still describes what a future caller would have to get right.
+         *
          * Upstream exposes this only as a serialized field read once during
-         * InitializePredictionEarly, so a scene could pick a mode but never change it. FishMMO
-         * needs both: the open world runs spectators interpolated because relaying every owner's
-         * input to every observer is what makes 100-200 players unaffordable, while a PvP arena can
-         * afford to pay for forwarded peers to get exact positions.
+         * InitializePredictionEarly, so a scene could pick a mode but never change it. The open
+         * world runs spectators interpolated because relaying every owner's input to every
+         * observer is what makes 100-200 players unaffordable.
          *
          * Safe to flip at runtime because every send path reads the property live rather than
          * caching it -- Replicate_SendNonAuthoritative opens with a check, and
@@ -121,13 +127,26 @@ namespace FishNet.Object
          * Set this from the server. Flipping it on a client changes nothing, because the server
          * decides what it sends.
          *
+         * FISHMMO: after calling this, also call CharacterPredictionController.ApplyObserverTransportMode()
+         * on the object. FishMMO runs two mutually exclusive observer transports (see
+         * ObserverSyncMode): forwarded reconcile, or NetworkTransform plus per-controller
+         * broadcasts. The controller push sites read EnableStateForwarding live and switch
+         * themselves, but the NetworkTransform's synchronised properties are state that has to be
+         * set, so that one call is what stops position being sent twice.
+         *
          * Turning forwarding ON also stamps ObserverAddedTick for the NEXT tick. Reconcile deltas
          * are encoded against a per-behaviour baseline that only the owner has been receiving while
          * forwarding was off; without a reset, every observer would decode up to a second of deltas
          * against a baseline it never saw, until the periodic full serialize repaired it.
          * GetDeltaSerializeOption already answers FullSerialize when ObserverAddedTick equals the
          * sending tick -- the same mechanism a genuinely new observer uses -- so stamping the next
-         * tick bounds the stale window to at most one reconcile. */
+         * tick bounds the stale window to at most one reconcile.
+         *
+         * Known gap, moot while nothing flips forwarding: the stamp shares ObserverAddedTick with
+         * the observer rebuild (TryInvokeOnObserversActive writes LocalTick to it), so a rebuild
+         * landing between this call and the next reconcile overwrites the +1 stamp with the
+         * current tick and the forced full serialize is lost for that one reconcile. A caller
+         * that revives this switch should stamp a dedicated field instead of sharing this one. */
         public void SetStateForwarding(bool value)
         {
             if (_enableStateForwarding == value)

@@ -143,10 +143,19 @@ namespace FishMMO.RenderScratch
 		private static PartyMemberVitalsEntry Vitals(long id, float hp, float mp, float sp,
 			float dps, float hps, params ObservedBuffEntry[] buffs)
 		{
+			/* The fixture still speaks in fractions and rates; the payload carries them quantised
+			 * (one byte per fraction, a whole-number rate) since the vitals push became change
+			 * gated. Converting here keeps every caller of this helper unchanged. */
 			return new PartyMemberVitalsEntry
 			{
-				CharacterID = id, HealthPCT = hp, ManaPCT = mp, StaminaPCT = sp,
-				DamagePerSecond = dps, HealPerSecond = hps, Buffs = buffs,
+				CharacterID = id,
+				HealthPCT = PartyVitalsQuantiser.FractionToByte(hp),
+				ManaPCT = PartyVitalsQuantiser.FractionToByte(mp),
+				StaminaPCT = PartyVitalsQuantiser.FractionToByte(sp),
+				DamagePerSecond = PartyVitalsQuantiser.RateToUInt16(dps),
+				HealPerSecond = PartyVitalsQuantiser.RateToUInt16(hps),
+				BuffsChanged = true,
+				Buffs = buffs,
 			};
 		}
 

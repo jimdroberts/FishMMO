@@ -154,6 +154,10 @@ namespace FishMMO.Shared
 				// between x86 and ARM that Mathf.CeilToInt is susceptible to.
 				float activationTimeSec = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 				remainingTicks = (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
+				remainingTicks = ApplyChannelActivationFloor(newAbility, activationData.ActivationFlags, remainingTicks);
+				// A fresh activation owes its observers a reliable opening message; see
+				// BroadcastAbilityActivated.
+				channelSpawnsBroadcast = 0u;
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
 					replicatedFlags.EnableBit(AbilityActivationFlags.IsHeld);
@@ -183,6 +187,43 @@ namespace FishMMO.Shared
 				return true;
 			}
 			return false;
+		}
+
+		/// <summary>
+		/// Raises a channelled ability's activation window to at least one tick.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A channel's per-tick spawns happen in <see cref="UpdateActivation"/>, which is reached
+		/// only while <c>remainingTicks &gt; 0</c>. An ability authored with
+		/// <c>ActivationTime = 0</c> and a Channeled event therefore never reached it at all: the
+		/// activation completed inside the same replicate call that started it and the whole
+		/// channel collapsed to the single closing spawn from <see cref="FinishAbility"/>, with no
+		/// error and nothing to see. The author asked for a channel; this gives them the shortest
+		/// one that exists rather than silently turning it into an instant.
+		/// </para>
+		/// <para>
+		/// Pure and deterministic — it reads only the ability's events and this tick's input
+		/// flags, both of which the server and the owner agree on — so both sides compute the same
+		/// <c>remainingTicks</c> and the reconcile stays quiet. Applies only while the ability is
+		/// actually held: a channelled ability activated without the hold flag is a one-shot cast
+		/// and keeps its instant timing.
+		/// </para>
+		/// </remarks>
+		/// <param name="ability">The ability being started.</param>
+		/// <param name="activationFlags">This tick's activation flags.</param>
+		/// <param name="ticks">The activation window computed from the ability's activation time.</param>
+		/// <returns>The activation window to use.</returns>
+		private uint ApplyChannelActivationFloor(Ability ability, int activationFlags, uint ticks)
+		{
+			if (ticks > 0u ||
+				ChanneledTemplate == null ||
+				!activationFlags.IsFlagged(AbilityActivationFlags.IsHeld) ||
+				!ability.HasAbilityEvent(ChanneledTemplate.ID))
+			{
+				return ticks;
+			}
+			return 1u;
 		}
 
 		/// <summary>
@@ -362,7 +403,7 @@ namespace FishMMO.Shared
 		/// During reconcile replay the visual spawn is skipped but the seed is still
 		/// advanced to keep client/server RNG in lockstep.
 		/// </summary>
-		private void ResolveTargetAndSpawn(Ability ability, AbilityActivationReplicateData activationData, ReplicateState state)
+		private void ResolveTargetAndSpawn(Ability ability, AbilityActivationReplicateData activationData, ReplicateState state, bool isChannelTick = false)
 		{
 			// During reconcile replay, spawned objects were already destroyed by
 			// DestroyAbilityObjectsAfterTick. Skip the visual spawn but still
@@ -400,7 +441,7 @@ namespace FishMMO.Shared
 					 * Safe to send while forwarding is still on: an observer receiving both paths
 					 * spawns once, because AbilityContainerAllocator treats a matching seed+tick as
 					 * a duplicate and replaces it rather than adding a second object. */
-					BroadcastAbilityActivated(ability, targetInfo, activationData.GetPredictionTick());
+					BroadcastAbilityActivated(ability, targetInfo, activationData.GetPredictionTick(), isChannelTick);
 				}
 				else if (base.IsServerStarted && !warnedMissingTargetController)
 				{
@@ -434,13 +475,21 @@ namespace FishMMO.Shared
 		/// named.
 		/// </para>
 		/// <para>
-		/// Scoped to the caster's observers, so the interest management already in place bounds this
-		/// traffic without any extra work. Sent unreliably: a lost cast is a missed visual effect on
-		/// one observer, and re-sending it late would spawn a deterministic object at the wrong tick,
-		/// which looks far worse than the miss.
+		/// Scoped to the caster's observers and excluding its owner, so the interest management
+		/// already in place bounds this traffic without any extra work. A one-off cast and the
+		/// FIRST spawn of a channel go reliably — a cast is a rare, event-driven message and the
+		/// ability object is client-local with no state channel behind it, so a dropped activation
+		/// was a projectile that observer never saw at all. The second and later per-tick spawns of
+		/// a channel go unreliably; see the channel-cost note in the body. Either way a late
+		/// message still lands correctly, because the receiver fast-forwards by the measured
+		/// transit delay rather than assuming the message was instant.
 		/// </para>
 		/// </remarks>
-		private void BroadcastAbilityActivated(Ability ability, TargetInfo targetInfo, PredictionTick spawnTick)
+		/// <param name="isChannelTick">
+		/// True when this spawn is one of a channelled ability's per-tick spawns rather than a
+		/// one-off cast. See the channel-cost note below.
+		/// </param>
+		private void BroadcastAbilityActivated(Ability ability, TargetInfo targetInfo, PredictionTick spawnTick, bool isChannelTick = false)
 		{
 			if (!base.IsServerStarted || base.NetworkManager == null || base.NetworkObject == null)
 			{
@@ -451,6 +500,18 @@ namespace FishMMO.Shared
 			 * object, and a required target that was not found spawned nothing here either. */
 			if (!AbilityObject.SpawnsWorldObject(ability.Template) ||
 				(ability.Template.RequiresTarget && targetInfo.Target == null))
+			{
+				return;
+			}
+
+			/* Forwarded objects reproduce the cast from the relayed input instead.
+			 *
+			 * Their observers run the replicate and spawn the object themselves, so this message
+			 * would be the same spawn a second time. The allocator would collapse the duplicate, but
+			 * the receiving handler also fast-forwards what it is given, and fast-forwarding an
+			 * object that is already simulating jumps it ahead of the server's copy.
+			 * See ObserverSyncMode. */
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
 			{
 				return;
 			}
@@ -469,21 +530,61 @@ namespace FishMMO.Shared
 			AbilitySpawnPose pose = AbilityObject.ResolveSpawnPose(Character, ability, AbilitySpawner, targetInfo,
 				replicatedAimOrigin, replicatedAimDirection);
 
-			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new AbilityActivatedBroadcast
+			/* To observers only.
+			 *
+			 * The owner is always one of its own object's observers, and used to receive this and
+			 * discard it on arrival (it predicted the cast and owns the authoritative copy through
+			 * the reconcile).
+			 *
+			 * CHANNEL COST. A one-off cast goes reliably: it is a rare, event-driven message with
+			 * no recovery path of its own — the object is client-local, so a dropped activation
+			 * used to be a projectile that observer never saw, for its whole lifetime. A
+			 * channelled ability is a different shape. It re-broadcasts every tick it is held,
+			 * thirty a second, and each of those spawns is one short-lived visual among many; a
+			 * lost one is a gap in a beam nobody can point to, while paying reliable delivery for
+			 * all of them puts a retransmit queue behind a stream that is already continuous. So
+			 * the FIRST spawn of a channel is reliable — that is the one that tells an observer a
+			 * channel started at all — and the per-tick spawns after it are unreliable. The
+			 * counter resets in TryStartAbility and Cancel, so every new channel pays for its own
+			 * opening message.
+			 *
+			 * The fast-forward on the receiving side already accounts for however long a message
+			 * took to arrive, so a retransmitted or late one still lands in the right place. */
+			Channel channel = Channel.Reliable;
+			if (isChannelTick)
+			{
+				if (channelSpawnsBroadcast > 0u)
+				{
+					channel = Channel.Unreliable;
+				}
+				channelSpawnsBroadcast++;
+			}
+
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new AbilityActivatedBroadcast
 			{
 				CasterObjectID = base.NetworkObject.ObjectId,
 				AbilityID = ability.ID,
 				Seed = currentSeed,
 				SpawnTick = spawnTick.Value,
+				SpawnMode = (byte)ability.Template.AbilitySpawnTarget,
 				AimOrigin = replicatedAimOrigin,
 				PackedAimDirection = AimDirectionCompression.Encode(replicatedAimDirection),
 				TargetObjectID = targetObjectID,
-				HitPosition = targetInfo.HitPosition,
 				SpawnPosition = pose.Position,
 				SpawnRotation = pose.Rotation,
 				ServerTick = base.TimeManager.LocalTick,
-			}, true, Channel.Unreliable);
+			}, channel);
 		}
+
+		/// <summary>
+		/// Activation broadcasts already sent for the channel currently being held.
+		/// </summary>
+		/// <remarks>
+		/// Zero means the next channel spawn is the first of its channel and must go reliably.
+		/// Server-side only — it exists solely to pick a send channel. See
+		/// <see cref="BroadcastAbilityActivated"/>.
+		/// </remarks>
+		private uint channelSpawnsBroadcast;
 
 		/// <summary>
 		/// Ticks an observer should fast-forward a freshly reproduced ability object by, so it
@@ -522,7 +623,56 @@ namespace FishMMO.Shared
 			}
 			networkManager.ClientManager.RegisterBroadcast<AbilityActivatedBroadcast>(OnAbilityActivatedBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityLearnedObserverBroadcast>(OnAbilityLearnedObserverBroadcast);
 			activationBroadcastRegistered = true;
+		}
+
+		/// <summary>
+		/// Files an ability a peer learned while this client was already observing it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Without this, an observer's knowledge of a peer's abilities was frozen at the moment it
+		/// started observing: <c>ReadPayload</c> was the only source, so every cast of an ability
+		/// crafted afterwards resolved to nothing and drew nothing, permanently.
+		/// </para>
+		/// <para>
+		/// The ability lands in the controller's observer-only store, never in
+		/// <c>KnownAbilities</c> — see <c>AbilityController.RegisterObservedAbility</c> for why
+		/// that distinction is the security boundary. The owner is excluded by the sender and
+		/// skipped again here; it has its own <c>AbilityAddBroadcast</c>.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityLearnedObserverBroadcast(AbilityLearnedObserverBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null)
+			{
+				return;
+			}
+
+			AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
+			if (template == null)
+			{
+				Log.Warning("AbilityController",
+					$"Observed learn for ability {msg.AbilityID} names unknown template {msg.TemplateID}; " +
+					"its casts will not be drawn.");
+				return;
+			}
+
+			List<int> events = msg.Events != null && msg.Events.Length > 0 ? new List<int>(msg.Events) : null;
+			controller.RegisterObservedAbility(msg.AbilityID, template, events);
 		}
 
 		/// <summary>
@@ -548,7 +698,7 @@ namespace FishMMO.Shared
 
 			AbilityController controller = casterNob.GetComponent<AbilityController>();
 			if (controller == null ||
-				!controller.KnownAbilities.TryGetValue(msg.AbilityID, out Ability ability) ||
+				!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability) ||
 				ability.Objects == null ||
 				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
 				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
@@ -594,7 +744,12 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			if (!controller.KnownAbilities.TryGetValue(msg.AbilityID, out Ability ability))
+			/* Both sources, not just KnownAbilities. An ability the caster learned after this
+			 * client started observing it is never in KnownAbilities — the payload that filled
+			 * that dictionary predates the learn — and dropping the cast here is what made such
+			 * abilities permanently invisible. AbilityLearnedObserverBroadcast files those in the
+			 * observer-only store this consults second. */
+			if (!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability))
 			{
 				return;
 			}
@@ -608,12 +763,41 @@ namespace FishMMO.Shared
 			}
 
 			Vector3 aimDirection = AimDirectionCompression.Decode(msg.PackedAimDirection);
-			// The server's hit point, not the target's root: Target-mode abilities spawn at it.
-			TargetInfo targetInfo = new TargetInfo(target, msg.HitPosition);
+
+			/* Camera spawns re-derive their pose; every other mode was sent one.
+			 *
+			 * A Camera pose is a pure function of the aim origin, the aim direction and the
+			 * template's range, all of which are on the wire or on the template, so passing null
+			 * here lets ResolveSpawnPose reproduce the server's own arithmetic exactly. The other
+			 * modes read the caster's motor, collider or spawner transform, which this peer holds
+			 * interpolated several hundred milliseconds behind the server, so resolving them
+			 * locally would put the object on a parallel, offset trajectory for its whole life. */
+			bool derivesPose = msg.SpawnMode == (byte)AbilitySpawnTarget.Camera;
+			AbilitySpawnPose? pose = derivesPose ? (AbilitySpawnPose?)null : new AbilitySpawnPose(msg.SpawnPosition, msg.SpawnRotation);
+
+			/* TargetInfo's hit position no longer travels: the only thing that read it was the
+			 * Target-mode branch of ResolveSpawnPose, and that mode now receives its resolved pose
+			 * outright. The target transform itself still matters — RequiresTarget templates refuse
+			 * to spawn without one, and ability behaviours track it. */
+			TargetInfo targetInfo = new TargetInfo(target, msg.SpawnPosition);
+
+			/* Whether this cast is already running here decides if the message is news.
+			 *
+			 * A duplicate reaches this handler two ways: a retransmit, or — if forwarding is ever
+			 * enabled without the guard on the sender — the locally simulated spawn arriving first.
+			 * The allocator collapses the duplicate and hands back the object that already exists,
+			 * so spawning is safe; fast-forwarding is not, because that object has been simulating
+			 * since it was created and advancing it again puts it ahead of the server's copy. */
+			PredictionTick spawnTick = new PredictionTick(msg.SpawnTick);
+			bool alreadyRunning = AbilityContainerAllocator.IsSpawnAlreadyRunning(ability, msg.Seed, spawnTick);
 
 			AbilityObject spawned = AbilityObject.Spawn(ability, controller.Character, controller.AbilitySpawner, targetInfo,
-				msg.AimOrigin, aimDirection, msg.Seed, new PredictionTick(msg.SpawnTick),
-				new AbilitySpawnPose(msg.SpawnPosition, msg.SpawnRotation));
+				msg.AimOrigin, aimDirection, msg.Seed, spawnTick, pose);
+
+			if (alreadyRunning)
+			{
+				return;
+			}
 
 			/* The message took one network delay to get here, during which the server's copy
 			 * kept moving. Catch up, less the interpolation the observer renders its peers behind. */
@@ -631,7 +815,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void SpawnChanneledAbility(Ability validatedAbility, AbilityActivationReplicateData activationData, ReplicateState state)
 		{
-			ResolveTargetAndSpawn(validatedAbility, activationData, state);
+			ResolveTargetAndSpawn(validatedAbility, activationData, state, isChannelTick: true);
 
 			// Channeled abilities consume resources every tick, but only on non-replay execution.
 			if (!state.ContainsReplayed())
@@ -1128,6 +1312,8 @@ namespace FishMMO.Shared
 			currentAbilityID = NO_ABILITY;
 			remainingTicks = 0;
 			chargedHoldTicks = 0;
+			// The next channel starts over and owes its observers a reliable opening message.
+			channelSpawnsBroadcast = 0u;
 
 			// Clear persistent activation flags from replicated state.
 			replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);

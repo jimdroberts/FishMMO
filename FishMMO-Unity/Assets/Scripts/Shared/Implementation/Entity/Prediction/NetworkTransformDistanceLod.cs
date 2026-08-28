@@ -2,39 +2,55 @@ using System.Collections.Generic;
 using FishNet.Component.Transforming;
 using FishNet.Connection;
 using FishNet.Object;
+using FishNet.Observing;
+using FishNet.Transporting;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Scales a <see cref="NetworkTransform"/>'s send interval by how far away the nearest observer
-	/// is, so an object nobody is standing near stops paying full rate.
+	/// Rate limits a <see cref="NetworkTransform"/>'s unreliable updates <b>per observer</b> by how far
+	/// that observer is from the object, so a spectator across the zone stops paying full rate for
+	/// something it can barely see while a spectator standing next to it still gets every tick.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why interval and not something finer.</b> Once payloads are delta-encoded, a transform
-	/// update is around eleven bytes behind a ten-byte RPC header — the header is roughly half the
-	/// cost. At that point the only lever left is sending fewer messages, and
-	/// <see cref="NetworkTransform.SetInterval"/> is the one FishNet already exposes for it.
+	/// <b>Why per observer and not <see cref="NetworkTransform.SetInterval"/>.</b> The transform's
+	/// own interval is one value for the whole object, changed through a buffered observers RPC, so
+	/// the best it could do was follow the <i>nearest</i> observer — useless in a crowd, where
+	/// somebody is always close to everything. It also fought the per-observer streaming filter:
+	/// with the transform sending every Nth tick and the filter passing every Mth tick per
+	/// observer, an observer only heard from the object when both gates coincided, which for
+	/// coprime intervals happens once in N×M ticks. This component therefore never touches the
+	/// transform's interval (it stays at 1) and instead answers, per observer and per send,
+	/// through FishNet's <see cref="IObserverSendFilter"/> hook. Skipping an unreliable update is
+	/// indistinguishable from packet loss to the receiver, and reliable sends (the settle after a
+	/// stop, a teleport) are never filtered, so every observer still converges on the true pose.
 	/// </para>
 	/// <para>
-	/// <b>What this cannot do.</b> The interval lives on the object, not on the observer, so every
-	/// observer of an object gets the same rate. The distance that matters is therefore the
-	/// <i>nearest</i> observer's: if anyone is close enough to notice, everyone keeps the fast rate.
-	/// That makes this very effective in sparse zones — a distant NPC nobody is near drops to a
-	/// fraction of its traffic — and close to useless in a packed capital, where somebody is always
-	/// within a few metres of everything. Dense scenes need <see cref="IntervalScale"/> raised
-	/// instead, which is a per-zone decision rather than a per-object one.
+	/// <b>Composition with the observer cap.</b> Characters registered with
+	/// <see cref="ObserverStreamingRegistry"/> already have a per-observer filter,
+	/// <see cref="ObserverStreamingEntry"/>, that rate limits everything beyond a viewer's
+	/// full-rate cap. That entry reads this component and applies the <i>larger</i> of the two
+	/// intervals, so the two never multiply and never starve anyone. Objects without an entry —
+	/// world items, static interactables — install this component as the object's filter directly.
 	/// </para>
 	/// <para>
-	/// <b>Changing the interval is not free.</b> <see cref="NetworkTransform.SetInterval"/> is a
-	/// buffered observers RPC, so a value that oscillates across a band edge would cost more than
-	/// the rate it saves. Bands are therefore evaluated on a slow timer and applied with a hysteresis
-	/// margin, so an object hovering on a boundary settles rather than flapping.
+	/// <b>Owner.</b> The owner never counts. Its own character is at distance zero from itself and
+	/// would have pinned every object at full rate; more to the point a server-authoritative
+	/// transform with SendToOwner off does not send to its owner at all
+	/// (<see cref="NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs"/>).
+	/// </para>
+	/// <para>
+	/// <b>Hysteresis.</b> Bands are evaluated on a slow timer and each observer holds its band
+	/// until it clears the edge by <see cref="hysteresis"/>, so an observer hovering on a boundary
+	/// sees a steady sample spacing rather than one that flips every evaluation. Changing an
+	/// observer's interval is free on the wire now (it is a dictionary write, not an RPC), but an
+	/// interpolator fed at an abruptly changing rate can hitch, which is what the margin protects.
 	/// </para>
 	/// </remarks>
 	[RequireComponent(typeof(NetworkTransform))]
-	public class NetworkTransformDistanceLod : NetworkBehaviour
+	public class NetworkTransformDistanceLod : NetworkBehaviour, IObserverSendFilter
 	{
 		/// <summary>
 		/// One distance band: everything nearer than <see cref="MaximumDistance"/> and not covered by
@@ -43,17 +59,17 @@ namespace FishMMO.Shared
 		[System.Serializable]
 		public struct Band
 		{
-			[Tooltip("Nearest observer must be within this distance for this band to apply.")]
+			[Tooltip("Observer must be within this distance for this band to apply.")]
 			public float MaximumDistance;
 
-			[Tooltip("Ticks between transform sends while this band applies. 1 is every tick.")]
+			[Tooltip("Ticks between transform sends to an observer in this band. 1 is every tick.")]
 			[Range(1, 60)]
 			public byte Interval;
 		}
 
 		/// <summary>
 		/// Bands in ascending distance order. The first whose <see cref="Band.MaximumDistance"/> the
-		/// nearest observer is inside wins; beyond the last band, the last band's interval is used.
+		/// observer is inside wins; beyond the last band, the last band's interval is used.
 		/// </summary>
 		/// <remarks>
 		/// Defaults are deliberately conservative — full rate out to twenty metres, which covers
@@ -61,7 +77,7 @@ namespace FishMMO.Shared
 		/// against how your camera frames the world rather than against the byte counts.
 		/// </remarks>
 		[Header("Level of detail")]
-		[Tooltip("Ascending distance bands. Nearest observer inside a band sets that band's interval.")]
+		[Tooltip("Ascending distance bands. An observer inside a band receives that band's interval.")]
 		[SerializeField]
 		private Band[] bands =
 		{
@@ -74,10 +90,11 @@ namespace FishMMO.Shared
 		/// Multiplies whichever band interval is selected. Raise it for dense scenes.
 		/// </summary>
 		/// <remarks>
-		/// The escape hatch for the case the per-object distance rule cannot see. In a capital every
-		/// object has a near observer, so every object sits in the fastest band and this component
-		/// saves nothing; raising the scale for that scene trades some smoothness for a proportional
-		/// cut across every object in it. Settable at runtime so a zone can raise it on entry.
+		/// Per-observer distance already handles a crowd far better than the old nearest-observer
+		/// rule did, but a capital can still have dozens of observers inside the first band of
+		/// every object. Raising the scale for that scene trades some smoothness for a
+		/// proportional cut across every object in it. Settable at runtime so a zone can raise it
+		/// on entry.
 		/// </remarks>
 		[Tooltip("Multiplier applied to the selected band's interval. Raise for crowded scenes.")]
 		[Range(1, 8)]
@@ -86,22 +103,18 @@ namespace FishMMO.Shared
 
 		/// <summary>Seconds between band evaluations.</summary>
 		/// <remarks>
-		/// Deliberately slow. Each applied change is a buffered observers RPC, and the thing being
-		/// decided — roughly how far away the nearest player is — does not move meaningfully within
-		/// a few hundred milliseconds.
+		/// Deliberately slow. The thing being decided — roughly how far away each observer is —
+		/// does not move meaningfully within a few hundred milliseconds, and the evaluation walks
+		/// every observer of every object carrying this component.
 		/// </remarks>
-		[Tooltip("Seconds between evaluations. Low values cost RPCs without improving the decision.")]
+		[Tooltip("Seconds between evaluations, rounded to whole ticks when the server starts. Low values cost CPU without improving the decision.")]
 		[Range(0.1f, 5f)]
 		[SerializeField]
 		private float evaluateInterval = 0.5f;
 
 		/// <summary>
-		/// Fraction a band edge is extended by before the object is allowed to leave that band.
+		/// Fraction a band edge is extended by before an observer is allowed to leave that band.
 		/// </summary>
-		/// <remarks>
-		/// Without this an object sitting exactly on an edge would emit an RPC every evaluation as
-		/// it crossed back and forth — spending bandwidth to save bandwidth.
-		/// </remarks>
 		[Tooltip("Hysteresis on band edges, as a fraction of the edge distance.")]
 		[Range(0f, 0.5f)]
 		[SerializeField]
@@ -114,113 +127,276 @@ namespace FishMMO.Shared
 			set => intervalScale = Mathf.Clamp(value, 1, 8);
 		}
 
-		private NetworkTransform networkTransform;
-		private float nextEvaluateTime;
-		private int currentBand = -1;
-		private byte appliedInterval;
-
-		private void Awake()
+		/// <summary>Number of observers currently held below full rate by distance.</summary>
+		public int LimitedObserverCount
 		{
-			networkTransform = GetComponent<NetworkTransform>();
+			get
+			{
+				int count = 0;
+				foreach (KeyValuePair<int, ObserverLod> pair in lodByClientId)
+				{
+					if (pair.Value.Interval > 1)
+					{
+						count++;
+					}
+				}
+				return count;
+			}
 		}
+
+		/// <summary>Per-observer state: the band it is currently held in and the interval that maps to.</summary>
+		private struct ObserverLod
+		{
+			public int Band;
+			public byte Interval;
+			/// <summary>Pass number this observer was last seen on, for pruning departed observers.</summary>
+			public uint Pass;
+		}
+
+		private readonly Dictionary<int, ObserverLod> lodByClientId = new Dictionary<int, ObserverLod>();
+		private readonly List<int> departed = new List<int>();
+
+		/// <summary>
+		/// <see cref="evaluateInterval"/> converted to whole ticks, resolved once from
+		/// <c>TimeManager.TickDelta</c> when the server starts.
+		/// </summary>
+		/// <remarks>
+		/// The inspector field stays in seconds because that is the unit the decision is authored
+		/// in, but nothing at runtime measures elapsed seconds: the conversion happens once and
+		/// every comparison after it is integer tick arithmetic. Same pattern as
+		/// <c>BuffController.tickDelta</c>.
+		/// </remarks>
+		private uint evaluateIntervalTicks = 1;
+
+		/// <summary>Tick the next evaluation pass is due on.</summary>
+		private uint nextEvaluateTick;
+
+		private uint pass;
 
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
 
-			// Start at the fastest band so an object is never briefly coarse right after spawning,
-			// which is exactly when a player is most likely to be looking at it.
-			currentBand = -1;
-			appliedInterval = 0;
-			nextEvaluateTime = 0f;
+			lodByClientId.Clear();
+
+			/* Tick driven, not frame driven.
+			 *
+			 * This used to run from Update() against Time.time. Nothing about the decision is
+			 * wrong on a wall clock -- it only chooses how often each observer hears from this
+			 * transform -- but it made the cadence depend on the server's frame rate, which on a
+			 * headless build is neither fixed nor related to the tick rate the sends are actually
+			 * gated on (ShouldSend is `tick % interval`). Driving it from OnPostTick puts the
+			 * scheduler and the thing it schedules in the same clock, and matches
+			 * ObserverStreamingRegistry, which reschedules from the same event. */
+			evaluateIntervalTicks = ResolveEvaluateIntervalTicks();
+			nextEvaluateTick = 0u;
+
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
+			}
+
+			/* Objects that are not characters never get an ObserverStreamingEntry, so this is the
+			 * only per-observer filter they will have. Characters may register their entry before
+			 * or after this runs; either way the entry reads this component, so whichever filter
+			 * ends up installed produces the same decision. */
+			if (base.NetworkObject != null && base.NetworkObject.ObserverSendFilter == null)
+			{
+				base.NetworkObject.ObserverSendFilter = this;
+			}
 		}
 
-		private void Update()
+		public override void OnStopServer()
 		{
-			if (!base.IsServerStarted || networkTransform == null || bands == null || bands.Length < 1)
+			if (base.TimeManager != null)
 			{
-				return;
+				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
 			}
-			if (Time.time < nextEvaluateTime)
+			if (base.NetworkObject != null && ReferenceEquals(base.NetworkObject.ObserverSendFilter, this))
 			{
-				return;
+				base.NetworkObject.ObserverSendFilter = null;
 			}
-			nextEvaluateTime = Time.time + evaluateInterval;
-
-			int band = ResolveBand(NearestObserverSqrDistance());
-			if (band < 0)
-			{
-				return;
-			}
-
-			byte interval = (byte)Mathf.Clamp(bands[band].Interval * Mathf.Max(1, intervalScale), 1, 255);
-			if (band == currentBand && interval == appliedInterval)
-			{
-				return;
-			}
-
-			currentBand = band;
-			appliedInterval = interval;
-			networkTransform.SetInterval(interval);
+			lodByClientId.Clear();
+			base.OnStopServer();
 		}
 
 		/// <summary>
-		/// Squared distance to the closest observing player, or <see cref="float.MaxValue"/> when
-		/// nobody is observing.
+		/// Converts the authored <see cref="evaluateInterval"/> into whole ticks, never below one.
 		/// </summary>
 		/// <remarks>
-		/// Squared throughout — this runs per object per evaluation and the comparison does not need
-		/// the square root. An observer whose connection has no first object yet (still loading in)
-		/// is skipped rather than treated as infinitely far, so an object does not drop to its
-		/// coarsest band because someone is mid-handshake beside it.
+		/// Falls back to one tick when the TimeManager is unavailable or reports a non-positive
+		/// tick delta: evaluating every tick is wasteful but correct, where a zero interval would
+		/// divide by zero and a large one would freeze every observer in whatever band it first
+		/// landed in.
 		/// </remarks>
-		private float NearestObserverSqrDistance()
+		private uint ResolveEvaluateIntervalTicks()
 		{
-			NetworkObject nob = base.NetworkObject;
-			if (nob == null)
+			double tickDelta = base.TimeManager != null ? base.TimeManager.TickDelta : 0d;
+			if (tickDelta <= 0d)
 			{
-				return float.MaxValue;
+				return 1u;
 			}
-
-			HashSet<NetworkConnection> observers = nob.Observers;
-			if (observers == null || observers.Count < 1)
-			{
-				return float.MaxValue;
-			}
-
-			Vector3 position = transform.position;
-			float nearest = float.MaxValue;
-
-			foreach (NetworkConnection connection in observers)
-			{
-				NetworkObject observerObject = connection?.FirstObject;
-				if (observerObject == null)
-				{
-					continue;
-				}
-
-				float sqr = (observerObject.transform.position - position).sqrMagnitude;
-				if (sqr < nearest)
-				{
-					nearest = sqr;
-				}
-			}
-
-			return nearest;
+			int ticks = Mathf.RoundToInt(evaluateInterval / (float)tickDelta);
+			return ticks < 1 ? 1u : (uint)ticks;
 		}
 
 		/// <summary>
-		/// Picks the band for a nearest-observer distance, holding the current band until the
-		/// distance clears its edge by <see cref="hysteresis"/>.
+		/// Re-bands observers on a fixed tick cadence.
 		/// </summary>
-		/// <param name="sqrDistance">Squared distance to the nearest observer.</param>
-		/// <returns>Band index, or -1 when nothing is observing and the rate is irrelevant.</returns>
-		private int ResolveBand(float sqrDistance)
+		/// <remarks>
+		/// <see cref="TimeManager.OnPostTick"/> rather than <c>OnTick</c>: the pass reads every
+		/// observer's transform position, and post-tick is after the motor has moved characters for
+		/// this tick, so a band is chosen from where things actually are rather than from where
+		/// they were when the tick began.
+		/// </remarks>
+		private void TimeManager_OnPostTick()
 		{
-			if (sqrDistance == float.MaxValue)
+			if (!base.IsServerStarted || bands == null || bands.Length < 1 || base.TimeManager == null)
 			{
-				// Unobserved. Whatever interval is set costs nothing, so leave it alone rather than
-				// spending an RPC on a decision no one can see.
+				return;
+			}
+
+			uint localTick = base.TimeManager.LocalTick;
+			/* Unsigned wrap-safe comparison: (int)(a - b) < 0 stays correct across uint overflow,
+			 * where `a < b` would stall the scheduler for the rest of the session at wrap. Same
+			 * form ObservedResourcePushScheduler uses. */
+			if (nextEvaluateTick != 0u && (int)(localTick - nextEvaluateTick) < 0)
+			{
+				return;
+			}
+			nextEvaluateTick = localTick + evaluateIntervalTicks;
+
+			Evaluate();
+		}
+
+		/// <summary>
+		/// Re-bands every current observer. Public so a server can force a pass after a bulk
+		/// change (a teleport, a load boundary) and so tests can drive it.
+		/// </summary>
+		public void Evaluate()
+		{
+			NetworkObject nob = base.NetworkObject;
+			if (nob == null || bands == null || bands.Length < 1)
+			{
+				return;
+			}
+
+			pass++;
+			Vector3 position = transform.position;
+			NetworkConnection owner = nob.Owner;
+
+			HashSet<NetworkConnection> observers = nob.Observers;
+			if (observers != null)
+			{
+				foreach (NetworkConnection connection in observers)
+				{
+					if (connection == null)
+					{
+						continue;
+					}
+					if (owner != null && owner.IsValid && connection == owner)
+					{
+						// The owner is never rate limited, and would otherwise sit at distance zero.
+						continue;
+					}
+
+					NetworkObject observerObject = connection.FirstObject;
+					if (observerObject == null)
+					{
+						/* Still loading in. Keep whatever it had (full rate if nothing) rather than
+						 * banding it on a position it does not have yet. */
+						continue;
+					}
+
+					BandObserver(connection.ClientId, (observerObject.transform.position - position).sqrMagnitude);
+				}
+			}
+
+			// Forget observers that left, so a reconnecting client starts fresh.
+			departed.Clear();
+			foreach (KeyValuePair<int, ObserverLod> pair in lodByClientId)
+			{
+				if (pair.Value.Pass != pass)
+				{
+					departed.Add(pair.Key);
+				}
+			}
+			for (int i = 0; i < departed.Count; i++)
+			{
+				lodByClientId.Remove(departed[i]);
+			}
+		}
+
+		/// <summary>
+		/// Bands one observer for the current pass. Split out of <see cref="Evaluate"/> so tests can
+		/// drive it without a spawned NetworkObject and live connections.
+		/// </summary>
+		internal void BandObserver(int clientId, float sqrDistance)
+		{
+			lodByClientId.TryGetValue(clientId, out ObserverLod lod);
+			int previousBand = lod.Pass == 0 ? -1 : lod.Band;
+			int band = ResolveBand(bands, hysteresis, sqrDistance, previousBand);
+
+			lod.Band = band;
+			lod.Interval = IntervalForBand(bands, band, intervalScale);
+			lod.Pass = pass;
+			lodByClientId[clientId] = lod;
+		}
+
+		/// <summary>Band an observer is currently held in, or -1 when it is not tracked.</summary>
+		public int GetBand(NetworkConnection connection)
+		{
+			return connection != null && lodByClientId.TryGetValue(connection.ClientId, out ObserverLod lod) ? lod.Band : -1;
+		}
+
+		/// <summary>Send interval currently applied to an observer by distance; 1 when unlimited.</summary>
+		public byte GetInterval(NetworkConnection connection)
+		{
+			if (connection == null || !lodByClientId.TryGetValue(connection.ClientId, out ObserverLod lod))
+			{
+				return 1;
+			}
+			return lod.Interval < 1 ? (byte)1 : lod.Interval;
+		}
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// Used directly only when the object has no <see cref="ObserverStreamingEntry"/>; the entry
+		/// otherwise folds <see cref="GetInterval"/> into its own decision. Reliable sends are never
+		/// declined — the reliable settle after a stop must reach every observer.
+		/// </remarks>
+		public bool ShouldSend(NetworkObject networkObject, NetworkConnection connection, Channel channel)
+		{
+			if (channel != Channel.Unreliable || connection == null || networkObject == null)
+			{
+				return true;
+			}
+			if (connection == networkObject.Owner)
+			{
+				return true;
+			}
+			byte interval = GetInterval(connection);
+			if (interval <= 1)
+			{
+				return true;
+			}
+			uint tick = networkObject.TimeManager != null ? networkObject.TimeManager.LocalTick : 0u;
+			return ObserverStreamingPolicy.ShouldSendThisTick(tick, interval, connection.ClientId);
+		}
+
+		/// <summary>
+		/// Picks the band for one observer's squared distance, holding <paramref name="currentBand"/>
+		/// until the distance clears that band's edge by <paramref name="hysteresis"/>.
+		/// </summary>
+		/// <param name="bands">Ascending bands; must have at least one element.</param>
+		/// <param name="hysteresis">Fraction each held band's edge is widened by.</param>
+		/// <param name="sqrDistance">Squared distance from the object to the observer.</param>
+		/// <param name="currentBand">Band the observer is currently held in, or -1 for none.</param>
+		/// <returns>Band index. Distances beyond the last band clamp to it.</returns>
+		public static int ResolveBand(Band[] bands, float hysteresis, float sqrDistance, int currentBand)
+		{
+			if (bands == null || bands.Length < 1)
+			{
 				return -1;
 			}
 
@@ -228,8 +404,8 @@ namespace FishMMO.Shared
 			{
 				float edge = bands[i].MaximumDistance;
 
-				// Widen the edge of the band we are already in, so sitting on a boundary settles
-				// instead of emitting an RPC every evaluation.
+				// Widen the edge of the band the observer is already in, so sitting on a boundary
+				// settles instead of changing every evaluation.
 				if (i == currentBand)
 				{
 					edge *= 1f + hysteresis;
@@ -242,6 +418,16 @@ namespace FishMMO.Shared
 			}
 
 			return bands.Length - 1;
+		}
+
+		/// <summary>Interval for a band after scaling, clamped to the byte range; 1 for no band.</summary>
+		public static byte IntervalForBand(Band[] bands, int band, int scale)
+		{
+			if (bands == null || band < 0 || band >= bands.Length)
+			{
+				return 1;
+			}
+			return (byte)Mathf.Clamp(bands[band].Interval * Mathf.Max(1, scale), 1, 255);
 		}
 	}
 }

@@ -1,7 +1,9 @@
 using FishNet.Connection;
+using FishNet.Object;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
@@ -32,6 +34,11 @@ namespace FishMMO.Shared
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
+
+			/* Before the ownership split: everyone who read a spawn payload gets the objects that
+			 * were already in the air, owner included. A fresh connection has predicted nothing,
+			 * so it needs the catch-up exactly as much as an observer does. */
+			MaterializePendingInFlightObjects();
 
 			if (!base.IsOwner)
 			{
@@ -74,6 +81,68 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 			}
+		}
+
+		/// <summary>
+		/// Reproduces the ability objects that were already in flight when this client started
+		/// observing the caster.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Each one is spawned at the pose the server launched it from and then fast-forwarded by
+		/// the difference between this client's estimate of the server tick and the tick the
+		/// object started on, less the interpolation this client renders its peers behind — the
+		/// same arithmetic a live activation broadcast uses, so a streamed object and a witnessed
+		/// one end up in the same place.
+		/// </para>
+		/// <para>
+		/// An object whose remaining life has already run out during transit destroys itself
+		/// inside <c>FastForward</c> without dispatching its OnDestroy events, which is correct:
+		/// it no longer exists on the server and its effects have already played there.
+		/// </para>
+		/// </remarks>
+		private void MaterializePendingInFlightObjects()
+		{
+			if (pendingInFlightObjects.Count == 0)
+			{
+				return;
+			}
+
+			NetworkObject nob = base.NetworkObject;
+			FishNet.Managing.Timing.TimeManager timeManager = nob != null ? nob.TimeManager : null;
+
+			/* AbilityObject.Spawn throws without a TimeManager — deterministic simulation has no
+			 * meaning without a fixed tick delta. Dropping the catch-up costs a few visuals;
+			 * throwing here would abort the rest of the character's start. */
+			if (timeManager == null)
+			{
+				pendingInFlightObjects.Clear();
+				return;
+			}
+
+			for (int i = 0; i < pendingInFlightObjects.Count; ++i)
+			{
+				InFlightAbilityObject entry = pendingInFlightObjects[i];
+
+				if (!KnownAbilities.TryGetValue(entry.AbilityID, out Ability ability))
+				{
+					continue;
+				}
+
+				AbilityObject spawned = AbilityObject.Spawn(ability, Character, AbilitySpawner,
+					new TargetInfo(null, entry.Position),
+					entry.Position, entry.Rotation * Vector3.forward,
+					entry.Seed, new PredictionTick(entry.SpawnTick),
+					new AbilitySpawnPose(entry.Position, entry.Rotation));
+
+				if (spawned != null)
+				{
+					spawned.FastForward(ComputeObserverFastForwardTicks(timeManager.Tick, entry.ServerStartTick,
+						LagCompensationTick.SpectatorInterpolationTicks));
+				}
+			}
+
+			pendingInFlightObjects.Clear();
 		}
 
 		/// <summary>
@@ -198,6 +267,72 @@ namespace FishMMO.Shared
 		private const int ABILITY_PAYLOAD_LENGTH_BYTES = 4;
 
 		/// <summary>
+		/// Shape byte written as the first thing inside the framed block.
+		/// </summary>
+		/// <remarks>
+		/// The owner's payload carries the deterministic RNG; nobody else's does. One byte says
+		/// which shape follows, so the reader never has to guess and a future third shape does not
+		/// need a new frame.
+		/// </remarks>
+		private const byte ABILITY_PAYLOAD_SHAPE_OWNER = 0x01;
+
+		/// <summary>
+		/// Ability objects already in flight that one spawn payload will carry.
+		/// </summary>
+		/// <remarks>
+		/// A cap rather than a complete list. This is a catch-up hint for someone who just came
+		/// into range, not authoritative state — anything past a handful of simultaneous
+		/// projectiles from one caster is visual noise that will have expired before it matters,
+		/// and the cap is what stops a pathological caster from making every observer-add
+		/// expensive.
+		/// </remarks>
+		private const int MAX_PAYLOAD_IN_FLIGHT_OBJECTS = 8;
+
+		/// <summary>
+		/// Ability objects with less than this much life left are left out of the spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Reproducing one costs an Instantiate and its whole spawn-event chain for a visual that
+		/// is about to vanish, and the fast-forward would very likely destroy it on arrival
+		/// anyway.
+		/// </remarks>
+		private const float MIN_STREAMED_REMAINING_LIFE = 0.25f;
+
+		/// <summary>
+		/// One ability object that was already flying when this client started observing the caster.
+		/// </summary>
+		private struct InFlightAbilityObject
+		{
+			/// <summary>Ability the object belongs to.</summary>
+			public long AbilityID;
+			/// <summary>Deterministic spawn seed.</summary>
+			public int Seed;
+			/// <summary>Replicate tick the object spawned on, in the caster's domain.</summary>
+			public uint SpawnTick;
+			/// <summary>Server tick the object started on, for the fast-forward.</summary>
+			public uint ServerStartTick;
+			/// <summary>World position the object spawned at.</summary>
+			public Vector3 Position;
+			/// <summary>World rotation the object spawned with.</summary>
+			public Quaternion Rotation;
+		}
+
+		/// <summary>
+		/// In-flight objects read from the spawn payload, waiting to be reproduced.
+		/// </summary>
+		/// <remarks>
+		/// Not reproduced inside <c>ReadPayload</c>: that runs while the object is still being
+		/// spawned, before the character is assembled, and <c>AbilityObject.Spawn</c> needs a live
+		/// caster with a TimeManager. They are materialised from <c>OnStartCharacter</c> instead.
+		/// </remarks>
+		private readonly List<InFlightAbilityObject> pendingInFlightObjects = new List<InFlightAbilityObject>();
+
+		/// <summary>
+		/// Scratch list used by <see cref="WritePayload"/> to gather in-flight objects.
+		/// </summary>
+		private readonly List<InFlightAbilityObject> inFlightWriteBuffer = new List<InFlightAbilityObject>();
+
+		/// <summary>
 		/// Reads the ability controller's state from the network payload, including ability RNG seed, known abilities, and cooldowns.
 		/// </summary>
 		/// <param name="conn">The network connection.</param>
@@ -206,9 +341,6 @@ namespace FishMMO.Shared
 		{
 			const int maxPayloadAbilities = 2048;
 			const int maxPayloadAbilityEvents = 512;
-
-			// Read the AbilitySeedGenerator seed
-			abilitySeed = reader.ReadInt32();
 
 			/* Where this behaviour's data ends, whatever happens below. Every early exit seeks
 			 * here before returning so the shared payload reader is left where the next
@@ -233,25 +365,39 @@ namespace FishMMO.Shared
 			int abilityBlockLength = (int)declaredLength;
 			int abilityBlockEnd = reader.Position + abilityBlockLength;
 
-			/* The generator's CURRENT state, not a fresh one from abilitySeed. The server's
-			 * generator has advanced once per cast since it was created; a client that connects
-			 * (or reconnects) later and re-derives it from the seed starts at the server's
-			 * INITIAL currentSeed, and the first reconcile then reports a mismatch that was
-			 * never a misprediction. */
-			int payloadCurrentSeed = reader.ReadInt32();
-			uint rngS0 = reader.ReadUInt32();
-			uint rngS1 = reader.ReadUInt32();
-			uint rngS2 = reader.ReadUInt32();
-			uint rngS3 = reader.ReadUInt32();
-			if (abilitySeedGenerator == null)
+			/* Cleared up front, not on the success path. Every abort below seeks to the frame end
+			 * and returns, and anything left here from an earlier read would then be materialised
+			 * as if this payload had asked for it. */
+			pendingInFlightObjects.Clear();
+
+			/* Which shape follows. Only the owner's payload carries the deterministic RNG — see
+			 * WritePayload for why an observer must not be handed a peer's generator state. */
+			byte shape = reader.ReadUInt8Unpacked();
+			if ((shape & ABILITY_PAYLOAD_SHAPE_OWNER) != 0)
 			{
-				abilitySeedGenerator = new DeterministicRNG(rngS0, rngS1, rngS2, rngS3);
+				// Read the AbilitySeedGenerator seed
+				abilitySeed = reader.ReadInt32();
+
+				/* The generator's CURRENT state, not a fresh one from abilitySeed. The server's
+				 * generator has advanced once per cast since it was created; a client that connects
+				 * (or reconnects) later and re-derives it from the seed starts at the server's
+				 * INITIAL currentSeed, and the first reconcile then reports a mismatch that was
+				 * never a misprediction. */
+				int payloadCurrentSeed = reader.ReadInt32();
+				uint rngS0 = reader.ReadUInt32();
+				uint rngS1 = reader.ReadUInt32();
+				uint rngS2 = reader.ReadUInt32();
+				uint rngS3 = reader.ReadUInt32();
+				if (abilitySeedGenerator == null)
+				{
+					abilitySeedGenerator = new DeterministicRNG(rngS0, rngS1, rngS2, rngS3);
+				}
+				else
+				{
+					abilitySeedGenerator.RestoreState(rngS0, rngS1, rngS2, rngS3);
+				}
+				currentSeed = payloadCurrentSeed;
 			}
-			else
-			{
-				abilitySeedGenerator.RestoreState(rngS0, rngS1, rngS2, rngS3);
-			}
-			currentSeed = payloadCurrentSeed;
 
 			//Log.Debug($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
@@ -329,6 +475,42 @@ namespace FishMMO.Shared
 				cooldownController.Read(reader, currentTick);
 			}
 
+			/* Objects that were already in the air when this client was added as an observer.
+			 *
+			 * Only recorded here. Reproducing them needs a live caster with a TimeManager, and
+			 * this runs mid-spawn while the character is still being assembled, so
+			 * OnStartCharacter drains the list once everything exists. */
+			int inFlightCount = reader.ReadUInt8Unpacked();
+			if (inFlightCount > MAX_PAYLOAD_IN_FLIGHT_OBJECTS)
+			{
+				Log.Error("AbilityController",
+					$"ReadPayload: in-flight object count {inFlightCount} exceeds limit " +
+					$"{MAX_PAYLOAD_IN_FLIGHT_OBJECTS}. Skipping in-flight state.");
+				reader.Position = abilityBlockEnd;
+				return;
+			}
+			for (int i = 0; i < inFlightCount; ++i)
+			{
+				// Read into locals: the field order below is the wire order, and nothing about it
+				// should depend on how an object initialiser happens to be evaluated.
+				long inFlightAbilityID = reader.ReadInt64();
+				int inFlightSeed = reader.ReadInt32();
+				uint inFlightSpawnTick = reader.ReadUInt32();
+				uint inFlightServerStartTick = reader.ReadUInt32();
+				Vector3 inFlightPosition = reader.ReadVector3();
+				Quaternion inFlightRotation = reader.ReadQuaternion64();
+
+				pendingInFlightObjects.Add(new InFlightAbilityObject()
+				{
+					AbilityID = inFlightAbilityID,
+					Seed = inFlightSeed,
+					SpawnTick = inFlightSpawnTick,
+					ServerStartTick = inFlightServerStartTick,
+					Position = inFlightPosition,
+					Rotation = inFlightRotation,
+				});
+			}
+
 			/* Belt and braces on the success path too. If the two sides ever disagree about the
 			 * shape of this block — a cooldown controller present on one peer and not the other,
 			 * say — the frame still absorbs it here rather than corrupting the behaviour after
@@ -353,9 +535,6 @@ namespace FishMMO.Shared
 			// Ensure the seed generator exists (shared with ResetState and CreateReconcile).
 			EnsureAbilitySeedGenerator();
 
-			// Write the ability RNG seed for the clients
-			writer.WriteInt32(abilitySeed);
-
 			//Log.Debug($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			/* Everything below is framed by a byte count.
@@ -376,13 +555,35 @@ namespace FishMMO.Shared
 			writer.Skip(ABILITY_PAYLOAD_LENGTH_BYTES);
 			int abilityBlockStart = writer.Position;
 
-			// Current seed and full generator state — see ReadPayload for why not just the seed.
-			writer.WriteInt32(currentSeed);
-			abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
-			writer.WriteUInt32(rngS0);
-			writer.WriteUInt32(rngS1);
-			writer.WriteUInt32(rngS2);
-			writer.WriteUInt32(rngS3);
+			/* The deterministic RNG is OWNER-ONLY.
+			 *
+			 * It used to go to every observer, where it is both useless and dangerous. Useless
+			 * because an observer never runs the seed forward: it is handed the per-cast Seed in
+			 * each AbilityActivatedBroadcast and reproduces the object from that. Dangerous
+			 * because xoshiro128** is not a cryptographic generator — 128 bits of state is the
+			 * whole generator, so a modified client holding a peer's state can compute every seed
+			 * that peer will ever cast with, and anything the ability system rolls from those
+			 * seeds (crit chance, proc rolls, spread) becomes predictable for someone else's
+			 * character. abilitySeed travels with it for the same reason: the generator is derived
+			 * from it.
+			 *
+			 * A shape byte, not a silent difference in length: the reader must know which shape it
+			 * is reading rather than infer it from its own idea of ownership, which is a thing the
+			 * two peers could disagree about during a possession change. */
+			bool isOwner = PayloadVisibility.IsOwner(this, conn);
+			writer.WriteUInt8Unpacked(isOwner ? ABILITY_PAYLOAD_SHAPE_OWNER : (byte)0);
+
+			if (isOwner)
+			{
+				// Current seed and full generator state — see ReadPayload for why not just the seed.
+				writer.WriteInt32(abilitySeed);
+				writer.WriteInt32(currentSeed);
+				abilitySeedGenerator.CaptureState(out uint rngS0, out uint rngS1, out uint rngS2, out uint rngS3);
+				writer.WriteUInt32(rngS0);
+				writer.WriteUInt32(rngS1);
+				writer.WriteUInt32(rngS2);
+				writer.WriteUInt32(rngS3);
+			}
 
 			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);
@@ -415,11 +616,136 @@ namespace FishMMO.Shared
 				/* Cooldown entries go to the owner only. Observers never read a peer's cooldowns
 				 * (see CooldownController.Write), and the block is still written — framed, zero
 				 * count — so ReadPayload's shape is identical on every receiver. */
-				cooldownController.Write(writer, includeEntries: PayloadVisibility.IsOwner(this, conn));
+				cooldownController.Write(writer, includeEntries: isOwner);
 			}
+
+			/* Ability objects that are already in the air.
+			 *
+			 * Everything above describes what the caster CAN do; none of it says anything about
+			 * what is happening right now. A projectile mid-flight reached observers only through
+			 * the activation broadcast that launched it, which is sent once, to whoever was
+			 * observing at that instant — so anyone who came into range a moment later saw an
+			 * empty sky while the server had a fireball crossing it, and the first they knew of it
+			 * was the damage. This list closes that window for whoever is being added right now.
+			 *
+			 * Sent to every receiver including the owner: a fresh connection has predicted
+			 * nothing, so it needs the catch-up exactly as much as an observer does.
+			 *
+			 * The pose travels for every spawn mode, unlike the activation broadcast, which omits
+			 * it for Camera spawns and sends the aim instead. That trick works there because the
+			 * message is written at the moment of the cast, while the aim still exists; a live
+			 * AbilityObject has long since discarded the aim and retains only the pose it
+			 * resolved. There is nothing left to derive from. */
+			CollectInFlightAbilityObjects(inFlightWriteBuffer);
+			writer.WriteUInt8Unpacked((byte)inFlightWriteBuffer.Count);
+			for (int i = 0; i < inFlightWriteBuffer.Count; ++i)
+			{
+				InFlightAbilityObject entry = inFlightWriteBuffer[i];
+				writer.WriteInt64(entry.AbilityID);
+				writer.WriteInt32(entry.Seed);
+				writer.WriteUInt32(entry.SpawnTick);
+				writer.WriteUInt32(entry.ServerStartTick);
+				writer.WriteVector3(entry.Position);
+				/* 64-bit, matching the activation broadcast's SpawnRotation. This pose is used as
+				 * both the spawn transform and the aim direction the object flies along, so the
+				 * 32-bit form's 1.24-degree worst case put a reproduced projectile up to about a
+				 * metre off the server's line over its flight. At most eight entries, once, in a
+				 * spawn payload. */
+				writer.WriteQuaternion64(entry.Rotation);
+			}
+			inFlightWriteBuffer.Clear();
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - abilityBlockStart),
 				abilityBlockStart - ABILITY_PAYLOAD_LENGTH_BYTES);
+		}
+
+		/// <summary>
+		/// Gathers the caster's currently alive ability objects for the spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Root objects only (<c>ID == 0</c>). Children are produced by the ability's own
+		/// OnSpawn events — a multiply or split action — and those events run again when the
+		/// receiver reproduces the root, so sending them would spawn each child twice.
+		/// </para>
+		/// <para>
+		/// Objects that cannot be reproduced from a pose alone are skipped rather than sent and
+		/// dropped: a <c>RequiresTarget</c> ability refuses to spawn without a target transform,
+		/// and a live object no longer holds the target it was launched at.
+		/// </para>
+		/// </remarks>
+		/// <param name="into">Cleared, then filled with at most <see cref="MAX_PAYLOAD_IN_FLIGHT_OBJECTS"/> entries.</param>
+		private void CollectInFlightAbilityObjects(List<InFlightAbilityObject> into)
+		{
+			into.Clear();
+
+			if (KnownAbilities == null || KnownAbilities.Count == 0)
+			{
+				return;
+			}
+
+			/* Resolved lazily and through NetworkObject, which is null-safe on an unspawned
+			 * behaviour where base.TimeManager would throw. Nothing reads it unless there is at
+			 * least one object to describe. */
+			uint serverTick = 0u;
+			bool haveServerTick = false;
+
+			foreach (Ability ability in KnownAbilities.Values)
+			{
+				if (ability.Objects == null || ability.Objects.Count == 0)
+				{
+					continue;
+				}
+				if (ability.Template == null || ability.Template.RequiresTarget)
+				{
+					continue;
+				}
+
+				foreach (Dictionary<int, AbilityObject> container in ability.Objects.Values)
+				{
+					if (container == null || !container.TryGetValue(0, out AbilityObject root))
+					{
+						continue;
+					}
+					if (root == null || root.IsDestroyed)
+					{
+						continue;
+					}
+
+					// Nearly over: not worth an Instantiate and a spawn-event chain.
+					float totalLifeTime = root.TotalLifeTime;
+					if (totalLifeTime > 0.0f && root.RemainingLifeTime < MIN_STREAMED_REMAINING_LIFE)
+					{
+						continue;
+					}
+
+					if (!haveServerTick)
+					{
+						NetworkObject nob = base.NetworkObject;
+						serverTick = nob != null && nob.TimeManager != null ? nob.TimeManager.LocalTick : 0u;
+						haveServerTick = true;
+					}
+
+					into.Add(new InFlightAbilityObject()
+					{
+						AbilityID = ability.ID,
+						Seed = root.SpawnSeed,
+						SpawnTick = root.SpawnTick.Value,
+						/* The server tick this object STARTED on, not the current one. The
+						 * receiver compares it against its own estimate of the server tick and
+						 * fast-forwards by the difference, which is what places the object where
+						 * the server holds it rather than at its launch point. */
+						ServerStartTick = unchecked(serverTick - root.ElapsedTicks),
+						Position = root.SpawnPosition,
+						Rotation = root.SpawnRotation,
+					});
+
+					if (into.Count >= MAX_PAYLOAD_IN_FLIGHT_OBJECTS)
+					{
+						return;
+					}
+				}
+			}
 		}
 	}
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// ECA action that applies a buff to a character in a region.
-	/// Suppressed during prediction reconciliation.
+	/// Server-only (gameplay state); suppressed during prediction reconciliation.
 	/// </summary>
 	[Serializable]
 	public class ApplyRegionBuffAction : BaseAction
@@ -22,9 +22,9 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null || Buff == null) return;
 
-			if (eventData != null &&
-				eventData.TryGet(out RegionEventData regionData) &&
-				regionData.IsReconciling)
+			// Server authoritative: buffs are gameplay state and must only be applied on the
+			// server (also refuses during reconcile replay as belt-and-braces).
+			if (!RegionActionGate.ShouldExecuteGameplay(initiator, eventData))
 			{
 				return;
 			}

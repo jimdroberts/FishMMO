@@ -22,9 +22,11 @@ namespace FishMMO.Shared
 	/// a new template type.
 	/// </para>
 	/// <para>
-	/// Fires on the client as well as the server so predicted state stays in step, and re-fires on
-	/// every reconcile replay. Actions that must not repeat should test
-	/// <see cref="Buff.IsReplaying"/>, carried on the <see cref="BuffEventData"/>.
+	/// <b>Fires on the server only, once per tick.</b> An action here is a side effect — damage
+	/// credit, threat, a chained debuff, achievement progress — and must happen exactly once, so
+	/// <see cref="BaseBuffTemplate.InvokeTickEvents"/> suppresses it on every client pass and on
+	/// the server's reconcile replays alike. The owning client still runs the buff's resource
+	/// mutation for prediction; its health is corrected by the attribute reconcile.
 	/// </para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "New Buff Tick Event", menuName = "FishMMO/Character/Buff/Events/Buff Tick Event", order = 0)]

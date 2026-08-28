@@ -46,6 +46,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the container that holds the generated member rows.</summary>
 		private const string MEMBER_LIST_NAME = "party-member-list";
 
+		/// <summary>Name of the header close button element.</summary>
+		private const string CLOSE_BTN_NAME = "close-button";
+
 		/// <summary>Name of the create-party button.</summary>
 		private const string CREATE_BUTTON_NAME = "party-create";
 
@@ -285,6 +288,15 @@ namespace FishMMO.Client
 			if (root == null)
 			{
 				return;
+			}
+
+			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
+			 * against a freshly cloned tree, so this is a new element each time and the
+			 * handler cannot accumulate the way a subscription to a static event would. */
+			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
+			if (closeButton != null)
+			{
+				closeButton.clicked += Hide;
 			}
 
 			memberList = root.Q(MEMBER_LIST_NAME);
@@ -785,18 +797,30 @@ namespace FishMMO.Client
 
 				model.HasVitals = true;
 				model.VitalsMisses = 0;
-				model.HealthPCT = entry.HealthPCT;
-				model.ManaPCT = entry.ManaPCT;
-				model.StaminaPCT = entry.StaminaPCT;
+				/* Back from the wire's quantised form. The payload carries each fraction as one
+				 * byte and each meter as a whole-number rate; the model works in fractions, which
+				 * is what the bars and the percentage readout expect. */
+				model.HealthPCT = PartyVitalsQuantiser.ByteToFraction(entry.HealthPCT);
+				model.ManaPCT = PartyVitalsQuantiser.ByteToFraction(entry.ManaPCT);
+				model.StaminaPCT = PartyVitalsQuantiser.ByteToFraction(entry.StaminaPCT);
 				model.DamagePerSecond = entry.DamagePerSecond;
 				model.HealPerSecond = entry.HealPerSecond;
 
-				model.Buffs.Clear();
-				if (entry.Buffs != null)
+				/* An omitted array means "unchanged since the last payload", not "no buffs".
+				 *
+				 * The server only pays for the array when the visible set actually differs, so
+				 * clearing on every payload would blank every party member's icons for a second at
+				 * a time. BuffsChanged is what distinguishes an omission from a genuinely empty
+				 * set — the latter arrives as BuffsChanged with a null or empty array. */
+				if (entry.BuffsChanged)
 				{
-					for (int b = 0; b < entry.Buffs.Length; ++b)
+					model.Buffs.Clear();
+					if (entry.Buffs != null)
 					{
-						model.Buffs.Add(entry.Buffs[b]);
+						for (int b = 0; b < entry.Buffs.Length; ++b)
+						{
+							model.Buffs.Add(entry.Buffs[b]);
+						}
 					}
 				}
 				model.BuffsReceivedTime = now;

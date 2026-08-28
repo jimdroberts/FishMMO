@@ -166,8 +166,27 @@ namespace FishMMO.Shared
 #endif
 
 		/// <inheritdoc/>
+		/// <summary>
+		/// The fallback aim direction, already through the wire quantiser.
+		/// </summary>
+		/// <remarks>
+		/// Static and computed once: <c>Quantize</c> is a round trip through the packer, and this
+		/// is a constant. See <see cref="PopulateInput"/> for why the raw fallback is not used.
+		/// </remarks>
+		private static readonly Vector3 QuantizedFallbackAim =
+			AimDirectionCompression.Quantize(AimDirectionCompression.FallbackDirection);
+
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
+			/* Both early exits below leave a default-initialised input on the wire, whose aim is
+			 * Vector3.zero. Consumers substitute AimDirectionCompression.FallbackDirection for a
+			 * zero aim, but they do it AFTER the wire round trip on the remote peers and BEFORE it
+			 * on this one, so the owner would simulate from the raw fallback while everyone else
+			 * simulated from its encoded form — a small divergence, in the one case where nothing
+			 * else is going right anyway. Writing the quantised fallback explicitly means every
+			 * peer starts from the identical vector. */
+			input.AimDirection = QuantizedFallbackAim;
+
 			if (OnHandleCharacterInput == null)
 			{
 				return;
@@ -344,8 +363,27 @@ namespace FishMMO.Shared
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <para>
+		/// The owner always reconciles — this is the correction that repairs its own predicted
+		/// movement.
+		/// </para>
+		/// <para>
+		/// A non-owner only reconciles a forwarded object, because that is the only mode in which
+		/// the reconcile is what positions this character on an observing client. With forwarding
+		/// off, position arrives through <c>NetworkTransform</c> and applying a motor state on top
+		/// would give the transform two writers — the same failure
+		/// <see cref="CharacterPredictionController.ApplyObserverTransportMode"/> exists to prevent
+		/// in the other direction. See <see cref="ObserverSyncMode"/>.
+		/// </para>
+		/// </remarks>
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
+			if (!base.IsOwner && !ObserverSyncMode.ObserversConsumeReconcile(base.NetworkObject))
+			{
+				return;
+			}
+
 			CharacterController.ApplyState(rd.MotorState);
 
 			pendingPlatformID = rd.MotorState.CurrentPlatformID;

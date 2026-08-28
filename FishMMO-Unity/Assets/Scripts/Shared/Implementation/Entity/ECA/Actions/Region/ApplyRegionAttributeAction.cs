@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// ECA action that modifies a character attribute when in a region.
 	/// Adds to a resource attribute's current value or adds a modifier to a regular attribute.
-	/// Suppressed during prediction reconciliation.
+	/// Server-only (gameplay state); suppressed during prediction reconciliation.
 	/// </summary>
 	[Serializable]
 	public class ApplyRegionAttributeAction : BaseAction
@@ -32,9 +32,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (eventData != null &&
-				eventData.TryGet(out RegionEventData regionData) &&
-				regionData.IsReconciling)
+			// Server authoritative: attribute mutation is gameplay state and must only run on the
+			// server (also refuses during reconcile replay as belt-and-braces).
+			if (!RegionActionGate.ShouldExecuteGameplay(initiator, eventData))
 			{
 				return;
 			}

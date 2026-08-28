@@ -415,6 +415,18 @@ namespace FishNet.Component.Transforming
         /// </summary>
         public bool GetSendToOwner() => _sendToOwner;
 
+        /* FISHMMO EDIT: do not put the owner on the wire for updates it will discard.
+         *
+         * A server-authoritative transform with SendToOwner off still sent
+         * ObserversUpdateClientAuthoritativeTransform to its owner every tick -- the owner's
+         * handler is the first thing to return (see the guard at the top of that RPC), so every
+         * one of those packets was ~630 B/s per moving player of pure waste. NetworkBehaviour
+         * consults this property when it builds an ObserversRpc exclusion list, which is the
+         * same list the ExcludeOwner attribute flag feeds, so the owner is skipped at the send
+         * rather than at the receive. Buffered RPCs (interval, SendToOwner changes) are never
+         * affected: they are not sent through that branch and the owner needs them. */
+        public override bool ExcludeOwnerFromUnbufferedObserversRpcs => !_clientAuthoritative && !_sendToOwner;
+
         /// <summary>
         /// Sets SendToOwner. Only the server may call this method.
         /// </summary>

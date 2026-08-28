@@ -43,12 +43,110 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		public ICharacter TargetCharacter { get; set; }
 
+		/// <summary>Explicitly supplied generator, or the lazily derived one once it has been asked for.</summary>
+		private DeterministicRNG rng;
+
 		/// <summary>
-		/// Optional deterministic RNG carried with hit events so value providers (e.g.
-		/// random damage rolls) and dispel actions stay deterministic across client and
-		/// server. Null when the event has no RNG context (e.g. tick, scene-load).
+		/// The deterministic RNG for this event. An explicitly threaded generator (the ability
+		/// object's, for a hit) is returned as-is; otherwise one is derived on first use from the
+		/// event's own identity and cached.
 		/// </summary>
-		public DeterministicRNG RNG { get; set; }
+		/// <remarks>
+		/// <para>
+		/// <b>Never null, and never the shared instance.</b> It used to be null for every event type
+		/// that was not an ability collision — <c>AbilityEventData</c>, <c>RegionEventData</c>,
+		/// <c>BuffEventData</c> — and every consumer coped by falling back to
+		/// <see cref="DeterministicRNG.Shared"/>, a process-wide stream seeded from
+		/// <c>Environment.TickCount</c>. That is not a fallback, it is a different answer on every
+		/// peer and on every run: a random target selector picking out of the same five candidates
+		/// picked a different one on the client than on the server, and a different one again the
+		/// next time the same cast happened.
+		/// </para>
+		/// <para>
+		/// The derived stream is a function of the initiator's network identity and the event's tick,
+		/// both of which every peer agrees on, so the same event yields the same rolls everywhere.
+		/// Two events in the same tick from the same initiator share a stream deliberately: they are
+		/// the same event as far as reproduction is concerned. Where a caller needs an independent
+		/// reproducible stream — a selector that must not consume the rolls a later action expects —
+		/// it takes one from <see cref="DeriveRNG(int)"/> with its own salt.
+		/// </para>
+		/// </remarks>
+		public DeterministicRNG RNG
+		{
+			get
+			{
+				if (rng == null)
+				{
+					rng = DeriveRNG(0);
+				}
+				return rng;
+			}
+			set => rng = value;
+		}
+
+		/// <summary>
+		/// True when a generator was explicitly threaded onto this event rather than derived from it.
+		/// </summary>
+		/// <remarks>
+		/// For diagnostics and for the few call sites that genuinely want to know whether an upstream
+		/// system owns the stream. Reading it does not derive one.
+		/// </remarks>
+		public bool HasExplicitRNG => rng != null;
+
+		/// <summary>
+		/// Builds a reproducible generator for this event, independent of any other stream.
+		/// </summary>
+		/// <param name="salt">
+		/// Distinguishes one consumer from another within the same event. Use a constant per call
+		/// site; anything derived from local state would defeat the point.
+		/// </param>
+		/// <returns>A generator whose sequence is identical on every peer for the same event.</returns>
+		public DeterministicRNG DeriveRNG(int salt)
+		{
+			int identity = 0;
+			if (Initiator != null)
+			{
+				/* ObjectId first: the server assigns it and replicates it, so every peer holds the
+				 * same value for the same character. The persistent character ID is the fallback for
+				 * an initiator that is not (or not yet) a spawned network object — a scene trigger,
+				 * an unspawned character — and 0 for one that is neither, which still yields a
+				 * reproducible stream, just one shared by all such initiators. */
+				identity = Initiator.NetworkObject != null
+					? Initiator.NetworkObject.ObjectId
+					: (int)Initiator.ID;
+			}
+
+			uint tick = 0u;
+			if (TryGet(out TickEventData tickData))
+			{
+				tick = tickData.Tick.Value;
+			}
+
+			return new DeterministicRNG(DeriveSeed(identity, tick, salt));
+		}
+
+		/// <summary>
+		/// The seed mix behind <see cref="DeriveRNG(int)"/>, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// FNV-1a over the three inputs. Separated out so the properties that matter — same inputs
+		/// give the same seed, a different tick gives a different one — are testable without an
+		/// event, a character or a network.
+		/// </remarks>
+		/// <param name="identity">The initiator's network object id, or its character id.</param>
+		/// <param name="tick">The event's tick, or 0 when it carries none.</param>
+		/// <param name="salt">Per-call-site constant.</param>
+		public static int DeriveSeed(int identity, uint tick, int salt)
+		{
+			unchecked
+			{
+				uint hash = 2166136261u;
+				hash = (hash ^ (uint)identity) * 16777619u;
+				hash = (hash ^ tick) * 16777619u;
+				hash = (hash ^ (uint)salt) * 16777619u;
+				return (int)hash;
+			}
+		}
 
 		/// <summary>
 		/// Optional ambient filter applied to every condition evaluation occurring within
@@ -164,7 +262,11 @@ namespace FishMMO.Shared.Core
 			{
 				scoped.SetTarget(target);
 			}
-			scoped.RNG = RNG;
+			/* The raw field, not the property: a fork must not be the thing that decides the parent
+			 * needs a generator. When the parent has one the fork shares it (a fan-out is one event);
+			 * when it does not, the fork derives its own from the identity they both carry, which is
+			 * the same seed the parent would have derived. */
+			scoped.rng = rng;
 			scoped.ConditionFilter = ConditionFilter;
 			scoped.Merge(this);
 			return scoped;
