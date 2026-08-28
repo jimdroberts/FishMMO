@@ -416,7 +416,23 @@ namespace FishMMO.Shared
 		/// This is a <b>payload / initial-sync</b> path. See <see cref="Read"/> remarks.
 		/// </remarks>
 		/// <param name="writer">The network writer.</param>
-		public void Write(Writer writer)
+		public void Write(Writer writer) => Write(writer, includeEntries: true);
+
+		/// <summary>
+		/// Writes cooldown data, optionally as an empty block.
+		/// </summary>
+		/// <remarks>
+		/// <paramref name="includeEntries"/> is false for connections that are not this
+		/// character's owner. Cooldowns gate the owner's own activations and drive the owner's
+		/// hotkey bar; an observer never reads a peer's — <c>IsOnCooldown</c> is only consulted
+		/// inside the caster's own replicate, which observers do not run for peers. The one case
+		/// where an observer does run it, forwarded mode, is served by the absolute reconcile
+		/// FishNet sends on the tick an observer is added, which carries the cooldown array.
+		/// Writing the same framed block with a zero count keeps <see cref="Read"/> unchanged.
+		/// </remarks>
+		/// <param name="writer">The network writer.</param>
+		/// <param name="includeEntries">False to write an empty, still-framed block.</param>
+		public void Write(Writer writer, bool includeEntries)
 		{
 			writer.WriteUInt32(GetCurrentDomainTick());
 
@@ -424,6 +440,14 @@ namespace FishMMO.Shared
 			 * an untrustworthy count. See COOLDOWN_PAYLOAD_LENGTH_BYTES. */
 			writer.Skip(COOLDOWN_PAYLOAD_LENGTH_BYTES);
 			int cooldownBlockStart = writer.Position;
+
+			if (!includeEntries)
+			{
+				writer.WriteInt32(0);
+				writer.InsertUInt32Unpacked((uint)(writer.Position - cooldownBlockStart),
+					cooldownBlockStart - COOLDOWN_PAYLOAD_LENGTH_BYTES);
+				return;
+			}
 
 			writer.WriteInt32(cooldowns.Count);
 			foreach (KeyValuePair<long, CooldownInstance> cooldown in cooldowns)
@@ -753,12 +777,15 @@ namespace FishMMO.Shared
 			 * every reconcile. */
 			preReconcileIDs.Clear();
 
-			// Fire removal events for entries being removed (before clearing)
+			// Fire removal events for entries being removed (before clearing). Gated on
+			// ownership like the add/update announcements below — these events drive the LOCAL
+			// player's hotkey bar, and reconcile deserialisation also runs for objects the local
+			// player does not own.
 			foreach (long existingID in cooldowns.Keys)
 			{
 				preReconcileIDs.Add(existingID);
 
-				if (!reconcileIDs.Contains(existingID))
+				if (IsLocalOwner && !reconcileIDs.Contains(existingID))
 				{
 					ICooldownController.OnRemoveCooldown?.Invoke(existingID);
 				}

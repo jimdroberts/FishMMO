@@ -424,12 +424,16 @@ namespace FishNet.Object
 
             /* FISHMMO EDIT: delta reconcile enabled.
              *
-             * Upstream gates this behind `#if DO_NOT_USE`, a symbol defined nowhere, and ships the
-             * full serializer instead. The reconcile half of that gate compiles cleanly; only the
-             * replicate half has bit-rotted -- it still references locals and container types that
-             * were refactored away -- so the replicate sites further down are deliberately left on
-             * the full serializer. Measured saving on reconcile is ~87% of bytes per second at
-             * tickRate 30; on replicate it would be ~11%. See PredictionBandwidthBenchmarkTests.
+             * Upstream gated every delta call site behind `#if DO_NOT_USE`, a symbol defined
+             * nowhere, and shipped the full serializer instead. The reconcile half of that gate
+             * compiled cleanly apart from one casing typo; the replicate half had bit-rotted
+             * against its own callers and was replaced -- see Writer.WriteDeltaReplicate and
+             * Reader.ReadDeltaReplicate, which take the current container types and encode each
+             * packet self-contained so it survives loss on the unreliable channel replicates use.
+             *
+             * Measured at tickRate 30 with redundancy 3, per entity per observer while walking:
+             * reconcile 6750 -> 980 B/s, replicate 2550 -> 1530 B/s. See
+             * PredictionBandwidthBenchmarkTests for the framed figures including transport overhead.
              *
              * Enabled unconditionally rather than behind a scripting define on purpose: Unity's
              * defines are per build target, so a symbol set for the Linux server build and missed
@@ -946,11 +950,10 @@ namespace FishNet.Object
              * write the queueTick. */
             if (!toServer)
                 methodWriter.WriteTickUnpacked(queuedTick);
-#if DO_NOT_USE
-            methodWriter.WriteDeltaReplicate(replicatesHistory, offset, deltaOption);
-#else
-            methodWriter.WriteReplicate<T>(replicatesHistory, offset);
-#endif
+            /* FISHMMO EDIT: self-contained delta replicate -- see Writer.WriteDeltaReplicate.
+             * deltaOption is deliberately unused: each packet stands alone because entry 0 is
+             * always absolute, so there is no cross-packet baseline for FullSerialize to reset. */
+            methodWriter.WriteDeltaReplicate(replicatesHistory, offset);
             _transportManagerCache.CheckSetReliableChannel(methodWriter.Length + MAXIMUM_RPC_HEADER_SIZE, ref channel);
             PooledWriter writer = CreateRpc(hash, methodWriter, PacketId.Replicate, channel);
 
@@ -1021,11 +1024,8 @@ namespace FishNet.Object
             else
                 tick = tm.LastPacketTick.LastRemoteTick;
 
-#if DO_NOT_USE
-            receivedReplicatesCount = reader.ReadDeltaReplicate(lastReadReplicate, ref arrBuffer, tick);
-#else
-            List<ReplicateDataContainer<T>> readReplicates = reader.ReadReplicate<T>(tick);
-#endif
+            // FISHMMO EDIT: self-contained delta replicate -- see Reader.ReadDeltaReplicate.
+            List<ReplicateDataContainer<T>> readReplicates = reader.ReadDeltaReplicate<T>(tick);
 
 
             /* This does not need to log to statistics -- network traffic
@@ -1111,11 +1111,8 @@ namespace FishNet.Object
             methodWriter.WriteTickUnpacked(runTickOflastEntry);
             //Write the replicates.
             int redundancyCount = (int)Mathf.Min(_networkObjectCache.PredictionManager.RedundancyCount, queueCount);
-#if DO_NOT_USE
-            methodWriter.WriteDeltaReplicate(replicatesQueue, redundancyCount, GetDeltaSerializeOption());
-#else
-            methodWriter.WriteReplicate<T>(replicatesQueue, redundancyCount);
-#endif
+            // FISHMMO EDIT: self-contained delta replicate -- see Writer.WriteDeltaReplicate.
+            methodWriter.WriteDeltaReplicate(replicatesQueue, redundancyCount);
             PooledWriter writer = CreateRpc(hash, methodWriter, PacketId.Replicate, channel);
 
             //Exclude owner and if clientHost, also localClient.
@@ -1519,6 +1516,19 @@ namespace FishNet.Object
              * that branch cannot have been compiled in a long time. */
             T newData = reader.ReadDeltaReconcile(lastReconcileData);
 
+            /* FISHMMO EDIT: a delta whose baseline this reader does not hold is REJECTED.
+             *
+             * Reconciles travel in the unreliable StateUpdate datagram, and each delta is encoded
+             * against the previous state the writer SENT, not one the reader is known to have. A
+             * single lost datagram therefore left every later delta decoding against a stale
+             * baseline — a wrong position applied to the owner for up to a second, until the
+             * periodic absolute snapshot. The project's delta reader detects the gap through a
+             * per-reconcile sequence byte and raises this flag; honouring it here means the object
+             * is simply not reconciled this tick (no baseline advance, no rollback), which is the
+             * same thing a lost packet already meant before delta encoding existed. */
+            if (ReconcileDeltaGuard.ConsumeRejection())
+                return;
+
             /* FISHMMO EDIT: the baseline advances even when the state is dropped for being old.
              *
              * Reconcile_Send advances its own `lastReconcileData` unconditionally after every
@@ -1570,6 +1580,32 @@ namespace FishNet.Object
         {
             _lastOrderedReplicatedTick = value;
             _networkObjectCache.SetReplicateTick(value, createdReplicate);
+        }
+    }
+
+    /// <summary>
+    /// FISHMMO EDIT. Lets a project delta-reconcile reader tell <see cref="NetworkBehaviour.Reconcile_Reader{T}"/>
+    /// that the payload it just decoded was built against a baseline this peer does not hold.
+    /// </summary>
+    /// <remarks>
+    /// A static, not a return value, because <c>GenericDeltaReader&lt;T&gt;</c>'s signature is fixed
+    /// and every peer is single-threaded through FishNet's read loop. Set by the reader
+    /// immediately before it returns; consumed (and cleared) by the very next
+    /// <c>Reconcile_Reader</c> statement, so it can never leak across two reads.
+    /// </remarks>
+    public static class ReconcileDeltaGuard
+    {
+        private static bool _rejectLastRead;
+
+        /// <summary>Marks the delta just read as undecodable against the local baseline.</summary>
+        public static void RejectLastRead() => _rejectLastRead = true;
+
+        /// <summary>Returns whether the last read was rejected, and clears the flag.</summary>
+        public static bool ConsumeRejection()
+        {
+            bool rejected = _rejectLastRead;
+            _rejectLastRead = false;
+            return rejected;
         }
     }
 }

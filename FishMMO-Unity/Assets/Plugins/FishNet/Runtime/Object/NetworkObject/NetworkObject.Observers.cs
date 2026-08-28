@@ -1,4 +1,4 @@
-﻿using FishNet.Component.Observing;
+using FishNet.Component.Observing;
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Managing.Timing;
@@ -39,6 +39,14 @@ namespace FishNet.Object
         /// </summary>
         [HideInInspector]
         public HashSet<NetworkConnection> Observers = new();
+        /* FISHMMO EDIT: optional per-observer rate limiter for unreliable ObserversRpcs.
+         * See IObserverSendFilter. Null (the default) sends to every observer as upstream does. */
+        /// <summary>
+        /// When set, consulted for every unreliable, non-buffered ObserversRpc this object sends
+        /// so that individual observers can receive it at a reduced rate.
+        /// </summary>
+        [System.NonSerialized]
+        public FishNet.Observing.IObserverSendFilter ObserverSendFilter;
         #endregion
 
         #region Internal.

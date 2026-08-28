@@ -52,6 +52,16 @@ namespace FishMMO.Shared
 		private EquipmentReconcileEntry[] cachedEquipmentSnapshot;
 		private bool equipmentSnapshotDirty = true;
 
+		/// <summary>
+		/// Reusable slot-index set for <see cref="RestoreFromReconcile"/>.
+		/// </summary>
+		/// <remarks>
+		/// Preallocated because reconcile runs on every differing tick on the owner's hottest
+		/// path — the same reason the buff and cooldown controllers pool their reconcile sets.
+		/// Cleared on entry so it never carries state between calls.
+		/// </remarks>
+		private readonly HashSet<int> reconcileSlots = new HashSet<int>();
+
 		/// <inheritdoc />
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
@@ -139,15 +149,9 @@ namespace FishMMO.Shared
 			int slotCount = Items != null ? Items.Count : 0;
 			if (slotCount == 0) return;
 
-			// Build current state map: slot → item (null if empty)
-			Item[] currentItems = new Item[slotCount];
-			for (int i = 0; i < slotCount; i++)
-			{
-				currentItems[i] = Items[i];
-			}
-
-			// Build reconcile state set for fast lookup
-			HashSet<int> reconcileSlots = new HashSet<int>();
+			// Build reconcile state set for fast lookup. Pooled — this runs on every differing
+			// reconcile tick on the owner, so a per-call HashSet is garbage at tick rate.
+			reconcileSlots.Clear();
 			if (entries != null)
 			{
 				for (int i = 0; i < entries.Length; i++)
@@ -158,16 +162,23 @@ namespace FishMMO.Shared
 
 			bool changed = false;
 
-			// 1. Unequip items in slots that server says are empty
+			/* 1. Unequip items in slots that server says are empty.
+			 *
+			 * Items is read directly rather than through a defensive copy: the slot list is fixed
+			 * size (one entry per ItemSlot enum value, never resized), each iteration reads its
+			 * slot before the SetItemSlot below mutates it, and SetItemSlot touches only that one
+			 * index. The old Item[] copy existed to guard against iteration-under-mutation that
+			 * cannot occur here, at the cost of an array allocation per reconcile. */
 			for (int i = 0; i < slotCount; i++)
 			{
-				if (currentItems[i] != null && !reconcileSlots.Contains(i))
+				Item existing = Items[i];
+				if (existing != null && !reconcileSlots.Contains(i))
 				{
-					if (currentItems[i].IsEquippable)
+					if (existing.IsEquippable)
 					{
-						currentItems[i].Equippable.Unequip();
+						existing.Equippable.Unequip();
 					}
-					OnItemUnequipped?.Invoke(currentItems[i], (ItemSlot)i);
+					OnItemUnequipped?.Invoke(existing, (ItemSlot)i);
 					SetItemSlot(null, i);
 					changed = true;
 				}

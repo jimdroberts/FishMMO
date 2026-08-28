@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 #define DEVELOPMENT
 #endif
 using System;
@@ -357,6 +357,21 @@ namespace FishNet.Object
 
             PooledWriter writer = lCreateRpc(channel);
             SetNetworkConnectionCache(excludeServer, excludeOwner);
+            /* FISHMMO EDIT: per-observer level of detail. Observers the object's send filter
+             * declines this tick join the exclusion list, exactly as the owner or clientHost
+             * would. Only unreliable, non-buffered RPCs are eligible — see IObserverSendFilter. */
+            if (channel == Channel.Unreliable && !bufferLast)
+            {
+                FishNet.Observing.IObserverSendFilter sendFilter = _networkObjectCache.ObserverSendFilter;
+                if (sendFilter != null)
+                {
+                    foreach (NetworkConnection observer in _networkObjectCache.Observers)
+                    {
+                        if (!_networkConnectionCache.Contains(observer) && !sendFilter.ShouldSend(_networkObjectCache, observer, channel))
+                            _networkConnectionCache.Add(observer);
+                    }
+                }
+            }
             _networkObjectCache.NetworkManager.TransportManager.SendToClients((byte)channel, writer.GetArraySegment(), _networkObjectCache.Observers, _networkConnectionCache, true, orderType);
 
             /* If buffered then dispose of any already buffered

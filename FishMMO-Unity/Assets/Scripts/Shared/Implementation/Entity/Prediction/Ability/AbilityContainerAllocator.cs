@@ -87,6 +87,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Destroys all ability objects in a container and removes their ability references.
 		/// </summary>
+		/// <remarks>
+		/// OnDestroy ECA events are suppressed: the container is being <i>replaced</i> by a
+		/// duplicate of the same spawn (an observer with state forwarding on receives both the
+		/// forwarded replicate and the activation broadcast), not ended, so an explosion or
+		/// on-death proc firing here would play at spawn time.
+		/// </remarks>
 		private static void DestroyContainer(Dictionary<int, AbilityObject> container)
 		{
 			foreach (AbilityObject obj in container.Values)
@@ -94,7 +100,7 @@ namespace FishMMO.Shared
 				if (obj != null)
 				{
 					obj.Ability = null;
-					obj.DestroyAbilityObjectInternal();
+					obj.DestroyAbilityObjectInternal(dispatchDestroyEvents: false);
 				}
 			}
 		}
