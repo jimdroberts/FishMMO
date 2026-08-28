@@ -370,12 +370,17 @@ namespace FishMMO.Server.Implementation
 		/// to open the transport stops that damage before it starts.
 		/// </para>
 		/// <para>
-		/// Every other outcome stays non-fatal and is only reported. A drift check that could not
-		/// run, or a check that could not run at all, leaves the schema unverified rather than
-		/// known-bad: a server whose schema is merely unconfirmed still serves everything that
-		/// does not touch the changed tables, and refusing to start on a failed *diagnostic*
-		/// would be the worse outcome. The check runs concurrently with behaviour initialization
-		/// and is joined just before the transport opens, so it costs no startup latency.
+		/// A check that could not run at all stays non-fatal and is only reported. That leaves
+		/// the schema unverified rather than known-bad: a server whose schema is merely
+		/// unconfirmed still serves everything that does not touch the changed tables, and
+		/// refusing to start on a failed *diagnostic* would be the worse outcome. The check runs
+		/// concurrently with behaviour initialization and is joined just before the transport
+		/// opens, so it costs no startup latency.
+		/// </para>
+		/// <para>
+		/// Note this verifies applied migrations only — an entity changed with no migration
+		/// generated for it leaves nothing pending and passes. See
+		/// <see cref="SchemaValidationResult"/> and issue #162.
 		/// </para>
 		/// </remarks>
 		private void VerifyDatabaseSchema()
@@ -432,14 +437,9 @@ namespace FishMMO.Server.Implementation
 				return false;
 			}
 
-			if (result.UnavailableReason != null)
-			{
-				Log.Warning("Server", problem);
-			}
-			else
-			{
-				Log.Error("Server", problem);
-			}
+			// Nothing pending and no problem beyond the check itself failing to run: unverified,
+			// not known-bad.
+			Log.Warning("Server", problem);
 			return true;
 		}
 
