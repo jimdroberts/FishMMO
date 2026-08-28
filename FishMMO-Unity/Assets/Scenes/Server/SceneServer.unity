@@ -445,7 +445,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a9fc3aafb02eb74fb571c300f846bf2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Observing.HashGrid
-  _gridAxes: 0
+  _gridAxes: 2
   _accuracy: 70
 --- !u!114 &8097462252018206298
 MonoBehaviour:

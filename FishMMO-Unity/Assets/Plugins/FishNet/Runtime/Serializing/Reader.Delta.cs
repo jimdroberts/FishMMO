@@ -1,4 +1,8 @@
 using System;
+// FISHMMO EDIT: List/CollectionCaches/Channel for the self-contained delta replicate reader below.
+using System.Collections.Generic;
+using FishNet.Transporting;
+using GameKit.Dependencies.Utilities;
 using FishNet.CodeGenerating;
 using System.Runtime.CompilerServices;
 using FishNet.Managing;
@@ -391,6 +395,51 @@ namespace FishNet.Serializing
         /// Reads a reconcile.
         /// </summary>
         internal T ReadDeltaReconcile<T>(T lastReconcile) => ReadDelta(lastReconcile);
+
+        /// <summary>
+        /// Reads a self-contained delta replicate written by
+        /// <see cref="Writer.WriteDeltaReplicate{T}(GameKit.Dependencies.Utilities.RingBuffer{FishNet.Object.Prediction.ReplicateDataContainer{T}}, int)"/>.
+        /// </summary>
+        /// <remarks>
+        /// FISHMMO EDIT. Mirrors <c>Reader.ReadReplicate</c> exactly -- same count byte, same tick
+        /// back-dating, same container construction -- differing only in that entries after the
+        /// first are deltas against the entry before them within this packet. The overload above
+        /// it is upstream's, which returns an int and takes a <c>ref T[]</c>; the prediction call
+        /// site needs a <c>List&lt;ReplicateDataContainer&lt;T&gt;&gt;</c>, which is one of the
+        /// reasons that overload no longer compiles against its own caller.
+        /// </remarks>
+        internal List<ReplicateDataContainer<T>> ReadDeltaReplicate<T>(uint tick) where T : IReplicateData, new()
+        {
+            List<ReplicateDataContainer<T>> collection = CollectionCaches<ReplicateDataContainer<T>>.RetrieveList();
+
+            // Number of entries written.
+            int count = (int)ReadUInt8Unpacked();
+            if (count <= 0)
+            {
+                NetworkManager.Log($"Replicate count cannot be 0 or less.");
+                // Purge remaining and return default.
+                Position += Remaining;
+                return collection;
+            }
+
+            /* Back-date the tick so entries are stamped oldest to newest, exactly as
+             * ReadReplicate does. Past replicates cannot skip ticks for this to hold. */
+            tick -= (uint)(count - 1);
+
+            T prev = default;
+            for (int i = 0; i < count; i++)
+            {
+                // First entry is absolute so the packet stands alone on a lossy channel; the rest
+                // are deltas against the entry before them. See Writer.WriteDeltaReplicate.
+                T data = i == 0 ? Read<T>() : ReadDelta(prev);
+                Channel c = ReadChannel();
+
+                collection.Add(new(data, c, tick + (uint)i, isCreated: true));
+                prev = data;
+            }
+
+            return collection;
+        }
 
         /// <summary>
         /// Reads a replicate.

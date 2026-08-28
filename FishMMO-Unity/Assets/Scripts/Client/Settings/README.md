@@ -57,6 +57,19 @@ keybinding overrides were skipped silently, panel positions were never restored,
 was built from nothing. Every one of those looked like a setting that had not saved rather than
 one that had never been read.
 
+**Why the theme carries a version.** `UIThemeVersion` marks a colour set as written by the
+current skin. The `<Name>ColorR/G/B/A` keys were inherited from the Canvas UI on the reading that
+they name colours in the game rather than parts of a scene — true of `Text`, `Health`, `Mana`,
+`Stamina`, `Crosshair` and `TooltipLabel`, and false of `Primary`, `Secondary`, `Highlight` and
+`Background`, which carry the old skin's greys. Those four are honoured only from a stamped file;
+older entries stay on disk and are ignored, and setting any colour in the options panel stamps the
+version and brings the whole set into force.
+
+This only became visible once the store had an owner. While `Configuration.GlobalSettings` was
+still null through boot the theme parsed nothing, so a `Background` colour set years ago in a UI
+that no longer exists did nothing — until the loading order was fixed, at which point it repainted
+every panel grey.
+
 **Why applying waits for the hook.** The bootstrap system installs a boot-time frame rate and
 VSync default during the first scene's `Awake`. Anything applied before those two lines is
 silently overwritten by them.
@@ -77,7 +90,7 @@ files.
 | Display | `VSync`, `Frame Rate Limit`, `Brightness`, `Resolution Width`, `Resolution Height`, `Refresh Rate`, `Fullscreen`, `Quality Level` |
 | Audio | `Audio.Volume.<Channel>`, `Audio.MuteWhenUnfocused` |
 | Gameplay | `ShowDamage`, `ShowHeals`, `ShowAchievementCompletion`, `IgnorePartyInvites`, `IgnoreGuildInvites` |
-| Interface | `UI.Scale`, `UI.SnapGridSize`, `UI.Panel.<PanelName>.X` / `.Y`, `<Name>ColorR/G/B/A` |
+| Interface | `UI.Scale`, `UI.SnapGridSize`, `UI.Panel.<PanelName>.X` / `.Y`, `UIThemeVersion`, `<Name>ColorR/G/B/A` |
 | Input | `InputBindingOverrides` (the Input System's override JSON) |
 
 Quality is stored by **name**, not index: levels can be reordered between builds and an index

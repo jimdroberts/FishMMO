@@ -5,6 +5,7 @@ using FishMMO.Shared.Core;
 using FishNet.Connection;
 using FishNet.Serializing;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -531,9 +532,26 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Width of the byte count that frames this behaviour's spawn payload.
+		/// </summary>
+		private const int CONTAINER_PAYLOAD_LENGTH_BYTES = 4;
+
+		/// <summary>
+		/// Upper bound on slots accepted from a spawn payload. Well above any authored container
+		/// size; exists so a corrupt count cannot drive an unbounded read loop.
+		/// </summary>
+		private const int MAX_PAYLOAD_SLOTS = 4096;
+
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
 			base.WritePayload(connection, writer);
+
+			/* Everything below is framed by a byte count so ReadPayload can resynchronise after
+			 * rejecting an untrustworthy count. See CONTAINER_PAYLOAD_LENGTH_BYTES. */
+			writer.Skip(CONTAINER_PAYLOAD_LENGTH_BYTES);
+			int containerBlockStart = writer.Position;
+
 			writer.WriteInt32(Items.Count);
 			for (int i = 0; i < Items.Count; i++)
 			{
@@ -549,12 +567,41 @@ namespace FishMMO.Shared
 					writer.WriteBoolean(false);
 				}
 			}
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - containerBlockStart),
+				containerBlockStart - CONTAINER_PAYLOAD_LENGTH_BYTES);
 		}
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
 			base.ReadPayload(connection, reader);
+
+			/* Where this behaviour's data ends. FishNet packs every NetworkBehaviour's spawn payload
+			 * into one buffer with no per-behaviour framing, so an abort here would leave every
+			 * behaviour after this one reading from the wrong offset. The length is validated against
+			 * what the reader holds first; Reader.Position has no bounds check. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("Container",
+					$"ReadPayload: framed length {declaredLength} exceeds the {remainingBytes} bytes remaining in " +
+					"the spawn payload. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return;
+			}
+			int containerBlockLength = (int)declaredLength;
+			int containerBlockEnd = reader.Position + containerBlockLength;
+
 			int slotCount = reader.ReadInt32();
+			if (slotCount < 0 || slotCount > MAX_PAYLOAD_SLOTS)
+			{
+				Log.Error("Container",
+					$"ReadPayload: slot count {slotCount} is outside [0, {MAX_PAYLOAD_SLOTS}]. Aborting payload read.");
+				reader.Position = containerBlockEnd;
+				return;
+			}
+
 			lockedSlots?.Clear();
 			items.Clear();
 			for (int i = 0; i < slotCount; i++)
@@ -580,6 +627,17 @@ namespace FishMMO.Shared
 				{
 					items.Add(null);
 				}
+			}
+
+			/* Belt and braces on the success path: the frame absorbs any shape disagreement here
+			 * rather than corrupting the behaviour after this one. */
+			if (reader.Position != containerBlockEnd)
+			{
+				Log.Error("Container",
+					$"ReadPayload consumed {reader.Position - (containerBlockEnd - containerBlockLength)} of " +
+					$"{containerBlockLength} framed bytes. Seeking to the end of the block; the container " +
+					"contents read above may be incomplete.");
+				reader.Position = containerBlockEnd;
 			}
 		}
 	}

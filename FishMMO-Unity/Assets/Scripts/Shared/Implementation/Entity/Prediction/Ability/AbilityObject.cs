@@ -2,12 +2,40 @@
 using System.Collections.Generic;
 using System;
 using FishNet.Managing.Timing;
+using FishNet.Object;
+using FishNet.Transporting;
 using SceneManager = UnityEngine.SceneManagement.SceneManager;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// World pose an ability object is spawned with.
+	/// </summary>
+	/// <remarks>
+	/// Resolved once by <see cref="AbilityObject.ResolveSpawnPose"/> on the peer that runs the
+	/// authoritative simulation (server) or predicts it (owner), and carried verbatim to observers
+	/// in <see cref="AbilityActivatedBroadcast"/>. An observer must not re-resolve it: every spawn
+	/// target except <see cref="AbilitySpawnTarget.Camera"/> reads the caster's motor, transform or
+	/// spawner, and an observer holds those interpolated — several hundred milliseconds behind —
+	/// so a locally resolved pose would put the object where the caster used to be, and the
+	/// closed-form trajectory would keep it on that offset line for its whole life.
+	/// </remarks>
+	public readonly struct AbilitySpawnPose
+	{
+		/// <summary>World position.</summary>
+		public readonly Vector3 Position;
+		/// <summary>World rotation.</summary>
+		public readonly Quaternion Rotation;
+
+		public AbilitySpawnPose(Vector3 position, Quaternion rotation)
+		{
+			Position = position;
+			Rotation = rotation;
+		}
+	}
+
 	/// <summary>
 	/// Represents a spawned ability object in the world, handling its lifetime, collision, and event triggers.
 	/// </summary>
@@ -74,6 +102,26 @@ namespace FishMMO.Shared
 		/// </summary>
 		public DeterministicRNG RNG;
 
+		/// <summary>World position this object was spawned at.</summary>
+		/// <remarks>
+		/// Recorded so trajectories can be evaluated as a closed form —
+		/// <c>SpawnPosition + SpawnRotation * direction * speed * elapsed</c> — instead of
+		/// accumulating <c>position +=</c> per tick. Accumulation is exactly reproducible only while
+		/// every peer takes the identical number of steps; the closed form is reproducible from the
+		/// spawn tuple alone, which is what an observer that reconstructs the object from a
+		/// broadcast actually holds. See <see cref="AbilityMoveTransformAction"/>.
+		/// </remarks>
+		public Vector3 SpawnPosition;
+
+		/// <summary>World rotation this object was spawned with. See <see cref="SpawnPosition"/>.</summary>
+		public Quaternion SpawnRotation = Quaternion.identity;
+
+		/// <summary>
+		/// Ticks this object has simulated since spawn. Advanced in <see cref="OnTick"/> before tick
+		/// events dispatch, so the first tick's events see a value of 1.
+		/// </summary>
+		public uint ElapsedTicks;
+
 		/// <summary>
 		/// Immutable snapshot of the ability data captured at spawn time.
 		/// Used as a fallback when the live <see cref="Ability"/> reference becomes null
@@ -82,8 +130,7 @@ namespace FishMMO.Shared
 		public AbilityObjectSnapshot Snapshot;
 
 		/// <summary>
-		/// Static cache of prefab colliders keyed by template ID.
-		/// Avoids calling GetComponent on the prefab every spawn.
+		/// Movement speed. Prefers the live Ability, falls back to the Snapshot.
 		/// </summary>
 		public float Speed => Ability != null ? Ability.Speed : (Snapshot != null ? Snapshot.Speed : 0f);
 
@@ -156,6 +203,12 @@ namespace FishMMO.Shared
 		private bool isServer;
 
 		/// <summary>
+		/// True when this ability object is simulating on the server. Gameplay effects
+		/// (damage, healing, buffs, area queries) are only applied where this is true.
+		/// </summary>
+		public bool IsServer => isServer;
+
+		/// <summary>
 		/// Cached reference to the object's GameObject.
 		/// </summary>
 		public GameObject GameObject { get; private set; }
@@ -165,17 +218,29 @@ namespace FishMMO.Shared
 		public Transform Transform { get; private set; }
 
 		/// <summary>
-		/// Unity Awake callback. Caches references and sets Rigidbody to kinematic if present.
-		/// </summary>
-		/// <summary>
 		/// Unity Awake callback. Caches GameObject, Transform, and Rigidbody references.
 		/// Sets the Rigidbody to kinematic if present.
 		/// </summary>
 		private void Awake()
 		{
-			GameObject = gameObject;
-			Transform = transform;
-			CachedRigidBody = GetComponent<Rigidbody>();
+			CacheComponents();
+		}
+
+		/// <summary>
+		/// Caches GameObject, Transform and Rigidbody references and makes the rigidbody kinematic.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent, and called from initialisation as well as <see cref="Awake"/>: Unity does
+		/// not run <c>Awake</c> on a component added to an inactive GameObject, and
+		/// <see cref="Spawn"/> deactivates the instance before it adds a missing
+		/// <see cref="AbilityObject"/>, so without this an object whose prefab lacks the component
+		/// reached activation with <see cref="GameObject"/> null and threw inside Replicate.
+		/// </remarks>
+		private void CacheComponents()
+		{
+			GameObject ??= gameObject;
+			Transform ??= transform;
+			CachedRigidBody ??= GetComponent<Rigidbody>();
 			if (CachedRigidBody != null)
 			{
 				CachedRigidBody.isKinematic = true;
@@ -191,6 +256,7 @@ namespace FishMMO.Shared
 			destroyed = false;
 			initialized = false;
 			predictionController = null;
+			ElapsedTicks = 0;
 
 			if (timeManager != null)
 			{
@@ -225,6 +291,9 @@ namespace FishMMO.Shared
 			{
 				RemainingLifeTime -= tickDelta;
 			}
+
+			// Integer tick count, so closed-form trajectories never accumulate float error.
+			ElapsedTicks++;
 
 			// Dispatch OnTick events only if the caster is still valid.
 			// If the caster disconnected, the object keeps existing but skips ECA dispatching
@@ -342,7 +411,43 @@ namespace FishMMO.Shared
 			HitCount--;
 			if (HitCount < 1)
 			{
-				DestroyAbilityObjectInternal();
+				/* Collision is the one end-of-life that is NOT deterministic across peers: a
+				 * client resolves it against interpolated characters and can miss a hit the
+				 * server landed, leaving a ghost flying to the end of its lifetime. Lifetime
+				 * expiry is identical everywhere and needs no message. */
+				DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: true);
+			}
+		}
+
+		/// <summary>
+		/// Advances this object's simulation clock without running per-tick events, so an
+		/// observer that learns about a spawn late can place the object where the server has it.
+		/// </summary>
+		/// <remarks>
+		/// The closed-form trajectory (<see cref="AbilityMoveTransformAction"/>) reads
+		/// <see cref="ElapsedTicks"/>, so bumping the counter is enough to move the object on its
+		/// next tick; the lifetime is advanced by the same amount so the object still expires on
+		/// the server's schedule. An object fast-forwarded past its lifetime is destroyed quietly —
+		/// it no longer exists on the server, so its destroy effects have already played.
+		/// </remarks>
+		/// <param name="ticks">Ticks the server has already simulated for this object.</param>
+		public void FastForward(uint ticks)
+		{
+			if (ticks == 0u || destroyed)
+			{
+				return;
+			}
+
+			ElapsedTicks += ticks;
+
+			float totalLifeTime = TotalLifeTime;
+			if (totalLifeTime > 0.0f)
+			{
+				RemainingLifeTime -= ticks * tickDelta;
+				if (RemainingLifeTime <= 0.0f)
+				{
+					DestroyAbilityObjectInternal(dispatchDestroyEvents: false);
+				}
 			}
 		}
 
@@ -350,7 +455,17 @@ namespace FishMMO.Shared
 		/// Destroys this ability object, dispatching OnDestroy events and cleaning up references.
 		/// Uses the snapshot for OnDestroy events when the live Ability is unavailable.
 		/// </summary>
-		internal void DestroyAbilityObjectInternal()
+		/// <param name="dispatchDestroyEvents">
+		/// False to skip the OnDestroy ECA events. Used when the object is being <i>replaced</i>
+		/// rather than ended — a duplicate spawn superseded by <see cref="AbilityContainerAllocator"/>,
+		/// or an observer fast-forwarded past the object's lifetime — where an explosion or proc
+		/// would play at the wrong moment.
+		/// </param>
+		/// <param name="notifyObservers">
+		/// True to tell this caster's observers to destroy their copy. Only meaningful on the
+		/// server for an end-of-life that clients cannot reproduce deterministically (collision).
+		/// </param>
+		internal void DestroyAbilityObjectInternal(bool dispatchDestroyEvents = true, bool notifyObservers = false)
 		{
 			// Set-once guard: if another path (collision vs lifetime) already
 			// set the flag, bail out immediately.
@@ -361,6 +476,11 @@ namespace FishMMO.Shared
 			// after the subscription is removed and the reference is nulled.
 			uint destroyTick = GetCurrentAuthoritativeTick();
 
+			if (notifyObservers)
+			{
+				BroadcastDestroyedToObservers();
+			}
+
 			// Unsubscribe from tick events before cleanup.
 			if (timeManager != null)
 			{
@@ -369,7 +489,7 @@ namespace FishMMO.Shared
 			}
 
 			// Dispatch OnDestroy events if the caster is still valid.
-			var destroyEvents = ActiveOnDestroyEvents;
+			var destroyEvents = dispatchDestroyEvents ? ActiveOnDestroyEvents : null;
 			if (destroyEvents != null && Caster != null)
 			{
 				EventData destroyEvent = new EventData(Caster);
@@ -398,33 +518,56 @@ namespace FishMMO.Shared
 			cachedTickEventData = null;
 			Caster = null;
 			Snapshot = null;
-			GameObject.SetActive(false);
-			Destroy(GameObject);
+			GameObject go = GameObject != null ? GameObject : gameObject;
+			go.SetActive(false);
+			Destroy(go);
 		}
 
 		/// <summary>
-		/// Returns the current authoritative tick. Prefers the <see cref="CharacterPredictionController"/>
-		/// snapshot tick when it matches the live <see cref="TimeManager.LocalTick"/>, falling back
-		/// to the live tick otherwise.
+		/// Tells the caster's observers that this object ended on the server, so a client whose
+		/// own collision test missed the hit does not keep a ghost flying.
 		/// </summary>
-		private uint GetCurrentAuthoritativeTick()
+		/// <remarks>
+		/// Sent unreliably: a lost message costs one observer a ghost that still expires on its
+		/// own lifetime, and the message is cheap enough to send for every collision-ended object.
+		/// Skipped once the object has been detached from its ability (rollback and disconnect
+		/// paths null <see cref="Ability"/> first), since there is no container to name.
+		/// </remarks>
+		private void BroadcastDestroyedToObservers()
 		{
-			uint liveTick = timeManager != null ? timeManager.LocalTick : 0u;
-			if (predictionController == null)
+			if (!isServer || Ability == null)
 			{
-				return liveTick;
+				return;
 			}
 
-			uint snapshotTick = predictionController.CurrentLocalTickSnapshot;
-			if (snapshotTick == TimeManager.UNSET_TICK)
+			NetworkObject casterNob = Caster?.NetworkObject;
+			if (casterNob == null || casterNob.NetworkManager == null || !casterNob.IsSpawned)
 			{
-				return liveTick;
+				return;
 			}
-			if (timeManager != null && snapshotTick != liveTick)
+
+			casterNob.NetworkManager.ServerManager.Broadcast(casterNob, new AbilityObjectDestroyedBroadcast
 			{
-				return liveTick;
-			}
-			return snapshotTick;
+				CasterObjectID = casterNob.ObjectId,
+				AbilityID = Ability.ID,
+				ContainerID = ContainerID,
+				ObjectID = ID,
+			}, true, Channel.Unreliable);
+		}
+
+		/// <summary>
+		/// Returns the current authoritative tick — the live <see cref="TimeManager.LocalTick"/>,
+		/// or 0 once the object has been unsubscribed.
+		/// </summary>
+		/// <remarks>
+		/// This used to prefer <see cref="CharacterPredictionController.CurrentLocalTickSnapshot"/>
+		/// but only when it equalled the live tick, which made it the live tick in every case; the
+		/// snapshot is captured from the same <c>LocalTick</c> inside the same <c>OnTick</c>, so
+		/// there is no drift to guard against here.
+		/// </remarks>
+		private uint GetCurrentAuthoritativeTick()
+		{
+			return timeManager != null ? timeManager.LocalTick : 0u;
 		}
 
 		/// <summary>
@@ -454,7 +597,7 @@ namespace FishMMO.Shared
 				Log.Error("AbilityObject",
 					$"InitializeAbilityObject: double-init detected for ability '{ability?.Template?.name}' "
 					+ $"(ID {ability?.ID}). Destroying orphaned object.");
-				Destroy(abilityObject.GameObject);
+				Destroy(abilityObject.gameObject);
 				return;
 			}
 
@@ -497,6 +640,9 @@ namespace FishMMO.Shared
 			int seed,
 			PredictionTick spawnTick)
 		{
+			// Awake has not run if the instance was inactive when the component was added.
+			abilityObject.CacheComponents();
+
 			abilityObject.initialized = true;
 			abilityObject.Ability = ability;
 			abilityObject.Caster = caster;
@@ -505,6 +651,11 @@ namespace FishMMO.Shared
 			abilityObject.RNG = new DeterministicRNG(seed);
 			abilityObject.SpawnTick = spawnTick;
 			abilityObject.SpawnSeed = seed;
+			abilityObject.ElapsedTicks = 0;
+			// Spawn already positioned the transform (SetAbilitySpawnPosition runs before Initialize).
+			Transform spawnTransform = abilityObject.Transform;
+			abilityObject.SpawnPosition = spawnTransform.position;
+			abilityObject.SpawnRotation = spawnTransform.rotation;
 			// Snapshot is lazily initialized: only created when the Ability reference is
 			// about to be nulled (DetachAllAbilityObjects). This avoids 3 heap allocations
 			// (3 Dictionary copies) per spawn for the common case where
@@ -613,13 +764,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			abilityObject.GameObject ??= abilityObject.gameObject;
-			abilityObject.Transform ??= abilityObject.transform;
-			abilityObject.CachedRigidBody ??= abilityObject.GetComponent<Rigidbody>();
-			if (abilityObject.CachedRigidBody != null)
-			{
-				abilityObject.CachedRigidBody.isKinematic = true;
-			}
+			abilityObject.CacheComponents();
 
 			abilityObject.ResetRuntimeState();
 			abilityObject.ContainerID = source.ContainerID;
@@ -631,6 +776,11 @@ namespace FishMMO.Shared
 			abilityObject.RNG = new DeterministicRNG(CreateChildSeed(seed, abilityObjectID));
 			abilityObject.SpawnTick = source.SpawnTick;
 			abilityObject.SpawnSeed = source.SpawnSeed;
+			// A child's own pose, not the parent's: multiply/split actions place children at offsets
+			// and rotations of their own, and the closed-form trajectory must start from there.
+			abilityObject.SpawnPosition = abilityObject.Transform.position;
+			abilityObject.SpawnRotation = abilityObject.Transform.rotation;
+			abilityObject.ElapsedTicks = 0;
 			abilityObject.Snapshot = source.Snapshot;
 			abilityObject.predictionController = source.predictionController;
 			abilityObject.isServer = source.isServer;
@@ -670,17 +820,23 @@ namespace FishMMO.Shared
 		/// <param name="seed">The deterministic RNG seed.</param>
 		/// <param name="spawnTick">The replicate-input tick at which this object is being spawned, used for rollback.
 		/// Must be sourced from <see cref="CharacterReplicateData.GetPredictionTick"/> to preserve type-safe tick sourcing.</param>
-		public static void Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed, PredictionTick spawnTick)
+		/// <param name="pose">
+		/// Pose to spawn at, when the caller already holds the authoritative one (an observer
+		/// reproducing a broadcast). Null resolves it locally via <see cref="ResolveSpawnPose"/>.
+		/// </param>
+		/// <returns>The spawned root object, or null when the ability spawns nothing (pet, self, no prefab, missing required target).</returns>
+		public static AbilityObject Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo,
+			Vector3 aimOrigin, Vector3 aimDirection, int seed, PredictionTick spawnTick, AbilitySpawnPose? pose = null)
 		{
 			AbilityTemplate template = ability.Template;
 			if (template == null)
 			{
-				return;
+				return null;
 			}
 
 			if (template.RequiresTarget && targetInfo.Target == null)
 			{
-				return;
+				return null;
 			}
 
 			// Pet abilities are only supported for player characters.
@@ -690,7 +846,7 @@ namespace FishMMO.Shared
 				{
 					OnPetSummon?.Invoke(petAbilityTemplate, petOwner);
 				}
-				return;
+				return null;
 			}
 
 			// Self-target abilities don't spawn ability objects and instead apply immediately.
@@ -718,17 +874,18 @@ namespace FishMMO.Shared
 						hitEvent.Execute(collisionEvent);
 					}
 				}
-				return;
+				return null;
 			}
 
 			if (template.AbilityObjectPrefab == null)
 			{
-				return;
+				return null;
 			}
 
 			GameObject go = Instantiate(template.AbilityObjectPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
-			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, go.transform);
+			AbilitySpawnPose resolvedPose = pose ?? ResolveSpawnPose(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection);
+			go.transform.SetPositionAndRotation(resolvedPose.Position, resolvedPose.Rotation);
 			go.SetActive(false);
 
 			AbilityObject abilityObject = go.GetComponent<AbilityObject>();
@@ -738,19 +895,54 @@ namespace FishMMO.Shared
 			}
 
 			InitializeAbilityObject(abilityObject, ability, caster, abilitySpawner, targetInfo, seed, spawnTick);
+			return abilityObject.initialized ? abilityObject : null;
+		}
+
+		/// <summary>
+		/// True when <see cref="Spawn"/> would create a world object for this template — i.e.
+		/// there is something for an observer to reproduce.
+		/// </summary>
+		/// <remarks>
+		/// Pet and self-target abilities apply on the server and reach clients through their own
+		/// paths (pet broadcasts, reconcile/resource broadcasts), so an activation broadcast for
+		/// them would be received, decoded and discarded by every observer for nothing.
+		/// </remarks>
+		public static bool SpawnsWorldObject(AbilityTemplate template)
+		{
+			return template != null &&
+				template.AbilityObjectPrefab != null &&
+				!(template is PetAbilityTemplate) &&
+				template.AbilitySpawnTarget != AbilitySpawnTarget.Self;
 		}
 
 		/// <summary>
 		/// Positions and rotates the ability object transform based on the spawn target type.
-		/// Resolves motor position from KCC for PCs or transform for NPCs. Camera data is
-		/// resolved via <see cref="AbilityController.ResolveCameraData"/>.
+		/// See <see cref="ResolveSpawnPose"/>.
 		/// </summary>
+		public static void SetAbilitySpawnPosition(ICharacter caster, Ability ability, Transform abilitySpawner,
+			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection, Transform abilityTransform)
+		{
+			AbilitySpawnPose pose = ResolveSpawnPose(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection);
+			abilityTransform.SetPositionAndRotation(pose.Position, pose.Rotation);
+		}
+
+		/// <summary>
+		/// Resolves the world pose an ability object spawns with, from the spawn target type.
+		/// Resolves motor position from KCC for PCs or transform for NPCs.
+		/// </summary>
+		/// <remarks>
+		/// Run only where the caster's pose is authoritative or predicted — server and owner.
+		/// Observers receive the result in <see cref="AbilityActivatedBroadcast"/>; see
+		/// <see cref="AbilitySpawnPose"/> for why they must not call this themselves.
+		/// </remarks>
 		/// <param name="caster">The character casting the ability.</param>
 		/// <param name="ability">The ability being spawned.</param>
 		/// <param name="abilitySpawner">The transform acting as the spawn origin.</param>
 		/// <param name="targetInfo">The targeting information.</param>
-		/// <param name="abilityTransform">The transform of the spawned ability object to position.</param>
-		public static void SetAbilitySpawnPosition(ICharacter caster, Ability ability, Transform abilitySpawner, TargetInfo targetInfo, Transform abilityTransform)
+		/// <param name="aimOrigin">Aim origin replicated for the tick being simulated.</param>
+		/// <param name="aimDirection">Aim direction replicated for the tick being simulated.</param>
+		public static AbilitySpawnPose ResolveSpawnPose(ICharacter caster, Ability ability, Transform abilitySpawner,
+			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection)
 		{
 			// Resolve motor transform (KCC motor for PCs, regular transform for NPCs).
 			IPlayerCharacter playerCaster = caster as IPlayerCharacter;
@@ -761,17 +953,30 @@ namespace FishMMO.Shared
 				? playerCaster.Motor.Transform.rotation
 				: caster.Transform.rotation;
 
-			// Resolve virtual camera via shared helper (eliminates duplicated PC/NPC/fallback logic).
-			AbilityController.ResolveCameraData(caster, playerCaster, out Vector3 cameraPosition, out Quaternion cameraRotation);
+			Vector3 position = motorPosition;
+			Quaternion rotation = motorRotation;
+
+			/* Aim arrives as a parameter rather than being re-resolved from the caster.
+			 *
+			 * This used to call AbilityController.ResolveCameraData, which read the live
+			 * KCCController or AIController. Both readings were wrong: a player's owner held its
+			 * exact camera while the server and observers held the quantised one, so a
+			 * deterministic spawn landed differently on each peer; and AIController disables itself
+			 * off the server, so on every client an NPC resolved to origin-zero facing +Z. The
+			 * caller passes the aim that was replicated for the tick being simulated, which is the
+			 * only value all peers agree on. */
+			Vector3 cameraPosition = aimOrigin;
 
 			switch (ability.Template.AbilitySpawnTarget)
 			{
 				case AbilitySpawnTarget.Self:
 				case AbilitySpawnTarget.PointBlank:
-					abilityTransform.SetPositionAndRotation(motorPosition, motorRotation);
+					position = motorPosition;
+					rotation = motorRotation;
 					break;
 				case AbilitySpawnTarget.Target:
-					abilityTransform.SetPositionAndRotation(targetInfo.HitPosition, caster.Transform.rotation);
+					position = targetInfo.HitPosition;
+					rotation = caster.Transform.rotation;
 					break;
 				case AbilitySpawnTarget.Forward:
 					{
@@ -791,14 +996,13 @@ namespace FishMMO.Shared
 						Vector3 positionOffset = caster.Transform.forward * distance;
 						positionOffset.y += height;
 
-						Vector3 spawnPosition = motorPosition + positionOffset;
-
-						abilityTransform.SetPositionAndRotation(spawnPosition, caster.Transform.rotation);
+						position = motorPosition + positionOffset;
+						rotation = caster.Transform.rotation;
 					}
 					break;
 				case AbilitySpawnTarget.Camera:
 					{
-						Vector3 cameraForward = cameraRotation * Vector3.forward;
+						Vector3 cameraForward = aimDirection;
 
 						Vector3 spawnPosition = cameraPosition + cameraForward;
 
@@ -806,30 +1010,31 @@ namespace FishMMO.Shared
 
 						Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
 
-						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
-
-						abilityTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
+						position = spawnPosition;
+						rotation = Quaternion.LookRotation(lookDirection);
 					}
 					break;
 				case AbilitySpawnTarget.Spawner:
-					abilityTransform.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
+					position = abilitySpawner.position;
+					rotation = abilitySpawner.rotation;
 					break;
 				case AbilitySpawnTarget.SpawnerWithCameraRotation:
 					{
-						Vector3 cameraForward = cameraRotation * Vector3.forward;
+						Vector3 cameraForward = aimDirection;
 
 						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
 
 						Vector3 lookDirection = (farTargetPosition - abilitySpawner.position).normalized;
 
-						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
-
-						abilityTransform.SetPositionAndRotation(abilitySpawner.position, spawnRotation);
+						position = abilitySpawner.position;
+						rotation = Quaternion.LookRotation(lookDirection);
 					}
 					break;
 				default:
 					break;
 			}
+
+			return new AbilitySpawnPose(position, rotation);
 		}
 	}
 }

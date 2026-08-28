@@ -120,9 +120,14 @@ namespace FishMMO.Shared
 			if (prev == null && next == null)
 				return false;
 
-			bool forceWrite = option != DeltaSerializerOption.Unset;
+			/* Only a full serialize forces the whole array out. This writer's presence is signalled
+			 * by a bit in the caller's flags word, so on a RootSerialize it can still take the
+			 * index-delta path — or decline entirely — and let the caller leave the bit clear.
+			 * Treating RootSerialize as a full serialize meant every reconcile that was not a
+			 * periodic resend shipped every array in full. */
+			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
 
-			if (!forceWrite && ReferenceEquals(prev, next))
+			if (!fullSerialize && ReferenceEquals(prev, next))
 				return false;
 
 			int prevCount = prev?.Length ?? 0;
@@ -134,43 +139,51 @@ namespace FishMMO.Shared
 				nextCount = MaxEntries;
 			}
 
-			// Full-array path: different length, force-write, or no previous data
-			if (forceWrite || prevCount != nextCount || prev == null || prevCount == 0)
+			/* Index-delta path: same length, single pass.
+			 *
+			 * The shape here deliberately matches AttributeReconcileEntry, BuffReconcileEntry and
+			 * CooldownReconcileEntry. This method used to carry two extra disjuncts
+			 * (prev == null || prevCount == 0) that routed the "both sides empty" and "nothing
+			 * changed" cases into branches which wrote a two-byte header and then returned false.
+			 * The return value is what tells CharacterReconcileDataDeltaSerializer whether to set
+			 * this field's bit in the delta bitmask, so a false return left those two bytes in the
+			 * stream with no bit set — and the reader, which only consumes the field when its bit
+			 * is set, walked off by two bytes for the rest of the payload. A delta writer must
+			 * write bytes if and only if it returns true. */
+			if (!fullSerialize && prevCount == nextCount)
 			{
-				if (nextCount == 0)
-				{
-					writer.WriteUInt16(0);
-					return forceWrite;
-				}
-				writer.WriteUInt16(BuildHeader(nextCount, false));
+				int countPos = writer.Position;
+				int startLength = writer.Length;
+				writer.WriteUInt16(0); // placeholder for packed header
+
+				int changedCount = 0;
 				for (int i = 0; i < nextCount; i++)
-					WriteTo(writer, next[i]);
+				{
+					if (!next[i].Equals(prev[i]))
+					{
+						writer.WriteUInt16((ushort)i);
+						WriteTo(writer, next[i]);
+						changedCount++;
+					}
+				}
+
+				if (changedCount == 0)
+				{
+					// Hand back exactly the bytes taken, Length included — the caller will leave
+					// this field's bit clear, so the reader will never consume them.
+					writer.Position = countPos;
+					writer.Length = startLength;
+					return false;
+				}
+
+				writer.InsertUInt16Unpacked(BuildHeader(changedCount, true), countPos);
 				return true;
 			}
 
-			// Index-delta path: same length, single pass
-			int changedCount = 0;
+			// Full-array path: different length, or a forced full serialize.
+			writer.WriteUInt16(BuildHeader(nextCount, false));
 			for (int i = 0; i < nextCount; i++)
-			{
-				if (!next[i].Equals(prev[i]))
-					changedCount++;
-			}
-
-			if (changedCount == 0)
-			{
-				writer.WriteUInt16(0);
-				return false;
-			}
-
-			writer.WriteUInt16(BuildHeader(changedCount, true));
-			for (int i = 0; i < nextCount; i++)
-			{
-				if (!next[i].Equals(prev[i]))
-				{
-					writer.WriteUInt16((ushort)i);
-					WriteTo(writer, next[i]);
-				}
-			}
+				WriteTo(writer, next[i]);
 			return true;
 		}
 
