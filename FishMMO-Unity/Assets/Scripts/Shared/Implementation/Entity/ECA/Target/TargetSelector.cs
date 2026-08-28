@@ -56,27 +56,104 @@ namespace FishMMO.Shared
 		/// <returns>A GameObject to use as a spatial reference, or null.</returns>
 
 		/// <summary>
-		/// Runs an overlap query against where characters were when the caster's client saw them.
+		/// True when this peer is the one allowed to resolve a physics query into targets.
 		/// </summary>
 		/// <remarks>
-		/// Delegates to <see cref="LagCompensatedQuery"/>, which is shared with the ECA actions that
-		/// resolve hits without going through a selector. The query is eager and the rewind closes
-		/// before any result is yielded — selectors are iterators, and holding characters displaced
-		/// across <c>yield return</c> would run the consumer's damage and ECA work against a stale
-		/// world.
+		/// <para>
+		/// <b>Server only, and not "not a replicate tick".</b> Every physics selector used to open
+		/// with <c>if (tickData.IsReplicateTick) yield break;</c>, on the theory that a replicate tick
+		/// means a client replay. It does not. <c>AbilityObject</c>'s self-target dispatch and its
+		/// OnPreSpawn/OnSpawn dispatches, and <c>AbilityController</c>'s activation triggers, all
+		/// attach a <c>TickEventData</c> built from the replicate <c>PredictionTick</c> — on the
+		/// server as well. So the guard fired on the server too, and a point-blank area ability
+		/// selected nothing and dealt no damage on any peer. <c>AbilityApplyAreaAction</c> was
+		/// corrected for exactly this and gates on the peer instead; this is the same rule, applied
+		/// at the selector.
+		/// </para>
+		/// <para>
+		/// The tick payload is left on the event untouched. It still carries real information for the
+		/// tick-domain consumers downstream (buff stamping, cooldowns) — it just never meant what the
+		/// old guard read it as.
+		/// </para>
 		/// </remarks>
-		protected static int RewoundOverlapSphere(
-			EventData eventData, GameObject context, Vector3 center, float radius,
-			Collider[] hits, LayerMask mask)
-			=> LagCompensatedQuery.OverlapSphere(eventData, context, center, radius, hits, mask);
+		protected static bool IsAuthoritativePeer(EventData eventData) => EcaAuthority.IsServer(eventData);
 
 		/// <summary>
-		/// Runs a raycast against where characters were when the caster's client saw them.
+		/// Delegate for the body of a rewound gather.
 		/// </summary>
-		protected static int RewoundRaycast(
-			EventData eventData, GameObject context, Vector3 origin, Vector3 direction, float distance,
-			RaycastHit[] hits, LayerMask mask)
-			=> LagCompensatedQuery.Raycast(eventData, context, origin, direction, distance, hits, mask);
+		protected delegate void GatherTargets(EventData eventData, GameObject context, List<GameObject> results);
+
+		/// <summary>
+		/// Collects candidates inside a single rewind scope and returns them once it has closed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is <see cref="ChainTargetSelector"/>'s pattern, generalised, and it exists for two
+		/// reasons the chain learned first.
+		/// </para>
+		/// <para>
+		/// <b>Ranking must read the same world the query did.</b> <see cref="LagCompensatedQuery"/>
+		/// closes its rewind before returning, so a selector that queried through it and then measured
+		/// distances was selecting from the rewound world and ranking by live positions — the nearest
+		/// candidate by one measure and a different one by the other, differing by the peer's speed
+		/// times its latency. Conditions are evaluated inside the scope for the same reason: a range
+		/// condition that disagrees with the query that produced the candidate is not a filter, it is
+		/// a coin toss.
+		/// </para>
+		/// <para>
+		/// <b>Nothing is yielded while the world is displaced.</b> Selectors are iterators and the
+		/// consumer between two yields is the damage and ECA pipeline. Materialising the whole result
+		/// first means the scope has closed before any of that runs.
+		/// </para>
+		/// </remarks>
+		/// <param name="eventData">The event driving the selection.</param>
+		/// <param name="context">The spatial origin object; its scene is the one rewound.</param>
+		/// <param name="results">Receives the selected objects, in the gather's order.</param>
+		/// <param name="gather">The query and ranking to run under the scope.</param>
+		protected static void GatherRewound(EventData eventData, GameObject context, List<GameObject> results, GatherTargets gather)
+		{
+			if (LagCompensatedQuery.TryResolveRewind(eventData, out ICharacter caster, out uint rewindTick))
+			{
+				/* A nested Rewind is refused by the registry rather than stacked, so a selector
+				 * invoked from inside somebody else's scope (a region action fanning out over several
+				 * characters in one tick) runs against that outer rewind instead of corrupting it. */
+				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
+				{
+					gather(eventData, context, results);
+				}
+			}
+			else
+			{
+				gather(eventData, context, results);
+			}
+		}
+
+		/// <summary>
+		/// Query buffer size for a selector whose authored cap is <paramref name="maxHits"/>.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately larger than the cap. Sizing the buffer at exactly <c>MaxHits</c> makes the
+		/// physics broadphase perform the truncation, in its own order, before the selector ever sees
+		/// the candidates — so a cap of 5 in a crowd of 20 picked five arbitrary characters and the
+		/// deterministic sort that follows had nothing to work with. Querying wide and capping after
+		/// the sort is what makes the cap mean "the first five in a defined order".
+		/// </remarks>
+		protected static int QueryBufferSize(int maxHits)
+		{
+			int cap = Mathf.Max(1, maxHits);
+			return Mathf.Clamp(cap * 4, 32, 256);
+		}
+
+		/* RewoundOverlapSphere and RewoundRaycast were removed rather than left unused.
+		 *
+		 * They wrapped LagCompensatedQuery, which closes its rewind scope before it returns — correct
+		 * for a caller that only wants the hit set, and a trap for a selector, which then ranks and
+		 * filters those hits by LIVE positions. Every selector that used them selected out of the
+		 * caster's view of the world and then decided between the candidates using the server's,
+		 * which at 300 ms is a different answer. The replacement is GatherRewound: one scope, held
+		 * open across the query, the ranking and the conditions, closed before anything is yielded.
+		 * Leaving the old helpers in place as a shorter-looking option is how the next selector
+		 * reintroduces the bug. */
 
 		protected static GameObject GetContext(EventData eventData)
 		{

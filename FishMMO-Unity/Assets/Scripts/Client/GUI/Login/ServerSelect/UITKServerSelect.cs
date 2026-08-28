@@ -165,10 +165,17 @@ namespace FishMMO.Client
 				refreshButton.clicked += OnClick_Refresh;
 			}
 
+			/* Back, not quit-to-login. This button is labelled "Back" and sits beside a separate
+			 * "Quit", but it called Client.QuitToLogin() — so a player who reached the world list,
+			 * changed their mind about which character to play and pressed Back was logged out and
+			 * landed on the sign-in screen. The screen behind this one is the character list: that
+			 * is where a selection is made, and re-selecting is the only way to change it.
+			 * Mirrors UITKCharacterCreate.OnClick_Back, which is the same button on the same
+			 * layer of this flow. */
 			Button quitToLoginButton = Root.Q<Button>(QUIT_LOGIN_BUTTON_NAME);
 			if (quitToLoginButton != null)
 			{
-				quitToLoginButton.clicked += OnClick_QuitToLogin;
+				quitToLoginButton.clicked += OnClick_Back;
 			}
 
 			Button quitButton = Root.Q<Button>(QUIT_BUTTON_NAME);
@@ -177,9 +184,10 @@ namespace FishMMO.Client
 				quitButton.clicked += OnClick_Quit;
 			}
 
-			// Enter connects to the highlighted world, Escape goes back to the login screen.
+			// Enter connects to the highlighted world, Escape goes back to the character list.
+			// Escape and the Back button share OnClick_Back so they cannot drift apart.
 			// Enter observes the same lock as the Connect button it mirrors; see LoginKeys.Attach.
-			LoginKeys.Attach(this, Root, OnClick_ConnectToServer, OnClick_QuitToLogin, () => !replyGuard.IsPending);
+			LoginKeys.Attach(this, Root, OnClick_ConnectToServer, OnClick_Back, () => !replyGuard.IsPending);
 			LoginKeys.SetTabOrder(Root, connectButton, refreshButton, quitToLoginButton, quitButton);
 		}
 
@@ -473,23 +481,30 @@ namespace FishMMO.Client
 			 * after a character selection and again on every refresh, so one can arrive just
 			 * after a quit to login — and showing unconditionally put the world list on top of
 			 * the sign-in form of an account that had already logged out. */
-			if (!LoginScreenOwnsTheScreen())
+			if (!AnotherPanelOwnsTheScreen())
 			{
 				Show();
 			}
 		}
 
 		/// <summary>
-		/// Whether the player has gone back to the sign-in screen.
+		/// Whether a panel upstream of this one currently owns the screen.
 		/// </summary>
 		/// <remarks>
-		/// The login and registration panels are upstream of this one: reaching either means the
-		/// session this list describes is over, or was never entered.
+		/// The login and registration panels mean the session this list describes is over, or was
+		/// never entered. The character list and the character-create form mean the player has
+		/// backed out of here (see <see cref="OnClick_Back"/>) or never left: a refresh answered
+		/// just after Back, or a second push from the server, would otherwise put the world list
+		/// straight back on top of the screen they had just returned to. The ordinary success path
+		/// is unaffected — <c>UITKCharacterSelect.OnClick_SelectCharacter</c> hides that panel
+		/// before the list it triggers can arrive.
 		/// </remarks>
-		private bool LoginScreenOwnsTheScreen()
+		private bool AnotherPanelOwnsTheScreen()
 		{
 			return (UIManager.TryGetTK("UILogin", out UITKControl login) && login.Visible) ||
-				(UIManager.TryGetTK("UIRegister", out UITKControl register) && register.Visible);
+				(UIManager.TryGetTK("UIRegister", out UITKControl register) && register.Visible) ||
+				(UIManager.TryGetTK("UICharacterSelect", out UITKControl characterSelect) && characterSelect.Visible) ||
+				(UIManager.TryGetTK("UICharacterCreate", out UITKControl characterCreate) && characterCreate.Visible);
 		}
 
 		/// <summary>
@@ -635,6 +650,40 @@ namespace FishMMO.Client
 			// element needs the cached value invalidated or it would keep the UXML's bare text.
 			lastShownCooldownSeconds = -1;
 			UpdateRefreshButton();
+		}
+
+		/// <summary>
+		/// Returns to the character list without tearing the session down. Bound to both the Back
+		/// button and Escape.
+		/// </summary>
+		/// <remarks>
+		/// A handoff that is already in flight is the exception: <see cref="OnClick_ConnectToServer"/>
+		/// starts <c>Client.RequestHopTokenThenConnect</c>, a coroutine that waits up to five
+		/// seconds for a token and then connects regardless. Nothing cancels it but the teardown in
+		/// <c>Client.QuitToLogin</c>, so simply hiding this panel would drop the player into
+		/// the world from the character list they had just backed out to. Escape is deliberately
+		/// never blocked (see <see cref="LoginKeys.Attach"/>), so backing out mid-handoff does what
+		/// it always did — ends the session — and says so rather than appearing to log the player
+		/// out at random.
+		/// </remarks>
+		public void OnClick_Back()
+		{
+			if (replyGuard.IsPending)
+			{
+				LoginNotice.Show("The connection to that world was cancelled. Please log in again.");
+				OnClick_QuitToLogin();
+				return;
+			}
+
+			if (UIManager.TryGetTK("UICharacterSelect", out UITKCharacterSelect characterSelect))
+			{
+				Hide();
+				characterSelect.ReturnFromDownstreamPanel();
+				return;
+			}
+
+			// No character list panel; the login screen is the only other place to be.
+			OnClick_QuitToLogin();
 		}
 
 		/// <summary>

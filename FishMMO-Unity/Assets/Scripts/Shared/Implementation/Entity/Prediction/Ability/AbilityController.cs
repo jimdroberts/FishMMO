@@ -411,6 +411,9 @@ namespace FishMMO.Shared
 				ability.DetachAllAbilityObjects();
 			}
 
+			// Observer-only abilities hold spawned objects too; detach and forget them the same way.
+			ClearObservedAbilities();
+
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
 			KnownAbilityEvents.Clear();
@@ -420,6 +423,7 @@ namespace FishMMO.Shared
 			KnownAbilityOnSpawnEvents.Clear();
 			KnownAbilityOnDestroyEvents.Clear();
 			templateToAbilityID?.Clear();
+			pendingInFlightObjects.Clear();
 
 			// Force regeneration of the ability seed generator on every reset.
 			// Without this, a non-null generator from a previous session (e.g.,
@@ -584,8 +588,13 @@ namespace FishMMO.Shared
 
 			/* Record what this tick's simulation left behind, on every pass including replays —
 			 * a replay re-simulates the tick and its result is what the next reconcile for that
-			 * tick should be compared with. The server has nothing to compare, so it skips. */
-			if (!base.IsServerStarted)
+			 * tick should be compared with.
+			 *
+			 * Owner only, matching the reconcile: the server has nothing to compare against, and a
+			 * non-owner's reconcile path no longer reads this history at all (see OnReconcile), so
+			 * filling it would be per-tick work whose only possible effect is a wrong correction
+			 * if the gate is ever lost. */
+			if (!base.IsServerStarted && base.IsOwner)
 			{
 				predictedStateHistory.Record(input.GetTick(), currentSeed, currentAbilityID);
 			}
@@ -798,6 +807,33 @@ namespace FishMMO.Shared
 		{
 			//Log.Debug($"Reconciled: {rd.GetTick()}");
 			uint reconcileTick = rd.GetTick();
+
+			/* Predicted-history reconciliation is OWNER-ONLY.
+			 *
+			 * Everything in ReconcilePredictedHistory judges the server's state against what THIS
+			 * peer predicted for the same tick, and only the owner predicts: it is the only peer
+			 * whose replicate stream carries real input, the only one that spawns ability objects
+			 * ahead of the server, and the only one whose UI shows a cast bar to clear. A
+			 * non-owner that reached this code compared the server's seed against a history it had
+			 * never populated (or, with state forwarding on, one built from relayed input) and
+			 * could destroy ability objects it had faithfully reproduced from a broadcast, fire
+			 * OnAbilityDenied for a denial that was not its own, and clear a cast bar it never
+			 * drew. Non-owners take the authoritative fields below and nothing else. */
+			if (base.IsOwner)
+			{
+				ReconcilePredictedHistory(rd, reconcileTick);
+			}
+
+			ApplyAuthoritativeReconcileState(rd);
+		}
+
+		/// <summary>
+		/// Owner-only half of <see cref="OnReconcile"/>: compares the server's state for the
+		/// reconcile tick against what this client predicted for that same tick and corrects the
+		/// difference.
+		/// </summary>
+		private void ReconcilePredictedHistory(CharacterReconcileData rd, uint reconcileTick)
+		{
 			bool denied = rd.UnpackFlags.IsFlagged(AbilityActivationFlags.Denied);
 
 			/* Compare like with like. This reconcile describes the server's state AFTER tick
@@ -811,19 +847,28 @@ namespace FishMMO.Shared
 			 * judge against and no correction is attempted. */
 			bool havePredicted = predictedStateHistory.TryGet(reconcileTick, out int predictedSeed, out long predictedAbilityID);
 
+			/* The state this client held going INTO the reconcile tick. Needed to tell apart the
+			 * two ways a seed can disagree at tick T — see ShouldDestroySpawnsAtReconcileTick. */
+			bool havePrevious = predictedStateHistory.TryGet(reconcileTick - 1u, out int previousSeed, out _);
+
+			/* True when the server demonstrably did NOT spawn at the reconcile tick while this
+			 * client did, so the object spawned exactly ON that tick has to go too. */
+			bool destroyAtTick = ShouldDestroySpawnsAtReconcileTick(denied, havePredicted, predictedSeed,
+				havePrevious, previousSeed, rd.Seed);
+
 			// Detect prediction mismatch: the client's simulation of this tick produced a
 			// different seed than the server's, so the client spawned something the server did
 			// not (or vice versa). Destroy ability objects spawned after the reconcile tick.
 			// If a specific ability was being activated, restrict destruction to that ability;
 			// otherwise fall back to a full cleanup.
-			if (havePredicted && predictedSeed != rd.Seed)
+			if ((havePredicted && predictedSeed != rd.Seed) || destroyAtTick)
 			{
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
 				if (predictedAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(predictedAbilityID, out Ability mismatchedAbility))
 				{
 					// Only destroy objects from the ability whose activation caused the seed divergence
-					mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick);
+					mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick, destroyAtTick);
 				}
 				else
 				{
@@ -831,7 +876,7 @@ namespace FishMMO.Shared
 					// this is the common path for them, not a sign of deeper desync.
 					foreach (Ability ability in KnownAbilities.Values)
 					{
-						ability.DestroyAbilityObjectsAfterTick(reconcileTick);
+						ability.DestroyAbilityObjectsAfterTick(reconcileTick, destroyAtTick);
 					}
 				}
 			}
@@ -855,7 +900,106 @@ namespace FishMMO.Shared
 			{
 				OnCancel?.Invoke();
 			}
+		}
 
+		/// <summary>
+		/// Decides whether ability objects spawned exactly ON the reconcile tick must be destroyed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why this exists.</b> An instant cast (<c>ActivationTime</c> 0) starts and finishes
+		/// inside one replicate call, so the history entry for that tick records
+		/// <c>NO_ABILITY</c> and only the seed advance survives. Cleanup used a strict
+		/// <c>&gt; tick</c> comparison, so a projectile predicted AT tick T was never destroyed
+		/// when the server refused the cast at T, and it flew on as a ghost for its whole
+		/// lifetime.
+		/// </para>
+		/// <para>
+		/// <b>Why it cannot simply be "destroy at T on any mismatch".</b> FishNet replays from
+		/// <c>T + 1</c>, so an object spawned at T is never re-created by the replay. Deleting one
+		/// the server really did spawn removes it permanently. The seed is what distinguishes the
+		/// cases: <c>ResolveTargetAndSpawn</c> advances the seed exactly once per spawn attempt on
+		/// every peer, so "did this peer spawn at T" is readable as "did its seed advance at T".
+		/// </para>
+		/// <para><b>Truth table.</b> P = this client's predicted seed after T,
+		/// P₋ = its predicted seed after T-1, S = the server's seed after T.</para>
+		/// <list type="table">
+		/// <item><description>
+		/// <b>Server spawned at T, client spawned at T</b> — P == S. No correction; the object at
+		/// T is confirmed and must survive. Returns false.
+		/// </description></item>
+		/// <item><description>
+		/// <b>Server DENIED the activation at T, client spawned at T</b> — the Denied flag is
+		/// authoritative and independent of the RNG, and a denial means nothing started, so
+		/// nothing spawned. Returns true. This is the instant-cast ghost.
+		/// </description></item>
+		/// <item><description>
+		/// <b>Server did not spawn at T for another reason (input lost), client spawned at T</b> —
+		/// S == P₋ (the server's seed never moved at T) while P != P₋ (the client's did). Returns
+		/// true.
+		/// </description></item>
+		/// <item><description>
+		/// <b>Server spawned at T, client did not</b> — P == P₋ and S != P. The client has no
+		/// object at T to remove, and the server's copy is not reproducible here. Returns false;
+		/// the ordinary <c>&gt; T</c> cleanup still runs.
+		/// </description></item>
+		/// <item><description>
+		/// <b>Divergence began before T</b> — S matches neither P nor P₋, so who spawned at T
+		/// cannot be established. Returns false and leaves tick T alone rather than risk deleting
+		/// a confirmed object; the <c>&gt; T</c> cleanup still corrects everything after it.
+		/// </description></item>
+		/// <item><description>
+		/// <b>No history for T</b> (first reconciles after spawn, or older than the ring) — nothing
+		/// to judge against. Returns false.
+		/// </description></item>
+		/// </list>
+		/// </remarks>
+		/// <param name="denied">The server set <see cref="AbilityActivationFlags.Denied"/> for this tick.</param>
+		/// <param name="havePredicted">A history entry exists for the reconcile tick.</param>
+		/// <param name="predictedSeed">The client's seed after simulating the reconcile tick.</param>
+		/// <param name="havePrevious">A history entry exists for the tick before the reconcile tick.</param>
+		/// <param name="previousSeed">The client's seed after simulating the tick before the reconcile tick.</param>
+		/// <param name="serverSeed">The server's seed after the reconcile tick.</param>
+		internal static bool ShouldDestroySpawnsAtReconcileTick(
+			bool denied,
+			bool havePredicted,
+			int predictedSeed,
+			bool havePrevious,
+			int previousSeed,
+			int serverSeed)
+		{
+			// Nothing to compare against.
+			if (!havePredicted)
+			{
+				return false;
+			}
+
+			/* Client and server agree about tick T. Whatever happened at T happened on both, so
+			 * the object spawned there — if any — is confirmed. */
+			if (predictedSeed == serverSeed)
+			{
+				return false;
+			}
+
+			/* An authoritative refusal. TryStartAbility failed on the server, so no spawn can have
+			 * occurred at T, whatever the seeds say about earlier ticks. */
+			if (denied)
+			{
+				return true;
+			}
+
+			/* The server's seed is still exactly what this client had going into T: the server
+			 * advanced nothing at T. Combined with the client's own seed having moved, this
+			 * client spawned something the server did not. */
+			return havePrevious && previousSeed == serverSeed && predictedSeed != previousSeed;
+		}
+
+		/// <summary>
+		/// Applies the server's authoritative ability state from a reconcile. Runs on every peer
+		/// that receives one, owner or not.
+		/// </summary>
+		private void ApplyAuthoritativeReconcileState(CharacterReconcileData rd)
+		{
 			currentAbilityID = rd.AbilityID;
 			remainingTicks = rd.RemainingTicks;
 			currentSeed = rd.Seed;

@@ -21,7 +21,9 @@ namespace FishMMO.UnitTests
 	/// </para>
 	/// <para>
 	/// <b>What is measured and what is arithmetic.</b> Payload sizes are real writer output or
-	/// figures taken from the benchmark fixtures. The rates are design parameters — the LOD band,
+	/// figures taken from the benchmark fixtures. The rates are design parameters — the LOD band
+	/// (a representative observer 20-40 m away; the LOD is per observer, so a peer inside 20 m
+	/// costs three times this and one beyond 40 m half of it),
 	/// <c>observedResourcePushInterval</c>, and a cast per second, which is the ceiling the authored
 	/// cooldowns allow rather than an average. Nothing here has run in a live session.
 	/// </para>
@@ -40,7 +42,7 @@ namespace FishMMO.UnitTests
 		private const int ActivationBroadcastBytes = 37;
 
 		// ── design rates ──
-		private const int LodBand = 3;                 // NetworkTransformDistanceLod middle band
+		private const int LodBand = 3;                 // NetworkTransformDistanceLod middle band (20-40 m), applied per observer
 		private const double ResourceHz = 5.0;         // observedResourcePushInterval = 6 ticks
 		private const double CastHz = 1.0;             // every authored cooldown is >= 1s
 		private const double BuffHz = 0.5;

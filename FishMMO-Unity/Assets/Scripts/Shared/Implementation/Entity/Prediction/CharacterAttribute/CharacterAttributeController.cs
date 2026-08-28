@@ -524,7 +524,8 @@ namespace FishMMO.Shared
 				{
 					int templateID = reader.ReadInt32();
 					int value = reader.ReadInt32();
-					SetAttribute(templateID, value);
+					int modifier = reader.ReadInt32();
+					SetAttribute(templateID, value, modifier);
 				}
 			}
 
@@ -548,7 +549,8 @@ namespace FishMMO.Shared
 					int templateID = reader.ReadInt32();
 					int value = reader.ReadInt32();
 					float currentValue = reader.ReadSingle();
-					SetResourceAttribute(templateID, value, currentValue);
+					int modifier = reader.ReadInt32();
+					SetResourceAttribute(templateID, value, currentValue, modifier);
 				}
 			}
 
@@ -590,6 +592,19 @@ namespace FishMMO.Shared
 			writer.Skip(ATTRIBUTE_PAYLOAD_LENGTH_BYTES);
 			int attributeBlockStart = writer.Position;
 
+			/* The whole attribute sheet, to every receiver.
+			 *
+			 * Base value AND external modifier for each attribute, so the receiver can compute the
+			 * same FinalValue the server holds. Sending base values alone was the old bug: a
+			 * character standing still in +max-health gear showed its UNBUFFED maximum to every new
+			 * observer, because the modifier that produced the real maximum never travelled.
+			 *
+			 * Observers get the same sheet as the owner. While state forwarding was on this arrived
+			 * as CharacterReconcileData.Attributes on every tick; with forwarding off that channel
+			 * is gone, so the payload seeds the set and CharacterAttributesBroadcast keeps it up to
+			 * date. Trimming the set for observers is not an option — a resource's maximum is a
+			 * formula over these attributes, so a peer missing them cannot recompute anything.
+			 */
 			// Sort keys for deterministic wire order. WritePayload is a one-shot
 			// initialisation call, so the allocation is acceptable.
 			var sortedAttrIDs = new List<int>(Attributes.Keys);
@@ -601,6 +616,7 @@ namespace FishMMO.Shared
 				CharacterAttribute attribute = Attributes[sortedAttrIDs[i]];
 				writer.WriteInt32(attribute.Template.ID);
 				writer.WriteInt32(attribute.Value);
+				writer.WriteInt32(attribute.ExternalModifier);
 			}
 
 			var sortedResIDs = new List<int>(ResourceAttributes.Keys);
@@ -613,6 +629,7 @@ namespace FishMMO.Shared
 				writer.WriteInt32(resourceAttribute.Template.ID);
 				writer.WriteInt32(resourceAttribute.Value);
 				writer.WriteSingle(resourceAttribute.CurrentValue);
+				writer.WriteInt32(resourceAttribute.ExternalModifier);
 			}
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - attributeBlockStart),
@@ -1331,6 +1348,22 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </summary>
 		/// <param name="resourceState">The resource state snapshot to apply.</param>
+		/// <summary>
+		/// Applies observer-visible resource values without touching the regeneration schedule.
+		/// </summary>
+		/// <remarks>
+		/// The observer broadcast is whole-unit values only; it deliberately carries no regen tick.
+		/// See the call site for why applying a zeroed schedule would be wrong.
+		/// </remarks>
+		public void ApplyObservedResourceState(float health, int maxHealth, float mana, int maxMana, float stamina, int maxStamina)
+		{
+			BeginPropagation();
+			ApplyIndividualResourceState(HealthResourceTemplateID, maxHealth, health);
+			ApplyIndividualResourceState(ManaResourceTemplateID, maxMana, mana);
+			ApplyIndividualResourceState(StaminaResourceTemplateID, maxStamina, stamina);
+			EndPropagation();
+		}
+
 		public void ApplyResourceState(CharacterAttributeResourceState resourceState)
 		{
 			// Restore the absolute next-regen tick from server state so the client fires
@@ -1523,14 +1556,29 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private byte observedResourcePushInterval = 6;
 
-		/// <summary>Last state actually sent, so unchanged resources cost nothing.</summary>
-		private CharacterAttributeResourceState lastPushedResources;
+		/// <summary>
+		/// Change gate, rate limit and loss-repair schedule for the observer push.
+		/// </summary>
+		/// <remarks>
+		/// Holds the last state actually sent, the earliest tick the next push may occur on, and
+		/// the pending confirmation that repeats the final value of a burst so a dropped unreliable
+		/// packet cannot leave observers permanently stale. Kept as one struct so the whole decision
+		/// is unit-testable without a live character — see ObservedResourcePushScheduler.
+		/// </remarks>
+		private ObservedResourcePushScheduler resourcePushScheduler;
 
-		/// <summary>False until the first push, which always happens regardless of change.</summary>
-		private bool hasPushedResources;
+		/// <summary>
+		/// The attribute sheet as this character's observers last had it, for the change diff.
+		/// </summary>
+		/// <remarks>
+		/// A copy rather than a reference to the cached snapshot: <see cref="CreateAttributeSnapshot"/>
+		/// hands out the same array while nothing has changed, so holding that reference would make
+		/// the diff compare the array against itself and never report anything.
+		/// </remarks>
+		private AttributeReconcileEntry[] lastPushedAttributes;
 
-		/// <summary>Earliest tick the next push may occur on.</summary>
-		private uint nextResourcePushTick;
+		/// <summary>Scratch list of changed entries. Server work is single threaded.</summary>
+		private static readonly List<AttributeReconcileEntry> attributePushBuffer = new List<AttributeReconcileEntry>();
 
 		/// <summary>
 		/// Sends this character's resources to observers, rate limited and change gated.
@@ -1551,6 +1599,109 @@ namespace FishMMO.Shared
 		/// past tick.
 		/// </para>
 		/// </remarks>
+		/// <summary>
+		/// Sends attributes that changed since the last push to this character's observers.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is the replacement for what <c>CharacterReconcileData.Attributes</c> used to deliver
+		/// while state forwarding was enabled. It runs once per tick from
+		/// <see cref="OnCreateReconcile"/> — server only, and outside the <c>[Replicate]</c> method,
+		/// so it can never be dispatched from inside a replay of a past tick — but it only puts
+		/// anything on the wire when an attribute actually moved.
+		/// </para>
+		/// <para>
+		/// The common case costs nothing at all: <see cref="CreateAttributeSnapshot"/> returns the
+		/// same array reference while the sheet is unchanged, so the reference test below exits
+		/// before any comparison work is done.
+		/// </para>
+		/// <para>
+		/// The first push for a character sends the full sheet. The payload already gave every
+		/// observer that sheet, so this is redundant with it for anyone present at spawn — but it
+		/// costs one message once, and it is what makes the diff's baseline true rather than assumed.
+		/// </para>
+		/// </remarks>
+		private void MaybePushObservedAttributes()
+		{
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+
+			/* Forwarded objects already deliver this. Their observers receive the whole reconcile,
+			 * Attributes array included, so broadcasting the same values again is pure duplication.
+			 * See ObserverSyncMode. */
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+
+			AttributeReconcileEntry[] current = CreateAttributeSnapshot();
+
+			// Nothing has changed since the last push, and usually since many pushes ago.
+			if (ReferenceEquals(current, lastPushedAttributes))
+			{
+				return;
+			}
+
+			int currentCount = current?.Length ?? 0;
+			int lastCount = lastPushedAttributes?.Length ?? 0;
+
+			/* A full send when there is no comparable baseline: the first push, or a sheet whose
+			 * shape changed. The entries are ordered by template id and the set is fixed at spawn,
+			 * so a differing length means the character was rebuilt, not that one attribute moved. */
+			bool fullSet = lastPushedAttributes == null || lastCount != currentCount;
+
+			attributePushBuffer.Clear();
+			if (fullSet)
+			{
+				for (int i = 0; i < currentCount; ++i)
+				{
+					attributePushBuffer.Add(current[i]);
+				}
+			}
+			else
+			{
+				for (int i = 0; i < currentCount; ++i)
+				{
+					if (!current[i].Equals(lastPushedAttributes[i]))
+					{
+						attributePushBuffer.Add(current[i]);
+					}
+				}
+			}
+
+			/* The snapshot was rebuilt but every value landed where it already was — a modifier
+			 * added and removed inside one tick, most often. Adopt the new array as the baseline so
+			 * the reference test above starts exiting early again, and send nothing. */
+			if (attributePushBuffer.Count > 0)
+			{
+				ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterAttributesBroadcast()
+				{
+					CharacterObjectID = base.NetworkObject != null ? base.NetworkObject.ObjectId : 0,
+					IsFullSet = fullSet,
+					Attributes = attributePushBuffer.ToArray(),
+				}, Channel.Reliable);
+			}
+
+			/* Copied, not aliased. CreateAttributeSnapshot rebuilds in place on the next change and
+			 * would otherwise mutate the very baseline the next diff is measured against. */
+			if (currentCount == 0)
+			{
+				lastPushedAttributes = System.Array.Empty<AttributeReconcileEntry>();
+			}
+			else
+			{
+				if (lastPushedAttributes == null || lastPushedAttributes.Length != currentCount)
+				{
+					lastPushedAttributes = new AttributeReconcileEntry[currentCount];
+				}
+				System.Array.Copy(current, lastPushedAttributes, currentCount);
+			}
+
+			attributePushBuffer.Clear();
+		}
+
 		private void MaybePushObservedResources()
 		{
 			if (!base.IsServerStarted || base.TimeManager == null)
@@ -1558,11 +1709,13 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			uint tick = base.TimeManager.LocalTick;
-			if (hasPushedResources && tick < nextResourcePushTick)
+			// Forwarded objects carry ResourceState in every reconcile; see ObserverSyncMode.
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
 			{
 				return;
 			}
+
+			uint tick = base.TimeManager.LocalTick;
 
 			CharacterAttributeResourceState state = GetResourceState();
 
@@ -1571,34 +1724,25 @@ namespace FishMMO.Shared
 			 * a per-interval stream. */
 			state.NextRegenTick = 0u;
 
-			if (hasPushedResources && !ResourcesDifferForObservers(lastPushedResources, state))
+			/* Change gate plus one delayed confirmation.
+			 *
+			 * These go out unreliably, and the gate compares against what the SERVER last sent
+			 * rather than against what any particular observer received. A dropped packet was
+			 * therefore unrecoverable: the state never differs again, so nothing is ever re-sent and
+			 * that observer keeps the stale value indefinitely. The killing blow is the worst case,
+			 * because a character at zero health does not regenerate and so never dirties the gate
+			 * again — observers would keep drawing a corpse as alive.
+			 *
+			 * The scheduler answers Confirm once, shortly after a burst of changes stops, repeating
+			 * the final value. That is two packets instead of one for a burst that ends, and still
+			 * nothing at all for a character whose resources are not moving. */
+			ObservedResourcePushScheduler.Decision decision = resourcePushScheduler.Evaluate(tick, state, observedResourcePushInterval);
+			if (decision == ObservedResourcePushScheduler.Decision.None)
 			{
 				return;
 			}
 
-			nextResourcePushTick = tick + observedResourcePushInterval;
-			lastPushedResources = state;
-			hasPushedResources = true;
-
-			BroadcastObservedResources(state);
-		}
-
-		/// <summary>
-		/// True when two resource states differ by enough for an observer to notice.
-		/// </summary>
-		/// <remarks>
-		/// Compared at whole units because that is what a health bar renders. Sub-unit regeneration
-		/// drift would otherwise mark every interval dirty and push continuously.
-		/// </remarks>
-		private static bool ResourcesDifferForObservers(
-			CharacterAttributeResourceState a, CharacterAttributeResourceState b)
-		{
-			return Mathf.RoundToInt(a.Health) != Mathf.RoundToInt(b.Health) ||
-				   Mathf.RoundToInt(a.Mana) != Mathf.RoundToInt(b.Mana) ||
-				   Mathf.RoundToInt(a.Stamina) != Mathf.RoundToInt(b.Stamina) ||
-				   a.MaxHealth != b.MaxHealth ||
-				   a.MaxMana != b.MaxMana ||
-				   a.MaxStamina != b.MaxStamina;
+			BroadcastObservedResources(resourcePushScheduler.LastPushed);
 		}
 
 		/// <summary>
@@ -1616,7 +1760,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterResourcesBroadcast
+			/* Observers only. The owner holds these values authoritatively through the reconcile,
+			 * at full precision and every tick, and its client discarded this message on arrival. */
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterResourcesBroadcast
 			{
 				CharacterObjectID = base.NetworkObject.ObjectId,
 				// Whole units: the same precision the change gate compares at. See the broadcast type.
@@ -1626,7 +1772,7 @@ namespace FishMMO.Shared
 				MaxMana = state.MaxMana,
 				Stamina = Mathf.RoundToInt(state.Stamina),
 				MaxStamina = state.MaxStamina,
-			}, true, Channel.Unreliable);
+			}, Channel.Unreliable);
 		}
 
 		/// <summary>True once this client has registered the shared broadcast handler.</summary>
@@ -1647,7 +1793,76 @@ namespace FishMMO.Shared
 				return;
 			}
 			networkManager.ClientManager.RegisterBroadcast<CharacterResourcesBroadcast>(OnResourcesBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<CharacterAttributesBroadcast>(OnAttributesBroadcast);
 			resourcesBroadcastRegistered = true;
+		}
+
+		/// <summary>
+		/// Applies changed attributes to whichever character the message names.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The owner is skipped: its own reconcile carries the same pair of values every tick and is
+		/// authoritative, so applying a second copy could only fight it.
+		/// </para>
+		/// <para>
+		/// Entries are applied by <c>TemplateID</c>, so an attribute this character does not have is
+		/// ignored rather than mis-applied, and the order entries arrive in does not matter. The
+		/// whole batch is bracketed by one propagation scope so a listener sees the sheet settled
+		/// once rather than partway through — a maximum-health formula reading strength halfway
+		/// through an equip would otherwise publish a value that never really existed.
+		/// </para>
+		/// </remarks>
+		private static void OnAttributesBroadcast(CharacterAttributesBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+			if (nob.IsOwner)
+			{
+				return;
+			}
+
+			CharacterAttributeController controller = nob.GetComponent<CharacterAttributeController>();
+			if (controller == null)
+			{
+				return;
+			}
+
+			controller.ApplyObservedAttributes(msg.Attributes);
+		}
+
+		/// <summary>
+		/// Applies a set of authoritative attribute entries by template id.
+		/// </summary>
+		/// <remarks>
+		/// Both the base value and the external modifier are applied, which is what lets the
+		/// receiver arrive at the same <c>FinalValue</c> the server holds. Attributes the message
+		/// does not name are left alone: the sheet is fixed when the character spawns, so an
+		/// omission means "unchanged", never "removed".
+		/// </remarks>
+		/// <param name="entries">Entries to apply. Null or empty is a no-op.</param>
+		public void ApplyObservedAttributes(AttributeReconcileEntry[] entries)
+		{
+			if (entries == null || entries.Length < 1)
+			{
+				return;
+			}
+
+			BeginPropagation();
+			for (int i = 0; i < entries.Length; ++i)
+			{
+				AttributeReconcileEntry entry = entries[i];
+				SetAttribute(entry.TemplateID, entry.Value, entry.ExternalModifier);
+			}
+			EndPropagation();
 		}
 
 		/// <summary>
@@ -1681,16 +1896,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			controller.ApplyResourceState(new CharacterAttributeResourceState
-			{
-				Health = msg.Health,
-				MaxHealth = msg.MaxHealth,
-				Mana = msg.Mana,
-				MaxMana = msg.MaxMana,
-				Stamina = msg.Stamina,
-				MaxStamina = msg.MaxStamina,
-				NextRegenTick = 0u,
-			});
+			/* The regeneration schedule is deliberately left alone.
+			 *
+			 * This message carries no meaningful NextRegenTick — observers do not simulate another
+			 * character's regeneration, so the sender zeroes it rather than paying for it. Feeding
+			 * that zero into the schedule would clear this controller's pulse timing, and on any
+			 * peer that DOES simulate (the owner never takes this path, but a forwarded object
+			 * would) the next pulse would then be rescheduled from the wrong origin. Values only. */
+			controller.ApplyObservedResourceState(msg.Health, msg.MaxHealth, msg.Mana, msg.MaxMana, msg.Stamina, msg.MaxStamina);
 		}
 
 		#endregion
@@ -1705,6 +1918,7 @@ namespace FishMMO.Shared
 			 * disabled. Pushed from here for the same reason BuffController pushes here: it is once
 			 * per tick, server only, and outside the [Replicate] method. */
 			MaybePushObservedResources();
+			MaybePushObservedAttributes();
 		}
 
 		/// <summary>
@@ -1713,10 +1927,31 @@ namespace FishMMO.Shared
 		/// the propagation system; dirty-tracking is suppressed during the restore
 		/// so the rebuilt snapshot retains <c>ReferenceEquals</c> identity.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The owner always reconciles: this is the authority for the resource values its own
+		/// predicted regeneration advances from.
+		/// </para>
+		/// <para>
+		/// A non-owner only reconciles a forwarded object. With forwarding off an observer's copy of
+		/// this character is fed by <see cref="CharacterResourcesBroadcast"/> and
+		/// <see cref="CharacterAttributesBroadcast"/> instead, and it would not receive this
+		/// reconcile anyway — so the guard states the contract rather than defending against a
+		/// message that cannot arrive. Stating it matters because the two paths carry the same
+		/// fields at different precisions: the broadcast rounds resources to whole units and zeroes
+		/// <c>NextRegenTick</c>, so letting both write would let a coarser value land on top of a
+		/// finer one depending on arrival order. See <see cref="ObserverSyncMode"/>.
+		/// </para>
+		/// </remarks>
 		/// <param name="rd">Unified reconcile payload.</param>
 		/// <param name="channel">Transport channel.</param>
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
+			if (!base.IsOwner && !ObserverSyncMode.ObserversConsumeReconcile(base.NetworkObject))
+			{
+				return;
+			}
+
 			ApplyResourceState(rd.ResourceState);
 			ApplyAttributeSnapshot(rd.Attributes);
 		}

@@ -208,22 +208,56 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Instantiates the FXPrefab on the target when the buff is applied (client-side only).
+		/// Instantiates the FXPrefab on the target when the buff becomes visible on it (client-side only).
 		/// </summary>
-		/// <param name="buff">The buff instance being applied.</param>
+		/// <remarks>
+		/// <para>
+		/// Returns the instance so the caller can own its lifetime. <see cref="BuffController"/>
+		/// tracks one instance per template per character and hands it back to
+		/// <see cref="OnRemoveFX"/> when the buff leaves; before that the instance was fire-and-forget
+		/// and outlived the buff it was meant to show — on the owner and on every observer.
+		/// </para>
+		/// <para>
+		/// <paramref name="buff"/> is null when the FX is driven by the observer-facing list rather
+		/// than a simulated buff: observers no longer hold <see cref="Buff"/> instances for other
+		/// characters, only <see cref="ObservedBuffEntry"/>. Overrides must tolerate that.
+		/// </para>
+		/// <para>
+		/// Parented under <see cref="ICharacter.MeshRoot"/> so it follows the model. That root is
+		/// cleared when the race model (re)loads, which destroys the instance; the controller
+		/// re-creates it from <see cref="IModelReadyHandler.OnModelReady"/>.
+		/// </para>
+		/// </remarks>
+		/// <param name="buff">The simulated buff instance, or null for an observed buff.</param>
 		/// <param name="target">The character receiving the buff.</param>
-		public virtual void OnApplyFX(Buff buff, ICharacter target)
+		/// <returns>The instantiated FX, or null when there is nothing to show.</returns>
+		public virtual GameObject OnApplyFX(Buff buff, ICharacter target)
 		{
-			if (buff == null || target == null)
+			if (target == null)
 			{
-				return;
+				return null;
 			}
 #if !UNITY_SERVER
 			if (loadedFXPrefab != null)
 			{
-				Instantiate(loadedFXPrefab, target.MeshRoot != null ? target.MeshRoot : target.Transform);
+				Transform parent = target.MeshRoot != null ? target.MeshRoot : target.Transform;
+				return Instantiate(loadedFXPrefab, parent);
 			}
 #endif
+			return null;
+		}
+
+		/// <summary>
+		/// Tears down an FX instance previously returned by <see cref="OnApplyFX"/> (client-side only).
+		/// </summary>
+		/// <param name="fxInstance">The instance to remove. May already be destroyed.</param>
+		/// <param name="target">The character the buff left. May be null during teardown.</param>
+		public virtual void OnRemoveFX(GameObject fxInstance, ICharacter target)
+		{
+			if (fxInstance != null)
+			{
+				Destroy(fxInstance);
+			}
 		}
 
 		/// <summary>
@@ -298,12 +332,22 @@ namespace FishMMO.Shared
 		/// or not whoever cast it is still in the scene; it simply credits nobody, and
 		/// <see cref="ApplyDamageAction"/> is content with that.
 		/// </para>
+		/// <para>
+		/// <b>Server only.</b> With state forwarding off, the owner still ticks its own buffs for
+		/// prediction, but an ECA trigger is a side effect — damage credit, threat, chained
+		/// effects, achievements — and must run exactly once. The owner's health is corrected by
+		/// the attribute reconcile; nothing here needs to run on a client.
+		/// </para>
 		/// </remarks>
 		/// <param name="buff">The buff instance.</param>
 		/// <param name="target">The character carrying the buff.</param>
 		protected void InvokeTickEvents(Buff buff, ICharacter target)
 		{
 			if (buff == null || target == null || OnTickEvents == null || OnTickEvents.Count < 1)
+			{
+				return;
+			}
+			if (ShouldSuppressTickSideEffects(buff))
 			{
 				return;
 			}
@@ -349,12 +393,13 @@ namespace FishMMO.Shared
 		/// writing the resource directly.
 		/// </para>
 		/// <para>
-		/// <b>Both sides, once each.</b> This runs on the client as well as the server, which is
-		/// what keeps predicted health in step with the server's; the authoritative consequences
-		/// are already gated inside the damage controller, whose <c>Kill</c> returns immediately
-		/// off the server. ECA trigger dispatch is suppressed while replaying, because reconcile
-		/// re-runs every tick since the last authoritative state and a single tick of poison must
-		/// not count a dozen times toward an achievement.
+		/// <b>Both sides, side effects on one.</b> The resource mutation runs on the owning client
+		/// as well as the server, which is what keeps predicted health in step with the server's.
+		/// The triggers hanging off <c>Damage</c>/<c>Heal</c> are passed as suppressed on every
+		/// client — replayed or not — and only ever fire on the server. Before this, the flag
+		/// tracked replay alone, so the owner's first pass over a tick fired achievements and
+		/// combat triggers a second time alongside the server. See
+		/// <see cref="ShouldSuppressTickSideEffects"/>.
 		/// </para>
 		/// </remarks>
 		/// <param name="buff">The buff instance, supplying stacks, attribution and replay state.</param>
@@ -391,7 +436,7 @@ namespace FishMMO.Shared
 			 * lands: a lingering poison is part of the simulation whether or not whoever applied
 			 * it is still around. It simply credits nobody. */
 			ICharacter caster = buff.Caster;
-			bool suppressTriggers = buff.IsReplaying;
+			bool suppressTriggers = ShouldSuppressTickSideEffects(buff);
 
 			for (int i = 0; i < tickAttributes.Count; ++i)
 			{
@@ -428,6 +473,20 @@ namespace FishMMO.Shared
 				// Non-health resource: no damage semantics apply.
 				resourceAttribute.AddToCurrentValue(amount);
 			}
+		}
+
+		/// <summary>
+		/// True when a tick's non-idempotent side effects (ECA triggers, achievement and combat
+		/// hooks) must not run for <paramref name="buff"/>'s current tick.
+		/// </summary>
+		/// <remarks>
+		/// Suppressed on every client, and on the server during a replay. The only pass that is
+		/// allowed to have consequences is the server's first execution of a tick.
+		/// </remarks>
+		/// <param name="buff">The buff being ticked.</param>
+		internal static bool ShouldSuppressTickSideEffects(Buff buff)
+		{
+			return buff == null || buff.IsReplaying || !buff.IsAuthoritative;
 		}
 	}
 }

@@ -16,6 +16,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the container that holds the generated faction rows.</summary>
 		private const string LIST_NAME = "faction-list";
 
+		/// <summary>Name of the header close button element.</summary>
+		private const string CLOSE_BTN_NAME = "close-button";
+
 		/// <summary>USS class applied to each generated faction row.</summary>
 		private const string ROW_CLASS = "faction-row";
 
@@ -79,6 +82,15 @@ namespace FishMMO.Client
 			if (root == null)
 			{
 				return;
+			}
+
+			/* Resolved from the tree rather than cached: OnStarting re-runs on every reopen
+			 * against a freshly cloned tree, so this is a new element each time and the
+			 * handler cannot accumulate the way a subscription to a static event would. */
+			Button closeButton = root.Q<Button>(CLOSE_BTN_NAME);
+			if (closeButton != null)
+			{
+				closeButton.clicked += Hide;
 			}
 
 			list = root.Q(LIST_NAME);

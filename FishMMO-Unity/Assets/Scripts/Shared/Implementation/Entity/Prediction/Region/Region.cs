@@ -10,6 +10,19 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Represents a networked region in the game world. Handles region hierarchy, collider setup, and triggers region actions on player entry, stay, and exit.
+	/// <para>
+	/// Membership is tracked locally in a <see cref="RegionMembership{T}"/> rather than trusting the
+	/// NetworkCollider callbacks one-for-one: FishNet re-polls colliders during prediction reconcile
+	/// replay (and we deliberately fire nothing while a character teleports), so callbacks that arrive
+	/// while suppressed are recorded only and the resulting Enter/Exit is raised exactly once on the
+	/// next non-reconciling post-tick via a raw-vs-effective diff. Stay never fires during replay.
+	/// </para>
+	/// <para>
+	/// Hierarchy: a child region takes ownership of a character standing inside it. Every ancestor
+	/// receives a paired Exit only if it had raised an Enter, and a parent re-Enters when the last
+	/// child releases the character while it is still physically inside the parent. Parent Stay is
+	/// suppressed while any descendant owns the character.
+	/// </para>
 	/// </summary>
 	[RequireComponent(typeof(NetworkTrigger))]
 	public class Region : NetworkBehaviour
@@ -62,10 +75,34 @@ namespace FishMMO.Shared
 		private NetworkTrigger networkTrigger;
 
 		/// <summary>
+		/// Raw-vs-effective membership bookkeeping for this region. See the class remarks.
+		/// </summary>
+		private readonly RegionMembership<IPlayerCharacter> membership = new RegionMembership<IPlayerCharacter>();
+
+		private readonly List<IPlayerCharacter> flushEnters = new List<IPlayerCharacter>();
+		private readonly List<IPlayerCharacter> flushExits = new List<IPlayerCharacter>();
+
+		/// <summary>
+		/// Cached predicates for <see cref="RegionMembership{T}.Flush"/> so the per-tick flush allocates nothing.
+		/// </summary>
+		private Func<IPlayerCharacter, bool> isTeleportingPredicate;
+		private Func<IPlayerCharacter, bool> isDestroyedPredicate;
+		private Func<IPlayerCharacter, bool> canEnterPredicate;
+
+		/// <summary>
+		/// True when an Enter has been raised for <paramref name="character"/> and no Exit yet.
+		/// </summary>
+		public bool Contains(IPlayerCharacter character) => membership.IsInside(character);
+
+		/// <summary>
 		/// Initializes the region, sets up collider, terrain bounds, and event handlers for network triggers.
 		/// </summary>
 		void Awake()
 		{
+			isTeleportingPredicate = c => c.IsTeleporting;
+			isDestroyedPredicate = IsDestroyed;
+			canEnterPredicate = c => !DescendantContains(c);
+
 			// Set the region's layer to ignore raycasts.
 			// GameObject.layer takes a layer index, not the LayerMask bit mask that
 			// Constants.Layers.IgnoreRaycast holds — assigning the mask sets an invalid layer.
@@ -74,16 +111,12 @@ namespace FishMMO.Shared
 				gameObject.layer = Constants.Layers.Index.IgnoreRaycast;
 			}
 
-			// Register this region as a child of its parent, if applicable.
-			if (Parent != null)
-			{
-				Parent.Children.Add(this);
-			}
-
 			// Get and configure the collider for this region.
 			Collider = gameObject.GetComponent<Collider>();
 			if (Collider == null)
 			{
+				// Not registered as a child: a region with no collider can never own a character,
+				// so it must not block its parent's entry logic either.
 				Log.Debug("Region", Name + " collider is null and will not function properly.");
 				return;
 			}
@@ -100,6 +133,13 @@ namespace FishMMO.Shared
 				}
 			}
 
+			// Register this region as a child of its parent only once its collider is valid, so a
+			// parent iterating Children never sees a child whose Collider is unassigned.
+			if (Parent != null)
+			{
+				Parent.Children.Add(this);
+			}
+
 			// Set up network trigger event handlers for region entry, stay, and exit.
 			networkTrigger = gameObject.GetComponent<NetworkTrigger>();
 			if (networkTrigger != null)
@@ -110,11 +150,42 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <inheritdoc />
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
+			}
+		}
+
+		/// <inheritdoc />
+		public override void OnStopNetwork()
+		{
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
+			}
+			base.OnStopNetwork();
+		}
+
+		/// <summary>
+		/// A disabled region can no longer poll its collider, so every effective member receives its
+		/// paired Exit now rather than being stranded "inside" forever.
+		/// </summary>
+		void OnDisable()
+		{
+			ClearMembersWithExit();
+		}
+
 		/// <summary>
 		/// Cleans up event handler subscriptions and removes this region from its parent's children list.
 		/// </summary>
 		void OnDestroy()
 		{
+			ClearMembersWithExit();
+
 			if (networkTrigger != null)
 			{
 				networkTrigger.OnEnter -= NetworkCollider_OnEnter;
@@ -148,139 +219,256 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		#region Collider callbacks
+
 		/// <summary>
-		/// Handles logic when a player enters the region's collider.
-		/// Children regions take priority over parents.
-		/// Notifies the parent region of exit if this region fully contains the player.
+		/// Handles a collider Enter. Recorded while reconciling/teleporting; otherwise raises Enter
+		/// unless a child region owns the character, and pairs an Exit on every ancestor that had entered.
 		/// </summary>
-		/// <param name="other">The collider of the entering object.</param>
 		private void NetworkCollider_OnEnter(Collider other)
 		{
-			if (other == null)
-			{
-				return;
-			}
-			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
+			IPlayerCharacter character = Resolve(other);
 			if (character == null)
 			{
 				return;
 			}
-			if (character.IsTeleporting)
+			bool suppressed = IsSuppressed(character);
+			if (membership.RecordEnter(character, suppressed, !DescendantContains(character)))
 			{
-				return;
-			}
-			// Children regions take priority: if any child contains the character, do not process parent entry.
-			if (Children != null && other != null)
-			{
-				foreach (Region child in Children)
-				{
-					if (child == null)
-					{
-						continue;
-					}
-					// If a child region contains the character, skip parent entry logic.
-					if (child.Collider.bounds.Intersects(other.bounds))
-					{
-						//Log.Debug($"OnEnter: {other.gameObject.name} intersects child {child.gameObject.name}");
-						return;
-					}
-				}
-			}
-			// Notify parent region of exit, if applicable.
-			if (Parent != null)
-			{
-				Parent.NetworkCollider_OnExit(other);
-			}
-			// Invoke all region entry triggers.
-			if (OnRegionEnter != null)
-			{
-				//Log.Debug($"OnEnter: {character.CharacterName} Entered {gameObject.name}");
-				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
-				// Attach raw authoritative tick payload for callers that need timing context.
-				if (base.TimeManager != null)
-				{
-					eventData.Add(new TickEventData(character, base.TimeManager.LocalTick));
-				}
-				for (int i = 0; i < OnRegionEnter.Count; ++i)
-				{
-					OnRegionEnter[i]?.Execute(eventData);
-				}
+				Parent?.OnDescendantTookOwnership(character);
+				Fire(OnRegionEnter, character);
 			}
 		}
 
 		/// <summary>
-		/// Handles logic while a player stays within the region's collider.
+		/// Handles a collider Stay. Only forwarded for effective members and never during replay/teleport.
 		/// </summary>
-		/// <param name="other">The collider of the staying object.</param>
 		private void NetworkCollider_OnStay(Collider other)
 		{
-			if (other == null)
-			{
-				return;
-			}
-			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
+			IPlayerCharacter character = Resolve(other);
 			if (character == null)
 			{
 				return;
 			}
-			if (character.IsTeleporting)
+			if (membership.ShouldStay(character, IsSuppressed(character)))
 			{
-				return;
-			}
-			// Invoke all region stay triggers.
-			if (OnRegionStay != null)
-			{
-				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
-				if (base.TimeManager != null)
-				{
-					eventData.Add(new TickEventData(character, base.TimeManager.LocalTick));
-				}
-				for (int i = 0; i < OnRegionStay.Count; ++i)
-				{
-					OnRegionStay[i]?.Execute(eventData);
-				}
+				Fire(OnRegionStay, character);
 			}
 		}
 
 		/// <summary>
-		/// Handles logic when a player exits the region's collider.
-		/// Notifies the parent region of entry if applicable.
+		/// Handles a collider Exit. Recorded while reconciling/teleporting; otherwise raises Exit only
+		/// when an Enter was raised earlier, then offers the character back to the parent.
 		/// </summary>
-		/// <param name="other">The collider of the exiting object.</param>
 		private void NetworkCollider_OnExit(Collider other)
 		{
-			if (other == null)
-			{
-				return;
-			}
-			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
+			IPlayerCharacter character = Resolve(other);
 			if (character == null)
 			{
 				return;
 			}
-			if (character.IsTeleporting)
+			bool suppressed = IsSuppressed(character);
+			if (membership.RecordExit(character, suppressed))
+			{
+				Fire(OnRegionExit, character);
+				Parent?.OnDescendantReleased(character);
+			}
+		}
+
+		#endregion
+
+		#region Hierarchy
+
+		/// <summary>
+		/// A descendant raised Enter for <paramref name="character"/>: this region (and every ancestor)
+		/// exits it, but only if it had actually entered — no unpaired Exit is ever produced.
+		/// </summary>
+		private void OnDescendantTookOwnership(IPlayerCharacter character)
+		{
+			if (membership.ForceExit(character))
+			{
+				Fire(OnRegionExit, character);
+			}
+			Parent?.OnDescendantTookOwnership(character);
+		}
+
+		/// <summary>
+		/// A descendant raised Exit for <paramref name="character"/>: re-enter if the character is still
+		/// physically inside this region and no other descendant owns it; otherwise let the next ancestor try.
+		/// </summary>
+		private void OnDescendantReleased(IPlayerCharacter character)
+		{
+			if (membership.TryEnter(character, IsSuppressed(character), !DescendantContains(character)))
+			{
+				Fire(OnRegionEnter, character);
+				return;
+			}
+			if (!membership.IsRawInside(character))
+			{
+				Parent?.OnDescendantReleased(character);
+			}
+		}
+
+		/// <summary>
+		/// True when any child (recursively) physically contains the character — by its own collider
+		/// report, or geometrically when its collider has not polled yet this tick. Children without a
+		/// collider are skipped.
+		/// </summary>
+		private bool DescendantContains(IPlayerCharacter character)
+		{
+			if (Children == null || character == null)
+			{
+				return false;
+			}
+			for (int i = 0; i < Children.Count; ++i)
+			{
+				Region child = Children[i];
+				if (child == null)
+				{
+					continue;
+				}
+				if (child.membership.IsRawInside(character))
+				{
+					return true;
+				}
+				if (child.Collider != null && RegionGeometry.ContainsPoint(child.Collider, CharacterPoint(character)))
+				{
+					return true;
+				}
+				if (child.DescendantContains(character))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		#endregion
+
+		#region Flush
+
+		/// <summary>
+		/// Runs after every tick, once reconcile replay has finished (OnPostTick is outside the
+		/// reconcile window, so <c>IsReconciling</c> is false here). Diffs raw presence against
+		/// effective membership and raises whatever Enter/Exit was deferred during replay or teleport.
+		/// </summary>
+		private void TimeManager_OnPostTick()
+		{
+			if (IsReconciling)
 			{
 				return;
 			}
-			// Invoke all region exit triggers.
-			if (OnRegionExit != null)
+			flushEnters.Clear();
+			flushExits.Clear();
+			membership.Flush(isTeleportingPredicate, isDestroyedPredicate, canEnterPredicate, flushEnters, flushExits);
+
+			for (int i = 0; i < flushExits.Count; ++i)
 			{
-				//Log.Debug($"OnExit: {character.CharacterName} Exited {gameObject.name}");
-				RegionEventData eventData = new RegionEventData(character, this, base.PredictionManager.IsReconciling);
-				if (base.TimeManager != null)
-				{
-					eventData.Add(new TickEventData(character, base.TimeManager.LocalTick));
-				}
-				for (int i = 0; i < OnRegionExit.Count; ++i)
-				{
-					OnRegionExit[i]?.Execute(eventData);
-				}
+				Fire(OnRegionExit, flushExits[i]);
+				Parent?.OnDescendantReleased(flushExits[i]);
 			}
-			// Notify parent region of entry, if applicable.
-			if (Parent != null)
+			for (int i = 0; i < flushEnters.Count; ++i)
 			{
-				Parent.NetworkCollider_OnEnter(other);
+				Parent?.OnDescendantTookOwnership(flushEnters[i]);
+				Fire(OnRegionEnter, flushEnters[i]);
+			}
+			flushEnters.Clear();
+			flushExits.Clear();
+		}
+
+		/// <summary>
+		/// Raises a final Exit for every live effective member and forgets everyone.
+		/// </summary>
+		private void ClearMembersWithExit()
+		{
+			if (membership.EffectiveCount == 0 && membership.RawCount == 0)
+			{
+				return;
+			}
+			flushExits.Clear();
+			membership.Clear(isDestroyedPredicate, flushExits);
+			for (int i = 0; i < flushExits.Count; ++i)
+			{
+				Fire(OnRegionExit, flushExits[i]);
+				Parent?.OnDescendantReleased(flushExits[i]);
+			}
+			flushExits.Clear();
+		}
+
+		#endregion
+
+		#region Helpers
+
+		private bool IsReconciling
+		{
+			get
+			{
+				FishNet.Managing.Predicting.PredictionManager pm = base.PredictionManager;
+				return pm != null && pm.IsReconciling;
 			}
 		}
+
+		/// <summary>
+		/// Events for a character are deferred while the prediction system replays or the character teleports.
+		/// </summary>
+		private bool IsSuppressed(IPlayerCharacter character)
+		{
+			return IsReconciling || character.IsTeleporting;
+		}
+
+		private static bool IsDestroyed(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				return true;
+			}
+			// Unity's overloaded == reports a destroyed native object as null.
+			return character is UnityEngine.Object uo && uo == null;
+		}
+
+		private static IPlayerCharacter Resolve(Collider other)
+		{
+			if (other == null)
+			{
+				return null;
+			}
+			return other.GetComponent<IPlayerCharacter>();
+		}
+
+		private static Vector3 CharacterPoint(IPlayerCharacter character)
+		{
+			if (character.Collider != null)
+			{
+				return character.Collider.bounds.center;
+			}
+			return character.Transform != null ? character.Transform.position : Vector3.zero;
+		}
+
+		/// <summary>
+		/// Executes a trigger list for a character. Region events are never executed while reconciling,
+		/// so <see cref="RegionEventData.IsReconciling"/> is always false here; the action-side guards
+		/// remain as belt-and-braces.
+		/// </summary>
+		private void Fire(List<Trigger> triggers, IPlayerCharacter character)
+		{
+			if (triggers == null || triggers.Count == 0 || IsDestroyed(character))
+			{
+				return;
+			}
+			RegionEventData eventData = new RegionEventData(character, this, false);
+			// Attach the local tick for callers that need timing context. On the server this is the
+			// authoritative tick; on a client it is the client's own local (predicted) tick. Either way
+			// it is NOT a replicate-domain tick, hence the non-replicate TickEventData constructor.
+			if (base.TimeManager != null)
+			{
+				eventData.Add(new TickEventData(character, base.TimeManager.LocalTick));
+			}
+			for (int i = 0; i < triggers.Count; ++i)
+			{
+				triggers[i]?.Execute(eventData);
+			}
+		}
+
+		#endregion
 	}
 }

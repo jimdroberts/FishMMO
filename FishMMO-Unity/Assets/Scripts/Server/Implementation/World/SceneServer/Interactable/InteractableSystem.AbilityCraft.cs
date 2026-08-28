@@ -241,6 +241,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				Server.NetworkWrapper.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
 
+				/* Tell the character's observers too.
+				 *
+				 * An observer's copy of a peer's known abilities is written once, by the spawn
+				 * payload, when it starts observing. Everyone already watching this character when
+				 * it crafts learns nothing from the message above — it is addressed to the owner —
+				 * so every cast of this ability resolved to nothing on their clients and drew
+				 * nothing, for as long as they kept observing. The bytes go here, on the rare
+				 * learn, rather than on every cast.
+				 *
+				 * The events travel because they carry the ability's behaviour: its OnTick events
+				 * are what move the spawned object, and a reproduction built without them would
+				 * spawn a projectile that never left the caster. */
+				ObserverBroadcastScope.BroadcastToObserversExceptOwner(character.NetworkObject, new AbilityLearnedObserverBroadcast()
+				{
+					CasterObjectID = character.NetworkObject.ObjectId,
+					AbilityID = newAbility.ID,
+					TemplateID = newAbility.Template.ID,
+					Events = msg.Events,
+				}, Channel.Reliable);
+
 				// Increment achievement for crafting an ability
 				if (abilityCrafter.AchievementTemplate != null &&
 					character.TryGet(out IAchievementController achievementController))

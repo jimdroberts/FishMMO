@@ -24,12 +24,31 @@ namespace FishMMO.Shared
 		public bool IncludeUnspawned;
 
 		/// <summary>
-		/// Returns all GameObjects in the active scene that have a component implementing <see cref="ICharacter"/>.
+		/// Returns all GameObjects in the context's scene that have a component implementing <see cref="ICharacter"/>.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Server only.</b> This feeds gameplay — it is the fan-out behind "everyone in the zone"
+		/// effects — so it resolves where those effects are authoritative, for the same reason the
+		/// physics selectors do.
+		/// </para>
+		/// <para>
+		/// <b>Ordered.</b> <c>FindObjectsByType</c> is called with <c>FindObjectsSortMode.None</c>,
+		/// which returns whatever order the scene's object registry happens to hold — not the
+		/// hierarchy order, and not the same order twice. Anything downstream that caps the set,
+		/// stops at the first match, or rolls against it was choosing arbitrarily. Sorting by network
+		/// identity costs one pass and makes the fan-out reproducible.
+		/// </para>
+		/// </remarks>
 		/// <param name="eventData">The event data driving the selection.</param>
-		/// <returns>An enumerable of character GameObjects.</returns>
+		/// <returns>An enumerable of character GameObjects, ordered by network identity.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
+			if (!IsAuthoritativePeer(eventData))
+			{
+				yield break;
+			}
+
 			GameObject context = GetContext(eventData);
 			if (context == null)
 			{
@@ -39,6 +58,9 @@ namespace FishMMO.Shared
 			MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(
 				IncludeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude,
 				FindObjectsSortMode.None);
+
+			List<GameObject> candidates = new List<GameObject>();
+			List<TargetRank> ranks = new List<TargetRank>();
 
 			for (int i = 0; i < behaviours.Length; i++)
 			{
@@ -52,8 +74,16 @@ namespace FishMMO.Shared
 					(IncludeUnspawned || character.IsSpawned) &&
 					AreConditionsMet(character.GameObject, eventData))
 				{
-					yield return character.GameObject;
+					candidates.Add(character.GameObject);
+					ranks.Add(TargetOrdering.Rank(candidates.Count - 1, character.GameObject, 0f));
 				}
+			}
+
+			TargetOrdering.SortStable(ranks);
+
+			for (int i = 0; i < ranks.Count; ++i)
+			{
+				yield return candidates[ranks[i].Index];
 			}
 		}
 	}

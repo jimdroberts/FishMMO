@@ -137,6 +137,8 @@ namespace FishMMO.Shared
 					"the NetworkObject's Prediction settings.");
 			}
 
+			ApplyObserverTransportMode();
+
 			/* An AI character must be ownerless so the server is FishNet's controller for it.
 			 * Replicate_Authoritative only accepts server-produced input when the object has no
 			 * owner; hand an AI character to a client connection and the server's decisions are
@@ -251,6 +253,83 @@ namespace FishMMO.Shared
 			}
 
 			return TimeManager.UNSET_TICK;
+		}
+
+		/// <summary>
+		/// Stops the NetworkTransform duplicating position when prediction already carries it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A forwarded object's observers simulate it: they receive the owner's replicate input and
+		/// the server's reconcile, and run the same motor. The NetworkTransform on top of that is
+		/// the same position a second time, on its own channel, and the two writers also fight over
+		/// the transform on the observing client.
+		/// </para>
+		/// <para>
+		/// <b>Only when prediction genuinely moves this character.</b> That means a
+		/// <see cref="KCCPlayer"/>, which is the only thing that fills
+		/// <c>CharacterReconcileData.MotorState</c>. NPCs run the same prediction pipeline for their
+		/// abilities, buffs and attributes but are moved by a NavMeshAgent, so their MotorState is
+		/// default every tick and the NetworkTransform is the only thing that moves them anywhere.
+		/// Silencing it for an NPC because forwarding happened to be on would freeze it for every
+		/// observer while it carried on fighting.
+		/// </para>
+		/// <para>
+		/// Position and rotation are switched rather than the component disabled, because
+		/// <c>NetworkTransform.enabled</c> does not stop it: it sends from a TimeManager
+		/// subscription taken in OnStartNetwork and receives through an ObserversRpc, and neither
+		/// consults <c>enabled</c>. Scale is left alone — prediction does not carry it.
+		/// </para>
+		/// <para>
+		/// Server side only. The server decides what it sends, and a client flipping its own copy
+		/// would change nothing except what that client itself transmits.
+		/// </para>
+		/// <para>
+		/// Public because the mode can change at runtime: whatever flips
+		/// <c>NetworkObject.SetStateForwarding</c> — an arena or tournament handing out precision
+		/// for the duration of a match — must call this afterwards, or the character keeps the
+		/// transport it started with.
+		/// </para>
+		/// </remarks>
+		public void ApplyObserverTransportMode()
+		{
+			if (!base.IsServerStarted || base.NetworkObject == null)
+			{
+				return;
+			}
+
+			FishNet.Component.Transforming.NetworkTransform networkTransform =
+				GetComponent<FishNet.Component.Transforming.NetworkTransform>();
+			if (networkTransform == null)
+			{
+				return;
+			}
+
+			bool predictionMovesThisCharacter = GetComponent<KCCPlayer>() != null;
+			bool transformIsRedundant = IsTransformRedundant(
+				predictionMovesThisCharacter, base.NetworkObject.EnableStateForwarding);
+
+			networkTransform.SetSynchronizePosition(!transformIsRedundant);
+			networkTransform.SetSynchronizeRotation(!transformIsRedundant);
+		}
+
+		/// <summary>
+		/// The whole rule <see cref="ApplyObserverTransportMode"/> applies, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// Named and separated so the truth table can be asserted directly rather than inferred
+		/// from the two <c>SetSynchronize*</c> calls it drives. Both inputs matter and neither alone
+		/// is sufficient: forwarding on makes the reconcile carry position, but only for a character
+		/// prediction actually moves — an NPC's <c>MotorState</c> is default every tick because a
+		/// NavMeshAgent moves it, so silencing its transform would freeze it for every observer
+		/// while it carried on fighting.
+		/// </remarks>
+		/// <param name="predictionMovesThisCharacter">True when a <see cref="KCCPlayer"/> is present.</param>
+		/// <param name="stateForwardingEnabled">The object's live <c>EnableStateForwarding</c>.</param>
+		/// <returns>True when the NetworkTransform would be sending position a second time.</returns>
+		internal static bool IsTransformRedundant(bool predictionMovesThisCharacter, bool stateForwardingEnabled)
+		{
+			return predictionMovesThisCharacter && stateForwardingEnabled;
 		}
 
 		/// <summary>

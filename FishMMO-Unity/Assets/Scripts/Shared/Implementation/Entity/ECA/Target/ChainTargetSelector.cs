@@ -53,9 +53,10 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with <paramref name="context"/>.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			// Physics queries are non-deterministic across client/server.
-			// Suppress during prediction replay to prevent target divergence.
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick)
+			/* Server only. The old guard here refused any event carrying a replicate tick, which
+			 * the server's own spawn and self-target dispatches also carry — see
+			 * TargetSelector.IsAuthoritativePeer. */
+			if (!IsAuthoritativePeer(eventData))
 			{
 				yield break;
 			}
@@ -82,17 +83,7 @@ namespace FishMMO.Shared
 			 * the scope for the same consistency reason; they gate the traversal itself. */
 			List<GameObject> chain = new List<GameObject>(Mathf.Max(1, ChainLength));
 
-			if (LagCompensatedQuery.TryResolveRewind(eventData, out FishMMO.Shared.Core.ICharacter caster, out uint rewindTick))
-			{
-				using (LagCompensationRegistry.Rewind(context.scene, rewindTick, caster))
-				{
-					BuildChain(eventData, context, chain);
-				}
-			}
-			else
-			{
-				BuildChain(eventData, context, chain);
-			}
+			GatherRewound(eventData, context, chain, BuildChain);
 
 			for (int i = 0; i < chain.Count; i++)
 			{
@@ -109,6 +100,8 @@ namespace FishMMO.Shared
 			EnsureHitBuffer();
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 			HashSet<GameObject> selected = new HashSet<GameObject>();
+			List<GameObject> linkCandidates = new List<GameObject>();
+			List<TargetRank> linkRanks = new List<TargetRank>();
 			GameObject current = context;
 			for (int i = 0; i < ChainLength && current != null; i++)
 			{
@@ -123,22 +116,25 @@ namespace FishMMO.Shared
 				// through LagCompensatedQuery would just re-resolve the tick and be refused as a
 				// nested scope.
 				int hitCount = physicsScene.OverlapSphere(center, ChainRadius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
-				GameObject next = null;
-				float minDist = float.MaxValue;
+				/* Ties broken by network identity rather than by buffer order. Two candidates at the
+				 * same distance is not a hypothetical for a chain — the links radiate outward from a
+				 * point and equidistant pairs are common — and picking whichever the broadphase
+				 * listed first made the whole remaining walk depend on it. */
+				linkCandidates.Clear();
+				linkRanks.Clear();
 				for (int j = 0; j < hitCount; j++)
 				{
 					Collider hit = hits[j];
-					if (hit != null && !selected.Contains(hit.gameObject) && AreConditionsMet(hit.gameObject, eventData))
+					if (hit == null || selected.Contains(hit.gameObject) || !AreConditionsMet(hit.gameObject, eventData))
 					{
-						float dist = Vector3.Distance(center, hit.transform.position);
-						if (dist < minDist)
-						{
-							minDist = dist;
-							next = hit.gameObject;
-						}
+						continue;
 					}
+					linkCandidates.Add(hit.gameObject);
+					linkRanks.Add(TargetOrdering.Rank(linkCandidates.Count - 1, hit.gameObject, Vector3.Distance(center, hit.transform.position)));
 				}
-				current = next;
+
+				int nearest = TargetOrdering.NearestIndex(linkRanks);
+				current = nearest >= 0 ? linkCandidates[linkRanks[nearest].Index] : null;
 			}
 		}
 

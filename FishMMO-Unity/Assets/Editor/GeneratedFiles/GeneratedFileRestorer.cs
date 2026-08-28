@@ -23,6 +23,10 @@ namespace FishMMO.GeneratedFiles
 	/// depends on neither, so it still compiles and can heal the project on load.
 	///
 	/// Existing files are never overwritten — restoring must never clobber real values.
+	/// That is also why <see cref="GeneratedFileDriftCheck"/> runs alongside the restore:
+	/// a file that already exists keeps the shape it had when it was written, so a field
+	/// added to a template later never reaches it, and the only symptom is a CS0117 in an
+	/// assembly that looks unrelated (https://github.com/jimdroberts/FishMMO/issues/122).
 	/// </summary>
 	[InitializeOnLoad]
 	public static class GeneratedFileRestorer
@@ -34,6 +38,15 @@ namespace FishMMO.GeneratedFiles
 		private const string TemplateFolderName = "GeneratedFileTemplates";
 
 		private const string TemplateExtension = ".template";
+
+		/// <summary>
+		/// The template a generated file is restored from and checked against, as a path
+		/// relative to the project root.
+		/// </summary>
+		private static string TemplatePathFor(string relativePath)
+		{
+			return TemplateFolderName + "/" + Path.GetFileName(relativePath) + TemplateExtension;
+		}
 
 		/// <summary>
 		/// Generated files, as paths relative to the project root. Each one is restored
@@ -64,6 +77,17 @@ namespace FishMMO.GeneratedFiles
 		/// <c>Unity -batchmode -quit -projectPath . -executeMethod FishMMO.GeneratedFiles.GeneratedFileRestorer.RestoreFromCommandLine</c>
 		/// Prefer GeneratedFileTemplates/restore-generated-files.sh, which needs no Unity.
 		/// </summary>
+		/// <remarks>
+		/// Strongly prefer the script in CI, because this entry point cannot report the
+		/// problems it exists for. A batch-mode Unity that finds ANY assembly failing to
+		/// compile logs "Scripts have compiler errors." and shuts down without running
+		/// -executeMethod or any [InitializeOnLoad] constructor — and a missing or drifted
+		/// generated file breaks FishMMO.Shared or FishMMO.Client by definition, so the
+		/// run is already over before this method would be called. It is useful for the
+		/// case where everything compiles and you want the check anyway; the shell script
+		/// is what actually guards a headless build. In the interactive Editor there is no
+		/// such abort, so loading the project still runs the restore and the drift report.
+		/// </remarks>
 		public static void RestoreFromCommandLine()
 		{
 			if (Restore(logWhenNothingToDo: true) < 0)
@@ -71,10 +95,13 @@ namespace FishMMO.GeneratedFiles
 		}
 
 		/// <summary>
-		/// Copies every missing generated file from its template.
+		/// Copies every missing generated file from its template, then checks the ones
+		/// that already existed still declare everything their template declares.
 		/// </summary>
 		/// <returns>
-		/// The number of files created, or -1 if a template was missing or unreadable.
+		/// The number of files created, or -1 if a template was missing or unreadable, or
+		/// an existing file has drifted from its template. A drifted file is a compile
+		/// error waiting to happen, so automation should treat it the same as a missing one.
 		/// </returns>
 		public static int Restore(bool logWhenNothingToDo)
 		{
@@ -85,7 +112,6 @@ namespace FishMMO.GeneratedFiles
 				return -1;
 			}
 
-			string templateFolder = Path.Combine(projectRoot, TemplateFolderName);
 			var restored = new List<string>();
 			bool failed = false;
 
@@ -95,12 +121,12 @@ namespace FishMMO.GeneratedFiles
 				if (File.Exists(targetPath))
 					continue;
 
-				string templatePath = Path.Combine(templateFolder, Path.GetFileName(relativePath) + TemplateExtension);
+				string templatePath = Path.Combine(projectRoot, TemplatePathFor(relativePath).Replace('/', Path.DirectorySeparatorChar));
 				if (!File.Exists(templatePath))
 				{
 					Debug.LogError(
 						$"[FishMMO] Missing generated file '{relativePath}' and its template " +
-						$"'{TemplateFolderName}/{Path.GetFileName(relativePath)}{TemplateExtension}'. " +
+						$"'{TemplatePathFor(relativePath)}'. " +
 						"The project will not compile until it is restored.");
 					failed = true;
 					continue;
@@ -136,12 +162,59 @@ namespace FishMMO.GeneratedFiles
 					"\nOpen FishMMO Dashboard > Game Settings to write your real hosts, pins, and secret.");
 				AssetDatabase.Refresh();
 			}
-			else if (logWhenNothingToDo && !failed)
-			{
-				Debug.Log("[FishMMO] All generated files are present — nothing to restore.");
-			}
+
+			// Runs after the restore so files created just now are covered too — they are
+			// copies of their template, so they pass, and a drifted file is reported whether
+			// or not anything was restored this pass.
+			if (ReportDrift(projectRoot))
+				failed = true;
+			else if (restored.Count == 0 && logWhenNothingToDo && !failed)
+				Debug.Log("[FishMMO] All generated files are present and match their templates — nothing to restore.");
 
 			return failed ? -1 : restored.Count;
+		}
+
+		/// <summary>
+		/// Logs every generated file that does not declare what its template declares.
+		/// </summary>
+		/// <returns>True if any file has drifted, or a template could not be read.</returns>
+		private static bool ReportDrift(string projectRoot)
+		{
+			bool drifted = false;
+
+			foreach (string relativePath in GeneratedFiles)
+			{
+				string targetPath = Path.Combine(projectRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+				string templatePath = Path.Combine(projectRoot, TemplatePathFor(relativePath).Replace('/', Path.DirectorySeparatorChar));
+
+				// A file missing here was already reported by the restore above.
+				if (!File.Exists(targetPath) || !File.Exists(templatePath))
+					continue;
+
+				string drift;
+				try
+				{
+					drift = GeneratedFileDriftCheck.Describe(
+						relativePath,
+						TemplatePathFor(relativePath),
+						File.ReadAllText(templatePath),
+						File.ReadAllText(targetPath));
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"[FishMMO] Could not check '{relativePath}' against its template: {ex.Message}");
+					drifted = true;
+					continue;
+				}
+
+				if (drift == null)
+					continue;
+
+				Debug.LogError(drift);
+				drifted = true;
+			}
+
+			return drifted;
 		}
 	}
 }
