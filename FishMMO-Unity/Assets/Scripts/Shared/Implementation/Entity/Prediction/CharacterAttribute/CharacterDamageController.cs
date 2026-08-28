@@ -199,6 +199,18 @@ namespace FishMMO.Shared
 		private bool loggedMissingResource;
 
 		/// <summary>
+		/// Whether <see cref="Immortal"/> was raised by this class because health could not be
+		/// resolved, as opposed to being set deliberately by gameplay.
+		/// </summary>
+		/// <remarks>
+		/// Tracked separately so the fallback can be withdrawn without ever clearing an immortality
+		/// somebody else asked for. A boss scripted to be untouchable during a phase, and a banker
+		/// with no health attribute, both read as <c>Immortal == true</c>; only the second is ours
+		/// to undo.
+		/// </remarks>
+		private bool immortalFromMissingResource;
+
+		/// <summary>
 		/// Gets the cached health resource attribute for this character.
 		/// Returns null when the attribute controller or health attribute is missing, reporting the
 		/// first occurrence only.
@@ -212,17 +224,45 @@ namespace FishMMO.Shared
 					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
 						!attributeController.TryGetHealthAttribute(out resourceInstance))
 					{
+						/* Fall back to immortal rather than leaving the entity in an undefined
+						 * state.
+						 *
+						 * With no health resource there is nothing to subtract from and nothing to
+						 * test against zero, so Damage and Kill would operate on a null instance.
+						 * Immortal is already the guard both of those check first, so raising it
+						 * turns "what happens is undefined" into "nothing happens" — a banker that
+						 * cannot be hurt, rather than one whose damage path depends on which null
+						 * check runs first.
+						 *
+						 * This is a safety net, not a fix. The entity is still misconfigured and
+						 * still says so once; what this buys is that the misconfiguration cannot
+						 * become a crash or a corpse that was never alive. */
+						if (!immortalFromMissingResource && !immortal)
+						{
+							immortal = true;
+							immortalFromMissingResource = true;
+						}
+
 						if (!loggedMissingResource)
 						{
 							loggedMissingResource = true;
 							Log.Error("CharacterDamageController",
 								$"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute. " +
+								"Treating it as immortal so it cannot be damaged or killed. " +
 								"Further occurrences on this object are suppressed until it resolves.");
 						}
 					}
 					else
 					{
-						// Resolved — re-arm so a later, different failure is not silently swallowed.
+						/* Resolved. Withdraw only an immortality this class raised — one set by
+						 * gameplay is not ours to clear. */
+						if (immortalFromMissingResource)
+						{
+							immortal = false;
+							immortalFromMissingResource = false;
+						}
+
+						// Re-arm so a later, different failure is not silently swallowed.
 						loggedMissingResource = false;
 					}
 				}
@@ -1093,6 +1133,7 @@ namespace FishMMO.Shared
 			 * and leaving this set would suppress the new occupant's own misconfiguration behind a
 			 * flag raised by the previous one. */
 			loggedMissingResource = false;
+			immortalFromMissingResource = false;
 			combatTimerActive = false;
 			lastCombatTick = 0;
 			Character?.DisableFlags(CharacterFlags.IsInCombat);
