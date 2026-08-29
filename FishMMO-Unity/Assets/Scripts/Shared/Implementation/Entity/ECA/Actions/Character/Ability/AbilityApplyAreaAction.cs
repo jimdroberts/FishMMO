@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 						var targetCharacter = hit.GetComponent<ICharacter>();
 						if (targetCharacter != null)
 						{
-							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject, null, abilityObject.RNG);
+							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject, abilityObject.RNG);
 							if (tickToPropagate != null)
 							{
 								collisionEvent.Add(tickToPropagate);

@@ -4,6 +4,7 @@ using System;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Transporting;
+using Scene = UnityEngine.SceneManagement.Scene;
 using SceneManager = UnityEngine.SceneManagement.SceneManager;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -69,6 +70,43 @@ namespace FishMMO.Shared
 		/// Cached reference to the object's Rigidbody, if present.
 		/// </summary>
 		public Rigidbody CachedRigidBody;
+
+		/// <summary>
+		/// The collider whose dimensions the swept hit query uses.
+		/// </summary>
+		/// <remarks>
+		/// The instance's own collider where there is one, so the sweep reads the live scale and
+		/// rotation; <see cref="AbilityPrefabColliderCache"/> supplies the shape for an object whose
+		/// prefab put the collider somewhere this component cannot reach. Resolved once at
+		/// initialisation rather than per tick because it must outlive the ability: an orphaned
+		/// object keeps flying after its caster disconnects, and by then there is no template left to
+		/// ask.
+		/// </remarks>
+		private Collider sweepShape;
+
+		/// <summary>
+		/// Where this object was the last time it resolved hits — the start of the segment the next
+		/// sweep covers.
+		/// </summary>
+		/// <remarks>
+		/// Seeded with the spawn position so the first tick sweeps the distance actually travelled
+		/// rather than starting from wherever the closed form had already put the transform.
+		/// </remarks>
+		private Vector3 lastSweepPosition;
+
+		/// <summary>Ordered hits from the current tick's sweep. Reused so a tick allocates nothing.</summary>
+		private List<AbilitySweepHit> sweepHits;
+
+		/// <summary>
+		/// Every target this object has already hit, for its whole lifetime.
+		/// </summary>
+		/// <remarks>
+		/// The sweep runs every tick, so without this a pierce sitting inside a character would
+		/// resolve a hit against it on each of them until its hit count drained. Membership only —
+		/// nothing here is ever a sort key, so it is safe for this to be a per-process reference set
+		/// where an ordering decision would not be.
+		/// </remarks>
+		private HashSet<GameObject> hitTargets;
 
 		/// <summary>
 		/// Cached reference to the caster's CharacterPredictionController, if available.
@@ -252,6 +290,7 @@ namespace FishMMO.Shared
 			GameObject ??= gameObject;
 			Transform ??= transform;
 			CachedRigidBody ??= GetComponent<Rigidbody>();
+			sweepShape ??= GetComponent<Collider>();
 			if (CachedRigidBody != null)
 			{
 				CachedRigidBody.isKinematic = true;
@@ -268,6 +307,9 @@ namespace FishMMO.Shared
 			initialized = false;
 			predictionController = null;
 			ElapsedTicks = 0;
+			lastSweepPosition = Transform != null ? Transform.position : transform.position;
+			hitTargets?.Clear();
+			sweepHits?.Clear();
 
 			if (timeManager != null)
 			{
@@ -354,6 +396,13 @@ namespace FishMMO.Shared
 				DestroyAbilityObjectInternal();
 				return;
 			}
+
+			/* Last, and after the movement the tick events just applied. The sweep covers the segment
+			 * from where the object resolved hits previously to where it now is, so it has to run
+			 * once the transform has been advanced — and after the expiry check, because an object
+			 * that ends this tick never reached a physics step under the callback this replaces and
+			 * must not start resolving hits it never used to. */
+			ResolveSweptHits();
 		}
 
 		/// <summary>
@@ -371,62 +420,155 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Unity OnCollisionEnter callback. Handles collision logic, event dispatch, and destruction.
-		/// Dispatched on EVERY peer, like the tick events: an ability object is a local, deterministic
-		/// object rather than a networked one, so the peer that spawned it can resolve its own hit.
-		/// What each action then does about that is the action's own decision — visual actions run
-		/// where there is a screen, state-changing actions run where they are authoritative or
-		/// predicted (see EcaAuthority.MayPredict).
-		/// Each <see cref="AbilityOnHitEvent"/> is executed independently; its inherited
-		/// <see cref="Trigger.TargetSelector"/> selects the final targets (defaulting to the direct
-		/// collision target when an InitiatorTargetSelector or null is configured).
+		/// Resolves everything this object touched over the segment it travelled this tick, and
+		/// dispatches an OnHit event for each.
 		/// </summary>
-		/// <param name="collision">The collision data from Unity.</param>
-		void OnCollisionEnter(Collision collision)
+		/// <remarks>
+		/// <para>
+		/// <b>Why this is a query and not a collision callback.</b> An ability object is a local,
+		/// deterministic object: a kinematic body teleported once per tick to a closed-form position.
+		/// Unity's <c>OnCollisionEnter</c> resolved those teleports against the server's present
+		/// positions, which is wrong twice over. It is not lag compensated — the caster's client
+		/// rendered its peers roughly two ticks plus half a round trip in the past, a gap measured at
+		/// 0.45&#160;m on a same-city connection and 2.2&#160;m at 300&#160;ms — and a rewind scope
+		/// cannot be wrapped around a physics step that has already run. And a body that jumps its
+		/// whole per-tick step at once tunnels through any target thinner than that step. Sweeping
+		/// the segment explicitly fixes both, and it has to be per object rather than one rewind for
+		/// all of them because every projectile has a different caster with a different view offset.
+		/// </para>
+		/// <para>
+		/// <b>The server rewinds and a client does not, deliberately.</b> A client's rendered world
+		/// already <i>is</i> the rewound world; the server displacing its characters to the tick that
+		/// client was looking at makes the two queries run against the same geometry, so a predicted
+		/// hit and the authoritative one agree by construction rather than by luck. That symmetry is
+		/// the whole point of resolving it here — <see cref="PredictedCombatEvents"/> greys out a
+		/// prediction the server contradicts, so the divergence was becoming visible as damage
+		/// numbers that retracted.
+		/// </para>
+		/// <para>
+		/// <b>Dispatched on every peer</b>, like the tick events. What each action then does about it
+		/// is the action's own decision: visual actions run where there is a screen, state-changing
+		/// actions run where they are authoritative or predicted (<c>EcaAuthority.MayPredict</c>).
+		/// Each <see cref="AbilityOnHitEvent"/> is executed independently and its inherited
+		/// <c>Trigger.TargetSelector</c> selects the final targets, defaulting to the direct hit.
+		/// </para>
+		/// </remarks>
+		private void ResolveSweptHits()
 		{
-			if (destroyed) return;
-
-			// If we have no ability data at all, the object has no collision logic. Destroy it.
-			if (Ability == null && Snapshot == null)
+			if (destroyed)
 			{
-				DestroyAbilityObjectInternal();
 				return;
 			}
 
-			// Only the server dispatches collision events (damage, healing, buffs).
-			// Clients skip effect dispatch to avoid visual fighting between predicted
-			// state changes and authoritative server broadcasts.
-			/* Dispatched on every peer, not just the server.
-			 *
-			 * This was server-only, which made two things impossible at once: an impact VFX
-			 * authored on an OnHit trigger instantiated on the headless server and was never seen
-			 * by anybody, and the caster could not predict its own hit — the action never ran on a
-			 * client, so widening the damage gate to MayPredict had no effect on the projectile
-			 * path at all. Both had the same cause and are fixed by letting the dispatch happen
-			 * everywhere.
-			 *
-			 * Nothing is trusted to a client by doing this. Every state-changing action carries its
-			 * own authority gate (EcaAuthority.IsServer or MayPredict), and visual actions carry a
-			 * client gate so they no longer run on a server that has no screen. */
+			Transform shapeTransform = Transform != null ? Transform : transform;
+			Vector3 from = lastSweepPosition;
+			Vector3 to = shapeTransform.position;
+			// Advanced before anything can throw or destroy: a segment must never be swept twice,
+			// which would re-hit everything along it that the hit set has not already absorbed.
+			lastSweepPosition = to;
+
+			GameObject self = GameObject != null ? GameObject : gameObject;
+			/* The object's own scene, never the global Physics API. A scene server hosts many scenes
+			 * and the default one holds none of these colliders — the trap TargetController.UpdateTarget
+			 * was already caught by. */
+			Scene scene = self.scene;
+			PhysicsScene physicsScene = scene.GetPhysicsScene();
+			LayerMask mask = AbilityObjectSweep.CollisionMaskForLayer(self.layer);
+
+			sweepHits ??= new List<AbilitySweepHit>(16);
+
+			int count;
+			/* Server only, and only for a caster whose view actually lagged. LagCompensationTick
+			 * declines for a server-driven character (an NPC brain aims at live positions) and for a
+			 * connection whose tick bookkeeping is not established, in which case the query runs
+			 * uncompensated — the behaviour this call site had before. On a client there is nothing
+			 * to rewind and nothing that should be: its world is already the one it aimed in. */
+			if (isServer && LagCompensationTick.TryResolve(Caster, timeManager, out RewindTarget rewindTarget))
+			{
+				/* The caster is excluded — it fires from where it is, not where it was. The query is
+				 * run eagerly inside the scope and the results are dispatched after it closes, so no
+				 * damage or ECA action ever runs against a world several hundred milliseconds stale. */
+				using (LagCompensationRegistry.Rewind(scene, rewindTarget, Caster))
+				{
+					count = AbilityObjectSweep.Sweep(physicsScene, sweepShape, shapeTransform, from, to, mask, sweepHits);
+				}
+			}
+			else
+			{
+				count = AbilityObjectSweep.Sweep(physicsScene, sweepShape, shapeTransform, from, to, mask, sweepHits);
+			}
+
+			for (int i = 0; i < count; ++i)
+			{
+				if (!DispatchSweptHit(sweepHits[i]))
+				{
+					break;
+				}
+			}
+
+			sweepHits.Clear();
+		}
+
+		/// <summary>
+		/// Runs the OnHit events for one swept hit and applies its cost to <see cref="HitCount"/>.
+		/// </summary>
+		/// <param name="hit">The hit to resolve. Never this object's own collider — <see cref="AbilityObjectSweep"/> excludes those.</param>
+		/// <returns>False when this object has ended and the rest of the sweep must be abandoned.</returns>
+		private bool DispatchSweptHit(AbilitySweepHit hit)
+		{
+			Collider collider = hit.Collider;
+			if (collider == null)
+			{
+				return true;
+			}
+
+			/* The rigidbody's GameObject where there is one, which is what Collision.gameObject
+			 * reported — so a hit on a child collider resolves to the body it belongs to rather than
+			 * to the bone. Walking the parents afterwards covers a character rigged without one; the
+			 * same trap EventData.SetTarget and TargetOrdering.Rank both already resolve this way. */
+			Rigidbody body = collider.attachedRigidbody;
+			GameObject hitRoot = body != null ? body.gameObject : collider.gameObject;
+			if (!hitRoot.TryGetComponent(out ICharacter hitCharacter))
+			{
+				hitCharacter = hitRoot.GetComponentInParent<ICharacter>();
+			}
+
+			/* Once per target for this object's whole life, keyed on the character where there is one
+			 * so two hitboxes on one body cost one hit. The sweep runs every tick, and a pierce that
+			 * ends up inside a character overlaps it on all of them; without this it would drain its
+			 * entire hit count into one victim in a fraction of a second. */
+			hitTargets ??= new HashSet<GameObject>();
+			if (!hitTargets.Add(hitCharacter != null ? hitCharacter.GameObject : hitRoot))
+			{
+				return true;
+			}
+
 			if (Caster != null && Caster.IsSpawned)
 			{
 				var hitEvents = OnHitEvents;
 				if (hitEvents != null)
 				{
-					collision.gameObject.TryGetComponent(out ICharacter hitCharacter);
+					// Thread the raw authoritative tick if available. TickEventData marks this as non-replicate,
+					// so prediction-domain consumers must route it through their authoritative fallback.
+					uint collisionTick = GetCurrentAuthoritativeTick();
 
 					foreach (var hitEvent in hitEvents.Values)
 					{
 						// The trigger's own TargetSelector handles fan-out.
-						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision, RNG);
-						// Thread the raw authoritative tick if available. TickEventData marks this as non-replicate,
-						// so prediction-domain consumers must route it through their authoritative fallback.
-						uint collisionTick = GetCurrentAuthoritativeTick();
+						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
+							Caster, hitCharacter, this, hit.Point, hit.Normal, RNG);
 
 						collisionEvent.Add(new TickEventData(Caster, collisionTick));
 						hitEvent.Execute(collisionEvent);
 					}
 				}
+			}
+
+			// An OnHit action is allowed to end this object (and AbilityPierceHitAction is allowed to
+			// extend it); either way the decision below must read the state the actions left behind.
+			if (destroyed)
+			{
+				return false;
 			}
 
 			// Decrement hit count and destroy if exhausted.
@@ -436,12 +578,15 @@ namespace FishMMO.Shared
 			HitCount--;
 			if (HitCount < 1)
 			{
-				/* Collision is the one end-of-life that is NOT deterministic across peers: a
-				 * client resolves it against interpolated characters and can miss a hit the
-				 * server landed, leaving a ghost flying to the end of its lifetime. Lifetime
-				 * expiry is identical everywhere and needs no message. */
+				/* A hit is the one end-of-life that is NOT deterministic across peers: a client
+				 * resolves it against interpolated characters and can miss a hit the server landed,
+				 * leaving a ghost flying to the end of its lifetime. Lifetime expiry is identical
+				 * everywhere and needs no message. */
 				DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: true);
+				return false;
 			}
+
+			return true;
 		}
 
 		/// <summary>
@@ -695,6 +840,14 @@ namespace FishMMO.Shared
 			Transform spawnTransform = abilityObject.Transform;
 			abilityObject.SpawnPosition = spawnTransform.position;
 			abilityObject.SpawnRotation = spawnTransform.rotation;
+			/* The sweep's first segment starts where the object was spawned. Set alongside the spawn
+			 * pose so the two can never disagree. */
+			abilityObject.lastSweepPosition = abilityObject.SpawnPosition;
+			abilityObject.hitTargets?.Clear();
+			/* Falls back to the prefab's collider so an object whose component sits above or below the
+			 * collider still sweeps its real shape rather than degrading to a ray. Resolved now
+			 * because the template is reachable now: a detached object outlives its ability. */
+			abilityObject.sweepShape ??= AbilityPrefabColliderCache.GetPrefabCollider(ability.Template);
 			// Snapshot is lazily initialized: only created when the Ability reference is
 			// about to be nulled (DetachAllAbilityObjects). This avoids 3 heap allocations
 			// (3 Dictionary copies) per spawn for the common case where
@@ -817,6 +970,15 @@ namespace FishMMO.Shared
 			// and rotations of their own, and the closed-form trajectory must start from there.
 			abilityObject.SpawnPosition = abilityObject.Transform.position;
 			abilityObject.SpawnRotation = abilityObject.Transform.rotation;
+			// ResetRuntimeState seeded this from the transform before the child was placed; re-seed it
+			// from the pose it will actually start travelling from.
+			abilityObject.lastSweepPosition = abilityObject.SpawnPosition;
+			/* Not inherited from the source. A child is a new object with its own hit budget, and
+			 * copying the parent's set would make a fork unable to hit what the parent already had. */
+			abilityObject.hitTargets?.Clear();
+			// The child is a clone of the source's GameObject, so CacheComponents already found the
+			// same collider; the source's shape covers a prefab-resolved one.
+			abilityObject.sweepShape ??= source.sweepShape;
 			abilityObject.ElapsedTicks = 0;
 			abilityObject.Snapshot = source.Snapshot;
 			abilityObject.predictionController = source.predictionController;
@@ -909,7 +1071,7 @@ namespace FishMMO.Shared
 					foreach (var hitEvent in ability.OnHitEvents.Values)
 					{
 						// The trigger's own TargetSelector handles fan-out (self / area / etc.).
-						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster, null, null, rng);
+						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster, null, rng);
 						// Thread the spawn tick so prediction-aware ECA actions (e.g. ApplyBuffAction)
 						// use the deterministic replicate tick rather than target.GetLocalTick().
 						collisionEvent.Add(new TickEventData(caster, spawnTick));

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reflection;
 using FishNet.Object;
 using FishNet.Serializing;
@@ -477,10 +477,11 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// The number that decides whether interpolated spectators are acceptable for combat. Hits
-		/// resolve on the server via <c>AbilityObject.OnCollisionEnter</c> against current
-		/// positions, so a client aiming at an interpolated peer is aiming at where that peer was,
-		/// and the discrepancy is the peer's velocity times the staleness.
+		/// The number that decides whether interpolated spectators are acceptable for combat. It is
+		/// the error an <i>uncompensated</i> hit carries: a client aiming at an interpolated peer is
+		/// aiming at where that peer was, and the discrepancy is the peer's velocity times the
+		/// staleness. <c>AbilityObject.ResolveSweptHits</c> now rewinds the scene to that same view
+		/// before it queries, so this is the gap the rewind has to close rather than one players see.
 		/// </para>
 		/// <para>
 		/// This test asserts nothing about what is acceptable — that is a design call. It fails

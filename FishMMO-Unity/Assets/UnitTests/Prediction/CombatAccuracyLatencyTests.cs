@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NUnit.Framework;
 using FishMMO.Shared;
 using UnityEngine;
@@ -19,8 +19,8 @@ namespace FishMMO.UnitTests
 	/// </para>
 	/// <para>
 	/// <b>The two hit paths that actually exist.</b> Read from the code rather than the templates:
-	/// <c>AbilityObject.OnCollisionEnter</c> resolves a spawned volume against character colliders
-	/// and is gated on <c>isServer</c>; and the <c>TargetSelector</c> family resolves through
+	/// <c>AbilityObject.ResolveSweptHits</c> sweeps a spawned volume along the segment it travelled
+	/// this tick and dispatches on every peer; and the <c>TargetSelector</c> family resolves through
 	/// <c>physicsScene.OverlapSphere</c> (Area, Cone, Chain, Nearest, Furthest, Random) or
 	/// <c>physicsScene.Raycast</c> (Line). Both run on the server, and both now resolve against
 	/// where the caster's client saw its peers rather than against the server's present.

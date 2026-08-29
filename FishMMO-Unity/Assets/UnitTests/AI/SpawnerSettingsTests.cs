@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -17,6 +19,76 @@ namespace FishMMO.UnitTests.AI
 	[TestFixture]
 	public class SpawnerSettingsTests
 	{
+		// --- Respawn drain --------------------------------------------------------------------
+
+		/// <summary>
+		/// A spawner whose <see cref="SpawnableSettings.NetworkObject"/> is null, so
+		/// <see cref="ObjectSpawner.SpawnObject"/> reaches its own guard and no-ops. The timer
+		/// bookkeeping under test still runs in full.
+		/// </summary>
+		private static ObjectSpawner BuildSpawner(GameObject go, int maxSpawnCount)
+		{
+			ObjectSpawner spawner = go.AddComponent<ObjectSpawner>();
+			spawner.Spawnables = new List<SpawnableSettings> { new SpawnableSettings() };
+			spawner.MaxSpawnCount = maxSpawnCount;
+			spawner.SpawnableRespawnTimers.Clear();
+			return spawner;
+		}
+
+		[Test]
+		public void TryRespawn_DrainsEveryDueTimerInOnePass()
+		{
+			/* One spawn per call was invisible while this ran every frame — ten frames refilled a
+			 * ten-monster camp. Behind a polling interval the same cap becomes one monster per
+			 * interval, so a wiped camp takes the better part of a minute and no authored
+			 * MinimumRespawnTime can raise the ceiling. */
+			GameObject go = new GameObject("SpawnerDrain");
+			try
+			{
+				ObjectSpawner spawner = BuildSpawner(go, maxSpawnCount: 10);
+				DateTime overdue = DateTime.UtcNow.AddSeconds(-1.0);
+				for (int i = 0; i < 5; ++i)
+				{
+					spawner.SpawnableRespawnTimers.Add(overdue);
+				}
+
+				spawner.TryRespawn();
+
+				Assert.AreEqual(0, spawner.SpawnableRespawnTimers.Count,
+					"Every due timer should be consumed in one pass, not just the first.");
+			}
+			finally { UnityEngine.Object.DestroyImmediate(go); }
+		}
+
+		[Test]
+		public void TryRespawn_LeavesTimersThatAreNotYetDue()
+		{
+			// Draining must stay selective: a deadline in the future is not a deadline that passed.
+			GameObject go = new GameObject("SpawnerDrainSelective");
+			try
+			{
+				ObjectSpawner spawner = BuildSpawner(go, maxSpawnCount: 10);
+				for (int i = 0; i < 3; ++i)
+				{
+					spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
+				}
+				for (int i = 0; i < 2; ++i)
+				{
+					spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddMinutes(5.0));
+				}
+
+				spawner.TryRespawn();
+
+				Assert.AreEqual(2, spawner.SpawnableRespawnTimers.Count,
+					"Only the overdue timers should have been consumed.");
+				foreach (DateTime remaining in spawner.SpawnableRespawnTimers)
+				{
+					Assert.Greater(remaining, DateTime.UtcNow, "A future timer was consumed.");
+				}
+			}
+			finally { UnityEngine.Object.DestroyImmediate(go); }
+		}
+
 		// --- Respawn check interval -----------------------------------------------------------
 
 		/// <summary>Drives the private scheduler and returns the delay it chose.</summary>
@@ -37,7 +109,7 @@ namespace FishMMO.UnitTests.AI
 
 				return next - Time.time;
 			}
-			finally { Object.DestroyImmediate(go); }
+			finally { UnityEngine.Object.DestroyImmediate(go); }
 		}
 
 		[Test]

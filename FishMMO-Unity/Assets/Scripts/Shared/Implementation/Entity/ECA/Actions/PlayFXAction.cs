@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FishMMO.Logging;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -23,8 +23,19 @@ namespace FishMMO.Shared
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing collision or interaction information.</param>
 		/// <remarks>
-		/// This method attempts to retrieve <see cref="CollisionEventData"/> from the event data. The FX is spawned at the first contact point if available, otherwise at the collision transform's position, the initiator's position, or Vector3.zero as fallback.
+		/// <para>
+		/// The FX is spawned at the hit point a <see cref="CollisionEventData"/> carries, falling back
+		/// to the target's position, then the initiator's, then the world origin.
+		/// </para>
+		/// <para>
+		/// It used to read <c>Collision.contacts[0]</c>. That threw as soon as anything dispatched a
+		/// hit without a Unity collision — <see cref="AbilityApplyAreaAction"/> always did, and now
+		/// every ability hit does, because <see cref="AbilityObject"/> resolves them with a swept
+		/// query so they can be lag compensated. The event carries the impact point directly instead.
+		/// </para>
+		/// <para>
 		/// VFX instantiation is suppressed during prediction replay ticks to prevent visual spam.
+		/// </para>
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
@@ -44,15 +55,16 @@ namespace FishMMO.Shared
 			if (eventData.TryGet(out CollisionEventData collisionEventData))
 			{
 				Vector3 spawnPosition;
-				// Prefer the first contact point if available.
-				if (collisionEventData.Collision.contacts.Length > 0)
+				// Prefer the resolved impact point.
+				if (collisionEventData.HasHitPoint)
 				{
-					spawnPosition = collisionEventData.Collision.contacts[0].point;
+					spawnPosition = collisionEventData.HitPoint;
 				}
-				// Otherwise, use the collision object's position if available.
-				else if (collisionEventData.Collision.transform != null)
+				// Otherwise, use whatever was hit — an area effect resolves a whole overlap at once
+				// and has no single contact to report.
+				else if (collisionEventData.Target != null)
 				{
-					spawnPosition = collisionEventData.Collision.transform.position;
+					spawnPosition = collisionEventData.Target.transform.position;
 				}
 				// Otherwise, use the initiator's position if available.
 				else if (initiator != null)

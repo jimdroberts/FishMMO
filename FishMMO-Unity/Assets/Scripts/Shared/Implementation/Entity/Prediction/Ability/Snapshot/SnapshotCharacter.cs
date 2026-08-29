@@ -57,15 +57,14 @@ namespace FishMMO.Shared
 		public bool IsTeleporting => false;
 
 		/// <summary>
-		/// Always returns <c>true</c> so that <c>AbilityObject.OnTick</c> and
-		/// <c>AbilityObject.OnCollisionEnter</c> continue to dispatch ECA events
-		/// through the phantom caster.
+		/// Always returns <c>true</c> so that <c>AbilityObject.OnTick</c> and its swept hit
+		/// resolution continue to dispatch ECA events through the phantom caster.
 		/// </summary>
 		/// <remarks>
 		/// CONTRACT: This MUST return <c>true</c>. Both <c>AbilityObject.OnTick</c>
-		/// and <c>AbilityObject.OnCollisionEnter</c> guard event dispatch with
+		/// and <c>AbilityObject.DispatchSweptHit</c> guard event dispatch with
 		/// <c>Caster != null &amp;&amp; Caster.IsSpawned</c>. Returning <c>false</c>
-		/// would silently suppress all tick and collision events on every detached
+		/// would silently suppress all tick and hit events on every detached
 		/// ability object for the remainder of its lifetime.
 		/// </remarks>
 		public bool IsSpawned => true;

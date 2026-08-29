@@ -532,7 +532,22 @@ namespace FishMMO.Shared
 						SpawnableRespawnTimers.RemoveAt(i);
 
 						SpawnObject();
-						return;
+
+						/* Keep draining rather than returning after the first spawn. Returning
+						 * capped the spawner at one object per call, which was invisible while
+						 * this ran every frame — a wiped ten-monster camp refilled in ten frames.
+						 * Behind an interval it becomes one object per interval: a camp taking
+						 * the better part of a minute to refill, and a hard ceiling on spawn rate
+						 * that no authored MinimumRespawnTime can raise. */
+
+						/* SpawnObject empties the timer list the moment Spawned reaches
+						 * MaxSpawnCount, and this loop still holds an index into it. Stop on the
+						 * cap, and bound-check besides, rather than read past the end. */
+						if (Spawned.Count >= MaxSpawnCount ||
+							i > SpawnableRespawnTimers.Count)
+						{
+							break;
+						}
 					}
 				}
 			}
