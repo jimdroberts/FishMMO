@@ -16,4 +16,4 @@ MonoBehaviour:
   _addOrder: 0
   _isConstant: 0
   _maximumDistance: 50
-  _hideDistancePercent: 0.15
+  _hideDistancePercent: 0.35

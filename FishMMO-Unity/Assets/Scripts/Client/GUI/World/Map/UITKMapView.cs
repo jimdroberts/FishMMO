@@ -318,6 +318,43 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Where a marker should actually be drawn this frame.
+		/// </summary>
+		/// <param name="snapshot">The collected snapshot.</param>
+		/// <returns>The live transform position for a tracking marker, the collected one otherwise.</returns>
+		/// <remarks>
+		/// <para>The single place a marker's position is decided, so the mesh, the layout and the
+		/// click test cannot disagree about where a marker is — a click test reading a different
+		/// position from the one drawn means markers that cannot be clicked where they appear.</para>
+		/// <para>The null test is a Unity object comparison and costs an engine call, which is why
+		/// the flag is checked first: notes and landmarks have no source at all and skip it, and a
+		/// destroyed marker falls back to the last position the filter published rather than
+		/// throwing. It disappears on the next collection a tenth of a second later.</para>
+		/// </remarks>
+		private static Vector3 ResolvePosition(in MapMarkerSnapshot snapshot)
+		{
+			if (snapshot.TracksSource && snapshot.Source != null)
+			{
+				return snapshot.Source.Position;
+			}
+			return snapshot.Position;
+		}
+
+		/// <summary>
+		/// Which way a marker's icon should point this frame.
+		/// </summary>
+		/// <param name="snapshot">The collected snapshot.</param>
+		/// <returns>The live heading for a tracking marker, the collected one otherwise.</returns>
+		private static float ResolveFacing(in MapMarkerSnapshot snapshot)
+		{
+			if (snapshot.TracksSource && snapshot.Source != null)
+			{
+				return snapshot.Source.FacingDegrees;
+			}
+			return snapshot.FacingDegrees;
+		}
+
+		/// <summary>
 		/// Converts a world position into a point inside this element.
 		/// </summary>
 		/// <param name="worldPosition">The world position.</param>
@@ -369,7 +406,8 @@ namespace FishMMO.Client
 				MapMarkerSnapshot snapshot = snapshots[i];
 				VisualElement element = activeMarkers[i];
 
-				Vector2 view = View.WorldToView(snapshot.Position);
+				Vector3 position = ResolvePosition(in snapshot);
+				Vector2 view = View.WorldToView(position);
 				bool outside = view.x < 0.0f || view.x > 1.0f || view.y < 0.0f || view.y > 1.0f;
 
 				if (outside && !snapshot.ClampToEdge)
@@ -390,7 +428,7 @@ namespace FishMMO.Client
 				element.style.left = view.x * content.width;
 				element.style.top = (1.0f - view.y) * content.height;
 
-				ApplyMarkerVisuals(element, snapshot, clamped);
+				ApplyMarkerVisuals(element, snapshot, position, clamped);
 			}
 
 			// Anything left over from a busier frame is hidden rather than destroyed.
@@ -431,8 +469,9 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="element">The marker element.</param>
 		/// <param name="snapshot">What to show.</param>
+		/// <param name="position">The world position the marker was placed at this frame.</param>
 		/// <param name="clamped">Whether the marker was pinned to the frame edge.</param>
-		private void ApplyMarkerVisuals(VisualElement element, MapMarkerSnapshot snapshot, bool clamped)
+		private void ApplyMarkerVisuals(VisualElement element, MapMarkerSnapshot snapshot, Vector3 position, bool clamped)
 		{
 			MarkerElements parts = (MarkerElements)element.userData;
 
@@ -460,12 +499,12 @@ namespace FishMMO.Client
 			float rotation;
 			if (clamped)
 			{
-				Vector2 direction = View.WorldToView(snapshot.Position) - new Vector2(0.5f, 0.5f);
+				Vector2 direction = View.WorldToView(position) - new Vector2(0.5f, 0.5f);
 				rotation = Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg;
 			}
 			else
 			{
-				rotation = snapshot.HasFacing ? View.WorldToViewAngle(snapshot.FacingDegrees) : 0.0f;
+				rotation = snapshot.HasFacing ? View.WorldToViewAngle(ResolveFacing(in snapshot)) : 0.0f;
 			}
 			parts.Icon.style.rotate = new StyleRotate(new Rotate(rotation));
 
@@ -634,9 +673,13 @@ namespace FishMMO.Client
 
 			for (int i = 0; i < snapshots.Count; ++i)
 			{
-				Vector2 point = WorldToLocal(snapshots[i].Position);
+				/* Copied out of the list rather than passed by reference: a List indexer returns a
+				 * value, not a ref, so it cannot bind to an `in` parameter. */
+				MapMarkerSnapshot snapshot = snapshots[i];
+
+				Vector2 point = WorldToLocal(ResolvePosition(in snapshot));
 				float distance = Vector2.Distance(point, localPosition);
-				float radius = Mathf.Max(8.0f, snapshots[i].Size);
+				float radius = Mathf.Max(8.0f, snapshot.Size);
 
 				if (distance < radius && distance < bestDistance)
 				{
