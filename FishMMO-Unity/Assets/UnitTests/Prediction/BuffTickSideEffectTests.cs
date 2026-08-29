@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -349,6 +349,9 @@ namespace FishMMO.UnitTests
 			public bool TryGetManaAttribute(out CharacterResourceAttribute mana) { mana = null; return false; }
 			public bool TryGetStaminaAttribute(out CharacterResourceAttribute stamina) { stamina = null; return false; }
 			public void AddAttribute(CharacterAttribute instance) { }
+
+			/// <summary>No ledger on a stub; nothing to release.</summary>
+			public void ClearModifierSource(ModifierSource source) { }
 			public void Regenerate(uint tick) { }
 			public void ApplyResourceState(CharacterAttributeResourceState resourceState) { }
 			public CharacterAttributeResourceState GetResourceState() => default;

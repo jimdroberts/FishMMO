@@ -922,6 +922,43 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Releases one contributor from every attribute on the sheet.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For a source whose owner goes away without knowing which attributes it touched — a region a
+		/// character walks out of, which cannot enumerate what its authored actions modified. Cheap
+		/// because <see cref="CharacterAttribute.ClearSource"/> is a no-op on an attribute that source
+		/// never touched, and an attribute holds a handful of contributors at most.
+		/// </para>
+		/// <para>
+		/// Resources are walked too: a region action is free to modify a resource's maximum, and a
+		/// contributor the sheet forgot on one half would be exactly the orphaned modifier the ledger
+		/// exists to prevent.
+		/// </para>
+		/// </remarks>
+		/// <param name="source">The contributor to release everywhere.</param>
+		public void ClearModifierSource(ModifierSource source)
+		{
+			BeginPropagation();
+			try
+			{
+				foreach (CharacterAttribute attribute in Attributes.Values)
+				{
+					attribute.ClearSource(source);
+				}
+				foreach (CharacterResourceAttribute resource in ResourceAttributes.Values)
+				{
+					resource.ClearSource(source);
+				}
+			}
+			finally
+			{
+				EndPropagation();
+			}
+		}
+
+		/// <summary>
 		/// Sets the base value and optional external modifier of a non-resource attribute by template ID.
 		/// </summary>
 		/// <param name="id">The template ID of the attribute.</param>

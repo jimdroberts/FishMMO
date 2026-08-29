@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -153,6 +153,9 @@ namespace FishMMO.UnitTests
 			public bool TryGetResourceAttribute(CharacterAttributeTemplate template, out CharacterResourceAttribute attribute) => throw new NotImplementedException();
 			public bool TryGetResourceAttribute(int id, out CharacterResourceAttribute attribute) => throw new NotImplementedException();
 			public void AddAttribute(CharacterAttribute instance) => throw new NotImplementedException();
+
+			/// <summary>No ledger on a stub; nothing to release.</summary>
+			public void ClearModifierSource(ModifierSource source) { }
 			public void Regenerate(uint tick) => throw new NotImplementedException();
 			public void ApplyResourceState(CharacterAttributeResourceState resourceState) => throw new NotImplementedException();
 			public CharacterAttributeResourceState GetResourceState() => throw new NotImplementedException();

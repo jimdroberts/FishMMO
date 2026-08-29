@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Object;
 using FishNet.Component.Prediction;
@@ -270,6 +270,7 @@ namespace FishMMO.Shared
 			bool suppressed = IsSuppressed(character);
 			if (membership.RecordExit(character, suppressed))
 			{
+				ReleaseAttributeContributions(character);
 				Fire(OnRegionExit, character);
 				Parent?.OnDescendantReleased(character);
 			}
@@ -287,6 +288,7 @@ namespace FishMMO.Shared
 		{
 			if (membership.ForceExit(character))
 			{
+				ReleaseAttributeContributions(character);
 				Fire(OnRegionExit, character);
 			}
 			Parent?.OnDescendantTookOwnership(character);
@@ -364,6 +366,7 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < flushExits.Count; ++i)
 			{
+				ReleaseAttributeContributions(flushExits[i]);
 				Fire(OnRegionExit, flushExits[i]);
 				Parent?.OnDescendantReleased(flushExits[i]);
 			}
@@ -389,6 +392,7 @@ namespace FishMMO.Shared
 			membership.Clear(isDestroyedPredicate, flushExits);
 			for (int i = 0; i < flushExits.Count; ++i)
 			{
+				ReleaseAttributeContributions(flushExits[i]);
 				Fire(OnRegionExit, flushExits[i]);
 				Parent?.OnDescendantReleased(flushExits[i]);
 			}
@@ -449,6 +453,43 @@ namespace FishMMO.Shared
 		/// so <see cref="RegionEventData.IsReconciling"/> is always false here; the action-side guards
 		/// remain as belt-and-braces.
 		/// </summary>
+		/// <summary>
+		/// Drops every attribute contribution this region owns on <paramref name="character"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The paired half of <c>ApplyRegionAttributeAction</c>, and it lives here rather than in an
+		/// authored OnExit trigger on purpose: an author who wires the apply and forgets the release
+		/// would leave a permanent bonus, which is precisely the failure that had the action cut down
+		/// to resources in the first place. Membership is what owns the pairing, so membership ends it.
+		/// </para>
+		/// <para>
+		/// Called from every path that ends membership — a normal exit, an exit deferred through the
+		/// post-tick flush after a reconcile or teleport, a descendant region taking ownership, and
+		/// this region despawning. A character that DIES or disconnects inside the region raises no
+		/// exit and is not reached here; its whole ledger is cleared by
+		/// <c>CharacterAttributeController.ResetState</c> on despawn instead.
+		/// </para>
+		/// <para>
+		/// Server only. The contribution is only ever applied on the server
+		/// (<c>RegionActionGate.ShouldExecuteGameplay</c>), so releasing it anywhere else would
+		/// subtract something that peer never added — which the ledger makes a harmless no-op, but
+		/// asking at all is cheaper than relying on that.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character leaving this region.</param>
+		private void ReleaseAttributeContributions(IPlayerCharacter character)
+		{
+			if (character == null || !base.IsServerStarted || base.NetworkObject == null)
+			{
+				return;
+			}
+			if (character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				attributeController.ClearModifierSource(ModifierSource.Region(base.NetworkObject.ObjectId));
+			}
+		}
+
 		private void Fire(List<Trigger> triggers, IPlayerCharacter character)
 		{
 			if (triggers == null || triggers.Count == 0 || IsDestroyed(character))

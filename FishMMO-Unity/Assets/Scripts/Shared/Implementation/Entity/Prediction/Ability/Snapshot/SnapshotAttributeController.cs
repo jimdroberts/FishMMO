@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -138,6 +138,13 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc/>
 		public void AddAttribute(CharacterAttribute instance) { }
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// A snapshot is a frozen copy taken for an ability's damage maths; nothing modifies it after
+		/// it is built, so it owns no contributors to release.
+		/// </remarks>
+		public void ClearModifierSource(ModifierSource source) { }
 
 		/// <inheritdoc/>
 		public void Regenerate(uint tick) { }

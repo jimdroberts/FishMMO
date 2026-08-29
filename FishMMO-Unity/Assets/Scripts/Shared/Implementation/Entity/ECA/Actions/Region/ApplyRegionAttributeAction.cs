@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -6,39 +6,46 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// ECA action that adds a one-shot amount to a character's RESOURCE while it is in a region.
+	/// ECA action that changes a character's attribute while it is inside a region.
 	/// Server-only (gameplay state); suppressed during prediction reconciliation.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Resources only, deliberately.</b> This used to fall through to
-	/// <c>CharacterAttribute.AddModifier</c> for a non-resource attribute, which was the one
-	/// modifier source in the project with no paired removal and no owner: nothing reversed it when
-	/// the character left the region, died, disconnected inside it or changed scene, and on an
-	/// <c>OnRegionStay</c> trigger it accumulated once per tick forever. <c>ExternalModifier</c> is
-	/// a bare accumulator with no per-source ledger, so an orphaned contribution is
-	/// indistinguishable from a real one and survives until the server next recomputes the sheet
-	/// from scratch.
+	/// <b>Two different operations, chosen by the attribute.</b> A RESOURCE gets a one-shot change to
+	/// its current value — a drain or a regeneration, safe on <c>OnRegionStay</c> and with nothing to
+	/// reverse. A non-resource ATTRIBUTE gets a region-owned modifier that lasts while the character
+	/// is inside and is released when it leaves.
 	/// </para>
 	/// <para>
-	/// <b>Use <see cref="ApplyRegionBuffAction"/> with an <see cref="AttributeBuffTemplate"/> for a
-	/// region-scoped attribute bonus.</b> That path already owns the pairing — the buff applies the
-	/// modifier once and <c>OnRemove</c> reverses exactly it on expiry, dispel, death or teardown —
-	/// and it is safe to fire every stay tick, because refreshing an existing buff resets its
-	/// duration without touching the modifier.
+	/// <b>The author does not wire the removal, and that is the point.</b> The contribution is keyed
+	/// to the region (<see cref="ModifierSource.Region"/>) and
+	/// <c>Region.ReleaseAttributeContributions</c> drops it on every path that ends membership:
+	/// walking out, a deferred exit flushed after a reconcile or teleport, a descendant region taking
+	/// ownership, and the region itself despawning. A character that dies or disconnects inside the
+	/// region raises no exit at all — its whole ledger is cleared by
+	/// <c>CharacterAttributeController.ResetState</c> on despawn, which is the same guarantee by a
+	/// different route.
 	/// </para>
 	/// <para>
-	/// A resource delta needs none of that: it moves <c>CurrentValue</c>, which is depletable state
-	/// the server reconciles and broadcasts outright, so there is nothing to reverse.
+	/// This action used to refuse non-resource attributes outright. Applied through the old
+	/// <c>AddModifier</c> a region bonus had no owner: nothing reversed it on leaving, dying,
+	/// disconnecting or changing scene, and on an <c>OnRegionStay</c> trigger it accumulated once per
+	/// tick forever. Naming the source fixes both — a release is possible, and a restatement every
+	/// stay tick is idempotent rather than cumulative.
+	/// </para>
+	/// <para>
+	/// <see cref="ApplyRegionBuffAction"/> with an <see cref="AttributeBuffTemplate"/> remains the
+	/// right choice when the effect should outlive the region — a lingering blessing — or should be
+	/// dispellable. This action is for a bonus that IS the region.
 	/// </para>
 	/// </remarks>
 	[Serializable]
 	public class ApplyRegionAttributeAction : BaseAction
 	{
 		/// <summary>
-		/// The resource attribute to modify (health, mana, stamina...).
+		/// The attribute to modify. A resource is changed one-shot; anything else is modified for as long as the character is in the region.
 		/// </summary>
-		[Tooltip("The resource attribute to modify. Non-resource attributes are not supported — use ApplyRegionBuffAction with an AttributeBuffTemplate.")]
+		[Tooltip("Attribute to modify. A resource gets a one-shot change to its current value; any other attribute gets a region-owned modifier released when the character leaves.")]
 		public CharacterAttributeTemplate Attribute;
 
 		/// <summary>
@@ -69,17 +76,44 @@ namespace FishMMO.Shared
 
 			if (attributeController.TryGetResourceAttribute(Attribute, out CharacterResourceAttribute r))
 			{
+				/* A resource delta is one-shot and has nothing to reverse: it moves CurrentValue,
+				 * which is depletable state the server reconciles and broadcasts outright. Safe on
+				 * an OnRegionStay trigger, where it is a drain or a regeneration. */
 				r.AddToCurrentValue(Value);
 				return;
 			}
 
-			/* Refused rather than quietly applied as an unpaired modifier — see the remarks on this
-			 * type. Logged once per execution because an author who wired a non-resource attribute
-			 * here got a silently permanent bonus, which is worse than an obvious no-op. */
-			Log.Warning("ApplyRegionAttributeAction",
-				$"'{Attribute.Name}' is not a resource attribute. This action only adds to resource " +
-				"current values; for a region-scoped attribute bonus use ApplyRegionBuffAction with " +
-				"an AttributeBuffTemplate, which reverses itself when the buff ends.");
+			if (!attributeController.TryGetAttribute(Attribute, out CharacterAttribute c))
+			{
+				Log.Warning("ApplyRegionAttributeAction",
+					$"'{Attribute.Name}' resolves to no attribute on this character.");
+				return;
+			}
+
+			/* A NAMED contribution, released by the region itself when the character leaves it —
+			 * see Region.ReleaseAttributeContributions.
+			 *
+			 * This is what the action could not do before. A region bonus applied through
+			 * AddModifier had no owner: nothing reversed it on leaving, dying, disconnecting inside
+			 * the region or changing scene, and on an OnRegionStay trigger it accumulated once per
+			 * tick forever. The action was cut down to resources rather than repaired, because
+			 * there was no way to express "this region's contribution" for anything to release.
+			 *
+			 * Keyed by the region's ObjectId, which is stable for the region's life and unique
+			 * within the scene. Idempotent, so an OnRegionStay trigger firing every tick states the
+			 * same number every tick rather than accumulating — which is what made the stay case
+			 * unusable. */
+			if (!eventData.TryGet(out RegionEventData regionEvent) ||
+				regionEvent.Region == null ||
+				regionEvent.Region.NetworkObject == null)
+			{
+				Log.Warning("ApplyRegionAttributeAction",
+					"No region on the event; a region-scoped modifier cannot be keyed to an owner and " +
+					"would be unreleasable. Wire this to a Region trigger.");
+				return;
+			}
+
+			c.SetSource(ModifierSource.Region(regionEvent.Region.NetworkObject.ObjectId), Value);
 		}
 	}
 }

@@ -95,6 +95,16 @@ namespace FishMMO.Shared.Core
 		void AddAttribute(CharacterAttribute instance);
 
 		/// <summary>
+		/// Releases one contributor from every attribute on the sheet.
+		/// </summary>
+		/// <remarks>
+		/// For a source whose owner goes away without knowing which attributes it touched — see
+		/// <c>Region</c>, which releases its own contributions when a character leaves it.
+		/// </remarks>
+		/// <param name="source">The contributor to release everywhere.</param>
+		void ClearModifierSource(ModifierSource source);
+
+		/// <summary>
 		/// Advances tick-driven regen for resource attributes (e.g., health, mana).
 		/// A pulse fires when <c>tick % regenTickInterval == 0</c>; an internal
 		/// monotonic guard prevents double-advancement under replay, resimulation,
