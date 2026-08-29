@@ -443,7 +443,6 @@ namespace FishMMO.UnitTests
 			public List<Trigger> OnBuffRemoveTriggers { get; } = new List<Trigger>();
 			public SortedDictionary<int, Buff> Buffs { get; } = new SortedDictionary<int, Buff>();
 			public IReadOnlyList<ObservedBuffEntry> ObservedBuffs { get; } = new List<ObservedBuffEntry>();
-			public float ObservedBuffsReceivedTime => 0f;
 
 			public void InitializeOnce(ICharacter character) { }
 			public void OnStartCharacter() { }
@@ -469,7 +468,7 @@ namespace FishMMO.UnitTests
 			public void Apply(Buff buff, bool suppressFX = false) { }
 			public void Remove(int buffID) { }
 			public void RemoveRandom(DeterministicRNG rng, bool includeBuffs = false, bool includeDebuffs = false) { }
-			public void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false) { }
+			public void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false, bool preserveFX = false) { }
 			public BuffReconcileEntry[] CreateReconcileSnapshot() => null;
 			public void RestoreFromReconcile(BuffReconcileEntry[] entries, uint reconcileTick) { }
 		}

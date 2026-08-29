@@ -466,7 +466,7 @@ MonoBehaviour:
   _sendToOwner: 0
   _interval: 1
   _synchronizePosition: 1
-  _positionSensitivity: 0.001
+  _positionSensitivity: 0.05
   _positionSnapping:
     X: 0
     Y: 0

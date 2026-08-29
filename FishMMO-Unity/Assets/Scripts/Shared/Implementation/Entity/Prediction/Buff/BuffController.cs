@@ -18,21 +18,22 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Who simulates.</b> Every character — player and NPC alike — is ticked from
+	/// <b>Who simulates.</b> The server and the owning client. Both are ticked from
 	/// <see cref="OnReplicate"/>, which <see cref="CharacterPredictionController"/> drives from its
-	/// own <c>[Replicate]</c> method. There is no <c>TimeManager.OnTick</c> path: an NPC has no
-	/// owning client, so its replicate runs on the server only, and a player's runs on the server
-	/// and on the owning client. State forwarding is authored OFF on every prefab, so an observer
-	/// never runs Replicate or OnReconcile for somebody else's character and therefore never
-	/// simulates their buffs.
+	/// own <c>[Replicate]</c> method — an NPC's runs on the server only, a player's on the server
+	/// and on the owner. State forwarding is authored OFF on every prefab, so an observer never
+	/// runs Replicate or OnReconcile for somebody else's character.
 	/// </para>
 	/// <para>
-	/// <b>What observers get.</b> A display-only list — see <see cref="ObservedBuffs"/> — assembled
-	/// on the server, filtered by <see cref="BaseBuffTemplate.HiddenFromOthers"/>, and delivered
-	/// through the spawn payload and <see cref="CharacterBuffsBroadcast"/>. Their
-	/// <see cref="Buffs"/> dictionary stays empty for characters they do not own, which is what
-	/// keeps a frozen, never-ticked copy of somebody else's simulation out of their attribute
-	/// controller.
+	/// <b>What observers do.</b> They hold the same <see cref="Buffs"/> entries everyone else does,
+	/// so Inspect, the target frame and aggro logic read real state rather than a display
+	/// projection, and they count those durations down locally from
+	/// <c>TimeManager.OnTick</c> — the peer's controller is a spawned NetworkBehaviour with a
+	/// perfectly good TimeManager, it just has no replicate to drive it. What they do NOT do is
+	/// APPLY them: the attribute broadcast already carries every buff's contribution inside
+	/// <c>ExternalModifier</c>, and the resource broadcast already carries the result of every
+	/// damage-over-time tick, so running the effects here would count both twice. See
+	/// <c>SimulatesBuffEffects</c>.
 	/// </para>
 	/// </remarks>
 	public class BuffController : CharacterBehaviour, IBuffController, IPredictableController, IModelReadyHandler
@@ -183,24 +184,6 @@ namespace FishMMO.Shared
 		private float tickDelta;
 
 		/// <summary>
-		/// Cached reference to the character prediction controller for resolving authoritative ticks.
-		/// </summary>
-		private CharacterPredictionController predictionController;
-
-		#region Observed buffs (target frame)
-
-		/// <summary>
-		/// Backing store for <see cref="ObservedBuffs"/>.
-		/// </summary>
-		private ObservedBuffEntry[] observedBuffs = System.Array.Empty<ObservedBuffEntry>();
-
-		/// <inheritdoc />
-		public IReadOnlyList<ObservedBuffEntry> ObservedBuffs => observedBuffs;
-
-		/// <inheritdoc />
-		public float ObservedBuffsReceivedTime { get; private set; }
-
-		/// <summary>
 		/// Set whenever the visible buff set structurally changed — a buff added, removed, or its
 		/// stack count moved. Consumed once per replicate tick.
 		/// </summary>
@@ -210,49 +193,6 @@ namespace FishMMO.Shared
 		/// push per change would be several observer messages for one logical event.
 		/// </remarks>
 		private bool observedBuffsDirty;
-
-		/// <summary>
-		/// Set when a buff's remaining duration moved but the visible SET did not — a refresh of an
-		/// already-present buff.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// This exists because continuous re-application is a normal authoring pattern: an aura, or
-		/// a <see cref="Region"/> whose stay trigger re-applies its buff, refreshes the same buff on
-		/// every single tick. Treating that as a change would push a reliable observer message and
-		/// rebuild the observed list thirty times a second, forever, for a buff whose displayed bar
-		/// is simply pinned full.
-		/// </para>
-		/// <para>
-		/// A timing-only change is therefore only pushed once the truth has drifted more than
-		/// <see cref="ObservedBuffDriftToleranceSeconds"/> from what the last push implied — see
-		/// <see cref="ObservedTimingDriftExceedsTolerance"/>. Observers count their bars down
-		/// locally from receipt, so within the tolerance the picture they are already drawing is
-		/// the right one.
-		/// </para>
-		/// </remarks>
-		private bool observedBuffsTimingDirty;
-
-		/// <summary>
-		/// How far an observed buff's remaining duration may drift from what the last push implied
-		/// before a timing-only change is worth sending.
-		/// </summary>
-		/// <remarks>
-		/// One second on a bar a few pixels tall is not visible; a message every tick is.
-		/// </remarks>
-		private const float ObservedBuffDriftToleranceSeconds = 1.0f;
-
-		/// <summary>
-		/// Domain tick at which <see cref="lastObservedRemaining"/> was captured, or
-		/// <see cref="TimeManager.UNSET_TICK"/> when nothing has been pushed yet.
-		/// </summary>
-		private uint lastObservedPushTick = TimeManager.UNSET_TICK;
-
-		/// <summary>
-		/// Remaining seconds per template as of the last push, the baseline a timing-only change is
-		/// measured against.
-		/// </summary>
-		private readonly Dictionary<int, float> lastObservedRemaining = new Dictionary<int, float>();
 
 		/// <summary>
 		/// Server-side scratch list used to build the observer payload without allocating per push.
@@ -292,6 +232,15 @@ namespace FishMMO.Shared
 		private readonly List<ObservedBuffEntry> observedBuffMergeBuffer = new List<ObservedBuffEntry>();
 
 		/// <summary>
+		/// The character's prediction controller, cached in <see cref="OnStartNetwork"/>.
+		/// </summary>
+		/// <remarks>
+		/// Supplies the pending replicate tick that buff timing is stamped against, so a buff
+		/// applied between replicates lands in the right tick domain rather than the previous one.
+		/// </remarks>
+		private CharacterPredictionController predictionController;
+
+		/// <summary>
 		/// Drops the delta baseline so the next push states the whole strip.
 		/// </summary>
 		/// <remarks>
@@ -320,98 +269,17 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Marks the observer-facing buff list as having drifted in TIMING only.
-		/// </summary>
-		/// <remarks>
-		/// Never upgrades a structural change back down; the structural flag wins because it is
-		/// unconditional.
-		/// </remarks>
-		private void MarkObservedBuffsTimingDirty()
-		{
-			observedBuffsTimingDirty = true;
-		}
-
-		/// <summary>
 		/// True when the observed list is worth (re)sending this tick.
 		/// </summary>
 		private bool ShouldPushObservedBuffs()
 		{
-			if (observedBuffsDirty)
-			{
-				return true;
-			}
-			if (!observedBuffsTimingDirty)
-			{
-				return false;
-			}
-			return ObservedTimingDriftExceedsTolerance();
+			/* Structural changes only. Timing no longer travels: every peer counts its own bars
+			 * down from its own TimeManager, so the periodic "the numbers have drifted" resend —
+			 * and the baseline bookkeeping that decided when to send it — has nothing left to
+			 * correct and is gone. */
+			return observedBuffsDirty;
 		}
 
-		/// <summary>
-		/// True when any visible buff's remaining duration has drifted more than
-		/// <see cref="ObservedBuffDriftToleranceSeconds"/> from what the last push implied.
-		/// </summary>
-		/// <remarks>
-		/// The last push carried each buff's remaining seconds at a known tick. A receiver counts
-		/// that down in real time, so what it currently believes is <c>pushed - elapsed</c>. Only a
-		/// divergence between that and the truth is worth bytes: a buff refreshed every tick by an
-		/// aura holds its remaining duration constant, so its truth and the receiver's belief drift
-		/// apart at exactly the rate the receiver counts down — one second of tolerance means one
-		/// message per second instead of one per tick.
-		/// </remarks>
-		private bool ObservedTimingDriftExceedsTolerance()
-		{
-			uint currentTick = GetCurrentDomainTick();
-			if (currentTick == TimeManager.UNSET_TICK || lastObservedPushTick == TimeManager.UNSET_TICK)
-			{
-				// No usable baseline: send, and establish one.
-				return true;
-			}
-
-			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
-			float elapsed = (int)(currentTick - lastObservedPushTick) * delta;
-
-			foreach (Buff buff in buffs.Values)
-			{
-				BaseBuffTemplate template = buff?.Template;
-				if (template == null || template.HiddenFromOthers)
-				{
-					continue;
-				}
-				if (!lastObservedRemaining.TryGetValue(template.ID, out float pushedRemaining))
-				{
-					// Present now, absent from the baseline: structural, and the baseline is stale.
-					return true;
-				}
-
-				float implied = pushedRemaining - elapsed;
-				if (implied < 0f)
-				{
-					implied = 0f;
-				}
-				if (Mathf.Abs(ComputeObservedRemaining(buff, template, currentTick, delta) - implied) >
-					ObservedBuffDriftToleranceSeconds)
-				{
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		/// <summary>
-		/// Captures the baseline a later timing-only change is measured against.
-		/// </summary>
-		private void RecordObservedBuffBaseline()
-		{
-			lastObservedPushTick = GetCurrentDomainTick();
-			lastObservedRemaining.Clear();
-			for (int i = 0; i < observedBuffBuffer.Count; ++i)
-			{
-				ObservedBuffEntry entry = observedBuffBuffer[i];
-				lastObservedRemaining[entry.TemplateID] = entry.RemainingSeconds;
-			}
-		}
 
 		/// <summary>
 		/// Seconds remaining on <paramref name="buff"/>, in the shape observers are sent.
@@ -438,11 +306,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>This is the whole trust boundary for the target-frame feature.</b> The client is never
-		/// asked what it may see and is never sent anything it may not: the list is assembled here,
-		/// on the server, from the server's own buff dictionary, and every entry marked
-		/// <see cref="BaseBuffTemplate.HiddenFromOthers"/> is dropped before it reaches the wire.
-		/// A client that ignores its own UI code still learns nothing extra.
+		/// <b>Assembled on the server, from the server's own buff dictionary.</b> There is no
+		/// per-buff visibility filter: buffs are not hidden from other players, so what a character
+		/// is carrying is exactly what its observers are told. The filter that used to sit here
+		/// (<c>HiddenFromOthers</c>) was authored on no buff in the project and has been removed.
 		/// </para>
 		/// <para>
 		/// Delivery is a broadcast scoped to this NetworkObject's observers — the same set that can
@@ -459,12 +326,9 @@ namespace FishMMO.Shared
 			bool structural = observedBuffsDirty;
 
 			observedBuffsDirty = false;
-			observedBuffsTimingDirty = false;
 
 			BuildObservedBuffEntries();
 
-			// The timing baseline is always the FULL strip, never the subset that goes on the wire.
-			RecordObservedBuffBaseline();
 
 			bool fullSet = !structural || !hasObservedBuffBaseline;
 			if (fullSet)
@@ -575,10 +439,8 @@ namespace FishMMO.Shared
 		private void RefreshObservedBuffsLocally()
 		{
 			observedBuffsDirty = false;
-			observedBuffsTimingDirty = false;
 
 			BuildObservedBuffEntries();
-			RecordObservedBuffBaseline();
 			ApplyObservedBuffs(observedBuffBuffer.ToArray());
 		}
 
@@ -594,7 +456,7 @@ namespace FishMMO.Shared
 			foreach (Buff buff in buffs.Values)
 			{
 				BaseBuffTemplate template = buff?.Template;
-				if (template == null || template.HiddenFromOthers)
+				if (template == null)
 				{
 					continue;
 				}
@@ -676,7 +538,7 @@ namespace FishMMO.Shared
 		/// <para>
 		/// Applied locally before sending, which is what the previous <c>ObserversRpc</c> achieved
 		/// with <c>RunLocally</c>. A broadcast is never delivered back to its sender, so without the
-		/// local call the server's own <see cref="observedBuffs"/> would stay empty and anything
+		/// local call the server's own buff container would not reflect the push and anything
 		/// server side that inspects a character's visible buffs — <c>PartySystem</c> does — would
 		/// read nothing.
 		/// </para>
@@ -736,11 +598,111 @@ namespace FishMMO.Shared
 
 			SyncObservedBuffFX(next);
 
-			observedBuffs = next;
-			ObservedBuffsReceivedTime = Time.unscaledTime;
+			/* The real container is the point of the message, not a side effect of it. A local
+			 * client is required to hold an observed character's actual state — Inspect and
+			 * faction/aggro read it, not just the renderer — so what arrives here is materialised
+			 * into `buffs` rather than kept only as a display list. */
+			MaterializeObservedBuffs(next);
 
 			IBuffController.OnObservedBuffsChanged?.Invoke(this);
 		}
+
+		/// <summary>
+		/// Reconciles a tracking-only peer's <see cref="Buffs"/> with what the server just sent.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Not routed through <see cref="Apply"/> and <see cref="Remove"/>.</b> Those spawn and
+		/// despawn FX and raise the add/remove events, and both are already handled for this peer —
+		/// <see cref="SyncObservedBuffFX"/> ran a moment ago against the previous list, and
+		/// <c>OnObservedBuffsChanged</c> fires below. Going through them would double every effect
+		/// instance and every UI notification.
+		/// </para>
+		/// <para>
+		/// The expiry tick is rebased into THIS peer's tick domain: the sender's remaining seconds
+		/// are converted against the local clock, because tick domains are per-client and an
+		/// absolute tick from the server means nothing here. Zero remaining is permanent, so it maps
+		/// to <c>UNSET_TICK</c>, which <c>Buff.HasExpired</c> reads as "never" — mapping it to the
+		/// current tick instead would expire every permanent buff on the next observer tick.
+		/// </para>
+		/// <para>
+		/// Skipped entirely on the server and the owner: they run the real simulation, and this
+		/// message is a projection of what they already hold.
+		/// </para>
+		/// </remarks>
+		/// <param name="entries">The visible buff set as the server described it.</param>
+		private void MaterializeObservedBuffs(ObservedBuffEntry[] entries)
+		{
+			if (SimulatesBuffEffects)
+			{
+				return;
+			}
+
+			uint currentTick = GetCurrentDomainTick();
+			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
+
+			materializeSeenBuffer.Clear();
+
+			for (int i = 0; i < entries.Length; ++i)
+			{
+				ObservedBuffEntry entry = entries[i];
+				BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(entry.TemplateID);
+				if (template == null)
+				{
+					// Unresolvable template: nothing to display and nothing to tick.
+					continue;
+				}
+
+				materializeSeenBuffer.Add(entry.TemplateID);
+
+				uint expiryTick = TimeManager.UNSET_TICK;
+				if (entry.RemainingSeconds > 0f && currentTick != TimeManager.UNSET_TICK)
+				{
+					int remainingTicks = Mathf.Max(1, Mathf.CeilToInt(entry.RemainingSeconds / delta));
+					expiryTick = currentTick + (uint)remainingTicks;
+				}
+
+				if (buffs.TryGetValue(entry.TemplateID, out Buff existing))
+				{
+					existing.Stacks = entry.Stacks;
+					existing.ExpiryTick = expiryTick;
+					existing.SetTickDelta(delta);
+					continue;
+				}
+
+				Buff materialized = new Buff(entry.TemplateID, expiryTick, TimeManager.UNSET_TICK,
+					delta, entry.Stacks, 0);
+				if (materialized.Template != null)
+				{
+					buffs.Add(entry.TemplateID, materialized);
+				}
+			}
+
+			/* Anything the server did not name is gone. Removed directly for the same reason the
+			 * additions are added directly, and only ever on a tracking-only peer — this can never
+			 * drop a buff the owner is simulating. */
+			materializeRemoveBuffer.Clear();
+			foreach (int templateID in buffs.Keys)
+			{
+				if (!materializeSeenBuffer.Contains(templateID))
+				{
+					materializeRemoveBuffer.Add(templateID);
+				}
+			}
+			for (int i = 0; i < materializeRemoveBuffer.Count; ++i)
+			{
+				buffs.Remove(materializeRemoveBuffer[i]);
+			}
+
+			materializeSeenBuffer.Clear();
+			materializeRemoveBuffer.Clear();
+		}
+
+		/// <summary>Scratch set of template ids named by the message being materialised.</summary>
+		private readonly HashSet<int> materializeSeenBuffer = new HashSet<int>();
+
+		/// <summary>Scratch list of template ids to drop, so the dictionary is not mutated mid-iteration.</summary>
+		private readonly List<int> materializeRemoveBuffer = new List<int>();
 
 		/// <summary>True once this client has registered the shared buff handler.</summary>
 		/// <remarks>
@@ -808,12 +770,11 @@ namespace FishMMO.Shared
 		/// message was a full set.
 		/// </para>
 		/// <para>
-		/// <b>Retained entries are aged.</b> Every consumer draws a bar as
-		/// <c>RemainingSeconds - (now - ObservedBuffsReceivedTime)</c>, and applying the merge
-		/// resets that receipt time. An entry the delta did not mention would therefore restart its
-		/// countdown from the value it was sent with — a bar visibly jumping back UP every time an
-		/// unrelated buff landed on the same character. Subtracting the elapsed time as the entry
-		/// is carried across keeps the displayed countdown continuous.
+		/// <b>Retained entries need no ageing any more.</b> They are read back out of
+		/// <see cref="Buffs"/>, whose expiry ticks are in THIS peer's own tick domain and are
+		/// advanced every tick — so a bar the delta did not mention is already correct. The
+		/// arithmetic that used to re-base each carried-over entry by the age of the last message
+		/// existed only because the entries were remembered rather than simulated.
 		/// </para>
 		/// </remarks>
 		/// <param name="changed">Entries added or restacked. May be null or empty.</param>
@@ -822,40 +783,34 @@ namespace FishMMO.Shared
 		{
 			observedBuffMergeBuffer.Clear();
 
-			/* Zero means nothing has ever been received, so there is no elapsed span to charge the
-			 * retained entries — and Time.unscaledTime alone would age them by the whole session. */
-			float elapsed = ObservedBuffsReceivedTime > 0f
-				? Mathf.Max(0f, Time.unscaledTime - ObservedBuffsReceivedTime)
-				: 0f;
+			uint currentTick = GetCurrentDomainTick();
 
-			ObservedBuffEntry[] current = observedBuffs ?? System.Array.Empty<ObservedBuffEntry>();
-			for (int i = 0; i < current.Length; ++i)
+			foreach (Buff buff in buffs.Values)
 			{
-				int templateID = current[i].TemplateID;
+				BaseBuffTemplate template = buff?.Template;
+				if (template == null)
+				{
+					continue;
+				}
 
-				if (removed != null && System.Array.IndexOf(removed, templateID) >= 0)
+				if (removed != null && System.Array.IndexOf(removed, template.ID) >= 0)
 				{
 					continue;
 				}
 
 				// A changed entry supersedes the held one; it is appended below in sender order.
-				if (ContainsTemplate(changed, templateID))
+				if (ContainsTemplate(changed, template.ID))
 				{
 					continue;
 				}
 
-				ObservedBuffEntry retained = current[i];
-
-				/* 0 is "permanent", not "one tick left" — see ObservedBuffEntry.RemainingSeconds —
-				 * so a permanent buff must never be aged into looking finite, and a finite one must
-				 * never be aged down INTO 0 and read as permanent. Floor at a tenth of a second,
-				 * which is also the wire's resolution. */
-				if (retained.RemainingSeconds > 0f)
+				observedBuffMergeBuffer.Add(new ObservedBuffEntry()
 				{
-					retained.RemainingSeconds = Mathf.Max(0.1f, retained.RemainingSeconds - elapsed);
-				}
-
-				observedBuffMergeBuffer.Add(retained);
+					TemplateID = template.ID,
+					Stacks = buff.Stacks,
+					RemainingSeconds = buff.RemainingSeconds(currentTick),
+					TotalSeconds = template.Duration,
+				});
 			}
 
 			if (changed != null)
@@ -887,7 +842,6 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		#endregion
 
 		#region Buff FX
 
@@ -928,6 +882,145 @@ namespace FishMMO.Shared
 
 		/// <summary>True when this peer is the client owning this character.</summary>
 		private bool IsOwningClient => base.NetworkObject != null && base.IsOwner;
+
+		/// <summary>
+		/// True when this peer runs the buff SIMULATION — attribute modifiers, periodic effects,
+		/// ECA triggers — rather than merely tracking what the server says is applied.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The server and the owning client simulate. An observer tracks: it holds the same
+		/// <see cref="Buffs"/> entries so Inspect, the target frame and aggro logic read real state
+		/// rather than a display projection, and it counts their durations down locally so bars move
+		/// without a message per tick — but it must not APPLY them.
+		/// </para>
+		/// <para>
+		/// <b>Why applying would be wrong, not merely redundant.</b> The attribute broadcast an
+		/// observer already receives carries <c>ExternalModifier</c>, which is defined as the sum of
+		/// buff, equipment and region contributions. A buff applied locally on top of that counts
+		/// its own modifier twice — the same double-count the 2026-08-28 audit fixed on the spawn
+		/// payload. The same argument covers periodic effects: a damage-over-time tick would drain a
+		/// peer's health locally while <c>CharacterResourcesBroadcast</c> is already delivering the
+		/// drained value.
+		/// </para>
+		/// </remarks>
+		private bool SimulatesBuffEffects => IsAuthoritativePeer || IsOwningClient;
+
+		/// <summary>True once this controller subscribed the observer-side duration tick.</summary>
+		private bool observerTickSubscribed;
+
+		/// <summary>
+		/// Starts or stops the observer-side duration tick to match this peer's role.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An observer's <see cref="BuffController"/> is a spawned NetworkBehaviour with a perfectly
+		/// good <c>TimeManager</c> — what it lacks is a DRIVER, because state forwarding is off so
+		/// FishNet never invokes the replicate body for a character this peer does not own. The
+		/// buffs therefore sat in the dictionary and never advanced. Subscribing to
+		/// <c>TimeManager.OnTick</c> directly is the same fix <c>KCCPlatform</c> uses for the same
+		/// reason: an object with no owner still needs somebody to step it on a client.
+		/// </para>
+		/// <para>
+		/// Ownership can change at runtime, so this is idempotent and re-evaluated rather than
+		/// decided once — a character that gains an owner must stop double-advancing its buffs from
+		/// both here and the replicate.
+		/// </para>
+		/// </remarks>
+		private void RefreshObserverTickSubscription()
+		{
+			bool wanted = base.TimeManager != null && base.IsClientStarted && !SimulatesBuffEffects;
+
+			if (wanted == observerTickSubscribed)
+			{
+				return;
+			}
+
+			if (wanted)
+			{
+				base.TimeManager.OnTick += ObserverTimeManager_OnTick;
+			}
+			else
+			{
+				base.TimeManager.OnTick -= ObserverTimeManager_OnTick;
+			}
+			observerTickSubscribed = wanted;
+		}
+
+		/// <summary>
+		/// Advances an observed character's buff DURATIONS, and nothing else.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not <see cref="Tick"/>. That method dispatches periodic effects through
+		/// <c>Buff.TryTick</c>, which mutates resources on every peer that runs it — correct for the
+		/// owner, whose prediction has to stay in step with the server, and a double-count here
+		/// where the server's resource broadcast is already authoritative. This only expires what
+		/// has run out, so a bar empties on time and the icon disappears without waiting for a
+		/// message.
+		/// </remarks>
+		private void ObserverTimeManager_OnTick()
+		{
+			if (SimulatesBuffEffects || buffs.Count == 0)
+			{
+				return;
+			}
+
+			/* The controller's own domain tick, not TimeManager.LocalTick directly — the same
+			 * source every other buff path compares against, so expiry here cannot disagree with
+			 * expiry anywhere else. It also has a defined answer before the object is spawned,
+			 * where LocalTick would dereference a null TimeManager. */
+			uint currentTick = GetCurrentDomainTick();
+			if (currentTick == TimeManager.UNSET_TICK)
+			{
+				return;
+			}
+
+			/* Snapshot before iterating: Remove mutates the dictionary. Reuses the same buffer the
+			 * authoritative tick uses — the two never run on the same peer. */
+			tickIterationBuffer.Clear();
+			foreach (Buff b in buffs.Values)
+			{
+				tickIterationBuffer.Add(b);
+			}
+
+			for (int i = 0; i < tickIterationBuffer.Count; ++i)
+			{
+				Buff buff = tickIterationBuffer[i];
+				if (buff?.Template == null || !buffs.ContainsKey(buff.Template.ID))
+				{
+					continue;
+				}
+
+				buff.SetTickDelta(tickDelta);
+
+				if (!buff.HasExpired(currentTick))
+				{
+					continue;
+				}
+
+				if (buff.Stacks > 0)
+				{
+					/* The stack count is decremented directly rather than through
+					 * Buff.RemoveStack, which calls Template.OnRemoveStack first — this peer never
+					 * applied that stack's contribution, so reversing it would subtract something
+					 * it never added. Resetting the duration without decrementing would be worse
+					 * still: the buff would refill its own bar forever and never expire. */
+					--buff.Stacks;
+					buff.ResetDuration(currentTick, tickDelta);
+					continue;
+				}
+
+				/* Removed directly, and its effect torn down explicitly. Remove() defers FX to
+				 * SyncObservedBuffFX on this peer, which only runs when a message arrives — a buff
+				 * that ran out locally has no message coming, so its effect would keep playing over
+				 * a character that is no longer carrying it. */
+				int expiredID = buff.Template.ID;
+				buffs.Remove(expiredID);
+				DespawnBuffFX(expiredID);
+			}
+
+			tickIterationBuffer.Clear();
+		}
 
 		/// <summary>
 		/// True when the observed-buff list — rather than the simulation — is what should drive
@@ -1052,15 +1145,22 @@ namespace FishMMO.Shared
 
 			// Removals first, so a template that left and one that arrived cannot fight over
 			// whatever the FX parents itself to.
-			ObservedBuffEntry[] previous = observedBuffs;
-			for (int i = 0; i < previous.Length; ++i)
+			/* Diffed against what is actually SHOWING rather than against a remembered list. The
+			 * FX instances are the authority on what this peer has spawned, so nothing can drift
+			 * out of step with them — and it is one less parallel container. */
+			fxTeardownBuffer.Clear();
+			foreach (int showingID in buffFXInstances.Keys)
 			{
-				int templateID = previous[i].TemplateID;
-				if (!fxDiffBuffer.Contains(templateID))
+				if (!fxDiffBuffer.Contains(showingID))
 				{
-					DespawnBuffFX(templateID);
+					fxTeardownBuffer.Add(showingID);
 				}
 			}
+			for (int i = 0; i < fxTeardownBuffer.Count; ++i)
+			{
+				DespawnBuffFX(fxTeardownBuffer[i]);
+			}
+			fxTeardownBuffer.Clear();
 
 			for (int i = 0; i < next.Length; ++i)
 			{
@@ -1123,12 +1223,35 @@ namespace FishMMO.Shared
 		{
 			base.OnStopCharacter();
 
+			StopObserverTick();
 			DespawnAllBuffFX();
+		}
+
+		/// <summary>
+		/// Drops the observer-side duration tick if it is running.
+		/// </summary>
+		/// <remarks>
+		/// TimeManager holds the delegate, so a controller that despawned while subscribed keeps
+		/// being ticked — on a pooled character that is somebody else's buffs advancing on a
+		/// recycled object.
+		/// </remarks>
+		private void StopObserverTick()
+		{
+			if (!observerTickSubscribed)
+			{
+				return;
+			}
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick -= ObserverTimeManager_OnTick;
+			}
+			observerTickSubscribed = false;
 		}
 
 		/// <inheritdoc />
 		public override void OnDestroying()
 		{
+			StopObserverTick();
 			DespawnAllBuffFX();
 
 			base.OnDestroying();
@@ -1141,6 +1264,24 @@ namespace FishMMO.Shared
 			base.OnStartNetwork();
 			RefreshTickDelta();
 			predictionController = GetComponent<CharacterPredictionController>();
+
+			// An observed character has no replicate to advance its buffs; see the method's remarks.
+			RefreshObserverTickSubscription();
+		}
+
+		/// <summary>
+		/// Re-evaluates who advances this character's buffs when ownership moves.
+		/// </summary>
+		/// <remarks>
+		/// A character that GAINS an owner starts running the replicate, so the observer tick has to
+		/// stop or its buffs advance twice per tick. One that LOSES its owner is the reverse: the
+		/// replicate stops and the durations would freeze. Deciding this once at spawn would be
+		/// wrong in both directions.
+		/// </remarks>
+		public override void OnOwnershipClient(FishNet.Connection.NetworkConnection prevOwner)
+		{
+			base.OnOwnershipClient(prevOwner);
+			RefreshObserverTickSubscription();
 
 			/* Register the shared buff handler the first time any character starts on this client.
 			 * Never unregistered: ClientManager does not clear handlers on stop, so a per-character
@@ -1370,7 +1511,12 @@ namespace FishMMO.Shared
 		{
 			// Payload sync is authoritative. Clear any previous local state first so
 			// stale buffs from an earlier spawn, scene, or character state do not survive.
-			RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
+			/* preserveFX: this is a REFRESH, not a teardown. Whatever is still applicable is about to
+			 * be re-applied from the payload, and tearing the effects down first makes every buff's
+			 * FX restart on every payload read — visible as a stutter on an observer, which now
+			 * materialises real buffs and so actually has effects to lose. What is genuinely gone is
+			 * despawned by the diff that follows. */
+			RemoveAll(ignoreInvokeRemove: true, includePermanent: true, preserveFX: true);
 			cachedSnapshot = null;
 			snapshotDirty = true;
 			MarkObservedBuffsDirty();
@@ -1589,7 +1735,7 @@ namespace FishMMO.Shared
 			 * guessing which one it is holding.
 			 *
 			 * The OWNER gets its simulation: absolute ticks, tick counters, and its own
-			 * HiddenFromOthers buffs, which are prediction state it must restore on spawn and
+			 * every buff the owner is carrying, which is prediction state it must restore on spawn and
 			 * reconnect. EVERYONE ELSE gets the display list — template, stacks, remaining seconds,
 			 * hidden buffs already dropped. That is not merely a privacy filter (it is that too: the
 			 * full dictionary used to go to every connection, so a packet-inspecting client could
@@ -1901,7 +2047,6 @@ namespace FishMMO.Shared
 			}
 			else if (timingChange)
 			{
-				MarkObservedBuffsTimingDirty();
 			}
 		}
 
@@ -2011,10 +2156,20 @@ namespace FishMMO.Shared
 			{
 				snapshotDirty = true;
 				MarkObservedBuffsDirty();
-				buff.Apply(Character);
+
+				/* Tracked everywhere, APPLIED only where this peer simulates. An observer holds the
+				 * entry so Inspect, the target frame and aggro read real state, but the attribute
+				 * broadcast it already receives carries this buff's contribution inside
+				 * ExternalModifier — applying it here as well would count it twice. See
+				 * SimulatesBuffEffects. */
+				bool simulates = SimulatesBuffEffects;
+				if (simulates)
+				{
+					buff.Apply(Character);
+				}
 				buffs.Add(buff.Template.ID, buff);
 
-				for (int i = 0; i < buff.Stacks; ++i)
+				for (int i = 0; simulates && i < buff.Stacks; ++i)
 				{
 					buff.Template.OnApplyStack(buff, Character);
 				}
@@ -2050,12 +2205,26 @@ namespace FishMMO.Shared
 				snapshotDirty = true;
 				MarkObservedBuffsDirty();
 				BaseBuffTemplate template = buffInstance.Template;
-				if (!TryRemoveBuffEffects(buffInstance, buffID, nameof(Remove)))
+
+				/* Only reverse what this peer applied. A tracking-only observer never ran
+				 * Buff.Apply, so draining its stacks here would subtract modifiers it never added
+				 * and leave the character permanently below its real values — the mirror image of
+				 * the double-count Apply avoids. */
+				if (SimulatesBuffEffects && !TryRemoveBuffEffects(buffInstance, buffID, nameof(Remove)))
 				{
 					return;
 				}
 				buffs.Remove(buffID);
-				DespawnBuffFX(buffID);
+
+				/* FX has exactly one owner per peer. Where the simulation drives it, removing the
+				 * buff removes the effect. On a tracking-only peer SyncObservedBuffFX owns it
+				 * instead, diffing each arriving message against the last — and ReadPayload opens
+				 * with RemoveAll, so despawning here tore down every observed effect a moment
+				 * before that diff decided it was still showing and spawned it again. */
+				if (!DrivesFXFromObservedBuffs)
+				{
+					DespawnBuffFX(buffID);
+				}
 
 				// Gate UI/ECA dispatch when invoked from a replayed tick.
 				if (!isReplayingTick && template != null)
@@ -2126,7 +2295,7 @@ namespace FishMMO.Shared
 		/// permanent buff carries attribute modifiers, so leaving one behind leaked them into the
 		/// next character to use that instance.
 		/// </param>
-		public void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false)
+		public void RemoveAll(bool ignoreInvokeRemove = false, bool includePermanent = false, bool preserveFX = false)
 		{
 			snapshotDirty = true;
 			MarkObservedBuffsDirty();
@@ -2158,12 +2327,15 @@ namespace FishMMO.Shared
 						 * the next character to use this instance. */
 						if (includePermanent)
 						{
-							DespawnBuffFX(key);
+							if (!preserveFX) DespawnBuffFX(key);
 						}
 						continue;
 					}
 					buffs.Remove(key);
-					DespawnBuffFX(key);
+					if (!preserveFX)
+					{
+						DespawnBuffFX(key);
+					}
 
 					if (!ignoreInvokeRemove && !isReplayingTick && template != null)
 					{
@@ -2420,8 +2592,6 @@ namespace FishMMO.Shared
 			hasSeenFirstReplicate = false;
 			resolveAuthoritativeWarningLogged = false;
 			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
-			lastObservedPushTick = TimeManager.UNSET_TICK;
-			lastObservedRemaining.Clear();
 
 			/* This object may be pooled and respawned as somebody else. A surviving delta baseline
 			 * would let the next push describe the new occupant's strip as a difference from the
@@ -2439,7 +2609,6 @@ namespace FishMMO.Shared
 			 * object may be pooled and respawned as somebody else entirely, so the teardown is
 			 * unconditional. */
 			DespawnAllBuffFX();
-			observedBuffs = System.Array.Empty<ObservedBuffEntry>();
 		}
 
 		/// <summary>

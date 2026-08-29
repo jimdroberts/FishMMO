@@ -28,8 +28,17 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			/* Clients only. OnHit now dispatches on every peer, so without this the dedicated
+			 * server instantiates a particle prefab nobody can see — and before that widening, this
+			 * action ran ONLY there, which is why authored impact effects were invisible to every
+			 * player. Purely presentational, so it takes the client gate and never an authority one. */
+			if (!IsClientPeer(initiator, eventData))
+			{
+				return;
+			}
+
 			// Suppress VFX during prediction replay to prevent visual spam
-			if (eventData != null && eventData.TryGet(out TickEventData tickData) && tickData.IsReplicateTick) return;
+			if (IsReplayTick(eventData)) return;
 
 			// Try to get the collision event data. If not present, log a warning and exit.
 			if (eventData.TryGet(out CollisionEventData collisionEventData))

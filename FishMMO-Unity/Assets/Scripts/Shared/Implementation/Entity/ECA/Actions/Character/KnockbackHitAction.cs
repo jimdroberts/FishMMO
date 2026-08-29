@@ -32,13 +32,21 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing the target and ability information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			/* Server only. State forwarding is off, so an observer never simulates another
-			 * character and has nothing to predict here; the outcome reaches every peer through the
-			 * authoritative paths (reconcile, observer broadcast). Running it locally as well would
-			 * apply the effect twice on the peer that also happens to be the server, and produce a
-			 * value on a client that the server never agreed to. */
+			/* The DISPLACEMENT stays server only, and deliberately so. It moves the target, and on
+			 * the attacker's client that target is driven by NetworkTransform — a locally applied
+			 * impulse is overwritten by the next transform update one to three ticks later, so the
+			 * character snaps back. That reads worse than the delay it would be hiding, which is why
+			 * this is the one feedback action that did NOT move to MayPredict.
+			 *
+			 * What the attacker gets instead is a cosmetic flinch, played now, on a child transform
+			 * NetworkTransform does not touch — see CharacterHitReaction. The server's real
+			 * displacement then arrives and the two compose rather than fight. */
 			if (!EcaAuthority.IsServer(initiator, eventData))
 			{
+				if (EcaAuthority.MayPredict(initiator, eventData))
+				{
+					PlayPredictedReaction(eventData);
+				}
 				return;
 			}
 
@@ -84,5 +92,45 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+
+		/// <summary>
+		/// Plays the attacker-side flinch for a knockback the server has not confirmed yet.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Cosmetic only. It offsets the target's model, never its networked position, so nothing
+		/// the simulation, hit detection or lag compensation reads is affected — all of those work
+		/// from the root transform and the position history.
+		/// </para>
+		/// <para>
+		/// Suppressed on a replayed tick: a reconcile replays every tick since the correction, and
+		/// restarting the flinch on each of them would make the model jitter for the length of the
+		/// replay rather than lean once.
+		/// </para>
+		/// </remarks>
+		private static void PlayPredictedReaction(EventData eventData)
+		{
+			if (IsReplayTick(eventData))
+			{
+				return;
+			}
+
+			if (!TryResolveTarget(eventData, out ICharacter target) || target == null)
+			{
+				return;
+			}
+
+			/* The ability object's forward is the impact direction the authoritative branch uses
+			 * below, so the predicted lean points the same way the real displacement will. Without
+			 * one there is no direction to lean along and nothing is played. */
+			if (!eventData.TryGet(out AbilityCollisionEventData abilityEventData) ||
+				abilityEventData.AbilityObject == null)
+			{
+				return;
+			}
+
+			CharacterHitReaction.PlayOn(target, abilityEventData.AbilityObject.Transform.forward);
+		}
+
 	}
 }

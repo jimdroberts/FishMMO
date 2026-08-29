@@ -9,8 +9,11 @@ namespace FishMMO.Shared
 	/// Action that applies damage to a target character using a configurable value provider and a
 	/// given damage attribute type.
 	/// <para>
-	/// SERVER ONLY. <see cref="Execute"/> returns immediately on any other peer — damage is not
-	/// predicted, and the owner learns the result through the reconcile and the combat broadcasts.
+	/// Runs on the server, and on the client that OWNS the initiator — see
+	/// <see cref="EcaAuthority.MayPredict(ICharacter, EventData)"/>. The caster draws its own
+	/// number immediately through <see cref="PredictedCombatEvents"/> rather than waiting half a
+	/// round trip for the server's report; the server's report then confirms it, or the prediction
+	/// is greyed out when none arrives. Observers still wait to be told.
 	/// </para>
 	/// </summary>
 	[Serializable]
@@ -38,12 +41,20 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing the target information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			/* Server only. State forwarding is off, so an observer never simulates another
-			 * character and has nothing to predict here; the outcome reaches every peer through the
-			 * authoritative paths (reconcile, observer broadcast). Running it locally as well would
-			 * apply the effect twice on the peer that also happens to be the server, and produce a
-			 * value on a client that the server never agreed to. */
-			if (!EcaAuthority.IsServer(initiator, eventData))
+			/* The server, or the client that OWNS the initiator — see EcaAuthority.MayPredict.
+			 *
+			 * This was server-only, which meant a player's own hit moved nothing on their screen
+			 * until the server's report came back: hit, pause, then the bar drops. The caster has
+			 * predicted the cast and owns the input that produced it, so it is the one peer with
+			 * something to predict from; an observer still answers false and waits to be told.
+			 *
+			 * Safe because the authoritative consequences self-gate one level down —
+			 * CharacterDamageController.Kill, QueueCombatEvent and RecordCombatContribution each
+			 * return early unless IsServerStarted. A predicted hit moves a bar; it cannot kill
+			 * anybody, emit a combat report, or award loot rights. The server's own resource
+			 * broadcast overwrites the predicted value rather than accumulating on top of it, so a
+			 * misprediction heals itself on the next push instead of drifting. */
+			if (!EcaAuthority.MayPredict(initiator, eventData))
 			{
 				return;
 			}
@@ -63,6 +74,18 @@ namespace FishMMO.Shared
 			{
 				int amount = DamageValue.GetValue(initiator, eventData);
 				defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
+
+				/* The caster's own floating number, drawn now rather than on the server's report.
+				 *
+				 * Only off the server: the server has no display, and its report is what every
+				 * OTHER client draws from. Only on a real tick, never a replayed one — a reconcile
+				 * replays every tick since the last correction, and drawing a number per replayed
+				 * tick is the visual spam PlayFXAction guards against for the same reason. */
+				if (!EcaAuthority.IsServer(initiator, eventData) && !IsReplayTick(eventData))
+				{
+					PredictedCombatEvents.Predict(target, amount, PredictedCombatEvents.Kind.Damage,
+						DamageAttributeTemplate, UnityEngine.Time.unscaledTime);
+				}
 			}
 		}
 	}

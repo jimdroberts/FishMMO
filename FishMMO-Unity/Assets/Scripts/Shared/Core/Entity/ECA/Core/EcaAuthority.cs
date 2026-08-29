@@ -96,6 +96,78 @@ namespace FishMMO.Shared.Core
 		/// <param name="eventData">The event being executed, or null.</param>
 		public static bool IsServer(EventData eventData) => IsServer(null, eventData);
 
+		/// <summary>
+		/// True when this peer may apply an effect for FEEDBACK, ahead of the server agreeing.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why this is separate from <see cref="IsServer(ICharacter, EventData)"/>.</b> That gate
+		/// asks "may I change authoritative state", and its answer has to stay no on a client. But
+		/// using it for everything meant a player's own hit produced nothing locally until the
+		/// server's report arrived — hit, pause, then the world reacts. In a predicted client that
+		/// is not acceptable, and it is not what the gate was protecting against: the risk was a
+		/// client inventing effects for characters it has no business simulating, not a caster
+		/// showing the result of its own cast.
+		/// </para>
+		/// <para>
+		/// <b>Only the initiator's owner predicts.</b> The server always may. A client may only when
+		/// it owns the character that CAUSED the effect — it has that character's input, it
+		/// predicted the cast, and it is the only peer with anything to predict from. A mere
+		/// observer answers false: it has no input stream for the caster, holds every peer
+		/// interpolated, and the server is going to tell it what happened anyway.
+		/// </para>
+		/// <para>
+		/// <b>What makes this safe.</b> The authoritative consequences of a predicted effect are
+		/// already gated one level down, inside the controllers: <c>CharacterDamageController.Kill</c>,
+		/// <c>QueueCombatEvent</c> and <c>RecordCombatContribution</c> each return early unless
+		/// <c>IsServerStarted</c>. So a predicted hit moves a bar and raises local events; it cannot
+		/// kill anybody, award loot rights, or emit a combat report. Death in particular stays
+		/// server-only and unpredicted by deliberate decision — a corpse that stands back up is far
+		/// worse than one that arrives an RTT late.
+		/// </para>
+		/// <para>
+		/// An action whose effect is not player-visible — threat, taunt, revive — has nothing to gain
+		/// here and must keep using <see cref="IsServer(ICharacter, EventData)"/>. Predicting those
+		/// buys no feel and adds a way to be wrong.
+		/// </para>
+		/// </remarks>
+		/// <param name="initiator">The action's explicit initiator, or null.</param>
+		/// <param name="eventData">The event being executed, or null.</param>
+		public static bool MayPredict(ICharacter initiator, EventData eventData)
+		{
+			// The server is always allowed; this is a widening of IsServer, never a replacement.
+			if (IsServer(initiator, eventData))
+			{
+				return true;
+			}
+
+			ICharacter cause = initiator ?? eventData?.Initiator;
+			if (cause == null)
+			{
+				/* No initiator to own. Matches the undecidable case in Allows: a scene-authored
+				 * trigger or an edit-mode test has no peer to be wrong about. */
+				return true;
+			}
+
+			NetworkObject networkObject = cause.NetworkObject;
+			if (networkObject == null)
+			{
+				return true;
+			}
+
+			/* IsOwner, not "is a client". An observer watching somebody else's fireball must not
+			 * apply its effects locally — it would be guessing, and the server's broadcast is
+			 * already on its way. */
+			return networkObject.IsOwner;
+		}
+
+		/// <summary>
+		/// True when this peer may apply an effect for feedback. See
+		/// <see cref="MayPredict(ICharacter, EventData)"/>.
+		/// </summary>
+		/// <param name="eventData">The event being executed, or null.</param>
+		public static bool MayPredict(EventData eventData) => MayPredict(null, eventData);
+
 		/// <summary>Reads one character's networked view of the local peer.</summary>
 		private static PeerEvidence FromCharacter(ICharacter character)
 		{

@@ -1,3 +1,4 @@
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using FishMMO.Shared;
@@ -16,6 +17,55 @@ namespace FishMMO.UnitTests.AI
 	[TestFixture]
 	public class SpawnerSettingsTests
 	{
+		// --- Respawn check interval -----------------------------------------------------------
+
+		/// <summary>Drives the private scheduler and returns the delay it chose.</summary>
+		private static float ScheduleAndMeasure(float minimum, float maximum)
+		{
+			GameObject go = new GameObject("SpawnerInterval");
+			try
+			{
+				ObjectSpawner spawner = go.AddComponent<ObjectSpawner>();
+				spawner.RespawnCheckIntervalMinimum = minimum;
+				spawner.RespawnCheckIntervalMaximum = maximum;
+
+				System.Type type = typeof(ObjectSpawner);
+				type.GetMethod("ScheduleNextRespawnCheck", BindingFlags.Instance | BindingFlags.NonPublic)
+					.Invoke(spawner, null);
+				float next = (float)type.GetField("nextRespawnCheckTime", BindingFlags.Instance | BindingFlags.NonPublic)
+					.GetValue(spawner);
+
+				return next - Time.time;
+			}
+			finally { Object.DestroyImmediate(go); }
+		}
+
+		[Test]
+		public void RespawnCheck_SchedulesInsideTheConfiguredRange()
+		{
+			/* Sampled rather than checked once: the delay is random per pass, and a bound that is
+			 * only occasionally violated is exactly the kind that survives a single assertion. */
+			for (int i = 0; i < 50; ++i)
+			{
+				float delay = ScheduleAndMeasure(3.0f, 6.0f);
+
+				Assert.GreaterOrEqual(delay, 3.0f, "Scheduled sooner than the configured minimum.");
+				Assert.LessOrEqual(delay, 6.0f, "Scheduled later than the configured maximum.");
+			}
+		}
+
+		[Test]
+		public void RespawnCheck_RepairsABadIntervalInsteadOfPollingEveryFrame()
+		{
+			/* An inverted or negative range typed into the inspector must not resolve to a time in
+			 * the past. That would put Update back to calling TryRespawn every frame — silently,
+			 * with no error and no symptom other than the cost this interval exists to avoid. */
+			Assert.AreEqual(6.0f, ScheduleAndMeasure(6.0f, 3.0f), 0.001f,
+				"An inverted range should clamp to the minimum, not invert or throw.");
+			Assert.GreaterOrEqual(ScheduleAndMeasure(-5.0f, -1.0f), 0.0f,
+				"A negative range must not schedule the next check in the past.");
+		}
+
 		// --- Item roll table ------------------------------------------------------------------
 
 		[Test]

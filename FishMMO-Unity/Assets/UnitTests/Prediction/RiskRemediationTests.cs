@@ -40,14 +40,20 @@ namespace FishMMO.UnitTests
 		/// The owner path needs a spawned object with a valid owning connection, which an
 		/// EditMode test cannot construct; the filtered direction is the security-relevant one.
 		/// <para>
-		/// A non-owner's block is now the display list rather than the simulation, so the visible
-		/// buff lands in <c>ObservedBuffs</c> and the simulation dictionary stays empty — see
-		/// BuffObserverStateTests for why that shape matters. The property asserted here is
-		/// unchanged: a hidden buff never leaves the server.
+		/// A non-owner's block is the display list rather than the simulation, so the buffs land in
+		/// <c>ObservedBuffs</c> and the simulation dictionary stays empty — see BuffObserverStateTests
+		/// for why that shape matters.
+		/// </para>
+		/// <para>
+		/// <b>This used to assert a filter that no longer exists.</b> <c>HiddenFromOthers</c> was
+		/// authored on no buff in the project and buffs are not hidden from other players, so it was
+		/// removed. The test is kept, inverted: what it now guards is that EVERY buff reaches an
+		/// observer, so a filter cannot be reintroduced by accident and quietly blank somebody's
+		/// target frame.
 		/// </para>
 		/// </remarks>
 		[Test]
-		public void BuffPayload_OmitsHiddenBuffs_ForNonOwnerConnections()
+		public void BuffPayload_CarriesEveryBuff_ForNonOwnerConnections()
 		{
 			GameObject senderObject = new GameObject("BuffPayloadSender");
 			GameObject receiverObject = new GameObject("BuffPayloadReceiver");
@@ -58,12 +64,10 @@ namespace FishMMO.UnitTests
 			{
 				visible.name = "RiskRemediation_VisibleBuff";
 				visible.Duration = 10f;
-				visible.HiddenFromOthers = false;
 				visible.AddToCache(visible.name);
 
-				hidden.name = "RiskRemediation_HiddenBuff";
+				hidden.name = "RiskRemediation_SecondBuff";
 				hidden.Duration = 10f;
-				hidden.HiddenFromOthers = true;
 				hidden.AddToCache(hidden.name);
 
 				BuffController sender = senderObject.AddComponent<BuffController>();
@@ -90,14 +94,15 @@ namespace FishMMO.UnitTests
 
 				TestContext.WriteLine(
 					$"MEASURE buff payload to non-owner: {sender.Buffs.Count} live on server → " +
-					$"{receiver.ObservedBuffs.Count} on the wire ({writer.Length} B)");
+					$"{receiver.Buffs.Count} on the wire ({writer.Length} B)");
 
-				LogAssert.AreEqual(0, receiver.Buffs.Count,
-					"A non-owner must not be handed simulation state it will never tick.");
-				LogAssert.AreEqual(1, receiver.ObservedBuffs.Count,
-					"The visible buff must survive the payload round trip as an observed entry.");
-				LogAssert.AreEqual(visible.ID, receiver.ObservedBuffs[0].TemplateID,
-					"The visible buff must survive the payload round trip.");
+				LogAssert.AreEqual(2, receiver.Buffs.Count,
+					"A non-owner holds the real entries and ticks their durations locally; what it does " +
+					"not do is apply their effects. See BuffController.SimulatesBuffEffects.");
+				LogAssert.AreEqual(2, receiver.Buffs.Count,
+					"Every buff must survive the payload round trip. Buffs are not hidden from other " +
+					"players, so a count below this means a visibility filter was reintroduced and is " +
+					"silently blanking part of the target frame.");
 				LogAssert.AreEqual(0, reader.Remaining,
 					"The framed block must be consumed exactly; a count/entry mismatch would desync every behaviour after this one.");
 			}

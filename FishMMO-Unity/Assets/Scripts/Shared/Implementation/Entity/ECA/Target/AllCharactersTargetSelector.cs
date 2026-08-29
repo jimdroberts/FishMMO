@@ -40,6 +40,18 @@ namespace FishMMO.Shared
 		/// identity costs one pass and makes the fan-out reproducible.
 		/// </para>
 		/// </remarks>
+		/// <para>
+		/// <b>Rewound, despite selecting no volume.</b> Which characters this yields does not depend
+		/// on where anybody is — but its <see cref="TargetSelector.Conditions"/> are designer
+		/// authored and may be positional (<see cref="WithinRangeCondition"/>,
+		/// <see cref="HasLineOfSightCondition"/>, <see cref="IsWithinFacingAngleCondition"/>). A
+		/// condition evaluated outside the scope would filter this fan-out by where the SERVER holds
+		/// its characters while every other selector filters by where the caster saw them, so the
+		/// same authored range would mean two different things depending on which selector produced
+		/// the candidate. Running the whole gather under one scope makes the answer uniform; when
+		/// there is nothing to compensate, <see cref="TargetSelector.GatherRewound"/> simply runs the
+		/// body directly.
+		/// </para>
 		/// <param name="eventData">The event data driving the selection.</param>
 		/// <returns>An enumerable of character GameObjects, ordered by network identity.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
@@ -55,6 +67,25 @@ namespace FishMMO.Shared
 				yield break;
 			}
 
+			List<GameObject> results = new List<GameObject>();
+			GatherRewound(eventData, context, results, Gather);
+
+			for (int i = 0; i < results.Count; ++i)
+			{
+				yield return results[i];
+			}
+		}
+
+		/// <summary>
+		/// Collects and orders every character in the context's scene. Runs inside the rewind scope.
+		/// </summary>
+		/// <remarks>
+		/// An instance method rather than a static one so it can reach
+		/// <see cref="TargetSelector.AreConditionsMet"/>; the delegate is allocated per selection,
+		/// which is the same cost the enumerator itself already carries.
+		/// </remarks>
+		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
+		{
 			MonoBehaviour[] behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(
 				IncludeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude,
 				FindObjectsSortMode.None);
@@ -83,7 +114,7 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < ranks.Count; ++i)
 			{
-				yield return candidates[ranks[i].Index];
+				results.Add(candidates[ranks[i].Index]);
 			}
 		}
 	}

@@ -125,6 +125,18 @@ namespace FishMMO.Shared
 		public bool RandomRespawnTime = true;
 
 		/// <summary>
+		/// Shortest delay between respawn checks, in seconds.
+		/// </summary>
+		[Tooltip("Shortest delay between respawn checks, in seconds. Respawn deadlines are wall-clock, so this only sets how soon after a deadline the object appears - it does not change respawn timing itself.")]
+		public float RespawnCheckIntervalMinimum = 3.0f;
+
+		/// <summary>
+		/// Longest delay between respawn checks, in seconds.
+		/// </summary>
+		[Tooltip("Longest delay between respawn checks, in seconds. Each check picks a fresh random delay in this range so spawners do not all poll on the same frame.")]
+		public float RespawnCheckIntervalMaximum = 6.0f;
+
+		/// <summary>
 		/// If true, a random spawn position is picked inside the bounding box using the current position as the center.
 		/// </summary>
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
@@ -170,6 +182,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Internal index for linear spawn selection.
 		/// </summary>
+		/// <summary>
+		/// <see cref="Time.time"/> at which <see cref="Update"/> next polls for respawns.
+		/// </summary>
+		private float nextRespawnCheckTime = 0.0f;
+
 		private int lastSpawnIndex = 0;
 
 		/// <summary>
@@ -189,6 +206,11 @@ namespace FishMMO.Shared
 				enabled = false;
 				return;
 			}
+
+			/* Spread the first check across the window rather than starting every spawner's
+			 * clock together. A scene that loads hundreds of spawners on one frame would
+			 * otherwise have them all poll on the same frame forever after. */
+			nextRespawnCheckTime = Time.time + UnityEngine.Random.Range(0.0f, Mathf.Max(0.0f, RespawnCheckIntervalMaximum));
 
 			Transform = transform;
 
@@ -256,11 +278,44 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called every frame. Attempts to respawn objects if conditions and timers are met.
+		/// Polls for respawns on an interval rather than every frame.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="TryRespawn"/> walks the whole timer list and evaluates every respawn
+		/// condition, so running it per frame costs a scene full of spawners far more than it
+		/// buys. Respawn deadlines are wall-clock <see cref="DateTime"/> values, so polling more
+		/// slowly does not shift them - it only decides how soon after a deadline passes the
+		/// object actually appears, bounded by the interval.
+		/// </para>
+		/// <para>
+		/// The gate lives here rather than inside <see cref="TryRespawn"/> so that direct callers
+		/// still get an immediate attempt.
+		/// </para>
+		/// </remarks>
 		void Update()
 		{
+			if (Time.time < nextRespawnCheckTime)
+			{
+				return;
+			}
+
+			ScheduleNextRespawnCheck();
+
 			TryRespawn();
+		}
+
+		/// <summary>
+		/// Picks the next respawn check time, re-randomised each pass so spawners that happen to
+		/// align on one frame drift apart again instead of staying in lockstep.
+		/// </summary>
+		private void ScheduleNextRespawnCheck()
+		{
+			// Tolerate an inverted or negative range in the inspector rather than never polling.
+			float minimum = Mathf.Max(0.0f, RespawnCheckIntervalMinimum);
+			float maximum = Mathf.Max(minimum, RespawnCheckIntervalMaximum);
+
+			nextRespawnCheckTime = Time.time + UnityEngine.Random.Range(minimum, maximum);
 		}
 
 #if UNITY_EDITOR

@@ -1117,9 +1117,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <remarks>
 		/// <para>
 		/// Read from <c>IBuffController.ObservedBuffs</c> rather than from the raw buff dictionary,
-		/// so this inherits the existing trust boundary rather than opening a second one: that
-		/// list is assembled on the server and already has every buff marked
-		/// <c>HiddenFromOthers</c> stripped out of it. The server keeps its own copy current
+		/// so this reads the same server-assembled list every other observer path does rather than
+		/// opening a second source. The server keeps its own copy current
 		/// because the push RPC runs locally as well as on observers.
 		/// </para>
 		/// <para>
@@ -1142,36 +1141,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return null;
 			}
 
-			IReadOnlyList<ObservedBuffEntry> source = buffController.ObservedBuffs;
+			SortedDictionary<int, Buff> source = buffController.Buffs;
 			if (source == null || source.Count < 1)
 			{
 				return null;
 			}
 
-			float age = now - buffController.ObservedBuffsReceivedTime;
-			if (age < 0.0f)
-			{
-				age = 0.0f;
-			}
+			/* Read straight off the buff container, at the server's current tick.
+			 *
+			 * This used to read a display list and then re-base every entry by the age of the last
+			 * push, because those seconds were only correct at the moment the SET changed — for a
+			 * twenty-minute buff that could be many minutes stale. There is no separate list any
+			 * more and no push age to correct for: the duration is computed from the live tick, so
+			 * the arithmetic that existed to repair staleness is simply gone. */
+			uint currentTick = buffController.GetCurrentDomainTick();
 
 			vitalsBuffBuffer.Clear();
 
-			for (int i = 0; i < source.Count; ++i)
+			foreach (Buff buff in source.Values)
 			{
-				ObservedBuffEntry entry = source[i];
-
-				// A permanent buff carries no duration at all and is passed straight through.
-				if (entry.TotalSeconds > 0.0f)
+				BaseBuffTemplate template = buff?.Template;
+				if (template == null)
 				{
-					float remaining = entry.RemainingSeconds - age;
-					if (remaining <= 0.0f)
-					{
-						continue;
-					}
-					entry.RemainingSeconds = remaining;
+					continue;
 				}
 
-				vitalsBuffBuffer.Add(entry);
+				float remaining = buff.RemainingSeconds(currentTick);
+
+				// A permanent buff carries no duration at all and is passed straight through.
+				if (template.Duration > 0.0f && remaining <= 0.0f)
+				{
+					continue;
+				}
+
+				vitalsBuffBuffer.Add(new ObservedBuffEntry()
+				{
+					TemplateID = template.ID,
+					Stacks = buff.Stacks,
+					RemainingSeconds = remaining,
+					TotalSeconds = template.Duration,
+				});
 
 				/* Bounded. See maxVitalsBuffsPerMember: this list has no natural size limit and
 				 * this payload is sent party-size times per party per second. Truncated from the

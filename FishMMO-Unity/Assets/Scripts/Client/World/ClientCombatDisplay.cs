@@ -91,6 +91,12 @@ namespace FishMMO.Client
 			 * which reaches no client at all, and on the owning client for its own predicted
 			 * damage-over-time ticks, which repeat on every reconcile replay. The report fires once,
 			 * on every client that can see the target, carrying the amount that actually landed. */
+			/* The caster draws its OWN numbers before the server confirms them, so the report is no
+			 * longer the only source. See PredictedCombatEvents for why absence is the rejection
+			 * signal and why the server cannot send one. */
+			PredictedCombatEvents.OnPredicted += OnPredictedCombatEvent;
+			PredictedCombatEvents.OnPredictionRejected += OnPredictionRejected;
+
 			CharacterDamageController.OnCombatEventReceived += OnCombatEvent;
 			ICharacterDamageController.OnKilled += OnKilled;
 			ICharacterDamageController.OnResurrected += OnResurrected;
@@ -103,6 +109,11 @@ namespace FishMMO.Client
 		public void Shutdown()
 		{
 			ClientSettings.OnGameplayChanged -= RefreshConfig;
+
+			PredictedCombatEvents.OnPredicted -= OnPredictedCombatEvent;
+			PredictedCombatEvents.OnPredictionRejected -= OnPredictionRejected;
+			PredictedCombatEvents.Clear();
+			predictedLabels.Clear();
 
 			CharacterDamageController.OnCombatEventReceived -= OnCombatEvent;
 			ICharacterDamageController.OnKilled -= OnKilled;
@@ -222,9 +233,29 @@ namespace FishMMO.Client
 			return value.ToString();
 		}
 
+		/// <summary>Labels drawn from a prediction, by the handle that can later reject them.</summary>
+		private readonly Dictionary<long, UITKWorldLabel> predictedLabels = new Dictionary<long, UITKWorldLabel>();
+
+		/// <summary>Colour a rejected number fades to: readable, obviously not a real hit.</summary>
+		private static readonly Color RejectedColor = new Color(0.55f, 0.55f, 0.55f, 0.75f);
+
 		/// <summary>Routes one server-reported combat event to the right floating number.</summary>
+		/// <remarks>
+		/// A report the caster already drew as a prediction is consumed rather than drawn again.
+		/// Everyone else — every observer, and the caster for hits it did not predict — draws here
+		/// as before.
+		/// </remarks>
 		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind)
 		{
+			PredictedCombatEvents.Kind predictedKind = kind == CombatEventKind.Heal
+				? PredictedCombatEvents.Kind.Heal
+				: PredictedCombatEvents.Kind.Damage;
+
+			if (PredictedCombatEvents.TryConfirm(target, predictedKind))
+			{
+				return;
+			}
+
 			if (kind == CombatEventKind.Heal)
 			{
 				OnHealed(source, target, amount);
@@ -233,10 +264,50 @@ namespace FishMMO.Client
 			OnDamaged(source, target, amount, dmg);
 		}
 
-		private void OnDamaged(ICharacter attacker, ICharacter target, int amount, DamageAttributeTemplate dmg)
+		/// <summary>Draws a number this client predicted, keeping the label so it can be rejected.</summary>
+		private void OnPredictedCombatEvent(long id, ICharacter target, int amount, PredictedCombatEvents.Kind kind, DamageAttributeTemplate dmg)
+		{
+			UITKWorldLabel label = kind == PredictedCombatEvents.Kind.Heal
+				? OnHealed(null, target, amount)
+				: OnDamaged(null, target, amount, dmg);
+
+			if (label != null)
+			{
+				predictedLabels[id] = label;
+			}
+		}
+
+		/// <summary>
+		/// Greys out a number the server never confirmed.
+		/// </summary>
+		/// <remarks>
+		/// Recoloured rather than removed. A number that vanishes mid-flight reads as a rendering
+		/// glitch; one that greys out reads as "that did not land", which is what happened. The
+		/// label may already have been recycled by the pool, in which case there is nothing to mark
+		/// and nothing to fix.
+		/// </remarks>
+		private void OnPredictionRejected(long id)
+		{
+			if (predictedLabels.TryGetValue(id, out UITKWorldLabel label))
+			{
+				predictedLabels.Remove(id);
+				if (label != null)
+				{
+					label.SetColor(RejectedColor);
+				}
+			}
+		}
+
+		/// <summary>Ages out predictions the server never confirmed. Driven by the client loop.</summary>
+		public void Tick()
+		{
+			PredictedCombatEvents.Sweep(Time.unscaledTime);
+		}
+
+		private UITKWorldLabel OnDamaged(ICharacter attacker, ICharacter target, int amount, DamageAttributeTemplate dmg)
 		{
 			EnsureConfig();
-			if (target == null || !showDamage) return;
+			if (target == null || !showDamage) return null;
 			var pos = target.Transform.position;
 			pos.y += GetDisplayHeight(target);
 			int fx = 0; fx.EnableBit(LabelEffect.FloatRandom); fx.EnableBit(LabelEffect.FadeOut);
@@ -244,17 +315,17 @@ namespace FishMMO.Client
 			 * attribute, and the report is free to arrive before this client has resolved the
 			 * template, so the colour falls back rather than the number being skipped. */
 			Color damageColor = dmg != null ? dmg.DisplayColor : new TinyColor(255, 64, 64).ToUnityColor();
-			UITKLabelMaker.Display3D(ToDisplayString(amount), pos, damageColor, 2.0f, 1.0f, false, fx);
+			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, damageColor, 2.0f, 1.0f, false, fx);
 		}
 
-		private void OnHealed(ICharacter healer, ICharacter healed, int amount)
+		private UITKWorldLabel OnHealed(ICharacter healer, ICharacter healed, int amount)
 		{
 			EnsureConfig();
-			if (healed == null || !showHeals) return;
+			if (healed == null || !showHeals) return null;
 			var pos = healed.Transform.position;
 			pos.y += GetDisplayHeight(healed);
 			int fx = 0; fx.EnableBit(LabelEffect.FloatUp); fx.EnableBit(LabelEffect.FadeOut);
-			UITKLabelMaker.Display3D(ToDisplayString(amount), pos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false, fx);
+			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false, fx);
 		}
 
 		private void OnKilled(ICharacter killer, ICharacter victim)

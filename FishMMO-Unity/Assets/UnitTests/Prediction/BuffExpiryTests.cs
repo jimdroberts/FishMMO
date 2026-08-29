@@ -34,7 +34,7 @@ namespace FishMMO.UnitTests
 	/// <c>CharacterReconcileData</c> — buffs included — reaches the OWNER and nobody else. It never
 	/// reached observers for players even when the FishNet default was on, because a player object
 	/// has an owner; now it reaches no observer for any object. What observers get instead is the
-	/// server-built display list (BuffController.ObservedBuffs), in seconds rather than ticks,
+	/// server-built observer message, in seconds rather than ticks,
 	/// carried by the spawn payload's observer block and by CharacterBuffsBroadcast. The legacy
 	/// observer broadcast path (CharacterObserverBuffAdd/RemoveBroadcast) was deleted because it
 	/// used <c>TimeManager.LocalTick</c> as the apply tick, which diverges from the source
