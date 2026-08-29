@@ -95,6 +95,34 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Drops the outstanding rate limit so the next CHANGE is sent on the tick it happens.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="NextPushTick"/> is an absolute deadline stamped from the interval in force at
+		/// the last push. A caller that widens its interval while a character is idle therefore
+		/// leaves a deadline behind that outlives the reason for it — and the event that matters
+		/// most (the first hit of a fight) is exactly the one that arrives while it is still
+		/// pending. This clears the deadline without pushing anything: nothing is sent unless the
+		/// state has actually changed.
+		/// </para>
+		/// <para>
+		/// Deliberately does NOT touch <see cref="LastPushed"/>, <see cref="HasPushed"/> or the
+		/// pending confirmation. Clearing those would resend a value the observers already hold and
+		/// would drop the loss repair for the previous push.
+		/// </para>
+		/// </remarks>
+		/// <param name="tick">The current server tick; the deadline is moved back to it.</param>
+		public void AllowImmediatePush(uint tick)
+		{
+			/* Not zero: Evaluate compares as a SIGNED difference so ticks wrap correctly, and a
+			 * literal zero is "very far in the past" only until the tick counter wraps past it.
+			 * The current tick is unambiguous — tick - tick is 0, which is not negative, so the
+			 * next change passes the gate. */
+			NextPushTick = tick;
+		}
+
+		/// <summary>
 		/// True when two resource states differ by enough for an observer to notice.
 		/// </summary>
 		/// <remarks>

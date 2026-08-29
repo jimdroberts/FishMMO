@@ -94,7 +94,19 @@ namespace FishMMO.Shared
 					WorldSceneSettings worldSceneSettings = GameObject.FindFirstObjectByType<WorldSceneSettings>();
 					if (worldSceneSettings != null)
 					{
-						sceneDetails.MaxClients = worldSceneSettings.MaxClients;
+						/* Clamped on read, not trusted. The Range attribute only constrains the
+						 * inspector — a value edited into the scene YAML by hand, or authored
+						 * before the cap existed, arrives here unchecked. Clamping at the point
+						 * the cache is built means every consumer downstream sees a legal number. */
+						sceneDetails.MaxClients = Mathf.Clamp(
+							worldSceneSettings.MaxClients, 1, WorldSceneSettings.MaximumClientsPerScene);
+
+						if (worldSceneSettings.MaxClients != sceneDetails.MaxClients)
+						{
+							Log.Warning("WorldSceneDetailsCacheReader",
+								$"{currentScene.name} declares MaxClients={worldSceneSettings.MaxClients}, " +
+								$"outside [1, {WorldSceneSettings.MaximumClientsPerScene}]. Using {sceneDetails.MaxClients}.");
+						}
 						sceneDetails.MapDefinition = worldSceneSettings.MapDefinition;
 
 						/* The definition wins, and the component is the fallback rather than the

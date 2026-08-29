@@ -307,6 +307,104 @@ namespace FishMMO.UnitTests
 				"An observer draws whole units; a fractional change is invisible and must not be sent.");
 		}
 
+		/// <summary>
+		/// Entering combat must not be made to wait out a rate limit sized for an idle character.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Out of combat the push interval is widened (12 ticks) because the only thing moving a bar
+		/// is regeneration. <c>NextPushTick</c> is an absolute deadline stamped from whatever
+		/// interval was in force at the last push, so an idle character carries a deadline up to
+		/// twelve ticks out — and the first hit of a fight is exactly the change that arrives while
+		/// it is still pending. Without the reset, observers would see an eleven-tick-stale health
+		/// bar at the one moment it matters.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void ResourceScheduler_EnteringCombatClearsTheOutOfCombatRateLimit()
+		{
+			const uint OutOfCombat = 12;
+			const uint InCombat = 6;
+
+			ObservedResourcePushScheduler scheduler = default;
+
+			// Idle at full health: the first push stamps a deadline twelve ticks out.
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.Push,
+				scheduler.Evaluate(0, Resources(100.0f), OutOfCombat));
+
+			// Hit on tick 1. Under the idle deadline this is refused.
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.None,
+				scheduler.Evaluate(1, Resources(60.0f), InCombat),
+				"Sanity: without clearing the deadline the hit is held. This is the behaviour being fixed.");
+
+			scheduler.AllowImmediatePush(1);
+
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.Push,
+				scheduler.Evaluate(1, Resources(60.0f), InCombat),
+				"Once combat clears the deadline the damage must go out on the tick it lands.");
+			Assert.AreEqual(60.0f, scheduler.LastPushed.Health,
+				"The push must carry the post-damage value.");
+		}
+
+		/// <summary>
+		/// Clearing the rate limit must not itself send anything.
+		/// </summary>
+		/// <remarks>
+		/// It lifts the deadline; the change gate still decides. Resending a value the observers
+		/// already hold would make every combat entry cost a packet per character whether or not
+		/// anything happened.
+		/// </remarks>
+		[Test]
+		public void ResourceScheduler_AllowImmediatePushDoesNotResendAnUnchangedState()
+		{
+			ObservedResourcePushScheduler scheduler = default;
+			scheduler.Evaluate(0, Resources(100.0f), 12);
+
+			scheduler.AllowImmediatePush(1);
+
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.None,
+				scheduler.Evaluate(1, Resources(100.0f), 6),
+				"Nothing changed, so nothing may be sent — the deadline was lifted, not the change gate.");
+		}
+
+		/// <summary>
+		/// Clearing the rate limit must leave the pending loss-repair confirmation intact.
+		/// </summary>
+		/// <remarks>
+		/// The confirmation is what repairs a dropped unreliable packet. Resetting the whole
+		/// scheduler on combat entry would drop it, reintroducing the stale-corpse failure for any
+		/// character that took a hit shortly after its last push.
+		/// </remarks>
+		[Test]
+		public void ResourceScheduler_AllowImmediatePushKeepsThePendingConfirmation()
+		{
+			ObservedResourcePushScheduler scheduler = default;
+			scheduler.Evaluate(0, Resources(100.0f), 12);
+
+			scheduler.AllowImmediatePush(1);
+
+			Assert.IsTrue(scheduler.ConfirmPending,
+				"The confirmation scheduled by the last push must survive; it is the loss repair.");
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.Confirm,
+				scheduler.Evaluate(ObservedResourcePushScheduler.ConfirmDelayTicks, Resources(100.0f), 6),
+				"The confirmation must still fire on its original schedule.");
+		}
+
+		/// <summary>The wider out-of-combat interval must actually rate limit.</summary>
+		[Test]
+		public void ResourceScheduler_OutOfCombatIntervalHoldsChangesLonger()
+		{
+			ObservedResourcePushScheduler scheduler = default;
+			scheduler.Evaluate(0, Resources(50.0f), 12);
+
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.None, scheduler.Evaluate(6, Resources(52.0f), 12),
+				"Six ticks is inside the twelve-tick out-of-combat interval; regeneration must not push there.");
+			Assert.AreEqual(ObservedResourcePushScheduler.Decision.Push, scheduler.Evaluate(12, Resources(54.0f), 12),
+				"At twelve ticks the interval has elapsed and the accumulated change goes out.");
+			Assert.AreEqual(54.0f, scheduler.LastPushed.Health,
+				"The delayed push must carry the newest value, not the one it skipped.");
+		}
+
 		/// <summary>A maximum that moves is a change even when the current value has not.</summary>
 		[Test]
 		public void ResourceScheduler_MaxChangeCounts()

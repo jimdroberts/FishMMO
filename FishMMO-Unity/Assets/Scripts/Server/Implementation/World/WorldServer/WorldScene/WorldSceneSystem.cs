@@ -117,7 +117,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
-		private const int MaxClientsPerInstance = 500;
+		/// <remarks>
+		/// Deferred to <see cref="WorldSceneSettings.MaximumClientsPerScene"/> rather than declared
+		/// independently: this value and the scene server's admission cap have to agree, or the
+		/// world server routes players into a scene the scene server will then refuse.
+		/// </remarks>
+		private const int MaxClientsPerInstance = WorldSceneSettings.MaximumClientsPerScene;
 
 		/// <summary>
 		/// Ceiling on how many instances of one open-world scene may be loading at the same time.
@@ -1118,8 +1123,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				 * open-world zone that takes twenty seconds to come up collected ten requests;
 				 * scene servers dequeued and loaded all of them, so one zone became ten stacked
 				 * copies, each with its own physics scene, nine of them empty. An empty scene is
-				 * not eligible for stale unload until StaleSceneTimeout (an hour by default), so
-				 * they stayed.
+				 * not eligible for stale unload until StaleSceneTimeout (five minutes), so they
+				 * stayed for minutes rather than being reclaimed on the next pulse.
 				 *
 				 * EnqueueIfUnderOutstandingLimitAsync counts and inserts in a single statement,
 				 * bounded by how many instances the waiting population could fill. One player
