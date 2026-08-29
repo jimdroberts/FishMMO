@@ -413,9 +413,9 @@ namespace FishMMO.UnitTests
 			body.WriteInt32(entries.Length);
 			for (int i = 0; i < entries.Length; ++i)
 			{
-				body.WriteInt32(entries[i].TemplateID);
-				body.WriteInt32(entries[i].Stacks);
-				body.WriteSingle(entries[i].RemainingSeconds);
+				// The entry's own wire form, shared with CharacterBuffsBroadcast. Hand-writing the
+				// fields here is what let this helper drift from the writer it is imitating.
+				entries[i].WriteTo(body);
 			}
 
 			Reader reader = new Reader(FramePayload(ApplyTick, body).GetArraySegment(), null);

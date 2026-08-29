@@ -368,6 +368,29 @@ namespace FishNet.Component.Transforming
             Rotation = AutoPackType.Packed,
             Scale = AutoPackType.Unpacked
         };
+        //FISHMMO EDIT: position compression scale is configurable rather than a hardcoded 100.
+        /* Range and resolution are the same number seen two ways. An Int16 holds +/-32766 scaled
+         * units, so this multiplier fixes both the reachable range (32766 / multiplier) and the
+         * precision (1 / multiplier). The stock 100 gives centimeter precision within +/-327.66
+         * units and silently spends 4 bytes per axis on everything beyond that, which on a map
+         * larger than a 655 unit box is almost every object. Lowering it trades resolution for
+         * range. Serialized rather than const so both peers read the same value from the same
+         * asset; scale compression is deliberately left on the stock 100. */
+        /// <summary>
+        /// Scale applied to positions before they are compressed into an Int16.
+        /// </summary>
+        [Tooltip("Scale applied to positions before compressing them to 2 bytes per axis. Compressed range is 32766 divided by this value; resolution is 1 divided by it. The default 100 gives centimeter precision within +/-327.66 units; 10 gives decimeter precision within +/-3276.6 units. Positions outside the range cost 4 bytes per axis instead of 2.")]
+        [SerializeField]
+        private float _positionMultiplier = DEFAULT_POSITION_MULTIPLIER;
+        /// <summary>
+        /// The stock position scale: centimeter precision within +/-327.66 units.
+        /// </summary>
+        private const float DEFAULT_POSITION_MULTIPLIER = 100f;
+        /// <summary>
+        /// <see cref="_positionMultiplier"/>, guarded against a zero or negative asset value,
+        /// which would divide by zero on read and blank every position.
+        /// </summary>
+        private float PositionMultiplier => _positionMultiplier > 0f ? _positionMultiplier : DEFAULT_POSITION_MULTIPLIER;
         /// <summary>
         /// How many ticks to interpolate.
         /// </summary>
@@ -1185,6 +1208,8 @@ namespace FishNet.Component.Transforming
             float compressed;
             //Multiplier for compression.
             float multiplier = 100f;
+            //FISHMMO EDIT: positions use the configurable scale; scale compression keeps the stock 100.
+            float positionMultiplier = PositionMultiplier;
             /* Maximum value compressed may be
              * to send as compressed. */
             float maxValue = short.MaxValue - 1;
@@ -1198,7 +1223,7 @@ namespace FishNet.Component.Transforming
                 if (ChangedContains(changed, ChangedDelta.PositionX))
                 {
                     original = t.localPosition.x;
-                    compressed = original * multiplier;
+                    compressed = original * positionMultiplier;
                     if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= maxValue)
                     {
                         flagsA |= UpdateFlagA.X2;
@@ -1215,7 +1240,7 @@ namespace FishNet.Component.Transforming
                 if (ChangedContains(changed, ChangedDelta.PositionY))
                 {
                     original = t.localPosition.y;
-                    compressed = original * multiplier;
+                    compressed = original * positionMultiplier;
                     if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= maxValue)
                     {
                         flagsA |= UpdateFlagA.Y2;
@@ -1232,7 +1257,7 @@ namespace FishNet.Component.Transforming
                 if (ChangedContains(changed, ChangedDelta.PositionZ))
                 {
                     original = t.localPosition.z;
-                    compressed = original * multiplier;
+                    compressed = original * positionMultiplier;
                     if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= maxValue)
                     {
                         flagsA |= UpdateFlagA.Z2;
@@ -1367,21 +1392,21 @@ namespace FishNet.Component.Transforming
             readerRemaining = reader.Remaining;
             //X
             if (UpdateFlagAContains(flagsA, UpdateFlagA.X2))
-                nextTransformData.Position.x = reader.ReadInt16() / 100f;
+                nextTransformData.Position.x = reader.ReadInt16() / PositionMultiplier; //FISHMMO EDIT
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.X4))
                 nextTransformData.Position.x = reader.ReadSingle();
             else
                 nextTransformData.Position.x = prevTransformData.Position.x;
             //Y
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Y2))
-                nextTransformData.Position.y = reader.ReadInt16() / 100f;
+                nextTransformData.Position.y = reader.ReadInt16() / PositionMultiplier; //FISHMMO EDIT
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.Y4))
                 nextTransformData.Position.y = reader.ReadSingle();
             else
                 nextTransformData.Position.y = prevTransformData.Position.y;
             //Z
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Z2))
-                nextTransformData.Position.z = reader.ReadInt16() / 100f;
+                nextTransformData.Position.z = reader.ReadInt16() / PositionMultiplier; //FISHMMO EDIT
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.Z4))
                 nextTransformData.Position.z = reader.ReadSingle();
             else

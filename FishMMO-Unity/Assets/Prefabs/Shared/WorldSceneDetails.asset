@@ -24,7 +24,7 @@ MonoBehaviour:
     - Tutorial SpawnPoints
     - Tutorial Spawners
     m_values:
-    - MaxClients: 100
+    - MaxClients: 6
       SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
         type: 3}
       InitialSpawnPositions:
@@ -49,7 +49,7 @@ MonoBehaviour:
         m_values:
         - BoundaryOrigin: {x: 0, y: 75, z: 0}
           BoundarySize: {x: 300, y: 150, z: 200}
-    - MaxClients: 100
+    - MaxClients: 200
       SceneTransitionImage: {fileID: 21300000, guid: 5c2d23be0cbdd4048a53de5b3b050809,
         type: 3}
       InitialSpawnPositions:
@@ -100,7 +100,7 @@ MonoBehaviour:
         m_values:
         - BoundaryOrigin: {x: 12, y: 74.80027, z: 12}
           BoundarySize: {x: 1024, y: 149.18054, z: 1024}
-    - MaxClients: 100
+    - MaxClients: 200
       SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
         type: 3}
       InitialSpawnPositions:
@@ -164,7 +164,7 @@ MonoBehaviour:
         m_values:
         - BoundaryOrigin: {x: 0, y: 41.20125, z: 0}
           BoundarySize: {x: 1000, y: 82.4025, z: 1000}
-    - MaxClients: 100
+    - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
       InitialSpawnPositions:
         m_keys: []
@@ -191,7 +191,7 @@ MonoBehaviour:
         m_values:
         - BoundaryOrigin: {x: 0, y: 0, z: 0}
           BoundarySize: {x: 180, y: 50, z: 180}
-    - MaxClients: 100
+    - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
@@ -245,7 +245,7 @@ MonoBehaviour:
         m_values:
         - BoundaryOrigin: {x: 0, y: 0, z: 0}
           BoundarySize: {x: 180, y: 50, z: 180}
-    - MaxClients: 100
+    - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
       InitialSpawnPositions:
         m_keys: []
