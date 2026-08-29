@@ -277,7 +277,7 @@ MonoBehaviour:
   AbilityRotation: {fileID: 0}
   Personality: {fileID: 0}
   BehaviorTree: {fileID: 0}
-  LodSettings: {fileID: 0}
+  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
   BossScript: {fileID: 0}
   AggressionDamageWeight: 1
   AggressionHealingWeight: 0.6
