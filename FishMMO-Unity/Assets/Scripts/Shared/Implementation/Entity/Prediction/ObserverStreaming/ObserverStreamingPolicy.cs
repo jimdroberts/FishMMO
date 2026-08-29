@@ -136,6 +136,50 @@ namespace FishMMO.Shared
 		public static float EngagementRange { get; set; } = 40f;
 
 		/// <summary>
+		/// Hard cap on how many CHARACTERS one viewer may observe at once.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The difference between this and <see cref="FullRateObserverCap"/> is existence versus
+		/// fidelity. The full-rate cap slows the 25th character down; this one makes the 41st not
+		/// exist on that client at all — no transform, no vitals, no buffs, no spawn. It is what
+		/// bounds a client's cost in a town, where distance alone bounds nothing.
+		/// </para>
+		/// <para>
+		/// Applies only to registered characters. Interactables, world items and scene objects are
+		/// governed by their own distance conditions and are not budgeted — they are cheap and their
+		/// absence is far more confusing than a missing distant stranger.
+		/// </para>
+		/// </remarks>
+		public static int VisibilityBudget { get; set; } = 40;
+
+		/// <summary>
+		/// How far past <see cref="VisibilityBudget"/> an ALREADY VISIBLE character keeps its slot,
+		/// as a fraction of the budget.
+		/// </summary>
+		/// <remarks>
+		/// Rank hysteresis, not distance hysteresis. Two characters of near-identical score sitting
+		/// either side of the boundary would otherwise swap every pass, and each swap is a spawn and
+		/// a despawn — far more expensive than any rate change, and visible as flicker.
+		/// </remarks>
+		public static float VisibilityBudgetHysteresis { get; set; } = 0.25f;
+
+		/// <summary>
+		/// How many characters inside the engagement radius receive every tick.
+		/// </summary>
+		/// <remarks>
+		/// The engagement exemption exists so lag compensation can rewind to a real tick sample, and
+		/// without a budget it is unbounded: thirty players inside 40 m is thirty full-rate streams.
+		/// The top entries by relevance keep every tick; the rest inside the radius fall to every
+		/// second tick, which costs them a compensation accuracy of one tick — around 3 cm at walking
+		/// speed, against the six ticks the distance band would otherwise have given them.
+		/// </remarks>
+		public static int EngagedFullRateBudget { get; set; } = 12;
+
+		/// <summary>Interval applied to engaged characters beyond <see cref="EngagedFullRateBudget"/>.</summary>
+		public static byte EngagedOverflowInterval { get; set; } = 2;
+
+		/// <summary>
 		/// Hard ceiling on the engagement radius: no attack or ability in this project reaches
 		/// further, so nothing beyond it can ever need tick-exact compensation.
 		/// </summary>
@@ -287,6 +331,9 @@ namespace FishMMO.Shared
 			{
 				case "ObserverFullRateCap": return TryInt(value, v => FullRateObserverCap = Math.Max(0, v));
 				case "ObserverEngagementRange": return TryFloat(value, v => EngagementRange = Mathf.Max(0f, v));
+				case "ObserverVisibilityBudget": return TryInt(value, v => VisibilityBudget = Math.Max(0, v));
+				case "ObserverVisibilityBudgetHysteresis": return TryFloat(value, v => VisibilityBudgetHysteresis = Mathf.Max(0f, v));
+				case "ObserverEngagedFullRateBudget": return TryInt(value, v => EngagedFullRateBudget = Math.Max(0, v));
 				case "ObserverEngagementRangeCeiling": return TryFloat(value, v => EngagementRangeCeiling = Mathf.Max(0f, v));
 				case "ObserverEngagementRangeMargin": return TryFloat(value, v => EngagementRangeMargin = Mathf.Max(0f, v));
 				case "ObserverCombatWeight": return TryFloat(value, v => CombatWeight = v);

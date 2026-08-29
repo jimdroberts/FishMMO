@@ -539,6 +539,133 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(MapContent.NoteColors[MapContent.NoteColors.Length - 1], MapContent.NoteColor(-1));
 		}
 
+		// ── Marker positions ────────────────────────────────────────
+
+		[Test]
+		public void Filter_ExactMarker_IsMarkedAsTrackingItsTransform()
+		{
+			/* The map must draw entities where they are on this frame, not where they were when the
+			 * snapshot was collected a tenth of a second ago. The view honours that by re-reading the
+			 * source transform, but only for markers the filter resolved exactly — so this asserts
+			 * the flag that permits it. */
+			GameObject host = new GameObject("Fixture");
+			try
+			{
+				MapMarker marker = host.AddComponent<MapMarker>();
+				marker.Visibility = MapMarkerVisibility.Always;
+				marker.Type = MapMarkerType.Vendor;
+				host.transform.position = new Vector3(7.0f, 0.0f, 3.0f);
+
+				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
+				new MapMarkerFilter().Collect(results, null, false, null);
+
+				MapMarkerSnapshot snapshot = FindSnapshot(results, marker);
+				Assert.IsTrue(snapshot.TracksSource, "A world fixture is resolved exactly and may be re-read live.");
+				Assert.AreEqual(7.0f, snapshot.Position.x, 1e-3f);
+				Assert.AreEqual(3.0f, snapshot.Position.z, 1e-3f);
+			}
+			finally
+			{
+				Object.DestroyImmediate(host);
+			}
+		}
+
+		[Test]
+		public void Filter_ThrottledMarker_PublishesACoarsePositionAndForbidsLiveReads()
+		{
+			/* The detection tier's entire value is that the exact position is never published. If
+			 * TracksSource leaked true here the view would helpfully refresh the position straight
+			 * off the transform every frame and undo the filter from the far side — the throttling
+			 * would still be in the code and would no longer be in the picture. */
+			GameObject host = new GameObject("Stranger");
+			try
+			{
+				MapMarker marker = host.AddComponent<MapMarker>();
+				marker.Visibility = MapMarkerVisibility.Detection;
+
+				// Inside the detection radius, and deliberately not on the quantisation grid.
+				host.transform.position = new Vector3(6.3f, 0.0f, -2.7f);
+
+				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
+				MapMarkerFilter filter = new MapMarkerFilter();
+				filter.Collect(results, null, false, null);
+
+				MapMarkerSnapshot snapshot = FindSnapshot(results, marker);
+
+				Assert.IsFalse(snapshot.TracksSource, "A throttled marker must never be re-read from its transform.");
+				Assert.IsNull(snapshot.Label, "A throttled marker is never labelled.");
+
+				float quantum = filter.PositionQuantum;
+				Assert.AreEqual(0.0f, Mathf.Repeat(snapshot.Position.x, quantum), 1e-3f, "X is snapped to the grid.");
+				Assert.AreEqual(0.0f, Mathf.Repeat(snapshot.Position.z, quantum), 1e-3f, "Z is snapped to the grid.");
+				Assert.AreNotEqual(host.transform.position.x, snapshot.Position.x);
+			}
+			finally
+			{
+				Object.DestroyImmediate(host);
+			}
+		}
+
+		[Test]
+		public void Filter_ThrottledMarker_OutsideDetectionRadius_IsNotDrawnAtAll()
+		{
+			GameObject host = new GameObject("DistantStranger");
+			try
+			{
+				MapMarker marker = host.AddComponent<MapMarker>();
+				marker.Visibility = MapMarkerVisibility.Detection;
+
+				MapMarkerFilter filter = new MapMarkerFilter();
+				host.transform.position = new Vector3(filter.DetectionRadius * 3.0f, 0.0f, 0.0f);
+
+				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
+				filter.Collect(results, null, false, null);
+
+				foreach (MapMarkerSnapshot snapshot in results)
+				{
+					Assert.AreNotSame(marker, snapshot.Source,
+						"A stranger beyond the detection radius must not reach the map at all.");
+				}
+			}
+			finally
+			{
+				Object.DestroyImmediate(host);
+			}
+		}
+
+		[Test]
+		public void Filter_DetectionRadius_IsSmallerThanTheObserverFloor()
+		{
+			/* The guarantee is that the map is strictly less informative than the network stream it
+			 * is drawn from. That only holds if the detection radius stays under the smallest radius
+			 * the observer system will shrink a character's streaming range to under load. */
+			Assert.Less(new MapMarkerFilter().DetectionRadius, ObserverStreamingPolicy.MinimumRange);
+		}
+
+		/// <summary>
+		/// The snapshot produced for a particular marker.
+		/// </summary>
+		/// <param name="results">The collected snapshots.</param>
+		/// <param name="marker">The marker to find.</param>
+		/// <returns>Its snapshot.</returns>
+		/// <remarks>
+		/// The registry is static and shared, so a test asserts on its own marker rather than on
+		/// whatever happens to be the only entry.
+		/// </remarks>
+		private static MapMarkerSnapshot FindSnapshot(List<MapMarkerSnapshot> results, MapMarker marker)
+		{
+			for (int i = 0; i < results.Count; ++i)
+			{
+				if (ReferenceEquals(results[i].Source, marker))
+				{
+					return results[i];
+				}
+			}
+
+			Assert.Fail($"The filter produced no snapshot for '{marker.name}'.");
+			return default;
+		}
+
 		// ── Cartography seam ────────────────────────────────────────
 
 		[Test]

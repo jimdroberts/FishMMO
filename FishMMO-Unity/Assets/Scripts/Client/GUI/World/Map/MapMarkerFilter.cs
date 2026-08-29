@@ -120,6 +120,10 @@ namespace FishMMO.Client
 				{
 					Source = marker,
 					Position = position,
+					/* Only an exactly-resolved marker may be re-read from its transform by the
+					 * view. A throttled one keeps the coarsened position recorded here — see
+					 * MapMarkerSnapshot.TracksSource. */
+					TracksSource = exact,
 					FacingDegrees = marker.FacingDegrees,
 					HasFacing = exact && IsCharacterRelationship(relationship),
 					Type = ResolveType(marker, relationship),

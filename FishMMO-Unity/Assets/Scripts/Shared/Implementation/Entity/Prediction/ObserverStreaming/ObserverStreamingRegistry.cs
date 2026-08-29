@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Managing.Timing;
 using FishNet.Object;
@@ -37,6 +37,19 @@ namespace FishMMO.Shared
 		private static readonly Dictionary<int, List<ObserverStreamingEntry>> entriesByScene = new Dictionary<int, List<ObserverStreamingEntry>>();
 		private static readonly Dictionary<long, int> cellCounts = new Dictionary<long, int>();
 		private static readonly List<Candidate> candidates = new List<Candidate>();
+
+		/// <summary>
+		/// Per viewer, the visibility rank of each character it could observe: object id to rank,
+		/// rank 0 being the most relevant. Rebuilt every pass and read by
+		/// <c>ObserverBudgetCondition</c>. Inner dictionaries are reused rather than reallocated.
+		/// </summary>
+		private static readonly Dictionary<int, Dictionary<int, int>> ranksByClientId = new Dictionary<int, Dictionary<int, int>>();
+
+		/// <summary>Viewers that produced a ranking on the most recent pass.</summary>
+		private static readonly HashSet<int> rankedClientIds = new HashSet<int>();
+
+		/// <summary>Per viewer, characters pinned into the budget regardless of rank.</summary>
+		private static readonly Dictionary<int, HashSet<int>> pinnedByClientId = new Dictionary<int, HashSet<int>>();
 		private static TimeManager timeManager;
 		private static uint nextPassTick;
 
@@ -45,6 +58,10 @@ namespace FishMMO.Shared
 			public ObserverStreamingEntry Entry;
 			public float Score;
 			public float Distance;
+			/// <summary>Never evicted by the visibility budget; sorts ahead of everything else.</summary>
+			public bool Pinned;
+			/// <summary>Inside the viewer's engagement radius, so a candidate for full-rate updates.</summary>
+			public bool Engaged;
 		}
 
 		/// <summary>Number of characters currently registered.</summary>
@@ -58,6 +75,60 @@ namespace FishMMO.Shared
 
 		/// <summary>Characters whose observer range was changed in the last pass.</summary>
 		public static int LastPassRangeChanges { get; private set; }
+
+		/// <summary>Characters pinned into a visibility budget in the last pass.</summary>
+		public static int LastPassPinned { get; private set; }
+
+		/// <summary>(viewer, observed) pairs excluded by the visibility budget in the last pass.</summary>
+		public static int LastPassBudgetExcluded { get; private set; }
+
+		/// <summary>
+		/// Whether a character is inside a viewer's visibility budget.
+		/// </summary>
+		/// <remarks>
+		/// The budget condition's whole implementation. <paramref name="hasRanking"/> distinguishes
+		/// "ranked and excluded" from "no pass has run for this viewer yet" — the caller must not
+		/// treat the second as a rejection, or everything stays hidden until the first pass lands.
+		/// </remarks>
+		/// <param name="viewerClientId">Client id of the viewing connection.</param>
+		/// <param name="observedObjectId">Object id of the character being tested.</param>
+		/// <param name="currentlyVisible">True when the viewer already observes it; widens the budget by the hysteresis.</param>
+		/// <param name="hasRanking">False when this viewer has no ranking yet.</param>
+		/// <returns>True when the character is inside the budget.</returns>
+		public static bool IsWithinVisibilityBudget(int viewerClientId, int observedObjectId, bool currentlyVisible, out bool hasRanking)
+		{
+			hasRanking = rankedClientIds.Contains(viewerClientId);
+			if (!hasRanking)
+			{
+				return false;
+			}
+
+			if (pinnedByClientId.TryGetValue(viewerClientId, out HashSet<int> pinned) &&
+				pinned.Contains(observedObjectId))
+			{
+				return true;
+			}
+
+			if (!ranksByClientId.TryGetValue(viewerClientId, out Dictionary<int, int> ranks) ||
+				!ranks.TryGetValue(observedObjectId, out int rank))
+			{
+				/* Ranked viewer, unranked object: out of range on this pass. Not the budget's
+				 * business — the distance condition has already decided that, and rejecting here
+				 * would be a second vote on the same question. */
+				return true;
+			}
+
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			if (budget <= 0)
+			{
+				return true;
+			}
+			if (currentlyVisible)
+			{
+				budget = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			}
+			return rank < budget;
+		}
 
 		/// <summary>
 		/// Registers a character. Installs the entry as the object's observer send filter.
@@ -117,12 +188,39 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Drops every registration. For tests and server shutdown.</summary>
+		/// <summary>Reusable rank map for one viewer, cleared rather than reallocated.</summary>
+		private static Dictionary<int, int> RanksFor(int clientId)
+		{
+			if (!ranksByClientId.TryGetValue(clientId, out Dictionary<int, int> ranks))
+			{
+				ranks = new Dictionary<int, int>();
+				ranksByClientId[clientId] = ranks;
+			}
+			ranks.Clear();
+			return ranks;
+		}
+
+		/// <summary>Reusable pin set for one viewer, cleared rather than reallocated.</summary>
+		private static HashSet<int> PinsFor(int clientId)
+		{
+			if (!pinnedByClientId.TryGetValue(clientId, out HashSet<int> pins))
+			{
+				pins = new HashSet<int>();
+				pinnedByClientId[clientId] = pins;
+			}
+			pins.Clear();
+			return pins;
+		}
+
 		public static void Clear()
 		{
 			for (int i = entries.Count - 1; i >= 0; --i)
 			{
 				Unregister(entries[i].NetworkObject);
 			}
+			ranksByClientId.Clear();
+			rankedClientIds.Clear();
+			pinnedByClientId.Clear();
 		}
 
 		private static void OnPostTick()
@@ -149,6 +247,9 @@ namespace FishMMO.Shared
 			LastPassViewers = 0;
 			LastPassLimitedPairs = 0;
 			LastPassRangeChanges = 0;
+			LastPassPinned = 0;
+			LastPassBudgetExcluded = 0;
+			rankedClientIds.Clear();
 
 			// Prune destroyed objects and refresh cached inputs.
 			for (int i = entries.Count - 1; i >= 0; --i)
@@ -243,7 +344,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static void RankForViewers(List<ObserverStreamingEntry> sceneEntries)
 		{
-			int cap = ObserverStreamingPolicy.FullRateObserverCap;
+			int rateCap = ObserverStreamingPolicy.FullRateObserverCap;
+			int engagedBudget = ObserverStreamingPolicy.EngagedFullRateBudget;
+			byte engagedOverflow = ObserverStreamingPolicy.EngagedOverflowInterval;
+			int visibilityBudget = ObserverStreamingPolicy.VisibilityBudget;
 
 			for (int v = 0; v < sceneEntries.Count; ++v)
 			{
@@ -261,46 +365,117 @@ namespace FishMMO.Shared
 				LastPassViewers++;
 				candidates.Clear();
 				float viewerRange = viewer.AppliedRange > 0f ? viewer.AppliedRange : ObserverStreamingPolicy.DensityRadius;
+				float engagementRange = ObserverStreamingPolicy.ResolveEngagementRange(viewer.LongestAbilityRange);
+				long viewerTargetId = viewer.CurrentTargetObjectId;
+
+				Dictionary<int, int> ranks = RanksFor(viewerConnection.ClientId);
+				HashSet<int> pins = PinsFor(viewerConnection.ClientId);
 
 				for (int o = 0; o < sceneEntries.Count; ++o)
 				{
 					ObserverStreamingEntry observed = sceneEntries[o];
-					if (ReferenceEquals(observed, viewer) || !observed.NetworkObject.Observers.Contains(viewerConnection))
+					if (ReferenceEquals(observed, viewer))
 					{
 						continue;
 					}
 
+					/* Candidacy by DISTANCE, not by current observer membership.
+					 *
+					 * Ranking only what the viewer already observes would deadlock the visibility
+					 * budget: a character that is not yet an observer would never be ranked, the
+					 * budget condition would never admit it, and it could never become an observer.
+					 * The viewer's applied range is the same one the distance condition is using,
+					 * so this ranks exactly the set that condition can admit. */
 					float distance = Vector3.Distance(viewer.Position, observed.Position);
+					if (distance > viewerRange)
+					{
+						continue;
+					}
+
 					bool sameParty = viewer.PartyID != 0 && viewer.PartyID == observed.PartyID;
 					bool sameGuild = viewer.GuildID != 0 && viewer.GuildID == observed.GuildID;
+
+					/* Pins: never evicted, whatever the crowd.
+					 *
+					 * Party members inside the ability ceiling, because a group that cannot see each
+					 * other cannot play together — and the character the viewer currently targets,
+					 * because losing your target mid-fight is the worst possible moment for a
+					 * despawn. Pins still occupy budget slots, so a full party in a crowd simply
+					 * leaves fewer slots for strangers. */
+					bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
+						(viewerTargetId != 0 && observed.NetworkObject.ObjectId == viewerTargetId);
+					if (pinned)
+					{
+						pins.Add(observed.NetworkObject.ObjectId);
+						LastPassPinned++;
+					}
+
 					candidates.Add(new Candidate
 					{
 						Entry = observed,
 						Score = ObserverStreamingPolicy.Score(observed.InCombat, sameParty, sameGuild, distance, viewerRange),
 						Distance = distance,
+						Pinned = pinned,
+						Engaged = distance <= engagementRange,
 					});
 				}
 
-				if (candidates.Count <= cap)
-				{
-					continue;
-				}
-
 				candidates.Sort(CompareCandidates);
-				for (int i = cap; i < candidates.Count; ++i)
+
+				int engagedSoFar = 0;
+				for (int i = 0; i < candidates.Count; ++i)
 				{
-					byte interval = ObserverStreamingPolicy.LodInterval(candidates[i].Distance);
-					if (interval > 1)
+					Candidate candidate = candidates[i];
+					ranks[candidate.Entry.NetworkObject.ObjectId] = i;
+
+					if (visibilityBudget > 0 && !candidate.Pinned && i >= visibilityBudget)
 					{
-						candidates[i].Entry.SetInterval(viewerConnection, interval);
-						LastPassLimitedPairs++;
+						LastPassBudgetExcluded++;
+					}
+
+					/* Rate limiting, in one place, most relevant first.
+					 *
+					 * An engaged character keeps every tick while the engaged budget lasts, then
+					 * falls to the overflow interval rather than to its distance band — it is still
+					 * close enough to be shot at, and one tick of compensation error is a different
+					 * thing from six. Everything else follows the relevance cap as before. */
+					if (candidate.Engaged)
+					{
+						if (engagedSoFar < engagedBudget)
+						{
+							engagedSoFar++;
+							continue;
+						}
+						if (engagedOverflow > 1)
+						{
+							candidate.Entry.SetInterval(viewerConnection, engagedOverflow);
+							LastPassLimitedPairs++;
+						}
+						continue;
+					}
+
+					if (i >= rateCap)
+					{
+						byte interval = ObserverStreamingPolicy.LodInterval(candidate.Distance);
+						if (interval > 1)
+						{
+							candidate.Entry.SetInterval(viewerConnection, interval);
+							LastPassLimitedPairs++;
+						}
 					}
 				}
+
+				rankedClientIds.Add(viewerConnection.ClientId);
 			}
 		}
 
 		private static int CompareCandidates(Candidate a, Candidate b)
 		{
+			// Pins occupy the lowest ranks so they can never be pushed out by a crowd.
+			if (a.Pinned != b.Pinned)
+			{
+				return a.Pinned ? -1 : 1;
+			}
 			int byScore = b.Score.CompareTo(a.Score);
 			if (byScore != 0)
 			{
