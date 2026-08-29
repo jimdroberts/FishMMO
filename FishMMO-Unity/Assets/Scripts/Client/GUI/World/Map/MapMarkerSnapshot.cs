@@ -21,7 +21,29 @@ namespace FishMMO.Client
 		public MapMarker Source;
 
 		/// <summary>Where to draw it, in world space. Not necessarily where the object is.</summary>
+		/// <remarks>
+		/// For a marker with <see cref="TracksSource"/> set this is only the position at the moment
+		/// the snapshot was collected; the view re-reads the live transform each frame. For a
+		/// throttled one it is the coarsened, deliberately stale position, and it is the only
+		/// position the map has.
+		/// </remarks>
 		public Vector3 Position;
+
+		/// <summary>
+		/// Whether the view should re-read <see cref="Source"/>'s live transform every frame
+		/// instead of drawing at the collected <see cref="Position"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>Set only for markers the filter resolved <b>exactly</b>. Collecting markers is
+		/// expensive enough to do about ten times a second, but a character crosses real distance in
+		/// a tenth of a second — so drawing at the collected position makes every dot stutter along
+		/// behind its character while the terrain scrolls smoothly underneath it.</para>
+		/// <para>Never set for a throttled marker, and that is the point of the flag rather than
+		/// having the view always re-read the source: the whole value of the detection tier is that
+		/// the exact position is never published, and a view that helpfully refreshed it from the
+		/// transform would undo the filter from the far side.</para>
+		/// </remarks>
+		public bool TracksSource;
 
 		/// <summary>Which way the object is facing, in degrees clockwise from world north.</summary>
 		public float FacingDegrees;
