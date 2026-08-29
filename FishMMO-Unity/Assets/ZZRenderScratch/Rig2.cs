@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
@@ -48,6 +48,9 @@ namespace FishMMO.RenderScratch
 			if (instance == null) { return; }
 			attributes[instance.Template.ID] = instance;
 		}
+
+		/// <summary>No modifier ledger on this render rig; nothing to release.</summary>
+		public void ClearModifierSource(ModifierSource source) { }
 
 		public void SetAttribute(int id, int value, int? modifier = null)
 		{

@@ -2981,6 +2981,122 @@ namespace FishMMO.UnitTests
 				"And the item is still attributed, so unequipping it will still take its bonus away.");
 		}
 
+		// ── Region-owned attribute modifiers ──────────────────────────────────────
+
+		/// <summary>
+		/// A region's contribution is idempotent across stay ticks and released as a whole.
+		/// </summary>
+		/// <remarks>
+		/// Both halves of what had <c>ApplyRegionAttributeAction</c> cut down to resources. Applied
+		/// through the old <c>AddModifier</c> an <c>OnRegionStay</c> trigger accumulated once per tick
+		/// forever, and nothing could reverse the total because nothing recorded who owned it.
+		/// </remarks>
+		[Test]
+		public void RegionModifier_IsIdempotentPerStayTick_AndReleasedWhole()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource region = ModifierSource.Region(4242);
+
+			// An OnRegionStay trigger firing every tick for a second at 30Hz.
+			for (int tick = 0; tick < 30; ++tick)
+			{
+				attribute.SetSource(region, 25);
+			}
+
+			LogAssert.AreEqual(25, attribute.ExternalModifier,
+				"Thirty stay ticks state the same contribution thirty times. Accumulating here is the " +
+				"defect that made the stay case unusable and got the action amputated.");
+
+			attribute.ClearSource(region);
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "Leaving the region takes the whole bonus.");
+			LogAssert.AreEqual(0, attribute.ModifierSourceCount, "And the contributor is gone.");
+		}
+
+		/// <summary>
+		/// Releasing one region leaves every other contributor — including a second, overlapping region.
+		/// </summary>
+		[Test]
+		public void RegionModifier_ReleasingOneRegion_LeavesOverlappingOnes()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource outer = ModifierSource.Region(1);
+			ModifierSource inner = ModifierSource.Region(2);
+			ModifierSource item = ModifierSource.Item(9);
+
+			attribute.SetSource(outer, 10);
+			attribute.SetSource(inner, 5);
+			attribute.SetSource(item, 3);
+			LogAssert.AreEqual(18, attribute.ExternalModifier, "Two nested regions and an item.");
+
+			// Walking out of the inner region while still inside the outer one.
+			attribute.ClearSource(inner);
+			LogAssert.AreEqual(13, attribute.ExternalModifier,
+				"Only the inner region's contribution leaves. Regions nest, so releasing one must not " +
+				"take an ancestor's bonus with it.");
+			LogAssert.AreEqual(10, attribute.GetSourceValue(outer), "The outer region is untouched.");
+			LogAssert.AreEqual(3, attribute.GetSourceValue(item), "And so is the equipment.");
+		}
+
+		/// <summary>
+		/// A sheet-wide release drops the region's contribution from attributes AND resources.
+		/// </summary>
+		/// <remarks>
+		/// This is what <c>Region.ReleaseAttributeContributions</c> calls. It has to walk both halves:
+		/// a region action may modify a resource's maximum, and a contributor forgotten on one half is
+		/// exactly the orphaned modifier the ledger exists to prevent.
+		/// </remarks>
+		[Test]
+		public void ClearModifierSource_ReleasesAcrossTheWholeSheet()
+		{
+			GameObject host = new GameObject("RegionReleaseHost");
+			CharacterAttributeTemplate plain = null;
+			CharacterAttributeTemplate resourceTemplate = null;
+			try
+			{
+				CharacterAttributeController controller = host.AddComponent<CharacterAttributeController>();
+
+				plain = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				plain.name = "RegionReleasePlain";
+				plain.InitialValue = 50;
+				plain.AddToCache(plain.name);
+
+				resourceTemplate = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				resourceTemplate.name = "RegionReleaseResource";
+				resourceTemplate.InitialValue = 100;
+				resourceTemplate.IsResourceAttribute = true;
+				resourceTemplate.AddToCache(resourceTemplate.name);
+
+				/* Registered straight into the two dictionaries. AddAttribute routes everything into
+				 * Attributes regardless of kind, and the resource half is populated elsewhere during
+				 * real initialisation — which is more setup than this test needs. Both properties
+				 * expose the live dictionaries. */
+				controller.Attributes[plain.ID] = new CharacterAttribute(controller, plain.ID, 50, 0);
+				controller.ResourceAttributes[resourceTemplate.ID] =
+					new CharacterResourceAttribute(controller, resourceTemplate.ID, 100, 100f, 0);
+
+				ModifierSource region = ModifierSource.Region(77);
+				controller.Attributes[plain.ID].SetSource(region, 8);
+				controller.ResourceAttributes[resourceTemplate.ID].SetSource(region, 40);
+
+				LogAssert.AreEqual(8, controller.Attributes[plain.ID].ExternalModifier, "Attribute took it.");
+				LogAssert.AreEqual(40, controller.ResourceAttributes[resourceTemplate.ID].ExternalModifier,
+					"And so did the resource's maximum.");
+
+				controller.ClearModifierSource(region);
+
+				LogAssert.AreEqual(0, controller.Attributes[plain.ID].ExternalModifier,
+					"Leaving the region releases it from the attribute.");
+				LogAssert.AreEqual(0, controller.ResourceAttributes[resourceTemplate.ID].ExternalModifier,
+					"And from the resource. Walking only one half orphans the other.");
+			}
+			finally
+			{
+				if (plain != null) { plain.RemoveFromCache(); UnityEngine.Object.DestroyImmediate(plain); }
+				if (resourceTemplate != null) { resourceTemplate.RemoveFromCache(); UnityEngine.Object.DestroyImmediate(resourceTemplate); }
+				UnityEngine.Object.DestroyImmediate(host);
+			}
+		}
+
 		/// <summary>
 		/// A minimal <see cref="ICharacter"/> that is a real component, so the parent walk in
 		/// <see cref="TargetOrdering.ResolveHitRoot"/> can find it.
