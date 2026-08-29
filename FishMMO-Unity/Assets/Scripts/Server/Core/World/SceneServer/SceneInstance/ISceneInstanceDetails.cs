@@ -79,6 +79,31 @@ namespace FishMMO.Server.Core.World.SceneServer
 		DateTime LastExit { get; set; }
 
 		/// <summary>
+		/// True when the instance emptied because its occupants CHOSE to leave, rather than
+		/// because they went away.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An empty instance means two very different things. Everyone walked out of the dungeon:
+		/// the run is over, nobody is coming back, and holding the scene for a timeout wastes a
+		/// placement slot. The last player's connection dropped: the run is not over, and reaping
+		/// immediately would destroy their progress before they could reconnect to it.
+		/// </para>
+		/// <para>
+		/// Set by <c>CharacterSystem.TryLeaveInstance</c>, which is the only voluntary route out —
+		/// the leave-instance broadcast, the <c>/leaveinstance</c> command, and the forced return
+		/// when an instance is being closed. Cleared whenever anybody is present again, so a
+		/// returning player does not inherit the previous departure's verdict.
+		/// </para>
+		/// <para>
+		/// Note this is not the same distinction combat logout makes: that keeps a disconnected
+		/// body counted as PRESENT so the scene never looks empty at all. This covers the case
+		/// where the scene really is empty and the question is how long to hold it.
+		/// </para>
+		/// </remarks>
+		bool VacatedDeliberately { get; set; }
+
+		/// <summary>
 		/// When the scene row this instance was loaded for was created.
 		/// </summary>
 		/// <remarks>
