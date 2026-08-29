@@ -11,10 +11,35 @@ namespace FishMMO.Shared
 	public class WorldSceneSettings : MonoBehaviour
 	{
 		/// <summary>
+		/// The hard ceiling on clients in any one scene, anywhere in the project.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The single source of truth for the cap. The world server (routing and instance
+		/// spin-up) and the scene server (channel admission) both clamp to this, so a scene
+		/// authored above it is reduced rather than honoured — a designer cannot raise a scene's
+		/// population past what the bandwidth and observer budgets were sized for.
+		/// </para>
+		/// <para>
+		/// 200 is a deliberate ceiling, not a guess: per-client cost is bounded by the observer
+		/// visibility budget rather than by scene population, so scaling past this is done by
+		/// adding scene instances (and scene servers), never by widening one scene. See
+		/// <c>SceneServerPlacementPolicy</c>.
+		/// </para>
+		/// </remarks>
+		public const int MaximumClientsPerScene = 200;
+
+		/// <summary>
 		/// The maximum number of clients allowed in this scene.
 		/// </summary>
-		[Tooltip("The maximum number of clients allowed in this scene.")]
-		public int MaxClients = 100;
+		/// <remarks>
+		/// The <see cref="RangeAttribute"/> constrains the inspector; it does not constrain a value
+		/// edited into the scene YAML by hand or arriving from an older asset, so every consumer
+		/// clamps to <see cref="MaximumClientsPerScene"/> on read as well.
+		/// </remarks>
+		[Tooltip("The maximum number of clients allowed in this scene. Clamped to 200.")]
+		[Range(1, MaximumClientsPerScene)]
+		public int MaxClients = MaximumClientsPerScene;
 
 		/// <summary>
 		/// The scene's map, loading image and player-facing name.

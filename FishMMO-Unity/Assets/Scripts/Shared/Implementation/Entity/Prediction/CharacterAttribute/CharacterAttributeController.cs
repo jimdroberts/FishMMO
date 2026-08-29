@@ -1786,10 +1786,64 @@ namespace FishMMO.Shared
 		/// so an idle character at full health sends nothing at all.
 		/// </para>
 		/// </remarks>
-		[Tooltip("Ticks between resource pushes to observers. 6 at tick rate 30 is five updates a second.")]
+		[Tooltip("Ticks between resource pushes to observers while in combat. 6 at tick rate 30 is five updates a second.")]
 		[Range(1, 30)]
 		[SerializeField]
 		private byte observedResourcePushInterval = 6;
+
+		/// <summary>
+		/// Ticks between pushes of this character's resources to observers while OUT of combat.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Out of combat the only thing moving a bar is regeneration, which is a slow ramp nobody
+		/// is reading closely — and it is the common case for most characters in a scene most of
+		/// the time. Twelve ticks at 30&#160;Hz is still two and a half updates a second.
+		/// </para>
+		/// <para>
+		/// This does NOT delay the reaction to being hit. Entering combat clears the rate limit
+		/// through <see cref="ObservedResourcePushScheduler.AllowImmediatePush"/>, so the first
+		/// damage of a fight goes out on the tick it lands rather than waiting out an interval that
+		/// was sized for an idle character. Without that, widening this interval would have shown
+		/// observers an eleven-tick-stale health bar at exactly the moment it matters most.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Ticks between resource pushes to observers while out of combat. Entering combat takes effect immediately.")]
+		[Range(1, 60)]
+		[SerializeField]
+		private byte observedResourceOutOfCombatPushInterval = 12;
+
+		/// <summary>
+		/// Combat state as of the last observer resource evaluation, so the transition INTO combat
+		/// can be detected. <c>null</c> until the first evaluation.
+		/// </summary>
+		private bool? lastObservedResourceCombatState;
+
+		/// <summary>Cached damage controller; resolved once, on first use.</summary>
+		private ICharacterDamageController observedResourceDamageController;
+
+		/// <summary>True once the damage controller lookup has been attempted.</summary>
+		private bool observedResourceDamageControllerResolved;
+
+		/// <summary>
+		/// True while this character is in combat, for the purpose of choosing a push interval.
+		/// </summary>
+		/// <remarks>
+		/// A character with no damage controller — anything that cannot be attacked — is treated as
+		/// out of combat and gets the wider interval, which is the correct answer for it.
+		/// </remarks>
+		private bool IsInCombatForObservedResources
+		{
+			get
+			{
+				if (!observedResourceDamageControllerResolved)
+				{
+					Character?.TryGet(out observedResourceDamageController);
+					observedResourceDamageControllerResolved = true;
+				}
+				return observedResourceDamageController != null && observedResourceDamageController.IsInCombat;
+			}
+		}
 
 		/// <summary>
 		/// Change gate, rate limit and loss-repair schedule for the observer push.
@@ -1971,7 +2025,20 @@ namespace FishMMO.Shared
 			 * The scheduler answers Confirm once, shortly after a burst of changes stops, repeating
 			 * the final value. That is two packets instead of one for a burst that ends, and still
 			 * nothing at all for a character whose resources are not moving. */
-			ObservedResourcePushScheduler.Decision decision = resourcePushScheduler.Evaluate(tick, state, observedResourcePushInterval);
+			/* Combat picks the interval, and the transition INTO it clears the outstanding rate
+			 * limit. The limit is stored as an absolute "earliest next push" tick, so a character
+			 * that was idling on the twelve-tick interval carries a deadline set under the old rate;
+			 * without this, the first hit of a fight would be held until that deadline expired. */
+			bool inCombat = IsInCombatForObservedResources;
+			if (lastObservedResourceCombatState.HasValue && inCombat && !lastObservedResourceCombatState.Value)
+			{
+				resourcePushScheduler.AllowImmediatePush(tick);
+			}
+			lastObservedResourceCombatState = inCombat;
+
+			byte pushInterval = inCombat ? observedResourcePushInterval : observedResourceOutOfCombatPushInterval;
+
+			ObservedResourcePushScheduler.Decision decision = resourcePushScheduler.Evaluate(tick, state, pushInterval);
 			if (decision == ObservedResourcePushScheduler.Decision.None)
 			{
 				return;

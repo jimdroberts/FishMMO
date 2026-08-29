@@ -256,8 +256,53 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Server-side scratch list used to build the observer payload without allocating per push.
+		/// Always holds the FULL visible strip; the delta is derived from it.
 		/// </summary>
 		private readonly List<ObservedBuffEntry> observedBuffBuffer = new List<ObservedBuffEntry>();
+
+		/// <summary>
+		/// The full visible strip as of the last push, keyed by template id — what this character's
+		/// existing observers are currently holding, and the baseline the delta is measured against.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Per CHARACTER, not per observer, which is what keeps one serialized message fannable out
+		/// to every observer. That only works because every entry is absolute and self-describing:
+		/// see the remarks on <see cref="CharacterBuffsBroadcast"/>.
+		/// </para>
+		/// <para>
+		/// Empty means "no usable baseline", which forces the next push to be a full set. That is
+		/// the state after a spawn and after <see cref="ResetObservedBuffBaseline"/>, and it is why
+		/// a pooled NPC cannot inherit the previous occupant's strip as a baseline and send a delta
+		/// against buffs its observers never saw.
+		/// </para>
+		/// </remarks>
+		private readonly Dictionary<int, ObservedBuffEntry> lastPushedObservedBuffs = new Dictionary<int, ObservedBuffEntry>();
+
+		/// <summary>True once <see cref="lastPushedObservedBuffs"/> reflects a push that went out.</summary>
+		private bool hasObservedBuffBaseline;
+
+		/// <summary>Server-side scratch: entries added or restacked since the last push.</summary>
+		private readonly List<ObservedBuffEntry> observedBuffDeltaBuffer = new List<ObservedBuffEntry>();
+
+		/// <summary>Server-side scratch: template ids that left the strip since the last push.</summary>
+		private readonly List<int> observedBuffRemovedBuffer = new List<int>();
+
+		/// <summary>Client-side scratch used to merge a delta into the current strip.</summary>
+		private readonly List<ObservedBuffEntry> observedBuffMergeBuffer = new List<ObservedBuffEntry>();
+
+		/// <summary>
+		/// Drops the delta baseline so the next push states the whole strip.
+		/// </summary>
+		/// <remarks>
+		/// Called when this character's observers can no longer be assumed to hold what was last
+		/// sent — a despawn, or a pooled object being reused as somebody else.
+		/// </remarks>
+		private void ResetObservedBuffBaseline()
+		{
+			lastPushedObservedBuffs.Clear();
+			hasObservedBuffBaseline = false;
+		}
 
 		/// <summary>
 		/// Marks the observer-facing buff list as needing a push on the next tick.
@@ -408,12 +453,105 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private void PushObservedBuffs()
 		{
+			/* Which flag brought us here decides the SHAPE of the message, so read them before the
+			 * reset. A structural change is describable as a delta; a timing resync is not — every
+			 * visible buff's remaining duration has moved, so there is nothing to leave out. */
+			bool structural = observedBuffsDirty;
+
 			observedBuffsDirty = false;
 			observedBuffsTimingDirty = false;
 
 			BuildObservedBuffEntries();
+
+			// The timing baseline is always the FULL strip, never the subset that goes on the wire.
 			RecordObservedBuffBaseline();
-			BroadcastObservedBuffs(observedBuffBuffer.ToArray());
+
+			bool fullSet = !structural || !hasObservedBuffBaseline;
+			if (fullSet)
+			{
+				ObservedBuffEntry[] entries = observedBuffBuffer.ToArray();
+				AdoptObservedBuffBaseline();
+				BroadcastObservedBuffs(entries, System.Array.Empty<int>(), true);
+				return;
+			}
+
+			BuildObservedBuffDelta();
+
+			/* Structurally dirty but nothing structural actually differs — a buff added and removed
+			 * inside one tick, or a stack that went up and back down. The strip observers hold is
+			 * still correct, so adopt the rebuilt baseline and send nothing. */
+			if (observedBuffDeltaBuffer.Count == 0 && observedBuffRemovedBuffer.Count == 0)
+			{
+				AdoptObservedBuffBaseline();
+				return;
+			}
+
+			ObservedBuffEntry[] changed = observedBuffDeltaBuffer.ToArray();
+			int[] removed = observedBuffRemovedBuffer.ToArray();
+			AdoptObservedBuffBaseline();
+			BroadcastObservedBuffs(changed, removed, false);
+		}
+
+		/// <summary>
+		/// Fills <see cref="observedBuffDeltaBuffer"/> and <see cref="observedBuffRemovedBuffer"/>
+		/// from <see cref="observedBuffBuffer"/> against <see cref="lastPushedObservedBuffs"/>.
+		/// </summary>
+		/// <remarks>
+		/// Structural comparison only — see <see cref="ObservedBuffEntry.StructurallyEquals"/> for
+		/// why remaining duration is excluded. An entry that is structurally unchanged is left out
+		/// even though its remaining duration has moved; the receiver counts that down itself, and
+		/// the timing gate sends a full set when its belief drifts too far.
+		/// </remarks>
+		private void BuildObservedBuffDelta()
+		{
+			observedBuffDeltaBuffer.Clear();
+			observedBuffRemovedBuffer.Clear();
+
+			for (int i = 0; i < observedBuffBuffer.Count; ++i)
+			{
+				ObservedBuffEntry entry = observedBuffBuffer[i];
+				if (!lastPushedObservedBuffs.TryGetValue(entry.TemplateID, out ObservedBuffEntry previous) ||
+					!entry.StructurallyEquals(previous))
+				{
+					observedBuffDeltaBuffer.Add(entry);
+				}
+			}
+
+			foreach (KeyValuePair<int, ObservedBuffEntry> kvp in lastPushedObservedBuffs)
+			{
+				bool stillPresent = false;
+				for (int i = 0; i < observedBuffBuffer.Count; ++i)
+				{
+					if (observedBuffBuffer[i].TemplateID == kvp.Key)
+					{
+						stillPresent = true;
+						break;
+					}
+				}
+				if (!stillPresent)
+				{
+					observedBuffRemovedBuffer.Add(kvp.Key);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Adopts the full strip in <see cref="observedBuffBuffer"/> as the delta baseline.
+		/// </summary>
+		/// <remarks>
+		/// Called on every push, including the ones that send nothing: after a push the observers'
+		/// strip and this baseline agree, and a baseline left behind would re-send changes that
+		/// were already delivered.
+		/// </remarks>
+		private void AdoptObservedBuffBaseline()
+		{
+			lastPushedObservedBuffs.Clear();
+			for (int i = 0; i < observedBuffBuffer.Count; ++i)
+			{
+				ObservedBuffEntry entry = observedBuffBuffer[i];
+				lastPushedObservedBuffs[entry.TemplateID] = entry;
+			}
+			hasObservedBuffBaseline = true;
 		}
 
 		/// <summary>
@@ -516,10 +654,17 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* A full set, always. This connection has no strip to merge into and no baseline in
+			 * common with the delta stream — and deliberately does NOT touch
+			 * lastPushedObservedBuffs, which describes what the EXISTING observers hold and is
+			 * already correct for them. Bringing one late observer up to the same state is exactly
+			 * what makes the shared baseline true for everyone again. */
 			base.NetworkManager.ServerManager.Broadcast(connection, new CharacterBuffsBroadcast
 			{
 				CharacterObjectID = base.NetworkObject.ObjectId,
+				IsFullSet = true,
 				Buffs = observedBuffBuffer.ToArray(),
+				Removed = System.Array.Empty<int>(),
 			}, true, Channel.Reliable);
 		}
 
@@ -550,12 +695,18 @@ namespace FishMMO.Shared
 		/// change, which — unlike a dropped ability cast — has no self-correcting replacement.
 		/// </para>
 		/// </remarks>
-		/// <param name="entries">The visible buffs.</param>
-		private void BroadcastObservedBuffs(ObservedBuffEntry[] entries)
+		/// <param name="entries">The changed buffs, or the whole strip when <paramref name="fullSet"/>.</param>
+		/// <param name="removed">Template ids that left the strip; empty when <paramref name="fullSet"/>.</param>
+		/// <param name="fullSet">True when <paramref name="entries"/> states the entire visible strip.</param>
+		private void BroadcastObservedBuffs(ObservedBuffEntry[] entries, int[] removed, bool fullSet)
 		{
 			/* The local apply happens either way: it is what keeps this peer's own ObservedBuffs
-			 * (and, on a client, the observer FX diff) in step, and it costs nothing on the wire. */
-			ApplyObservedBuffs(entries);
+			 * (and, on a client, the observer FX diff) in step, and it costs nothing on the wire.
+			 *
+			 * It is given the FULL strip, never the delta. PartySystem and the target frame read
+			 * ObservedBuffs as a complete list, and the server is not a receiver of its own
+			 * broadcast, so there is no merge on this side to reconstruct it from. */
+			ApplyObservedBuffs(observedBuffBuffer.ToArray());
 
 			/* Forwarded objects deliver buffs through the reconcile instead, and their observers
 			 * build FX from the simulation dictionary. Sending this as well would give every
@@ -568,7 +719,9 @@ namespace FishMMO.Shared
 			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterBuffsBroadcast
 			{
 				CharacterObjectID = base.NetworkObject != null ? base.NetworkObject.ObjectId : 0,
+				IsFullSet = fullSet,
 				Buffs = entries ?? System.Array.Empty<ObservedBuffEntry>(),
+				Removed = removed ?? System.Array.Empty<int>(),
 			}, Channel.Reliable);
 		}
 
@@ -630,7 +783,108 @@ namespace FishMMO.Shared
 			}
 
 			BuffController controller = nob.GetComponent<BuffController>();
-			controller?.ApplyObservedBuffs(msg.Buffs);
+			if (controller == null)
+			{
+				return;
+			}
+
+			if (msg.IsFullSet)
+			{
+				controller.ApplyObservedBuffs(msg.Buffs ?? System.Array.Empty<ObservedBuffEntry>());
+				return;
+			}
+
+			controller.MergeObservedBuffs(msg.Buffs, msg.Removed);
+		}
+
+		/// <summary>
+		/// Applies a delta to the current strip: entries replace or append by template id, removed
+		/// ids drop out, everything else keeps the remaining duration it already had.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Hands the merged FULL strip to <see cref="ApplyObservedBuffs"/> rather than duplicating
+		/// its work, so the FX diff and the change event see exactly what they saw when every
+		/// message was a full set.
+		/// </para>
+		/// <para>
+		/// <b>Retained entries are aged.</b> Every consumer draws a bar as
+		/// <c>RemainingSeconds - (now - ObservedBuffsReceivedTime)</c>, and applying the merge
+		/// resets that receipt time. An entry the delta did not mention would therefore restart its
+		/// countdown from the value it was sent with — a bar visibly jumping back UP every time an
+		/// unrelated buff landed on the same character. Subtracting the elapsed time as the entry
+		/// is carried across keeps the displayed countdown continuous.
+		/// </para>
+		/// </remarks>
+		/// <param name="changed">Entries added or restacked. May be null or empty.</param>
+		/// <param name="removed">Template ids that left. May be null or empty.</param>
+		private void MergeObservedBuffs(ObservedBuffEntry[] changed, int[] removed)
+		{
+			observedBuffMergeBuffer.Clear();
+
+			/* Zero means nothing has ever been received, so there is no elapsed span to charge the
+			 * retained entries — and Time.unscaledTime alone would age them by the whole session. */
+			float elapsed = ObservedBuffsReceivedTime > 0f
+				? Mathf.Max(0f, Time.unscaledTime - ObservedBuffsReceivedTime)
+				: 0f;
+
+			ObservedBuffEntry[] current = observedBuffs ?? System.Array.Empty<ObservedBuffEntry>();
+			for (int i = 0; i < current.Length; ++i)
+			{
+				int templateID = current[i].TemplateID;
+
+				if (removed != null && System.Array.IndexOf(removed, templateID) >= 0)
+				{
+					continue;
+				}
+
+				// A changed entry supersedes the held one; it is appended below in sender order.
+				if (ContainsTemplate(changed, templateID))
+				{
+					continue;
+				}
+
+				ObservedBuffEntry retained = current[i];
+
+				/* 0 is "permanent", not "one tick left" — see ObservedBuffEntry.RemainingSeconds —
+				 * so a permanent buff must never be aged into looking finite, and a finite one must
+				 * never be aged down INTO 0 and read as permanent. Floor at a tenth of a second,
+				 * which is also the wire's resolution. */
+				if (retained.RemainingSeconds > 0f)
+				{
+					retained.RemainingSeconds = Mathf.Max(0.1f, retained.RemainingSeconds - elapsed);
+				}
+
+				observedBuffMergeBuffer.Add(retained);
+			}
+
+			if (changed != null)
+			{
+				for (int i = 0; i < changed.Length; ++i)
+				{
+					observedBuffMergeBuffer.Add(changed[i]);
+				}
+			}
+
+			ApplyObservedBuffs(observedBuffMergeBuffer.ToArray());
+			observedBuffMergeBuffer.Clear();
+		}
+
+		/// <summary>True when <paramref name="entries"/> names <paramref name="templateID"/>.</summary>
+		private static bool ContainsTemplate(ObservedBuffEntry[] entries, int templateID)
+		{
+			if (entries == null)
+			{
+				return false;
+			}
+			for (int i = 0; i < entries.Length; ++i)
+			{
+				if (entries[i].TemplateID == templateID)
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		#endregion
@@ -1219,24 +1473,12 @@ namespace FishMMO.Shared
 				? System.Array.Empty<ObservedBuffEntry>()
 				: new ObservedBuffEntry[count];
 
+			/* TotalSeconds is not on the wire — ObservedBuffEntry.ReadFrom resolves it from the
+			 * template, which the receiver already has, and a client that cannot resolve the
+			 * template cannot draw the icon either. */
 			for (int i = 0; i < count; ++i)
 			{
-				int templateID = reader.ReadInt32();
-				int stacks = reader.ReadInt32();
-				float remainingSeconds = reader.ReadSingle();
-
-				/* TotalSeconds is not on the wire: it is a property of the template, which the
-				 * receiver already has, and a client that cannot resolve the template cannot draw
-				 * the icon either. */
-				BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
-
-				entries[i] = new ObservedBuffEntry()
-				{
-					TemplateID = templateID,
-					Stacks = stacks,
-					RemainingSeconds = remainingSeconds,
-					TotalSeconds = template != null ? template.Duration : 0f,
-				};
+				entries[i] = ObservedBuffEntry.ReadFrom(reader);
 			}
 
 			ApplyObservedBuffs(entries);
@@ -1382,14 +1624,13 @@ namespace FishMMO.Shared
 				 * whether you were watching when the buff landed or walked up afterwards. */
 				BuildObservedBuffEntries();
 
+				/* Same seven-byte entry the observer broadcast writes. Single-sourced deliberately:
+				 * this block and CharacterBuffsBroadcast describe the same thing to the same
+				 * receiver, and two hand-written copies of one wire format is how they drift. */
 				writer.WriteInt32(observedBuffBuffer.Count);
 				for (int i = 0; i < observedBuffBuffer.Count; ++i)
 				{
-					ObservedBuffEntry entry = observedBuffBuffer[i];
-					writer.WriteInt32(entry.TemplateID);
-					writer.WriteInt32(entry.Stacks);
-					// TotalSeconds is omitted: the receiver reads it off the template it already has.
-					writer.WriteSingle(entry.RemainingSeconds);
+					observedBuffBuffer[i].WriteTo(writer);
 				}
 			}
 
@@ -2181,6 +2422,12 @@ namespace FishMMO.Shared
 			preReplicatePayloadReferenceTick = TimeManager.UNSET_TICK;
 			lastObservedPushTick = TimeManager.UNSET_TICK;
 			lastObservedRemaining.Clear();
+
+			/* This object may be pooled and respawned as somebody else. A surviving delta baseline
+			 * would let the next push describe the new occupant's strip as a difference from the
+			 * previous one's — buffs its observers never saw, and removals for buffs that were
+			 * never there. Dropping it forces the next push to be a full set. */
+			ResetObservedBuffBaseline();
 
 			RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
 
