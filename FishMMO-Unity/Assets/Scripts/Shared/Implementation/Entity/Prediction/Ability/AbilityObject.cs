@@ -541,13 +541,13 @@ namespace FishMMO.Shared
 			/* The rigidbody's GameObject where there is one, which is what Collision.gameObject
 			 * reported — so a hit on a child collider resolves to the body it belongs to rather than
 			 * to the bone. Walking the parents afterwards covers a character rigged without one; the
-			 * same trap EventData.SetTarget and TargetOrdering.Rank both already resolve this way. */
-			Rigidbody body = collider.attachedRigidbody;
-			GameObject hitRoot = body != null ? body.gameObject : collider.gameObject;
-			if (!hitRoot.TryGetComponent(out ICharacter hitCharacter))
-			{
-				hitCharacter = hitRoot.GetComponentInParent<ICharacter>();
-			}
+			 * same trap EventData.SetTarget and TargetOrdering.Rank both already resolve this way.
+			 *
+			 * Shared with the area query rather than spelled out here. AbilityApplyAreaAction used a
+			 * bare GetComponent on the collider, so the two hit-resolving paths disagreed about who
+			 * was even a candidate: this one saw a character rigged with a child hitbox, that one did
+			 * not. One implementation is what keeps them honest. */
+			GameObject hitRoot = TargetOrdering.ResolveHitRoot(collider, out ICharacter hitCharacter);
 
 			/* Once per target for this object's whole life, keyed on the character where there is one
 			 * so two hitboxes on one body cost one hit. The sweep runs every tick, and a pierce that

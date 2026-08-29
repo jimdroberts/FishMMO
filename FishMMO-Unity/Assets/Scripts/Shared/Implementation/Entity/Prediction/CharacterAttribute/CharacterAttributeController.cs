@@ -1718,10 +1718,13 @@ namespace FishMMO.Shared
 		/// Silently skips when <paramref name="templateID"/> is 0 (resource not present on
 		/// this entity) or when the ID does not resolve to a live resource attribute.
 		/// <para>
-		/// <see cref="CharacterAttribute.SetFinal"/> is used in place of
+		/// <see cref="CharacterAttribute.SetFinalDerivingModifier"/> is used in place of
 		/// <see cref="CharacterAttribute.SetValue"/> because the reconciled max value is
 		/// authoritative from the server — invoking <c>UpdateValues</c> here would
-		/// overwrite it with a locally-computed formula result.
+		/// overwrite it with a locally-computed formula result. It back-solves
+		/// <c>ExternalModifier</c> as well as writing the final, so the next recompute reproduces
+		/// the server's number instead of throwing it away; a bare <c>SetFinal</c> left the
+		/// authoritative maximum one <c>AddModifier</c> away from being recomputed out of existence.
 		/// <see cref="PropagateToParents"/> propagates the new max upward so any parent
 		/// whose formula reads this resource's max value recomputes correctly.
 		/// Callers must bracket calls with <see cref="BeginPropagation"/>/<see cref="EndPropagation"/>.
@@ -1752,16 +1755,16 @@ namespace FishMMO.Shared
 		/// Re-propagates a resource attribute's new <c>FinalValue</c> to all parent attributes
 		/// whose formulas depend on it.
 		/// <para>
-		/// <b>SetFinal invariant:</b> <see cref="CharacterAttribute.SetFinal"/> writes
-		/// <c>finalValue</c> directly, bypassing <c>CalculateFinalValue</c> and
-		/// <c>UpdateValues</c>. This is intentional for reconcile: the authoritative
-		/// server value must not be overwritten by a local formula recalculation on the
-		/// attribute itself. However, any <em>parent</em> attribute whose formula reads
-		/// this attribute's <c>FinalValue</c> must still recompute — that is the sole
-		/// responsibility of this helper.
+		/// <b>Authoritative-write invariant:</b> the reconcile installs a resource's maximum with
+		/// <see cref="CharacterAttribute.SetFinalDerivingModifier"/>, which writes <c>finalValue</c>
+		/// without letting a local formula pass recompute it. That is intentional — the server's
+		/// value must not be overwritten by this peer's arithmetic — but it means the attribute
+		/// itself never raises the recalculation a normal write would. Any <em>parent</em> attribute
+		/// whose formula reads this attribute's <c>FinalValue</c> must therefore be recomputed by
+		/// hand, and that is the sole responsibility of this helper.
 		/// </para>
 		/// <para>
-		/// <b>Rule:</b> every call to <c>SetFinal</c> on a resource attribute during
+		/// <b>Rule:</b> every authoritative write to a resource attribute's final value during
 		/// reconcile MUST be followed immediately by a call to this helper. Omitting
 		/// the call silently breaks formula-derived attributes that read the resource's max.
 		/// </para>

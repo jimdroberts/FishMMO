@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using FishMMO.Logging;
+using FishMMO.Shared.Core;
 using FishNet.Object;
 using UnityEngine;
 
@@ -79,6 +81,124 @@ namespace FishMMO.Shared
 		/// <summary>Sort key for a candidate that carries no <see cref="NetworkObject"/>.</summary>
 		public const int UnnetworkedObjectId = int.MaxValue;
 
+		/// <summary>Largest a query buffer is allowed to grow to before results are truncated.</summary>
+		/// <remarks>
+		/// Matches <c>AbilityObjectSweep</c>'s ceiling, so every query in the project truncates at the
+		/// same point rather than at whichever bound its own author picked.
+		/// </remarks>
+		public const int MaximumQueryBufferSize = 256;
+
+		/// <summary>
+		/// Query buffer size for a caller whose authored cap is <paramref name="maxHits"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Deliberately larger than the cap. Sizing the buffer at exactly <c>MaxHits</c> makes the
+		/// physics broadphase perform the truncation, in its own order, before the caller ever sees
+		/// the candidates — so a cap of 5 in a crowd of 20 picked five arbitrary characters and the
+		/// deterministic sort that follows had nothing to work with. Querying wide and capping after
+		/// the sort is what makes the cap mean "the first five in a defined order".
+		/// </para>
+		/// <para>
+		/// This is the STARTING size, not a limit: it only moves the truncation point from
+		/// <c>maxHits</c> up to <c>maxHits * 4</c>. A caller must still grow the buffer through
+		/// <see cref="TryGrowQueryBuffer{T}"/> when a query comes back full, or the same failure
+		/// returns in a denser crowd.
+		/// </para>
+		/// <para>
+		/// Lives here rather than on <c>TargetSelector</c> because the ability actions resolve hits
+		/// without a selector and need the identical rule; it was duplicated inline in
+		/// <c>AbilityApplyAreaAction</c> for exactly as long as it lived somewhere only selectors
+		/// could reach.
+		/// </para>
+		/// </remarks>
+		public static int QueryBufferSize(int maxHits)
+		{
+			int cap = Mathf.Max(1, maxHits);
+			return Mathf.Clamp(cap * 4, 32, MaximumQueryBufferSize);
+		}
+
+		/// <summary>
+		/// Doubles a query buffer that came back full, so the caller can re-run the query.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A non-allocating physics query returns at most <c>buffer.Length</c> results and says
+		/// nothing about how many it discarded. A full buffer is therefore indistinguishable from an
+		/// exactly-full one, and the discarded entries were chosen by the broadphase — so a cap or a
+		/// sort applied afterwards is ordering an arbitrary subset. Re-querying into a bigger buffer
+		/// is the only way to learn whether anything was lost.
+		/// </para>
+		/// <para>
+		/// Use it as the condition of the query loop:
+		/// <code>
+		/// int count;
+		/// while (true)
+		/// {
+		///     count = physicsScene.OverlapSphere(centre, radius, hits, mask, QueryTriggerInteraction.UseGlobal);
+		///     if (!TargetOrdering.TryGrowQueryBuffer(ref hits, count)) break;
+		/// }
+		/// </code>
+		/// </para>
+		/// </remarks>
+		/// <typeparam name="T">Buffer element type — <c>Collider</c> or <c>RaycastHit</c>.</typeparam>
+		/// <param name="buffer">The buffer, replaced with a larger one when this returns true.</param>
+		/// <param name="count">Result count the query just returned.</param>
+		/// <returns>True when the buffer grew and the query must be re-run.</returns>
+		public static bool TryGrowQueryBuffer<T>(ref T[] buffer, int count)
+		{
+			if (buffer == null)
+			{
+				buffer = new T[QueryBufferSize(0)];
+				return true;
+			}
+
+			if (count < buffer.Length)
+			{
+				return false;
+			}
+
+			if (buffer.Length >= MaximumQueryBufferSize)
+			{
+				WarnQueryBufferSaturated();
+				return false;
+			}
+
+			buffer = new T[Mathf.Min(MaximumQueryBufferSize, buffer.Length * 2)];
+			return true;
+		}
+
+		/// <summary>True once the saturation warning has been issued this session.</summary>
+		private static bool warnedQueryBufferSaturated;
+
+		/// <summary>
+		/// Reports the one case this module cannot make deterministic, once per session.
+		/// </summary>
+		/// <remarks>
+		/// At <see cref="MaximumQueryBufferSize"/> candidates the broadphase truncates and no
+		/// ordering downstream can recover the set it discarded. Warned rather than thrown, because
+		/// dropping the whole query would be worse than an arbitrary subset of it — but warned at
+		/// all, because this used to be the one failure in the target system with no symptom other
+		/// than an ability quietly choosing different victims in a crowd. Once per session: it fires
+		/// from a per-tick path and a repeating log would bury the rest of the frame.
+		/// </remarks>
+		private static void WarnQueryBufferSaturated()
+		{
+			if (warnedQueryBufferSaturated)
+			{
+				return;
+			}
+			warnedQueryBufferSaturated = true;
+			Log.Warning("TargetOrdering",
+				$"A spatial query filled its {MaximumQueryBufferSize}-entry buffer. Beyond this the physics " +
+				"broadphase truncates the candidates in its own order, so any MaxHits cap applied afterwards " +
+				"selects from an arbitrary subset. Reduce the query radius or raise " +
+				nameof(MaximumQueryBufferSize) + ". Reported once per session.");
+		}
+
+		/// <summary>Resets the once-per-session warning. For tests.</summary>
+		internal static void ResetQueryBufferWarning() => warnedQueryBufferSaturated = false;
+
 		/// <summary>
 		/// Builds the sort keys for one candidate GameObject.
 		/// </summary>
@@ -106,6 +226,64 @@ namespace FishMMO.Shared
 			}
 
 			return new TargetRank(index, objectId, nameKey, secondaryKey, distance);
+		}
+
+		/// <summary>
+		/// Resolves the body a raw collider hit belongs to, and the character on it if there is one.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A prefab is free to hang its hitbox off a child transform, so the collider a query returns
+		/// is frequently not the object anything downstream cares about. The rigidbody's GameObject
+		/// where there is one — which is what <c>Collision.gameObject</c> reported back when hits came
+		/// from collision callbacks — then a parent walk for a character rigged without one.
+		/// </para>
+		/// <para>
+		/// This is the same resolution <see cref="Rank"/> performs for its <c>ObjectId</c> key, and the
+		/// reason both exist is that a bare <c>GetComponent</c> on the collider gets two things wrong
+		/// at once: it silently drops a character whose hitbox is a child, and it counts a character
+		/// with two colliders twice. <c>AbilityApplyAreaAction</c> had both faults while the sweep next
+		/// to it did not, so the two hit-resolving paths disagreed about who was even a candidate.
+		/// One implementation is what keeps them honest.
+		/// </para>
+		/// </remarks>
+		/// <param name="collider">The collider a query returned. May be null.</param>
+		/// <param name="character">The character that owns it, or null.</param>
+		/// <returns>The resolved body, or null when <paramref name="collider"/> is null.</returns>
+		public static GameObject ResolveHitRoot(Collider collider, out ICharacter character)
+		{
+			character = null;
+			if (collider == null)
+			{
+				return null;
+			}
+
+			Rigidbody body = collider.attachedRigidbody;
+			GameObject root = body != null ? body.gameObject : collider.gameObject;
+
+			if (!root.TryGetComponent(out character))
+			{
+				character = root.GetComponentInParent<ICharacter>();
+			}
+			return root;
+		}
+
+		/// <summary>
+		/// The key a hit should be deduplicated and capped by: the character where there is one,
+		/// otherwise the resolved body.
+		/// </summary>
+		/// <remarks>
+		/// Keyed on the character so two hitboxes on one body cost one hit and occupy one slot of a
+		/// <c>MaxHits</c> cap. A cap that counts colliders rather than victims means the same ability
+		/// hits a different NUMBER of characters depending on how its targets are rigged.
+		/// </remarks>
+		/// <param name="collider">The collider a query returned.</param>
+		/// <param name="character">The character that owns it, or null.</param>
+		/// <returns>The dedupe key, or null when <paramref name="collider"/> is null.</returns>
+		public static GameObject ResolveHitKey(Collider collider, out ICharacter character)
+		{
+			GameObject root = ResolveHitRoot(collider, out character);
+			return character != null ? character.GameObject : root;
 		}
 
 		/// <summary>
@@ -282,61 +460,24 @@ namespace FishMMO.Shared
 			return dot >= cosHalfAngle;
 		}
 
-		/// <summary>
-		/// Orders a filled <c>OverlapSphere</c> buffer by network identity, in place.
-		/// </summary>
-		/// <remarks>
-		/// Applied at the query boundary so every consumer — selectors and the ability actions that
-		/// resolve hits without one — sees the same order for the same overlap. Insertion sort
-		/// because these buffers hold tens of entries at most and it allocates nothing.
-		/// </remarks>
-		public static void SortColliders(Collider[] hits, int count)
-		{
-			if (hits == null || count < 2)
-			{
-				return;
-			}
-			if (count > hits.Length)
-			{
-				count = hits.Length;
-			}
-
-			// Keys are resolved once and carried alongside the entries. Recomputing them inside the
-			// comparison would put a GetComponentInParent walk on every compare, which is how an
-			// ordering fix turns into a per-hit performance regression.
-			EnsureKeyBuffers(count);
-			for (int i = 0; i < count; ++i)
-			{
-				TargetRank rank = Rank(i, hits[i] != null ? hits[i].gameObject : null, 0f);
-				keyObjectIds[i] = rank.ObjectId;
-				keyNames[i] = rank.NameKey;
-				keySecondary[i] = rank.SecondaryKey;
-				keyDistance[i] = 0f;
-			}
-
-			for (int i = 1; i < count; ++i)
-			{
-				Collider current = hits[i];
-				int currentObjectId = keyObjectIds[i];
-				int currentName = keyNames[i];
-				int currentSecondary = keySecondary[i];
-
-				int j = i - 1;
-				while (j >= 0 && CompareKeys(keyObjectIds[j], keyNames[j], keySecondary[j], 0f,
-											currentObjectId, currentName, currentSecondary, 0f, false) > 0)
-				{
-					hits[j + 1] = hits[j];
-					keyObjectIds[j + 1] = keyObjectIds[j];
-					keyNames[j + 1] = keyNames[j];
-					keySecondary[j + 1] = keySecondary[j];
-					--j;
-				}
-				hits[j + 1] = current;
-				keyObjectIds[j + 1] = currentObjectId;
-				keyNames[j + 1] = currentName;
-				keySecondary[j + 1] = currentSecondary;
-			}
-		}
+		/* SortColliders was REMOVED, not left unused.
+		 *
+		 * It ordered an overlap buffer by network identity at the query boundary, on the theory that
+		 * imposing SOME reproducible order there fixed every consumer at once. It does the opposite
+		 * for the one operation that actually reads the order: a MaxHits cap. Truncating an
+		 * identity-ordered set keeps the lowest ObjectIds — the characters the server happened to
+		 * spawn earliest — not the ones nearest the blast, so a 3-target AoE in a crowd of 8 hit the
+		 * same three every time and never the ones standing on the impact point. Every selector that
+		 * caps already ranked by distance and disagreed with it.
+		 *
+		 * The deeper problem is that the query boundary cannot know the answer. Distance and identity
+		 * are both legitimate orders and only the CALLER knows which one its cap means, which is why
+		 * LagCompensatedQuery.OverlapSphere now returns the buffer unordered and every consumer states
+		 * its own order. SortRaycastHits survives because a ray genuinely has only one reading —
+		 * distance along the line — and Unity's non-allocating overload promises none.
+		 *
+		 * Leaving this in place as a shorter-looking option is how the next caller re-introduces an
+		 * identity-ordered cap. */
 
 		/// <summary>
 		/// Orders a filled <c>Raycast</c> buffer by distance along the ray, ties by identity.
@@ -377,7 +518,7 @@ namespace FishMMO.Shared
 
 				int j = i - 1;
 				while (j >= 0 && CompareKeys(keyObjectIds[j], keyNames[j], keySecondary[j], keyDistance[j],
-											currentObjectId, currentName, currentSecondary, currentDistance, true) > 0)
+											currentObjectId, currentName, currentSecondary, currentDistance) > 0)
 				{
 					hits[j + 1] = hits[j];
 					keyObjectIds[j + 1] = keyObjectIds[j];
@@ -418,15 +559,19 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Comparison over raw key columns, used by the in-place buffer sorts where the entries carry
-		/// no index of their own (they are being moved) and identity alone must break every tie.
+		/// Comparison over raw key columns, used by <see cref="SortRaycastHits"/> where the entries
+		/// carry no index of their own (they are being moved) and identity alone must break every tie.
 		/// </summary>
+		/// <remarks>
+		/// Distance always leads. The <c>distanceFirst</c> switch this used to take existed only for
+		/// <c>SortColliders</c>, which ordered an overlap by identity and is gone — see the note where
+		/// it used to be.
+		/// </remarks>
 		private static int CompareKeys(
 			int aObjectId, int aName, int aSecondary, float aDistance,
-			int bObjectId, int bName, int bSecondary, float bDistance,
-			bool distanceFirst)
+			int bObjectId, int bName, int bSecondary, float bDistance)
 		{
-			if (distanceFirst && aDistance != bDistance)
+			if (aDistance != bDistance)
 			{
 				return aDistance < bDistance ? -1 : 1;
 			}

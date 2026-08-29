@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -69,7 +69,20 @@ namespace FishMMO.Shared
 			Vector3 origin = context.transform.position;
 			Vector3 direction = context.transform.forward;
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
-			int hitCount = physicsScene.Raycast(origin, direction, hits, Length, TargetLayer, QueryTriggerInteraction.UseGlobal);
+			/* Re-queried until the buffer stops coming back full. A non-allocating query returns
+			 * at most buffer.Length results and says nothing about how many it discarded, and the
+			 * ones it discarded were chosen by the broadphase — so the ranking and the MaxHits cap
+			 * below would be ordering an arbitrary subset. The starting size is already wider than
+			 * the cap; this covers the crowd that outgrows it. */
+			int hitCount;
+			while (true)
+			{
+				hitCount = physicsScene.Raycast(origin, direction, hits, Length, TargetLayer, QueryTriggerInteraction.UseGlobal);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref hits, hitCount))
+				{
+					break;
+				}
+			}
 
 			/* Ordered along the ray, not by identity. A line is a sequence and every effect authored
 			 * on one — pierce, beam falloff, "first thing you hit" — reads it that way, so distance is
@@ -78,7 +91,11 @@ namespace FishMMO.Shared
 			TargetOrdering.SortRaycastHits(hits, hitCount);
 
 			int kept = 0;
-			int cap = Mathf.Max(1, MaxHits);
+			/* Zero or less means NO cap, matching TargetOrdering.CappedCount and every other selector.
+			 * This used to be Mathf.Max(1, MaxHits), so an author who set MaxHits to 0 on a beam
+			 * meaning "pierce everything on the line" got a beam that stopped at the first target —
+			 * the one place in the target system where a non-positive cap meant something else. */
+			int cap = MaxHits > 0 ? MaxHits : int.MaxValue;
 			for (int i = 0; i < hitCount && kept < cap; i++)
 			{
 				Collider collider = hits[i].collider;
@@ -98,7 +115,10 @@ namespace FishMMO.Shared
 		private void EnsureHitBuffer()
 		{
 			int size = QueryBufferSize(MaxHits);
-			if (hits == null || hits.Length != size)
+			/* Grow-only. This used to reallocate whenever the length differed from the authored
+			 * size, which silently undid any growth TryGrowQueryBuffer had bought on the previous
+			 * query — so a selector in a dense crowd re-truncated on every single cast. */
+			if (hits == null || hits.Length < size)
 			{
 				hits = new RaycastHit[size];
 			}

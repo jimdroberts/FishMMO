@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target information.</param>
 		/// <remarks>
-		/// Resolves the target via <see cref="BaseAction.ResolveTarget"/> and interrupts that target's ability controller.
+		/// Resolves the target via <see cref="BaseAction.TryResolveTarget"/> and interrupts that target's ability controller.
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{

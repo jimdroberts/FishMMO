@@ -437,7 +437,11 @@ namespace FishMMO.Shared
 					 * hitting nothing. Flagging it lets the reconcile take that object back. */
 					if (spawned == null && base.IsServerStarted)
 					{
-						serverSpawnedNothing = true;
+						/* Stamped with the tick it happened on, not raised as a bare flag. The
+						 * reconcile built after this tick's replicates only carries it if the two
+						 * ticks match — see ShouldFlagNoSpawn for why a mismatch must be dropped
+						 * rather than reported against whatever tick the reconcile ends up on. */
+						serverSpawnedNothingTick = activationData.GetPredictionTick().Value;
 					}
 
 					/* Tell observers what happened, as one message per cast.
@@ -648,10 +652,12 @@ namespace FishMMO.Shared
 		/// crafted afterwards resolved to nothing and drew nothing, permanently.
 		/// </para>
 		/// <para>
-		/// The ability lands in the controller's observer-only store, never in
-		/// <c>KnownAbilities</c> — see <c>AbilityController.RegisterObservedAbility</c> for why
-		/// that distinction is the security boundary. The owner is excluded by the sender and
-		/// skipped again here; it has its own <c>AbilityAddBroadcast</c>.
+		/// The ability lands in <c>KnownAbilities</c>, the same container the owner uses — see
+		/// <c>AbilityController.RegisterObservedAbility</c>, which explains why the parallel
+		/// observer-only store it used to go into was the wrong shape. The security boundary is
+		/// that method's OWNER CHECK, not a container split: this message only ever describes
+		/// somebody else, so it refuses on our own character. The owner is excluded by the sender
+		/// and skipped again here; it has its own <c>AbilityAddBroadcast</c>.
 		/// </para>
 		/// </remarks>
 		private static void OnAbilityLearnedObserverBroadcast(AbilityLearnedObserverBroadcast msg, Channel channel)

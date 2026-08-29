@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -97,7 +97,20 @@ namespace FishMMO.Shared
 
 			Vector3 origin = context.transform.position;
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
-			int hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+			/* Re-queried until the buffer stops coming back full. A non-allocating query returns
+			 * at most buffer.Length results and says nothing about how many it discarded, and the
+			 * ones it discarded were chosen by the broadphase — so the ranking and the MaxHits cap
+			 * below would be ordering an arbitrary subset. The starting size is already wider than
+			 * the cap; this covers the crowd that outgrows it. */
+			int hitCount;
+			while (true)
+			{
+				hitCount = physicsScene.OverlapSphere(origin, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref hits, hitCount))
+				{
+					break;
+				}
+			}
 
 			for (int i = 0; i < hitCount; i++)
 			{
@@ -150,7 +163,10 @@ namespace FishMMO.Shared
 		private void EnsureHitBuffer()
 		{
 			int size = QueryBufferSize(MaxHits);
-			if (hits == null || hits.Length != size)
+			/* Grow-only. This used to reallocate whenever the length differed from the authored
+			 * size, which silently undid any growth TryGrowQueryBuffer had bought on the previous
+			 * query — so a selector in a dense crowd re-truncated on every single cast. */
+			if (hits == null || hits.Length < size)
 			{
 				hits = new Collider[size];
 			}

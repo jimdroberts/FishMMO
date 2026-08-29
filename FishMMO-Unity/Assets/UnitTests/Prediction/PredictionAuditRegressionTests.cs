@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -2173,6 +2173,642 @@ namespace FishMMO.UnitTests
 			}
 			LogAssert.Fail($"No guid in {metaPath}");
 			return null;
+		}
+
+		// ══════════════════════════════════════════════════════════════════════════
+		// 2026-08-29 audit round: area-query determinism, buffer growth, scope safety
+		// ══════════════════════════════════════════════════════════════════════════
+
+		/// <summary>
+		/// A MaxHits cap on an area query keeps the NEAREST candidates, not the ones with the lowest
+		/// identity keys.
+		/// </summary>
+		/// <remarks>
+		/// <c>LagCompensatedQuery.OverlapSphere</c> used to sort its buffer by network identity
+		/// (ObjectId, then a stable name hash) and <c>AbilityApplyAreaAction</c> truncated that
+		/// ordered buffer — so a cap of 2 in a crowd kept the two lowest identity keys rather than the
+		/// two nearest the blast. The names below are ASSIGNED so that identity order is the exact
+		/// reverse of distance order, which is what makes reverting the fix fail this test rather than
+		/// coincidentally still pass.
+		/// </remarks>
+		[Test]
+		public void AreaQuery_CapKeepsTheNearest_NotTheLowestIdentityKeys()
+		{
+			// None of these carry a NetworkObject, so ObjectId ties at UnnetworkedObjectId for all
+			// three and the identity comparison falls through to the name key — which is the key this
+			// test arranges to disagree with distance.
+			string[] names = { "areaCapA", "areaCapB", "areaCapC" };
+			Array.Sort(names, (a, b) => TargetOrdering.StableNameKey(b).CompareTo(TargetOrdering.StableNameKey(a)));
+
+			GameObject nearest = MakeSphere(names[0], new Vector3(1f, 0f, 0f));
+			GameObject middle = MakeSphere(names[1], new Vector3(3f, 0f, 0f));
+			GameObject furthest = MakeSphere(names[2], new Vector3(5f, 0f, 0f));
+			GameObject context = new GameObject("areaCapContext");
+			try
+			{
+				Physics.SyncTransforms();
+
+				// Precondition: identity order really is the reverse of distance order, so the two
+				// orderings cannot agree by accident.
+				LogAssert.IsTrue(
+					TargetOrdering.StableNameKey(nearest.name) > TargetOrdering.StableNameKey(furthest.name),
+					"The nearest object must carry the HIGHEST name key, or identity order and distance " +
+					"order would agree and this test would pass against the defect.");
+
+				List<LagCompensatedQuery.CompensatedHit> results = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.OverlapSphereNearest(
+					null, context, Vector3.zero, 10f, ~0, maxHits: 2, charactersOnly: false, results);
+
+				LogAssert.AreEqual(2, count, "MaxHits caps the result.");
+
+				List<GameObject> picked = new List<GameObject>();
+				for (int i = 0; i < results.Count; ++i)
+				{
+					picked.Add(results[i].Collider.gameObject);
+				}
+
+				LogAssert.IsTrue(picked.Contains(nearest), "The nearest candidate must survive the cap.");
+				LogAssert.IsTrue(picked.Contains(middle), "The second nearest must survive the cap.");
+				LogAssert.IsFalse(picked.Contains(furthest),
+					"The furthest candidate is the one a distance cap drops. Keeping it means the cap is " +
+					"ordering by identity again.");
+
+				LogAssert.IsTrue(results[0].Distance < results[1].Distance,
+					"Results are handed back nearest first.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(nearest);
+				UnityEngine.Object.DestroyImmediate(middle);
+				UnityEngine.Object.DestroyImmediate(furthest);
+			}
+		}
+
+		/// <summary>
+		/// A hit on a child collider resolves to the body it belongs to, not to the bone.
+		/// </summary>
+		/// <remarks>
+		/// <c>AbilityApplyAreaAction</c> used a bare <c>GetComponent&lt;ICharacter&gt;()</c> on the
+		/// collider, so a character whose hitbox hangs off a child was found by the overlap, charged
+		/// against the cap, and then silently skipped. The sweep next to it resolved through the
+		/// rigidbody and did not — the two hit-resolving paths disagreed about who was a candidate.
+		/// </remarks>
+		[Test]
+		public void ResolveHitRoot_WalksAChildColliderUpToItsBody()
+		{
+			GameObject body = new GameObject("hitRootBody");
+			try
+			{
+				body.AddComponent<Rigidbody>().isKinematic = true;
+				GameObject hitbox = new GameObject("hitRootChild");
+				hitbox.transform.SetParent(body.transform);
+				SphereCollider collider = hitbox.AddComponent<SphereCollider>();
+
+				GameObject resolved = TargetOrdering.ResolveHitRoot(collider, out ICharacter character);
+
+				LogAssert.AreSame(body, resolved,
+					"A child collider must resolve to the body its rigidbody sits on, which is what " +
+					"Collision.gameObject reported back when hits came from collision callbacks.");
+				LogAssert.IsNull(character, "There is no ICharacter on this body.");
+				LogAssert.AreSame(body, TargetOrdering.ResolveHitKey(collider, out _),
+					"With no character the dedupe key is the resolved body, never the child collider.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(body);
+			}
+		}
+
+		/// <summary>
+		/// Two hitboxes on one body cost one hit and one slot of the cap.
+		/// </summary>
+		/// <remarks>
+		/// The cap used to count COLLIDERS, so the same ability hit a different number of characters
+		/// depending on how its targets happened to be rigged: a cap of 2 spent both slots on the
+		/// two-hitbox body and never reached the second character at all.
+		/// </remarks>
+		[Test]
+		public void AreaQuery_TwoHitboxesOnOneBody_CostOneSlotOfTheCap()
+		{
+			GameObject twoBox = new GameObject("areaDedupeBody");
+			GameObject single = MakeSphere("areaDedupeOther", new Vector3(4f, 0f, 0f));
+			GameObject context = new GameObject("areaDedupeContext");
+			try
+			{
+				twoBox.transform.position = new Vector3(1f, 0f, 0f);
+				twoBox.AddComponent<Rigidbody>().isKinematic = true;
+				for (int i = 0; i < 2; ++i)
+				{
+					GameObject hitbox = new GameObject("areaDedupeHitbox" + i);
+					hitbox.transform.SetParent(twoBox.transform);
+					hitbox.transform.localPosition = new Vector3(i * 0.5f, 0f, 0f);
+					hitbox.AddComponent<SphereCollider>().radius = 0.5f;
+				}
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> results = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.OverlapSphereNearest(
+					null, context, Vector3.zero, 10f, ~0, maxHits: 2, charactersOnly: false, results);
+
+				LogAssert.AreEqual(2, count, "Two distinct bodies are in range.");
+
+				bool sawTwoBox = false;
+				bool sawSingle = false;
+				for (int i = 0; i < results.Count; ++i)
+				{
+					GameObject root = TargetOrdering.ResolveHitRoot(results[i].Collider, out _);
+					sawTwoBox |= ReferenceEquals(root, twoBox);
+					sawSingle |= ReferenceEquals(root, single);
+				}
+
+				LogAssert.IsTrue(sawTwoBox, "The two-hitbox body is hit.");
+				LogAssert.IsTrue(sawSingle,
+					"The second body must still be reached. A cap that counts colliders spends both " +
+					"slots on the first body and never gets here.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(twoBox);
+				UnityEngine.Object.DestroyImmediate(single);
+			}
+		}
+
+		/// <summary>
+		/// A character rigged with its collider on a child is still resolved, and scenery never
+		/// consumes a slot of a damage query's cap.
+		/// </summary>
+		[Test]
+		public void AreaQuery_CharactersOnly_FindsAChildRiggedCharacterAndSkipsScenery()
+		{
+			GameObject character = new GameObject("areaCharBody");
+			GameObject scenery = MakeSphere("areaCharScenery", new Vector3(0.5f, 0f, 0f));
+			GameObject context = new GameObject("areaCharContext");
+			try
+			{
+				character.transform.position = new Vector3(2f, 0f, 0f);
+				character.AddComponent<Rigidbody>().isKinematic = true;
+				character.AddComponent<MonoCharacter>();
+				GameObject hitbox = new GameObject("areaCharHitbox");
+				hitbox.transform.SetParent(character.transform);
+				hitbox.transform.localPosition = Vector3.zero;
+				hitbox.AddComponent<SphereCollider>().radius = 0.5f;
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> results = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.OverlapSphereNearest(
+					null, context, Vector3.zero, 10f, ~0, maxHits: 1, charactersOnly: true, results);
+
+				LogAssert.AreEqual(1, count,
+					"The character must be found through its child hitbox. A bare GetComponent on the " +
+					"collider finds nothing here and the query returns empty.");
+				LogAssert.IsNotNull(results[0].Character, "The resolved character travels with the hit.");
+				LogAssert.AreSame(character, results[0].Character.GameObject, "And it is the right one.");
+				LogAssert.IsTrue(scenery != null,
+					"The scenery collider is nearer than the character; charactersOnly must skip it " +
+					"BEFORE it charges the cap, or the query returns scenery and hits nobody.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(character);
+				UnityEngine.Object.DestroyImmediate(scenery);
+			}
+		}
+
+		/// <summary>
+		/// A query buffer that comes back full is grown, and growth stops at the shared ceiling.
+		/// </summary>
+		/// <remarks>
+		/// Without this the broadphase truncates the candidate set before any ranking runs, which is
+		/// the same failure <c>QueryBufferSize</c> exists to prevent — just moved from <c>MaxHits</c>
+		/// up to <c>MaxHits * 4</c>.
+		/// </remarks>
+		[Test]
+		public void TryGrowQueryBuffer_DoublesWhileFull_AndStopsAtTheCeiling()
+		{
+			Collider[] buffer = new Collider[32];
+
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref buffer, 31),
+				"A query that did not fill its buffer discarded nothing; there is nothing to grow for.");
+			LogAssert.AreEqual(32, buffer.Length, "And the buffer is left alone.");
+
+			LogAssert.IsTrue(TargetOrdering.TryGrowQueryBuffer(ref buffer, 32),
+				"A full buffer is indistinguishable from a truncated one, so it must be re-queried wider.");
+			LogAssert.AreEqual(64, buffer.Length, "Doubling, not a fixed step.");
+
+			int guard = 0;
+			while (TargetOrdering.TryGrowQueryBuffer(ref buffer, buffer.Length) && ++guard < 32)
+			{
+			}
+			LogAssert.AreEqual(TargetOrdering.MaximumQueryBufferSize, buffer.Length,
+				"Growth stops at the shared ceiling rather than running away.");
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref buffer, buffer.Length),
+				"At the ceiling the answer is a warning, not another allocation.");
+		}
+
+		/// <summary>
+		/// A selector's hit buffer is grow-only, so growth bought on one query survives to the next.
+		/// </summary>
+		/// <remarks>
+		/// <c>EnsureHitBuffer</c> reallocated whenever the length DIFFERED from the authored size,
+		/// which silently undid every growth — a selector in a dense crowd re-truncated on every
+		/// single cast, and the growth loop above would have been dead weight.
+		/// </remarks>
+		[Test]
+		public void SelectorHitBuffer_IsGrowOnly()
+		{
+			AreaTargetSelector selector = new AreaTargetSelector { MaxHits = 4 };
+			FieldInfo hitsField = typeof(AreaTargetSelector).GetField("hits", Any);
+			MethodInfo ensure = typeof(AreaTargetSelector).GetMethod("EnsureHitBuffer", Any);
+			LogAssert.IsNotNull(hitsField);
+			LogAssert.IsNotNull(ensure);
+
+			ensure.Invoke(selector, null);
+			int authored = ((Collider[])hitsField.GetValue(selector)).Length;
+			LogAssert.IsTrue(authored > 4, "The authored size is wider than the cap.");
+
+			// Stand in for a buffer the growth loop widened on a previous, denser query.
+			hitsField.SetValue(selector, new Collider[TargetOrdering.MaximumQueryBufferSize]);
+			ensure.Invoke(selector, null);
+
+			LogAssert.AreEqual(TargetOrdering.MaximumQueryBufferSize,
+				((Collider[])hitsField.GetValue(selector)).Length,
+				"A buffer that already grew must not be shrunk back to the authored size.");
+		}
+
+		/// <summary>
+		/// A throw while restoring rewound characters still closes the scope.
+		/// </summary>
+		/// <remarks>
+		/// <c>RestoreAll</c> set <c>scopeOpen = false</c> only on the success path. One throw left it
+		/// true forever, every later <c>Rewind</c> took the nested-scope branch and returned an
+		/// inactive scope, and from that point every hit in the process resolved against live
+		/// positions — silently, with no log and no recovery short of a restart.
+		/// </remarks>
+		[Test]
+		public void RewindScope_ClosesEvenWhenARestoreThrows()
+		{
+			Type registry = typeof(LagCompensationRegistry);
+			FieldInfo scopeOpen = registry.GetField("scopeOpen", Any);
+			FieldInfo rewound = registry.GetField("rewound", Any);
+			MethodInfo restoreAll = registry.GetMethod("RestoreAll", Any);
+			LogAssert.IsNotNull(scopeOpen);
+			LogAssert.IsNotNull(rewound);
+			LogAssert.IsNotNull(restoreAll);
+
+			GameObject go = new GameObject("rewindThrower");
+			bool priorIgnore = UnityEngine.TestTools.LogAssert.ignoreFailingMessages;
+			try
+			{
+				CharacterPositionHistory history = go.AddComponent<CharacterPositionHistory>();
+				// Marked as displaced so Restore() reaches the transform, then destroyed so that
+				// touching the transform raises MissingReferenceException — a restore that cannot
+				// complete, which is the only way this failure ever happens.
+				typeof(CharacterPositionHistory).GetField("isRewound", Any).SetValue(history, true);
+
+				List<CharacterPositionHistory> list = (List<CharacterPositionHistory>)rewound.GetValue(null);
+				list.Clear();
+				list.Add(history);
+				scopeOpen.SetValue(null, true);
+
+				UnityEngine.Object.DestroyImmediate(go);
+				go = null;
+
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+				restoreAll.Invoke(null, null);
+
+				LogAssert.IsFalse((bool)scopeOpen.GetValue(null),
+					"The scope must be closed in a finally. Leaving it open disables lag compensation " +
+					"for the rest of the process.");
+				LogAssert.AreEqual(0, ((List<CharacterPositionHistory>)rewound.GetValue(null)).Count,
+					"And the displaced list is cleared, so the next scope does not inherit it.");
+			}
+			finally
+			{
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = priorIgnore;
+				LagCompensationRegistry.Clear();
+				if (go != null)
+				{
+					UnityEngine.Object.DestroyImmediate(go);
+				}
+			}
+		}
+
+		/// <summary>
+		/// <c>MaxHits</c> of zero means NO cap on a line selector, as it does everywhere else.
+		/// </summary>
+		/// <remarks>
+		/// It read <c>Mathf.Max(1, MaxHits)</c>, so an author who set zero on a beam meaning "pierce
+		/// everything on the line" got a beam that stopped at the first target — the one place in the
+		/// target system where a non-positive cap meant something other than "uncapped".
+		/// </remarks>
+		[Test]
+		public void LineSelector_ZeroMaxHits_MeansUncapped()
+		{
+			GameObject context = new GameObject("lineCapContext");
+			GameObject a = MakeSphere("lineCapA", new Vector3(0f, 0f, 2f));
+			GameObject b = MakeSphere("lineCapB", new Vector3(0f, 0f, 4f));
+			GameObject c = MakeSphere("lineCapC", new Vector3(0f, 0f, 6f));
+			try
+			{
+				context.transform.position = Vector3.zero;
+				context.transform.forward = Vector3.forward;
+				Physics.SyncTransforms();
+
+				LineTargetSelector selector = new LineTargetSelector { Length = 20f, TargetLayer = ~0, MaxHits = 0 };
+				EventData eventData = new EventData(null);
+				eventData.SetTarget(context);
+
+				List<GameObject> picked = new List<GameObject>(selector.SelectTargets(eventData));
+
+				LogAssert.AreEqual(3, picked.Count,
+					"Zero means uncapped, matching TargetOrdering.CappedCount. A cap of one here is the " +
+					"defect: a beam authored to pierce everything stopped at the first target.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(a);
+				UnityEngine.Object.DestroyImmediate(b);
+				UnityEngine.Object.DestroyImmediate(c);
+			}
+		}
+
+		/// <summary>
+		/// The client-measured view offset is latched from real input only, so a tick the server ran
+		/// with default data does not zero it and switch lag compensation off.
+		/// </summary>
+		/// <remarks>
+		/// FishNet does not skip a tick when a connection's replicate queue is empty — it calls
+		/// <c>ReplicateDefaultData()</c>, which invokes the body with a default-initialised struct and
+		/// <c>ReplicateState.Ticked</c> WITHOUT <c>Created</c>. Assigning unconditionally wrote a zero
+		/// on every such tick, and <c>LagCompensationTick.TryResolve</c> declines on a zero offset, so
+		/// those hits silently resolved against live positions.
+		/// </remarks>
+		[Test]
+		public void ViewOffset_IsLatchedFromRealInput_AndSurvivesAnEmptyQueueTick()
+		{
+			GameObject go = new GameObject("viewOffsetLatch");
+			try
+			{
+				CharacterPredictionController controller = go.AddComponent<CharacterPredictionController>();
+				MethodInfo capture = typeof(CharacterPredictionController).GetMethod("CaptureViewOffset", Any);
+				LogAssert.IsNotNull(capture);
+
+				// A tick carrying real queued input: Ticked | Created.
+				CharacterReplicateData real = default;
+				real.ViewOffsetTicks = 7;
+				real.ViewOffsetFraction = 128;
+				capture.Invoke(controller, new object[] { real, ReplicateState.Ticked | ReplicateState.Created });
+
+				LogAssert.AreEqual((byte)7, controller.CurrentViewOffsetTicks, "Real input is latched.");
+				LogAssert.AreEqual((byte)128, controller.CurrentViewOffsetFraction, "Including the sub-tick remainder.");
+
+				// The tick FishNet manufactures when the queue is empty: default data, no Created bit.
+				capture.Invoke(controller, new object[] { default(CharacterReplicateData), ReplicateState.Ticked });
+
+				LogAssert.AreEqual((byte)7, controller.CurrentViewOffsetTicks,
+					"A defaulted replicate must NOT overwrite the latched offset. Zero here means every " +
+					"tick with a late packet resolves its hits uncompensated.");
+				LogAssert.AreEqual((byte)128, controller.CurrentViewOffsetFraction, "Same for the remainder.");
+
+				// A replay re-supplies the tick's real input and keeps Created, so it still latches.
+				CharacterReplicateData replayed = default;
+				replayed.ViewOffsetTicks = 3;
+				capture.Invoke(controller, new object[]
+				{
+					replayed,
+					ReplicateState.Replayed | ReplicateState.Ticked | ReplicateState.Created
+				});
+				LogAssert.AreEqual((byte)3, controller.CurrentViewOffsetTicks,
+					"A replay carries the tick's actual input and must still update the latch.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// A no-spawn report only travels in the reconcile for the tick it happened on.
+		/// </summary>
+		/// <remarks>
+		/// <c>serverSpawnedNothing</c> was a bare bool consumed by the next <c>OnCreateReconcile</c>,
+		/// which is exact only while the server runs exactly one replicate per tick. FishNet's
+		/// catch-up path runs a second replicate body in the same tick, and then a flag raised at T
+		/// would be stamped onto the reconcile for T+1 — destroying an owner-predicted object the
+		/// server really did spawn, which the replay cannot restore because it starts at T+1.
+		/// </remarks>
+		[Test]
+		public void NoSpawnFlag_TravelsOnlyInItsOwnTicksReconcile()
+		{
+			LogAssert.IsTrue(AbilityController.ShouldFlagNoSpawn(100u, 100u),
+				"The ordinary case: one replicate, one reconcile, same tick.");
+
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(100u, 101u),
+				"Two replicates consumed in one tick share a reconcile stamped for the LATER tick. " +
+				"Reporting the earlier tick's no-spawn against it destroys a real object.");
+
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(101u, 100u),
+				"A report from ahead of the reconcile is equally not this reconcile's business.");
+
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(FishNet.Managing.Timing.TimeManager.UNSET_TICK, 100u),
+				"Nothing recorded means nothing to report.");
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(100u, FishNet.Managing.Timing.TimeManager.UNSET_TICK),
+				"No reconcile tick means the flag cannot be attributed, so it is dropped rather than guessed.");
+		}
+
+		// ── Hitscan: the Bullet / Beam resolution path ────────────────────────────
+
+		/// <summary>
+		/// A hitscan ray reports the bodies it passes through in ray order, one entry per body.
+		/// </summary>
+		/// <remarks>
+		/// The ordering is the whole point: a pierce cap is meaningless over an unordered set, and
+		/// Unity's non-allocating <c>Raycast</c> promises no order at all.
+		/// </remarks>
+		[Test]
+		public void RaycastNearest_ReturnsBodiesInRayOrder_OnePerBody()
+		{
+			GameObject context = new GameObject("rayContext");
+			GameObject near = MakeSphere("rayNear", new Vector3(0f, 0f, 2f));
+			GameObject far = MakeSphere("rayFar", new Vector3(0f, 0f, 6f));
+			GameObject twoBox = new GameObject("rayTwoBox");
+			try
+			{
+				// A body with two colliders on the line must still cost one entry.
+				twoBox.transform.position = new Vector3(0f, 0f, 4f);
+				twoBox.AddComponent<Rigidbody>().isKinematic = true;
+				for (int i = 0; i < 2; ++i)
+				{
+					GameObject hb = new GameObject("rayTwoBoxHit" + i);
+					hb.transform.SetParent(twoBox.transform);
+					hb.transform.localPosition = new Vector3(0f, 0f, i * 0.3f);
+					hb.AddComponent<SphereCollider>().radius = 0.5f;
+				}
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> hits = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.RaycastNearest(
+					null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 0, charactersOnly: false, hits);
+
+				LogAssert.AreEqual(3, count,
+					"Three distinct bodies on the line. Four means the two-collider body was counted twice.");
+
+				for (int i = 1; i < hits.Count; ++i)
+				{
+					LogAssert.IsTrue(hits[i - 1].Distance <= hits[i].Distance,
+						"Hits must come back ordered along the ray, nearest first.");
+				}
+
+				LogAssert.AreSame(near, TargetOrdering.ResolveHitRoot(hits[0].Collider, out _),
+					"The nearest body is reported first.");
+				LogAssert.AreSame(twoBox, TargetOrdering.ResolveHitRoot(hits[1].Collider, out _),
+					"Then the two-collider body, once, at its nearest collider.");
+				LogAssert.AreSame(far, TargetOrdering.ResolveHitRoot(hits[2].Collider, out _),
+					"Then the furthest.");
+
+				LogAssert.IsTrue(hits[0].Point != Vector3.zero,
+					"The impact point is carried, so an effect can be placed where the shot landed.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(near);
+				UnityEngine.Object.DestroyImmediate(twoBox);
+				UnityEngine.Object.DestroyImmediate(far);
+			}
+		}
+
+		/// <summary>
+		/// The pierce cap counts bodies, and zero means it pierces everything.
+		/// </summary>
+		[Test]
+		public void RaycastNearest_PierceCap_CountsBodiesAndZeroMeansUncapped()
+		{
+			GameObject context = new GameObject("pierceContext");
+			GameObject a = MakeSphere("pierceA", new Vector3(0f, 0f, 2f));
+			GameObject b = MakeSphere("pierceB", new Vector3(0f, 0f, 4f));
+			GameObject c = MakeSphere("pierceC", new Vector3(0f, 0f, 6f));
+			try
+			{
+				Physics.SyncTransforms();
+				List<LagCompensatedQuery.CompensatedHit> hits = new List<LagCompensatedQuery.CompensatedHit>();
+
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 1, charactersOnly: false, hits);
+				LogAssert.AreEqual(1, hits.Count, "A pierce of one stops at the first body.");
+				LogAssert.AreSame(a, TargetOrdering.ResolveHitRoot(hits[0].Collider, out _),
+					"And that body is the nearest one, not whichever the broadphase listed first.");
+
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 2, charactersOnly: false, hits);
+				LogAssert.AreEqual(2, hits.Count, "A pierce of two stops at the second.");
+
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 0, charactersOnly: false, hits);
+				LogAssert.AreEqual(3, hits.Count,
+					"Zero means uncapped, matching TargetOrdering.CappedCount and every selector.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(a);
+				UnityEngine.Object.DestroyImmediate(b);
+				UnityEngine.Object.DestroyImmediate(c);
+			}
+		}
+
+		/// <summary>
+		/// A ray that finds a character through a child hitbox reports the character, and
+		/// <c>charactersOnly</c> keeps scenery from consuming the pierce budget.
+		/// </summary>
+		[Test]
+		public void RaycastNearest_CharactersOnly_SkipsSceneryWithoutSpendingTheCap()
+		{
+			GameObject scenery = MakeSphere("rayWall", new Vector3(0f, 0f, 2f));
+			GameObject character = new GameObject("rayCharacter");
+			GameObject context = new GameObject("rayCharContext");
+			try
+			{
+				character.transform.position = new Vector3(0f, 0f, 5f);
+				character.AddComponent<Rigidbody>().isKinematic = true;
+				character.AddComponent<MonoCharacter>();
+				GameObject hb = new GameObject("rayCharacterHitbox");
+				hb.transform.SetParent(character.transform);
+				hb.transform.localPosition = Vector3.zero;
+				hb.AddComponent<SphereCollider>().radius = 0.5f;
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> hits = new List<LagCompensatedQuery.CompensatedHit>();
+
+				// charactersOnly: the wall is nearer, and must neither be reported nor charged.
+				int count = LagCompensatedQuery.RaycastNearest(
+					null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 1, charactersOnly: true, hits);
+
+				LogAssert.AreEqual(1, count,
+					"The character must be reached. Charging the cap for the wall would return the wall " +
+					"and hit nobody.");
+				LogAssert.IsNotNull(hits[0].Character, "And it resolves through its child hitbox.");
+				LogAssert.AreSame(character, hits[0].Character.GameObject, "To the right body.");
+
+				// The opposite setting is what makes cover work: the wall comes back, first.
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 0, charactersOnly: false, hits);
+				LogAssert.IsTrue(hits.Count >= 1, "Scenery is reported when it is allowed to block.");
+				LogAssert.IsNull(hits[0].Character,
+					"And it arrives first, which is what lets the hitscan action stop the shot there.");
+				LogAssert.AreSame(scenery, TargetOrdering.ResolveHitRoot(hits[0].Collider, out _),
+					"The blocker is the wall.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(character);
+				UnityEngine.Object.DestroyImmediate(scenery);
+			}
+		}
+
+		/// <summary>
+		/// A minimal <see cref="ICharacter"/> that is a real component, so the parent walk in
+		/// <see cref="TargetOrdering.ResolveHitRoot"/> can find it.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="MockCharacter"/> below is a plain class and cannot sit on a GameObject, which is
+		/// exactly what the child-hitbox resolution needs to be tested against.
+		/// </remarks>
+		private sealed class MonoCharacter : MonoBehaviour, ICharacter
+		{
+			public long ID { get; set; } = 91;
+			public string Name => "MonoCharacter";
+			public Transform Transform => transform;
+			public GameObject GameObject => gameObject;
+			public Collider Collider { get; set; }
+			public NetworkConnection Owner => null;
+			public NetworkObject NetworkObject => null;
+			public PredictionManager PredictionManager => null;
+			public HashSet<NetworkConnection> Observers { get; } = new HashSet<NetworkConnection>();
+			public bool IsTeleporting => false;
+			public bool IsSpawned => true;
+			public int Flags { get; set; }
+			public WorldLabel CharacterNameLabel { get; set; }
+			public WorldLabel CharacterGuildLabel { get; set; }
+			public Transform MeshRoot => null;
+#if !UNITY_SERVER
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
+#endif
+			public void EnableFlags(CharacterFlags flags) => Flags |= (int)flags;
+			public void DisableFlags(CharacterFlags flags) => Flags &= ~(int)flags;
+			public bool IsFlagged(CharacterFlags flags) => (Flags & (int)flags) != 0;
+			public void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
+			public void Invoke(List<Trigger> triggers, EventData eventData) { }
 		}
 
 		private sealed class MockCharacter : ICharacter

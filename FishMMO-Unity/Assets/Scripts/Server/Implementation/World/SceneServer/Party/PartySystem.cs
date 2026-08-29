@@ -203,7 +203,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Maximum buffs and debuffs sent per party member on the vitals pump.
 		/// </summary>
 		/// <remarks>
-		/// A display cap, and a bound on the message. <c>IBuffController.ObservedBuffs</c> has no
+		/// A display cap, and a bound on the message. <c>IBuffController.Buffs</c> has no
 		/// size limit — world buffs, consumables and a raid's worth of stacking auras all land in
 		/// it — and this payload is built for every member of every party once a second and sent
 		/// to each of them, so an uncapped list multiplies by the party size twice over. The
@@ -1116,17 +1116,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>The member's visible buffs and debuffs, or null when it has none.</returns>
 		/// <remarks>
 		/// <para>
-		/// Read from <c>IBuffController.ObservedBuffs</c> rather than from the raw buff dictionary,
-		/// so this reads the same server-assembled list every other observer path does rather than
-		/// opening a second source. The server keeps its own copy current
-		/// because the push RPC runs locally as well as on observers.
+		/// Read straight from <c>IBuffController.Buffs</c> — the character's own container, which on
+		/// the server is the authoritative simulation. There is no second observer-facing list to
+		/// read from any more; the parallel <c>ObservedBuffs</c> collection this used to go through
+		/// was folded back into the buff dictionary.
 		/// </para>
 		/// <para>
-		/// The seconds in that list were correct when it was last PUSHED, which is only when the
-		/// buff SET changed — for a twenty-minute buff that can be a very long time ago, and a
-		/// client counting down from it would show the buff expiring twenty minutes late. Each
-		/// entry is therefore re-based by the age of the push before it goes on the wire, and one
-		/// that has run out in the meantime is dropped rather than sent as a zero-length bar.
+		/// That also removed the re-basing this used to do. Durations in the old display list were
+		/// only correct at the moment the buff SET last changed — for a twenty-minute buff that could
+		/// be many minutes stale — so every entry had to be corrected by the age of the last push.
+		/// Computing the remaining time from the live tick makes the number right by construction and
+		/// the correction unnecessary. An entry that has already run out is still dropped rather than
+		/// sent as a zero-length bar.
 		/// </para>
 		/// <para>
 		/// Returns null rather than an empty array for a member with no buffs. Almost every entry

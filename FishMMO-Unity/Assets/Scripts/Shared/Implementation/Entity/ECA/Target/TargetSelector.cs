@@ -132,17 +132,26 @@ namespace FishMMO.Shared
 		/// Query buffer size for a selector whose authored cap is <paramref name="maxHits"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Deliberately larger than the cap. Sizing the buffer at exactly <c>MaxHits</c> makes the
 		/// physics broadphase perform the truncation, in its own order, before the selector ever sees
 		/// the candidates — so a cap of 5 in a crowd of 20 picked five arbitrary characters and the
 		/// deterministic sort that follows had nothing to work with. Querying wide and capping after
 		/// the sort is what makes the cap mean "the first five in a defined order".
+		/// </para>
+		/// <para>
+		/// <b>A starting size, not a limit.</b> It only moves the truncation point from <c>MaxHits</c>
+		/// up to <c>MaxHits * 4</c>; every caller must still grow the buffer through
+		/// <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> when a query comes back full.
+		/// </para>
+		/// <para>
+		/// The rule itself lives on <see cref="TargetOrdering"/> now, because the ability actions
+		/// resolve hits without a selector and need the identical arithmetic — it was duplicated
+		/// inline in <c>AbilityApplyAreaAction</c> for exactly as long as it lived somewhere only
+		/// selectors could reach. This forwarder stays so the selectors read naturally.
+		/// </para>
 		/// </remarks>
-		protected static int QueryBufferSize(int maxHits)
-		{
-			int cap = Mathf.Max(1, maxHits);
-			return Mathf.Clamp(cap * 4, 32, 256);
-		}
+		protected static int QueryBufferSize(int maxHits) => TargetOrdering.QueryBufferSize(maxHits);
 
 		/* RewoundOverlapSphere and RewoundRaycast were removed rather than left unused.
 		 *

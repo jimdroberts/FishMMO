@@ -1,4 +1,5 @@
-﻿using FishNet.Object.Prediction;
+﻿using FishNet.Managing.Timing;
+using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -105,12 +106,32 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Set when the server completed an activation that produced no ability object, so the
-		/// reconcile can tell the owner to take back the object it spawned for that tick.
-		/// Cleared after each <see cref="OnCreateReconcile"/>, like <see cref="wasDenied"/>.
-		/// See <see cref="AbilityActivationFlags.NoSpawn"/>.
+		/// The replicate tick on which the server completed an activation that produced no ability
+		/// object, so the reconcile can tell the owner to take back the object it spawned for that
+		/// tick. <see cref="TimeManager.UNSET_TICK"/> when there is nothing to report.
 		/// </summary>
-		internal bool serverSpawnedNothing;
+		/// <remarks>
+		/// <para>
+		/// <b>A tick rather than a bool, because the pairing it relied on is a project setting.</b>
+		/// It was a plain flag set during the replicate and consumed by the next
+		/// <see cref="OnCreateReconcile"/>, which is exact only while the server runs exactly one
+		/// replicate per tick. FishNet's <c>Replicate_NonAuthoritative</c> has a catch-up path that
+		/// runs a SECOND replicate body in the same tick (<c>consumeExcess &amp;&amp; count &gt;
+		/// leaveInBuffer</c>), and then two replicates share one reconcile — so a flag raised at tick
+		/// T would be stamped onto the reconcile for T+1, and
+		/// <see cref="ShouldDestroySpawnsAtReconcileTick"/> would destroy an owner-predicted object
+		/// the server really did spawn. That is the one case its truth table calls unrecoverable,
+		/// because the replay starts at T+1 and never re-creates it.
+		/// </para>
+		/// <para>
+		/// That path is disabled today: every shipped scene sets
+		/// <c>PredictionManager._dropExcessiveReplicates: 1</c> and a dedicated server is not
+		/// client-only, so <c>consumeExcess</c> is false. Carrying the tick means the guarantee no
+		/// longer depends on an inspector checkbox nobody knew was load-bearing — see
+		/// <see cref="ShouldFlagNoSpawn"/> for what happens when the ticks disagree.
+		/// </para>
+		/// </remarks>
+		internal uint serverSpawnedNothingTick = TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// The ID of the next ability to activate after the current one, or NO_ABILITY if none.
@@ -437,7 +458,7 @@ namespace FishMMO.Shared
 			// Clear the server-side denial sentinel so a respawn/possession does not
 			// carry over a stale Denied bit into the next reconcile.
 			wasDenied = false;
-			serverSpawnedNothing = false;
+			serverSpawnedNothingTick = TimeManager.UNSET_TICK;
 			Cancel();
 
 			// Ensure no stale slot locks remain after state reset.
@@ -835,10 +856,21 @@ namespace FishMMO.Shared
 				flags.EnableBit(AbilityActivationFlags.Denied);
 				wasDenied = false;
 			}
-			if (serverSpawnedNothing)
+			/* Only when the no-spawn belongs to the tick this reconcile describes. A reconcile is the
+			 * state after the LAST replicate the server ran this tick, so that tick — and no other —
+			 * is what the owner will compare it against. Consumed either way: a stale report has
+			 * missed its reconcile and must not be carried into the next one. */
+			if (serverSpawnedNothingTick != TimeManager.UNSET_TICK)
 			{
-				flags.EnableBit(AbilityActivationFlags.NoSpawn);
-				serverSpawnedNothing = false;
+				uint reconcileTick = predictionController != null
+					? predictionController.CurrentReplicateTickSnapshot
+					: TimeManager.UNSET_TICK;
+
+				if (ShouldFlagNoSpawn(serverSpawnedNothingTick, reconcileTick))
+				{
+					flags.EnableBit(AbilityActivationFlags.NoSpawn);
+				}
+				serverSpawnedNothingTick = TimeManager.UNSET_TICK;
 			}
 
 			if ((flags & ~0xFFFF) != 0)
@@ -957,6 +989,42 @@ namespace FishMMO.Shared
 			{
 				OnCancel?.Invoke();
 			}
+		}
+
+		/// <summary>
+		/// Whether a recorded no-spawn may travel in the reconcile currently being built.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// True only when the two ticks are the same one. The reconcile describes the state after the
+		/// last replicate the server ran this tick, and
+		/// <see cref="ShouldDestroySpawnsAtReconcileTick"/> on the owner judges the flag against
+		/// exactly that tick — so a flag raised on any other tick names an object the owner will not
+		/// look for, or worse, a different object that it will.
+		/// </para>
+		/// <para>
+		/// <b>Refusing is the safe direction and that is deliberate.</b> Dropping a mismatched report
+		/// leaves the owner with a ghost projectile that flies out its lifetime: a visual defect, and
+		/// self-correcting. Stamping it onto the wrong tick destroys an object the server really did
+		/// spawn, which the replay cannot restore because it starts at T+1. Between a wrong visual and
+		/// an unrecoverable one, the reconcile says nothing.
+		/// </para>
+		/// <para>
+		/// Separated from <see cref="OnCreateReconcile"/> so the rule can be pinned by a test rather
+		/// than inferred from the one call site, exactly as
+		/// <see cref="ShouldDestroySpawnsAtReconcileTick"/> is.
+		/// </para>
+		/// </remarks>
+		/// <param name="spawnedNothingTick">Replicate tick the server resolved no object on.</param>
+		/// <param name="reconcileTick">Replicate tick this reconcile describes.</param>
+		internal static bool ShouldFlagNoSpawn(uint spawnedNothingTick, uint reconcileTick)
+		{
+			if (spawnedNothingTick == TimeManager.UNSET_TICK ||
+				reconcileTick == TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+			return spawnedNothingTick == reconcileTick;
 		}
 
 		/// <summary>

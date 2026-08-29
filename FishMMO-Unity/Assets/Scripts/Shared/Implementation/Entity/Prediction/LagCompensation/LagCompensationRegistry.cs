@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -121,17 +122,29 @@ namespace FishMMO.Shared
 			Transform excludeTransform = exclude?.Transform;
 			rewound.Clear();
 
-			for (int i = 0; i < list.Count; i++)
+			/* A throw part-way through leaves everything displaced SO FAR stranded in the past with no
+			 * scope to restore it — the characters simply stay where they were half a second ago, for
+			 * good. Putting them back before the exception escapes is the only correct handling; the
+			 * caller still sees the throw. */
+			try
 			{
-				CharacterPositionHistory history = list[i];
-				if (history == null || history.transform == excludeTransform)
+				for (int i = 0; i < list.Count; i++)
 				{
-					continue;
+					CharacterPositionHistory history = list[i];
+					if (history == null || history.transform == excludeTransform)
+					{
+						continue;
+					}
+					if (history.Rewind(target))
+					{
+						rewound.Add(history);
+					}
 				}
-				if (history.Rewind(target))
-				{
-					rewound.Add(history);
-				}
+			}
+			catch
+			{
+				RestoreAll();
+				throw;
 			}
 
 			if (rewound.Count == 0)
@@ -147,15 +160,46 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Returns every displaced character to its live position.</summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Every character is restored even if one of them cannot be.</b> A single throw part-way
+		/// through this loop used to abandon the rest of the list, so the characters after the failure
+		/// stayed displaced permanently. Each restore is therefore isolated: one bad entry costs that
+		/// one character's position, not everybody's.
+		/// </para>
+		/// <para>
+		/// <b>And the scope is closed whatever happens.</b> Without the <c>finally</c>,
+		/// <see cref="scopeOpen"/> stayed true after a throw, every subsequent
+		/// <see cref="Rewind(Scene, RewindTarget, ICharacter)"/> took the nested-scope branch and
+		/// returned an inactive scope, and from that moment on every hit in the process resolved
+		/// against live positions — silently, with no log and no way to recover short of a restart.
+		/// A mechanism whose failure mode is "quietly stop working forever" has to be the one that
+		/// cannot fail.
+		/// </para>
+		/// </remarks>
 		private static void RestoreAll()
 		{
-			for (int i = 0; i < rewound.Count; i++)
+			try
 			{
-				rewound[i]?.Restore();
+				for (int i = 0; i < rewound.Count; i++)
+				{
+					try
+					{
+						rewound[i]?.Restore();
+					}
+					catch (Exception ex)
+					{
+						Log.Error("LagCompensationRegistry",
+							$"Failed to restore a rewound character; it may be left displaced. {ex}");
+					}
+				}
 			}
-			rewound.Clear();
-			Physics.SyncTransforms();
-			scopeOpen = false;
+			finally
+			{
+				rewound.Clear();
+				Physics.SyncTransforms();
+				scopeOpen = false;
+			}
 		}
 
 		/// <summary>

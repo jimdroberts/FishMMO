@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -195,10 +195,10 @@ namespace FishMMO.UnitTests
 
 			LogAssert.AreEqual(812f, health.CurrentValue,
 				"An observer's health bar is drawn from CurrentValue; the broadcast must set it.");
-			/* FinalValue, not Value. ApplyIndividualResourceState calls SetFinal rather than
-			 * SetValue precisely because the server's maximum is authoritative — running the local
-			 * formula would overwrite it with a locally computed result. FinalValue is what the bar
-			 * is drawn against. */
+			/* FinalValue, not Value. ApplyIndividualResourceState installs the maximum with
+			 * SetFinalDerivingModifier rather than SetValue, precisely because the server's maximum
+			 * is authoritative — running the local formula would overwrite it with a locally
+			 * computed result. FinalValue is what the bar is drawn against. */
 			LogAssert.AreEqual(1200, health.FinalValue,
 				"The maximum must arrive too, or the bar is drawn against the wrong denominator.");
 			LogAssert.AreEqual(800, mana.FinalValue, "Mana maximum must reach the observer.");

@@ -2,6 +2,7 @@
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
+using FishNet.Connection;
 using FishNet.Managing.Timing;
 using System.Collections.Generic;
 using System.Linq;
@@ -59,10 +60,17 @@ namespace FishMMO.Shared
 		/// server-present the owning client was rendering its peers.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Read by <see cref="LagCompensationTick"/> to decide how far to rewind a hit query. Cached
 		/// from the replicate rather than read off a live controller for the usual reason: the value
 		/// has to be the one that belongs to the tick being simulated, including during a replay.
 		/// Zero for a server-driven character, which compensates nothing.
+		/// </para>
+		/// <para>
+		/// <b>Latched from real input only</b> — see <see cref="CaptureViewOffset"/>. This is not the
+		/// value from the most recent <i>invocation</i> of the replicate body, because plenty of those
+		/// carry no input at all.
+		/// </para>
 		/// </remarks>
 		public byte CurrentViewOffsetTicks { get; private set; }
 
@@ -208,8 +216,33 @@ namespace FishMMO.Shared
 			CurrentLocalTickSnapshot = TimeManager.UNSET_TICK;
 			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+			ClearViewOffset();
 
 			base.OnStopNetwork();
+		}
+
+		/// <summary>
+		/// Drops the latched view offset when this object changes hands.
+		/// </summary>
+		/// <remarks>
+		/// The offset describes ONE connection's latency, and <see cref="CaptureViewOffset"/> holds the
+		/// last measured value across input gaps on purpose. That makes it stale rather than merely
+		/// absent when the connection behind it changes, so the two places the connection can change —
+		/// a new owner, and a pooled object's despawn — clear it rather than letting the next owner
+		/// inherit the previous one's latency until its first input arrives.
+		/// </remarks>
+		/// <param name="prevOwner">The connection that owned this object before.</param>
+		public override void OnOwnershipServer(NetworkConnection prevOwner)
+		{
+			base.OnOwnershipServer(prevOwner);
+			ClearViewOffset();
+		}
+
+		/// <summary>Resets the latched view offset to "nothing to compensate".</summary>
+		private void ClearViewOffset()
+		{
+			CurrentViewOffsetTicks = 0;
+			CurrentViewOffsetFraction = 0;
 		}
 
 		/// <summary>
@@ -382,13 +415,58 @@ namespace FishMMO.Shared
 		private void Replicate(CharacterReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			CurrentReplicateTickSnapshot = input.GetTick();
-			CurrentViewOffsetTicks = input.ViewOffsetTicks;
-			CurrentViewOffsetFraction = input.ViewOffsetFraction;
+			CaptureViewOffset(input, state);
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			for (int i = 0; i < controllers.Length; i++)
 			{
 				controllers[i].OnReplicate(ref input, state, channel);
 			}
+		}
+
+		/// <summary>
+		/// Latches the client-measured view offset, but only from a replicate that carried real input.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>An empty input queue does not skip the tick — it runs the body with a default struct.</b>
+		/// FishNet's <c>Replicate_NonAuthoritative</c> calls <c>ReplicateDefaultData()</c> whenever the
+		/// server has nothing queued for this connection, which builds a default-initialised
+		/// <see cref="CharacterReplicateData"/> and invokes the replicate body with it. Assigning the
+		/// view offset unconditionally therefore wrote a ZERO on every such tick, and
+		/// <see cref="LagCompensationTick.TryResolve"/> declines on a zero offset — so that tick's hits
+		/// silently resolved against live positions.
+		/// </para>
+		/// <para>
+		/// The queue holds <c>StateInterpolation</c> entries in steady state (2 on every shipped
+		/// scene), so it empties on any loss or jitter spike costing more than two ticks, and again
+		/// during the refill after one. That matters most for a projectile: its sweep reads this value
+		/// on every tick of its flight, not the value from the tick it was cast on, so a mid-flight
+		/// hiccup un-compensated part of a single shot.
+		/// </para>
+		/// <para>
+		/// <b><c>Created</c> is the engine's own discriminator</b>, not one invented here. Real queued
+		/// input runs as <c>Ticked | Created</c> on the server and on the owner alike, and a replay
+		/// re-supplies the tick's actual input with <c>Created</c> still set; only
+		/// <c>ReplicateDefaultData</c> omits it. Latching on it means a gap holds the last measured
+		/// offset — which is the right answer, because the client's latency did not change just
+		/// because a packet was late.
+		/// </para>
+		/// <para>
+		/// Kept as its own method so the rule can be tested without going through the codegen-rewritten
+		/// <c>[Replicate]</c> body.
+		/// </para>
+		/// </remarks>
+		/// <param name="input">The replicate input for this invocation.</param>
+		/// <param name="state">The replicate state FishNet invoked the body with.</param>
+		internal void CaptureViewOffset(CharacterReplicateData input, ReplicateState state)
+		{
+			if (!state.ContainsCreated())
+			{
+				return;
+			}
+
+			CurrentViewOffsetTicks = input.ViewOffsetTicks;
+			CurrentViewOffsetFraction = input.ViewOffsetFraction;
 		}
 
 		/// <summary>

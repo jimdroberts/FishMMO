@@ -228,11 +228,13 @@ namespace FishMMO.Shared
 		/// motor selects the full-radius probe distance instead of the 0.005 minimum, which stops a
 		/// freshly spawned or teleported character reading as airborne for 1-3 frames.
 		/// <para>
-		/// NOTE: <c>ApplyState</c> clears this on EVERY reconcile, not only on spawn or teleport, so
-		/// the first replayed tick after any reconcile probes at the full radius and overwrites the
-		/// <c>LastMovementIterationFoundAnyGround</c> value the reconcile just restored. An airborne
-		/// owner can therefore snap to ground on a tick where the server did not. Gating the reset on
-		/// an actual teleport is an open item from the 2026-08-28 audit.
+		/// <b>Only <see cref="ResetGroundProbe"/> clears this, and only a teleport or a fresh spawn
+		/// calls it.</b> <see cref="ApplyState"/> deliberately does NOT — see the comment there. It
+		/// used to, on every reconcile, which made the next tick force
+		/// <c>LastMovementIterationFoundAnyGround</c> true and overwrite the value the reconcile had
+		/// just restored from the server, so an airborne owner could snap to ground where the server
+		/// did not, be corrected, and repeat. That was an open item from the 2026-08-28 audit and it
+		/// is closed.
 		/// </para>
 		/// </summary>
 		private bool hasDoneInitialGroundProbe = false;

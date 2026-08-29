@@ -190,10 +190,18 @@ namespace FishMMO.Shared
 	/// bytes belong here, once, rather than on every cast.
 	/// </para>
 	/// <para>
-	/// <b>Not a grant.</b> The receiving side files this in the controller's observer-only
-	/// transient store, never in <c>KnownAbilities</c>, which gates activation and is populated
-	/// exclusively from server-authoritative paths. Nothing a client learns from this message can
-	/// let it cast anything.
+	/// <b>Not a grant.</b> The receiving side files this straight into <c>KnownAbilities</c>, the
+	/// same container the owner uses — a client is required to hold an observed character's real
+	/// state, because Inspect and faction evaluation read it and not just the renderer. What stops
+	/// it being a grant is <c>AbilityController.RegisterObservedAbility</c>'s owner check: the
+	/// message only ever describes somebody else, so it refuses outright on our own character, and
+	/// the dictionary an activation is gated on can never be written by it.
+	/// </para>
+	/// <para>
+	/// This used to be enforced by filing the ability in a separate observer-only dictionary
+	/// instead. It is not any more, and two comments went on claiming it was — long enough to be
+	/// worth spelling out here: <b>the boundary is the owner check, not a container split.</b>
+	/// Removing that check because "the parallel store is what protects it" reopens the hole.
 	/// </para>
 	/// <para>
 	/// The event ids travel because they are what makes the reproduction move: an ability's

@@ -550,17 +550,16 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Fills the OWNER's own <see cref="ObservedBuffs"/> from its own simulation, sending
-		/// nothing.
+		/// Fills the OWNER's own <see cref="buffs"/> from its own simulation, sending nothing.
 		/// </summary>
 		/// <remarks>
 		/// <para>
 		/// The owner is excluded from <see cref="CharacterBuffsBroadcast"/> (see
 		/// <see cref="BroadcastObservedBuffs"/>) because it already holds the authoritative-by-
 		/// reconcile buff dictionary this list is derived from. But the target frame reads
-		/// <see cref="ObservedBuffs"/> uniformly for whatever is targeted, including the local
-		/// player targeting themselves, so the list still has to exist locally — it is just built
-		/// here, from <see cref="buffs"/>, for zero bytes.
+		/// <see cref="buffs"/> uniformly for whatever is targeted, including the local player
+		/// targeting themselves, so the entries still have to be materialised locally — they are just
+		/// built here, from this peer's own simulation, for zero bytes.
 		/// </para>
 		/// <para>
 		/// Runs outside the replicate body, on a non-replayed tick, so the change event is raised
@@ -679,7 +678,7 @@ namespace FishMMO.Shared
 		/// payload. A third copy, in seconds, of a list it can derive locally for nothing is pure
 		/// cost — and this list is the LOSSY one, so the owner must not read it in preference to
 		/// its own simulation. <see cref="RefreshObservedBuffsLocally"/> fills the owner's
-		/// <see cref="ObservedBuffs"/> instead. Excluding a connection from an object's observer set
+		/// <see cref="buffs"/> instead. Excluding a connection from an object's observer set
 		/// has one safe spelling — see <see cref="ObserverBroadcastScope"/>, which explains why
 		/// <c>ServerManager.BroadcastExcept</c> cannot be handed <c>NetworkObject.Observers</c>.
 		/// </para>
@@ -1261,7 +1260,7 @@ namespace FishMMO.Shared
 		/// pushes change one entry out of several, and a rebuild would restart every looping effect
 		/// the character is already showing.
 		/// </remarks>
-		/// <param name="next">The list about to become <see cref="ObservedBuffs"/>.</param>
+		/// <param name="next">The arriving observed list, about to be merged into <see cref="buffs"/>.</param>
 		private void SyncObservedBuffFX(ObservedBuffEntry[] next)
 		{
 			if (!DrivesFXFromObservedBuffs)

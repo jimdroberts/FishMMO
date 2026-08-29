@@ -6,9 +6,15 @@
 	/// <para>
 	/// <b>One-shot vs. continuous flags:</b> <see cref="Jump"/> is a one-shot impulse that
 	/// should fire once and be cleared. <see cref="Crouch"/> and <see cref="Sprint"/> are
-	/// continuous (held) flags that persist while the key is held. Observer prediction
-	/// clears one-shot flags to prevent indefinite re-prediction. When adding new
-	/// one-shot flags, include them in <see cref="OneShotMask"/>.
+	/// continuous (held) flags that persist while the key is held.
+	/// </para>
+	/// <para>
+	/// This used to add "observer prediction clears one-shot flags to prevent indefinite
+	/// re-prediction. When adding new one-shot flags, include them in OneShotMask." There is no
+	/// OneShotMask and there never was one in this project, and the clearing it described belonged
+	/// to the observer-prediction path — which does not run: state forwarding is off, so FishNet
+	/// never invokes a replicate body on a non-owner. A one-shot flag is cleared by its producer,
+	/// <c>KCCPlayer.PopulateInput</c>, on the tick after it is consumed.
 	/// </para>
 	/// </summary>
 	public enum KCCMoveFlags : int

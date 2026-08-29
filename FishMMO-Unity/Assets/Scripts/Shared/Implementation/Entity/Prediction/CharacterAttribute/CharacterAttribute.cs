@@ -289,15 +289,14 @@ namespace FishMMO.Shared
 			externalModifier = newValue;
 		}
 
-		/// <summary>
-		/// Sets the final value directly. Use with caution; normally final value is calculated.
-		/// </summary>
-		/// <param name="newValue">The new final value.</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetFinal(int newValue)
-		{
-			finalValue = newValue;
-		}
+		/* SetFinal was REMOVED rather than left as an unused public setter.
+		 *
+		 * It wrote finalValue and nothing else, which is exactly half of what an authoritative
+		 * install needs: value and externalModifier are what CalculateFinalValue reads, so the next
+		 * recompute — any AddModifier from a buff, an equip or an unequip — threw the server's
+		 * number away. SetFinalDerivingModifier below is the whole operation and is what the
+		 * resource reconcile calls; leaving the half-version available under the shorter name is how
+		 * the bug comes back. */
 
 		/// <summary>
 		/// Installs an authoritative final value AND back-solves <see cref="ExternalModifier"/> so a
@@ -305,9 +304,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <see cref="SetFinal"/> writes <c>finalValue</c> directly, which is what the resource
-		/// reconcile wants — the server's number must not be overwritten by a local formula pass.
-		/// But it leaves <c>value</c> and <c>externalModifier</c> untouched, and those are what
+		/// Writing <c>finalValue</c> directly is what the resource reconcile wants — the server's
+		/// number must not be overwritten by a local formula pass. But writing it ALONE (which is
+		/// all the removed <c>SetFinal</c> did) leaves <c>value</c> and <c>externalModifier</c>
+		/// untouched, and those are what
 		/// <see cref="CalculateFinalValue"/> reads. Resource attributes carry neither of them in the
 		/// reconcile, so the very next thing that called <c>UpdateValues</c> on the resource — any
 		/// <see cref="AddModifier"/> from a buff, an equip or an unequip — recomputed the final from

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -31,8 +32,13 @@ namespace FishMMO.Shared
 		[Tooltip("Layer mask to filter targets in the area.")]
 		public LayerMask TargetLayerMask = ~0;
 
+		/// <summary>
+		/// Reused result list. Not static: an OnHit trigger fired from the loop below can author
+		/// another area effect, and a shared list would be cleared out from under the fan-out that
+		/// owns it.
+		/// </summary>
 		[NonSerialized]
-		private Collider[] hits;
+		private List<LagCompensatedQuery.CompensatedHit> hits;
 
 		/// <summary>
 		/// Executes the area effect, applying the ability to all valid targets within the radius.
@@ -67,34 +73,25 @@ namespace FishMMO.Shared
 					int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 					float radius = RadiusValue.GetValue(initiator, eventData);
 
-					/* Query WIDE, cap late. Sizing the buffer at exactly maxHits makes the physics
-					 * broadphase perform the truncation, in its own order, before anything here sees
-					 * the candidates — so a cap of 5 in a crowd of 20 hit five arbitrary characters
-					 * and the deterministic sort inside LagCompensatedQuery had nothing left to
-					 * order. The cap is applied to the sorted result below instead, which is what
-					 * makes it mean "the first five in a defined order". Same rule, and the same
-					 * arithmetic, as TargetSelector.QueryBufferSize; it is duplicated rather than
-					 * shared because that helper is protected on the selector base and this is an
-					 * action. */
-					int bufferSize = Mathf.Clamp(Mathf.Max(1, maxHits) * 4, 32, 256);
-					if (hits == null || hits.Length != bufferSize)
-					{
-						hits = new Collider[bufferSize];
-					}
+					hits ??= new List<LagCompensatedQuery.CompensatedHit>(16);
 
 					Vector3 center = abilityObject.Transform.position;
 					/* Resolved against where the caster's client saw these characters, not where
 					 * they are now. The ability object's own position needs no compensation: its
-					 * motion is deterministic, so every peer already agrees on it. */
-					int hitCount = LagCompensatedQuery.OverlapSphere(
-						eventData, abilityObject.GameObject, center, radius, hits, TargetLayerMask);
-
-					// The buffer is intentionally wider than the cap; truncate the ORDERED result.
-					// maxHits <= 0 means "no cap", matching TargetOrdering.CappedCount.
-					if (maxHits > 0 && hitCount > maxHits)
-					{
-						hitCount = maxHits;
-					}
+					 * motion is deterministic, so every peer already agrees on it.
+					 *
+					 * The query, the distance ranking, the per-character dedupe and the cap all
+					 * happen inside one rewind scope in there. This method used to do the last three
+					 * itself, out here, and got all three wrong: it capped a buffer that
+					 * LagCompensatedQuery had sorted by ObjectId — so the cap kept the characters
+					 * the server spawned earliest rather than the ones nearest the blast — it sized
+					 * its buffer once and never grew it, so a crowd past the buffer was truncated by
+					 * the broadphase before any of that ran, and it resolved characters with a bare
+					 * GetComponent on the collider, which drops a character whose hitbox is a child
+					 * and counts a character with two hitboxes twice. */
+					int hitCount = LagCompensatedQuery.OverlapSphereNearest(
+						eventData, abilityObject.GameObject, center, radius, TargetLayerMask,
+						maxHits, charactersOnly: true, hits);
 
 					var onHitEvents = abilityObject.OnHitEvents;
 					if (onHitEvents == null)
@@ -110,24 +107,34 @@ namespace FishMMO.Shared
 
 					for (int i = 0; i < hitCount; i++)
 					{
-						var hit = hits[i];
-						if (hit == null) continue;
-
-						var targetCharacter = hit.GetComponent<ICharacter>();
-						if (targetCharacter != null)
+						/* Already deduplicated per character, ordered nearest-first and filtered to
+						 * characters by the query, so this loop neither re-resolves components nor has
+						 * to guard against the same body arriving twice. */
+						ICharacter targetCharacter = hits[i].Character;
+						if (targetCharacter == null)
 						{
-							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter, abilityObject, abilityObject.RNG);
-							if (tickToPropagate != null)
-							{
-								collisionEvent.Add(tickToPropagate);
-							}
+							continue;
+						}
 
-							foreach (var trigger in onHitEvents.Values)
-							{
-								trigger?.Execute(collisionEvent);
-							}
+						/* The impact point and normal travel now that the query measures them inside the
+						 * rewind scope. An OnHit effect on an area ability used to be placed with no
+						 * point at all and defaulted to the target's origin, so a blast marked every
+						 * victim at its feet rather than on the side facing the explosion. */
+						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
+							initiator, targetCharacter, abilityObject, hits[i].Point, hits[i].Normal, abilityObject.RNG);
+						if (tickToPropagate != null)
+						{
+							collisionEvent.Add(tickToPropagate);
+						}
+
+						foreach (var trigger in onHitEvents.Values)
+						{
+							trigger?.Execute(collisionEvent);
 						}
 					}
+
+					// Nothing holds a reference into the query's reusable buffers past this point.
+					hits.Clear();
 				}
 				else
 				{

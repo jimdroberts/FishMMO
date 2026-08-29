@@ -115,7 +115,20 @@ namespace FishMMO.Shared
 				// Direct query on purpose: the caller already holds the rewind scope, so routing
 				// through LagCompensatedQuery would just re-resolve the tick and be refused as a
 				// nested scope.
-				int hitCount = physicsScene.OverlapSphere(center, ChainRadius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+				/* Re-queried until the buffer stops coming back full. A non-allocating query returns
+				 * at most buffer.Length results and says nothing about how many it discarded, and the
+				 * ones it discarded were chosen by the broadphase — so the ranking and the MaxHits cap
+				 * below would be ordering an arbitrary subset. The starting size is already wider than
+				 * the cap; this covers the crowd that outgrows it. */
+				int hitCount;
+				while (true)
+				{
+					hitCount = physicsScene.OverlapSphere(center, ChainRadius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+					if (!TargetOrdering.TryGrowQueryBuffer(ref hits, hitCount))
+					{
+						break;
+					}
+				}
 				/* Ties broken by network identity rather than by buffer order. Two candidates at the
 				 * same distance is not a hypothetical for a chain — the links radiate outward from a
 				 * point and equidistant pairs are common — and picking whichever the broadphase
@@ -147,7 +160,9 @@ namespace FishMMO.Shared
 			 * exactly MaxHits let the broadphase truncate the candidates in its own order before the
 			 * nearest-link ranking ran, so a busy radius produced a different chain on each cast. */
 			int bufferSize = QueryBufferSize(MaxHits);
-			if (hits == null || hits.Length != bufferSize)
+			/* Grow-only. Reallocating on any length difference silently undid the growth
+			 * TryGrowQueryBuffer had bought on the previous query. */
+			if (hits == null || hits.Length < bufferSize)
 			{
 				hits = new Collider[bufferSize];
 			}
