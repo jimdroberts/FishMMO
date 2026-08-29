@@ -71,6 +71,12 @@ namespace FishMMO.Shared
 			}
 
 			currentValue = clamped;
+
+			/* Before the updateInternal branch, not inside it. That flag suppresses the change
+			 * NOTIFICATION, which callers turn off to avoid re-entrancy — it does not mean the
+			 * value did not change, and persistence has to follow the value. */
+			MarkPersistenceDirty();
+
 			if (updateInternal)
 			{
 				Internal_OnAttributeChanged(this);

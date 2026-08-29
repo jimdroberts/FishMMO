@@ -1003,7 +1003,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// would poison the batch upsert with a STALE_STATE rejection.
 				if (attr.Version <= 0)
 					continue;
+				/* Unchanged since the database last confirmed it, so there is nothing to write.
+				 * The row is not merely rejected further down — it is never built, never sent, and
+				 * never probed. */
+				if (!attr.PersistenceDirty)
+					continue;
 				attr.Version++;
+				attr.MarkPersistPending(attr.Version);
 				attributes.Add(new CharacterAttributeData(
 					id: 0,
 					version: attr.Version,
@@ -1018,7 +1024,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				var resAttr = kvp.Value;
 				if (resAttr.Version <= 0)
 					continue;
+				if (!resAttr.PersistenceDirty)
+					continue;
 				resAttr.Version++;
+				resAttr.MarkPersistPending(resAttr.Version);
 				attributes.Add(new CharacterAttributeData(
 					id: 0,
 					version: resAttr.Version,
@@ -1046,6 +1055,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Ability ability = kvp.Value;
 				if (ability == null || ability.Template == null)
+				{
+					continue;
+				}
+
+				/* Unchanged since the database last confirmed it. Skipping ahead of the ToList also
+				 * avoids building an event-id list per ability per save for a row nobody will
+				 * write. */
+				if (!ability.PersistenceDirty)
 				{
 					continue;
 				}
@@ -1360,12 +1377,99 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await BulkWriteReporting.ReportAsync("CharacterSystem", "Attribute save", await attrService.PersistAsync(attributes));
+				DatabaseResult<BulkWriteResult> result = await attrService.PersistAsync(attributes);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Attribute save", result);
+
+				/* Only a write that landed clears the dirty marks, and it clears them back on the
+				 * main thread because that is the only thread the attributes are touched from.
+				 * A failed write leaves everything marked, so the next pass carries it — which is
+				 * the behaviour the unconditional save had by accident and this has to keep on
+				 * purpose, since the periodic path has no other retry.
+				 *
+				 * Filtered rows are why this looks at the outcome and not the boolean alone. A
+				 * best-effort report is content with a batch the service declined to attempt in
+				 * part — an unresolvable character or template, or a duplicate key it dropped —
+				 * and those rows never reached the database. Clearing them would retire a value
+				 * that was never stored. Superseded rows are the opposite and safe to clear: they
+				 * were refused because the database already holds something newer. */
+				if (written && result.Data.Filtered == 0)
+				{
+					TryEnqueueMainThread(() => MarkAttributesPersisted(attributes));
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAttributesAsync failed: {ex}");
 			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every attribute a completed write covered.
+		/// </summary>
+		/// <remarks>
+		/// Runs on the main thread, which is the only thread attributes are touched from. Each
+		/// attribute decides for itself whether the confirmation still applies — see
+		/// <see cref="CharacterAttribute.MarkPersisted"/> — so a value that moved while the write
+		/// was in flight stays dirty and a stale confirmation clears nothing. A character that has
+		/// since left the server is simply not resolvable and is skipped; its attributes are going
+		/// away with it.
+		/// </remarks>
+		/// <param name="attributes">The snapshot that was written.</param>
+		private void MarkAttributesPersisted(List<CharacterAttributeData> attributes)
+		{
+			if (attributes == null || attributes.Count == 0)
+			{
+				return;
+			}
+
+			for (int i = 0; i < attributes.Count; ++i)
+			{
+				CharacterAttributeData saved = attributes[i];
+
+				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
+					!character.TryGet(out ICharacterAttributeController attrController))
+				{
+					continue;
+				}
+
+				if (attrController.Attributes.TryGetValue(saved.TemplateID, out CharacterAttribute attribute))
+				{
+					attribute.MarkPersisted(saved.Version);
+				}
+				else if (attrController.ResourceAttributes.TryGetValue(saved.TemplateID, out CharacterResourceAttribute resourceAttribute))
+				{
+					resourceAttribute.MarkPersisted(saved.Version);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Resolves a character the server is still holding, connected or lingering.
+		/// </summary>
+		/// <remarks>
+		/// A combat-logout body is not in <c>CharactersByID</c> but is still resident and still
+		/// being written by the periodic save — see <see cref="AppendLingeringCharacterSnapshots"/>.
+		/// Looking only at the connected map would leave every lingering body's attributes
+		/// permanently marked, so they would be rewritten on every pass for as long as the body
+		/// stood there.
+		/// </remarks>
+		/// <param name="characterID">The character to resolve.</param>
+		/// <param name="character">Out: the resident character, or null.</param>
+		/// <returns>True if the character is still resident.</returns>
+		private bool TryGetResidentCharacter(long characterID, out IPlayerCharacter character)
+		{
+			character = null;
+
+			if (Server?.DataContainerRegistry != null &&
+				Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data) &&
+				data.CharactersByID.TryGetValue(characterID, out character) &&
+				character != null)
+			{
+				return true;
+			}
+
+			character = TryGetLingeringCharacter(characterID);
+			return character != null;
 		}
 
 		/// <summary>
@@ -1381,11 +1485,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await BulkWriteReporting.ReportAsync("CharacterSystem", "Ability save", await abilityService.PersistAsync(abilities));
+				DatabaseResult<BulkWriteResult> result = await abilityService.PersistAsync(abilities);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Ability save", result);
+
+				/* Only a write that landed clears the marks, and only on the main thread.
+				 *
+				 * Filtered rows are the reason this looks at the outcome rather than the boolean
+				 * alone. A best-effort report is happy with a batch the service declined to
+				 * attempt in part -- an unresolvable character or template, or a duplicate key it
+				 * dropped -- and those rows were never offered to the database at all. Clearing
+				 * them would retire a change that was never stored, and the periodic save has no
+				 * retry of its own to notice. Superseded rows are the opposite and safe to clear:
+				 * the database refused them because it already holds something newer. */
+				if (written && result.Data.Filtered == 0)
+				{
+					TryEnqueueMainThread(() => MarkAbilitiesPersisted(abilities));
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAbilitiesAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every ability a completed write covered.
+		/// </summary>
+		/// <remarks>
+		/// Runs on the main thread. Each ability is cleared only if its version still matches the
+		/// one written, so an ability changed while the save was in flight stays dirty. A character
+		/// that has since logged out is gone from the map and skipped.
+		/// </remarks>
+		/// <param name="abilities">The snapshot that was written.</param>
+		private void MarkAbilitiesPersisted(List<CharacterAbilityData> abilities)
+		{
+			if (abilities == null ||
+				Server?.DataContainerRegistry == null ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			{
+				return;
+			}
+
+			for (int i = 0; i < abilities.Count; ++i)
+			{
+				CharacterAbilityData saved = abilities[i];
+
+				if (!data.CharactersByID.TryGetValue(saved.CharacterID, out IPlayerCharacter character) ||
+					character == null ||
+					!character.TryGet(out IAbilityController abilityController))
+				{
+					continue;
+				}
+
+				if (abilityController.KnownAbilities.TryGetValue(saved.ID, out Ability ability) &&
+					ability != null)
+				{
+					ability.MarkPersisted(saved.Version);
+				}
 			}
 		}
 

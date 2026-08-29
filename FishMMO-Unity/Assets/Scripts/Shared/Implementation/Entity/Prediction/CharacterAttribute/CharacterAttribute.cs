@@ -27,6 +27,99 @@ namespace FishMMO.Shared
 		public long Version;
 
 		/// <summary>
+		/// Counts every change to a persisted field. Advances on mutation, never on a save.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Version"/> cannot do this job. It is bumped by the save snapshot and by
+		/// nothing else, so two snapshots of an attribute that changed between them differ, but an
+		/// attribute that changes WHILE a save is in flight still carries the version that save
+		/// wrote. A guard built on it would clear the mark on a change the write never contained.
+		/// This counter moves when the value moves, which is the question being asked.
+		/// </remarks>
+		private long changeCount;
+
+		/// <summary>The <see cref="changeCount"/> observed when the in-flight save snapshotted.</summary>
+		private long snapshotChangeCount;
+
+		/// <summary>The <see cref="Version"/> stamped on the in-flight save's snapshot.</summary>
+		private long snapshotVersion;
+
+		/// <summary>
+		/// Whether this attribute has changed since the database last confirmed it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The periodic save used to write every attribute of every resident character on every
+		/// pass, because it had no way to tell which had moved. Most have not: strength does not
+		/// drift while a player stands in a bank, and a character out of combat at full health
+		/// changes nothing at all between one save and the next.
+		/// </para>
+		/// <para>
+		/// Set from <see cref="MarkPersistenceDirty"/>, reached from
+		/// <see cref="Internal_OnAttributeChanged"/> — the single funnel every real change already
+		/// passes through — and from the two setters that deliberately bypass that funnel. The
+		/// setters ahead of it compare before they assign, so an assignment of the same value never
+		/// reaches it and never marks anything dirty. Cleared only by <see cref="MarkPersisted"/>,
+		/// once a write has actually landed.
+		/// </para>
+		/// </remarks>
+		public bool PersistenceDirty { get; private set; }
+
+		/// <summary>
+		/// Records that this attribute has changed in a way the database does not have yet.
+		/// </summary>
+		protected void MarkPersistenceDirty()
+		{
+			unchecked { ++changeCount; }
+			PersistenceDirty = true;
+		}
+
+		/// <summary>
+		/// Records the snapshot a save is about to write, so its confirmation can be checked
+		/// against what the attribute has done since.
+		/// </summary>
+		/// <remarks>
+		/// Called on the main thread as the batch is built, immediately after <see cref="Version"/>
+		/// is stamped. The mark deliberately stays set until the write is confirmed: an attribute
+		/// with a save in flight is still one the database does not have, so a second save path
+		/// — a logout, a despawn — that runs in the meantime must still pick it up.
+		/// </remarks>
+		/// <param name="stampedVersion">The version written onto the snapshot row.</param>
+		public void MarkPersistPending(long stampedVersion)
+		{
+			snapshotVersion = stampedVersion;
+			snapshotChangeCount = changeCount;
+		}
+
+		/// <summary>
+		/// Clears <see cref="PersistenceDirty"/> if the confirmed write is still the newest thing
+		/// this attribute has to say.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Two guards, and both are load-bearing. The version must match the snapshot that is being
+		/// confirmed, so a stale confirmation — an earlier save landing after a later one already
+		/// snapshotted — cannot clear a mark it knows nothing about. The change count must match
+		/// what the snapshot saw, so a value that moved while the write was in flight stays dirty
+		/// and is carried to the next pass.
+		/// </para>
+		/// <para>
+		/// A save that fails never calls this at all, so nothing is lost — the attribute is simply
+		/// written again on the following pass. That matters more than it looks: the periodic save
+		/// has no retry of its own, because writing everything every time WAS the retry.
+		/// </para>
+		/// </remarks>
+		/// <param name="persistedVersion">The version that was successfully written.</param>
+		public void MarkPersisted(long persistedVersion)
+		{
+			if (persistedVersion == snapshotVersion &&
+				changeCount == snapshotChangeCount)
+			{
+				PersistenceDirty = false;
+			}
+		}
+
+		/// <summary>
 		/// The template that defines this attribute's configuration and formulas.
 		/// </summary>
 		public CharacterAttributeTemplate Template { get; private set; }
@@ -84,6 +177,14 @@ namespace FishMMO.Shared
 		/// <param name="item">The attribute that was changed.</param>
 		protected virtual void Internal_OnAttributeChanged(CharacterAttribute item)
 		{
+			/* Marked on the attribute that moved, not on this one. Propagation calls this on the
+			 * dependent whose value changed, and it is that attribute the database is now behind
+			 * on. */
+			if (item != null)
+			{
+				item.MarkPersistenceDirty();
+			}
+
 			if (characterAttributeController != null && characterAttributeController.IsPropagating)
 			{
 				characterAttributeController.EnqueueNotification(item);
@@ -164,7 +265,18 @@ namespace FishMMO.Shared
 		/// <param name="newValue">The new base value.</param>
 		public void SetValueDirect(int newValue)
 		{
+			if (value == newValue)
+			{
+				return;
+			}
+
 			value = newValue;
+
+			/* Marked here as well as in Internal_OnAttributeChanged. This setter exists precisely to
+			 * write the value without raising the change event, so the funnel that normally records
+			 * the change never runs — and an attribute the database is behind on that does not say
+			 * so is one the periodic save silently stops writing. */
+			MarkPersistenceDirty();
 		}
 
 		/// <summary>

@@ -63,6 +63,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public int LingeringCharacterCount => lingeringCharacters.Count;
 
 		/// <summary>
+		/// Returns the lingering body for <paramref name="characterID"/>, or null.
+		/// </summary>
+		/// <remarks>
+		/// Lingering bodies are deliberately absent from <c>CharactersByID</c>, so anything that
+		/// has to reach every character the server is still holding needs both maps.
+		/// Main-thread only.
+		/// </remarks>
+		private IPlayerCharacter TryGetLingeringCharacter(long characterID)
+		{
+			return lingeringCharacters.TryGetValue(characterID, out LingeringCharacter entry)
+				? entry.Character
+				: null;
+		}
+
+		/// <summary>
 		/// Attempts to keep <paramref name="character"/> in the world instead of despawning it,
 		/// because its owner disconnected mid-combat.
 		/// </summary>
