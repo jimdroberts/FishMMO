@@ -25,6 +25,44 @@ namespace FishMMO.Shared
 		public long Version;
 
 		/// <summary>
+		/// Whether this ability has changed since the database last confirmed it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The periodic save wrote every known ability of every resident character on every pass,
+		/// because it had no way to tell which had changed. Almost none ever do: what is stored is
+		/// the template and the set of event IDs, and those move only when a player crafts, learns
+		/// or forgets something. Cooldowns are deliberately not persisted, so an ability in constant
+		/// use produces exactly the same row as one that has sat in a hotbar untouched for a week.
+		/// </para>
+		/// <para>
+		/// Set true on construction. That over-writes each ability once after a character loads,
+		/// which is deliberate: it costs one redundant write per ability per login instead of one
+		/// every save, and it does not depend on knowing which constructor the load path uses. An
+		/// ability is never missed, only occasionally written when it need not have been.
+		/// </para>
+		/// </remarks>
+		public bool PersistenceDirty { get; private set; } = true;
+
+		/// <summary>
+		/// Clears <see cref="PersistenceDirty"/> if this ability has not changed since the version
+		/// that was written.
+		/// </summary>
+		/// <remarks>
+		/// The version check is what makes the save safe to run in the background: an ability that
+		/// changed while the write was in flight has moved past the version written and stays dirty.
+		/// A write that fails never calls this, so the next pass carries it.
+		/// </remarks>
+		/// <param name="persistedVersion">The version that was successfully written.</param>
+		public void MarkPersisted(long persistedVersion)
+		{
+			if (Version == persistedVersion)
+			{
+				PersistenceDirty = false;
+			}
+		}
+
+		/// <summary>
 		/// Total activation time for this ability, including all modifiers.
 		/// </summary>
 		public float ActivationTime;
@@ -253,6 +291,8 @@ namespace FishMMO.Shared
 			if (abilityEvent == null || AbilityEvents.ContainsKey(abilityEvent.ID)) return;
 
 			AbilityEvents.Add(abilityEvent.ID, abilityEvent);
+			// The event set is half of what is persisted, so changing it is a change to store.
+			PersistenceDirty = true;
 			AddEventModifiers(abilityEvent);
 			resourceCostsDirty = true;
 			totalResourceCostDirty = true;
@@ -463,6 +503,7 @@ namespace FishMMO.Shared
 			if (AbilityEvents.TryGetValue(eventID, out AbilityEvent abilityEvent))
 			{
 				AbilityEvents.Remove(eventID);
+				PersistenceDirty = true;
 				OnTickEvents.Remove(eventID);
 				OnHitEvents.Remove(eventID);
 				OnPreSpawnEvents.Remove(eventID);

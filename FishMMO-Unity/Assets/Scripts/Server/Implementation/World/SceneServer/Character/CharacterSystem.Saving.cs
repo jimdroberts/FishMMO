@@ -1050,6 +1050,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
+				/* Unchanged since the database last confirmed it. Skipping ahead of the ToList also
+				 * avoids building an event-id list per ability per save for a row nobody will
+				 * write. */
+				if (!ability.PersistenceDirty)
+				{
+					continue;
+				}
+
 				List<int> eventIds = ability.AbilityEvents.Keys.ToList();
 
 				ability.Version++;
@@ -1381,11 +1389,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await BulkWriteReporting.ReportAsync("CharacterSystem", "Ability save", await abilityService.PersistAsync(abilities));
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Ability save", await abilityService.PersistAsync(abilities));
+
+				// Only a write that landed clears the marks, and only on the main thread.
+				if (written)
+				{
+					TryEnqueueMainThread(() => MarkAbilitiesPersisted(abilities));
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAbilitiesAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every ability a completed write covered.
+		/// </summary>
+		/// <remarks>
+		/// Runs on the main thread. Each ability is cleared only if its version still matches the
+		/// one written, so an ability changed while the save was in flight stays dirty. A character
+		/// that has since logged out is gone from the map and skipped.
+		/// </remarks>
+		/// <param name="abilities">The snapshot that was written.</param>
+		private void MarkAbilitiesPersisted(List<CharacterAbilityData> abilities)
+		{
+			if (abilities == null ||
+				Server?.DataContainerRegistry == null ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			{
+				return;
+			}
+
+			for (int i = 0; i < abilities.Count; ++i)
+			{
+				CharacterAbilityData saved = abilities[i];
+
+				if (!data.CharactersByID.TryGetValue(saved.CharacterID, out IPlayerCharacter character) ||
+					character == null ||
+					!character.TryGet(out IAbilityController abilityController))
+				{
+					continue;
+				}
+
+				if (abilityController.KnownAbilities.TryGetValue(saved.ID, out Ability ability) &&
+					ability != null)
+				{
+					ability.MarkPersisted(saved.Version);
+				}
 			}
 		}
 
