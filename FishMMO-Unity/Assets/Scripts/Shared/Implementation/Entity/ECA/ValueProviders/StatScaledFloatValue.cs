@@ -50,7 +50,17 @@ namespace FishMMO.Shared
 				foreach (GameObject go in SourceSelector.SelectTargets(eventData))
 				{
 					if (go == null) continue;
-					if (go.TryGetComponent(out ICharacter c) && c != null)
+					/* GetComponentInParent, not a bare TryGetComponent, and for the same reason
+					 * EventData.SetTarget walks the parents: a physics selector yields the COLLIDER it
+					 * hit, so a character whose hitbox hangs off a child resolved to nothing here and
+					 * the scaling silently fell back to the caster's own attribute. This is the only
+					 * consumer of a selector that does not fork through EventData.SetTarget, so it is
+					 * the one place the walk has to be spelled out. */
+					if (!go.TryGetComponent(out ICharacter c))
+					{
+						c = go.GetComponentInParent<ICharacter>();
+					}
+					if (c != null)
 					{
 						source = c;
 						break;

@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 		{
 			if (target == null) return;
 
-			ApplyAttributeModifiers(target, 1);
+			WriteBonusAttributes(target, 1 + (buff?.Stacks ?? 0));
 			EnableStateFlags(target);
 		}
 
@@ -111,7 +111,7 @@ namespace FishMMO.Shared
 		{
 			if (target == null) return;
 
-			ApplyAttributeModifiers(target, -1);
+			ClearBonusAttributes(target);
 			DisableStateFlags(target);
 		}
 
@@ -131,8 +131,9 @@ namespace FishMMO.Shared
 		{
 			if (target == null) return;
 
-			// Flags are already enabled by the base apply; a stack only adds its attributes.
-			ApplyAttributeModifiers(target, 1);
+			// Flags are already enabled by the base apply; a stack only restates its attributes.
+			// Stacks increments after this returns, so the post-operation multiplier is Stacks + 2.
+			WriteBonusAttributes(target, 2 + (buff?.Stacks ?? 0));
 		}
 
 		/// <summary>
@@ -144,7 +145,8 @@ namespace FishMMO.Shared
 		{
 			if (target == null) return;
 
-			ApplyAttributeModifiers(target, -1);
+			// Stacks decrements after this returns, so the post-operation multiplier is Stacks.
+			WriteBonusAttributes(target, buff?.Stacks ?? 0);
 		}
 
 		/// <summary>
@@ -163,24 +165,58 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="target">The character to modify.</param>
 		/// <param name="sign">+1 to apply, -1 to remove.</param>
-		private void ApplyAttributeModifiers(ICharacter target, int sign)
+		/// <summary>
+		/// States this buff's whole attribute contribution at a given stack multiplier.
+		/// </summary>
+		/// <remarks>
+		/// One ledger entry per attribute, keyed by this template. Restating is idempotent, so a
+		/// re-apply from a payload restore or a reconcile replay cannot double the bonus — which is
+		/// what the sign-multiplier shape this replaces could not promise.
+		/// </remarks>
+		private void WriteBonusAttributes(ICharacter target, int multiplier)
 		{
-			if (BonusAttributes == null || BonusAttributes.Count < 1) return;
+			if (target == null || BonusAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			ModifierSource source = ModifierSource.Buff(ID);
 
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
-				BuffAttributeTemplate attr = BonusAttributes[i];
-				if (attr?.Template == null) continue;
+				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
+				if (buffAttribute?.Template == null) continue;
 
-				int modifier = attr.Value * sign;
-				if (attributeController.TryGetAttribute(attr.Template.ID, out CharacterAttribute characterAttribute))
+				int modifier = buffAttribute.Value * multiplier;
+				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(modifier);
+					characterAttribute.SetSource(source, modifier);
 				}
-				else if (attributeController.TryGetResourceAttribute(attr.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
+				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(modifier);
+					characterResourceAttribute.SetSource(source, modifier);
+				}
+			}
+		}
+
+		/// <summary>Releases this buff's entry from every attribute it touched.</summary>
+		private void ClearBonusAttributes(ICharacter target)
+		{
+			if (target == null || BonusAttributes == null) return;
+			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			ModifierSource source = ModifierSource.Buff(ID);
+
+			for (int i = 0; i < BonusAttributes.Count; i++)
+			{
+				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
+				if (buffAttribute?.Template == null) continue;
+
+				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
+				{
+					characterAttribute.ClearSource(source);
+				}
+				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
+				{
+					characterResourceAttribute.ClearSource(source);
 				}
 			}
 		}

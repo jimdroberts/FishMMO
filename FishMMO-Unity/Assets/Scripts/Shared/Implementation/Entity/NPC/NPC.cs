@@ -1015,7 +1015,10 @@ namespace FishMMO.Shared
 
 					int current = resource.Value;
 					int scaled = Mathf.Max(1, Mathf.RoundToInt(current * difficulty.EnemyResourceMultiplier));
-					resource.AddModifier(scaled - current);
+					/* Named, so it can be released. Dungeon scaling had NO reversal at all: it was
+					 * added once at spawn and survived until RestoreTemplateBaseline zeroed every
+					 * modifier on the way back into the pool. */
+					resource.SetSource(ModifierSource.DungeonScaling, scaled - current);
 					resource.SetCurrentValue(scaled);
 				}
 			}
@@ -1039,7 +1042,7 @@ namespace FishMMO.Shared
 				if (attributeController.TryGetAttribute(scalar.Template, out CharacterAttribute attribute))
 				{
 					int current = attribute.Value;
-					attribute.AddModifier(Mathf.RoundToInt(current * scalar.Multiplier) - current);
+					attribute.SetSource(ModifierSource.DungeonScaling, Mathf.RoundToInt(current * scalar.Multiplier) - current);
 				}
 				else if (attributeController.TryGetResourceAttribute(scalar.Template, out CharacterResourceAttribute resource))
 				{
@@ -1048,7 +1051,7 @@ namespace FishMMO.Shared
 					 * and a named entry is "this one especially". */
 					int current = resource.Value;
 					int scaled = Mathf.Max(1, Mathf.RoundToInt(current * scalar.Multiplier));
-					resource.AddModifier(scaled - current);
+					resource.SetSource(ModifierSource.DungeonScaling, scaled - current);
 					resource.SetCurrentValue(scaled);
 				}
 			}
@@ -1092,11 +1095,11 @@ namespace FishMMO.Shared
 					if (attribute.IsScalar)
 					{
 						int newValue = characterAttribute.Value.GetPercentOf(value);
-						characterAttribute.SetModifier(newValue - old);
+						characterAttribute.SetSource(ModifierSource.NpcBonus, newValue - old);
 					}
 					else
 					{
-						characterAttribute.SetModifier(value - old);
+						characterAttribute.SetSource(ModifierSource.NpcBonus, value - old);
 					}
 				}
 				else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
@@ -1108,7 +1111,7 @@ namespace FishMMO.Shared
 						int newValue = characterResourceAttribute.Value.GetPercentOf(value);
 						int modifier = newValue - old;
 
-						characterResourceAttribute.SetModifier(modifier);
+						characterResourceAttribute.SetSource(ModifierSource.NpcBonus, modifier);
 						if (asServer)
 						{
 							characterResourceAttribute.SetCurrentValue(newValue);
@@ -1118,7 +1121,7 @@ namespace FishMMO.Shared
 					{
 						int modifier = value - old;
 
-						characterResourceAttribute.SetModifier(modifier);
+						characterResourceAttribute.SetSource(ModifierSource.NpcBonus, modifier);
 						if (asServer)
 						{
 							characterResourceAttribute.SetCurrentValue(value);

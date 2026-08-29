@@ -99,17 +99,28 @@ namespace FishMMO.Shared
 		{
 			EnsureHitBuffer();
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
+			/* Keyed on the BODY a link belongs to, not on the collider that was hit. It held
+			 * `hit.gameObject`, so a target rigged with two hitboxes was never marked as visited by
+			 * the first of them — the walk chained straight back onto a victim it had already struck
+			 * through its other collider and burned a link doing it. The keys are resolved through
+			 * TargetOrdering.ResolveHitKey, which collapses colliders sharing a rigidbody or a
+			 * character and leaves everything else — a wall, a building — keyed to itself. */
 			HashSet<GameObject> selected = new HashSet<GameObject>();
 			List<GameObject> linkCandidates = new List<GameObject>();
+			List<GameObject> linkKeys = new List<GameObject>();
 			List<TargetRank> linkRanks = new List<TargetRank>();
 			GameObject current = context;
+			GameObject currentKey = TargetOrdering.ResolveObjectKey(context);
 			for (int i = 0; i < ChainLength && current != null; i++)
 			{
 				if (!AreConditionsMet(current, eventData))
 				{
 					break;
 				}
-				selected.Add(current);
+				selected.Add(currentKey);
+				/* The link itself is still the object the query returned. Resolution and dedupe are
+				 * separate questions: consumers that want the character walk to it through
+				 * EventData.SetTarget, and a chain is free to arc between scene objects. */
 				results.Add(current);
 				Vector3 center = current.transform.position;
 				// Direct query on purpose: the caller already holds the rewind scope, so routing
@@ -134,20 +145,39 @@ namespace FishMMO.Shared
 				 * point and equidistant pairs are common — and picking whichever the broadphase
 				 * listed first made the whole remaining walk depend on it. */
 				linkCandidates.Clear();
+				linkKeys.Clear();
 				linkRanks.Clear();
 				for (int j = 0; j < hitCount; j++)
 				{
 					Collider hit = hits[j];
-					if (hit == null || selected.Contains(hit.gameObject) || !AreConditionsMet(hit.gameObject, eventData))
+					if (hit == null)
+					{
+						continue;
+					}
+					GameObject key = TargetOrdering.ResolveHitKey(hit, out ICharacter _);
+					if (selected.Contains(key) || !AreConditionsMet(hit.gameObject, eventData))
 					{
 						continue;
 					}
 					linkCandidates.Add(hit.gameObject);
+					linkKeys.Add(key);
 					linkRanks.Add(TargetOrdering.Rank(linkCandidates.Count - 1, hit.gameObject, Vector3.Distance(center, hit.transform.position)));
 				}
 
+				/* No dedupe over the link candidates: only the nearest becomes the next link, and the
+				 * nearest collider of a body is the only entry that body could have won with. The
+				 * body is marked visited on the next pass, which is what stops the walk returning. */
 				int nearest = TargetOrdering.NearestIndex(linkRanks);
-				current = nearest >= 0 ? linkCandidates[linkRanks[nearest].Index] : null;
+				if (nearest >= 0)
+				{
+					current = linkCandidates[linkRanks[nearest].Index];
+					currentKey = linkKeys[linkRanks[nearest].Index];
+				}
+				else
+				{
+					current = null;
+					currentKey = null;
+				}
 			}
 		}
 

@@ -237,15 +237,18 @@ namespace FishMMO.Shared
 					if (character != null && character.TryGet(out ICharacterAttributeController attributeController))
 					{
 						int attrId = attribute.Template.CharacterAttribute.ID;
+						/* The item's whole contribution, restated. This used to be
+						 * AddModifier(-oldValue) followed by AddModifier(newValue), which is only
+						 * correct while oldValue is exactly what had been added — and nothing
+						 * enforced that. Naming the source makes the old value irrelevant. */
+						ModifierSource source = ModifierSource.Item(item.InstanceID);
 						if (attributeController.TryGetAttribute(attrId, out CharacterAttribute characterAttribute))
 						{
-							characterAttribute.AddModifier(-oldValue);
-							characterAttribute.AddModifier(newValue);
+							characterAttribute.SetSource(source, newValue);
 						}
 						else if (attributeController.TryGetResourceAttribute(attrId, out CharacterResourceAttribute characterResourceAttribute))
 						{
-							characterResourceAttribute.AddModifier(-oldValue);
-							characterResourceAttribute.AddModifier(newValue);
+							characterResourceAttribute.SetSource(source, newValue);
 						}
 					}
 				}
@@ -262,15 +265,20 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			/* Keyed by the item, so applying twice is applying once. A character loaded from the
+			 * database, restored from a spawn payload and then corrected by a reconcile can reach
+			 * this more than once for the same item; under the old accumulate-and-negate shape each
+			 * arrival doubled the bonus and something downstream had to undo it. */
+			ModifierSource source = ModifierSource.Item(item != null ? item.InstanceID : 0);
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(pair.Value.Value);
+					characterAttribute.SetSource(source, pair.Value.Value);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(pair.Value.Value);
+					characterResourceAttribute.SetSource(source, pair.Value.Value);
 				}
 			}
 		}
@@ -285,15 +293,20 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			/* Released, not negated. On a peer that never applied this item — an observer, or an
+			 * owner whose ledger the reconcile had already restated — there is no entry and this is
+			 * correctly a no-op. The negation it replaces subtracted regardless and drove the sheet
+			 * below the server's number until the next authoritative push. */
+			ModifierSource source = ModifierSource.Item(item != null ? item.InstanceID : 0);
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(-pair.Value.Value);
+					characterAttribute.ClearSource(source);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(-pair.Value.Value);
+					characterResourceAttribute.ClearSource(source);
 				}
 			}
 		}

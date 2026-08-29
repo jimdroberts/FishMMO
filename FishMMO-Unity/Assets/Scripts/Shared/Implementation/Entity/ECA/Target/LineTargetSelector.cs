@@ -91,6 +91,13 @@ namespace FishMMO.Shared
 			TargetOrdering.SortRaycastHits(hits, hitCount);
 
 			int kept = 0;
+			/* One key per body already pierced, so the cap counts BODIES rather than colliders. A ray
+			 * reports every collider it passes through, so a target rigged with two hitboxes consumed
+			 * two of a beam's pierce slots and the beam stopped short of a victim behind it. Streamed
+			 * rather than a DedupeByBody pass because this loop already walks the hits in ray order
+			 * and emits as it goes — the first collider met on a body is its entry face, which is the
+			 * one a pierce means. */
+			List<GameObject> keptKeys = new List<GameObject>();
 			/* Zero or less means NO cap, matching TargetOrdering.CappedCount and every other selector.
 			 * This used to be Mathf.Max(1, MaxHits), so an author who set MaxHits to 0 on a beam
 			 * meaning "pierce everything on the line" got a beam that stopped at the first target —
@@ -99,10 +106,19 @@ namespace FishMMO.Shared
 			for (int i = 0; i < hitCount && kept < cap; i++)
 			{
 				Collider collider = hits[i].collider;
-				if (collider == null || !AreConditionsMet(collider.gameObject, eventData))
+				if (collider == null)
 				{
 					continue;
 				}
+				GameObject key = TargetOrdering.ResolveHitKey(collider, out ICharacter _);
+				if (TargetOrdering.ContainsBody(keptKeys, key) || !AreConditionsMet(collider.gameObject, eventData))
+				{
+					continue;
+				}
+				keptKeys.Add(key);
+				/* The result is still the collider the ray hit. Resolution and dedupe are separate
+				 * questions: consumers that want the character walk to it through
+				 * EventData.SetTarget, and a beam is free to report the wall panel it stopped on. */
 				results.Add(collider.gameObject);
 				++kept;
 			}

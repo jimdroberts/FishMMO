@@ -41,6 +41,59 @@ namespace FishMMO.Shared
 		/// </summary>
 		public long ID;
 
+		/// <summary>Counter behind <see cref="InstanceID"/>.</summary>
+		private static long nextInstanceID;
+
+		/// <summary>Backing field; assigned on first use so no constructor has to remember.</summary>
+		[NonSerialized]
+		private long instanceID;
+
+		/// <summary>
+		/// A process-unique identity for this item object, used to key its contribution to a
+		/// character's attributes.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Deliberately not <see cref="ID"/>, and the reason is not that the item is unsaved.</b>
+		/// Items ARE persisted the moment they are created, and the database does generate and return
+		/// an id — <c>CharacterInventoryService.PersistAsync</c> ends in <c>RETURNING id</c>. Two
+		/// things still make that id the wrong key.
+		/// </para>
+		/// <para>
+		/// <b>It is a SLOT identity, not an item identity.</b> The upsert is
+		/// <c>ON CONFLICT (character_id, slot) DO UPDATE</c>, so the row belongs to the slot rather
+		/// than to the thing in it. Move one item between two slots and it is two different rows;
+		/// put two different items through one slot and they share a row id. Keying an item's
+		/// attribute contribution by that would merge the contributions of every item that ever
+		/// occupied the slot.
+		/// </para>
+		/// <para>
+		/// <b>And it arrives too late.</b> The persist is enqueued fire-and-forget onto a worker
+		/// (<c>EnqueuePersistence</c>), so the item is in the inventory and equippable before the id
+		/// comes back. A ledger key has to be stable for the lifetime of the contribution: equipping
+		/// at <c>ID == 0</c> and releasing after the write-back landed would clear a key that was
+		/// never written, orphaning the bonus permanently. Nothing writes the returned id back onto
+		/// the item today in any case — the service returns it as a stale-version signal, which is
+		/// what <c>id &lt;= 0</c> throws on.
+		/// </para>
+		/// <para>
+		/// It does not matter that two peers assign different numbers to the same logical item: a
+		/// ledger is local to the peer that built it and is never compared across the wire. See
+		/// <see cref="ModifierSource"/>.
+		/// </para>
+		/// </remarks>
+		public long InstanceID
+		{
+			get
+			{
+				if (instanceID == 0)
+				{
+					instanceID = ++nextInstanceID;
+				}
+				return instanceID;
+			}
+		}
+
 		/// <summary>
 		/// Version number for this item instance, used for client synchronization and updates.
 		/// Incremented whenever the item's state changes in a way that requires client updates.

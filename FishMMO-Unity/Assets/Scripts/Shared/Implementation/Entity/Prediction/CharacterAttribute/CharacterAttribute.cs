@@ -136,10 +136,41 @@ namespace FishMMO.Shared
 		private int formulaModifier;
 
 		/// <summary>
-		/// The modifier accumulated from external sources such as equipped items, buffs, and region effects.
-		/// Persistent across formula recalculations. Managed via <see cref="AddModifier"/> and <see cref="SetModifier"/>.
+		/// The modifier contributed by external sources such as equipped items, buffs, region effects
+		/// and NPC scaling. Persistent across formula recalculations.
 		/// </summary>
+		/// <remarks>
+		/// <b>A cached sum, not the storage.</b> The storage is <see cref="modifierSources"/>; this is
+		/// kept in step with it so <see cref="CalculateFinalValue"/> and every reader of
+		/// <see cref="ExternalModifier"/> stay a single field read. Never assign to it outside
+		/// <see cref="RecomputeExternalModifier"/>.
+		/// </remarks>
 		private int externalModifier;
+
+		/// <summary>
+		/// Who contributed what. Lazily allocated: an attribute nobody has modified holds nothing.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A short list rather than a dictionary. An attribute carries a handful of sources at most —
+		/// a couple of items, a couple of buffs — so a linear walk with a struct compare beats hashing
+		/// and allocates nothing until the first source arrives. See <see cref="ModifierSource"/> for
+		/// why attribution is needed at all.
+		/// </para>
+		/// <para>
+		/// An entry whose value reaches zero is REMOVED rather than kept at zero, so the list length
+		/// tracks live contributors and a test can assert that a source was genuinely released rather
+		/// than merely zeroed.
+		/// </para>
+		/// </remarks>
+		private List<ModifierEntry> modifierSources;
+
+		/// <summary>One contributor's entry in the ledger.</summary>
+		private struct ModifierEntry
+		{
+			public ModifierSource Source;
+			public int Value;
+		}
 
 		/// <summary>
 		/// The final value of the attribute after applying all modifiers and clamping (if enabled by the template).
@@ -227,32 +258,208 @@ namespace FishMMO.Shared
 			}
 		}
 		/// <summary>
-		/// Sets the external modifier value and propagates changes through the attribute hierarchy.
-		/// Used by systems such as NPC initialization and network synchronization.
+		/// Installs or replaces one named source's contribution.
 		/// </summary>
-		/// <param name="newValue">The new external modifier value.</param>
-		public void SetModifier(int newValue)
+		/// <remarks>
+		/// <para>
+		/// <b>Idempotent, which is the whole point.</b> Calling this twice with the same source and
+		/// value leaves one entry worth that value — so applying an item or a buff a second time, from
+		/// a database load, a payload restore or a reconcile replay, cannot double it. That property
+		/// is what replaced a set of carefully ordered suppressions.
+		/// </para>
+		/// <para>
+		/// A value of zero removes the entry. A source contributing nothing is not a contributor, and
+		/// keeping it would make "is this source applied?" un-answerable.
+		/// </para>
+		/// </remarks>
+		/// <param name="source">Who is contributing.</param>
+		/// <param name="value">Their whole contribution, not a delta.</param>
+		public void SetSource(ModifierSource source, int value)
 		{
-			if (externalModifier != newValue)
+			if (SetSourceSilent(source, value))
 			{
-				externalModifier = newValue;
 				UpdateValues();
 			}
 		}
 
 		/// <summary>
-		/// Adds or subtracts an amount from the external modifier and propagates changes through the attribute hierarchy.
-		/// Used by items, buffs, and region effects. Addition: AddModifier(10) | Subtraction: AddModifier(-10)
+		/// Removes one named source's contribution.
 		/// </summary>
+		/// <remarks>
+		/// A source that is not present is a no-op, and that is deliberate: it is the correct answer
+		/// for a peer that never applied it. The old shape subtracted a stored value unconditionally,
+		/// so a client whose add had been suppressed still ran the subtraction and drove the sheet
+		/// negative until the next authoritative push corrected it.
+		/// </remarks>
+		/// <param name="source">The contributor to release.</param>
+		public void ClearSource(ModifierSource source)
+		{
+			if (SetSourceSilent(source, 0))
+			{
+				UpdateValues();
+			}
+		}
+
+		/// <summary>The contribution currently recorded for one source, or zero when it has none.</summary>
+		public int GetSourceValue(ModifierSource source)
+		{
+			if (modifierSources == null)
+			{
+				return 0;
+			}
+			for (int i = 0; i < modifierSources.Count; ++i)
+			{
+				if (modifierSources[i].Source == source)
+				{
+					return modifierSources[i].Value;
+				}
+			}
+			return 0;
+		}
+
+		/// <summary>Number of live contributors. For diagnostics and tests.</summary>
+		public int ModifierSourceCount => modifierSources?.Count ?? 0;
+
+		/// <summary>
+		/// Drops every contribution, attributed or not.
+		/// </summary>
+		/// <remarks>
+		/// For a character being recycled, where the whole sheet belongs to the previous occupant.
+		/// Distinct from <c>SetModifierDirect(0)</c>, which would install a residual of minus the
+		/// attributed sum and leave those sources in place — a total of zero today and the previous
+		/// occupant's contributors still in the ledger tomorrow.
+		/// </remarks>
+		public void ClearAllModifierSources()
+		{
+			if (modifierSources == null || modifierSources.Count == 0)
+			{
+				externalModifier = 0;
+				return;
+			}
+			modifierSources.Clear();
+			externalModifier = 0;
+		}
+
+		/// <summary>
+		/// Writes a source and refreshes the cached sum, without touching the attribute graph.
+		/// </summary>
+		/// <returns>True when the total actually moved.</returns>
+		private bool SetSourceSilent(ModifierSource source, int value)
+		{
+			int previous = externalModifier;
+
+			if (modifierSources == null)
+			{
+				if (value == 0)
+				{
+					return false;
+				}
+				modifierSources = new List<ModifierEntry>(2);
+			}
+
+			int index = -1;
+			for (int i = 0; i < modifierSources.Count; ++i)
+			{
+				if (modifierSources[i].Source == source)
+				{
+					index = i;
+					break;
+				}
+			}
+
+			if (value == 0)
+			{
+				if (index < 0)
+				{
+					return false;
+				}
+				modifierSources.RemoveAt(index);
+			}
+			else if (index < 0)
+			{
+				modifierSources.Add(new ModifierEntry { Source = source, Value = value });
+			}
+			else
+			{
+				if (modifierSources[index].Value == value)
+				{
+					return false;
+				}
+				modifierSources[index] = new ModifierEntry { Source = source, Value = value };
+			}
+
+			RecomputeExternalModifier();
+			return externalModifier != previous;
+		}
+
+		/// <summary>Refreshes the cached sum from the ledger.</summary>
+		private void RecomputeExternalModifier()
+		{
+			int total = 0;
+			if (modifierSources != null)
+			{
+				for (int i = 0; i < modifierSources.Count; ++i)
+				{
+					total += modifierSources[i].Value;
+				}
+			}
+			externalModifier = total;
+		}
+
+		/// <summary>
+		/// Installs an authoritative TOTAL, preserving what this peer has attributed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The total is the server's answer and must be reproduced exactly, but it is not a
+		/// contributor — so it lands in the <see cref="ModifierSourceKind.Authoritative"/> entry as
+		/// the RESIDUAL between the server's number and the sum of everything this peer attributed.
+		/// The observable total is identical to the old wholesale overwrite; what changes is that the
+		/// attributed sources survive it.
+		/// </para>
+		/// <para>
+		/// That survival is the point. Collapsing the ledger to a single entry every reconcile would
+		/// leave the owner unable to release an item or a buff between reconciles — the release would
+		/// find nothing to remove and silently keep the bonus until the next authoritative push.
+		/// </para>
+		/// </remarks>
+		/// <param name="newValue">The server's total external modifier.</param>
+		public void SetModifier(int newValue)
+		{
+			if (SetAuthoritativeTotalSilent(newValue))
+			{
+				UpdateValues();
+			}
+		}
+
+		/// <summary>
+		/// Adds an unattributed amount to the external modifier.
+		/// </summary>
+		/// <remarks>
+		/// <b>Prefer <see cref="SetSource"/>.</b> This writes into the
+		/// <see cref="ModifierSourceKind.Unattributed"/> bucket, which nothing can release except by
+		/// adding the negation — the exact failure the ledger exists to end. Nothing in the shipped
+		/// call graph uses it; it survives as a visible escape hatch rather than an absent one, and as
+		/// the shape the notification-suppression tests exercise.
+		/// </remarks>
 		/// <param name="amount">The amount to add (can be negative).</param>
 		public void AddModifier(int amount)
 		{
-			int tmp = externalModifier + amount;
-			if (externalModifier != tmp)
+			if (amount == 0)
 			{
-				externalModifier = tmp;
-				UpdateValues();
+				return;
 			}
+			SetSource(ModifierSource.Unattributed, GetSourceValue(ModifierSource.Unattributed) + amount);
+		}
+
+		/// <summary>
+		/// Sets the authoritative residual so the ledger sums to <paramref name="newValue"/>.
+		/// </summary>
+		/// <returns>True when the total actually moved.</returns>
+		private bool SetAuthoritativeTotalSilent(int newValue)
+		{
+			int attributed = externalModifier - GetSourceValue(ModifierSource.Authoritative);
+			return SetSourceSilent(ModifierSource.Authoritative, newValue - attributed);
 		}
 
 		/// <summary>
@@ -280,13 +487,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sets the external modifier directly without recomputing derived values or notifying listeners.
+		/// Sets the external modifier total without recomputing derived values or notifying listeners.
 		/// Used exclusively for two-phase reconcile alongside <see cref="SetValueDirect"/>.
 		/// </summary>
-		/// <param name="newValue">The new external modifier value.</param>
+		/// <remarks>
+		/// The silent twin of <see cref="SetModifier"/>, and it installs the same residual — see there
+		/// for why the attributed sources are preserved rather than collapsed. Silence is what the
+		/// two-phase reconcile needs: phase one writes every raw value, phase two runs one graph pass.
+		/// </remarks>
+		/// <param name="newValue">The server's total external modifier.</param>
 		public void SetModifierDirect(int newValue)
 		{
-			externalModifier = newValue;
+			SetAuthoritativeTotalSilent(newValue);
 		}
 
 		/* SetFinal was REMOVED rather than left as an unused public setter.
@@ -323,7 +535,9 @@ namespace FishMMO.Shared
 		/// <param name="newFinal">The authoritative final value.</param>
 		public void SetFinalDerivingModifier(int newFinal)
 		{
-			externalModifier = newFinal - value - formulaModifier;
+			// The total the graph must arrive at, then the residual that gets it there without
+			// discarding what this peer has attributed. See SetModifier.
+			SetAuthoritativeTotalSilent(newFinal - value - formulaModifier);
 			finalValue = CalculateFinalValue();
 		}
 
@@ -400,8 +614,10 @@ namespace FishMMO.Shared
 			this.characterAttributeController = characterAttributeController;
 			Template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(templateID);
 			value = initialValue;
-			externalModifier = initialModifier;
 			formulaModifier = 0;
+			// Through the ledger, so a freshly constructed attribute is already attributed rather
+			// than carrying a number no source owns.
+			SetSourceSilent(ModifierSource.Authoritative, initialModifier);
 			finalValue = CalculateFinalValue();
 		}
 

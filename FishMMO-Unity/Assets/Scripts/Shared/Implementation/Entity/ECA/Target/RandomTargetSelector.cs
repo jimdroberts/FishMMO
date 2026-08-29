@@ -93,9 +93,18 @@ namespace FishMMO.Shared
 		{
 			EnsureHitBuffer();
 			List<GameObject> candidates = new List<GameObject>();
+			/* One key per candidate, so the roll below draws from a set of BODIES rather than of
+			 * colliders — see TargetOrdering.DedupeByBody. The candidate itself stays the collider's
+			 * GameObject: consumers that want the character resolve it through EventData.SetTarget,
+			 * which walks the parents, and a selector is free to return scenery that has none. */
+			List<GameObject> keys = new List<GameObject>();
 			List<TargetRank> ranks = new List<TargetRank>();
 
 			Vector3 origin = context.transform.position;
+			/* The caster's own body, keyed the same way a hit is, so the exclusion below asks "is this
+			 * the caster" rather than "is this the caster's root transform" — see
+			 * TargetOrdering.ResolveObjectKey. */
+			GameObject contextKey = TargetOrdering.ResolveObjectKey(context);
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 			/* Re-queried until the buffer stops coming back full. A non-allocating query returns
 			 * at most buffer.Length results and says nothing about how many it discarded, and the
@@ -115,11 +124,20 @@ namespace FishMMO.Shared
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];
-				if (hit == null || hit.gameObject == context || !AreConditionsMet(hit.gameObject, eventData))
+				if (hit == null)
+				{
+					continue;
+				}
+				/* Compared on the resolved body, not on the collider. This read
+				 * `hit.gameObject == context`, which is false for a caster's own child hitbox — so a
+				 * caster rigged that way could draw itself out of its own random selection. */
+				GameObject key = TargetOrdering.ResolveHitKey(hit, out ICharacter _);
+				if (ReferenceEquals(key, contextKey) || !AreConditionsMet(hit.gameObject, eventData))
 				{
 					continue;
 				}
 				candidates.Add(hit.gameObject);
+				keys.Add(key);
 				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject, Vector3.Distance(origin, hit.transform.position)));
 			}
 
@@ -127,6 +145,11 @@ namespace FishMMO.Shared
 			 * rather than the lowest ObjectIds (the previous SortStable ranked by identity alone and
 			 * the distance passed to Rank was never consulted). */
 			TargetOrdering.SortByDistance(ranks);
+			/* Between the sort and the cap. A duplicate is not merely a wasted slot here: it is a
+			 * loaded die. Two hitboxes on one body occupied two entries and that body was drawn twice
+			 * as often as a single-collider one, which is a bias no amount of determinism downstream
+			 * can undo. */
+			TargetOrdering.DedupeByBody(ranks, keys);
 			TargetOrdering.ApplyMaxHits(ranks, MaxHits);
 
 			if (ranks.Count == 0)

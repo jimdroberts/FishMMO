@@ -889,15 +889,20 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
+					/* ClearAllModifierSources, not SetModifierDirect(0). The sheet belongs to the
+					 * previous occupant of this pooled object and every contributor has to go with
+					 * it. SetModifierDirect(0) would only install an authoritative residual of minus
+					 * the attributed sum — a total of zero today, and the previous character's items
+					 * and buffs still sitting in the ledger for the next one. */
 					if (Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 					{
 						attribute.SetValueDirect(template.InitialValue);
-						attribute.SetModifierDirect(0);
+						attribute.ClearAllModifierSources();
 					}
 					else if (ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute resource))
 					{
 						resource.SetValueDirect(template.InitialValue);
-						resource.SetModifierDirect(0);
+						resource.ClearAllModifierSources();
 					}
 				}
 
@@ -2562,8 +2567,10 @@ namespace FishMMO.Shared
 					{
 						if (!reconcileSeenIDs.Contains(kvp.Key))
 						{
+							// An attribute the server does not have at all: retire it outright rather
+							// than leaving contributors attached to a zero total.
 							kvp.Value.SetValueDirect(0);
-							kvp.Value.SetModifierDirect(0);
+							kvp.Value.ClearAllModifierSources();
 							snapshotChanged = true;
 						}
 					}

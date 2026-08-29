@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -40,7 +40,35 @@ namespace FishMMO.Shared
 		/// <param name="target">The character receiving the buff.</param>
 		public override void OnApply(Buff buff, ICharacter target)
 		{
-			ApplyModifiers(target, 1);
+			WriteModifiers(target, buff, 1 + (buff?.Stacks ?? 0));
+		}
+
+		/// <summary>
+		/// Restates the buff's contribution at the stack count this application leaves behind.
+		/// </summary>
+		/// <remarks>
+		/// <c>Buff.AddStack</c> calls this BEFORE incrementing <see cref="Buff.Stacks"/>, so the
+		/// count after the operation is <c>Stacks + 1</c> and the multiplier is <c>Stacks + 2</c>.
+		/// The base class would have routed this to <see cref="OnApply"/>, which was correct only
+		/// while modifiers accumulated; a ledger entry is restated rather than added to, so the hook
+		/// has to know the post-operation count.
+		/// </remarks>
+		public override void OnApplyStack(Buff buff, ICharacter target)
+		{
+			WriteModifiers(target, buff, 2 + (buff?.Stacks ?? 0));
+		}
+
+		/// <summary>
+		/// Restates the buff's contribution after losing one stack.
+		/// </summary>
+		/// <remarks>
+		/// <c>Buff.RemoveStack</c> decrements after this returns, so the post-operation count is
+		/// <c>Stacks - 1</c> and the multiplier is <c>Stacks</c>. At the last stack that is zero,
+		/// which releases the entry outright.
+		/// </remarks>
+		public override void OnRemoveStack(Buff buff, ICharacter target)
+		{
+			WriteModifiers(target, buff, buff?.Stacks ?? 0);
 		}
 
 		/// <summary>
@@ -50,33 +78,65 @@ namespace FishMMO.Shared
 		/// <param name="target">The character losing the buff.</param>
 		public override void OnRemove(Buff buff, ICharacter target)
 		{
-			ApplyModifiers(target, -1);
+			ClearModifiers(target, buff);
 		}
 
 		/// <summary>
-		/// Applies or removes attribute modifiers based on a sign multiplier.
-		/// Positive sign adds modifiers, negative sign removes them.
+		/// States this buff's whole contribution at a given stack multiplier.
 		/// </summary>
+		/// <remarks>
+		/// One ledger entry per attribute, keyed by this template — which is also the buff's key in
+		/// the character's buff container, so one buff instance owns exactly one entry. Restating is
+		/// idempotent, so a payload restore or a reconcile replay that re-applies the same buff
+		/// cannot double its bonus.
+		/// </remarks>
 		/// <param name="target">The character to modify.</param>
-		/// <param name="sign">+1 to apply, -1 to remove.</param>
-		private void ApplyModifiers(ICharacter target, int sign)
+		/// <param name="buff">The buff instance whose entry is being written.</param>
+		/// <param name="multiplier">Stack multiplier the contribution should reflect.</param>
+		private void WriteModifiers(ICharacter target, Buff buff, int multiplier)
 		{
 			if (target == null || BonusAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			ModifierSource source = ModifierSource.Buff(ID);
 
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
 				if (buffAttribute?.Template == null) continue;
 
-				int modifier = buffAttribute.Value * sign;
+				int modifier = buffAttribute.Value * multiplier;
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(modifier);
+					characterAttribute.SetSource(source, modifier);
 				}
 				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(modifier);
+					characterResourceAttribute.SetSource(source, modifier);
+				}
+			}
+		}
+
+		/// <summary>Releases this buff's entry from every attribute it touched.</summary>
+		private void ClearModifiers(ICharacter target, Buff buff)
+		{
+			if (target == null || BonusAttributes == null) return;
+			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			ModifierSource source = ModifierSource.Buff(ID);
+
+			for (int i = 0; i < BonusAttributes.Count; i++)
+			{
+				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
+				if (buffAttribute?.Template == null) continue;
+
+				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
+				{
+					characterAttribute.ClearSource(source);
+				}
+				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
+				{
+					characterResourceAttribute.ClearSource(source);
 				}
 			}
 		}

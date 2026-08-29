@@ -73,6 +73,11 @@ namespace FishMMO.Shared
 		{
 			EnsureHitBuffer();
 			List<GameObject> candidates = new List<GameObject>();
+			/* One key per candidate, so the cap below counts BODIES rather than colliders — see
+			 * TargetOrdering.DedupeByBody. The candidate itself stays the collider's GameObject:
+			 * consumers that want the character resolve it through EventData.SetTarget, which walks
+			 * the parents, and a selector is free to return scenery that has no character at all. */
+			List<GameObject> keys = new List<GameObject>();
 			List<TargetRank> ranks = new List<TargetRank>();
 
 			Vector3 origin = context.transform.position;
@@ -115,6 +120,7 @@ namespace FishMMO.Shared
 				}
 
 				candidates.Add(hit.gameObject);
+				keys.Add(TargetOrdering.ResolveHitKey(hit, out ICharacter _));
 				ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject, Vector3.Distance(origin, targetPosition)));
 			}
 
@@ -122,6 +128,11 @@ namespace FishMMO.Shared
 			 * rather than the lowest ObjectIds (the previous SortStable ranked by identity alone and
 			 * the distance passed to Rank was never consulted). */
 			TargetOrdering.SortByDistance(ranks);
+			/* Between the sort and the cap, never before the sort: the entry kept for a body is the
+			 * first one met, which on a distance-ordered list is that body's nearest collider. Before
+			 * this the cap counted colliders, so a target rigged with two hitboxes consumed two slots
+			 * of MaxHits and a cone hit fewer characters than it was authored to. */
+			TargetOrdering.DedupeByBody(ranks, keys);
 			TargetOrdering.ApplyMaxHits(ranks, MaxHits);
 
 			for (int i = 0; i < ranks.Count; ++i)

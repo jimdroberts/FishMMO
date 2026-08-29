@@ -49,6 +49,7 @@ namespace FishMMO.UnitTests
 		public void ClearGuard()
 		{
 			ReconcileDeltaGuard.ConsumeRejection();
+			DisposeLedgerFixture();
 		}
 
 		private static CharacterReconcileData BaseReconcile()
@@ -2771,6 +2772,213 @@ namespace FishMMO.UnitTests
 				UnityEngine.Object.DestroyImmediate(character);
 				UnityEngine.Object.DestroyImmediate(scenery);
 			}
+		}
+
+		// ── D3: the source-keyed modifier ledger ──────────────────────────────────
+
+		/// <summary>Template the ledger tests resolve their attribute through.</summary>
+		private static CharacterAttributeTemplate ledgerTemplate;
+
+		/// <summary>Host for the controller the attribute reports changes to.</summary>
+		private static GameObject ledgerHost;
+
+		/// <summary>
+		/// Builds an attribute wired to a real controller, so <c>UpdateValues</c> has somewhere to go.
+		/// </summary>
+		/// <remarks>
+		/// The template must be cached under its name or <c>CharacterAttributeTemplate.Get</c> cannot
+		/// resolve the id the constructor is handed, and the attribute comes up with a null Template.
+		/// </remarks>
+		private static CharacterAttribute MakeLedgerAttribute(int initialValue = 100, int initialModifier = 0)
+		{
+			DisposeLedgerFixture();
+
+			ledgerTemplate = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+			ledgerTemplate.name = "LedgerTestAttribute";
+			ledgerTemplate.InitialValue = initialValue;
+			ledgerTemplate.AddToCache(ledgerTemplate.name);
+
+			ledgerHost = new GameObject("LedgerTestHost");
+			CharacterAttributeController controller = ledgerHost.AddComponent<CharacterAttributeController>();
+
+			return new CharacterAttribute(controller, ledgerTemplate.ID, initialValue, initialModifier);
+		}
+
+		/// <summary>Releases the template and host a ledger test created.</summary>
+		private static void DisposeLedgerFixture()
+		{
+			if (ledgerTemplate != null)
+			{
+				ledgerTemplate.RemoveFromCache();
+				UnityEngine.Object.DestroyImmediate(ledgerTemplate);
+				ledgerTemplate = null;
+			}
+			if (ledgerHost != null)
+			{
+				UnityEngine.Object.DestroyImmediate(ledgerHost);
+				ledgerHost = null;
+			}
+		}
+
+		/// <summary>
+		/// Applying the same source twice is applying it once.
+		/// </summary>
+		/// <remarks>
+		/// This is the property that replaces a set of carefully ordered suppressions. A character can
+		/// reach an equip or a buff apply more than once for the same instance — a database load, a
+		/// spawn payload restore, a reconcile replay — and under the old accumulate-and-negate shape
+		/// every arrival doubled the bonus and something downstream had to undo it.
+		/// </remarks>
+		[Test]
+		public void Ledger_ReapplyingASource_DoesNotDouble()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource item = ModifierSource.Item(42);
+
+			attribute.SetSource(item, 10);
+			LogAssert.AreEqual(10, attribute.ExternalModifier, "First apply contributes its value.");
+
+			attribute.SetSource(item, 10);
+			attribute.SetSource(item, 10);
+			LogAssert.AreEqual(10, attribute.ExternalModifier,
+				"Re-applying the SAME source states its contribution again rather than adding to it. " +
+				"Doubling here is the database-load duplication the ledger exists to make impossible.");
+			LogAssert.AreEqual(1, attribute.ModifierSourceCount, "And it is still one contributor.");
+		}
+
+		/// <summary>
+		/// Every source kind can be released independently, and releasing one leaves the others.
+		/// </summary>
+		[Test]
+		public void Ledger_EachSourceIsReleasedIndependently()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource itemA = ModifierSource.Item(1);
+			ModifierSource itemB = ModifierSource.Item(2);
+			ModifierSource buff = ModifierSource.Buff(7);
+			ModifierSource dungeon = ModifierSource.DungeonScaling;
+
+			attribute.SetSource(itemA, 5);
+			attribute.SetSource(itemB, 7);
+			attribute.SetSource(buff, 11);
+			attribute.SetSource(dungeon, 13);
+			LogAssert.AreEqual(36, attribute.ExternalModifier, "Four contributors sum.");
+			LogAssert.AreEqual(4, attribute.ModifierSourceCount, "Four entries.");
+
+			/* Item 1 and buff 7 would collide on a bare id: both are small positive numbers from
+			 * different id spaces. The kind is what separates them. */
+			attribute.ClearSource(buff);
+			LogAssert.AreEqual(25, attribute.ExternalModifier, "Releasing the buff leaves the items.");
+			LogAssert.AreEqual(5, attribute.GetSourceValue(itemA), "Item 1 is untouched by buff 7's release.");
+
+			attribute.ClearSource(itemA);
+			attribute.ClearSource(itemB);
+			attribute.ClearSource(dungeon);
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "Everything released returns to zero.");
+			LogAssert.AreEqual(0, attribute.ModifierSourceCount,
+				"A released source is removed, not left at zero — otherwise 'is this applied?' is unanswerable.");
+		}
+
+		/// <summary>
+		/// Releasing a source this peer never applied is a no-op, not a subtraction.
+		/// </summary>
+		/// <remarks>
+		/// The negation shape it replaces subtracted unconditionally, so a peer whose add had been
+		/// suppressed — an observer, or an owner whose ledger the reconcile had restated — drove its
+		/// own sheet below the server's number until the next authoritative push corrected it.
+		/// </remarks>
+		[Test]
+		public void Ledger_ReleasingAnUnappliedSource_DoesNotSubtract()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			attribute.SetModifier(50);
+			LogAssert.AreEqual(50, attribute.ExternalModifier, "The server's total is installed.");
+
+			attribute.ClearSource(ModifierSource.Item(999));
+
+			LogAssert.AreEqual(50, attribute.ExternalModifier,
+				"Releasing a source that was never applied here must change nothing. Subtracting would " +
+				"put this peer below the server's number.");
+		}
+
+		/// <summary>
+		/// An authoritative total is reproduced exactly, and does NOT destroy attributed sources.
+		/// </summary>
+		/// <remarks>
+		/// The reconcile installs a total on the owner every tick. Collapsing the ledger to that one
+		/// number would leave the owner unable to release an item or a buff between reconciles — the
+		/// release would find nothing and silently keep the bonus. The total lands as a residual
+		/// instead, so the observable sum is identical and the attribution survives.
+		/// </remarks>
+		[Test]
+		public void Ledger_AuthoritativeTotal_IsExactAndPreservesAttribution()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource item = ModifierSource.Item(3);
+
+			attribute.SetSource(item, 20);
+			attribute.SetModifier(50);
+
+			LogAssert.AreEqual(50, attribute.ExternalModifier,
+				"The server's total is reproduced exactly — this is what the old wholesale overwrite did.");
+			LogAssert.AreEqual(20, attribute.GetSourceValue(item),
+				"And the item's attribution survived it, which the overwrite could not manage.");
+			LogAssert.AreEqual(30, attribute.GetSourceValue(ModifierSource.Authoritative),
+				"The authoritative entry holds the residual: the server's total minus what is attributed.");
+
+			// Now the owner unequips between reconciles. The bonus must actually leave.
+			attribute.ClearSource(item);
+			LogAssert.AreEqual(30, attribute.ExternalModifier,
+				"Releasing the item removes its contribution. Under a collapsing ledger this would " +
+				"have found nothing to remove and kept the full 50 until the next reconcile.");
+		}
+
+		/// <summary>
+		/// A recycled character keeps none of the previous occupant's contributors.
+		/// </summary>
+		/// <remarks>
+		/// <c>RestoreTemplateBaseline</c> must clear the ledger, not install a zero total.
+		/// <c>SetModifierDirect(0)</c> would set the authoritative residual to minus the attributed
+		/// sum — a total of zero today, and the previous character's items and buffs still in the
+		/// ledger for the next one.
+		/// </remarks>
+		[Test]
+		public void Ledger_ClearAll_RemovesContributorsNotJustTheTotal()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			attribute.SetSource(ModifierSource.Item(1), 15);
+			attribute.SetSource(ModifierSource.Buff(2), 25);
+
+			attribute.SetModifierDirect(0);
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "A zero total is a zero total either way.");
+			LogAssert.IsTrue(attribute.ModifierSourceCount > 0,
+				"But the contributors are still there — which is exactly why pool return must not use this.");
+
+			attribute.ClearAllModifierSources();
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "Cleared.");
+			LogAssert.AreEqual(0, attribute.ModifierSourceCount,
+				"And no contributor survives into the next occupant of a pooled character.");
+		}
+
+		/// <summary>
+		/// <c>SetFinalDerivingModifier</c> still lands on the requested final value.
+		/// </summary>
+		/// <remarks>
+		/// The resource reconcile back-solves a modifier from an authoritative maximum. Under the
+		/// ledger that solve targets the same total and lands in the authoritative residual, so
+		/// attributed sources survive a resource reconcile too.
+		/// </remarks>
+		[Test]
+		public void Ledger_SetFinalDerivingModifier_StillReproducesTheServersFinal()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute(initialValue: 100);
+			attribute.SetSource(ModifierSource.Item(8), 10);
+
+			attribute.SetFinalDerivingModifier(250);
+
+			LogAssert.AreEqual(250, attribute.FinalValue, "The server's final value is reproduced.");
+			LogAssert.AreEqual(10, attribute.GetSourceValue(ModifierSource.Item(8)),
+				"And the item is still attributed, so unequipping it will still take its bonus away.");
 		}
 
 		/// <summary>

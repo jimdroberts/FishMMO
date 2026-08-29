@@ -287,6 +287,142 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// The same dedupe key as <see cref="ResolveHitKey"/>, for an object that did not arrive
+		/// through a physics query.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Exists so a selector can compare a hit against its own spatial context — "is this candidate
+		/// the caster?" — on the same terms it compares two hits against each other. The context is an
+		/// <c>EventData.Target</c>, which is a GameObject rather than a collider, and testing it with a
+		/// bare reference comparison against <c>hit.gameObject</c> asks a different question: a caster
+		/// whose hitbox is a child does not equal its own hitbox, so the self-exclusion in the nearest,
+		/// furthest and random selectors let the caster select itself.
+		/// </para>
+		/// <para>
+		/// <see cref="Collider.attachedRigidbody"/> has no GameObject equivalent, so the rigidbody is
+		/// found by walking the parents instead. The two agree for anything a query can return: a
+		/// collider's attached rigidbody is the nearest one at or above it in the hierarchy.
+		/// </para>
+		/// </remarks>
+		/// <param name="candidate">The object to key. May be null.</param>
+		/// <returns>The dedupe key, or null when <paramref name="candidate"/> is null.</returns>
+		public static GameObject ResolveObjectKey(GameObject candidate)
+		{
+			if (candidate == null)
+			{
+				return null;
+			}
+
+			Rigidbody body = candidate.GetComponentInParent<Rigidbody>();
+			GameObject root = body != null ? body.gameObject : candidate;
+
+			if (!root.TryGetComponent(out ICharacter character))
+			{
+				character = root.GetComponentInParent<ICharacter>();
+			}
+			return character != null ? character.GameObject : root;
+		}
+
+		/// <summary>
+		/// Drops every candidate whose body is already represented, keeping the first of each.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Run it on a SORTED list, between the sort and the cap.</b> The entry it keeps for a body
+		/// is the first one it meets, so on a distance-ordered list that is the body's nearest
+		/// collider — the reading every consumer wants — and on an unsorted one it is whichever the
+		/// broadphase listed first, which is the arbitrary choice the whole module exists to remove.
+		/// </para>
+		/// <para>
+		/// <b>Why it is needed at all.</b> A prefab may hang several colliders off one body, and a
+		/// <c>MaxHits</c> cap applied to the raw hits then counts colliders rather than victims: the
+		/// same ability affects a different NUMBER of characters depending on how its targets are
+		/// rigged, and a random selection weights a body by its collider count. Static scenery is
+		/// untouched by this — a wall with twenty colliders and no rigidbody keys each collider to
+		/// itself, so twenty separate candidates is exactly what comes back.
+		/// </para>
+		/// <para>
+		/// A linear scan over what has been kept rather than a set: the list is bounded by the query
+		/// buffer, so this allocates nothing and hashes nothing. <see cref="object.ReferenceEquals"/>
+		/// rather than <c>==</c>, because Unity overloads equality on <c>Object</c> to ask the engine
+		/// whether the native object is still alive — a native crossing per comparison, for a question
+		/// that is not open: every operand came out of a query in this same frame.
+		/// </para>
+		/// </remarks>
+		/// <param name="ranks">The ordered rank list, truncated in place.</param>
+		/// <param name="keys">
+		/// The dedupe key of each candidate, indexed by <see cref="TargetRank.Index"/>. A null key is
+		/// treated as its own body and never collapses with another.
+		/// </param>
+		public static void DedupeByBody(List<TargetRank> ranks, IReadOnlyList<GameObject> keys)
+		{
+			if (ranks == null || keys == null || ranks.Count < 2)
+			{
+				return;
+			}
+
+			int write = 0;
+			for (int read = 0; read < ranks.Count; ++read)
+			{
+				GameObject key = KeyAt(keys, ranks[read].Index);
+				if (key != null)
+				{
+					bool duplicate = false;
+					for (int kept = 0; kept < write; ++kept)
+					{
+						if (ReferenceEquals(KeyAt(keys, ranks[kept].Index), key))
+						{
+							duplicate = true;
+							break;
+						}
+					}
+					if (duplicate)
+					{
+						continue;
+					}
+				}
+				ranks[write] = ranks[read];
+				++write;
+			}
+
+			if (write < ranks.Count)
+			{
+				ranks.RemoveRange(write, ranks.Count - write);
+			}
+		}
+
+		/// <summary>Reads a candidate's key, tolerating a rank whose index is out of range.</summary>
+		private static GameObject KeyAt(IReadOnlyList<GameObject> keys, int index)
+		{
+			return index >= 0 && index < keys.Count ? keys[index] : null;
+		}
+
+		/// <summary>
+		/// True when <paramref name="key"/> is already present in <paramref name="keptKeys"/>.
+		/// </summary>
+		/// <remarks>
+		/// The streaming form of <see cref="DedupeByBody"/>, for a caller that emits as it walks an
+		/// already-ordered set rather than truncating a rank list. Same linear scan, and the same
+		/// <see cref="object.ReferenceEquals"/> for the same reason.
+		/// </remarks>
+		public static bool ContainsBody(List<GameObject> keptKeys, GameObject key)
+		{
+			if (keptKeys == null || key == null)
+			{
+				return false;
+			}
+			for (int i = 0; i < keptKeys.Count; ++i)
+			{
+				if (ReferenceEquals(keptKeys[i], key))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Orders by network identity: ObjectId, then name, then position key, then original index.
 		/// </summary>
 		/// <returns>Negative when <paramref name="a"/> sorts first.</returns>

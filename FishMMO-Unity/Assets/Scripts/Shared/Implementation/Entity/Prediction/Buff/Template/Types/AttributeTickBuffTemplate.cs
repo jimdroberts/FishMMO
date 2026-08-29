@@ -56,29 +56,31 @@ namespace FishMMO.Shared
 		/// <param name="target">The character losing the buff.</param>
 		public override void OnRemove(Buff buff, ICharacter target)
 		{
-			if (buff == null || target == null || TickAttributes == null) return;
+			if (target == null || TickAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			// Use CumulativeTickMultiplier rather than (TickCount * (1 + currentStacks)).
-			// If stacks were added or removed while the buff was active, each tick fired
-			// with the Stacks value at THAT moment. CumulativeTickMultiplier is the exact
-			// sum of (1 + Stacks) across every tick that fired, so reversing it produces
-			// perfect symmetry regardless of stack changes between ticks.
+			/* Released, not reversed.
+			 *
+			 * This used to walk TickAttributes subtracting Value * CumulativeTickMultiplier — a
+			 * running sum of (1 + Stacks) maintained across every tick that fired, kept precisely so
+			 * the subtraction could match a total nobody was recording directly. The ledger records
+			 * that total, so the reversal is just letting go of the entry, and the two can no longer
+			 * drift apart. CumulativeTickMultiplier is still what OnTick uses to compute the entry.
+			 */
+			ModifierSource source = ModifierSource.Buff(ID);
+
 			for (int i = 0; i < TickAttributes.Count; i++)
 			{
 				BuffAttributeTemplate tickAttribute = TickAttributes[i];
 				if (tickAttribute?.Template == null) continue;
 
-				int totalModifier = tickAttribute.Value * buff.CumulativeTickMultiplier;
-				if (totalModifier == 0) continue;
-
 				if (attributeController.TryGetAttribute(tickAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(-totalModifier);
+					characterAttribute.ClearSource(source);
 				}
 				else if (attributeController.TryGetResourceAttribute(tickAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(-totalModifier);
+					characterResourceAttribute.ClearSource(source);
 				}
 			}
 		}
@@ -115,23 +117,29 @@ namespace FishMMO.Shared
 			if (buff == null || target == null || TickAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			int multiplier = 1 + buff.Stacks;
+			/* The RUNNING TOTAL this tick leaves behind, not this tick's slice.
+			 *
+			 * Buff.TryTick adds (1 + Stacks) to CumulativeTickMultiplier AFTER this returns, so the
+			 * post-tick cumulative is the field plus this tick's own multiplier. Stating the total
+			 * means a tick that fires twice for the same buff — a replay, a duplicated dispatch —
+			 * leaves the same number rather than twice the number. */
+			int cumulative = buff.CumulativeTickMultiplier + 1 + buff.Stacks;
+			ModifierSource source = ModifierSource.Buff(ID);
 
 			for (int i = 0; i < TickAttributes.Count; i++)
 			{
 				BuffAttributeTemplate tickAttribute = TickAttributes[i];
 				if (tickAttribute?.Template == null) continue;
 
-				int modifier = tickAttribute.Value * multiplier;
-				if (modifier == 0) continue;
+				int modifier = tickAttribute.Value * cumulative;
 
 				if (attributeController.TryGetAttribute(tickAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddModifier(modifier);
+					characterAttribute.SetSource(source, modifier);
 				}
 				else if (attributeController.TryGetResourceAttribute(tickAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddModifier(modifier);
+					characterResourceAttribute.SetSource(source, modifier);
 				}
 			}
 

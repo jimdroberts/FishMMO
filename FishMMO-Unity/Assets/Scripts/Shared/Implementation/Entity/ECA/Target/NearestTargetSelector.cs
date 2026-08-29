@@ -79,6 +79,10 @@ namespace FishMMO.Shared
 			List<TargetRank> ranks = new List<TargetRank>();
 
 			Vector3 origin = context.transform.position;
+			/* The caster's own body, keyed the same way a hit is, so the exclusion below asks "is this
+			 * the caster" rather than "is this the caster's root transform" — see
+			 * TargetOrdering.ResolveObjectKey. */
+			GameObject contextKey = TargetOrdering.ResolveObjectKey(context);
 			PhysicsScene physicsScene = context.scene.GetPhysicsScene();
 			/* Re-queried until the buffer stops coming back full. A non-allocating query returns
 			 * at most buffer.Length results and says nothing about how many it discarded, and the
@@ -98,7 +102,18 @@ namespace FishMMO.Shared
 			for (int i = 0; i < hitCount; i++)
 			{
 				Collider hit = hits[i];
-				if (hit == null || hit.gameObject == context || !AreConditionsMet(hit.gameObject, eventData))
+				if (hit == null)
+				{
+					continue;
+				}
+				/* Compared on the resolved body, not on the collider. This read
+				 * `hit.gameObject == context`, which is false for a caster's own child hitbox — so a
+				 * caster rigged that way was a candidate for its own nearest-target selection.
+				 *
+				 * No dedupe pass here: this selector emits exactly one winner, and the nearest
+				 * collider of a body is the only winning entry that body could have contributed. */
+				if (ReferenceEquals(TargetOrdering.ResolveHitKey(hit, out ICharacter _), contextKey) ||
+					!AreConditionsMet(hit.gameObject, eventData))
 				{
 					continue;
 				}
