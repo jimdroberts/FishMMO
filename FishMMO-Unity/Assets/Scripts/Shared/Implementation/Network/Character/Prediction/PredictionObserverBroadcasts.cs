@@ -1,5 +1,7 @@
 using FishNet.Broadcast;
 using FishNet.CodeGenerating;
+using FishNet.Serializing;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -231,13 +233,171 @@ namespace FishMMO.Shared
 	/// budget: a character holding steady buffs sends nothing.
 	/// </para>
 	/// </remarks>
+	/// <remarks>
+	/// <para>
+	/// <b>Delta by default.</b> A structural change carries only the buffs that were added or whose
+	/// stack count moved, plus the template ids that left — one buff expiring costs one id, not the
+	/// character's whole strip. <see cref="IsFullSet"/> marks the messages that are authoritative
+	/// for the entire strip: the first push, a late observer's replay, and the periodic timing
+	/// resync. See <c>BuffController.PushObservedBuffs</c>.
+	/// </para>
+	/// <para>
+	/// <b>Why not FishNet's difference-encoded deltas.</b> Each entry carries its template id and
+	/// its absolute values, never an index into the receiver's previous array or a difference from
+	/// it. The observer set changes continuously as players move, and the sender keeps ONE baseline
+	/// per character rather than one per observer — so a difference encoded against "what I last
+	/// sent to anyone" is undecodable to whoever joined after that send. Absolute entries are
+	/// applicable no matter what state the receiver was in, which is what makes a single serialized
+	/// message safe to fan out to every observer.
+	/// </para>
+	/// </remarks>
+	[UseGlobalCustomSerializer]
 	public struct CharacterBuffsBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the character these buffs belong to.</summary>
 		public int CharacterObjectID;
 
-		/// <summary>The buffs this character's observers are allowed to see.</summary>
+		/// <summary>
+		/// True when <see cref="Buffs"/> is the character's entire visible strip rather than the
+		/// entries that changed.
+		/// </summary>
+		/// <remarks>
+		/// A receiver REPLACES its strip on a full set and MERGES on a delta. Unlike
+		/// <c>CharacterAttributesBroadcast</c> — whose sheet is fixed at spawn, so an omission means
+		/// "unchanged" — a buff strip gains and loses members constantly, which is why
+		/// <see cref="Removed"/> has to exist alongside this flag rather than being implied by
+		/// absence.
+		/// </remarks>
+		public bool IsFullSet;
+
+		/// <summary>The buffs that changed, or the whole visible strip when <see cref="IsFullSet"/>.</summary>
 		public ObservedBuffEntry[] Buffs;
+
+		/// <summary>
+		/// Template ids no longer visible on this character. Always empty when
+		/// <see cref="IsFullSet"/>, which states the whole strip on its own.
+		/// </summary>
+		public int[] Removed;
+	}
+
+	/// <summary>Wire format for <see cref="CharacterBuffsBroadcast"/>.</summary>
+	/// <remarks>
+	/// Hand written for the same reason <c>CharacterAttributesBroadcast</c> is: the generated array
+	/// serializer spends four bytes on each length and a sentinel on each null, where both counts
+	/// here are bounded by a character's buff strip and a null array is simply an empty one. The
+	/// caps also stop a malformed message allocating an arbitrarily large array before the stream
+	/// runs out.
+	/// </remarks>
+	public static class CharacterBuffsBroadcastSerializer
+	{
+		/// <summary>Hard cap on entries, and separately on removals, in one message.</summary>
+		/// <remarks>
+		/// Far above any real character's visible strip; small enough that either count fits a
+		/// <c>ushort</c>.
+		/// </remarks>
+		public const int MAX_BUFFS = 4096;
+
+		/// <summary>Writes a <see cref="CharacterBuffsBroadcast"/>.</summary>
+		public static void WriteCharacterBuffsBroadcast(this Writer writer, CharacterBuffsBroadcast value)
+		{
+			writer.WriteInt32(value.CharacterObjectID);
+			writer.WriteBoolean(value.IsFullSet);
+
+			int count = value.Buffs?.Length ?? 0;
+			if (count > MAX_BUFFS)
+			{
+				Log.Warning("CharacterBuffsBroadcast",
+					$"Write buff count {count} exceeds limit {MAX_BUFFS}. Truncating to preserve stream integrity.");
+				count = MAX_BUFFS;
+			}
+			writer.WriteUInt16((ushort)count);
+			for (int i = 0; i < count; ++i)
+			{
+				value.Buffs[i].WriteTo(writer);
+			}
+
+			/* A full set states the whole strip, so removals would be noise — and a receiver that
+			 * replaces rather than merges would never read them. Not written at all rather than
+			 * written as zero, because the reader knows the flag before it gets here. */
+			if (value.IsFullSet)
+			{
+				return;
+			}
+
+			int removedCount = value.Removed?.Length ?? 0;
+			if (removedCount > MAX_BUFFS)
+			{
+				Log.Warning("CharacterBuffsBroadcast",
+					$"Write removed count {removedCount} exceeds limit {MAX_BUFFS}. Truncating to preserve stream integrity.");
+				removedCount = MAX_BUFFS;
+			}
+			writer.WriteUInt16((ushort)removedCount);
+			for (int i = 0; i < removedCount; ++i)
+			{
+				// Unpacked for the same reason ObservedBuffEntry writes its id unpacked.
+				writer.WriteInt32Unpacked(value.Removed[i]);
+			}
+		}
+
+		/// <summary>Reads a <see cref="CharacterBuffsBroadcast"/>.</summary>
+		public static CharacterBuffsBroadcast ReadCharacterBuffsBroadcast(this Reader reader)
+		{
+			CharacterBuffsBroadcast value = new CharacterBuffsBroadcast()
+			{
+				CharacterObjectID = reader.ReadInt32(),
+				IsFullSet = reader.ReadBoolean(),
+				Buffs = System.Array.Empty<ObservedBuffEntry>(),
+				Removed = System.Array.Empty<int>(),
+			};
+
+			int count = reader.ReadUInt16();
+			if (count > MAX_BUFFS)
+			{
+				/* A broadcast is its own message with no outer frame to seek past, so discarding
+				 * costs this one update and nothing after it. Returning a FULL empty set would tell
+				 * the receiver to clear the strip, so the discard is reported as a delta. */
+				Log.Warning("CharacterBuffsBroadcast",
+					$"Read buff count {count} exceeds limit {MAX_BUFFS}. Discarding this update.");
+				value.IsFullSet = false;
+				return value;
+			}
+
+			if (count > 0)
+			{
+				ObservedBuffEntry[] entries = new ObservedBuffEntry[count];
+				for (int i = 0; i < count; ++i)
+				{
+					entries[i] = ObservedBuffEntry.ReadFrom(reader);
+				}
+				value.Buffs = entries;
+			}
+
+			if (value.IsFullSet)
+			{
+				return value;
+			}
+
+			int removedCount = reader.ReadUInt16();
+			if (removedCount > MAX_BUFFS)
+			{
+				Log.Warning("CharacterBuffsBroadcast",
+					$"Read removed count {removedCount} exceeds limit {MAX_BUFFS}. Discarding this update.");
+				value.Buffs = System.Array.Empty<ObservedBuffEntry>();
+				return value;
+			}
+
+			if (removedCount > 0)
+			{
+				int[] removed = new int[removedCount];
+				for (int i = 0; i < removedCount; ++i)
+				{
+					removed[i] = reader.ReadInt32Unpacked();
+				}
+				value.Removed = removed;
+			}
+
+			return value;
+		}
 	}
 
 	/// <summary>

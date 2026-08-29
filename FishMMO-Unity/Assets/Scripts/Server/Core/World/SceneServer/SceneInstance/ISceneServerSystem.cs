@@ -111,5 +111,19 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="sceneID">Scene row ID identifying the instance.</param>
 		/// <param name="amount">Amount to adjust by.</param>
 		void AdjustSceneCharacterCount(long worldServerID, string sceneName, long sceneID, int amount);
+
+		/// <summary>
+		/// Records that an instance's occupant left by choice rather than by losing its connection,
+		/// so an instance emptied this way is reclaimed immediately instead of being held for the
+		/// idle timeout.
+		/// </summary>
+		/// <remarks>
+		/// Call AFTER the departure has been debited from the instance's population. See
+		/// <see cref="ISceneInstanceDetails.VacatedDeliberately"/>.
+		/// </remarks>
+		/// <param name="worldServerID">World server ID.</param>
+		/// <param name="sceneName">Instance scene name.</param>
+		/// <param name="sceneID">Scene row ID identifying the instance.</param>
+		void NoteDeliberateInstanceExit(long worldServerID, string sceneName, long sceneID);
 	}
 }

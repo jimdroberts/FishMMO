@@ -169,6 +169,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Keys the scene server configuration may set to tune scene placement. Each is optional;
+		/// absent keys leave <see cref="SceneServerPlacementPolicy"/> at its defaults.
+		/// </summary>
+		private static readonly string[] PlacementConfigurationKeys =
+		{
+			"PlacementSoftCapScenes",
+			"PlacementHardCapScenes",
+			"PlacementSoftCapCharacters",
+			"PlacementHardCapCharacters",
+		};
+
+		/// <summary>
+		/// Pushes any placement keys present in the server configuration into
+		/// <see cref="SceneServerPlacementPolicy"/>. See that type for what each key means.
+		/// </summary>
+		private void ApplyPlacementConfiguration()
+		{
+			if (Server.Configuration == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < PlacementConfigurationKeys.Length; ++i)
+			{
+				string key = PlacementConfigurationKeys[i];
+				if (!Server.Configuration.TryGetInt(key, out int value))
+				{
+					continue;
+				}
+				if (!SceneServerPlacementPolicy.ApplySetting(key, value))
+				{
+					_ = Log.Warning("SceneServerSystem", $"Ignoring malformed placement setting {key}={value}");
+				}
+			}
+
+			/* Logged at startup because a misconfigured cap is otherwise invisible: it does not
+			 * error, it just quietly stops this server taking work and the symptom shows up on a
+			 * different machine as uneven load. */
+			_ = Log.Info("SceneServerSystem",
+				$"Scene placement: scenes soft={SceneServerPlacementPolicy.SoftCapScenes} " +
+				$"hard={SceneServerPlacementPolicy.HardCapScenes}, " +
+				$"characters soft={SceneServerPlacementPolicy.SoftCapCharacters} " +
+				$"hard={SceneServerPlacementPolicy.HardCapCharacters}");
+		}
+
+		/// <summary>
 		/// Initializes the system and registers it in the database without blocking the Unity
 		/// main thread.
 		/// </summary>
@@ -186,6 +232,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			ApplyObserverStreamingConfiguration();
+			ApplyPlacementConfiguration();
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneServerSystemMainThreadQueueData>(out _))
 			{
@@ -482,6 +529,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Records that an instance's occupant left by choice rather than by losing its connection.
+		/// </summary>
+		/// <remarks>
+		/// Called after the departure has been debited from the instance's population, so if this
+		/// was the last occupant the instance is already empty and the next pulse reclaims it
+		/// immediately instead of holding it for the idle timeout. See
+		/// <see cref="ISceneInstanceDetails.VacatedDeliberately"/> for why the two cases differ.
+		/// <para>
+		/// A missing instance is not an error here, unlike in
+		/// <see cref="AdjustSceneCharacterCount"/>: the instance may already have been unloaded by
+		/// the very departure being recorded, and the only consequence of not marking a scene that
+		/// no longer exists is nothing at all.
+		/// </para>
+		/// </remarks>
+		/// <param name="worldServerID">World server ID.</param>
+		/// <param name="sceneName">Instance scene name.</param>
+		/// <param name="sceneID">Scene row ID identifying the instance.</param>
+		public void NoteDeliberateInstanceExit(long worldServerID, string sceneName, long sceneID)
+		{
+			if (string.IsNullOrEmpty(sceneName))
+			{
+				return;
+			}
+
+			if (TryGetSceneInstanceDetails(worldServerID, sceneName, sceneID, out ISceneInstanceDetails instance))
+			{
+				instance.VacatedDeliberately = true;
+			}
+		}
+
+		/// <summary>
 		/// Periodic callback that sends heartbeat pulses and processes scene state.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
@@ -586,6 +664,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 								int staleSceneTimeoutMinutes = ResolveStaleTimeoutMinutes(sceneDetails.SceneType);
 
+								/* An instance everybody CHOSE to leave is finished, and the idle
+								 * timeout has nothing left to protect: it exists so a dropped
+								 * connection can reconnect into its run, and nobody here lost a
+								 * connection. Reclaimed on this pulse rather than in two minutes,
+								 * which is what frees the placement slot for the next party.
+								 *
+								 * Open world is excluded deliberately. A zone is shared, so the
+								 * last person walking out says nothing about whether anyone else
+								 * is about to walk in, and the short timeout is what absorbs a
+								 * player crossing a boundary and stepping back. */
+								if (sceneDetails.SceneType != SceneType.OpenWorld &&
+									sceneDetails.VacatedDeliberately)
+								{
+									staleSceneTimeoutMinutes = 0;
+								}
+
 								if (timeSinceLastExit < staleSceneTimeoutMinutes)
 								{
 									Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
@@ -653,11 +747,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// Instanced content is not open world and must not be measured as if it were. An
-		/// open-world zone is shared, expensive to spin up, and likely to be wanted again within
-		/// the hour, so holding an empty one is a reasonable trade. A dungeon instance belongs to
-		/// one character or party: once it empties, the odds of that exact group returning fall
-		/// away quickly, and every abandoned one holds a full physics scene and a scene row for
-		/// the same hour. On a busy shard that is the dominant source of idle scene load.
+		/// open-world zone is shared and worth holding briefly against the next arrival; a dungeon
+		/// instance belongs to one character or party, and once it empties the odds of that exact
+		/// group returning fall away quickly.
+		/// <para>
+		/// The open-world default was an hour, chosen when a scene server hosted few scenes and
+		/// respawning one was the expensive event. With placement spreading scenes across a cluster
+		/// (<c>SceneServerPlacementPolicy</c>), an idle scene is no longer free — it occupies a slot
+		/// in the placement budget that a populated scene could use, so a sparsely visited zone
+		/// could hold capacity for an hour after its last visitor left. Five minutes still absorbs
+		/// the common case (a player crossing a zone boundary and coming back) without holding a
+		/// physics scene and a scene row for a group that has gone.
+		/// </para>
 		/// <para>
 		/// The instance timeout is still generous enough to be a grace period rather than a
 		/// reclaim: a party that wipes and runs back, or a player who relogs, keeps the instance
@@ -673,7 +774,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>Timeout in minutes.</returns>
 		private int ResolveStaleTimeoutMinutes(SceneType sceneType)
 		{
-			const int DefaultOpenWorldStaleMinutes = 60;
+			const int DefaultOpenWorldStaleMinutes = 5;
 			const int DefaultInstanceStaleMinutes = 5;
 
 			bool instanced = sceneType != SceneType.OpenWorld;
@@ -1081,8 +1182,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Process pending scenes — bounded to maxScenesPerPulse to prevent DB flood
-				for (int s = 0; s < maxScenesPerPulse; s++)
+				/* Placement. maxScenesPerPulse bounds the DB flood; the policy bounds how much of
+				 * that this server should actually take given what it is already hosting.
+				 *
+				 * DequeueAsync is FOR UPDATE SKIP LOCKED take-the-oldest, so without this every
+				 * server races equally and whichever pulses first claims everything in its window —
+				 * load plays no part. Tapering the budget by local load is what makes an idle peer
+				 * win those races instead. A full server returns 0 and leaves the row queued for
+				 * one with room. */
+				int dequeueBudget = SceneServerPlacementPolicy.ResolveDequeueBudget(
+					pulseSnapshot.Count, characterCount, maxScenesPerPulse);
+
+				for (int s = 0; s < dequeueBudget; s++)
 				{
 					DatabaseResult<SceneData> dequeueResult = await sceneService.DequeueAsync();
 					if (!dequeueResult.IsSuccess)

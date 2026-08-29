@@ -2723,7 +2723,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dd7ed21472896145913b33dc80349f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxClients: 100
+  MaxClients: 200
   SceneTransitionImage: {fileID: 0}
   DefaultSceneFog: {fileID: 0}
   DayNightCycle: 1
