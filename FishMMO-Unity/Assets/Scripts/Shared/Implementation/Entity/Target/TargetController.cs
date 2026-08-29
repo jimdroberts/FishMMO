@@ -115,6 +115,32 @@ namespace FishMMO.Shared
 		/// </summary>
 		void Update()
 		{
+			/* Mouse targeting belongs to the player holding the mouse.
+			 *
+			 * This component sits on every playable character, so without this guard every copy of
+			 * every character runs it: on a client watching fifty other players, fifty instances
+			 * each read the local mouse, build the same ray from the same camera, and trace it.
+			 * They necessarily agree — there is one mouse — so forty-nine of those traces exist
+			 * only to arrive at the answer the fiftieth already had, and each is a physics raycast
+			 * (two, where the first ray starts inside the caster and has to be pushed through).
+			 *
+			 * The events are the more serious half. A non-owner instance that resolves a target
+			 * raises OnChangeTarget and fires the character's target triggers, so ECA logic hung on
+			 * "this character acquired a target" runs on other people's characters, driven by where
+			 * the local player happens to be pointing.
+			 *
+			 * A dedicated server never reaches any of it — this method is inside #if !UNITY_SERVER.
+			 * The editor is the exception that matters: UNITY_SERVER is undefined there, so an
+			 * in-editor scene server runs this for every character against the developer's mouse.
+			 *
+			 * Deliberately not a guard on the whole component. UpdateTarget is still called
+			 * directly, on the server, by the ability and pet systems with their own aim origins,
+			 * and that path — including its lag compensation — is untouched by this. */
+			if (!base.IsOwner)
+			{
+				return;
+			}
+
 			if (Camera.main == null)
 			{
 				return;
