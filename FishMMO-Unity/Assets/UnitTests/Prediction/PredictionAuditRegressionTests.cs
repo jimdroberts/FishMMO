@@ -3071,8 +3071,11 @@ namespace FishMMO.UnitTests
 				 * real initialisation — which is more setup than this test needs. Both properties
 				 * expose the live dictionaries. */
 				controller.Attributes[plain.ID] = new CharacterAttribute(controller, plain.ID, 50, 0);
+				/* Current value 0: ClampCurrentValue returns early below 0.001 and so never reaches
+				 * characterAttributeController.Character.Flags, which a bare controller has no
+				 * character for. This test is about the MODIFIER, not the depletable value. */
 				controller.ResourceAttributes[resourceTemplate.ID] =
-					new CharacterResourceAttribute(controller, resourceTemplate.ID, 100, 100f, 0);
+					new CharacterResourceAttribute(controller, resourceTemplate.ID, 100, 0f, 0);
 
 				ModifierSource region = ModifierSource.Region(77);
 				controller.Attributes[plain.ID].SetSource(region, 8);
