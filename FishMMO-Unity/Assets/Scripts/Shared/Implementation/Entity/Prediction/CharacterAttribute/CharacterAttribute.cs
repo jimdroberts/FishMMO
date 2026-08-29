@@ -27,6 +27,45 @@ namespace FishMMO.Shared
 		public long Version;
 
 		/// <summary>
+		/// Whether this attribute has changed since the database last confirmed it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The periodic save used to write every attribute of every resident character on every
+		/// pass, because it had no way to tell which had moved. Most have not: strength does not
+		/// drift while a player stands in a bank, and a character out of combat at full health
+		/// changes nothing at all between one save and the next.
+		/// </para>
+		/// <para>
+		/// Set from <see cref="Internal_OnAttributeChanged"/>, which is the single funnel every
+		/// real change already passes through — the setters ahead of it compare before they assign,
+		/// so an assignment of the same value never reaches it and never marks anything dirty.
+		/// Cleared only by <see cref="MarkPersisted"/>, once a write has actually landed.
+		/// </para>
+		/// </remarks>
+		public bool PersistenceDirty { get; protected set; }
+
+		/// <summary>
+		/// Clears <see cref="PersistenceDirty"/> if this attribute has not moved on since the
+		/// version that was written.
+		/// </summary>
+		/// <remarks>
+		/// The version check is what makes the save safe to run in the background. A save takes a
+		/// snapshot and completes some time later; if the attribute changed in that window its
+		/// version has advanced past the one written, and it stays dirty so the next pass picks it
+		/// up. A save that fails never calls this at all, so nothing is lost — the attribute is
+		/// simply written again on the following pass.
+		/// </remarks>
+		/// <param name="persistedVersion">The version that was successfully written.</param>
+		public void MarkPersisted(long persistedVersion)
+		{
+			if (Version == persistedVersion)
+			{
+				PersistenceDirty = false;
+			}
+		}
+
+		/// <summary>
 		/// The template that defines this attribute's configuration and formulas.
 		/// </summary>
 		public CharacterAttributeTemplate Template { get; private set; }
@@ -84,6 +123,14 @@ namespace FishMMO.Shared
 		/// <param name="item">The attribute that was changed.</param>
 		protected virtual void Internal_OnAttributeChanged(CharacterAttribute item)
 		{
+			/* Marked on the attribute that moved, not on this one. Propagation calls this on the
+			 * dependent whose value changed, and it is that attribute the database is now behind
+			 * on. */
+			if (item != null)
+			{
+				item.PersistenceDirty = true;
+			}
+
 			if (characterAttributeController != null && characterAttributeController.IsPropagating)
 			{
 				characterAttributeController.EnqueueNotification(item);
@@ -164,7 +211,18 @@ namespace FishMMO.Shared
 		/// <param name="newValue">The new base value.</param>
 		public void SetValueDirect(int newValue)
 		{
+			if (value == newValue)
+			{
+				return;
+			}
+
 			value = newValue;
+
+			/* Marked here as well as in Internal_OnAttributeChanged. This setter exists precisely to
+			 * write the value without raising the change event, so the funnel that normally records
+			 * the change never runs — and an attribute the database is behind on that does not say
+			 * so is one the periodic save silently stops writing. */
+			PersistenceDirty = true;
 		}
 
 		/// <summary>

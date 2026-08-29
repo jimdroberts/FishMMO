@@ -1003,6 +1003,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// would poison the batch upsert with a STALE_STATE rejection.
 				if (attr.Version <= 0)
 					continue;
+				/* Unchanged since the database last confirmed it, so there is nothing to write.
+				 * The row is not merely rejected further down — it is never built, never sent, and
+				 * never probed. */
+				if (!attr.PersistenceDirty)
+					continue;
 				attr.Version++;
 				attributes.Add(new CharacterAttributeData(
 					id: 0,
@@ -1017,6 +1022,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				var resAttr = kvp.Value;
 				if (resAttr.Version <= 0)
+					continue;
+				if (!resAttr.PersistenceDirty)
 					continue;
 				resAttr.Version++;
 				attributes.Add(new CharacterAttributeData(
@@ -1360,11 +1367,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				await BulkWriteReporting.ReportAsync("CharacterSystem", "Attribute save", await attrService.PersistAsync(attributes));
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Attribute save", await attrService.PersistAsync(attributes));
+
+				/* Only a write that landed clears the dirty marks, and it clears them back on the
+				 * main thread because that is the only thread the attributes are touched from.
+				 * A failed write leaves everything marked, so the next pass carries it — which is
+				 * the behaviour the unconditional save had by accident and this has to keep on
+				 * purpose, since the periodic path has no other retry. */
+				if (written)
+				{
+					TryEnqueueMainThread(() => MarkAttributesPersisted(attributes));
+				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SaveAttributesAsync failed: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Clears the dirty mark on every attribute a completed write covered.
+		/// </summary>
+		/// <remarks>
+		/// Runs on the main thread. Each attribute is cleared only if its version still matches the
+		/// one written: an attribute that moved while the save was in flight has advanced past it
+		/// and stays dirty, so the change that landed mid-write is not mistaken for one already
+		/// stored. A character that has since logged out is simply gone from the map and skipped.
+		/// </remarks>
+		/// <param name="attributes">The snapshot that was written.</param>
+		private void MarkAttributesPersisted(List<CharacterAttributeData> attributes)
+		{
+			if (attributes == null ||
+				Server?.DataContainerRegistry == null ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			{
+				return;
+			}
+
+			for (int i = 0; i < attributes.Count; ++i)
+			{
+				CharacterAttributeData saved = attributes[i];
+
+				if (!data.CharactersByID.TryGetValue(saved.CharacterID, out IPlayerCharacter character) ||
+					character == null ||
+					!character.TryGet(out ICharacterAttributeController attrController))
+				{
+					continue;
+				}
+
+				if (attrController.Attributes.TryGetValue(saved.TemplateID, out CharacterAttribute attribute))
+				{
+					attribute.MarkPersisted(saved.Version);
+				}
+				else if (attrController.ResourceAttributes.TryGetValue(saved.TemplateID, out CharacterResourceAttribute resourceAttribute))
+				{
+					resourceAttribute.MarkPersisted(saved.Version);
+				}
 			}
 		}
 
