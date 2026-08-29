@@ -257,6 +257,7 @@ MonoBehaviour:
   _defaultConditions:
   - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
   - {fileID: 11400000, guid: cc503f7541ebd424c94541e6a767efee, type: 2}
+  - {fileID: 11400000, guid: 1d2f22af61092f51f20328d598c6b50a, type: 2}
 --- !u!4 &3329575399928312653
 Transform:
   m_ObjectHideFlags: 0
@@ -446,7 +447,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Observing.HashGrid
   _gridAxes: 2
-  _accuracy: 70
+  _accuracy: 200
 --- !u!114 &8097462252018206298
 MonoBehaviour:
   m_ObjectHideFlags: 0

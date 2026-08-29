@@ -45,6 +45,18 @@ namespace FishMMO.Shared
 		/// <summary>The range most recently applied to the distance condition.</summary>
 		public float AppliedRange { get; private set; }
 
+		/// <summary>
+		/// Longest range among this character's known abilities, cached for the pass. Drives how far
+		/// out its own view must be tick-exact; see <c>ObserverStreamingPolicy.ResolveEngagementRange</c>.
+		/// </summary>
+		public float LongestAbilityRange { get; private set; }
+
+		/// <summary>
+		/// Object id of the character this one currently targets, or 0. Pinned into its visibility
+		/// budget so a fight cannot despawn its own target.
+		/// </summary>
+		public long CurrentTargetObjectId { get; private set; }
+
 		/// <summary>Party id cached for the current scheduling pass; 0 when none.</summary>
 		public long PartyID { get; private set; }
 
@@ -66,6 +78,8 @@ namespace FishMMO.Shared
 		private IPartyController partyController;
 		private IGuildController guildController;
 		private ICharacterDamageController damageController;
+		private IAbilityController abilityController;
+		private ITargetController targetController;
 		private bool behavioursResolved;
 
 		public ObserverStreamingEntry(NetworkObject networkObject, ICharacter character)
@@ -107,12 +121,26 @@ namespace FishMMO.Shared
 				Character.TryGet(out partyController);
 				Character.TryGet(out guildController);
 				Character.TryGet(out damageController);
+				Character.TryGet(out abilityController);
+				Character.TryGet(out targetController);
 				behavioursResolved = true;
 			}
 
 			PartyID = partyController != null ? partyController.ID : 0;
 			GuildID = guildController != null ? guildController.ID : 0;
 			InCombat = damageController != null && damageController.IsInCombat;
+			LongestAbilityRange = abilityController is AbilityController abilities ? abilities.LongestKnownAbilityRange : 0f;
+
+			CurrentTargetObjectId = 0;
+			if (targetController != null)
+			{
+				Transform target = targetController.Current.Target;
+				if (target != null && target.TryGetComponent(out NetworkObject targetObject))
+				{
+					CurrentTargetObjectId = targetObject.ObjectId;
+				}
+			}
+
 			Position = NetworkObject.transform.position;
 		}
 
