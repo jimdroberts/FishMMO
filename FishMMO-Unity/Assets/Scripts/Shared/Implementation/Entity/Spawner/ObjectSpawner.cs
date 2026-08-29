@@ -125,6 +125,53 @@ namespace FishMMO.Shared
 		public bool RandomRespawnTime = true;
 
 		/// <summary>
+		/// Shortest delay before re-testing a respawn that a condition refused, in seconds.
+		/// </summary>
+		/// <remarks>
+		/// Only reached when a timer is due but <see cref="OrConditions"/> or
+		/// <see cref="TrueConditions"/> said no — a dungeon spawner waiting on a living boss, say.
+		/// The deadline has already passed, so this decides how promptly the spawner notices the
+		/// condition clearing, and nothing else. Conditions are arbitrary user code and cannot be
+		/// subscribed to, so the only way to notice is to ask again.
+		/// <para>
+		/// Randomised between the two values so a room full of spawners blocked by the same boss do
+		/// not re-test in lockstep for the whole encounter.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Shortest delay before re-testing a respawn a condition refused, in seconds.")]
+		[Min(0.0f)]
+		public float BlockedRetryIntervalMinimum = 3.0f;
+
+		/// <summary>
+		/// Longest delay before re-testing a respawn that a condition refused, in seconds.
+		/// </summary>
+		[Tooltip("Longest delay before re-testing a respawn a condition refused, in seconds.")]
+		[Min(0.0f)]
+		public float BlockedRetryIntervalMaximum = 6.0f;
+
+		/// <summary>
+		/// Shortest delay the blocked-respawn re-test may actually use, whatever the inspector says.
+		/// </summary>
+		/// <remarks>
+		/// Guards the scheduler against a zero-length retry, which would schedule the re-test at the
+		/// moment of the refusal and spin the tick without the clock advancing.
+		/// </remarks>
+		public const float MinimumBlockedRetrySeconds = 0.1f;
+
+		/// <summary>
+		/// Version counter used by <see cref="ObjectSpawnerScheduler"/> to recognise superseded
+		/// wakes. Owned by the scheduler; nothing else should write it.
+		/// </summary>
+		[NonSerialized]
+		public int SchedulerStamp;
+
+		/// <summary>
+		/// When set, the time this spawner should be re-tested after a condition refused a respawn.
+		/// Cleared once a respawn succeeds or there is nothing due.
+		/// </summary>
+		private DateTime? blockedRetryUtc;
+
+		/// <summary>
 		/// If true, a random spawn position is picked inside the bounding box using the current position as the center.
 		/// </summary>
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
@@ -223,6 +270,10 @@ namespace FishMMO.Shared
 				// Add a new respawn time
 				SpawnableRespawnTimers.Add(respawnTime);
 			}
+
+			/* Enter the schedule. A spawner that filled to its cap above has no timers and is
+			 * deliberately not queued at all. */
+			ObjectSpawnerScheduler.Reschedule(this);
 		}
 
 		/// <summary>
@@ -256,11 +307,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called every frame. Attempts to respawn objects if conditions and timers are met.
+		/// Called when the network stops. Drops this spawner from the respawn schedule.
 		/// </summary>
-		void Update()
+		/// <remarks>
+		/// Without this a spawner in an unloaded scene stays queued and is woken against a
+		/// destroyed object. The scheduler tolerates that, but leaving it to tolerate it means the
+		/// heap carries entries for scenes that no longer exist.
+		/// </remarks>
+		public override void OnStopNetwork()
 		{
-			TryRespawn();
+			base.OnStopNetwork();
+
+			ObjectSpawnerScheduler.Unregister(this);
 		}
 
 #if UNITY_EDITOR
@@ -326,6 +384,11 @@ namespace FishMMO.Shared
 			{
 				ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
 			}
+
+			/* The death is the event the whole schedule turns on. The timer just added may fall
+			 * before the wake already queued for this spawner, so the queued one is superseded
+			 * rather than trusted. */
+			ObjectSpawnerScheduler.Reschedule(this);
 		}
 
 		/// <summary>
@@ -400,10 +463,97 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Reports when this spawner next needs looking at, for
+		/// <see cref="ObjectSpawnerScheduler"/>.
+		/// </summary>
+		/// <remarks>
+		/// Three answers, in priority order: a pending re-test after a condition refused, the
+		/// earliest respawn deadline, or nothing at all. "Nothing" is the important one — a spawner
+		/// at its cap, or with no timers, is not queued, which is what makes a full world cost
+		/// nothing rather than merely cost little.
+		/// </remarks>
+		/// <param name="dueUtc">Receives the time this spawner should next run.</param>
+		/// <returns>True when this spawner needs a scheduled wake.</returns>
+		internal bool TryGetNextWakeUtc(out DateTime dueUtc)
+		{
+			dueUtc = default;
+
+			if (Spawnables == null ||
+				Spawnables.Count < 1 ||
+				SpawnableRespawnTimers.Count < 1 ||
+				Spawned.Count >= MaxSpawnCount)
+			{
+				return false;
+			}
+
+			// A refused respawn re-tests on its own clock; its deadline has already passed, so the
+			// earliest timer would otherwise make this spin every frame.
+			if (blockedRetryUtc.HasValue)
+			{
+				dueUtc = blockedRetryUtc.Value;
+				return true;
+			}
+
+			dueUtc = SpawnableRespawnTimers[0];
+			for (int i = 1; i < SpawnableRespawnTimers.Count; ++i)
+			{
+				if (SpawnableRespawnTimers[i] < dueUtc)
+				{
+					dueUtc = SpawnableRespawnTimers[i];
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Runs one scheduled respawn pass. Called by <see cref="ObjectSpawnerScheduler"/>.
+		/// </summary>
+		/// <param name="nowUtc">The time the scheduler woke this spawner.</param>
+		internal void RunScheduledRespawn(DateTime nowUtc)
+		{
+			TryRespawn(nowUtc);
+		}
+
+		/// <summary>
 		/// Attempts to respawn objects if their timers have elapsed and respawn conditions are met.
 		/// </summary>
+		/// <remarks>
+		/// Public so anything holding a spawner can force an immediate attempt rather than waiting
+		/// for its scheduled wake. The scheduler reaches the same work through
+		/// <see cref="RunScheduledRespawn"/>.
+		/// </remarks>
 		public void TryRespawn()
 		{
+			TryRespawn(DateTime.UtcNow);
+
+			// A direct caller is outside the schedule, so the wake it just invalidated has to be
+			// replaced. The scheduler reschedules itself and does not reach this.
+			ObjectSpawnerScheduler.Reschedule(this);
+		}
+
+		/// <summary>
+		/// Attempts to respawn every object whose timer has elapsed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Respawn conditions are evaluated <b>once</b> for the whole pass, not once per due timer.
+		/// <c>OnCheckCondition</c> is handed only the spawner, so its answer cannot differ between
+		/// two timers in the same pass; asking repeatedly walked every condition's NPC list again
+		/// for each one, which cost the most in exactly the case that produces many due timers at
+		/// once — a group wiped together.
+		/// </para>
+		/// <para>
+		/// Every due timer is then consumed, rather than one per call. A spawner is capable of
+		/// refilling as fast as its deadlines allow; stopping after the first meant the refill rate
+		/// was capped by however often this ran, which is a property of the tick and not something
+		/// anybody authored.
+		/// </para>
+		/// </remarks>
+		/// <param name="nowUtc">The time to evaluate deadlines against.</param>
+		private void TryRespawn(DateTime nowUtc)
+		{
+			blockedRetryUtc = null;
+
 			if (Spawnables == null ||
 				Spawnables.Count < 1 ||
 				SpawnableRespawnTimers.Count < 1)
@@ -418,69 +568,120 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Nothing is due yet. Reached whenever a wake fires early, and on any direct call.
+			bool anyDue = false;
+			for (int i = 0; i < SpawnableRespawnTimers.Count; ++i)
+			{
+				if (nowUtc >= SpawnableRespawnTimers[i])
+				{
+					anyDue = true;
+					break;
+				}
+			}
+			if (!anyDue)
+			{
+				return;
+			}
+
+			if (!EvaluateRespawnConditions())
+			{
+				/* Refused. The deadline has already passed, so without a separate re-test time the
+				 * scheduler would wake this spawner again immediately and keep doing so for as long
+				 * as the condition holds — the per-frame poll this replaced, with extra steps. */
+				blockedRetryUtc = nowUtc.AddSeconds(ResolveBlockedRetryDelay());
+				return;
+			}
+
 			/* Iterate backwards. The body removes the entry it fires, and a forward loop that
 			 * removes mid-iteration skips the following element. */
 			for (int i = SpawnableRespawnTimers.Count - 1; i >= 0; --i)
 			{
-				DateTime respawnTime = SpawnableRespawnTimers[i];
-
-				if (DateTime.UtcNow >= respawnTime)
+				if (nowUtc < SpawnableRespawnTimers[i])
 				{
-					bool shouldRespawn = true;
+					continue;
+				}
 
-					// Check OR respawn conditions (any one must be true to allow respawn).
-					if (OrConditions != null &&
-						OrConditions.Count >= 1)
+				/* Remove the timer BEFORE spawning. SpawnObject clears the whole timer
+				 * list when it reaches MaxSpawnCount, and the old order then tried to
+				 * remove an index from a list that had just been emptied — the count
+				 * guard turned that into a silent no-op, leaving a consumed timer in
+				 * place whenever the spawner did not hit its cap. */
+				SpawnableRespawnTimers.RemoveAt(i);
+
+				SpawnObject();
+
+				// SpawnObject clears the list at the cap, which invalidates the loop index.
+				if (Spawned.Count >= MaxSpawnCount)
+				{
+					return;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Evaluates the OR and AND respawn condition sets for this spawner.
+		/// </summary>
+		/// <returns>True when a respawn is permitted.</returns>
+		private bool EvaluateRespawnConditions()
+		{
+			// Check OR respawn conditions (any one must be true to allow respawn).
+			if (OrConditions != null &&
+				OrConditions.Count >= 1)
+			{
+				bool any = false;
+				foreach (BaseRespawnCondition condition in OrConditions)
+				{
+					if (condition == null)
 					{
-						shouldRespawn = false;
-						foreach (BaseRespawnCondition condition in OrConditions)
-						{
-							if (condition == null)
-							{
-								continue;
-							}
-							if (condition.OnCheckCondition(this))
-							{
-								shouldRespawn = true;
-								break;
-							}
-						}
+						continue;
 					}
-
-					// Check AND respawn conditions (all must be true to allow respawn).
-					if (shouldRespawn &&
-						TrueConditions != null &&
-						TrueConditions.Count >= 1)
+					if (condition.OnCheckCondition(this))
 					{
-						foreach (BaseRespawnCondition condition in TrueConditions)
-						{
-							if (condition == null)
-							{
-								continue;
-							}
-							if (!condition.OnCheckCondition(this))
-							{
-								shouldRespawn = false;
-								break;
-							}
-						}
+						any = true;
+						break;
 					}
+				}
+				if (!any)
+				{
+					return false;
+				}
+			}
 
-					// If all respawn conditions are met, spawn the object and remove its timer.
-					if (shouldRespawn)
+			// Check AND respawn conditions (all must be true to allow respawn).
+			if (TrueConditions != null &&
+				TrueConditions.Count >= 1)
+			{
+				foreach (BaseRespawnCondition condition in TrueConditions)
+				{
+					if (condition == null)
 					{
-						/* Remove the timer BEFORE spawning. SpawnObject clears the whole timer
-						 * list when it reaches MaxSpawnCount, and the old order then tried to
-						 * remove an index from a list that had just been emptied — the count
-						 * guard turned that into a silent no-op, leaving a consumed timer in
-						 * place whenever the spawner did not hit its cap. */
-						SpawnableRespawnTimers.RemoveAt(i);
-
-						SpawnObject();
-						return;
+						continue;
+					}
+					if (!condition.OnCheckCondition(this))
+					{
+						return false;
 					}
 				}
 			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Picks a randomised delay before re-testing a respawn a condition refused.
+		/// </summary>
+		/// <returns>The delay in seconds.</returns>
+		private float ResolveBlockedRetryDelay()
+		{
+			/* Floored, not merely clamped to zero. A retry delay of zero schedules the re-test for
+			 * the instant it was refused, so the scheduler would pop this spawner, reschedule it to
+			 * now, and pop it again without the clock ever advancing — a hang, not a slow tick.
+			 * Zero is also the one value that cannot be what anybody meant: it asks for the
+			 * every-frame poll this replaced. */
+			float minimum = Mathf.Max(MinimumBlockedRetrySeconds, BlockedRetryIntervalMinimum);
+			float maximum = Mathf.Max(minimum, BlockedRetryIntervalMaximum);
+
+			return DeterministicRNG.Shared.Range(minimum, maximum);
 		}
 
 		/// <summary>
