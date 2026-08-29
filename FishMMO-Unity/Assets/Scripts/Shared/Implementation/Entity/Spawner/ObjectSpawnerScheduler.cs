@@ -5,178 +5,251 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Drives every <see cref="ObjectSpawner"/>'s respawn checks from one place, ordered by when
-	/// each spawner next needs looking at.
+	/// Runs the respawn checks for every <see cref="ObjectSpawner"/> that currently has something
+	/// to respawn, from one <c>Update</c> instead of one per spawner.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Spawners used to poll themselves: every spawner ran <c>Update</c> every frame and called
-	/// <c>TryRespawn</c>, which returned immediately when there was nothing to do. Correct, but the
-	/// cost is paid per spawner per frame whether or not anything is pending, so it scales with how
-	/// much world exists rather than with how much of it is happening. A world with a hundred
-	/// thousand spawners spent milliseconds per frame discovering there was nothing to do.
+	/// The interval a spawner polls on is still its own — see
+	/// <see cref="ObjectSpawner.RespawnCheckIntervalMinimum"/>. What changes here is which spawners
+	/// are asked at all. A spawner with nothing pending, which is most of them in a world at rest,
+	/// is not in the list and costs nothing whatsoever: not a check, not a gate comparison, and not
+	/// a <c>Update</c> dispatch.
 	/// </para>
 	/// <para>
-	/// This keeps the spawners in a min-heap keyed by their next wake time, so a frame in which
-	/// nothing is due costs one <see cref="DateTime"/> comparison for the entire scene regardless of
-	/// how many spawners exist. Work happens only when a deadline actually arrives.
-	/// </para>
-	/// <para>
-	/// <b>Staleness is handled by version stamp, not by removal.</b> A heap cannot cheaply move an
-	/// entry that is already in it, and a spawner's next wake time changes constantly — every death
-	/// adds a timer that may fall before the one currently scheduled. Rather than search the heap,
-	/// <see cref="Reschedule"/> bumps the spawner's stamp and pushes a fresh entry; any older entry
-	/// for that spawner is recognised as stale when it surfaces and dropped. That makes rescheduling
-	/// O(log n) with no search, at the cost of a heap that can hold several entries per spawner.
-	/// The heap is drained of stale entries as they surface, so the excess is bounded by how often
-	/// spawners reschedule rather than growing without limit.
+	/// <b>The list holds references, not scheduling state.</b> It is a plain
+	/// <see cref="List{T}"/> of spawners with membership maintained by swap-removal, so a spawner
+	/// occupies one reference while it has work and nothing at all when it does not. There is no
+	/// ordering structure, no queued entries, and no per-spawner allocation. Measured against
+	/// 100,000 spawners, whose own timer lists and spawned dictionaries come to roughly 107 MB, a
+	/// membership list covering a tenth of them adds about 0.25 MB.
 	/// </para>
 	/// </remarks>
 	public static class ObjectSpawnerScheduler
 	{
 		/// <summary>
-		/// One scheduled wake for one spawner.
+		/// The index stored on a spawner that is not currently in <see cref="active"/>.
 		/// </summary>
-		private struct Entry
-		{
-			/// <summary>When this spawner should next be looked at.</summary>
-			public DateTime DueUtc;
+		public const int NotActive = -1;
 
-			/// <summary>The spawner to wake.</summary>
-			public ObjectSpawner Spawner;
+		/// <summary>
+		/// How many frames one full pass over the active list is spread across.
+		/// </summary>
+		/// <remarks>
+		/// A spawner's own check interval is seconds long, so being visited within about a second
+		/// costs nothing anybody can observe and keeps the per-frame walk proportional to a slice of
+		/// the active list rather than all of it.
+		/// </remarks>
+		public const int FramesPerSweep = 60;
 
-			/// <summary>
-			/// The spawner's stamp at the moment this entry was pushed. When it no longer matches
-			/// the spawner's current stamp this entry has been superseded and must be discarded.
-			/// </summary>
-			public int Stamp;
-		}
+		/// <summary>Spawners with respawn work outstanding.</summary>
+		private static readonly List<ObjectSpawner> active = new List<ObjectSpawner>();
 
-		/// <summary>Binary min-heap of pending wakes, ordered by <see cref="Entry.DueUtc"/>.</summary>
-		private static readonly List<Entry> heap = new List<Entry>();
+		/// <summary>Position of the rolling sweep within <see cref="active"/>.</summary>
+		private static int cursor;
 
 		/// <summary>The behaviour that calls <see cref="Tick"/>, created on first use.</summary>
 		private static ObjectSpawnerSchedulerDriver driver;
 
 		/// <summary>
-		/// Number of wakes currently queued, including entries that have been superseded but not
-		/// yet surfaced. Exposed for tests and diagnostics.
+		/// How many spawners currently have work outstanding. Exposed for tests and diagnostics.
 		/// </summary>
-		public static int QueuedCount => heap.Count;
+		public static int ActiveCount => active.Count;
 
 		/// <summary>
-		/// Queues <paramref name="spawner"/> to be looked at when it next needs it, superseding any
-		/// wake already queued for it.
+		/// Brings <paramref name="spawner"/> into or out of the active list to match whether it has
+		/// anything to respawn.
 		/// </summary>
 		/// <remarks>
-		/// Call after anything that changes when the spawner next has work: a despawn adding a
-		/// respawn timer, a spawn consuming one, or the spawner reaching its cap and clearing them.
-		/// A spawner with nothing pending is simply not queued, which is what makes an idle world
-		/// free rather than merely cheap.
+		/// Call after anything that changes that: a despawn adding a respawn timer, a spawn
+		/// consuming one, or the spawner reaching its cap and clearing them. Idempotent, so callers
+		/// need not track whether the spawner was already in the list.
 		/// </remarks>
-		/// <param name="spawner">The spawner to reschedule.</param>
-		public static void Reschedule(ObjectSpawner spawner)
+		/// <param name="spawner">The spawner whose membership should be refreshed.</param>
+		public static void Refresh(ObjectSpawner spawner)
 		{
 			if (spawner == null)
 			{
 				return;
 			}
 
-			// Supersede whatever was queued for this spawner, whether or not it needs a new wake.
-			unchecked
+			if (spawner.HasRespawnWork())
 			{
-				++spawner.SchedulerStamp;
+				Add(spawner);
+			}
+			else
+			{
+				Remove(spawner);
+			}
+		}
+
+		/// <summary>
+		/// Drops <paramref name="spawner"/> from the active list.
+		/// </summary>
+		/// <remarks>
+		/// Call from <c>OnStopNetwork</c>, so a spawner in an unloaded scene is not walked and its
+		/// reference is not held.
+		/// </remarks>
+		/// <param name="spawner">The spawner to drop.</param>
+		public static void Unregister(ObjectSpawner spawner)
+		{
+			Remove(spawner);
+		}
+
+		/// <summary>
+		/// Gives every spawner with outstanding work the chance to run its respawn check.
+		/// </summary>
+		/// <remarks>
+		/// Each spawner decides for itself whether its own interval has elapsed, so this walk is a
+		/// float comparison per active spawner and nothing more. Spawners that finish their work
+		/// leave the list here rather than being left to be skipped over on later frames.
+		/// </remarks>
+		/// <param name="nowUtc">The current UTC time, for evaluating respawn deadlines.</param>
+		public static void Tick(DateTime nowUtc)
+		{
+			Tick(nowUtc, Time.time);
+		}
+
+
+		/// <summary>
+		/// Gives a slice of the spawners with outstanding work the chance to run their respawn check.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The list is swept rather than walked: each frame advances a cursor through a fraction of
+		/// it, so every active spawner is visited about once per <see cref="FramesPerSweep"/> frames
+		/// instead of every frame. Their own interval gate is measured in seconds
+		/// (<see cref="ObjectSpawner.RespawnCheckIntervalMinimum"/>), so visiting more often than
+		/// that buys nothing — it only moves the cost from the spawners that have work to the ones
+		/// that are merely waiting, which is most of them.
+		/// </para>
+		/// <para>
+		/// <see cref="Time.time"/> is read once by the caller rather than by each spawner. It is a
+		/// native property, and crossing into the engine per active spawner per frame cost more than
+		/// everything else in this walk put together.
+		/// </para>
+		/// <para>
+		/// The dangling-reference check is <see cref="object.ReferenceEquals(object, object)"/> and
+		/// not <c>== null</c> on purpose. Unity overloads that operator to ask the engine whether the
+		/// native object is still alive, which is another crossing per entry per frame. Membership is
+		/// maintained on destruction instead, so a plain reference check is all this needs.
+		/// </para>
+		/// </remarks>
+		/// <param name="nowUtc">The current UTC time, for evaluating respawn deadlines.</param>
+		/// <param name="nowTime">The current <see cref="Time.time"/>, for the interval gates.</param>
+		public static void Tick(DateTime nowUtc, float nowTime)
+		{
+			int count = active.Count;
+			if (count < 1)
+			{
+				return;
 			}
 
-			if (!spawner.TryGetNextWakeUtc(out DateTime dueUtc))
+			// Round up, so a list shorter than the sweep still finishes inside one sweep.
+			int slice = (count + FramesPerSweep - 1) / FramesPerSweep;
+
+			for (int visited = 0; visited < slice && active.Count > 0; ++visited)
+			{
+				if (cursor >= active.Count)
+				{
+					cursor = 0;
+				}
+
+				ObjectSpawner spawner = active[cursor];
+
+				if (ReferenceEquals(spawner, null))
+				{
+					// Never registered as destroyed; drop the dangling reference.
+					RemoveAt(cursor);
+					continue;
+				}
+
+				spawner.RunScheduledRespawn(nowUtc, nowTime);
+
+				if (spawner.HasRespawnWork())
+				{
+					++cursor;
+					continue;
+				}
+
+				/* Finished. Removal swaps the last entry into this slot, so the cursor stays put:
+				 * whatever was moved here has not been visited in this sweep yet. */
+				RemoveAt(cursor);
+			}
+		}
+
+		/// <summary>
+		/// Empties the active list. Intended for tests and for a clean shutdown between sessions.
+		/// </summary>
+		public static void Clear()
+		{
+			for (int i = 0; i < active.Count; ++i)
+			{
+				if (active[i] != null)
+				{
+					active[i].SchedulerIndex = NotActive;
+				}
+			}
+			active.Clear();
+			cursor = 0;
+		}
+
+		/// <summary>
+		/// Adds a spawner to the active list if it is not already in it.
+		/// </summary>
+		/// <param name="spawner">The spawner to add.</param>
+		private static void Add(ObjectSpawner spawner)
+		{
+			if (spawner.SchedulerIndex != NotActive)
 			{
 				return;
 			}
 
 			EnsureDriver();
-			Push(new Entry
-			{
-				DueUtc = dueUtc,
-				Spawner = spawner,
-				Stamp = spawner.SchedulerStamp,
-			});
+
+			spawner.SchedulerIndex = active.Count;
+			active.Add(spawner);
 		}
 
 		/// <summary>
-		/// Drops <paramref name="spawner"/> from the schedule.
+		/// Removes a spawner from the active list if it is in it.
 		/// </summary>
-		/// <remarks>
-		/// Bumping the stamp is the removal: entries already in the heap become stale and are
-		/// discarded when they surface. Call from <c>OnStopNetwork</c> so a spawner in an unloaded
-		/// scene is never woken.
-		/// </remarks>
-		/// <param name="spawner">The spawner to drop.</param>
-		public static void Unregister(ObjectSpawner spawner)
+		/// <param name="spawner">The spawner to remove.</param>
+		private static void Remove(ObjectSpawner spawner)
 		{
-			if (spawner == null)
+			if (spawner == null || spawner.SchedulerIndex == NotActive)
 			{
 				return;
 			}
 
-			unchecked
-			{
-				++spawner.SchedulerStamp;
-			}
+			RemoveAt(spawner.SchedulerIndex);
 		}
 
 		/// <summary>
-		/// Wakes every spawner whose scheduled time has arrived.
+		/// Removes the entry at <paramref name="index"/> by swapping the last entry into its place.
 		/// </summary>
-		/// <remarks>
-		/// The common case is that the earliest entry is not yet due, which costs one comparison for
-		/// the whole scene. Each woken spawner reschedules itself, so a spawner that is blocked by a
-		/// respawn condition comes back for another attempt rather than being forgotten.
-		/// </remarks>
-		/// <param name="nowUtc">The current UTC time.</param>
-		public static void Tick(DateTime nowUtc)
+		/// <param name="index">The index to remove.</param>
+		private static void RemoveAt(int index)
 		{
-			/* Each pass pops one entry and re-queues at most one, so a well-behaved schedule cannot
-			 * exceed the entries present when the tick began. The budget matters because a spawner
-			 * that reschedules itself to a time already past would otherwise be popped forever
-			 * inside one frame: the clock does not advance during a tick, so nothing would end the
-			 * loop. Running out of budget degrades that spawner to being handled next frame - the
-			 * poll this replaced - rather than hanging the server. */
-			int budget = heap.Count + 1;
+			int last = active.Count - 1;
 
-			while (heap.Count > 0 && heap[0].DueUtc <= nowUtc && budget-- > 0)
+			ObjectSpawner removed = active[index];
+			if (removed != null)
 			{
-				Entry entry = Pop();
-
-				ObjectSpawner spawner = entry.Spawner;
-				if (spawner == null)
-				{
-					// Destroyed without unregistering. Dropping the entry is the whole cleanup.
-					continue;
-				}
-
-				if (entry.Stamp != spawner.SchedulerStamp)
-				{
-					// Superseded by a later Reschedule, or unregistered. A fresher entry either
-					// already exists or the spawner deliberately has none.
-					continue;
-				}
-
-				spawner.RunScheduledRespawn(nowUtc);
-
-				/* Unconditionally, and after the work rather than before it. The spawner may have
-				 * consumed a timer, been blocked by a condition, or hit its cap, and only it knows
-				 * which — asking it again is how a blocked spawner gets a retry instead of falling
-				 * out of the schedule for good. */
-				Reschedule(spawner);
+				removed.SchedulerIndex = NotActive;
 			}
-		}
 
-		/// <summary>
-		/// Clears the schedule. Intended for tests and for a clean shutdown between play sessions.
-		/// </summary>
-		public static void Clear()
-		{
-			heap.Clear();
+			if (index != last)
+			{
+				ObjectSpawner moved = active[last];
+				active[index] = moved;
+				if (moved != null)
+				{
+					moved.SchedulerIndex = index;
+				}
+			}
+
+			active.RemoveAt(last);
 		}
 
 		/// <summary>
@@ -203,71 +276,6 @@ namespace FishMMO.Shared
 
 			UnityEngine.Object.DontDestroyOnLoad(host);
 			driver = host.AddComponent<ObjectSpawnerSchedulerDriver>();
-		}
-
-		/// <summary>
-		/// Inserts an entry, sifting it up to its ordered position.
-		/// </summary>
-		/// <param name="entry">The entry to insert.</param>
-		private static void Push(Entry entry)
-		{
-			heap.Add(entry);
-
-			int index = heap.Count - 1;
-			while (index > 0)
-			{
-				int parent = (index - 1) / 2;
-				if (heap[parent].DueUtc <= heap[index].DueUtc)
-				{
-					break;
-				}
-
-				Entry swap = heap[parent];
-				heap[parent] = heap[index];
-				heap[index] = swap;
-				index = parent;
-			}
-		}
-
-		/// <summary>
-		/// Removes and returns the earliest entry, sifting the last entry down into its place.
-		/// </summary>
-		/// <returns>The entry with the earliest due time.</returns>
-		private static Entry Pop()
-		{
-			Entry top = heap[0];
-
-			int last = heap.Count - 1;
-			heap[0] = heap[last];
-			heap.RemoveAt(last);
-
-			int index = 0;
-			while (true)
-			{
-				int left = (2 * index) + 1;
-				int right = left + 1;
-				int smallest = index;
-
-				if (left < heap.Count && heap[left].DueUtc < heap[smallest].DueUtc)
-				{
-					smallest = left;
-				}
-				if (right < heap.Count && heap[right].DueUtc < heap[smallest].DueUtc)
-				{
-					smallest = right;
-				}
-				if (smallest == index)
-				{
-					break;
-				}
-
-				Entry swap = heap[smallest];
-				heap[smallest] = heap[index];
-				heap[index] = swap;
-				index = smallest;
-			}
-
-			return top;
 		}
 	}
 }

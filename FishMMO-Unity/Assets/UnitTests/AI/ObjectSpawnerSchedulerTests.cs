@@ -8,14 +8,15 @@ using FishMMO.Shared.Core;
 namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
-	/// Proofs for the scheduled respawn tick that replaced the per-spawner <c>Update</c> poll.
+	/// Proofs for the active list that replaced the per-spawner respawn <c>Update</c>.
 	/// </summary>
 	/// <remarks>
 	/// Two classes of defect are pinned here. The first is the point of the change: a spawner with
-	/// nothing pending must not be queued at all, or the cost goes back to scaling with how much
-	/// world exists. The second is what a schedule can get wrong that a poll cannot — a spawner
-	/// that drops out of the queue and is never looked at again. A poll forgives that by definition;
-	/// a schedule does not, and the failure is silent.
+	/// nothing to respawn must not be in the list at all, or the cost goes back to scaling with how
+	/// much world exists rather than with how much of it is in motion. The second is what
+	/// maintaining membership can get wrong that a blanket poll cannot — a spawner that leaves the
+	/// list and is never asked again. A poll forgives that by definition; a membership list does
+	/// not, and the failure is silent.
 	/// </remarks>
 	[TestFixture]
 	public class ObjectSpawnerSchedulerTests
@@ -50,6 +51,8 @@ namespace FishMMO.UnitTests.AI
 		/// The settings entry carries a null <c>NetworkObject</c>, which <c>SpawnObject</c> treats
 		/// as nothing to spawn and returns on. Everything up to that point — the guards, the
 		/// condition evaluation, the timer bookkeeping — is the code under test and runs for real.
+		/// The check interval is zeroed so a test tick is never swallowed by the spawner's own gate;
+		/// that gate is Jim's and is covered by SpawnerSettingsTests.
 		/// </remarks>
 		private ObjectSpawner NewSpawner(int maxSpawnCount = 10)
 		{
@@ -61,56 +64,85 @@ namespace FishMMO.UnitTests.AI
 			spawner.Spawnables = new List<SpawnableSettings> { new ItemSpawnableSettings() };
 			spawner.SpawnableRespawnTimers = new List<DateTime>();
 			spawner.Spawned = new Dictionary<long, ISpawnable>();
+			spawner.RespawnCheckIntervalMinimum = 0.0f;
+			spawner.RespawnCheckIntervalMaximum = 0.0f;
 			return spawner;
 		}
 
-		// --- Not being queued at all is the whole point ----------------------------------------
+		// --- Not being in the list at all is the whole point ------------------------------------
 
 		[Test]
-		public void SpawnerAtItsCap_IsNotQueued()
+		public void SpawnerAtItsCap_IsNotInTheActiveList()
 		{
-			/* The original question: ten monsters, none killed. A full spawner must leave the
-			 * schedule entirely rather than be woken to discover it has nothing to do. */
+			/* The original question: ten monsters, none killed. A full spawner must leave the list
+			 * entirely rather than be walked to discover it has nothing to do. */
 			ObjectSpawner spawner = NewSpawner(maxSpawnCount: 2);
 			spawner.Spawned[1] = null;
 			spawner.Spawned[2] = null;
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1));
 
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
-			Assert.AreEqual(0, ObjectSpawnerScheduler.QueuedCount,
-				"A spawner at its cap has no work and must not hold a wake.");
+			Assert.AreEqual(0, ObjectSpawnerScheduler.ActiveCount,
+				"A spawner at its cap has no work and must not be walked.");
 		}
 
 		[Test]
-		public void SpawnerWithNoPendingTimers_IsNotQueued()
+		public void SpawnerWithNoPendingTimers_IsNotInTheActiveList()
 		{
 			ObjectSpawner spawner = NewSpawner();
 
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
-			Assert.AreEqual(0, ObjectSpawnerScheduler.QueuedCount);
+			Assert.AreEqual(0, ObjectSpawnerScheduler.ActiveCount);
 		}
 
 		[Test]
-		public void SpawnerWithAPendingTimer_IsQueued()
+		public void SpawnerWithAPendingTimer_JoinsTheActiveList()
 		{
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(30.0));
 
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
-			Assert.AreEqual(1, ObjectSpawnerScheduler.QueuedCount);
+			Assert.AreEqual(1, ObjectSpawnerScheduler.ActiveCount);
 		}
 
-		// --- Deadlines ------------------------------------------------------------------------
+		[Test]
+		public void RefreshingTwice_AddsTheSpawnerOnce()
+		{
+			ObjectSpawner spawner = NewSpawner();
+			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(30.0));
+
+			ObjectSpawnerScheduler.Refresh(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
+
+			Assert.AreEqual(1, ObjectSpawnerScheduler.ActiveCount,
+				"Membership is a set; refreshing is not the same as enqueuing.");
+		}
+
+		[Test]
+		public void ASpawnerThatFinishesItsWork_LeavesTheActiveList()
+		{
+			ObjectSpawner spawner = NewSpawner();
+			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
+			ObjectSpawnerScheduler.Refresh(spawner);
+
+			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
+
+			Assert.AreEqual(0, ObjectSpawnerScheduler.ActiveCount,
+				"Nothing left to respawn, so nothing left to walk.");
+		}
+
+		// --- Deadlines --------------------------------------------------------------------------
 
 		[Test]
 		public void TickBeforeTheDeadline_LeavesTheTimerAlone()
 		{
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(30.0));
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
@@ -122,16 +154,17 @@ namespace FishMMO.UnitTests.AI
 		public void TickAfterTheDeadline_ConsumesEveryDueTimerInOnePass()
 		{
 			/* The refill-rate cap. The walk used to spawn one object and return, so a group wiped
-			 * together refilled at one per tick — a rate set by how often the tick ran rather than
-			 * by the respawn times anybody authored. Behind a multi-second gate that is the
-			 * difference between a camp returning in seconds and in the best part of a minute. */
+			 * together refilled at one per check — a rate set by the polling interval rather than by
+			 * the respawn times anybody authored. At frame rate that was invisible; behind a
+			 * multi-second interval it is the difference between a camp returning in seconds and in
+			 * the better part of a minute, and no MinimumRespawnTime can ask for faster. */
 			ObjectSpawner spawner = NewSpawner();
 			DateTime past = DateTime.UtcNow.AddSeconds(-1.0);
 			for (int i = 0; i < 5; ++i)
 			{
 				spawner.SpawnableRespawnTimers.Add(past);
 			}
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
@@ -145,7 +178,7 @@ namespace FishMMO.UnitTests.AI
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(600.0));
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
@@ -154,83 +187,39 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		[Test]
-		public void ASpawnerWithWorkRemaining_StaysQueuedAfterItsPass()
+		public void ASpawnerWithWorkRemaining_StaysInTheActiveList()
 		{
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(600.0));
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
-			Assert.AreEqual(1, ObjectSpawnerScheduler.QueuedCount,
-				"The remaining deadline still needs a wake.");
+			Assert.AreEqual(1, ObjectSpawnerScheduler.ActiveCount,
+				"The remaining deadline still needs looking at.");
 		}
 
-		// --- The failure a schedule can have and a poll cannot ---------------------------------
+		// --- The failure a membership list can have and a blanket poll cannot -------------------
 
 		[Test]
-		public void ARefusedRespawn_StaysInTheSchedule()
+		public void ARefusedRespawn_StaysInTheActiveList()
 		{
 			/* The defect this design is most exposed to. A condition that says no consumes no
-			 * timer, so a scheduler that only re-queues on progress drops the spawner for good and
-			 * the camp never comes back once the boss dies. Silent, and no test that kills a single
-			 * monster would ever see it. */
+			 * timer, so a list that only kept spawners which made progress would drop this one for
+			 * good and the camp would never come back once the boss died. Silent, and no test that
+			 * kills a single monster would ever see it. */
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
 			spawner.TrueConditions.Add(NewCondition(spawner, allow: false));
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
 			Assert.AreEqual(1, spawner.SpawnableRespawnTimers.Count,
 				"A refused respawn must not consume its deadline.");
-			Assert.AreEqual(1, ObjectSpawnerScheduler.QueuedCount,
-				"A refused spawner must remain queued, or it is never asked again.");
-		}
-
-		[Test]
-		public void ARefusedRespawn_DoesNotRetryOnTheVeryNextTick()
-		{
-			/* The other half: the deadline has already passed, so re-queueing on the deadline would
-			 * wake this spawner every single frame for as long as the condition holds - the poll
-			 * that was just removed, wearing a hat. */
-			ObjectSpawner spawner = NewSpawner();
-			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-			CountingRespawnCondition condition = NewCondition(spawner, allow: false);
-			spawner.TrueConditions.Add(condition);
-			ObjectSpawnerScheduler.Reschedule(spawner);
-
-			DateTime now = DateTime.UtcNow;
-			ObjectSpawnerScheduler.Tick(now);
-			int afterFirst = condition.Calls;
-
-			ObjectSpawnerScheduler.Tick(now);
-
-			Assert.AreEqual(afterFirst, condition.Calls,
-				"The retry is on its own clock; an immediate second tick must not re-test.");
-		}
-
-		[Test]
-		public void ARefusedRespawn_RetriesOnceItsDelayHasPassed()
-		{
-			ObjectSpawner spawner = NewSpawner();
-			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-			CountingRespawnCondition condition = NewCondition(spawner, allow: false);
-			spawner.BlockedRetryIntervalMinimum = 1.0f;
-			spawner.BlockedRetryIntervalMaximum = 2.0f;
-			spawner.TrueConditions.Add(condition);
-			ObjectSpawnerScheduler.Reschedule(spawner);
-
-			DateTime now = DateTime.UtcNow;
-			ObjectSpawnerScheduler.Tick(now);
-			int afterFirst = condition.Calls;
-
-			// Past the longest retry delay this spawner can pick.
-			ObjectSpawnerScheduler.Tick(now.AddSeconds(3.0));
-
-			Assert.Greater(condition.Calls, afterFirst,
-				"Once the retry delay elapses the condition must be asked again.");
+			Assert.AreEqual(1, ObjectSpawnerScheduler.ActiveCount,
+				"A refused spawner must stay in the list, or it is never asked again.");
 		}
 
 		[Test]
@@ -239,22 +228,20 @@ namespace FishMMO.UnitTests.AI
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
 			CountingRespawnCondition condition = NewCondition(spawner, allow: false);
-			spawner.BlockedRetryIntervalMinimum = 1.0f;
-			spawner.BlockedRetryIntervalMaximum = 2.0f;
 			spawner.TrueConditions.Add(condition);
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
-			DateTime now = DateTime.UtcNow;
-			ObjectSpawnerScheduler.Tick(now);
+			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
+			Assert.AreEqual(1, spawner.SpawnableRespawnTimers.Count, "Still blocked.");
 
 			condition.Allow = true;
-			ObjectSpawnerScheduler.Tick(now.AddSeconds(3.0));
+			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
 			Assert.AreEqual(0, spawner.SpawnableRespawnTimers.Count,
 				"The boss is dead; the camp should come back.");
 		}
 
-		// --- Conditions are a spawner-wide answer, not a per-timer one -------------------------
+		// --- Conditions are a spawner-wide answer, not a per-timer one ---------------------------
 
 		[Test]
 		public void Conditions_AreEvaluatedOncePerPass_NotOncePerDueTimer()
@@ -271,7 +258,7 @@ namespace FishMMO.UnitTests.AI
 			}
 			CountingRespawnCondition condition = NewCondition(spawner, allow: true);
 			spawner.TrueConditions.Add(condition);
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
@@ -279,111 +266,129 @@ namespace FishMMO.UnitTests.AI
 				"Six due timers is still one question.");
 		}
 
-		[Test]
-		public void AZeroRetryInterval_DoesNotHangTheTick()
-		{
-			/* A retry delay of zero schedules the re-test at the instant of the refusal. The clock
-			 * does not advance inside a tick, so popping and re-queueing that spawner would never
-			 * terminate. Zero is reachable straight from the inspector - both fields are [Min(0)] -
-			 * so this has to be survivable rather than merely discouraged. */
-			ObjectSpawner spawner = NewSpawner();
-			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-			spawner.BlockedRetryIntervalMinimum = 0.0f;
-			spawner.BlockedRetryIntervalMaximum = 0.0f;
-			spawner.TrueConditions.Add(NewCondition(spawner, allow: false));
-			ObjectSpawnerScheduler.Reschedule(spawner);
-
-			// Fails by hanging rather than by asserting, so the timeout is the real assertion.
-			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
-
-			Assert.Pass("The tick terminated.");
-		}
-
-		// --- Schedule bookkeeping ---------------------------------------------------------------
+		// --- Membership bookkeeping --------------------------------------------------------------
 
 		[Test]
-		public void Unregister_PreventsTheQueuedWakeFromFiring()
+		public void Unregister_TakesTheSpawnerOutOfTheWalk()
 		{
 			ObjectSpawner spawner = NewSpawner();
 			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-			ObjectSpawnerScheduler.Reschedule(spawner);
+			ObjectSpawnerScheduler.Refresh(spawner);
 
 			ObjectSpawnerScheduler.Unregister(spawner);
 			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
 
 			Assert.AreEqual(1, spawner.SpawnableRespawnTimers.Count,
-				"An unregistered spawner - an unloaded scene, say - must not be woken.");
+				"An unregistered spawner - an unloaded scene, say - must not be walked.");
 		}
 
 		[Test]
-		public void ReschedulingTwice_RunsTheSpawnerOnce()
+		public void RemovingFromTheMiddle_DoesNotStrandTheSpawnerThatTookItsPlace()
 		{
-			/* Rescheduling pushes rather than moving, so a spawner that reschedules often leaves
-			 * superseded entries behind it. Each must be recognised and dropped, or one death
-			 * produces several respawns. */
-			ObjectSpawner spawner = NewSpawner();
-			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-
-			ObjectSpawnerScheduler.Reschedule(spawner);
-			ObjectSpawnerScheduler.Reschedule(spawner);
-			ObjectSpawnerScheduler.Reschedule(spawner);
-			Assert.AreEqual(3, ObjectSpawnerScheduler.QueuedCount,
-				"Superseded entries are expected to still be in the heap.");
-
-			CountingRespawnCondition condition = NewCondition(spawner, allow: true);
-			spawner.TrueConditions.Add(condition);
-
-			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
-
-			Assert.AreEqual(1, condition.Calls,
-				"Only the current entry should run; the superseded ones are stale.");
-		}
-
-		[Test]
-		public void StaleEntries_AreDrainedRatherThanAccumulating()
-		{
-			ObjectSpawner spawner = NewSpawner();
-			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-
-			for (int i = 0; i < 20; ++i)
+			/* Membership is maintained by swapping the last entry into the vacated slot, which is
+			 * what keeps removal O(1). Get the moved spawner's stored index wrong and it is either
+			 * walked twice or dropped silently, and dropped is the one nobody notices. */
+			ObjectSpawner first = NewSpawner();
+			ObjectSpawner second = NewSpawner();
+			ObjectSpawner third = NewSpawner();
+			foreach (ObjectSpawner s in new[] { first, second, third })
 			{
-				ObjectSpawnerScheduler.Reschedule(spawner);
+				s.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(600.0));
+				ObjectSpawnerScheduler.Refresh(s);
 			}
 
-			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
+			// Take the middle one out; the third is swapped into its slot.
+			ObjectSpawnerScheduler.Unregister(second);
 
-			Assert.AreEqual(0, ObjectSpawnerScheduler.QueuedCount,
-				"Every stale entry should have been dropped as it surfaced.");
+			Assert.AreEqual(2, ObjectSpawnerScheduler.ActiveCount);
+
+			// If third's index was not repaired, removing it now corrupts the list.
+			ObjectSpawnerScheduler.Unregister(third);
+
+			Assert.AreEqual(1, ObjectSpawnerScheduler.ActiveCount);
+			ObjectSpawnerScheduler.Unregister(first);
+			Assert.AreEqual(0, ObjectSpawnerScheduler.ActiveCount,
+				"Every spawner should have been removable exactly once.");
 		}
 
 		[Test]
-		public void SpawnersAreWokenInDeadlineOrder()
+		public void ASpawnerLeavingMidSweep_DoesNotSkipTheOthers()
 		{
-			ObjectSpawner late = NewSpawner();
-			late.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
-			CountingRespawnCondition lateCondition = NewCondition(late, allow: false);
-			late.TrueConditions.Add(lateCondition);
+			/* The sweep removes entries as it goes, and removal swaps the last entry into the
+			 * vacated slot. A cursor that advances past that slot anyway silently skips whichever
+			 * spawner was moved into it — which reads as one camp in a zone that simply never comes
+			 * back. */
+			List<CountingRespawnCondition> conditions = new List<CountingRespawnCondition>();
+			for (int i = 0; i < 5; ++i)
+			{
+				ObjectSpawner s = NewSpawner();
+				s.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-1.0));
+				CountingRespawnCondition condition = NewCondition(s, allow: true);
+				s.TrueConditions.Add(condition);
+				conditions.Add(condition);
+				ObjectSpawnerScheduler.Refresh(s);
+			}
 
-			ObjectSpawner early = NewSpawner();
-			early.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(-30.0));
-			CountingRespawnCondition earlyCondition = NewCondition(early, allow: false);
-			early.TrueConditions.Add(earlyCondition);
+			// One full sweep. The list is walked a slice at a time, so this is not one tick.
+			DateTime now = DateTime.UtcNow;
+			for (int frame = 0; frame < ObjectSpawnerScheduler.FramesPerSweep; ++frame)
+			{
+				ObjectSpawnerScheduler.Tick(now, 0.0f);
+			}
 
-			ObjectSpawnerScheduler.Reschedule(late);
-			ObjectSpawnerScheduler.Reschedule(early);
-
-			List<string> order = new List<string>();
-			earlyCondition.OnChecked = () => order.Add("early");
-			lateCondition.OnChecked = () => order.Add("late");
-
-			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
-
-			CollectionAssert.AreEqual(new[] { "early", "late" }, order,
-				"The heap orders wakes by deadline, oldest first.");
+			for (int i = 0; i < conditions.Count; ++i)
+			{
+				Assert.AreEqual(1, conditions[i].Calls,
+					$"Spawner {i} was skipped by the sweep.");
+			}
+			Assert.AreEqual(0, ObjectSpawnerScheduler.ActiveCount,
+				"All five finished their work and should have left the list.");
 		}
 
-		// --- Helpers ---------------------------------------------------------------------------
+		[Test]
+		public void TheSweepSpreadsTheListAcrossFrames()
+		{
+			/* The reason this is a sweep and not a walk. A spawner waiting on a deadline minutes
+			 * away must not be visited every frame just because it is waiting: that is the cost the
+			 * active list exists to avoid, moved rather than removed. */
+			for (int i = 0; i < ObjectSpawnerScheduler.FramesPerSweep * 2; ++i)
+			{
+				ObjectSpawner s = NewSpawner();
+				s.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(600.0));
+				ObjectSpawnerScheduler.Refresh(s);
+			}
+
+			int active = ObjectSpawnerScheduler.ActiveCount;
+			Assert.AreEqual(ObjectSpawnerScheduler.FramesPerSweep * 2, active);
+
+			/* Nothing is due, so no membership changes and the arithmetic is stable: one frame
+			 * should cover about a FramesPerSweep-th of the list, not all of it. */
+			int expectedSlice = (active + ObjectSpawnerScheduler.FramesPerSweep - 1)
+				/ ObjectSpawnerScheduler.FramesPerSweep;
+
+			Assert.AreEqual(2, expectedSlice,
+				"A list twice the sweep length should be covered two entries at a time.");
+			Assert.Less(expectedSlice, active,
+				"A sweep that visits everything every frame is just the poll again.");
+		}
+
+		[Test]
+		public void Clear_ResetsMembershipSoSpawnersCanRejoin()
+		{
+			ObjectSpawner spawner = NewSpawner();
+			spawner.SpawnableRespawnTimers.Add(DateTime.UtcNow.AddSeconds(600.0));
+			ObjectSpawnerScheduler.Refresh(spawner);
+
+			ObjectSpawnerScheduler.Clear();
+			Assert.AreEqual(0, ObjectSpawnerScheduler.ActiveCount);
+
+			ObjectSpawnerScheduler.Refresh(spawner);
+
+			Assert.AreEqual(1, ObjectSpawnerScheduler.ActiveCount,
+				"A cleared spawner still believing it is a member could never rejoin.");
+		}
+
+		// --- Helpers -----------------------------------------------------------------------------
 
 		private CountingRespawnCondition NewCondition(ObjectSpawner spawner, bool allow)
 		{
@@ -404,14 +409,10 @@ namespace FishMMO.UnitTests.AI
 		/// <summary>How many times it has been asked.</summary>
 		public int Calls;
 
-		/// <summary>Raised on each check, for tests that care about ordering.</summary>
-		public Action OnChecked;
-
 		/// <inheritdoc />
 		public override bool OnCheckCondition(ObjectSpawner spawner)
 		{
 			++Calls;
-			OnChecked?.Invoke();
 			return Allow;
 		}
 	}

@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void Update()
 		{
-			ObjectSpawnerScheduler.Tick(DateTime.UtcNow);
+			ObjectSpawnerScheduler.Tick(DateTime.UtcNow, Time.time);
 		}
 	}
 }
