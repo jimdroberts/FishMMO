@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishNet.Connection;
@@ -1639,6 +1640,326 @@ namespace FishMMO.UnitTests
 				$"The exemption must leave most of the observed area throttled; it currently covers {exemptFraction * 100f:F0}%.");
 			LogAssert.IsTrue(engagement <= ObserverStreamingPolicy.EngagementRangeCeiling,
 				"The floor must not exceed the ability ceiling.");
+		}
+
+		// ── Visibility budget: the hard observer cap ──
+
+		[Test]
+		public void VisibilityBudget_AdmitsTheTopRanksAndExcludesTheRest()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			LogAssert.IsTrue(budget > 0, "A budget of 0 disables the cap; the test needs one.");
+
+			SeedRanks(clientId: 11, count: budget + 10);
+			try
+			{
+				LogAssert.IsTrue(Budget(11, RankObjectId(0), currentlyVisible: false),
+					"The most relevant character must be admitted.");
+				LogAssert.IsTrue(Budget(11, RankObjectId(budget - 1), currentlyVisible: false),
+					"The last character inside the budget must be admitted.");
+				LogAssert.IsFalse(Budget(11, RankObjectId(budget), currentlyVisible: false),
+					"The first character past the budget must be excluded — this is the cap.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>
+		/// Rank hysteresis, not distance hysteresis: two near-identical scores at the boundary would
+		/// otherwise spawn and despawn each other every pass, and a despawn is far more expensive
+		/// than any rate change.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_HoldsAnAlreadyVisibleCharacterPastTheBoundary()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			LogAssert.IsTrue(widened > budget, "The hysteresis must actually widen the budget.");
+
+			SeedRanks(clientId: 12, count: widened + 5);
+			try
+			{
+				LogAssert.IsTrue(Budget(12, RankObjectId(budget), currentlyVisible: true),
+					"A character already visible keeps its slot just past the budget.");
+				LogAssert.IsFalse(Budget(12, RankObjectId(budget), currentlyVisible: false),
+					"...but the same rank is not admitted from outside.");
+				LogAssert.IsFalse(Budget(12, RankObjectId(widened), currentlyVisible: true),
+					"Past the widened boundary even a visible character is dropped.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>
+		/// The chicken-and-egg case. Ranking only what a viewer already observes would mean a
+		/// character that is not yet an observer is never ranked, never admitted, and can never
+		/// become one.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_DoesNotDeadlockOnUnrankedOrUnrankedViewers()
+		{
+			SeedRanks(clientId: 13, count: 3);
+			try
+			{
+				// A ranked viewer, an object outside its range this pass: the distance condition has
+				// already decided that; the budget must not vote a second time.
+				LogAssert.IsTrue(Budget(13, 999999, currentlyVisible: false),
+					"An unranked object under a ranked viewer must not be rejected by the budget.");
+
+				// A viewer with no pass at all must be deferred, not rejected.
+				bool admitted = ObserverStreamingRegistry.IsWithinVisibilityBudget(
+					9999, RankObjectId(0), currentlyVisible: false, out bool hasRanking);
+				LogAssert.IsFalse(hasRanking,
+					"A viewer with no pass must report that it has no ranking...");
+				LogAssert.IsFalse(admitted, "...so the condition defers rather than admitting blind.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>Party members and the current target are pinned and cannot be evicted.</summary>
+		[Test]
+		public void VisibilityBudget_PinsAreNeverEvicted()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			SeedRanks(clientId: 14, count: budget + 5);
+			const int pinnedId = 4242;
+			try
+			{
+				// Ranked far outside the budget, but pinned.
+				RegistryRanks(14)[pinnedId] = budget + 4;
+				LogAssert.IsFalse(Budget(14, pinnedId, currentlyVisible: false),
+					"Sanity: without the pin this rank is excluded.");
+
+				RegistryPins(14).Add(pinnedId);
+				LogAssert.IsTrue(Budget(14, pinnedId, currentlyVisible: false),
+					"A pinned character is admitted whatever its rank — a party you cannot see is a party you cannot play with.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>The engaged full-rate budget bounds what the lag-compensation exemption can cost.</summary>
+		[Test]
+		public void EngagedFullRateBudget_BoundsTheExemption()
+		{
+			int k = ObserverStreamingPolicy.EngagedFullRateBudget;
+			LogAssert.IsTrue(k > 0, "Some engaged targets must keep full rate, or compensation is never exact.");
+			LogAssert.IsTrue(k <= ObserverStreamingPolicy.VisibilityBudget,
+				"More full-rate slots than visible characters would be unreachable.");
+			LogAssert.IsTrue(ObserverStreamingPolicy.EngagedOverflowInterval >= 2,
+				"Overflow must actually throttle, or the budget saves nothing.");
+			LogAssert.IsTrue(ObserverStreamingPolicy.EngagedOverflowInterval <= 3,
+				"Overflow beyond every 3rd tick gives back more compensation accuracy than the exemption was worth.");
+
+			// The cost the budget bounds, at the 17 B/update figure for most of an 8 km world.
+			const float bytesPerUpdate = 17f;
+			const float tickRate = 30f;
+			float unbounded = 30 * bytesPerUpdate * tickRate;
+			float bounded = k * bytesPerUpdate * tickRate
+				+ (30 - k) * bytesPerUpdate * (tickRate / ObserverStreamingPolicy.EngagedOverflowInterval);
+			TestContext.WriteLine(
+				$"MEASURE 30 engaged characters: {unbounded / 1024f:F1} KB/s unbounded, {bounded / 1024f:F1} KB/s with K={k}");
+			LogAssert.IsTrue(bounded < unbounded * 0.75f,
+				"The engaged budget must meaningfully bound the crowd case it exists for.");
+		}
+
+		private static readonly BindingFlags Priv = BindingFlags.Static | BindingFlags.NonPublic;
+
+		private static int RankObjectId(int rank) => 10000 + rank;
+
+		private static Dictionary<int, int> RegistryRanks(int clientId)
+		{
+			var map = (Dictionary<int, Dictionary<int, int>>)typeof(ObserverStreamingRegistry)
+				.GetField("ranksByClientId", Priv).GetValue(null);
+			if (!map.TryGetValue(clientId, out Dictionary<int, int> ranks))
+			{
+				ranks = new Dictionary<int, int>();
+				map[clientId] = ranks;
+			}
+			return ranks;
+		}
+
+		private static HashSet<int> RegistryPins(int clientId)
+		{
+			var map = (Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
+				.GetField("pinnedByClientId", Priv).GetValue(null);
+			if (!map.TryGetValue(clientId, out HashSet<int> pins))
+			{
+				pins = new HashSet<int>();
+				map[clientId] = pins;
+			}
+			return pins;
+		}
+
+		private static void SeedRanks(int clientId, int count)
+		{
+			Dictionary<int, int> ranks = RegistryRanks(clientId);
+			ranks.Clear();
+			RegistryPins(clientId).Clear();
+			for (int i = 0; i < count; i++)
+			{
+				ranks[RankObjectId(i)] = i;
+			}
+			((HashSet<int>)typeof(ObserverStreamingRegistry).GetField("rankedClientIds", Priv)
+				.GetValue(null)).Add(clientId);
+		}
+
+		private static void ClearRegistryRanks()
+		{
+			((Dictionary<int, Dictionary<int, int>>)typeof(ObserverStreamingRegistry)
+				.GetField("ranksByClientId", Priv).GetValue(null)).Clear();
+			((HashSet<int>)typeof(ObserverStreamingRegistry).GetField("rankedClientIds", Priv)
+				.GetValue(null)).Clear();
+			((Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
+				.GetField("pinnedByClientId", Priv).GetValue(null)).Clear();
+		}
+
+		private static bool Budget(int clientId, int objectId, bool currentlyVisible)
+			=> ObserverStreamingRegistry.IsWithinVisibilityBudget(clientId, objectId, currentlyVisible, out _);
+
+		// ── Observer stack wiring ──
+
+		/// <summary>
+		/// The condition asset must actually resolve to the script. It was authored by hand, and a
+		/// GUID mismatch does not fail loudly — the ScriptableObject deserialises to null, the
+		/// entry in <c>_defaultConditions</c> becomes a null reference, and the visibility budget
+		/// silently stops existing.
+		/// </summary>
+		[Test]
+		public void ObserverBudgetCondition_AssetResolvesToItsScript()
+		{
+			string assetPath = Path.Combine(Application.dataPath, "Settings/ObserverConditions/ObserverBudgetCondition.asset");
+			LogAssert.IsTrue(File.Exists(assetPath), "The budget condition asset must exist.");
+
+			string scriptMeta = Path.Combine(Application.dataPath,
+				"Scripts/Shared/Implementation/Entity/Prediction/ObserverStreaming/ObserverBudgetCondition.cs.meta");
+			LogAssert.IsTrue(File.Exists(scriptMeta), "The condition script must exist.");
+
+			string scriptGuid = GuidFromMeta(scriptMeta);
+			string asset = File.ReadAllText(assetPath);
+			LogAssert.IsTrue(asset.Contains($"guid: {scriptGuid}"),
+				$"The asset's m_Script must point at the condition script ({scriptGuid}); a mismatch loads as null and disables the cap.");
+		}
+
+		/// <summary>The condition has to be installed, and installed LAST.</summary>
+		[Test]
+		public void ObserverBudgetCondition_IsInstalledLastOnTheSceneServer()
+		{
+			string scenePath = Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity");
+			LogAssert.IsTrue(File.Exists(scenePath), "The SceneServer scene must exist.");
+			string scene = File.ReadAllText(scenePath);
+
+			string budgetGuid = GuidFromMeta(Path.Combine(Application.dataPath,
+				"Settings/ObserverConditions/ObserverBudgetCondition.asset.meta"));
+
+			int defaults = scene.IndexOf("_defaultConditions:", StringComparison.Ordinal);
+			LogAssert.IsTrue(defaults >= 0, "The ObserverManager must declare default conditions.");
+			int blockEnd = scene.IndexOf("--- !u!", defaults, StringComparison.Ordinal);
+			string block = scene.Substring(defaults, blockEnd - defaults);
+
+			LogAssert.IsTrue(block.Contains(budgetGuid),
+				"The budget condition must be in the SceneServer's default conditions, or nothing is capped.");
+
+			int gridIndex = block.IndexOf("cc503f7541ebd424c94541e6a767efee", StringComparison.Ordinal);
+			int budgetIndex = block.IndexOf(budgetGuid, StringComparison.Ordinal);
+			LogAssert.IsTrue(gridIndex >= 0 && budgetIndex > gridIndex,
+				"The budget must be evaluated after the cheap conditions — it is the only one needing a global ranking.");
+		}
+
+		/// <summary>
+		/// The grid is ANDed with the distance conditions, so an accuracy below twice the largest
+		/// distance silently clips it. This is what made 100 m player visibility actually 35–70 m.
+		/// </summary>
+		[Test]
+		public void HashGridAccuracy_CannotClipTheDistanceConditions()
+		{
+            string scene = File.ReadAllText(Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity"));
+			Match accuracy = Regex.Match(scene, @"_accuracy: (\d+)");
+			LogAssert.IsTrue(accuracy.Success, "The SceneServer must configure a HashGrid accuracy.");
+			int accuracyValue = int.Parse(accuracy.Groups[1].Value);
+
+			float largestDistance = 0f;
+			foreach (string path in Directory.GetFiles(
+				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
+			{
+				Match m = Regex.Match(File.ReadAllText(path), @"_maximumDistance: ([0-9.]+)");
+				if (m.Success)
+				{
+					largestDistance = Mathf.Max(largestDistance, float.Parse(m.Groups[1].Value,
+						System.Globalization.CultureInfo.InvariantCulture));
+				}
+			}
+			LogAssert.IsTrue(largestDistance > 0f, "At least one distance condition must be authored.");
+
+			/* Cells are ceil(accuracy/2) and "nearby" is the 3x3 block, so anything beyond
+			 * accuracy on an axis is always rejected. The grid must therefore reach at least as
+			 * far as the furthest distance condition, or it is the real visibility limit. */
+			LogAssert.IsTrue(accuracyValue >= largestDistance * 2f,
+				$"HashGrid accuracy {accuracyValue} clips a {largestDistance} m distance condition — cells are accuracy/2, so visibility would really be {accuracyValue / 2}–{accuracyValue} m depending on cell alignment.");
+		}
+
+		/// <summary>
+		/// Pop-in margin must cover the ground a player crosses between observer sweeps, and the
+		/// sweep slows down as population rises.
+		/// </summary>
+		[Test]
+		public void DistanceHysteresis_CoversTravelBetweenObserverSweeps()
+		{
+			foreach (string path in Directory.GetFiles(
+				Path.Combine(Application.dataPath, "Settings/ObserverConditions"), "*DistanceCondition.asset"))
+			{
+				string text = File.ReadAllText(path);
+				string name = Path.GetFileName(path);
+				Match hide = Regex.Match(text, @"_hideDistancePercent: ([0-9.]+)");
+				LogAssert.IsTrue(hide.Success, $"{name} must author a hide percent.");
+				float percent = float.Parse(hide.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+
+				Match max = Regex.Match(text, @"_maximumDistance: ([0-9.]+)");
+				float distance = float.Parse(max.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+				float margin = distance * percent;
+
+				/* The sweep is min(0.5 x (1 + clients x 0.005 + objects x 0.0005), ceiling). A scene
+				 * channel caps at 200 players; with ~3000 timed objects that is 1.75 s, and a 6 m/s
+				 * player covers 10.5 m. The margin has to exceed that or an object can cross the
+				 * whole hysteresis band between two sweeps and flicker.
+				 *
+				 * World items are exempt deliberately. They are static pickups whose worst failure
+				 * is a briefly blinking icon, and the alternative — a 15 m item that stays observed
+				 * out to 26 m — nearly doubles the number observed per player for no gameplay
+				 * benefit. Everything that spawns a CHARACTER pays the margin, because there a
+                 * flicker despawns audio, nameplates and a prediction object. */
+				const float sweepTravel = 10.5f;
+				if (name.StartsWith("WorldItem", StringComparison.Ordinal))
+				{
+					LogAssert.IsTrue(margin > 0f, $"{name} must still have some hysteresis.");
+					continue;
+				}
+
+				LogAssert.IsTrue(margin >= sweepTravel,
+					$"{name}: a {margin:F1} m hide margin is under the {sweepTravel:F1} m a player crosses between observer sweeps on a full 200-player channel — characters will flicker under exactly the load the caps exist for.");
+			}
+		}
+
+		private static string GuidFromMeta(string metaPath)
+		{
+			foreach (string line in File.ReadAllLines(metaPath))
+			{
+				if (line.StartsWith("guid:", StringComparison.Ordinal))
+				{
+					return line.Substring(5).Trim();
+				}
+			}
+			LogAssert.Fail($"No guid in {metaPath}");
+			return null;
 		}
 
 		private sealed class MockCharacter : ICharacter
