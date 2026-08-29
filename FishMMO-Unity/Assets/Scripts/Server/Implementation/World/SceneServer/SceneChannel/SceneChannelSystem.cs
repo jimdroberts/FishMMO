@@ -1124,7 +1124,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>Maximum number of clients for the scene.</returns>
 		private int GetMaxClients(string sceneName)
 		{
-			const int DEFAULT_MAX_CLIENTS = 500;
+			/* Deferred to the shared ceiling rather than declared here: this cap and the world
+			 * server's MaxClientsPerInstance have to agree, or the world server routes players
+			 * into a scene this system then refuses to admit them to. */
+			const int DEFAULT_MAX_CLIENTS = WorldSceneSettings.MaximumClientsPerScene;
 
 			if (Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem) &&
 				sceneServerSystem.WorldSceneDetailsCache?.Scenes?.TryGetValue(sceneName, out var details) == true)

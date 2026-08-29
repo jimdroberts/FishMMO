@@ -44,6 +44,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public DateTime LastExit { get; set; }
 
 		/// <inheritdoc />
+		public bool VacatedDeliberately { get; set; }
+
+		/// <inheritdoc />
 		public DateTime CreatedUtc { get; set; }
 
 		/// <inheritdoc />
@@ -68,7 +71,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (CharacterCount < 1)
 			{
 				LastExit = DateTime.UtcNow;
+				return;
 			}
+
+			/* Anybody present clears the verdict on the last departure. Without this an instance
+			 * that emptied by choice, then was rejoined, would still be marked for immediate reap
+			 * — so the next disconnect would destroy it out from under a live run. */
+			VacatedDeliberately = false;
 		}
 	}
 }

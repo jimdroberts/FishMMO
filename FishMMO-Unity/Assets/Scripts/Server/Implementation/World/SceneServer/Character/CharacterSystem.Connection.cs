@@ -803,10 +803,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
+			/* Captured before the dispatch clears them below: the instance being left has to be
+			 * identifiable after the character has stopped pointing at it. */
+			long departedWorldServerID = player.WorldServerID;
+			string departedInstanceScene = player.InstanceSceneName;
+			long departedInstanceHandle = player.InstanceSceneHandle;
+
 			// Announce the departure while the character still belongs to the instance, so the
 			// instance's population is the one debited. Same ordering as the bind-point respawn
 			// and the channel transfer, and for the same reason.
 			DispatchCharacterEvent(OnDisconnect, conn, player, nameof(OnDisconnect));
+
+			/* This is the VOLUNTARY route out — the leave-instance broadcast, /leaveinstance, and
+			 * the forced return when an instance is closing. Marking it after the debit means an
+			 * instance whose last occupant walked out is reclaimed on the next pulse instead of
+			 * being held for the idle timeout, which exists to let a DROPPED connection reconnect
+			 * into its run. See ISceneInstanceDetails.VacatedDeliberately. */
+			if (Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> instanceSceneServerSystem))
+			{
+				instanceSceneServerSystem.NoteDeliberateInstanceExit(
+					departedWorldServerID, departedInstanceScene, departedInstanceHandle);
+			}
 
 			// Put the character back where it entered from. SceneName already names the open
 			// world scene it came from; LastWorldPosition is the position within it.

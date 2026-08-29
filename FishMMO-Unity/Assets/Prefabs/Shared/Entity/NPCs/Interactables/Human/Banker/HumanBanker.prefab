@@ -456,6 +456,7 @@ MonoBehaviour:
     Position: 1
     Rotation: 1
     Scale: 0
+  _positionMultiplier: 10
   _interpolation: 2
   _extrapolation: 2
   _enableTeleport: 0
