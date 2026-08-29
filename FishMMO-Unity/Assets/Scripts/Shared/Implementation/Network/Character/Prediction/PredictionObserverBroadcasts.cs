@@ -223,7 +223,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// The list is filtered server side — templates flagged <c>HiddenFromOthers</c> never leave the
+	/// The list is assembled server side — no buff is hidden from other players, so it is the
 	/// server — so this is what observers are permitted to see rather than the character's real buff
 	/// state. Remaining durations are sent in seconds because observers do not run the buff
 	/// simulation and have no use for tick numbers.
@@ -409,6 +409,30 @@ namespace FishMMO.Shared
 	/// this instead would tie a message's lifetime to a pooled NPC's slot rather than to the
 	/// creature that died in it.
 	/// </remarks>
+	/// <summary>
+	/// Tells observers a character entered or left combat.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <c>CharacterFlags.IsInCombat</c> was known only to the character's own client and to the
+	/// server, so nothing on anybody else's screen could react to a peer being in a fight — a
+	/// nameplate indicator had no state to read. This is the smallest message that closes that:
+	/// one id and one bool, sent on the transition rather than continuously.
+	/// </para>
+	/// <para>
+	/// Reliable, and deliberately not buffered — a client that arrives later reads the flag out of
+	/// the spawn payload, exactly as it does for death.
+	/// </para>
+	/// </remarks>
+	public struct CharacterCombatStateBroadcast : IBroadcast
+	{
+		/// <summary>NetworkObject id of the character whose combat state changed.</summary>
+		public int CharacterObjectID;
+
+		/// <summary>True on entering combat, false on leaving.</summary>
+		public bool InCombat;
+	}
+
 	public struct CharacterDeathStateBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the character whose death state changed.</summary>

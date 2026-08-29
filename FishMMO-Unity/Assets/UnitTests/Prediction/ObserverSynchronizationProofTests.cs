@@ -244,33 +244,36 @@ namespace FishMMO.UnitTests
 		public void Buffs_ReachTheObserver_AndConvergeOnRemoval()
 		{
 			BuffController observer = MakeBuffController("ObserverBuffs");
+			BaseBuffTemplate first = MakeBuffTemplate("ProofBuff_First", 30f);
+			BaseBuffTemplate second = MakeBuffTemplate("ProofBuff_Second", 10f);
 
 			ObservedBuffEntry[] two =
 			{
-				new ObservedBuffEntry { TemplateID = 700, Stacks = 2, RemainingSeconds = 12.5f, TotalSeconds = 30f },
-				new ObservedBuffEntry { TemplateID = 701, Stacks = 0, RemainingSeconds = 4f, TotalSeconds = 10f },
+				new ObservedBuffEntry { TemplateID = first.ID, Stacks = 2, RemainingSeconds = 12.5f, TotalSeconds = 30f },
+				new ObservedBuffEntry { TemplateID = second.ID, Stacks = 0, RemainingSeconds = 4f, TotalSeconds = 10f },
 			};
 
 			ApplyObservedBuffs(observer, two);
 
-			LogAssert.AreEqual(2, observer.ObservedBuffs.Count,
+			LogAssert.AreEqual(2, observer.Buffs.Count,
 				"Both visible buffs must reach the observer.");
-			LogAssert.AreEqual(700, observer.ObservedBuffs[0].TemplateID, "Template id must survive.");
-			LogAssert.AreEqual(2, observer.ObservedBuffs[0].Stacks, "Stack count must survive.");
-			LogAssert.AreEqual(12.5f, observer.ObservedBuffs[0].RemainingSeconds, "Remaining seconds must survive.");
+			LogAssert.IsTrue(observer.Buffs.ContainsKey(first.ID), "Template id must survive.");
+			LogAssert.AreEqual(2, observer.Buffs[first.ID].Stacks, "Stack count must survive.");
+			LogAssert.IsTrue(Mathf.Abs(RemainingOf(observer, observer.Buffs[first.ID]) - 12.5f) < 0.2f,
+				"Remaining seconds must survive, within the tick rounding materialisation applies.");
 
 			// The second push drops one buff. The observer must end up with the server's set,
 			// not the union of both pushes.
 			ApplyObservedBuffs(observer, new[] { two[1] });
 
-			LogAssert.AreEqual(1, observer.ObservedBuffs.Count,
+			LogAssert.AreEqual(1, observer.Buffs.Count,
 				"A push that omits a buff must remove it — an observer converges on the server's set.");
-			LogAssert.AreEqual(701, observer.ObservedBuffs[0].TemplateID,
+			LogAssert.IsTrue(observer.Buffs.ContainsKey(second.ID),
 				"The surviving buff must be the one the server still lists.");
 
 			// And an empty push clears it entirely.
 			ApplyObservedBuffs(observer, System.Array.Empty<ObservedBuffEntry>());
-			LogAssert.AreEqual(0, observer.ObservedBuffs.Count, "An empty push must clear the display list.");
+			LogAssert.AreEqual(0, observer.Buffs.Count, "An empty push must clear the display list.");
 		}
 
 		/// <summary>
@@ -288,14 +291,16 @@ namespace FishMMO.UnitTests
 
 			ApplyObservedBuffs(observer, new[]
 			{
-				new ObservedBuffEntry { TemplateID = 700, Stacks = 3, RemainingSeconds = 12.5f, TotalSeconds = 30f },
+				new ObservedBuffEntry { TemplateID = MakeBuffTemplate("ProofBuff_Display", 30f).ID, Stacks = 3, RemainingSeconds = 12.5f, TotalSeconds = 30f },
 			});
 
-			LogAssert.AreEqual(1, observer.ObservedBuffs.Count, "The display list must be populated.");
-			LogAssert.AreEqual(0, observer.Buffs.Count,
-				"An observer must hold NO simulated Buff for a peer. A Buff carries attribute " +
-				"modifiers and an expiry in the owner's tick domain; an observer never ticks it, so " +
-				"one written here would apply its modifiers forever.");
+			/* The contract this used to assert is reversed on purpose. An observer now holds the
+			 * REAL Buff — Inspect and faction/aggro read the container, so a display-only projection
+			 * was not enough. What makes that safe is the other half: SimulatesBuffEffects is false
+			 * here, so no attribute modifier was applied, and the expiry was rebased into this
+			 * peer's own tick domain so it can be counted down and expired locally. */
+			LogAssert.AreEqual(1, observer.Buffs.Count,
+				"The observer must hold the real buff entry, not a display projection.");
 		}
 
 		// ── EQUIPMENT ────────────────────────────────────────────────────────
@@ -683,7 +688,7 @@ namespace FishMMO.UnitTests
 		/// </para>
 		/// <para>
 		/// Two exemptions, both outside the simulation and both asserted by name so a third cannot
-		/// be added silently. <c>BuffController.ObservedBuffsReceivedTime</c> is wall-clock on
+		/// be added silently. the old receipt timestamp was wall-clock on
 		/// purpose: an observed buff's remaining duration travels in SECONDS precisely because the
 		/// receiving client's tick domain is its own, and the value is only ever used to age a
 		/// display number. <c>KCCController</c>'s two accumulators are fed the fixed
@@ -1014,5 +1019,46 @@ namespace FishMMO.UnitTests
 			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
 			public void Invoke(List<Trigger> triggers, EventData eventData) { }
 		}
+
+		/// <summary>The controller's buffs in template order — Buffs is the single container now.</summary>
+		private static List<Buff> BuffList(BuffController controller)
+		{
+			List<Buff> list = new List<Buff>();
+			foreach (Buff b in controller.Buffs.Values) { list.Add(b); }
+			return list;
+		}
+
+		/// <summary>Remaining seconds for a buff, at the controller's current tick.</summary>
+		private static float RemainingOf(BuffController controller, Buff buff)
+			=> buff.RemainingSeconds(controller.GetCurrentDomainTick());
+
+
+		/// <summary>
+		/// A cached buff template with a real id.
+		/// </summary>
+		/// <remarks>
+		/// Synthetic ids no longer work: an observer materialises real <c>Buff</c> instances, and a
+		/// template it cannot resolve is dropped rather than displayed — there is nothing to tick or
+		/// draw. The tests therefore need templates that actually exist in the cache.
+		/// </remarks>
+		private BaseBuffTemplate MakeBuffTemplate(string name, float duration)
+		{
+			ProofBuffTemplate t = ScriptableObject.CreateInstance<ProofBuffTemplate>();
+			t.name = name;
+			t.Duration = duration;
+			t.TickRate = 1f;
+			t.AddToCache(t.name);
+			assets.Add(t);
+			return t;
+		}
+
+		private sealed class ProofBuffTemplate : BaseBuffTemplate
+		{
+			public override void OnApply(Buff buff, ICharacter target) { }
+			public override void OnRemove(Buff buff, ICharacter target) { }
+			public override GameObject OnApplyFX(Buff buff, ICharacter target) => null;
+			public override void OnRemoveFX(GameObject fxInstance, ICharacter target) { }
+		}
+
 	}
 }

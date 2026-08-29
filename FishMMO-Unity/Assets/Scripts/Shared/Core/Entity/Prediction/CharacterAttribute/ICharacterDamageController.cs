@@ -25,6 +25,24 @@ namespace FishMMO.Shared.Core
 		static Action<ICharacter, ICharacter> OnResurrected;
 
 		/// <summary>
+		/// Raised when a character enters or leaves combat. Carries the character and the new state.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A hook rather than a nameplate: what a combat indicator should look like is a UI decision,
+		/// and wiring one into the damage controller would put presentation inside authoritative
+		/// state. Subscribers filter by the character they care about — this is static, so it fires
+		/// for every character in view, the same contract the buff events carry.
+		/// </para>
+		/// <para>
+		/// Fires on every peer that knows the state, which since <c>CharacterCombatStateBroadcast</c>
+		/// includes observers — before it, only the character's own client could know a peer was
+		/// fighting, so there was nothing a nameplate could have read.
+		/// </para>
+		/// </remarks>
+		static Action<ICharacter, bool> OnCombatStateChanged;
+
+		/// <summary>
 		/// Event invoked when a resurrect is offered to a character but not yet applied.
 		/// Params: resurrector, target, health amount the offer would restore.
 		/// </summary>

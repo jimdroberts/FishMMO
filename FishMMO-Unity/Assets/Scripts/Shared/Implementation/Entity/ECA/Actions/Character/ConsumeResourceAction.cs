@@ -42,13 +42,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool TryExecute(ICharacter initiator, EventData eventData)
 		{
-			/* Server only, but reported as success elsewhere. The resource is authoritative state and
-			 * reaches clients through the attribute reconcile pipeline, so a client must not spend it
-			 * a second time. Returning FALSE here would be worse than not gating at all: paired with
-			 * StopChainOnFailure it would abort the rest of the chain on every client, taking the
-			 * non-authoritative steps (FX, dialogue, UI) down with it. "Not this peer's decision" is
-			 * not the same as "the cost could not be paid". */
-			if (!EcaAuthority.IsServer(initiator, eventData))
+			/* The server, or the client that OWNS the initiator — see EcaAuthority.MayPredict.
+			 *
+			 * This is the caster's OWN resource, and the caster already predicts the same spend
+			 * through the ability path's ConsumeResources; gating it to the server here meant a cost
+			 * paid by an ECA step left the mana bar sitting still until the reconcile corrected it.
+			 * An observer still answers false: it has no business spending somebody else's mana.
+			 *
+			 * Still reported as success either way. Returning FALSE would be worse than not gating
+			 * at all: paired with StopChainOnFailure it would abort the rest of the chain on every
+			 * peer that did not spend, taking the non-authoritative steps (FX, dialogue, UI) down
+			 * with it. "Not this peer's decision" is not the same as "the cost could not be paid". */
+			if (!EcaAuthority.MayPredict(initiator, eventData))
 			{
 				return true;
 			}

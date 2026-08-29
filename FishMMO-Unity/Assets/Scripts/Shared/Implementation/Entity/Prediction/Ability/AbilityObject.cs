@@ -372,9 +372,11 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Unity OnCollisionEnter callback. Handles collision logic, event dispatch, and destruction.
-		/// Gameplay-affecting effects (damage, healing, buffs) are only dispatched on the server.
-		/// Clients still see the collision (VFX, projectile destruction, hit-count drain) but
-		/// do not apply state changes to other characters — those arrive via server broadcasts.
+		/// Dispatched on EVERY peer, like the tick events: an ability object is a local, deterministic
+		/// object rather than a networked one, so the peer that spawned it can resolve its own hit.
+		/// What each action then does about that is the action's own decision — visual actions run
+		/// where there is a screen, state-changing actions run where they are authoritative or
+		/// predicted (see EcaAuthority.MayPredict).
 		/// Each <see cref="AbilityOnHitEvent"/> is executed independently; its inherited
 		/// <see cref="Trigger.TargetSelector"/> selects the final targets (defaulting to the direct
 		/// collision target when an InitiatorTargetSelector or null is configured).
@@ -394,7 +396,19 @@ namespace FishMMO.Shared
 			// Only the server dispatches collision events (damage, healing, buffs).
 			// Clients skip effect dispatch to avoid visual fighting between predicted
 			// state changes and authoritative server broadcasts.
-			if (isServer && Caster != null && Caster.IsSpawned)
+			/* Dispatched on every peer, not just the server.
+			 *
+			 * This was server-only, which made two things impossible at once: an impact VFX
+			 * authored on an OnHit trigger instantiated on the headless server and was never seen
+			 * by anybody, and the caster could not predict its own hit — the action never ran on a
+			 * client, so widening the damage gate to MayPredict had no effect on the projectile
+			 * path at all. Both had the same cause and are fixed by letting the dispatch happen
+			 * everywhere.
+			 *
+			 * Nothing is trusted to a client by doing this. Every state-changing action carries its
+			 * own authority gate (EcaAuthority.IsServer or MayPredict), and visual actions carry a
+			 * client gate so they no longer run on a server that has no screen. */
+			if (Caster != null && Caster.IsSpawned)
 			{
 				var hitEvents = OnHitEvents;
 				if (hitEvents != null)

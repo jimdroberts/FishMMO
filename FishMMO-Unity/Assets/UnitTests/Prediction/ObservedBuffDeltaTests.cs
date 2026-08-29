@@ -1,5 +1,7 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
+using FishMMO.Shared.Core;
 using FishMMO.Shared;
 using FishNet.Serializing;
 using NUnit.Framework;
@@ -262,98 +264,34 @@ namespace FishMMO.UnitTests
 			try
 			{
 				BuffController controller = go.AddComponent<BuffController>();
+				/* Real cached templates: materialisation drops an entry whose template it cannot
+				 * resolve, because there is nothing to tick or draw for one. */
+				int t1 = CacheTemplate("MergeProbe_1", 10f).ID;
+				int t2 = CacheTemplate("MergeProbe_2", 20f).ID;
+				int t3 = CacheTemplate("MergeProbe_3", 30f).ID;
+
 				SetObservedBuffs(controller,
-					new ObservedBuffEntry { TemplateID = 1, Stacks = 0, RemainingSeconds = 10f },
-					new ObservedBuffEntry { TemplateID = 2, Stacks = 0, RemainingSeconds = 20f });
+					new ObservedBuffEntry { TemplateID = t1, Stacks = 0, RemainingSeconds = 10f },
+					new ObservedBuffEntry { TemplateID = t2, Stacks = 0, RemainingSeconds = 20f });
 
 				Merge(controller,
 					changed: new[]
 					{
-						new ObservedBuffEntry { TemplateID = 2, Stacks = 4, RemainingSeconds = 25f },
-						new ObservedBuffEntry { TemplateID = 3, Stacks = 0, RemainingSeconds = 30f },
+						new ObservedBuffEntry { TemplateID = t2, Stacks = 4, RemainingSeconds = 25f },
+						new ObservedBuffEntry { TemplateID = t3, Stacks = 0, RemainingSeconds = 30f },
 					},
-					removed: new[] { 1 });
+					removed: new[] { t1 });
 
-				LogAssert.AreEqual(2, controller.ObservedBuffs.Count,
+				LogAssert.AreEqual(2, controller.Buffs.Count,
 					"Template 1 removed, 2 restacked, 3 added — two entries should remain.");
-				LogAssert.IsFalse(HasTemplate(controller, 1), "A removed template must leave the strip.");
+				LogAssert.IsFalse(HasTemplate(controller, t1), "A removed template must leave the strip.");
 
-				LogAssert.AreEqual(4, FindTemplate(controller, 2).Stacks,
+				LogAssert.AreEqual(4, FindTemplate(controller, t2).Stacks,
 					"A changed entry must REPLACE the held one, not sit alongside it.");
-				LogAssert.AreEqual(1, CountTemplate(controller, 2),
+				LogAssert.AreEqual(1, CountTemplate(controller, t2),
 					"A changed entry must appear exactly once. Two copies of one template would draw two " +
 					"icons and spawn a second FX instance for the same buff.");
-				LogAssert.IsTrue(HasTemplate(controller, 3), "An added template must join the strip.");
-			}
-			finally
-			{
-				UnityEngine.Object.DestroyImmediate(go);
-			}
-		}
-
-		/// <summary>
-		/// An entry the delta did not mention must not have its countdown restart.
-		/// </summary>
-		/// <remarks>
-		/// Consumers draw a bar as <c>RemainingSeconds - (now - ObservedBuffsReceivedTime)</c>, and
-		/// applying a merge resets that receipt time. Without ageing the retained entries, an
-		/// unrelated buff landing on a character would visibly push every other bar on it back UP.
-		/// </remarks>
-		[Test]
-		public void MergeObservedBuffs_AgesRetainedEntries_SoBarsDoNotJumpBack()
-		{
-			GameObject go = new GameObject("BuffDeltaAge");
-			try
-			{
-				BuffController controller = go.AddComponent<BuffController>();
-				SetObservedBuffs(controller,
-					new ObservedBuffEntry { TemplateID = 1, Stacks = 0, RemainingSeconds = 30f });
-
-				// Pretend the strip arrived four seconds ago.
-				SetProperty(controller, "ObservedBuffsReceivedTime", Time.unscaledTime - 4f);
-
-				Merge(controller,
-					changed: new[] { new ObservedBuffEntry { TemplateID = 2, Stacks = 0, RemainingSeconds = 9f } },
-					removed: System.Array.Empty<int>());
-
-				float retained = FindTemplate(controller, 1).RemainingSeconds;
-				LogAssert.IsTrue(Mathf.Abs(retained - 26f) < 0.5f,
-					$"A retained entry must be aged by the elapsed time (30s - 4s = 26s), was {retained}s. " +
-					"Left at 30s its bar would jump back up every time another buff landed.");
-			}
-			finally
-			{
-				UnityEngine.Object.DestroyImmediate(go);
-			}
-		}
-
-		/// <summary>Ageing must not turn a finite buff into a permanent one.</summary>
-		/// <remarks>
-		/// Zero remaining means PERMANENT in this entry, not "one tick left". A finite buff aged
-		/// down into zero would stop counting down and display as permanent — the exact bug the
-		/// observed list exists to avoid.
-		/// </remarks>
-		[Test]
-		public void MergeObservedBuffs_AgeingNeverProducesAPermanentBuff()
-		{
-			GameObject go = new GameObject("BuffDeltaAgeFloor");
-			try
-			{
-				BuffController controller = go.AddComponent<BuffController>();
-				SetObservedBuffs(controller,
-					new ObservedBuffEntry { TemplateID = 1, Stacks = 0, RemainingSeconds = 2f },
-					new ObservedBuffEntry { TemplateID = 9, Stacks = 0, RemainingSeconds = 0f });
-
-				SetProperty(controller, "ObservedBuffsReceivedTime", Time.unscaledTime - 60f);
-
-				Merge(controller,
-					changed: new[] { new ObservedBuffEntry { TemplateID = 2, Stacks = 0, RemainingSeconds = 9f } },
-					removed: System.Array.Empty<int>());
-
-				LogAssert.IsTrue(FindTemplate(controller, 1).RemainingSeconds > 0f,
-					"A finite buff aged past its end must floor above zero, because zero is read as permanent.");
-				LogAssert.AreEqual(0f, FindTemplate(controller, 9).RemainingSeconds,
-					"A permanent buff (0) must stay 0 rather than being aged into a finite value.");
+				LogAssert.IsTrue(HasTemplate(controller, t3), "An added template must join the strip.");
 			}
 			finally
 			{
@@ -362,6 +300,25 @@ namespace FishMMO.UnitTests
 		}
 
 		// ── Helpers ──────────────────────────────────────────────────────────────────
+
+		/// <summary>A cached buff template — materialisation drops entries it cannot resolve.</summary>
+		private static BaseBuffTemplate CacheTemplate(string name, float duration)
+		{
+			MergeProbeTemplate t = ScriptableObject.CreateInstance<MergeProbeTemplate>();
+			t.name = name;
+			t.Duration = duration;
+			t.TickRate = 1f;
+			t.AddToCache(t.name);
+			return t;
+		}
+
+		private sealed class MergeProbeTemplate : BaseBuffTemplate
+		{
+			public override void OnApply(Buff buff, ICharacter target) { }
+			public override void OnRemove(Buff buff, ICharacter target) { }
+			public override GameObject OnApplyFX(Buff buff, ICharacter target) => null;
+			public override void OnRemoveFX(GameObject fxInstance, ICharacter target) { }
+		}
 
 		private static void Merge(BuffController controller, ObservedBuffEntry[] changed, int[] removed)
 		{
@@ -372,9 +329,12 @@ namespace FishMMO.UnitTests
 
 		private static void SetObservedBuffs(BuffController controller, params ObservedBuffEntry[] entries)
 		{
-			FieldInfo field = typeof(BuffController).GetField("observedBuffs", PrivateInstanceFlags);
-			LogAssert.IsNotNull(field, "BuffController.observedBuffs backs the observed strip.");
-			field.SetValue(controller, entries);
+			/* Seeds the real container — Buffs is the single one now. Entries are materialised the
+			 * way an arriving message would materialise them, so the merge under test sees the same
+			 * shape it sees in production. */
+			typeof(BuffController)
+				.GetMethod("ApplyObservedBuffs", PrivateInstanceFlags)
+				.Invoke(controller, new object[] { entries });
 		}
 
 		private static void SetProperty(BuffController controller, string name, float value)
@@ -392,9 +352,9 @@ namespace FishMMO.UnitTests
 		private static int CountTemplate(BuffController controller, int templateID)
 		{
 			int count = 0;
-			for (int i = 0; i < controller.ObservedBuffs.Count; ++i)
+			for (int i = 0; i < controller.Buffs.Count; ++i)
 			{
-				if (controller.ObservedBuffs[i].TemplateID == templateID)
+				if (BuffList(controller)[i].Template.ID == templateID)
 				{
 					++count;
 				}
@@ -402,16 +362,27 @@ namespace FishMMO.UnitTests
 			return count;
 		}
 
-		private static ObservedBuffEntry FindTemplate(BuffController controller, int templateID)
+		/// <summary>The live buff for a template, or a failure naming what was missing.</summary>
+		private static Buff FindTemplate(BuffController controller, int templateID)
 		{
-			for (int i = 0; i < controller.ObservedBuffs.Count; ++i)
+			if (controller.Buffs.TryGetValue(templateID, out Buff buff))
 			{
-				if (controller.ObservedBuffs[i].TemplateID == templateID)
-				{
-					return controller.ObservedBuffs[i];
-				}
+				return buff;
 			}
-			throw new InvalidOperationException($"Template {templateID} is not in the observed strip.");
+			throw new InvalidOperationException($"Template {templateID} is not in the buff container.");
 		}
+
+		/// <summary>The controller's buffs in template order — Buffs is the single container now.</summary>
+		private static List<Buff> BuffList(BuffController controller)
+		{
+			List<Buff> list = new List<Buff>();
+			foreach (Buff b in controller.Buffs.Values) { list.Add(b); }
+			return list;
+		}
+
+		/// <summary>Remaining seconds for a buff, at the controller's current tick.</summary>
+		private static float RemainingOf(BuffController controller, Buff buff)
+			=> buff.RemainingSeconds(controller.GetCurrentDomainTick());
+
 	}
 }

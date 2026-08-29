@@ -459,9 +459,8 @@ namespace FishMMO.Shared
 				ability.DetachAllAbilityObjects();
 			}
 
-			// Observer-only abilities hold spawned objects too; detach and forget them the same way.
-			ClearObservedAbilities();
-
+			/* Observer-learned abilities live in KnownAbilities too, so the loop above already
+			 * detached their objects — there is no second set to sweep. */
 			KnownAbilities.Clear();
 			longestKnownAbilityRangeDirty = true;
 			KnownBaseAbilities.Clear();

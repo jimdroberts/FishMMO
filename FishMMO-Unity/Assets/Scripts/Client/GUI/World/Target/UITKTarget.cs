@@ -507,15 +507,33 @@ namespace FishMMO.Client
 			observedBuffModel.Clear();
 			observedBuffCaptureTime = Time.unscaledTime;
 
-			IReadOnlyList<ObservedBuffEntry> source = targetBuffs?.ObservedBuffs;
-			if (source == null)
+			/* Built from the target's real buff container. Every peer now holds the same entries —
+			 * an observer materialises them from the server's message and counts them down from its
+			 * own TimeManager — so there is no separate display list to read, and the remaining
+			 * seconds below are computed against THIS client's tick rather than re-based by however
+			 * long ago a message arrived. */
+			if (targetBuffs?.Buffs == null)
 			{
 				return;
 			}
 
-			for (int i = 0; i < source.Count; ++i)
+			uint currentTick = targetBuffs.GetCurrentDomainTick();
+
+			foreach (Buff buff in targetBuffs.Buffs.Values)
 			{
-				observedBuffModel.Add(source[i]);
+				BaseBuffTemplate template = buff?.Template;
+				if (template == null)
+				{
+					continue;
+				}
+
+				observedBuffModel.Add(new ObservedBuffEntry()
+				{
+					TemplateID = template.ID,
+					Stacks = buff.Stacks,
+					RemainingSeconds = buff.RemainingSeconds(currentTick),
+					TotalSeconds = template.Duration,
+				});
 			}
 		}
 

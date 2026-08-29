@@ -87,6 +87,62 @@ namespace FishMMO.Shared.Core
 		}
 
 		/// <summary>
+		/// True when this execution is a prediction REPLAY rather than a first run.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A reconcile replays every tick between the corrected one and now, so anything an action
+		/// does that is visible or one-shot — a floating number, a VFX instance, a sound — fires
+		/// once per replayed tick unless it is suppressed here. That is the visual spam
+		/// <c>PlayFXAction</c> already guards against; this is the same test with one definition
+		/// instead of an open-coded copy per action.
+		/// </para>
+		/// <para>
+		/// <b>Never use this as an authority gate.</b> The server's own ability dispatches carry
+		/// replicate ticks too, so gating state changes on it suppresses the server and the effect
+		/// happens nowhere — the exact mistake <see cref="EcaAuthority"/> exists to prevent. This
+		/// answers "have I already done this once", not "am I allowed to do this".
+		/// </para>
+		/// </remarks>
+		/// <param name="eventData">The event being executed, or null.</param>
+		/// <returns>True when the event carries a replayed tick.</returns>
+		protected static bool IsReplayTick(EventData eventData)
+		{
+			return eventData != null &&
+				   eventData.TryGet(out TickEventData tickData) &&
+				   tickData.IsReplicateTick;
+		}
+
+		/// <summary>
+		/// True when this peer has a screen — i.e. it is a client rather than the dedicated server.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For actions whose entire effect is presentational: particles, sound, floating text,
+		/// camera shake. Those must run on every client that can see the event and on NONE of the
+		/// server, which has nothing to render and would spend the allocation for no viewer.
+		/// </para>
+		/// <para>
+		/// <b>The mirror of <see cref="IsServer"/>, and not a substitute for it.</b> This answers
+		/// "should I draw something", never "may I change state". An action that mutates anything
+		/// must still gate on <see cref="EcaAuthority"/>; gating a state change on this instead
+		/// would let every client change state and the server change none.
+		/// </para>
+		/// <para>
+		/// There is no host mode in this project, so a peer is a client or a server and never both.
+		/// A character with no networked identity — a scene-authored trigger, an edit-mode test —
+		/// answers true, matching the "allow when undecidable" stance the authority gate takes.
+		/// </para>
+		/// </remarks>
+		/// <param name="initiator">The character the action is running for.</param>
+		/// <param name="eventData">The event being executed, or null.</param>
+		/// <returns>True when the local peer is a client.</returns>
+		protected static bool IsClientPeer(ICharacter initiator, EventData eventData)
+		{
+			return !EcaAuthority.IsServer(initiator, eventData);
+		}
+
+		/// <summary>
 		/// Sends a broadcast to the one player an action is acting for.
 		/// </summary>
 		/// <remarks>

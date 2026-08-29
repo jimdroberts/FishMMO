@@ -25,12 +25,20 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing the target information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			/* Server only. State forwarding is off, so an observer never simulates another
-			 * character and has nothing to predict here; the outcome reaches every peer through the
-			 * authoritative paths (reconcile, observer broadcast). Running it locally as well would
-			 * apply the effect twice on the peer that also happens to be the server, and produce a
-			 * value on a client that the server never agreed to. */
-			if (!EcaAuthority.IsServer(initiator, eventData))
+			/* The server, or the client that OWNS the initiator — see EcaAuthority.MayPredict.
+			 *
+			 * This was server-only, which meant a player's own hit moved nothing on their screen
+			 * until the server's report came back: hit, pause, then the bar drops. The caster has
+			 * predicted the cast and owns the input that produced it, so it is the one peer with
+			 * something to predict from; an observer still answers false and waits to be told.
+			 *
+			 * Safe because the authoritative consequences self-gate one level down —
+			 * CharacterDamageController.Kill, QueueCombatEvent and RecordCombatContribution each
+			 * return early unless IsServerStarted. A predicted hit moves a bar; it cannot kill
+			 * anybody, emit a combat report, or award loot rights. The server's own resource
+			 * broadcast overwrites the predicted value rather than accumulating on top of it, so a
+			 * misprediction heals itself on the next push instead of drifting. */
+			if (!EcaAuthority.MayPredict(initiator, eventData))
 			{
 				return;
 			}
@@ -50,6 +58,13 @@ namespace FishMMO.Shared
 			{
 				int amount = HealValue.GetValue(initiator, eventData);
 				defenderDamageController.Heal(initiator, amount);
+
+				// The healer's own number, drawn now. See ApplyDamageAction for the two guards.
+				if (!EcaAuthority.IsServer(initiator, eventData) && !IsReplayTick(eventData))
+				{
+					PredictedCombatEvents.Predict(target, amount, PredictedCombatEvents.Kind.Heal,
+						null, UnityEngine.Time.unscaledTime);
+				}
 			}
 		}
 	}

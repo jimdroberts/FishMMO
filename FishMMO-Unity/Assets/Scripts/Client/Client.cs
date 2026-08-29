@@ -384,6 +384,11 @@ namespace FishMMO.Client
 		{
 			Connection?.Update();
 
+			/* Ages out combat numbers this client predicted and the server never confirmed. Driven
+			 * from here rather than from a timer inside the display, because without a caller the
+			 * sweep never runs and a rejected number stays on screen looking like a real hit. */
+			combatDisplay?.Tick();
+
 			TickDeathDialogFallback();
 			
 			if (pendingErrorStackTrace != null)

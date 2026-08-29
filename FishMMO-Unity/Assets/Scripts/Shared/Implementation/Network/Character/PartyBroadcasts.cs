@@ -170,7 +170,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// The same server-filtered list the target frame draws from — already stripped of
-		/// anything marked <c>HiddenFromOthers</c>, carrying no tick-domain state and no template
+		/// nothing beyond what any observer already sees, carrying no tick-domain state and no template
 		/// hooks. Buffs and debuffs travel together and are split by the client on the template's
 		/// own <c>IsDebuff</c> flag, because that flag is a property of the template rather than
 		/// of the wire format and duplicating it into two arrays would let the two disagree.

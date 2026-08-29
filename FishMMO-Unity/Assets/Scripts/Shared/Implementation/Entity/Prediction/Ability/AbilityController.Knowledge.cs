@@ -273,67 +273,64 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Abilities this peer knows about only because it OBSERVES the caster, kept apart from
-		/// <see cref="KnownAbilities"/>.
+		/// Files an ability this peer was told about because it OBSERVES the caster.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// An observer's copy of a peer's <see cref="KnownAbilities"/> is written once, by
-		/// <c>ReadPayload</c>, at the moment it starts observing. Anything the caster learns after
-		/// that is unknown to it, and every cast of such an ability was dropped by
-		/// <c>OnAbilityActivatedBroadcast</c> — nothing was drawn, for the rest of the session.
-		/// <c>AbilityLearnedObserverBroadcast</c> fills this dictionary instead.
+		/// Goes straight into <see cref="KnownAbilities"/>. An observer's copy of a peer's set is
+		/// written once by <c>ReadPayload</c> when it starts observing, so without this anything
+		/// the caster learned afterwards stayed unknown and every cast of it was dropped by
+		/// <c>OnAbilityActivatedBroadcast</c> — invisible for the rest of the session.
+		/// <c>AbilityLearnedObserverBroadcast</c> is what closes that gap.
 		/// </para>
 		/// <para>
-		/// Deliberately NOT <see cref="KnownAbilities"/>. That dictionary is what
-		/// <see cref="CanActivate"/> gates on, and its documented invariant is that only
-		/// server-authoritative paths populate it. This one is read by the visual reproduction
-		/// path and by nothing else, so a forged learn message buys an attacker a projectile
-		/// drawn on their own screen and no activation of any kind.
+		/// <b>This used to land in a separate observer-only dictionary</b> so that
+		/// <see cref="CanActivate"/>, which gates on <see cref="KnownAbilities"/>, could keep the
+		/// invariant that only server-authoritative paths populate it. A local client is required to
+		/// hold an observed character's real state — Inspect and faction/aggro evaluation read it,
+		/// not just the renderer — so the parallel set was the wrong shape and is gone. The
+		/// invariant is preserved more cheaply by the owner check below.
 		/// </para>
 		/// <para>
-		/// Instance state, so it dies with the character rather than needing eviction: an
-		/// observer that loses sight of a caster despawns the object and the whole controller
-		/// with it, and a later re-spawn refills <see cref="KnownAbilities"/> from the payload.
+		/// <b>Never applied to our own character.</b> The owner learns through the authoritative
+		/// <c>KnownAbilityAddBroadcast</c> family, which is registered for the owner alone. This
+		/// message only ever describes somebody else, so refusing it on our own character costs
+		/// nothing and means a forged learn can never reach the dictionary an activation is gated
+		/// on.
 		/// </para>
 		/// </remarks>
-		private Dictionary<long, Ability> observedAbilities;
-
-		/// <summary>
-		/// Files an ability an observer was told about, for visual reproduction only.
-		/// </summary>
 		/// <param name="abilityID">The ability instance id used by activation broadcasts.</param>
 		/// <param name="template">The template the ability was built from.</param>
 		/// <param name="abilityEvents">Crafted event ids, or null.</param>
 		public void RegisterObservedAbility(long abilityID, AbilityTemplate template, List<int> abilityEvents)
 		{
-			if (template == null || abilityID == NO_ABILITY)
+			if (template == null || abilityID == NO_ABILITY || KnownAbilities == null)
 			{
 				return;
 			}
 
-			// Already authoritative here; the payload copy wins.
-			if (KnownAbilities != null && KnownAbilities.ContainsKey(abilityID))
+			if (base.IsOwner)
 			{
 				return;
 			}
 
-			observedAbilities ??= new Dictionary<long, Ability>();
-			if (observedAbilities.ContainsKey(abilityID))
+			// Already known — the payload copy, or an earlier learn, wins.
+			if (KnownAbilities.ContainsKey(abilityID))
 			{
 				return;
 			}
 
-			observedAbilities[abilityID] = new Ability(abilityID, template, abilityEvents);
+			KnownAbilities[abilityID] = new Ability(abilityID, template, abilityEvents);
+			longestKnownAbilityRangeDirty = true;
 		}
 
 		/// <summary>
-		/// Resolves an ability for the visual reproduction paths (activation and destroy
-		/// broadcasts): the authoritative set first, then anything learned while observing.
+		/// Resolves an ability for the visual reproduction paths (activation and destroy broadcasts).
 		/// </summary>
 		/// <remarks>
-		/// Never use this to decide whether a character may cast — that is
-		/// <see cref="KnownAbilities"/>'s job, and only its.
+		/// A thin wrapper over <see cref="KnownAbilities"/>, kept as its own method because the call
+		/// sites are the VISUAL paths and naming them as such is what stops somebody reaching for this
+		/// to decide whether a character may cast. That remains <see cref="CanActivate"/>'s job.
 		/// </remarks>
 		public bool TryGetAbilityForVisuals(long abilityID, out Ability ability)
 		{
@@ -341,29 +338,8 @@ namespace FishMMO.Shared
 			{
 				return true;
 			}
-			if (observedAbilities != null && observedAbilities.TryGetValue(abilityID, out ability))
-			{
-				return true;
-			}
 			ability = null;
 			return false;
-		}
-
-		/// <summary>
-		/// Detaches and forgets every observer-only ability. Called from
-		/// <see cref="AbilityController.ResetState"/> alongside the authoritative sets.
-		/// </summary>
-		private void ClearObservedAbilities()
-		{
-			if (observedAbilities == null)
-			{
-				return;
-			}
-			foreach (Ability ability in observedAbilities.Values)
-			{
-				ability.DetachAllAbilityObjects();
-			}
-			observedAbilities.Clear();
 		}
 
 		/// <summary>

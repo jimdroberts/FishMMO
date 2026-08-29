@@ -1013,14 +1013,22 @@ namespace FishMMO.UnitTests
 		{
 			MethodInfo removeAll = typeof(BuffController).GetMethod("RemoveAll", Any);
 			LogAssert.IsTrue(removeAll != null, "BuffController.RemoveAll must exist.");
+			/* Asserted by NAME, not by arity. The property that matters is that clearing permanent
+			 * buffs is an explicit decision at each call site; how many other options RemoveAll
+			 * grew since is irrelevant, and pinning the count made an unrelated parameter look like
+			 * a regression. */
 			ParameterInfo[] parameters = removeAll.GetParameters();
-			LogAssert.AreEqual(2, parameters.Length,
+			bool hasIncludePermanent = false;
+			for (int i = 0; i < parameters.Length; ++i)
+			{
+				hasIncludePermanent |= parameters[i].Name == "includePermanent";
+			}
+			LogAssert.IsTrue(hasIncludePermanent,
 				"RemoveAll must take an explicit includePermanent flag rather than always exempting permanent buffs.");
-			LogAssert.AreEqual("includePermanent", parameters[1].Name);
 
 			string source = File.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
-			int count = source.Split(new[] { "RemoveAll(ignoreInvokeRemove: true, includePermanent: true)" }, StringSplitOptions.None).Length - 1;
+			int count = source.Split(new[] { "includePermanent: true" }, StringSplitOptions.None).Length - 1;
 			LogAssert.AreEqual(2, count,
 				"Both lifecycle callers (ResetState and ReadPayload) must clear permanent buffs.");
 		}

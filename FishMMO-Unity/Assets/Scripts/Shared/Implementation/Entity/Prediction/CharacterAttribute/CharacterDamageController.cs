@@ -501,6 +501,7 @@ namespace FishMMO.Shared
 			{
 				combatTimerActive = false;
 				Character.DisableFlags(CharacterFlags.IsInCombat);
+				BroadcastCombatState(false);
 
 				/* Leaving combat expires loot rights in both directions. Without this, tagging a
 				 * creature for one point of damage and walking away would still entitle the
@@ -645,6 +646,7 @@ namespace FishMMO.Shared
 			{
 				combatTimerActive = true;
 				Character.EnableFlags(CharacterFlags.IsInCombat);
+				BroadcastCombatState(true);
 			}
 		}
 
@@ -854,6 +856,63 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		/// <param name="dead">True on death, false when the character is revived.</param>
+		/// <summary>
+		/// Announces a combat-state transition locally and to this character's observers.
+		/// </summary>
+		/// <remarks>
+		/// Applied locally before broadcasting, because a broadcast is never delivered back to its
+		/// sender — without it the server would announce a transition it never raised on itself, and
+		/// anything server-side listening would miss it.
+		/// </remarks>
+		/// <param name="inCombat">True on entering combat, false on leaving.</param>
+		private void BroadcastCombatState(bool inCombat)
+		{
+			ICharacterDamageController.OnCombatStateChanged?.Invoke(Character, inCombat);
+
+			if (base.NetworkManager == null || base.NetworkObject == null || !base.IsServerStarted)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterCombatStateBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				InCombat = inCombat,
+			}, true, FishNet.Transporting.Channel.Reliable);
+		}
+
+		/// <summary>Applies a combat-state broadcast to whichever character it names.</summary>
+		private static void OnCombatStateBroadcast(CharacterCombatStateBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out FishNet.Object.NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+
+			CharacterDamageController controller = nob.GetComponent<CharacterDamageController>();
+			if (controller?.Character == null)
+			{
+				return;
+			}
+
+			if (msg.InCombat)
+			{
+				controller.Character.EnableFlags(CharacterFlags.IsInCombat);
+			}
+			else
+			{
+				controller.Character.DisableFlags(CharacterFlags.IsInCombat);
+			}
+
+			ICharacterDamageController.OnCombatStateChanged?.Invoke(controller.Character, msg.InCombat);
+		}
+
 		private void BroadcastDeathState(bool dead)
 		{
 			ApplyDeathState(dead);
@@ -921,6 +980,7 @@ namespace FishMMO.Shared
 				return;
 			}
 			networkManager.ClientManager.RegisterBroadcast<CharacterDeathStateBroadcast>(OnDeathStateBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<CharacterCombatStateBroadcast>(OnCombatStateBroadcast);
 			deathStateBroadcastRegistered = true;
 		}
 

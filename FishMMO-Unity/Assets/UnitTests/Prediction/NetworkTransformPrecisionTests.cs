@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Globalization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using FishNet.Object;
 using FishNet.Serializing;
@@ -36,6 +38,8 @@ namespace FishMMO.UnitTests
 		private const float PROJECT_MULTIPLIER = 10f;
 		/// <summary>FishNet's stock value, which every unmodified prefab still gets.</summary>
 		private const float STOCK_MULTIPLIER = 100f;
+		/// <summary>Half the 10 cm wire grid: fine enough to be responsive, coarse enough to carry news.</summary>
+		private const float PROJECT_SENSITIVITY = 0.05f;
 
 		private static readonly Type NtType = typeof(NT);
 
@@ -252,6 +256,93 @@ namespace FishMMO.UnitTests
 		}
 
 		// ── the wiring ───────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Sends are gated on <c>_positionSensitivity</c>, measured against the last <em>sent</em>
+		/// position, so movement below it accumulates rather than being lost. A sensitivity far
+		/// finer than the wire grid just schedules packets that decode to the value already sent.
+		/// </summary>
+		[Test]
+		public void MovementBelowTheSensitivity_DoesNotMarkThePositionChanged()
+		{
+			GameObject go = new GameObject("NtSensitivity");
+			try
+			{
+				NT nt = Build(go, Vector3.zero, PROJECT_MULTIPLIER);
+				NtType.GetField("_positionSensitivity", BindingFlags.Instance | BindingFlags.NonPublic)
+					.SetValue(nt, PROJECT_SENSITIVITY);
+				MethodInfo getChanged = NtType.GetMethod("GetChanged",
+					BindingFlags.Instance | BindingFlags.NonPublic,
+					null,
+					new[] { typeof(Vector3), typeof(Quaternion), typeof(Vector3), typeof(NetworkBehaviour) },
+					null);
+				Assert.IsNotNull(getChanged, "GetChanged signature changed; this guard needs updating.");
+
+				Vector3 lastSent = Vector3.zero;
+				Quaternion rotation = go.transform.localRotation;
+				Vector3 scale = go.transform.localScale;
+
+				int PositionBits(Vector3 to)
+				{
+					go.transform.localPosition = to;
+					object result = getChanged.Invoke(nt, new object[] { lastSent, rotation, scale, null });
+					return Convert.ToInt32(result) & POSITION_XYZ;
+				}
+
+				Assert.AreEqual(0, PositionBits(new Vector3(0.02f, 0f, 0f)),
+					"A 2 cm move is inside the sensitivity and should not schedule a send.");
+				Assert.AreEqual(0, PositionBits(new Vector3(0.049f, 0f, 0f)),
+					"A move just under the sensitivity should not schedule a send.");
+				Assert.AreEqual(1, PositionBits(new Vector3(0.06f, 0f, 0f)),
+					"A 6 cm move exceeds the sensitivity and should mark X changed.");
+			}
+			finally { UnityEngine.Object.DestroyImmediate(go); }
+		}
+
+		/// <summary>
+		/// The sensitivity and the multiplier have to be chosen together: the first decides how far
+		/// something moves before a packet is scheduled, the second how finely that packet can
+		/// describe it.
+		/// </summary>
+		/// <remarks>
+		/// Far below the grid step, sends carry no new information. Above it, positions go stale by
+		/// more than the quantisation already costs. This pins the pair inside that band so neither
+		/// can be retuned alone.
+		/// </remarks>
+		[Test]
+		public void SensitivityAndMultiplier_StayCoherentOnEveryPrefab()
+		{
+			const string ntGuid = "a2836e36774ca1c4bbbee976e17b649c";
+			int checkedCount = 0;
+
+			foreach (string path in Directory.GetFiles(Application.dataPath, "*.prefab", SearchOption.AllDirectories))
+			{
+				string text = File.ReadAllText(path);
+				if (!text.Contains(ntGuid))
+				{
+					continue;
+				}
+
+				checkedCount++;
+				string name = Path.GetFileName(path);
+				Match multiplier = Regex.Match(text, @"_positionMultiplier:\s*([0-9.]+)");
+				Match sensitivity = Regex.Match(text, @"_positionSensitivity:\s*([0-9.]+)");
+				Assert.IsTrue(multiplier.Success, $"{name} has no _positionMultiplier.");
+				Assert.IsTrue(sensitivity.Success, $"{name} has no _positionSensitivity.");
+
+				float gridStep = 1f / float.Parse(multiplier.Groups[1].Value, CultureInfo.InvariantCulture);
+				float sensitivityValue = float.Parse(sensitivity.Groups[1].Value, CultureInfo.InvariantCulture);
+
+				Assert.GreaterOrEqual(sensitivityValue, gridStep * 0.25f,
+					$"{name}: sensitivity {sensitivityValue} is far finer than the {gridStep} wire grid, " +
+					"so it schedules sends that cannot carry new information.");
+				Assert.LessOrEqual(sensitivityValue, gridStep,
+					$"{name}: sensitivity {sensitivityValue} exceeds the {gridStep} wire grid, " +
+					"so positions go stale by more than quantisation already costs.");
+			}
+
+			Assert.AreEqual(10, checkedCount, "Expected ten NetworkTransform prefabs; the set changed.");
+		}
 
 		/// <summary>
 		/// Every NetworkTransform in the project must carry the project multiplier. A prefab that
