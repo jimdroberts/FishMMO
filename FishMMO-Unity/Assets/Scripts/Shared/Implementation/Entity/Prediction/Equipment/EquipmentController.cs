@@ -55,6 +55,14 @@ namespace FishMMO.Shared
 		/// Runs after CooldownController (90) and before CharacterAttributeController (95)
 		/// so equipment attribute modifiers are settled before the attribute reconcile snapshot.
 		/// </summary>
+		/// <remarks>
+		/// <b>Must stay below <see cref="CharacterAttributeController.Order"/> (95).</b> Restoring an
+		/// item re-applies its modifiers incrementally through
+		/// <c>ItemGenerator.ApplyAttributes</c> → <c>AddModifier</c>; the attribute reconcile then
+		/// overwrites the total absolutely. Raising this above 95 would leave those increments on
+		/// top of a total that already contains them. See the remarks on
+		/// <see cref="CharacterAttributeController.Order"/>.
+		/// </remarks>
 		public int Order => 93;
 
 		/// <summary>
@@ -595,10 +603,47 @@ namespace FishMMO.Shared
 			equipmentSnapshotDirty = true;
 		}
 
+		/// <summary>
+		/// True when this peer applied the attribute modifiers of the items in these slots, and so
+		/// is the peer that must reverse them.
+		/// </summary>
+		/// <remarks>
+		/// The server and the owning client equip for real. Everybody else is fed by
+		/// <see cref="ApplyObservedSlot"/>, which builds the item and points it at this character
+		/// through <see cref="SetEquippedCharacterSilently"/> WITHOUT applying its bonuses — the
+		/// server's authoritative <c>ExternalModifier</c> already contains them and arrives in
+		/// <c>CharacterAttributesBroadcast</c>. Mirrors <c>BuffController.SimulatesBuffEffects</c>,
+		/// which draws the same line for the same reason.
+		/// </remarks>
+		private bool SimulatesEquipmentEffects =>
+			base.NetworkObject != null && (base.IsServerStarted || base.IsOwner);
+
 		/// <inheritdoc />
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
+
+			/* Detach silently first on a peer that never applied these modifiers.
+			 *
+			 * Clear() destroys each item, and Item.Destroy unequips BEFORE detaching its handlers
+			 * (deliberately — that is what stops a real unequip orphaning its modifiers), so
+			 * ItemEquippable_OnUnequip runs and ItemGenerator.RemoveAttributes subtracts. On an
+			 * observer those bonuses were never added: SetEquippedCharacterSilently suppresses the
+			 * OnEquip half and then RE-ATTACHES the handler, leaving the removal half live. The
+			 * result was an observed character's sheet dropping by its gear's worth on teardown.
+			 * Clearing Character first makes ItemEquippable.Unequip a no-op, so the destroy still
+			 * runs and raises nothing. */
+			if (!SimulatesEquipmentEffects)
+			{
+				for (int i = 0; i < Items.Count; ++i)
+				{
+					Item item = Items[i];
+					if (item != null && item.IsEquippable)
+					{
+						ClearEquippedCharacterSilently(item);
+					}
+				}
+			}
 
 			Clear();
 			pendingEquips.Clear();

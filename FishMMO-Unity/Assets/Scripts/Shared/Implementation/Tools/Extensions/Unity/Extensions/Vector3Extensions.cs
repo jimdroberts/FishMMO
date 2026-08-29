@@ -10,18 +10,78 @@ namespace FishMMO.Shared
 	public static class Vector3Extensions
 	{
 		/// <summary>
-		/// Returns a random conical direction as a Quaternion, based on a forward vector, start position, cone radius, and distance.
+		/// A rotation looking along a direction drawn uniformly from inside a cone opening along
+		/// <paramref name="forward"/>.
 		/// </summary>
-		/// <param name="forward">The forward direction vector.</param>
-		/// <param name="startPosition">The starting position.</param>
-		/// <param name="coneRadius">The radius of the cone.</param>
-		/// <param name="distance">The distance from the start position.</param>
-		/// <param name="random">Random number generator.</param>
-		/// <returns>A Quaternion representing the random conical direction.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static Quaternion GetRandomConicalDirection(this Vector3 forward, Vector3 startPosition, float coneRadius, float distance, DeterministicRNG random)
+		/// <remarks>
+		/// <para>
+		/// This used to read <c>Quaternion.Euler(startPosition - ((distance * forward) + (RandomOnUnitSphere(random) * coneRadius)))</c>,
+		/// which fed a WORLD POSITION into <see cref="Quaternion.Euler"/> as if it were Euler angles in
+		/// degrees. The result was a function of the object's absolute map coordinates rather than of
+		/// its heading, the arc was applied as a sphere radius, and the same ability produced unrelated
+		/// rotations at different places in the world. The start position and distance are gone because
+		/// a direction does not depend on either.
+		/// </para>
+		/// <para>
+		/// Sampling is uniform over the spherical cap, not over the polar angle: drawing
+		/// <c>cos(theta)</c> flat keeps the density even across the cap, where drawing <c>theta</c> flat
+		/// would bunch results towards the axis. Every draw comes from
+		/// <paramref name="random"/> so two peers running the same ability with the same generator
+		/// state produce the same direction.
+		/// </para>
+		/// </remarks>
+		/// <param name="forward">Axis the cone opens along. A degenerate vector yields the identity rotation.</param>
+		/// <param name="coneAngleDegrees">TOTAL spread of the cone. Zero or less means no deviation; 360 or more is the whole sphere.</param>
+		/// <param name="random">Deterministic generator. Required — a shared or per-process stream would desynchronise peers.</param>
+		/// <returns>A rotation whose forward axis is the sampled direction.</returns>
+		public static Quaternion GetRandomConicalDirection(this Vector3 forward, float coneAngleDegrees, DeterministicRNG random)
 		{
-			return Quaternion.Euler(startPosition - ((distance * forward) + (RandomOnUnitSphere(random) * coneRadius)));
+			if (forward.sqrMagnitude < 1e-8f)
+			{
+				return Quaternion.identity;
+			}
+
+			Vector3 axis = forward.normalized;
+			if (coneAngleDegrees <= 0.0f || random == null)
+			{
+				return Quaternion.LookRotation(axis, StableUpFor(axis));
+			}
+
+			float halfAngleDegrees = coneAngleDegrees * 0.5f;
+			if (halfAngleDegrees > 180.0f)
+			{
+				halfAngleDegrees = 180.0f;
+			}
+
+			// Uniform over the cap: cos(theta) flat between the rim and the axis.
+			double cosLimit = Math.Cos(halfAngleDegrees * Mathf.Deg2Rad);
+			double cosTheta = cosLimit + (1.0 - cosLimit) * random.NextDouble();
+			double sinTheta = Math.Sqrt(Math.Max(0.0, 1.0 - (cosTheta * cosTheta)));
+			double phi = random.NextDouble() * 2.0 * Math.PI;
+
+			Vector3 local = new Vector3(
+				(float)(sinTheta * Math.Cos(phi)),
+				(float)(sinTheta * Math.Sin(phi)),
+				(float)cosTheta);
+
+			// Local +Z is the cone's axis, so rotating the sample into the axis frame aims it.
+			Vector3 direction = Quaternion.LookRotation(axis, StableUpFor(axis)) * local;
+			if (direction.sqrMagnitude < 1e-8f)
+			{
+				return Quaternion.LookRotation(axis, StableUpFor(axis));
+			}
+			return Quaternion.LookRotation(direction.normalized, StableUpFor(direction));
+		}
+
+		/// <summary>
+		/// An up vector that is never parallel to <paramref name="direction"/>, so
+		/// <see cref="Quaternion.LookRotation(Vector3, Vector3)"/> cannot degenerate on a
+		/// straight-up or straight-down heading.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static Vector3 StableUpFor(Vector3 direction)
+		{
+			return Mathf.Abs(direction.normalized.y) > 0.99f ? Vector3.forward : Vector3.up;
 		}
 
 		/// <summary>
@@ -88,10 +148,12 @@ namespace FishMMO.Shared
 			double y = Math.Sin(phi) * Math.Sin(theta);
 			double z = Math.Cos(phi);
 
-			// Unsafe.As is used for fast double-to-float conversion
-			return new Vector3(Unsafe.As<double, float>(ref x),
-							   Unsafe.As<double, float>(ref y),
-							   Unsafe.As<double, float>(ref z));
+			/* A plain cast, not Unsafe.As. This read `Unsafe.As<double, float>(ref x)` and called it a
+			 * "fast double-to-float conversion", but Unsafe.As REINTERPRETS the first four bytes of the
+			 * double rather than converting its value: 0.5 came back as 0f (the low half of its mantissa
+			 * is zero) and 0.9999 as 476472.94f. Every vector this returned was garbage, not a point on
+			 * the unit sphere. */
+			return new Vector3((float)x, (float)y, (float)z);
 		}
 
 		/// <summary>

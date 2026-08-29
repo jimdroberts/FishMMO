@@ -401,15 +401,6 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Tells observers a character died or was revived.
-	/// </summary>
-	/// <remarks>
-	/// Deliberately not a buffered message. Clients arriving after a death are served by the spawn
-	/// payload, which carries <c>CharacterFlags.IsDead</c> for players and NPCs alike; buffering
-	/// this instead would tie a message's lifetime to a pooled NPC's slot rather than to the
-	/// creature that died in it.
-	/// </remarks>
-	/// <summary>
 	/// Tells observers a character entered or left combat.
 	/// </summary>
 	/// <remarks>
@@ -433,6 +424,15 @@ namespace FishMMO.Shared
 		public bool InCombat;
 	}
 
+	/// <summary>
+	/// Tells observers a character died or was revived.
+	/// </summary>
+	/// <remarks>
+	/// Deliberately not a buffered message. Clients arriving after a death are served by the spawn
+	/// payload, which carries <c>CharacterFlags.IsDead</c> for players and NPCs alike; buffering
+	/// this instead would tie a message's lifetime to a pooled NPC's slot rather than to the
+	/// creature that died in it.
+	/// </remarks>
 	public struct CharacterDeathStateBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the character whose death state changed.</summary>

@@ -52,6 +52,7 @@ This is also why the per-spawner override settings matter for memory and not onl
 - Weighted item roll tables so one world-item prefab can serve every ground pickup in the game from a single pool bucket
 - NavMeshAgent re-seating on reuse: `IAIController.Initialize` warps the agent onto the NavMesh at the spawn position, because a recycled NPC's agent otherwise still believes it is where the previous occupant died
 - Per-object configurable respawn timers (fixed or randomized between min/max)
+- One `Update` for the whole process (`ObjectSpawnerScheduler`) rather than one per spawner, and only spawners that actually have something to respawn are visited at all
 - Auto-calculated vertical offset (`YOffset`) from prefab collider dimensions
 - Initial spawn count with clamping to max concurrent limit
 - AI controller initialization with home position on spawn, performed after the scene move and activation
@@ -92,6 +93,8 @@ This is an integrated module within the FishMMO project. No separate installatio
 | `SpawnType`          | `ObjectSpawnType`             | Linear         | Selection strategy for choosing from the list        |
 | `RandomRespawnTime`  | `bool`                        | true           | If true, randomizes between min/max respawn times    |
 | `InitialRespawnTime` | `float`                       | 0              | Fixed respawn time when RandomRespawnTime is false   |
+| `RespawnCheckIntervalMinimum` | `float`              | 3              | Shortest delay between this spawner's respawn checks |
+| `RespawnCheckIntervalMaximum` | `float`              | 6              | Longest delay; each check re-rolls inside the range so spawners do not poll in lockstep |
 | `RandomSpawnPosition`| `bool`                        | true           | If true, picks random position within bounding box   |
 | `BoundingBoxSize`    | `Vector3`                     | (1, 1, 1)      | Size of the spawn area                               |
 | `SphereRadius`       | `float`                       | 0.5            | SphereCast radius for ground detection               |
@@ -161,6 +164,7 @@ ObjectSpawnType : byte
 |--------------------------|----------------------------------|------------------------------------------------|
 | `Spawned`                | `Dictionary<long, ISpawnable>`   | Currently active spawned objects by ID          |
 | `SpawnableRespawnTimers` | `List<DateTime>`                 | Pending respawn timestamps                     |
+| `SchedulerIndex`         | `int`                            | Slot in `ObjectSpawnerScheduler`'s active list, or `NotActive`. Owned by the scheduler; not serialized |
 
 ### Editor Settings
 
@@ -232,6 +236,8 @@ Typical use: Boss encounters where all mobs must be defeated before the encounte
 | Ground detection | Enable `RandomSpawnPosition`, place spawner above terrain | Entities placed on ground surface with correct YOffset |
 | Gizmo display | Select spawner in Editor Scene view | Bounding box wireframe visible with configured color |
 | Object pooling | Despawn and respawn repeatedly, monitor allocations | Objects returned to pool and reused |
+| Scheduler membership | Read `ObjectSpawnerScheduler.ActiveCount` with every spawner at its cap | Zero — a world at rest costs nothing per frame |
+| Group refill | Wipe a camp of several NPCs at once, wait out the respawn delay | All of them return together, not one per check interval |
 
 ## Flow Diagram
 
@@ -279,8 +285,10 @@ flowchart LR
 
 ### Condition Evaluation Flow
 
+Evaluated once per pass, not once per due timer:
+
 ```
-Timer Elapsed?
+Any timer elapsed?
     │
     ├── No  → Skip
     │
@@ -305,14 +313,40 @@ Timer Elapsed?
 
 ### Respawn Loop (`TryRespawn`)
 
-Runs every frame in `Update()`:
+Driven by `ObjectSpawnerScheduler`, not by a per-spawner `Update`:
 
 1. Skips if no spawnables or no pending timers.
 2. Clears all timers if `Spawned.Count >= MaxSpawnCount`.
-3. For each timer that has elapsed (`DateTime.UtcNow >= respawnTime`):
-   - **OR conditions**: If any condition returns true, respawn is allowed. If the list is empty, defaults to allowed.
-   - **AND conditions**: All conditions must return true (checked only if OR conditions passed).
-   - If all conditions pass, spawns the object and removes the timer.
+3. Returns immediately if no timer has elapsed.
+4. Evaluates the respawn conditions **once** for the pass. `OnCheckCondition` is handed only the
+   spawner, so its answer cannot differ between two timers in the same pass.
+5. Consumes **every** elapsed timer, spawning one object each, stopping at `MaxSpawnCount`.
+
+A refused respawn consumes no timer: the spawner keeps its work and is re-tested on its own
+interval, which is what lets a camp come back once the boss guarding it dies.
+
+### Who gets asked, and how often (`ObjectSpawnerScheduler`)
+
+Two independent decisions, deliberately kept apart:
+
+- **How often a spawner polls** is its own `RespawnCheckIntervalMinimum` / `Maximum`, re-rolled each
+  pass. Respawn deadlines are wall-clock `DateTime` values, so a longer interval does not shift
+  them — it only bounds how soon after a deadline the object appears.
+- **Which spawners are asked at all** is the scheduler's membership list. A spawner joins when it
+  has something to respawn (`HasRespawnWork`) and leaves the moment it does not, so a spawner at its
+  cap costs nothing: not a check, not an interval comparison, and not an `Update` dispatch. That is
+  what makes the per-frame cost scale with how much of the world is in motion rather than with how
+  much of it exists.
+
+`ObjectSpawnerSchedulerDriver` is the single hidden, `DontDestroyOnLoad` `MonoBehaviour` that calls
+`Tick` once a frame. The list is *swept* rather than walked — each frame covers a
+`FramesPerSweep`-th of it — because "waiting on a deadline" is the common state in a busy world and
+those spawners do not need visiting sixty times a second to be told nothing is due. `Time.time` is a
+native property, so it is read once per tick and handed down rather than read per spawner.
+
+Membership is maintained on `OnStartNetwork`, on `Despawn`, on a direct `TryRespawn`, and on
+`OnStopNetwork` / `OnDestroy`. Unregistering on destruction is what earns the sweep its cheap
+`ReferenceEquals` liveness check instead of Unity's `== null`, which is a native call per entry.
 
 ## Project Structure
 
@@ -324,6 +358,8 @@ Spawner/
 ├── ObjectSpawnType.cs          # Enum for spawn selection strategy (Linear, Random, Weighted)
 ├── ObjectSpawner.cs            # Core spawner component (NetworkBehaviour)
 ├── ObjectSpawnerPool.cs        # Pool pre-warming; fixes a map's memory footprint at load
+├── ObjectSpawnerScheduler.cs   # Active list of spawners with work; decides who is asked
+├── ObjectSpawnerSchedulerDriver.cs # The one Update that ticks the scheduler
 ├── Settings/
 │   ├── SpawnableSettings.cs        # Per-object spawn configuration (respawn times, chance, offset)
 │   ├── ItemSpawnableSettings.cs    # Item-specific spawnable settings

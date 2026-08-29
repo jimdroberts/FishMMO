@@ -109,7 +109,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Orders by network identity: ObjectId, then name, then instance id, then original index.
+		/// Orders by network identity: ObjectId, then name, then position key, then original index.
 		/// </summary>
 		/// <returns>Negative when <paramref name="a"/> sorts first.</returns>
 		public static int CompareStable(TargetRank a, TargetRank b)
@@ -446,17 +446,19 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// A hash of a GameObject's name that both peers compute identically.
+		/// Stable hash of a world position at millimetre resolution. Used only to separate
+		/// un-networked candidates that share a name.
 		/// </summary>
 		/// <remarks>
-		/// Not <see cref="string.GetHashCode()"/>: that is permitted to be randomised per process, so
-		/// using it as a cross-peer sort key would order the same two scene objects differently on the
-		/// client and on the server. FNV-1a over the UTF-16 code units has no such freedom.
+		/// <b>It hashes the LIVE position, not an authored one</b> — the caller reads
+		/// <c>candidate.transform.position</c>. For the case this key exists to serve that is the same
+		/// thing: un-networked candidates are scene objects, every peer loads them from the same scene,
+		/// and they do not move. It is only a total-order tiebreak of last resort, reached when two
+		/// candidates share both an ObjectId and a name, so anything networked is separated long before
+		/// it gets here. Two un-networked candidates that share a name AND move independently would
+		/// order differently on two peers; nothing in the project does that today, and a candidate that
+		/// needs a reproducible identity should carry a NetworkObject rather than rely on this.
 		/// </remarks>
-		/// <summary>
-		/// Stable hash of a world position at millimetre resolution, identical on every peer that
-		/// loaded the same authored scene. Used to separate un-networked candidates that share a name.
-		/// </summary>
 		public static int StablePositionKey(Vector3 position)
 		{
 			unchecked
@@ -472,6 +474,14 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// A hash of a GameObject's name that both peers compute identically.
+		/// </summary>
+		/// <remarks>
+		/// Not <see cref="string.GetHashCode()"/>: that is permitted to be randomised per process, so
+		/// using it as a cross-peer sort key would order the same two scene objects differently on the
+		/// client and on the server. FNV-1a over the UTF-16 code units has no such freedom.
+		/// </remarks>
 		public static int StableNameKey(string name)
 		{
 			if (string.IsNullOrEmpty(name))

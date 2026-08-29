@@ -19,20 +19,29 @@ namespace FishMMO.Shared
 	/// private and reading it reflectively per hit would be absurd.
 	/// </para>
 	/// <para>
-	/// The first term does NOT measure latency, despite its name.
-	/// <c>NetworkConnection.ReplicateTick.LocalTickDifference</c> is
-	/// <c>TimeManager.LocalTick - ReplicateTick.LocalTick</c>, and <c>ReplicateTick.LocalTick</c> is
-	/// stamped with the CURRENT server tick every time the server runs a created replicate for that
-	/// owner (<c>NetworkBehaviour.ReplicateData</c> → <c>NetworkObject.SetReplicateTick</c> →
-	/// <c>EstimatedTick.Update</c>, which assigns <c>LocalTick = tm.LocalTick</c>). That stamp
-	/// happens immediately before the replicate body — including any ability that resolves a hit
-	/// from inside it — so on every tick that runs real input the difference is zero, whatever the
-	/// client's RTT. It only grows while a client is input-starved, which is the opposite of the
-	/// quantity wanted. In practice compensation is therefore a constant
-	/// <see cref="SpectatorInterpolationTicks"/>, and a 200 ms player is compensated exactly as much
-	/// as a 20 ms one. Deriving the term from something that tracks arrival — the owner's packet
-	/// tick or the TimeManager's RTT — is an open decision, not a bug in the rewind itself, which
-	/// works correctly for whatever tick it is handed.
+	/// <b>The whole offset is measured on the client and sent in the input.</b>
+	/// <see cref="KCCPlayer.ResolveViewOffset"/> adds half the round trip to
+	/// <see cref="SpectatorInterpolationTicks"/> and stamps the sum into
+	/// <c>CharacterReplicateData.ViewOffsetTicks</c>, to a 1/256 of a tick. The server cannot derive
+	/// it: <c>NetworkConnection.ReplicateTick.LocalTickDifference</c> looks like a latency term and
+	/// is not one — <c>ReplicateTick.LocalTick</c> is stamped with the current server tick
+	/// immediately before the replicate body runs, so it reads 0 on every tick that carries real
+	/// input, whatever the client's RTT.
+	/// </para>
+	/// <para>
+	/// <b>The offset is a DURATION; the anchor it is subtracted from is a server tick.</b> This is
+	/// the distinction the whole file turns on, so it lives in one place —
+	/// <see cref="ServerTickDomain"/> — which both this type and
+	/// <see cref="CharacterPositionHistory.RecordTick"/> call. Anchoring on the replicate input's
+	/// own tick is WRONG and silently disables compensation: on the server a replicate carries the
+	/// OWNING CLIENT'S <c>TimeManager.LocalTick</c>, an unsynchronised counter that restarts at zero
+	/// when that client connects (<c>NetworkBehaviour.Replicate_Reader</c> stamps the read datas
+	/// from <c>LastPacketTick.LastRemoteTick</c>, which is the sender's own <c>LocalTick</c>). The
+	/// history is keyed by the SERVER'S tick, so a target built in the client's domain lands far
+	/// outside the recorded window, every <c>Rewind</c> declines, and the query runs against live
+	/// positions with nothing logged. <see cref="PredictionTick"/> exists to stop replicate-domain
+	/// ticks leaking into raw-tick code; it cannot help here because this reads a plain
+	/// <c>uint</c>, so the rule is stated instead.
 	/// </para>
 	/// <para>
 	/// <b>Server-driven characters compensate nothing.</b> An NPC's brain runs on the server against
@@ -73,6 +82,31 @@ namespace FishMMO.Shared
 		public const uint MaximumCompensationTicks = 30;
 
 		/// <summary>
+		/// The one tick domain lag compensation works in: the server's own <c>TimeManager</c> tick.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Exists so the recording side and the rewinding side cannot drift apart. Every sample in
+		/// <see cref="CharacterPositionHistory"/> is keyed by this, and every
+		/// <see cref="RewindTarget"/> is measured back from it; expressing that as one function
+		/// makes a mismatch impossible to introduce by editing one side, which is exactly how the
+		/// replicate-domain anchor got in.
+		/// </para>
+		/// <para>
+		/// On the server <c>TimeManager.LocalTick</c> returns <c>TimeManager.Tick</c>, so this is
+		/// the authoritative simulation tick. It is deliberately NOT the replicate input's tick —
+		/// see the remarks on <see cref="LagCompensationTick"/> for why that one belongs to the
+		/// owning client and cannot index this history.
+		/// </para>
+		/// </remarks>
+		/// <param name="timeManager">The server's time manager.</param>
+		/// <returns>The current server tick, or <see cref="TimeManager.UNSET_TICK"/> when there is no time manager.</returns>
+		public static uint ServerTickDomain(TimeManager timeManager)
+		{
+			return timeManager != null ? timeManager.LocalTick : TimeManager.UNSET_TICK;
+		}
+
+		/// <summary>
 		/// Resolves the tick <paramref name="caster"/>'s client was rendering its peers at.
 		/// </summary>
 		/// <param name="caster">The character whose view is being reconstructed.</param>
@@ -104,42 +138,40 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			/* The offset the CLIENT measured, not one derived server-side.
-			 *
-			 * ReplicateTick.LocalTickDifference used to supply the latency term and is not a latency
-			 * term: it is stamped with the current server tick immediately before the replicate body
-			 * runs, so it read 0 on every tick that carried real input, and every player was
-			 * compensated the same fixed SpectatorInterpolationTicks regardless of ping. The client
-			 * has both halves of the real number — half its round trip, plus the interpolation buffer
-			 * it holds — and stamps their sum into the input, to a 1/256 of a tick.
-			 *
-			 * It is a claim, not a fact, so it is capped here and CharacterPositionHistory refuses
-			 * anything outside its recorded window outright — an inflated claim buys no compensation
-			 * rather than the deepest rewind available. */
+			/* A server-driven character compensates nothing, and ownership alone does not identify
+			 * one: a pet is owned by the connection that summoned it while a server-side AIController
+			 * writes its input. The owner check above lets monsters out because they are ownerless;
+			 * this lets pets out for the real reason. Today a pet also carries no KCCPlayer, so
+			 * nothing ever writes its ViewOffsetTicks and the zero check below would catch it — but
+			 * that is a property of the current prefabs, not a rule, and rewinding an NPC's targets
+			 * away from where its brain aimed is silent when it happens. */
+			if (nob.TryGetComponent(out IAIController _))
+			{
+				return false;
+			}
+
+			/* The offset the CLIENT measured, not one derived server-side; see the remarks on this
+			 * type. It is a claim, not a fact, so it is capped here and CharacterPositionHistory
+			 * refuses anything outside its recorded window outright — an inflated claim buys no
+			 * compensation rather than the deepest rewind available. */
 			uint wholeTicks = SpectatorInterpolationTicks;
 			float fraction = 0f;
-			uint anchorTick = timeManager.LocalTick;
+
+			/* ALWAYS the server's own tick. The replicate input's tick is the owning client's
+			 * unsynchronised counter and cannot index a history keyed by the server's — anchoring on
+			 * it put every target outside the recorded window, so nothing rewound and every hit
+			 * silently resolved against live positions. See ServerTickDomain. */
+			uint anchorTick = ServerTickDomain(timeManager);
+			if (anchorTick == TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
 
 			if (nob.TryGetComponent(out CharacterPredictionController predictionController))
 			{
 				uint claimed = predictionController.CurrentViewOffsetTicks;
 				wholeTicks = claimed > MaximumCompensationTicks ? MaximumCompensationTicks : claimed;
 				fraction = predictionController.CurrentViewOffsetFraction / 256f;
-
-				/* Anchor on the INPUT's tick, not the server's present one.
-				 *
-				 * The hit is resolved inside the replicate for a particular input, and the server
-				 * runs that input at whatever LocalTick it has reached — the two differ by however
-				 * many ticks of this client's input the server currently has buffered, which is
-				 * exactly the per-client quantity that varies. Anchoring on LocalTick folded that
-				 * queue depth straight into the rewind as error. Outside a replicate (an ability
-				 * object resolving from its own OnTick subscription) the snapshot is unset and the
-				 * server's present tick is the best available anchor. */
-				uint replicateTick = predictionController.CurrentReplicateTickSnapshot;
-				if (replicateTick != TimeManager.UNSET_TICK)
-				{
-					anchorTick = replicateTick;
-				}
 			}
 
 			if (wholeTicks == 0u && fraction <= 0f)

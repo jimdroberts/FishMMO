@@ -137,6 +137,22 @@ namespace FishMMO.Shared
 		public float RespawnCheckIntervalMaximum = 6.0f;
 
 		/// <summary>
+		/// <see cref="Time.time"/> at which this spawner next polls for respawns.
+		/// </summary>
+		private float nextRespawnCheckTime = 0.0f;
+
+		/// <summary>
+		/// This spawner's position in <see cref="ObjectSpawnerScheduler"/>'s active list, or
+		/// <see cref="ObjectSpawnerScheduler.NotActive"/> when it has no work outstanding.
+		/// </summary>
+		/// <remarks>
+		/// Stored here so the scheduler can drop a spawner without searching for it. Owned by the
+		/// scheduler; nothing else should write it.
+		/// </remarks>
+		[NonSerialized]
+		public int SchedulerIndex = ObjectSpawnerScheduler.NotActive;
+
+		/// <summary>
 		/// If true, a random spawn position is picked inside the bounding box using the current position as the center.
 		/// </summary>
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
@@ -182,11 +198,6 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Internal index for linear spawn selection.
 		/// </summary>
-		/// <summary>
-		/// <see cref="Time.time"/> at which <see cref="Update"/> next polls for respawns.
-		/// </summary>
-		private float nextRespawnCheckTime = 0.0f;
-
 		private int lastSpawnIndex = 0;
 
 		/// <summary>
@@ -245,6 +256,10 @@ namespace FishMMO.Shared
 				// Add a new respawn time
 				SpawnableRespawnTimers.Add(respawnTime);
 			}
+
+			/* Enter the schedule. A spawner that filled to its cap above has no timers and is
+			 * deliberately not queued at all. */
+			ObjectSpawnerScheduler.Refresh(this);
 		}
 
 		/// <summary>
@@ -278,44 +293,34 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Polls for respawns on an interval rather than every frame.
+		/// Called when the network stops. Drops this spawner from the respawn schedule.
 		/// </summary>
 		/// <remarks>
-		/// <para>
-		/// <see cref="TryRespawn"/> walks the whole timer list and evaluates every respawn
-		/// condition, so running it per frame costs a scene full of spawners far more than it
-		/// buys. Respawn deadlines are wall-clock <see cref="DateTime"/> values, so polling more
-		/// slowly does not shift them - it only decides how soon after a deadline passes the
-		/// object actually appears, bounded by the interval.
-		/// </para>
-		/// <para>
-		/// The gate lives here rather than inside <see cref="TryRespawn"/> so that direct callers
-		/// still get an immediate attempt.
-		/// </para>
+		/// Without this a spawner in an unloaded scene stays queued and is woken against a
+		/// destroyed object. The scheduler tolerates that, but leaving it to tolerate it means the
+		/// heap carries entries for scenes that no longer exist.
 		/// </remarks>
-		void Update()
+		public override void OnStopNetwork()
 		{
-			if (Time.time < nextRespawnCheckTime)
-			{
-				return;
-			}
+			base.OnStopNetwork();
 
-			ScheduleNextRespawnCheck();
-
-			TryRespawn();
+			ObjectSpawnerScheduler.Unregister(this);
 		}
 
 		/// <summary>
-		/// Picks the next respawn check time, re-randomised each pass so spawners that happen to
-		/// align on one frame drift apart again instead of staying in lockstep.
+		/// Drops this spawner from the respawn sweep when it is destroyed.
 		/// </summary>
-		private void ScheduleNextRespawnCheck()
+		/// <remarks>
+		/// Belt as well as braces: <see cref="OnStopNetwork"/> covers the ordinary path, but a
+		/// spawner destroyed without the network stopping first would otherwise be left in the
+		/// list. That matters more than it looks, because the sweep identifies dead entries with a
+		/// plain reference check rather than Unity's <c>== null</c> — the operator that asks the
+		/// engine whether the native object still exists, at the cost of a native call per entry per
+		/// frame. Leaving here is what earns that cheaper check.
+		/// </remarks>
+		private void OnDestroy()
 		{
-			// Tolerate an inverted or negative range in the inspector rather than never polling.
-			float minimum = Mathf.Max(0.0f, RespawnCheckIntervalMinimum);
-			float maximum = Mathf.Max(minimum, RespawnCheckIntervalMaximum);
-
-			nextRespawnCheckTime = Time.time + UnityEngine.Random.Range(minimum, maximum);
+			ObjectSpawnerScheduler.Unregister(this);
 		}
 
 #if UNITY_EDITOR
@@ -381,6 +386,11 @@ namespace FishMMO.Shared
 			{
 				ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
 			}
+
+			/* The death is the event the whole schedule turns on. The timer just added may fall
+			 * before the wake already queued for this spawner, so the queued one is superseded
+			 * rather than trusted. */
+			ObjectSpawnerScheduler.Refresh(this);
 		}
 
 		/// <summary>
@@ -455,9 +465,102 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Whether this spawner has anything left to respawn.
+		/// </summary>
+		/// <remarks>
+		/// Decides membership of <see cref="ObjectSpawnerScheduler"/>'s active list, and so decides
+		/// whether this spawner costs anything at all. A spawner at its cap or with no pending
+		/// timers is not walked, which is the whole point: the cost of respawning scales with how
+		/// much of the world is in motion rather than with how much of it exists.
+		/// </remarks>
+		/// <returns>True when a respawn is outstanding.</returns>
+		public bool HasRespawnWork()
+		{
+			return Spawnables != null &&
+				Spawnables.Count >= 1 &&
+				SpawnableRespawnTimers.Count >= 1 &&
+				Spawned.Count < MaxSpawnCount;
+		}
+
+		/// <summary>
+		/// Runs this spawner's respawn check if its own interval has elapsed.
+		/// </summary>
+		/// <remarks>
+		/// Called by <see cref="ObjectSpawnerScheduler"/> on every frame this spawner has work
+		/// outstanding. The interval gate is still this spawner's own, on the same terms as before
+		/// — the scheduler decides who is asked, not how often each one polls.
+		/// </remarks>
+		/// <param name="nowUtc">The time to evaluate respawn deadlines against.</param>
+		/// <param name="nowTime">The current <see cref="Time.time"/>, read once by the scheduler.</param>
+		internal void RunScheduledRespawn(DateTime nowUtc, float nowTime)
+		{
+			if (nowTime < nextRespawnCheckTime)
+			{
+				return;
+			}
+
+			ScheduleNextRespawnCheck(nowTime);
+
+			TryRespawn(nowUtc);
+		}
+
+		/// <summary>
+		/// Picks the next respawn check time, re-randomised each pass so spawners that happen to
+		/// align on one frame drift apart again instead of staying in lockstep.
+		/// </summary>
+		/// <remarks>
+		/// The clock is passed in rather than read here. <see cref="Time.time"/> is a native
+		/// property, and crossing into the engine once per active spawner per frame cost more than
+		/// the rest of the sweep put together, so <see cref="ObjectSpawnerScheduler"/> reads it once
+		/// and hands it down.
+		/// </remarks>
+		/// <param name="nowTime">The current <see cref="Time.time"/>.</param>
+		private void ScheduleNextRespawnCheck(float nowTime)
+		{
+			// Tolerate an inverted or negative range in the inspector rather than never polling.
+			float minimum = Mathf.Max(0.0f, RespawnCheckIntervalMinimum);
+			float maximum = Mathf.Max(minimum, RespawnCheckIntervalMaximum);
+
+			nextRespawnCheckTime = nowTime + UnityEngine.Random.Range(minimum, maximum);
+		}
+
+		/// <summary>
 		/// Attempts to respawn objects if their timers have elapsed and respawn conditions are met.
 		/// </summary>
+		/// <remarks>
+		/// Public so anything holding a spawner can force an immediate attempt rather than waiting
+		/// for its scheduled wake. The scheduler reaches the same work through
+		/// <see cref="RunScheduledRespawn"/>.
+		/// </remarks>
 		public void TryRespawn()
+		{
+			TryRespawn(DateTime.UtcNow);
+
+			// A direct caller is outside the schedule, so the wake it just invalidated has to be
+			// replaced. The scheduler reschedules itself and does not reach this.
+			ObjectSpawnerScheduler.Refresh(this);
+		}
+
+		/// <summary>
+		/// Attempts to respawn every object whose timer has elapsed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Respawn conditions are evaluated <b>once</b> for the whole pass, not once per due timer.
+		/// <c>OnCheckCondition</c> is handed only the spawner, so its answer cannot differ between
+		/// two timers in the same pass; asking repeatedly walked every condition's NPC list again
+		/// for each one, which cost the most in exactly the case that produces many due timers at
+		/// once — a group wiped together.
+		/// </para>
+		/// <para>
+		/// Every due timer is then consumed, rather than one per call. A spawner is capable of
+		/// refilling as fast as its deadlines allow; stopping after the first meant the refill rate
+		/// was capped by however often this ran, which is a property of the tick and not something
+		/// anybody authored.
+		/// </para>
+		/// </remarks>
+		/// <param name="nowUtc">The time to evaluate deadlines against.</param>
+		private void TryRespawn(DateTime nowUtc)
 		{
 			if (Spawnables == null ||
 				Spawnables.Count < 1 ||
@@ -473,84 +576,102 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Nothing is due yet. Reached whenever a wake fires early, and on any direct call.
+			bool anyDue = false;
+			for (int i = 0; i < SpawnableRespawnTimers.Count; ++i)
+			{
+				if (nowUtc >= SpawnableRespawnTimers[i])
+				{
+					anyDue = true;
+					break;
+				}
+			}
+			if (!anyDue)
+			{
+				return;
+			}
+
+			/* A refusal consumes no timer, so this spawner still has work and stays in the active
+			 * list. It is re-tested on its own interval, which is what makes a camp come back once
+			 * the boss guarding it dies. */
+			if (!EvaluateRespawnConditions())
+			{
+				return;
+			}
+
 			/* Iterate backwards. The body removes the entry it fires, and a forward loop that
 			 * removes mid-iteration skips the following element. */
 			for (int i = SpawnableRespawnTimers.Count - 1; i >= 0; --i)
 			{
-				DateTime respawnTime = SpawnableRespawnTimers[i];
-
-				if (DateTime.UtcNow >= respawnTime)
+				if (nowUtc < SpawnableRespawnTimers[i])
 				{
-					bool shouldRespawn = true;
+					continue;
+				}
 
-					// Check OR respawn conditions (any one must be true to allow respawn).
-					if (OrConditions != null &&
-						OrConditions.Count >= 1)
+				/* Remove the timer BEFORE spawning. SpawnObject clears the whole timer
+				 * list when it reaches MaxSpawnCount, and the old order then tried to
+				 * remove an index from a list that had just been emptied — the count
+				 * guard turned that into a silent no-op, leaving a consumed timer in
+				 * place whenever the spawner did not hit its cap. */
+				SpawnableRespawnTimers.RemoveAt(i);
+
+				SpawnObject();
+
+				// SpawnObject clears the list at the cap, which invalidates the loop index.
+				if (Spawned.Count >= MaxSpawnCount)
+				{
+					return;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Evaluates the OR and AND respawn condition sets for this spawner.
+		/// </summary>
+		/// <returns>True when a respawn is permitted.</returns>
+		private bool EvaluateRespawnConditions()
+		{
+			// Check OR respawn conditions (any one must be true to allow respawn).
+			if (OrConditions != null &&
+				OrConditions.Count >= 1)
+			{
+				bool any = false;
+				foreach (BaseRespawnCondition condition in OrConditions)
+				{
+					if (condition == null)
 					{
-						shouldRespawn = false;
-						foreach (BaseRespawnCondition condition in OrConditions)
-						{
-							if (condition == null)
-							{
-								continue;
-							}
-							if (condition.OnCheckCondition(this))
-							{
-								shouldRespawn = true;
-								break;
-							}
-						}
+						continue;
 					}
-
-					// Check AND respawn conditions (all must be true to allow respawn).
-					if (shouldRespawn &&
-						TrueConditions != null &&
-						TrueConditions.Count >= 1)
+					if (condition.OnCheckCondition(this))
 					{
-						foreach (BaseRespawnCondition condition in TrueConditions)
-						{
-							if (condition == null)
-							{
-								continue;
-							}
-							if (!condition.OnCheckCondition(this))
-							{
-								shouldRespawn = false;
-								break;
-							}
-						}
+						any = true;
+						break;
 					}
+				}
+				if (!any)
+				{
+					return false;
+				}
+			}
 
-					// If all respawn conditions are met, spawn the object and remove its timer.
-					if (shouldRespawn)
+			// Check AND respawn conditions (all must be true to allow respawn).
+			if (TrueConditions != null &&
+				TrueConditions.Count >= 1)
+			{
+				foreach (BaseRespawnCondition condition in TrueConditions)
+				{
+					if (condition == null)
 					{
-						/* Remove the timer BEFORE spawning. SpawnObject clears the whole timer
-						 * list when it reaches MaxSpawnCount, and the old order then tried to
-						 * remove an index from a list that had just been emptied — the count
-						 * guard turned that into a silent no-op, leaving a consumed timer in
-						 * place whenever the spawner did not hit its cap. */
-						SpawnableRespawnTimers.RemoveAt(i);
-
-						SpawnObject();
-
-						/* Keep draining rather than returning after the first spawn. Returning
-						 * capped the spawner at one object per call, which was invisible while
-						 * this ran every frame — a wiped ten-monster camp refilled in ten frames.
-						 * Behind an interval it becomes one object per interval: a camp taking
-						 * the better part of a minute to refill, and a hard ceiling on spawn rate
-						 * that no authored MinimumRespawnTime can raise. */
-
-						/* SpawnObject empties the timer list the moment Spawned reaches
-						 * MaxSpawnCount, and this loop still holds an index into it. Stop on the
-						 * cap, and bound-check besides, rather than read past the end. */
-						if (Spawned.Count >= MaxSpawnCount ||
-							i > SpawnableRespawnTimers.Count)
-						{
-							break;
-						}
+						continue;
+					}
+					if (!condition.OnCheckCondition(this))
+					{
+						return false;
 					}
 				}
 			}
+
+			return true;
 		}
 
 		/// <summary>

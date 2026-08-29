@@ -7,11 +7,15 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Action that applies a knockback force to a target character, pushing them away from the source.
-	/// Uses the KCC motor's velocity system for deterministic, collision-aware knockback
-	/// instead of direct Transform.position manipulation which bypasses prediction,
-	/// reconciliation, and collision detection. Runs on both client (prediction) and
-	/// server (authoritative); the KCC motor velocity is deterministic so the server
-	/// reconcile will correct any misprediction.
+	/// Uses the KCC motor's velocity system for collision-aware knockback instead of direct
+	/// Transform.position manipulation, which would bypass prediction, reconciliation and collision
+	/// detection.
+	/// <para>
+	/// The displacement is SERVER ONLY — see the note in <see cref="Execute"/> for why this is the
+	/// one feedback action that did not move to <c>EcaAuthority.MayPredict</c>. The victim's own
+	/// client receives it through the reconcile, and the attacker's client plays a cosmetic flinch
+	/// (<see cref="PlayPredictedReaction"/>) in the meantime.
+	/// </para>
 	/// </summary>
 	[Serializable]
 	public class KnockbackHitAction : BaseAction

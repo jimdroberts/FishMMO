@@ -62,7 +62,7 @@ namespace FishMMO.Shared
 				// The healer's own number, drawn now. See ApplyDamageAction for the two guards.
 				if (!EcaAuthority.IsServer(initiator, eventData) && !IsReplayTick(eventData))
 				{
-					PredictedCombatEvents.Predict(target, amount, PredictedCombatEvents.Kind.Heal,
+					PredictedCombatEvents.Predict(initiator, target, amount, PredictedCombatEvents.Kind.Heal,
 						null, UnityEngine.Time.unscaledTime);
 				}
 			}

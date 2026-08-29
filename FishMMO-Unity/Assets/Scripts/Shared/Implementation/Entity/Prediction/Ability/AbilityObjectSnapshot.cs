@@ -41,17 +41,15 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Snapshot of OnTick event triggers for continued ticking.
-		/// Stored as <see cref="IReadOnlyDictionary{TKey,TValue}"/> backed by a shallow copy
-		/// of the live <see cref="Ability"/> dictionary. The <see cref="Dictionary{TKey,TValue}"/>
-		/// implements <see cref="IReadOnlyDictionary{TKey,TValue}"/> directly, preventing
-		/// new entries without the overhead of a wrapper.
-		/// This ensures the snapshot is effectively immutable even if the live ability's event
-		/// dictionaries are later modified by <see cref="Ability.RemoveAbilityEvent"/>.
+		/// Stored as <see cref="IReadOnlyDictionary{TKey,TValue}"/> backed by a shallow, KEY-ORDERED
+		/// copy of the live <see cref="Ability"/> map — see <see cref="CopyOrEmpty"/> for why the
+		/// ordering has to survive the copy. Exposing it read-only prevents new entries without the
+		/// overhead of a wrapper, so the snapshot stays effectively immutable even if the live
+		/// ability's event maps are later modified by <see cref="Ability.RemoveAbilityEvent"/>.
 		///
 		/// <para>
-		/// Do NOT cast this field to its concrete <see cref="Dictionary{TKey,TValue}"/> type.
-		/// Casting bypasses the readonly contract and may allow accidental mutation of the
-		/// snapshot's internal state.
+		/// Do NOT cast this field to its concrete dictionary type. Casting bypasses the readonly
+		/// contract and may allow accidental mutation of the snapshot's internal state.
 		/// </para>
 		/// </summary>
 		public readonly IReadOnlyDictionary<int, AbilityOnTickEvent> OnTickEvents;
@@ -61,9 +59,8 @@ namespace FishMMO.Shared
 		/// See <see cref="OnTickEvents"/> for immutability rationale.
 		/// </summary>
 		/// <para>
-		/// Do NOT cast this field to its concrete <see cref="Dictionary{TKey,TValue}"/> type.
-		/// Casting bypasses the readonly contract and may allow accidental mutation of the
-		/// snapshot's internal state.
+		/// Do NOT cast this field to its concrete dictionary type. Casting bypasses the readonly
+		/// contract and may allow accidental mutation of the snapshot's internal state.
 		/// </para>
 		public readonly IReadOnlyDictionary<int, AbilityOnHitEvent> OnHitEvents;
 
@@ -72,18 +69,17 @@ namespace FishMMO.Shared
 		/// See <see cref="OnTickEvents"/> for immutability rationale.
 		/// </summary>
 		/// <para>
-		/// Do NOT cast this field to its concrete <see cref="Dictionary{TKey,TValue}"/> type.
-		/// Casting bypasses the readonly contract and may allow accidental mutation of the
-		/// snapshot's internal state.
+		/// Do NOT cast this field to its concrete dictionary type. Casting bypasses the readonly
+		/// contract and may allow accidental mutation of the snapshot's internal state.
 		/// </para>
 		public readonly IReadOnlyDictionary<int, AbilityOnDestroyEvent> OnDestroyEvents;
 
 		/// <summary>
 		/// Creates a snapshot from a live <see cref="Ability"/> instance.
-		/// Each event dictionary structure is copied into a new <see cref="Dictionary{TKey,TValue}"/>
-		/// and assigned to an <see cref="IReadOnlyDictionary{TKey,TValue}"/> field. This isolates the
-		/// snapshot from later mutations via <see cref="Ability.RemoveAbilityEvent"/> while
-		/// still sharing the immutable <see cref="ScriptableObject"/> event template values.
+		/// Each event map is copied into a new key-ordered dictionary and assigned to an
+		/// <see cref="IReadOnlyDictionary{TKey,TValue}"/> field. This isolates the snapshot from later
+		/// mutations via <see cref="Ability.RemoveAbilityEvent"/> while still sharing the immutable
+		/// <see cref="ScriptableObject"/> event template values.
 		/// </summary>
 		/// <param name="ability">The ability to snapshot. Must not be null.</param>
 		public AbilityObjectSnapshot(Ability ability)
@@ -99,9 +95,26 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Copies a source event map into an isolated dictionary, or returns a shared
+		/// Copies a source event map into an isolated, KEY-ORDERED dictionary, or returns a shared
 		/// empty instance when the source is null or empty.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Sorted, because the order these are dispatched in is a correctness property.</b> The
+		/// live maps on <see cref="Ability"/> are <see cref="SortedDictionary{TKey,TValue}"/> so every
+		/// peer runs an object's OnTick / OnHit / OnDestroy events in the same order — they all share
+		/// that object's <see cref="AbilityObject.RNG"/>, and an OnHit event is allowed to end the
+		/// object, so the order decides both what each event rolls and which ones run at all.
+		/// </para>
+		/// <para>
+		/// This used to copy into a plain <see cref="Dictionary{TKey,TValue}"/>, which dropped that
+		/// guarantee from the type at exactly the moment it stops being checkable — an orphaned object
+		/// outlives the ability it could be compared against. It happened to preserve the order (the
+		/// copy appends in source order and a dictionary enumerates its entries array), but "happens
+		/// to" is not what a determinism-critical path should rest on, and nothing would have caught a
+		/// regression.
+		/// </para>
+		/// </remarks>
 		private static IReadOnlyDictionary<int, TEvent> CopyOrEmpty<TEvent>(
 			IReadOnlyDictionary<int, TEvent> source,
 			IReadOnlyDictionary<int, TEvent> empty)
@@ -111,7 +124,12 @@ namespace FishMMO.Shared
 				return empty;
 			}
 
-			return new Dictionary<int, TEvent>(source);
+			SortedDictionary<int, TEvent> copy = new SortedDictionary<int, TEvent>();
+			foreach (KeyValuePair<int, TEvent> entry in source)
+			{
+				copy[entry.Key] = entry.Value;
+			}
+			return copy;
 		}
 
 	}

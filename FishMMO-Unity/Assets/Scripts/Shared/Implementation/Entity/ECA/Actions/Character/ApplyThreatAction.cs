@@ -63,10 +63,26 @@ namespace FishMMO.Shared
 		public int ResourceSpent = 0;
 
 		/// <summary>
-		/// Reusable overlap buffer. Safe to share: the sweep is fully consumed inside a single
-		/// synchronous <see cref="Execute"/> call.
+		/// Reusable overlap buffer, grown when a query fills it.
 		/// </summary>
-		private static readonly Collider[] hits = new Collider[32];
+		/// <remarks>
+		/// <para>
+		/// Safe to share: the sweep is fully consumed inside a single synchronous
+		/// <see cref="Execute"/> call, and nothing in the loop below re-enters this action — it only
+		/// reads faction and writes threat.
+		/// </para>
+		/// <para>
+		/// It grows because a saturated overlap buffer is silently truncated by the broadphase, in
+		/// its own order. At a fixed 32 that meant a pull larger than 32 NPCs gave threat to an
+		/// arbitrary subset of them and the rest never noticed the cast — the failure being invisible
+		/// and load-dependent, which is the worst combination for a threat mechanic. Doubling on
+		/// saturation is the same treatment <c>AbilityObjectSweep</c> gives its own buffer.
+		/// </para>
+		/// </remarks>
+		private static Collider[] hits = new Collider[32];
+
+		/// <summary>Upper bound on the overlap buffer, so a pathological scene cannot grow it without limit.</summary>
+		private const int MaximumBufferSize = 512;
 
 		/// <summary>
 		/// Applies threat to hostile NPCs around the initiator.
@@ -102,12 +118,26 @@ namespace FishMMO.Shared
 
 			PhysicsScene physicsScene = initiator.GameObject.scene.GetPhysicsScene();
 
-			int count = physicsScene.OverlapSphere(
-				initiator.Transform.position,
-				Radius,
-				hits,
-				NPCLayers,
-				QueryTriggerInteraction.Ignore);
+			/* Live positions, no rewind, deliberately. This is an aggro radius rather than a hit
+			 * decision: nothing here resolves whether a shot connected, the radius is authored in
+			 * tens of metres against a sub-metre error, and every candidate found is processed, so
+			 * neither the ordering nor a metre of staleness can change who ends up with threat. */
+			int count;
+			while (true)
+			{
+				count = physicsScene.OverlapSphere(
+					initiator.Transform.position,
+					Radius,
+					hits,
+					NPCLayers,
+					QueryTriggerInteraction.Ignore);
+
+				if (count < hits.Length || hits.Length >= MaximumBufferSize)
+				{
+					break;
+				}
+				hits = new Collider[hits.Length * 2];
+			}
 
 			for (int i = 0; i < count && i < hits.Length; ++i)
 			{

@@ -324,8 +324,18 @@ namespace FishMMO.UnitTests
 		{
 			int authored = -1;
 
-			foreach (string guid in UnityEditor.AssetDatabase.FindAssets(
-				"t:Prefab", new[] { "Assets/Prefabs/Shared/Entity/PlayableCharacters" }))
+			/* Every REWINDABLE prefab, not only the playable ones. Compensation undoes the
+			 * interpolation the shooter's client applied to whatever it was aiming at, and it aims
+			 * at monsters and pets as well as at players — so an NPC authored at a different
+			 * interpolation is compensated by the wrong amount just as surely. The roots match
+			 * EveryCharacterPrefab_CarriesPositionHistory, which already covers both trees. */
+			string[] roots =
+			{
+				"Assets/Prefabs/Shared/Entity/PlayableCharacters",
+				"Assets/Prefabs/Shared/Entity/NPCs",
+			};
+
+			foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:Prefab", roots))
 			{
 				string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
 				foreach (string line in System.IO.File.ReadAllLines(path))
@@ -338,8 +348,9 @@ namespace FishMMO.UnitTests
 					if (authored >= 0)
 					{
 						LogAssert.AreEqual(authored, parsed,
-							"Playable character prefabs must agree on _spectatorInterpolation; " +
-							"one constant cannot compensate two different settings.");
+							$"Rewindable prefabs must agree on _spectatorInterpolation; " +
+							$"'{System.IO.Path.GetFileNameWithoutExtension(path)}' says {parsed} but an " +
+							$"earlier prefab says {authored}, and one constant cannot compensate two settings.");
 					}
 					authored = parsed;
 				}
@@ -349,10 +360,92 @@ namespace FishMMO.UnitTests
 				$"MEASURE authored _spectatorInterpolation = {authored}, " +
 				$"LagCompensationTick constant = {LagCompensationTick.SpectatorInterpolationTicks}");
 
-			LogAssert.IsTrue(authored >= 0, "No playable prefab declared _spectatorInterpolation.");
+			LogAssert.IsTrue(authored >= 0, "No rewindable prefab declared _spectatorInterpolation.");
 			LogAssert.AreEqual((uint)authored, LagCompensationTick.SpectatorInterpolationTicks,
 				$"Prefabs interpolate {authored} ticks but LagCompensationTick compensates for " +
 				$"{LagCompensationTick.SpectatorInterpolationTicks}. Hits will land offset by the difference.");
+		}
+
+		/// <summary>
+		/// The history is keyed in the same tick domain the rewind measures back from.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is the invariant the whole subsystem rests on, and it was broken silently. The
+		/// anchor was taken from <c>CharacterPredictionController.CurrentReplicateTickSnapshot</c>,
+		/// which on the server is the OWNING CLIENT'S <c>TimeManager.LocalTick</c> — an
+		/// unsynchronised counter that restarts at zero when that client connects, while the history
+		/// is keyed by the server's own tick, which has been running since the process started.
+		/// </para>
+		/// <para>
+		/// The failure has no symptom at the call site. Every <c>TryResolve</c> declines, so every
+		/// <c>Rewind</c> declines, so <c>LagCompensationRegistry.Rewind</c> hands back an inactive
+		/// scope and the query runs against live positions — the exact behaviour compensation exists
+		/// to remove, reached without a single log line. This pins the two domains to one function
+		/// so they cannot be edited apart again.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void History_AndCompensationAnchor_ShareOneTickDomain()
+		{
+			/* A server that has been up for two hours at 30 tps, which is unremarkable, and a client
+			 * that connected a minute ago. Those are the two numbers that used to be subtracted from
+			 * each other. */
+			const uint serverTickNow = 216_000u;
+			const uint clientDomainTick = 1_800u;
+
+			Allocate(16);
+			for (uint i = 0; i < 16; i++)
+			{
+				Record(serverTickNow - 15u + i, new Vector3(0f, 0f, i));
+			}
+
+			// The server's own domain resolves, and resolves to the sample that was recorded for it.
+			LogAssert.IsTrue(
+				history.TryResolve(new RewindTarget(serverTickNow - 2u), out CharacterPositionHistory.Snapshot inDomain),
+				"A target measured back from the server's tick must resolve; this is the normal path.");
+			LogAssert.IsTrue(Mathf.Abs(inDomain.Position.z - 13f) < 0.001f,
+				$"Expected the sample recorded for tick {serverTickNow - 2u} (z=13) but resolved to z={inDomain.Position.z}.");
+
+			/* The owning client's domain does not, and must not be quietly clamped to the oldest
+			 * sample either — that would hand back a real-looking pose for a tick nobody recorded. */
+			LogAssert.IsFalse(
+				history.TryResolve(new RewindTarget(clientDomainTick), out _),
+				"A target built from the owning client's replicate tick is not in this history's domain " +
+				"and must be refused outright, not clamped.");
+
+			TestContext.WriteLine(
+				$"MEASURE server-domain anchor {serverTickNow} resolves; client-domain anchor {clientDomainTick} " +
+				$"is {serverTickNow - clientDomainTick} ticks outside the window and is refused.");
+		}
+
+		/// <summary>
+		/// <see cref="CharacterPositionHistory"/> stamps its samples with
+		/// <see cref="LagCompensationTick.ServerTickDomain"/>, the same call the rewind anchors on.
+		/// </summary>
+		/// <remarks>
+		/// Asserting the shared helper rather than the value it returns is the point: a future edit
+		/// that reaches for <c>TimeManager.LocalTick</c> on one side only is what this is here to
+		/// stop, and a value comparison would pass right up until the two peers differed.
+		/// </remarks>
+		[Test]
+		public void RecordTick_StampsThroughTheSharedDomainHelper()
+		{
+			string source = System.IO.File.ReadAllText(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/CharacterPositionHistory.cs");
+
+			LogAssert.IsTrue(source.Contains("LagCompensationTick.ServerTickDomain(base.TimeManager)"),
+				"CharacterPositionHistory.RecordTick must key the ring through " +
+				"LagCompensationTick.ServerTickDomain so it cannot drift out of the domain the rewind " +
+				"anchors in. Reading TimeManager.LocalTick directly here is how that drift starts.");
+
+			string tickSource = System.IO.File.ReadAllText(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs");
+
+			LogAssert.IsFalse(tickSource.Contains("CurrentReplicateTickSnapshot"),
+				"LagCompensationTick must not anchor on CurrentReplicateTickSnapshot. That value is the " +
+				"owning client's tick and cannot index a history keyed by the server's — using it " +
+				"disables compensation entirely, with nothing logged.");
 		}
 
 		/// <summary>

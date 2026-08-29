@@ -135,7 +135,10 @@ namespace FishMMO.Shared
 			EnsureSceneRegistration();
 
 			Transform t = transform;
-			Record(base.TimeManager.LocalTick, t.position, t.rotation);
+			/* Keyed through the shared helper, not base.TimeManager.LocalTick directly. The rewind
+			 * side measures its target back from the same call, so the two cannot be edited into
+			 * different tick domains — the failure that made every rewind decline silently. */
+			Record(LagCompensationTick.ServerTickDomain(base.TimeManager), t.position, t.rotation);
 		}
 
 		/// <summary>
@@ -305,8 +308,13 @@ namespace FishMMO.Shared
 			restorePosition = t.position;
 			restoreRotation = t.rotation;
 
-			// Already where it needs to be; skip the write and the restore bookkeeping.
-			if ((restorePosition - snapshot.Position).sqrMagnitude < 1e-8f)
+			/* Already where it needs to be; skip the write and the restore bookkeeping. Rotation is
+			 * compared as well as position: a character that turned on the spot moves no capsule
+			 * centre, but an ability whose shape is a box or a non-upright capsule sweeps a
+			 * different volume through it, so treating "did not move" as "nothing to restore" would
+			 * quietly leave that one character un-rewound. */
+			if ((restorePosition - snapshot.Position).sqrMagnitude < 1e-8f &&
+				Quaternion.Angle(restoreRotation, snapshot.Rotation) < 0.01f)
 			{
 				return false;
 			}

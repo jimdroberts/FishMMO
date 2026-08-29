@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Applies damage to the target character using the computed value and attribute template.
-		/// Server only — see the note on the class.
+		/// Runs on the server and on the client that owns the initiator — see the note on the class.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target information.</param>
@@ -83,7 +83,7 @@ namespace FishMMO.Shared
 				 * tick is the visual spam PlayFXAction guards against for the same reason. */
 				if (!EcaAuthority.IsServer(initiator, eventData) && !IsReplayTick(eventData))
 				{
-					PredictedCombatEvents.Predict(target, amount, PredictedCombatEvents.Kind.Damage,
+					PredictedCombatEvents.Predict(initiator, target, amount, PredictedCombatEvents.Kind.Damage,
 						DamageAttributeTemplate, UnityEngine.Time.unscaledTime);
 				}
 			}

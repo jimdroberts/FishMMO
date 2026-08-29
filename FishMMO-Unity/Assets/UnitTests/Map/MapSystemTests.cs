@@ -26,8 +26,11 @@ namespace FishMMO.UnitTests
 		/// <summary>Characters used by the store tests, cleaned up afterwards.</summary>
 		private readonly List<long> temporaryCharacters = new List<long>();
 
+		/// <summary>Marker fixtures built by <see cref="NewMarker"/>, torn down afterwards.</summary>
+		private readonly List<GameObject> markerHosts = new List<GameObject>();
+
 		/// <summary>
-		/// Removes anything the store tests wrote to disk.
+		/// Removes anything the store tests wrote to disk, and the marker fixtures.
 		/// </summary>
 		/// <remarks>
 		/// The stores write under the install directory, which in the editor is the folder above the
@@ -42,6 +45,52 @@ namespace FishMMO.UnitTests
 				FogOfWarStore.DeleteAll(temporaryCharacters[i]);
 			}
 			temporaryCharacters.Clear();
+
+			for (int i = 0; i < markerHosts.Count; ++i)
+			{
+				if (markerHosts[i] == null)
+				{
+					continue;
+				}
+
+				MapMarker marker = markerHosts[i].GetComponent<MapMarker>();
+				if (marker != null)
+				{
+					MapMarkerRegistry.Unregister(marker);
+				}
+
+				Object.DestroyImmediate(markerHosts[i]);
+			}
+			markerHosts.Clear();
+		}
+
+		/// <summary>
+		/// Builds a marker fixture that the filter can actually see.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="MapMarker"/> joins <see cref="MapMarkerRegistry"/> from <c>OnEnable</c>, and
+		/// edit mode does not run <c>OnEnable</c> on a component that is not <c>[ExecuteAlways]</c>.
+		/// A fixture built with <c>AddComponent</c> alone is therefore not in the registry, and
+		/// <see cref="MapMarkerFilter"/> collects from the registry — so the filter returns nothing
+		/// for it and every assertion about what it produced is answered by an empty list.
+		/// </para>
+		/// <para>
+		/// That is worth a helper rather than a line in each test, because the failure is not
+		/// symmetric: a test asserting a marker is <b>absent</b> passes whether the rule works or
+		/// the fixture was simply never registered.
+		/// </para>
+		/// </remarks>
+		/// <param name="name">Name for the host object, used in failure messages.</param>
+		/// <returns>A registered marker.</returns>
+		private MapMarker NewMarker(string name)
+		{
+			GameObject host = new GameObject(name);
+			markerHosts.Add(host);
+
+			MapMarker marker = host.AddComponent<MapMarker>();
+			MapMarkerRegistry.Register(marker);
+			return marker;
 		}
 
 		/// <summary>
@@ -548,26 +597,18 @@ namespace FishMMO.UnitTests
 			 * snapshot was collected a tenth of a second ago. The view honours that by re-reading the
 			 * source transform, but only for markers the filter resolved exactly — so this asserts
 			 * the flag that permits it. */
-			GameObject host = new GameObject("Fixture");
-			try
-			{
-				MapMarker marker = host.AddComponent<MapMarker>();
-				marker.Visibility = MapMarkerVisibility.Always;
-				marker.Type = MapMarkerType.Vendor;
-				host.transform.position = new Vector3(7.0f, 0.0f, 3.0f);
+			MapMarker marker = NewMarker("Fixture");
+			marker.Visibility = MapMarkerVisibility.Always;
+			marker.Type = MapMarkerType.Vendor;
+			marker.transform.position = new Vector3(7.0f, 0.0f, 3.0f);
 
-				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
-				new MapMarkerFilter().Collect(results, null, false, null);
+			List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
+			new MapMarkerFilter().Collect(results, null, false, null);
 
-				MapMarkerSnapshot snapshot = FindSnapshot(results, marker);
-				Assert.IsTrue(snapshot.TracksSource, "A world fixture is resolved exactly and may be re-read live.");
-				Assert.AreEqual(7.0f, snapshot.Position.x, 1e-3f);
-				Assert.AreEqual(3.0f, snapshot.Position.z, 1e-3f);
-			}
-			finally
-			{
-				Object.DestroyImmediate(host);
-			}
+			MapMarkerSnapshot snapshot = FindSnapshot(results, marker);
+			Assert.IsTrue(snapshot.TracksSource, "A world fixture is resolved exactly and may be re-read live.");
+			Assert.AreEqual(7.0f, snapshot.Position.x, 1e-3f);
+			Assert.AreEqual(3.0f, snapshot.Position.z, 1e-3f);
 		}
 
 		[Test]
@@ -577,59 +618,51 @@ namespace FishMMO.UnitTests
 			 * TracksSource leaked true here the view would helpfully refresh the position straight
 			 * off the transform every frame and undo the filter from the far side — the throttling
 			 * would still be in the code and would no longer be in the picture. */
-			GameObject host = new GameObject("Stranger");
-			try
-			{
-				MapMarker marker = host.AddComponent<MapMarker>();
-				marker.Visibility = MapMarkerVisibility.Detection;
+			MapMarker marker = NewMarker("Stranger");
+			marker.Visibility = MapMarkerVisibility.Detection;
 
-				// Inside the detection radius, and deliberately not on the quantisation grid.
-				host.transform.position = new Vector3(6.3f, 0.0f, -2.7f);
+			// Inside the detection radius, and deliberately not on the quantisation grid.
+			marker.transform.position = new Vector3(6.3f, 0.0f, -2.7f);
 
-				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
-				MapMarkerFilter filter = new MapMarkerFilter();
-				filter.Collect(results, null, false, null);
+			List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
+			MapMarkerFilter filter = new MapMarkerFilter();
+			filter.Collect(results, null, false, null);
 
-				MapMarkerSnapshot snapshot = FindSnapshot(results, marker);
+			MapMarkerSnapshot snapshot = FindSnapshot(results, marker);
 
-				Assert.IsFalse(snapshot.TracksSource, "A throttled marker must never be re-read from its transform.");
-				Assert.IsNull(snapshot.Label, "A throttled marker is never labelled.");
+			Assert.IsFalse(snapshot.TracksSource, "A throttled marker must never be re-read from its transform.");
+			Assert.IsNull(snapshot.Label, "A throttled marker is never labelled.");
 
-				float quantum = filter.PositionQuantum;
-				Assert.AreEqual(0.0f, Mathf.Repeat(snapshot.Position.x, quantum), 1e-3f, "X is snapped to the grid.");
-				Assert.AreEqual(0.0f, Mathf.Repeat(snapshot.Position.z, quantum), 1e-3f, "Z is snapped to the grid.");
-				Assert.AreNotEqual(host.transform.position.x, snapshot.Position.x);
-			}
-			finally
-			{
-				Object.DestroyImmediate(host);
-			}
+			float quantum = filter.PositionQuantum;
+			Assert.AreEqual(0.0f, Mathf.Repeat(snapshot.Position.x, quantum), 1e-3f, "X is snapped to the grid.");
+			Assert.AreEqual(0.0f, Mathf.Repeat(snapshot.Position.z, quantum), 1e-3f, "Z is snapped to the grid.");
+			Assert.AreNotEqual(marker.transform.position.x, snapshot.Position.x);
 		}
 
 		[Test]
 		public void Filter_ThrottledMarker_OutsideDetectionRadius_IsNotDrawnAtAll()
 		{
-			GameObject host = new GameObject("DistantStranger");
-			try
+			MapMarker marker = NewMarker("DistantStranger");
+			marker.Visibility = MapMarkerVisibility.Detection;
+
+			MapMarkerFilter filter = new MapMarkerFilter();
+			marker.transform.position = new Vector3(filter.DetectionRadius * 3.0f, 0.0f, 0.0f);
+
+			/* Prove the fixture is reachable before asserting it is absent. Without this the test
+			 * passes just as happily against an empty registry, which is how it passed while the
+			 * two beside it were failing for exactly that reason. */
+			MapMarker control = NewMarker("Control");
+			control.Visibility = MapMarkerVisibility.Always;
+
+			List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
+			filter.Collect(results, null, false, null);
+
+			FindSnapshot(results, control);
+
+			foreach (MapMarkerSnapshot snapshot in results)
 			{
-				MapMarker marker = host.AddComponent<MapMarker>();
-				marker.Visibility = MapMarkerVisibility.Detection;
-
-				MapMarkerFilter filter = new MapMarkerFilter();
-				host.transform.position = new Vector3(filter.DetectionRadius * 3.0f, 0.0f, 0.0f);
-
-				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
-				filter.Collect(results, null, false, null);
-
-				foreach (MapMarkerSnapshot snapshot in results)
-				{
-					Assert.AreNotSame(marker, snapshot.Source,
-						"A stranger beyond the detection radius must not reach the map at all.");
-				}
-			}
-			finally
-			{
-				Object.DestroyImmediate(host);
+				Assert.AreNotSame(marker, snapshot.Source,
+					"A stranger beyond the detection radius must not reach the map at all.");
 			}
 		}
 

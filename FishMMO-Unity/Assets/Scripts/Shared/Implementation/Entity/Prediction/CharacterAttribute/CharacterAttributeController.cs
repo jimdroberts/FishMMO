@@ -27,6 +27,20 @@ namespace FishMMO.Shared
 		/// Runs after buff reconcile/tick and before ability processing so
 		/// regenerated resources are available for same-tick activation checks.
 		/// </summary>
+		/// <remarks>
+		/// <b>Must stay above <see cref="BuffController.Order"/> (85) and
+		/// <see cref="EquipmentController.Order"/> (93).</b> This is what stops attribute modifiers
+		/// compounding on every reconcile, and it is load-bearing rather than tidy.
+		/// <see cref="CharacterPredictionController.Reconcile"/> walks the controllers in this
+		/// order. Buff and equipment restore INCREMENTALLY — <c>Buff.Apply</c> and
+		/// <c>ItemGenerator.ApplyAttributes</c> both call <c>AddModifier</c> — while
+		/// <see cref="ApplyAttributeSnapshot"/> installs the server's TOTAL absolutely, with
+		/// <c>SetModifierDirect</c>. Running last is what makes those incremental writes harmless:
+		/// they are overwritten, not added to. Reorder this below either of them and every reconcile
+		/// leaves buff and equipment contributions stacked on top of a total that already contains
+		/// them, drifting the owner's sheet with nothing to correct it.
+		/// Pinned by <c>PredictionAuditRegressionTests.AttributeReconcile_RunsAfterBuffAndEquipment</c>.
+		/// </remarks>
 		public int Order => 95;
 
 		/// <summary>
@@ -801,6 +815,10 @@ namespace FishMMO.Shared
 			suppressAttributeDirty = false;
 			notificationSuppressionDepth = 0;
 
+			/* Back to the template sheet before the resources are topped up, so the maximum they are
+			 * filled to is this prefab's own rather than the previous occupant's. */
+			RestoreTemplateBaseline();
+
 			foreach (CharacterResourceAttribute characterResourceAttribute in ResourceAttributes.Values)
 			{
 				characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);
@@ -814,6 +832,88 @@ namespace FishMMO.Shared
 			cachedSortedAttributes = null;
 			// Bump structure version so any cached ordering is invalidated.
 			unchecked { attributeStructureVersion++; }
+		}
+
+		/// <summary>
+		/// Returns every attribute to the value its template authored, with no external modifier.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why a pooled object needs this.</b> External modifiers are maintained by strictly
+		/// paired add/remove — a buff reverses its own contribution, an unequip subtracts what the
+		/// equip added — and every one of those pairs is undone during <see cref="ResetState"/>.
+		/// Every one that <em>completes</em>, at least: <c>BuffController.TryRemoveBuffEffects</c>
+		/// gives up when a template's <c>OnRemove</c> throws, and it is right to, because a partial
+		/// reversal is worse than none. That leaves a residue on the object, and this object is
+		/// about to be handed out again as a different character.
+		/// </para>
+		/// <para>
+		/// So the sheet is restored rather than repaired. Nothing needs to know WHICH modifiers
+		/// leaked or what they were worth — the authored template value is the correct state for an
+		/// object with no occupant, and it is exactly what <see cref="InitializeOnce"/> would have
+		/// built for a freshly instantiated one. A pooled character and a fresh one now start
+		/// identically, which was not true before: the pooled one began with whatever the previous
+		/// occupant's buffs, gear and NPC scaling had left behind.
+		/// </para>
+		/// <para>
+		/// <b>Safe only because of when this runs.</b> <c>ResetState</c> is reached from
+		/// <c>DefaultObjectPool.StoreObject</c>, i.e. as the object goes INTO the pool — the sole
+		/// caller of <c>NetworkObject.ResetState</c> in FishNet. The next occupant's real values
+		/// arrive afterwards and absolutely: a client reads base and modifier for every attribute in
+		/// <see cref="ReadPayload"/>, and the server re-runs its own scaling at spawn. Calling this
+		/// at any point during a live character's life would wipe its sheet.
+		/// </para>
+		/// </remarks>
+		private void RestoreTemplateBaseline()
+		{
+			if (CharacterAttributeDatabase == null)
+			{
+				return;
+			}
+
+			/* One scope for the whole sheet: the raw values are written first and the graph is
+			 * rebuilt once at the end, the same two-phase shape ApplyAttributeSnapshot uses, so no
+			 * parent ever evaluates a formula against a half-reset child.
+			 *
+			 * SUPPRESSION rather than plain propagation, because this fires as the object goes into
+			 * the pool. Every attribute on the sheet is about to change, and dispatching that to
+			 * listeners would tell a UI still holding this character that its health just dropped to
+			 * the template default — a despawn is not a gameplay event. EndNotificationSuppression
+			 * discards the queue rather than draining it. */
+			BeginNotificationSuppression();
+			try
+			{
+				foreach (CharacterAttributeTemplate template in CharacterAttributeDatabase.Attributes)
+				{
+					if (template == null)
+					{
+						continue;
+					}
+					if (Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
+					{
+						attribute.SetValueDirect(template.InitialValue);
+						attribute.SetModifierDirect(0);
+					}
+					else if (ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute resource))
+					{
+						resource.SetValueDirect(template.InitialValue);
+						resource.SetModifierDirect(0);
+					}
+				}
+
+				foreach (CharacterAttribute attribute in Attributes.Values)
+				{
+					attribute.UpdateValues(false);
+				}
+				foreach (CharacterResourceAttribute resource in ResourceAttributes.Values)
+				{
+					resource.UpdateValues(false);
+				}
+			}
+			finally
+			{
+				EndNotificationSuppression(nameof(RestoreTemplateBaseline));
+			}
 		}
 
 		/// <summary>
@@ -2138,24 +2238,45 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			controller.ApplyObservedAttributes(msg.Attributes);
+			controller.ApplyObservedAttributes(msg.Attributes, msg.IsFullSet);
 		}
 
 		/// <summary>
 		/// Applies a set of authoritative attribute entries by template id.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Both the base value and the external modifier are applied, which is what lets the
 		/// receiver arrive at the same <c>FinalValue</c> the server holds. Attributes the message
 		/// does not name are left alone: the sheet is fixed when the character spawns, so an
 		/// omission means "unchanged", never "removed".
+		/// </para>
+		/// <para>
+		/// That is exactly why <paramref name="isFullSet"/> is a diagnostic here rather than a mode.
+		/// It travelled on the wire and no consumer read it, which made the sender's one real use of
+		/// it silent: <see cref="MaybePushObservedAttributes"/> sets it when the sheet's LENGTH
+		/// changed, meaning the character was rebuilt — and a receiver that merges by id cannot
+		/// honour that. It cannot drop the attributes the message leaves out, because absence has
+		/// always meant "unchanged". Since nothing removes an attribute at runtime the case does not
+		/// arise today, so the flag is checked and reported rather than acted on: if the assumption
+		/// ever stops holding, this says so instead of the sheets quietly diverging.
+		/// </para>
 		/// </remarks>
 		/// <param name="entries">Entries to apply. Null or empty is a no-op.</param>
-		public void ApplyObservedAttributes(AttributeReconcileEntry[] entries)
+		/// <param name="isFullSet">True when <paramref name="entries"/> states the character's entire sheet.</param>
+		public void ApplyObservedAttributes(AttributeReconcileEntry[] entries, bool isFullSet = false)
 		{
 			if (entries == null || entries.Length < 1)
 			{
 				return;
+			}
+
+			if (isFullSet && entries.Length != Attributes.Count)
+			{
+				Log.Error("CharacterAttributeController",
+					$"ApplyObservedAttributes: a full set named {entries.Length} attributes but this character holds " +
+					$"{Attributes.Count}. Entries are merged by template id and absence means \"unchanged\", so any " +
+					"attribute the server has dropped stays behind here. Investigate the server/client keyset mismatch.");
 			}
 
 			BeginPropagation();

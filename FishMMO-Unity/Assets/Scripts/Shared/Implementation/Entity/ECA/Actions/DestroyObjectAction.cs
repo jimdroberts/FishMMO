@@ -18,12 +18,18 @@ namespace FishMMO.Shared
 		/// <param name="eventData">The event data containing the target object.</param>
 		/// <remarks>
 		/// Reads <see cref="EventData.Target"/>; logs a warning when no target is present.
-		/// Object destruction is gated behind <c>UNITY_SERVER</c> to ensure only the
-		/// authoritative server can destroy objects.
+		/// Server only, checked at runtime through <see cref="EcaAuthority"/> rather than with
+		/// <c>#if UNITY_SERVER</c> — that define is absent in the editor the scene server is
+		/// developed in, so the gate removed the body there instead of restricting it, and nothing
+		/// was ever destroyed.
 		/// </remarks>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-		#if UNITY_SERVER
+			if (!EcaAuthority.IsServer(initiator, eventData))
+			{
+				return;
+			}
+
 			if (eventData != null && eventData.Target != null)
 			{
 				GameObject target = eventData.Target;
@@ -34,7 +40,6 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("DestroyObjectAction", "Expected an EventData with a non-null Target.");
 			}
-		#endif
 		}
 	}
 }

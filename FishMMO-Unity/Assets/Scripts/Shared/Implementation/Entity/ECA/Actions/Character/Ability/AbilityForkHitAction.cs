@@ -6,52 +6,85 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Action that forks an ability hit in a specified arc and distance.
-	/// This action is typically used to create a spread or scatter effect for abilities, such as projectiles that split or fork after hitting a target.
+	/// Action that turns an ability object onto a new heading inside a cone when it hits something —
+	/// a projectile that scatters or ricochets off its target rather than carrying straight on.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>This used to do nothing.</b> It assigned <c>abilityObject.Transform.rotation</c>, but an
+	/// ability object's position is a closed form evaluated from its spawn pose and its integer tick
+	/// count (<see cref="AbilityMoveTransformAction"/>), so the next tick recomputed the position from
+	/// the original spawn line and threw the turn away. The projectile kept flying dead straight while
+	/// its mesh — and the knockback direction, which <see cref="KnockbackHitAction"/> reads off
+	/// <c>Transform.forward</c> — spun to a heading nothing travelled along.
+	/// <see cref="AbilityObject.Redirect"/> moves the closed form's own inputs instead, which is what
+	/// actually starts a new leg.
+	/// </para>
+	/// <para>
+	/// <b>Runs on every peer, like the rest of the OnHit chain.</b> The new heading is drawn from the
+	/// ability object's own <see cref="AbilityObject.RNG"/>, whose state is carried in the reconcile,
+	/// so the server and the caster's owner turn the same way for the same hit. A peer that did not
+	/// resolve the hit does not fork — its copy is corrected by
+	/// <c>AbilityObjectDestroyedBroadcast</c> or by lifetime expiry, exactly as for any other
+	/// locally-resolved hit.
+	/// </para>
+	/// <para>
+	/// <b>The reverse case is louder here than elsewhere, and is accepted.</b> A third-party observer
+	/// sweeps against its own interpolated world rather than the one the server rewound to for the
+	/// caster (see <see cref="AbilityObject.ResolveSweptHits"/>), so it can resolve a hit the server
+	/// did not. For most OnHit actions that costs an effect in the wrong place; for this one the
+	/// observer's copy also veers onto a heading the server never took, and stays wrong until the
+	/// destroy message or its lifetime ends it. Gating the fork to the server and the owner is not the
+	/// answer — observers would then watch every REAL fork fly straight on, which is the far more
+	/// common case. It is a visual on a peer that resolves nothing authoritative: damage self-gates
+	/// through <c>EcaAuthority.MayPredict</c>, which an observer fails.
+	/// </para>
+	/// </remarks>
 	[Serializable]
 	public class AbilityForkHitAction : BaseAction
 	{
 		/// <summary>
-		/// The value provider that determines the arc in degrees within which the ability can fork.
-		/// For example, 180 means the forked directions will be spread within a half-circle in front of the original direction.
+		/// The value provider that determines the total arc, in degrees, the new heading is drawn from.
 		/// </summary>
-		[Tooltip("The value provider that determines the arc in degrees for the fork spread.")]
+		/// <remarks>
+		/// A TOTAL spread about the current heading, so 90 means 45 degrees either side. Zero leaves the
+		/// heading alone; 360 or more is any direction at all.
+		/// </remarks>
+		[Tooltip("The value provider that determines the total arc in degrees for the fork spread. 90 means 45 degrees either side of the current heading.")]
 		[SerializeReference, SubclassSelector]
 		public IFloatValueProvider ArcValue;
 
 		/// <summary>
-		/// The value provider that determines the maximum distance the forked ability can reach.
-		/// </summary>
-		[Tooltip("The value provider that determines the maximum fork distance.")]
-		[SerializeReference, SubclassSelector]
-		public IFloatValueProvider DistanceValue;
-
-		/// <summary>
-		/// Executes the fork hit action, modifying the ability object's direction within the computed arc and distance.
+		/// Turns the ability object onto a new heading drawn from within the configured arc.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing ability collision information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			if (ArcValue == null || DistanceValue == null)
+			if (ArcValue == null)
 			{
-				Log.Warning("AbilityForkHitAction", "ArcValue or DistanceValue provider is null.");
+				Log.Warning("AbilityForkHitAction", "ArcValue provider is null.");
 				return;
 			}
 
-			if (eventData.TryGet(out AbilityCollisionEventData abilityEventData))
+			if (!eventData.TryGet(out AbilityCollisionEventData abilityEventData))
 			{
-				var abilityObject = abilityEventData.AbilityObject;
-				if (abilityObject != null)
-				{
-					float arc = ArcValue.GetValue(initiator, eventData);
-					float distance = DistanceValue.GetValue(initiator, eventData);
-
-					abilityObject.Transform.rotation = abilityObject.Transform.forward.GetRandomConicalDirection(
-						abilityObject.Transform.position, arc, distance, abilityObject.RNG);
-				}
+				return;
 			}
+
+			AbilityObject abilityObject = abilityEventData.AbilityObject;
+			if (abilityObject == null || abilityObject.Transform == null)
+			{
+				return;
+			}
+
+			float arc = ArcValue.GetValue(initiator, eventData);
+
+			/* The object's own generator, never a shared one: this draw has to come out the same on the
+			 * server and on the caster's client or the two copies fly apart from the fork onwards. */
+			Quaternion heading = abilityObject.Transform.forward.GetRandomConicalDirection(arc, abilityObject.RNG);
+
+			abilityObject.Redirect(heading);
 		}
 	}
 }

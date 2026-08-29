@@ -22,7 +22,8 @@ namespace FishMMO.Shared
 	/// carried in the reconcile and corrected every tick. Client and server draw the same number
 	/// from the same state. A hit-count divergence advances the two generators differently until
 	/// the next reconcile realigns them, so a mismatch is possible, bounded, and self-healing —
-	/// which is why <see cref="TryConfirm"/> matches on target and kind rather than on the amount.
+	/// which is why <see cref="TryConfirm"/> matches on source, target and kind rather than on the
+	/// amount.
 	/// </para>
 	/// <para>
 	/// <b>Why there is no server-sent rejection.</b> The server cannot tell a client "that hit did
@@ -63,6 +64,7 @@ namespace FishMMO.Shared
 		private struct Pending
 		{
 			public long Id;
+			public int SourceObjectId;
 			public int TargetObjectId;
 			public Kind Kind;
 			public int Amount;
@@ -88,18 +90,27 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static event Action<long> OnPredictionRejected;
 
+		/// <summary>
+		/// Raised when the server's report confirmed a predicted number. Nothing needs redrawing — the
+		/// number on screen was already right — but the display holds a handle per prediction so it can
+		/// grey one out later, and without this it would only ever release the handles for predictions
+		/// that turned out WRONG. A session's worth of correct hits leaked one entry each.
+		/// </summary>
+		public static event Action<long> OnPredictionConfirmed;
+
 		/// <summary>Predicted entries still waiting on the server.</summary>
 		public static int PendingCount => pending.Count;
 
 		/// <summary>
 		/// Records and announces a number this client predicted.
 		/// </summary>
+		/// <param name="source">The character that dealt it — this client's own, since only an owner predicts.</param>
 		/// <param name="target">The character the number belongs to.</param>
 		/// <param name="amount">The predicted amount.</param>
 		/// <param name="kind">Damage or heal.</param>
 		/// <param name="damageAttribute">Damage type, for colouring. Null for heals and typeless damage.</param>
 		/// <param name="now">Current unscaled time, in seconds.</param>
-		public static void Predict(ICharacter target, int amount, Kind kind, DamageAttributeTemplate damageAttribute, float now)
+		public static void Predict(ICharacter source, ICharacter target, int amount, Kind kind, DamageAttributeTemplate damageAttribute, float now)
 		{
 			if (target == null || amount <= 0)
 			{
@@ -107,11 +118,13 @@ namespace FishMMO.Shared
 			}
 
 			int targetObjectId = ResolveObjectId(target);
-			if (targetObjectId == 0)
+			int sourceObjectId = ResolveObjectId(source);
+			if (targetObjectId == 0 || sourceObjectId == 0)
 			{
 				/* No network identity to match a report against, so this could never be confirmed
 				 * and would always end up greyed out. Better to draw nothing than to draw a number
-				 * that is guaranteed to be marked wrong. */
+				 * that is guaranteed to be marked wrong. The SOURCE is required for the same reason
+				 * now that confirmation matches on it. */
 				return;
 			}
 
@@ -119,6 +132,7 @@ namespace FishMMO.Shared
 			pending.Add(new Pending
 			{
 				Id = id,
+				SourceObjectId = sourceObjectId,
 				TargetObjectId = targetObjectId,
 				Kind = kind,
 				Amount = amount,
@@ -133,37 +147,51 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Matched on target and kind, oldest first — deliberately NOT on the amount. The two
-		/// numbers agree whenever the RNG states agree, but a transient divergence would otherwise
-		/// leave the prediction unmatched and produce the worst outcome available: the predicted
-		/// number greyed out AND the server's number drawn beside it, for a hit that landed.
-		/// Trusting the pairing and letting the amount differ is the lesser error.
+		/// <b>Matched on SOURCE, target and kind</b>, oldest first. The source is what makes this a
+		/// pairing rather than a guess: a combat report is broadcast to everyone observing the victim,
+		/// so with source ignored any other player's hit on the same target consumed this client's
+		/// pending entry. Two players on one mob was enough — the other player's real number was
+		/// swallowed (the caller draws nothing on a match) and this client's own report, arriving to
+		/// find no pending entry left, was then drawn a second time.
+		/// </para>
+		/// <para>
+		/// Deliberately NOT matched on the amount. The two numbers agree whenever the RNG states
+		/// agree, but a transient divergence would otherwise leave the prediction unmatched and
+		/// produce the worst outcome available: the predicted number greyed out AND the server's
+		/// number drawn beside it, for a hit that landed. Trusting the pairing and letting the amount
+		/// differ is the lesser error.
 		/// </para>
 		/// <para>
 		/// The caller draws the server's number only when this returns false.
 		/// </para>
 		/// </remarks>
+		/// <param name="source">The attacker named by the report. A report with none matches nothing.</param>
 		/// <param name="target">The character named by the report.</param>
 		/// <param name="kind">Damage or heal.</param>
 		/// <returns>True when this report was already drawn as a prediction.</returns>
-		public static bool TryConfirm(ICharacter target, Kind kind)
+		public static bool TryConfirm(ICharacter source, ICharacter target, Kind kind)
 		{
-			if (target == null || pending.Count == 0)
+			if (source == null || target == null || pending.Count == 0)
 			{
 				return false;
 			}
 
 			int targetObjectId = ResolveObjectId(target);
-			if (targetObjectId == 0)
+			int sourceObjectId = ResolveObjectId(source);
+			if (targetObjectId == 0 || sourceObjectId == 0)
 			{
 				return false;
 			}
 
 			for (int i = 0; i < pending.Count; ++i)
 			{
-				if (pending[i].TargetObjectId == targetObjectId && pending[i].Kind == kind)
+				if (pending[i].SourceObjectId == sourceObjectId &&
+					pending[i].TargetObjectId == targetObjectId &&
+					pending[i].Kind == kind)
 				{
+					long id = pending[i].Id;
 					pending.RemoveAt(i);
+					OnPredictionConfirmed?.Invoke(id);
 					return true;
 				}
 			}

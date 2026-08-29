@@ -102,12 +102,13 @@ namespace FishMMO.UnitTests.AI
 				spawner.RespawnCheckIntervalMaximum = maximum;
 
 				System.Type type = typeof(ObjectSpawner);
+				float now = Time.time;
 				type.GetMethod("ScheduleNextRespawnCheck", BindingFlags.Instance | BindingFlags.NonPublic)
-					.Invoke(spawner, null);
+					.Invoke(spawner, new object[] { now });
 				float next = (float)type.GetField("nextRespawnCheckTime", BindingFlags.Instance | BindingFlags.NonPublic)
 					.GetValue(spawner);
 
-				return next - Time.time;
+				return next - now;
 			}
 			finally { UnityEngine.Object.DestroyImmediate(go); }
 		}
@@ -130,8 +131,9 @@ namespace FishMMO.UnitTests.AI
 		public void RespawnCheck_RepairsABadIntervalInsteadOfPollingEveryFrame()
 		{
 			/* An inverted or negative range typed into the inspector must not resolve to a time in
-			 * the past. That would put Update back to calling TryRespawn every frame — silently,
-			 * with no error and no symptom other than the cost this interval exists to avoid. */
+			 * the past. That would put the spawner back to running TryRespawn on every sweep —
+			 * silently, with no error and no symptom other than the cost this interval exists to
+			 * avoid. */
 			Assert.AreEqual(6.0f, ScheduleAndMeasure(6.0f, 3.0f), 0.001f,
 				"An inverted range should clamp to the minimum, not invert or throw.");
 			Assert.GreaterOrEqual(ScheduleAndMeasure(-5.0f, -1.0f), 0.0f,

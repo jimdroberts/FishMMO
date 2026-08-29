@@ -109,11 +109,6 @@ namespace FishMMO.Shared
 		private HashSet<GameObject> hitTargets;
 
 		/// <summary>
-		/// Cached reference to the caster's CharacterPredictionController, if available.
-		/// Used to read the current replicate tick snapshot in a subscription-order safe way.
-		/// </summary>
-		private CharacterPredictionController predictionController;
-		/// <summary>
 		/// Number of hits this object can perform before being destroyed.
 		/// </summary>
 		public int HitCount;
@@ -305,7 +300,6 @@ namespace FishMMO.Shared
 			cachedTickEventData = null;
 			destroyed = false;
 			initialized = false;
-			predictionController = null;
 			ElapsedTicks = 0;
 			lastSweepPosition = Transform != null ? Transform.position : transform.position;
 			hitTargets?.Clear();
@@ -437,13 +431,35 @@ namespace FishMMO.Shared
 		/// all of them because every projectile has a different caster with a different view offset.
 		/// </para>
 		/// <para>
-		/// <b>The server rewinds and a client does not, deliberately.</b> A client's rendered world
-		/// already <i>is</i> the rewound world; the server displacing its characters to the tick that
-		/// client was looking at makes the two queries run against the same geometry, so a predicted
-		/// hit and the authoritative one agree by construction rather than by luck. That symmetry is
-		/// the whole point of resolving it here — <see cref="PredictedCombatEvents"/> greys out a
-		/// prediction the server contradicts, so the divergence was becoming visible as damage
-		/// numbers that retracted.
+		/// <b>The server rewinds and a client does not, deliberately.</b> The CASTER'S OWNER renders a
+		/// world that already <i>is</i> the rewound one; the server displacing its characters to the
+		/// tick that client was looking at makes the two queries run against the same geometry, so a
+		/// predicted hit and the authoritative one agree by construction rather than by luck. That
+		/// symmetry is the whole point of resolving it here — <see cref="PredictedCombatEvents"/>
+		/// greys out a prediction the server contradicts, so the divergence was becoming visible as
+		/// damage numbers that retracted.
+		/// </para>
+		/// <para>
+		/// <b>That symmetry does not extend to a third-party observer, and is not made to.</b> The
+		/// server rewinds to the CASTER'S view offset, not to the observer's, so an observer's local
+		/// sweep answers a question nobody asked: it resolves the caster's projectile against the
+		/// observer's own interpolated world. Two outcomes follow, and they are handled differently
+		/// on purpose.
+		/// <list type="bullet">
+		/// <item>The observer MISSES a hit the server landed — corrected, by
+		/// <c>AbilityObjectDestroyedBroadcast</c>, which is why that message is reliable.</item>
+		/// <item>The observer HITS where the server did not — <b>not corrected</b>. Its copy ends
+		/// early and plays its impact effect at a place nothing happened, while the server's keeps
+		/// flying. No message can revive a copy that has already ended.</item>
+		/// </list>
+		/// Deferring the end-of-life decision to the server would close that second case and was
+		/// considered; it is the wrong trade. It would make EVERY observed hit — including the
+		/// overwhelming majority that this peer resolves correctly — wait half a round trip, so the
+		/// projectile visibly overshoots its target and detonates late on every single kill. A rare
+		/// impact effect in the wrong place is much cheaper than a universal delay, and neither
+		/// outcome touches gameplay: damage self-gates through <c>EcaAuthority.MayPredict</c>, which
+		/// an observer fails. Revisit only with a measurement showing the false-positive rate is high
+		/// enough to be worth that delay.
 		/// </para>
 		/// <para>
 		/// <b>Dispatched on every peer</b>, like the tick events. What each action then does about it
@@ -590,6 +606,52 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Re-anchors the closed-form trajectory so this object carries on from where it is now, on a
+		/// new heading.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Writing <c>Transform.rotation</c> alone does NOT steer an ability object, which is what
+		/// <see cref="AbilityForkHitAction"/> used to do. The trajectory is a closed form evaluated from
+		/// <see cref="SpawnPosition"/>, <see cref="SpawnRotation"/> and <see cref="ElapsedTicks"/>
+		/// (<see cref="AbilityMoveTransformAction"/>), so the next tick simply recomputed the position
+		/// from the ORIGINAL spawn line and overwrote the turn. Redirecting means starting a new leg:
+		/// the three closed-form inputs and the sweep origin all have to move together, which is why
+		/// this is one method rather than four assignments at the call site.
+		/// </para>
+		/// <para>
+		/// <see cref="RemainingLifeTime"/> is deliberately untouched. A redirect changes where the
+		/// object goes, not how long it lives — and lifetime expiry is the one end-of-life every peer
+		/// reproduces without being told, so trimming it here would make that no longer true for a peer
+		/// that did not resolve the hit which caused the fork.
+		/// </para>
+		/// <para>
+		/// The hit set is not cleared either. The object is still overlapping whatever it just hit, so
+		/// clearing it would let the new leg immediately re-resolve that same target and drain the hit
+		/// count into it — the exact failure the per-lifetime set exists to prevent.
+		/// </para>
+		/// </remarks>
+		/// <param name="rotation">The new heading. The closed form reads this from <see cref="SpawnRotation"/>.</param>
+		internal void Redirect(Quaternion rotation)
+		{
+			if (destroyed)
+			{
+				return;
+			}
+
+			Transform shapeTransform = Transform != null ? Transform : transform;
+			shapeTransform.rotation = rotation;
+
+			SpawnPosition = shapeTransform.position;
+			SpawnRotation = rotation;
+			ElapsedTicks = 0;
+			/* The next sweep starts from the turn, not from where the previous leg last resolved.
+			 * Without this the segment swept on the following tick spans the corner and reports
+			 * everything inside the triangle the object never actually travelled through. */
+			lastSweepPosition = SpawnPosition;
+		}
+
+		/// <summary>
 		/// Advances this object's simulation clock without running per-tick events, so an
 		/// observer that learns about a spawn late can place the object where the server has it.
 		/// </summary>
@@ -698,10 +760,26 @@ namespace FishMMO.Shared
 		/// own collision test missed the hit does not keep a ghost flying.
 		/// </summary>
 		/// <remarks>
-		/// Sent unreliably: a lost message costs one observer a ghost that still expires on its
-		/// own lifetime, and the message is cheap enough to send for every collision-ended object.
+		/// <para>
+		/// Sent RELIABLY. This is the only correction for an end-of-life no client can reproduce, and
+		/// it has no repeat behind it: a lost one is not a ghost that self-heals, it is a projectile
+		/// that flies to the end of its lifetime and detonates in empty air well past the target it
+		/// actually hit. It is one small message per collision-ended object, which is cheap enough to
+		/// guarantee. (It was <c>Channel.Unreliable</c>, while
+		/// <see cref="AbilityObjectDestroyedBroadcast"/> documented the reliable behaviour intended
+		/// here — the doc was updated and the channel was not.)
+		/// </para>
+		/// <para>
+		/// Reliable also fixes an ordering hazard: <c>AbilityActivatedBroadcast</c> is reliable, and
+		/// the two channels have no ordering relationship to each other. For an ability that hits on
+		/// its first or second tick the destroy could overtake the activation, find no container, and
+		/// no-op — after which the activation arrived and spawned a copy nothing would ever kill.
+		/// Both now ride the same ordered channel.
+		/// </para>
+		/// <para>
 		/// Skipped once the object has been detached from its ability (rollback and disconnect
 		/// paths null <see cref="Ability"/> first), since there is no container to name.
+		/// </para>
 		/// </remarks>
 		private void BroadcastDestroyedToObservers()
 		{
@@ -722,7 +800,7 @@ namespace FishMMO.Shared
 				AbilityID = Ability.ID,
 				ContainerID = ContainerID,
 				ObjectID = ID,
-			}, true, Channel.Unreliable);
+			}, true, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -865,9 +943,6 @@ namespace FishMMO.Shared
 			abilityObject.timeManager = timeManager;
 			abilityObject.tickDelta = (float)timeManager.TickDelta;
 			abilityObject.isServer = timeManager.NetworkManager.IsServerStarted;
-			// Cache the caster's prediction controller (if present) so this object
-			// can read the replicate-domain tick in a subscription-order safe way.
-			abilityObject.predictionController = caster.NetworkObject?.GetComponent<CharacterPredictionController>();
 			timeManager.OnTick += abilityObject.OnTick;
 		}
 
@@ -981,7 +1056,6 @@ namespace FishMMO.Shared
 			abilityObject.sweepShape ??= source.sweepShape;
 			abilityObject.ElapsedTicks = 0;
 			abilityObject.Snapshot = source.Snapshot;
-			abilityObject.predictionController = source.predictionController;
 			abilityObject.isServer = source.isServer;
 			// Snapshot is lazily initialized — children share the parent's lifecycle
 			// and don't need their own eagerly-created snapshot.

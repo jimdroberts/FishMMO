@@ -40,9 +40,16 @@ namespace FishMMO.Shared
 		/// Stack count above the base application: 0 means one application, 2 means three.
 		/// </summary>
 		/// <remarks>
-		/// True again as of the 2026-08-28 audit. A freshly applied stacking buff used to run both
-		/// the new-buff branch and the stack branch, so it arrived here reporting 1 while having
-		/// applied its modifier twice; <c>MaxStacks</c> is the total number of applications.
+		/// <c>MaxStacks</c> is the TOTAL number of applications, so this counts up to
+		/// <c>MaxStacks - 1</c>: the base application is the first, and each stack is one more.
+		/// <para>
+		/// Both halves of that were wrong until the 2026-08-29 audit, in the same direction. A
+		/// freshly applied stacking buff ran the new-buff branch AND the stack branch, so it arrived
+		/// here reporting 1 while having applied its modifier twice; and the cap tested
+		/// <c>Stacks &lt; MaxStacks</c>, which let a <c>MaxStacks=3</c> buff reach four applications.
+		/// The first was fixed on 2026-08-28, the second on 2026-08-29 — see
+		/// <c>BuffController.ApplyResolved</c>.
+		/// </para>
 		/// </remarks>
 		public int Stacks;
 
@@ -85,9 +92,11 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// <see cref="RemainingSeconds"/> is deliberately excluded. It moves every tick on every
 		/// buff, so including it would mark the whole list changed on every tick and collapse the
-		/// delta back into a full resend. Timing drift is a separate concern with its own gate —
-		/// see <c>BuffController.ObservedTimingDriftExceedsTolerance</c>, which answers it with a
-		/// periodic full set instead.
+		/// delta back into a full resend. Ordinary countdown needs no message at all: the receiver
+		/// counts its own bars down. The one case that does is a buff RENEWED after the receiver was
+		/// last told about it, which would otherwise run out locally and be deleted while the
+		/// character still holds it — <c>BuffController.ObservedBuffWillLapse</c> catches exactly
+		/// that, and answers it with a full set.
 		/// </remarks>
 		public bool StructurallyEquals(ObservedBuffEntry other)
 		{

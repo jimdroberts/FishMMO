@@ -43,6 +43,13 @@ namespace FishMMO.Shared
 		/// Runs after <see cref="KCCPlayer"/> so movement/camera state is current,
 		/// and before cooldowns, attributes, and ability activation.
 		/// </summary>
+		/// <remarks>
+		/// <b>Must stay below <see cref="CharacterAttributeController.Order"/> (95).</b> Restoring a
+		/// buff re-applies its modifier incrementally through <c>AddModifier</c>; the attribute
+		/// reconcile then overwrites the total absolutely. Raising this above 95 would leave those
+		/// increments on top of a total that already contains them. See the remarks on
+		/// <see cref="CharacterAttributeController.Order"/>.
+		/// </remarks>
 		public int Order => 85;
 
 		[Header("ECA - Buffs")]
@@ -222,6 +229,29 @@ namespace FishMMO.Shared
 		/// <summary>True once <see cref="lastPushedObservedBuffs"/> reflects a push that went out.</summary>
 		private bool hasObservedBuffBaseline;
 
+		/// <summary>
+		/// Domain tick at which <see cref="lastPushedObservedBuffs"/> was adopted, so the server can
+		/// work out when each observer's own countdown will run that entry out.
+		/// </summary>
+		/// <remarks>
+		/// The baseline records the remaining seconds observers were TOLD. They count down from
+		/// there against their own clock, so the tick those seconds were measured at is the other
+		/// half of the number — without it the server cannot tell a bar with eight seconds left from
+		/// one that ran out six seconds ago. See <see cref="ObservedBuffWillLapse"/>.
+		/// </remarks>
+		private uint observedBuffBaselineTick = TimeManager.UNSET_TICK;
+
+		/// <summary>
+		/// Ticks of slack allowed before a renewal is re-sent.
+		/// </summary>
+		/// <remarks>
+		/// Covers the wire quantisation (<see cref="ObservedBuffEntry"/> sends deciseconds, so up to
+		/// 0.05 s of rounding) plus the transit the message itself needs. Small enough that the
+		/// refresh lands before the observer's bar empties, large enough that it cannot fire twice
+		/// for one renewal.
+		/// </remarks>
+		private const uint OBSERVED_BUFF_RENEWAL_MARGIN_TICKS = 4;
+
 		/// <summary>Server-side scratch: entries added or restacked since the last push.</summary>
 		private readonly List<ObservedBuffEntry> observedBuffDeltaBuffer = new List<ObservedBuffEntry>();
 
@@ -251,6 +281,7 @@ namespace FishMMO.Shared
 		{
 			lastPushedObservedBuffs.Clear();
 			hasObservedBuffBaseline = false;
+			observedBuffBaselineTick = TimeManager.UNSET_TICK;
 		}
 
 		/// <summary>
@@ -260,8 +291,10 @@ namespace FishMMO.Shared
 		/// Called from every path that STRUCTURALLY changes <see cref="buffs"/> — a buff added,
 		/// removed, or its stack count changed — including the ones that run during a replayed
 		/// tick, because a replay changes the authoritative set just as much as a first execution
-		/// does. A change to remaining duration alone goes through
-		/// <see cref="MarkObservedBuffsTimingDirty"/> instead.
+		/// does. A change to remaining duration alone does NOT come through here — it is not worth a
+		/// message on its own, since every peer counts its own bars down. The one exception is a
+		/// renewal that would otherwise lapse on the observers, which
+		/// <see cref="ObservedBuffWillLapse"/> notices at push time rather than at change time.
 		/// </remarks>
 		private void MarkObservedBuffsDirty()
 		{
@@ -273,11 +306,101 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool ShouldPushObservedBuffs()
 		{
-			/* Structural changes only. Timing no longer travels: every peer counts its own bars
-			 * down from its own TimeManager, so the periodic "the numbers have drifted" resend —
-			 * and the baseline bookkeeping that decided when to send it — has nothing left to
-			 * correct and is gone. */
-			return observedBuffsDirty;
+			/* Structural changes, plus renewals that would otherwise lapse.
+			 *
+			 * Timing as such does not travel: every peer counts its own bars down from its own
+			 * TimeManager, so the periodic "the numbers have drifted" resend has nothing to correct
+			 * and is gone. That holds for a buff whose expiry never moves. It does NOT hold for one
+			 * that is REFRESHED — an aura, a Region stay-trigger — because a refresh is a timing
+			 * change and pushes nothing, so the observer counts down the duration it was told once,
+			 * ObserverTimeManager_OnTick deletes it, and MergeObservedBuffs rebuilds the strip from
+			 * the local dictionary that no longer contains it. The buff then never comes back: only
+			 * a full set could restore it, and full sets are sent on a fresh baseline and to newly
+			 * arriving observers. The character kept the aura; every observer lost it, from Buffs as
+			 * well as from the strip, which Inspect, the target frame and aggro all read. */
+			return observedBuffsDirty || ObservedBuffWillLapse();
+		}
+
+		/// <summary>
+		/// True when a buff this character still holds is about to run out on its observers because
+		/// it was renewed after they were last told about it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Deliberately NOT a drift tolerance. It does not ask whether the observers' number is
+		/// close to the server's — that comparison fires on every buff on every tick and is what
+		/// collapsed the delta back into a full resend. It asks the one question whose answer is a
+		/// visible defect: is a peer about to delete something the character is still carrying?
+		/// </para>
+		/// <para>
+		/// Server side only, by way of <see cref="hasObservedBuffBaseline"/>. The owner builds its
+		/// own list from its own simulation and never deletes from <see cref="buffs"/>, so it has
+		/// nothing to lapse; it also never adopts a baseline, which is what keeps it out of here.
+		/// </para>
+		/// </remarks>
+		private bool ObservedBuffWillLapse()
+		{
+			if (!hasObservedBuffBaseline ||
+				observedBuffBaselineTick == TimeManager.UNSET_TICK ||
+				buffs.Count == 0)
+			{
+				return false;
+			}
+
+			uint currentTick = GetCurrentDomainTick();
+			if (currentTick == TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+
+			float delta = tickDelta > 0f ? tickDelta : 1f / 30f;
+
+			foreach (Buff buff in buffs.Values)
+			{
+				BaseBuffTemplate template = buff?.Template;
+				if (template == null || template.IsPermanent || buff.ExpiryTick == TimeManager.UNSET_TICK)
+				{
+					// A permanent buff is sent with zero remaining, which observers read as "never
+					// expires" — there is nothing for it to lapse into.
+					continue;
+				}
+
+				// Already expired here: this tick's Tick() removes it, which is a structural change
+				// and travels on its own.
+				if ((int)(currentTick - buff.ExpiryTick) >= 0)
+				{
+					continue;
+				}
+
+				if (!lastPushedObservedBuffs.TryGetValue(template.ID, out ObservedBuffEntry sent))
+				{
+					// Never sent, so the strip is already structurally dirty for another reason.
+					continue;
+				}
+
+				/* Where the observer's own countdown reaches zero: the tick the baseline was taken,
+				 * plus the seconds it carried. Compared with the same wrap-safe tick arithmetic
+				 * everything else in this file uses. */
+				uint observerExpiryTick = observedBuffBaselineTick +
+					(uint)Mathf.Max(0, Mathf.CeilToInt(sent.RemainingSeconds / delta));
+
+				/* Only a RENEWAL is worth a message. If the server's own expiry is not meaningfully
+				 * later than the one observers are counting towards, the two run out together and
+				 * the removal travels on its own as a structural change — firing here as well would
+				 * add a redundant full set shortly before every buff in the game expired. */
+				if ((int)(buff.ExpiryTick - observerExpiryTick) <= (int)OBSERVED_BUFF_RENEWAL_MARGIN_TICKS)
+				{
+					continue;
+				}
+
+				// Renewed, and the observers are about to delete it. Say so before they do.
+				if ((int)(currentTick + OBSERVED_BUFF_RENEWAL_MARGIN_TICKS - observerExpiryTick) >= 0)
+				{
+					return true;
+				}
+			}
+
+			return false;
 		}
 
 
@@ -320,9 +443,12 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private void PushObservedBuffs()
 		{
-			/* Which flag brought us here decides the SHAPE of the message, so read them before the
-			 * reset. A structural change is describable as a delta; a timing resync is not — every
-			 * visible buff's remaining duration has moved, so there is nothing to leave out. */
+			/* Which condition brought us here decides the SHAPE of the message, so read the flag
+			 * before the reset below clears it. A structural change is describable as a delta. A
+			 * renewal is not: what moved is RemainingSeconds, which StructurallyEquals deliberately
+			 * ignores, so the delta would come out empty and the lapse would repeat every tick until
+			 * the buff really did expire. Arriving here on a renewal alone therefore sends a full
+			 * set — see ObservedBuffWillLapse. */
 			bool structural = observedBuffsDirty;
 
 			observedBuffsDirty = false;
@@ -416,6 +542,11 @@ namespace FishMMO.Shared
 				lastPushedObservedBuffs[entry.TemplateID] = entry;
 			}
 			hasObservedBuffBaseline = true;
+
+			/* Stamped with the tick the entries were measured at, because their RemainingSeconds is
+			 * only meaningful relative to it. This is what lets ObservedBuffWillLapse tell a renewal
+			 * that observers have not been told about from one they have. */
+			observedBuffBaselineTick = GetCurrentDomainTick();
 		}
 
 		/// <summary>
@@ -1039,8 +1170,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="template">The template whose FX to show.</param>
 		/// <param name="buff">
-		/// The simulated buff, or null when this is driven by the observed list — an observer holds
-		/// no <see cref="Buff"/> for somebody else's character.
+		/// The simulated buff, or null when this is driven by the observed list. An observer's
+		/// entries are tracking-only (see <see cref="MaterializeObservedBuffs"/>) and this path does
+		/// not require one.
 		/// </param>
 		private void SpawnBuffFX(BaseBuffTemplate template, Buff buff)
 		{
@@ -1277,6 +1409,19 @@ namespace FishMMO.Shared
 		/// stop or its buffs advance twice per tick. One that LOSES its owner is the reverse: the
 		/// replicate stops and the durations would freeze. Deciding this once at spawn would be
 		/// wrong in both directions.
+		/// <para>
+		/// <b>What this deliberately does NOT do is reconcile the modifier ledger, and that is only
+		/// safe while ownership never moves between two live clients.</b> <c>SimulatesBuffEffects</c>
+		/// decides whether this peer APPLIED a buff's modifiers, so flipping it mid-life desynchronises
+		/// the applied set from the tracked set: a client that gained a character it had been
+		/// observing holds materialised buffs whose modifiers it never added, and the next removal
+		/// would subtract them; one that lost ownership has applied modifiers that
+		/// <c>MaterializeObservedBuffs</c> would then drop without reversing. The only ownership
+		/// mutation in the project is <c>RemoveOwnership()</c> on combat logout, where the character
+		/// is being taken away from that client entirely, so neither case is reachable. Add a
+		/// <c>GiveOwnership</c> anywhere and this method has to re-assert the ledger first — reverse
+		/// what the old role applied, or apply what the new role now owns.
+		/// </para>
 		/// </remarks>
 		public override void OnOwnershipClient(FishNet.Connection.NetworkConnection prevOwner)
 		{
@@ -1596,10 +1741,11 @@ namespace FishMMO.Shared
 		/// own.
 		/// </summary>
 		/// <remarks>
-		/// Nothing here touches <see cref="buffs"/>. An observer holds no simulation for somebody
-		/// else's character, so there is no tick domain to translate into and no attribute modifier
-		/// to apply — only a list to draw and FX to show, both of which
-		/// <see cref="ApplyObservedBuffs"/> handles.
+		/// Nothing here touches <see cref="buffs"/> directly. An observer holds no simulation for
+		/// somebody else's character, so there is no tick domain to translate into and no attribute
+		/// modifier to apply. <see cref="ApplyObservedBuffs"/> owns what happens next: the FX diff,
+		/// and <see cref="MaterializeObservedBuffs"/>, which does populate <see cref="buffs"/> with
+		/// tracking-only entries so Inspect, the target frame and aggro read real state.
 		/// </remarks>
 		/// <param name="reader">The payload reader, positioned after the shape flag.</param>
 		/// <returns>True when the block was read to its end.</returns>
@@ -1956,13 +2102,34 @@ namespace FishMMO.Shared
 			 * simply pinned full. See ShouldPushObservedBuffs. */
 			bool structuralChange = false;
 			bool timingChange = false;
+
+			/* TRACK everywhere, APPLY only where this peer simulates — the same rule Apply(Buff)
+			 * and Remove(int) already follow, and the reason this local exists rather than the
+			 * property being read twice below.
+			 *
+			 * This path is reachable from a peer that does NOT simulate the target. ApplyBuffAction
+			 * lets the client owning the INITIATOR through (EcaAuthority.MayPredict) so a caster
+			 * sees its own debuff land without waiting a round trip, and a cross-character cast then
+			 * arrives here against the TARGET's controller — where SimulatesBuffEffects is false.
+			 * Applying the modifier there counted it twice, because the CharacterAttributesBroadcast
+			 * that peer already receives carries ExternalModifier, defined as the sum of every buff,
+			 * equipment and region contribution. Worse, it did not cancel out: Remove(int) IS gated,
+			 * so nothing reversed the local half when the buff ended, and the character stayed
+			 * wrong until the server's next attribute diff happened to overwrite it.
+			 *
+			 * The server and the owning client both answer true, so their behaviour is unchanged. */
+			bool simulates = SimulatesBuffEffects;
+
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
 			{
 				// New buff: constructor is the single source of truth for ExpiryTick.
 				// ResetDuration is NOT called here — it only runs for existing buffs below.
 				isNew = true;
 				buffInstance = new Buff(template.ID, replicateDomainTick, tickDelta);
-				buffInstance.Apply(Character);
+				if (simulates)
+				{
+					buffInstance.Apply(Character);
+				}
 				buffs.Add(template.ID, buffInstance);
 				structuralChange = true;
 
@@ -2002,12 +2169,29 @@ namespace FishMMO.Shared
 
 			/* Only an EXISTING buff stacks. A new one already applied its modifier through
 			 * Buff.Apply in the isNew branch above, so stacking it here as well applied the value
-			 * twice on the very first cast — a MaxStacks=3 buff landed at 2x and reached 4x at full
-			 * stacks. MaxStacks is the total number of applications, which is what
-			 * ObservedBuffEntry.Stacks documents ("0 = one application"). */
-			if (!isNew && template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
+			 * twice on the very first cast — a MaxStacks=3 buff landed at 2x.
+			 *
+			 * MaxStacks is the TOTAL number of applications, which is what ObservedBuffEntry.Stacks
+			 * documents ("0 = one application"). Stacks therefore has to stop one short of it: the
+			 * base application is the first, and each stack is one more. Testing Stacks < MaxStacks
+			 * let Stacks reach MaxStacks, so a MaxStacks=3 buff still delivered FOUR applications at
+			 * full stacks — the other half of the same off-by-one, fixed here.
+			 *
+			 * The stack is COUNTED on every peer and APPLIED only where this peer simulates, which
+			 * is how ObserverTimeManager_OnTick already unstacks (it decrements the field directly
+			 * rather than calling RemoveStack). Counting everywhere keeps the strip and the
+			 * MaterializeObservedBuffs comparison honest; applying only where we simulate is what
+			 * stops the modifier being counted twice. See the note on `simulates` above. */
+			if (!isNew && template.MaxStacks > 0 && buffInstance.Stacks + 1 < template.MaxStacks)
 			{
-				buffInstance.AddStack(Character);
+				if (simulates)
+				{
+					buffInstance.AddStack(Character);
+				}
+				else
+				{
+					++buffInstance.Stacks;
+				}
 				structuralChange = true;
 			}
 
@@ -2044,9 +2228,6 @@ namespace FishMMO.Shared
 			if (structuralChange)
 			{
 				MarkObservedBuffsDirty();
-			}
-			else if (timingChange)
-			{
 			}
 		}
 
@@ -2312,21 +2493,42 @@ namespace FishMMO.Shared
 				}
 			}
 
+			/* Only reverse what this peer applied — the same rule Apply and Remove already follow.
+			 * A tracking-only observer DOES hold Buff instances (MaterializeObservedBuffs builds
+			 * them so Inspect, the target frame and aggro read real state) but never ran Buff.Apply,
+			 * so draining them here subtracted modifiers it never added and left the observed
+			 * character's sheet permanently low. The observer expiry path already decrements Stacks
+			 * directly for exactly this reason; this was the one teardown that still went through
+			 * the template. */
+			bool simulates = SimulatesBuffEffects;
+
 			for (int i = 0; i < removeAllBuffer.Count; i++)
 			{
 				int key = removeAllBuffer[i];
 				if (buffs.TryGetValue(key, out Buff buff))
 				{
 					BaseBuffTemplate template = buff.Template;
-					if (!TryRemoveBuffEffects(buff, key, nameof(RemoveAll)))
+					if (simulates && !TryRemoveBuffEffects(buff, key, nameof(RemoveAll)))
 					{
-						/* The buff stays tracked so its attribute modifiers are not orphaned — but on
-						 * a lifecycle teardown the FX must go regardless. This object is about to be
-						 * pooled and respawned as somebody else, and a visual effect has no modifier
-						 * to orphan; leaving it running would hang the previous occupant's aura on
-						 * the next character to use this instance. */
+						/* Keeping the buff tracked is the right answer for an ordinary removal: the
+						 * modifier is still applied, so dropping the entry would orphan it and
+						 * nothing would ever reverse it.
+						 *
+						 * A LIFECYCLE teardown is the opposite case. includePermanent is passed only
+						 * by ResetState, which runs from DefaultObjectPool.StoreObject — this object
+						 * is going into the pool and will come back as somebody else entirely, so
+						 * there is no later pass to retry the cleanup and a retained entry becomes
+						 * the next occupant's buff. Drop it, and say so loudly: the modifier this
+						 * buff applied could not be reversed here, and it is
+						 * CharacterAttributeController.ResetState that clears it, which is why that
+						 * reset exists rather than relying on this path alone. */
 						if (includePermanent)
 						{
+							Log.Error("BuffController",
+								$"RemoveAll: effect cleanup for template {key} failed during lifecycle teardown. " +
+								"Dropping the buff anyway so the next occupant of this pooled object cannot inherit it; " +
+								"its attribute modifiers are cleared by CharacterAttributeController.ResetState.");
+							buffs.Remove(key);
 							if (!preserveFX) DespawnBuffFX(key);
 						}
 						continue;

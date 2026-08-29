@@ -96,6 +96,7 @@ namespace FishMMO.Client
 			 * signal and why the server cannot send one. */
 			PredictedCombatEvents.OnPredicted += OnPredictedCombatEvent;
 			PredictedCombatEvents.OnPredictionRejected += OnPredictionRejected;
+			PredictedCombatEvents.OnPredictionConfirmed += OnPredictionConfirmed;
 
 			CharacterDamageController.OnCombatEventReceived += OnCombatEvent;
 			ICharacterDamageController.OnKilled += OnKilled;
@@ -112,6 +113,7 @@ namespace FishMMO.Client
 
 			PredictedCombatEvents.OnPredicted -= OnPredictedCombatEvent;
 			PredictedCombatEvents.OnPredictionRejected -= OnPredictionRejected;
+			PredictedCombatEvents.OnPredictionConfirmed -= OnPredictionConfirmed;
 			PredictedCombatEvents.Clear();
 			predictedLabels.Clear();
 
@@ -243,7 +245,9 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// A report the caster already drew as a prediction is consumed rather than drawn again.
 		/// Everyone else — every observer, and the caster for hits it did not predict — draws here
-		/// as before.
+		/// as before. The SOURCE is part of the match: this report reaches every client observing the
+		/// victim, so without it another player's hit on the same target would consume this client's
+		/// prediction and go undrawn.
 		/// </remarks>
 		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind)
 		{
@@ -251,7 +255,7 @@ namespace FishMMO.Client
 				? PredictedCombatEvents.Kind.Heal
 				: PredictedCombatEvents.Kind.Damage;
 
-			if (PredictedCombatEvents.TryConfirm(target, predictedKind))
+			if (PredictedCombatEvents.TryConfirm(source, target, predictedKind))
 			{
 				return;
 			}
@@ -275,6 +279,20 @@ namespace FishMMO.Client
 			{
 				predictedLabels[id] = label;
 			}
+		}
+
+		/// <summary>
+		/// Releases the handle for a number the server confirmed.
+		/// </summary>
+		/// <remarks>
+		/// The label itself is correct and stays exactly as drawn — this only drops the entry that
+		/// would have let it be greyed out later. Without it the map kept one entry, and one reference
+		/// to a since-recycled pooled label, for every hit that went RIGHT, which is nearly all of
+		/// them.
+		/// </remarks>
+		private void OnPredictionConfirmed(long id)
+		{
+			predictedLabels.Remove(id);
 		}
 
 		/// <summary>

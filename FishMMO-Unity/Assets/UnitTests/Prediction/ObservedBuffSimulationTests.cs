@@ -232,6 +232,104 @@ namespace FishMMO.UnitTests
 				"fire OnRemoveStack and reverse a contribution this peer never applied.");
 		}
 
+		// ── Applying a buff to a character this peer does not simulate ───────────────
+
+		/// <summary>
+		/// The caster's own client reaches <c>ApplyResolved</c> for a buff landing on somebody else.
+		/// It must track the buff without applying its effects.
+		/// </summary>
+		/// <remarks>
+		/// <c>ApplyBuffAction</c> lets the client owning the INITIATOR through (EcaAuthority
+		/// .MayPredict) so a caster sees its own debuff land without waiting a round trip, and a
+		/// cross-character cast then arrives against the TARGET's controller — where this peer
+		/// simulates nothing. <c>ApplyResolved</c> was the one apply path with no
+		/// <c>SimulatesBuffEffects</c> gate, so it ran <c>Buff.Apply</c> there and counted the
+		/// modifier a second time on top of the ExternalModifier the attribute broadcast already
+		/// carries. <c>Remove</c> IS gated, so nothing reversed the local half when the buff ended.
+		/// </remarks>
+		[Test]
+		public void ApplyingToANonSimulatedCharacter_TracksTheBuffWithoutApplyingIt()
+		{
+			ProbeBuff template = MakeTemplate("ObsSim_CrossCharacterApply", duration: 10f);
+			BuffController observer = MakeObserver("CrossCharacterApply");
+
+			ApplyResolved(observer, template, ApplyTick);
+
+			LogAssert.AreEqual(1, observer.Buffs.Count,
+				"The buff is TRACKED here — the caster's client shows the debuff it just landed.");
+			LogAssert.AreEqual(0, template.ApplyCalls,
+				"OnApply must NOT run on a peer that does not simulate this character: the attribute " +
+				"broadcast already carries this buff's contribution inside ExternalModifier, so " +
+				"applying it here counts it twice and Remove — which IS gated — never reverses it.");
+		}
+
+		/// <summary>
+		/// Stacks are still counted on a peer that does not apply them, so the strip and the
+		/// materialise comparison stay honest.
+		/// </summary>
+		[Test]
+		public void StackingOnANonSimulatedCharacter_CountsWithoutApplying()
+		{
+			ProbeBuff template = MakeTemplate("ObsSim_CrossCharacterStack", duration: 10f);
+			template.MaxStacks = 3;
+			BuffController observer = MakeObserver("CrossCharacterStack");
+
+			ApplyResolved(observer, template, ApplyTick);
+			ApplyResolved(observer, template, ApplyTick + 1u);
+
+			LogAssert.AreEqual(1, observer.Buffs[template.ID].Stacks,
+				"The stack count travels on every peer — it is what the strip draws and what " +
+				"MaterializeObservedBuffs compares against.");
+			LogAssert.AreEqual(0, template.ApplyStackCalls,
+				"OnApplyStack must not run here, for the same reason OnApply must not.");
+		}
+
+		// ── The stack ceiling ────────────────────────────────────────────────────────
+
+		/// <summary>
+		/// <c>MaxStacks</c> is the TOTAL number of applications, so <c>Stacks</c> stops one short.
+		/// </summary>
+		/// <remarks>
+		/// Two halves of one off-by-one. A fresh stacking buff used to run both the new-buff branch
+		/// and the stack branch, applying its modifier twice on the first cast — fixed 2026-08-28.
+		/// The ceiling tested <c>Stacks &lt; MaxStacks</c>, which let Stacks REACH MaxStacks, so a
+		/// MaxStacks=3 buff still delivered four applications at full stacks — fixed 2026-08-29.
+		/// <c>ObservedBuffEntry.Stacks</c> documents the invariant: 0 means one application.
+		/// </remarks>
+		[Test]
+		public void StackCeiling_CountsTheBaseApplication()
+		{
+			ProbeBuff template = MakeTemplate("ObsSim_StackCeiling", duration: 10f);
+			template.MaxStacks = 3;
+			BuffController observer = MakeObserver("StackCeiling");
+
+			// Five applications against a ceiling of three.
+			for (uint i = 0; i < 5u; ++i)
+			{
+				ApplyResolved(observer, template, ApplyTick + i);
+			}
+
+			LogAssert.AreEqual(2, observer.Buffs[template.ID].Stacks,
+				"MaxStacks=3 means three applications in total: the base one plus two stacks. " +
+				"Stacks reaching 3 would be a fourth.");
+		}
+
+		/// <summary>A single-application buff never takes a stack at all.</summary>
+		[Test]
+		public void StackCeilingOfOne_NeverStacks()
+		{
+			ProbeBuff template = MakeTemplate("ObsSim_StackCeilingOne", duration: 10f);
+			template.MaxStacks = 1;
+			BuffController observer = MakeObserver("StackCeilingOne");
+
+			ApplyResolved(observer, template, ApplyTick);
+			ApplyResolved(observer, template, ApplyTick + 1u);
+			ApplyResolved(observer, template, ApplyTick + 2u);
+
+			LogAssert.AreEqual(0, observer.Buffs[template.ID].Stacks,
+				"MaxStacks=1 is one application, which is the base one — there is no stack to add.");
+		}
+
 		// ── The shape of the code ────────────────────────────────────────────────────
 
 		/// <summary>There must be no parallel observed-buff container left.</summary>
@@ -261,6 +359,19 @@ namespace FishMMO.UnitTests
 				RemainingSeconds = remaining,
 				TotalSeconds = template.Duration,
 			};
+
+		/// <summary>
+		/// Drives the single apply core directly. Reflection because <c>PredictionTick</c>'s
+		/// constructor is internal to the Shared assembly by design — that is the whole point of the
+		/// type — so the public <c>Apply(template, PredictionTick, caster)</c> overload cannot be
+		/// called from here.
+		/// </summary>
+		private static void ApplyResolved(BuffController controller, BaseBuffTemplate template, uint tick)
+		{
+			typeof(BuffController)
+				.GetMethod("ApplyResolved", Private)
+				.Invoke(controller, new object[] { template, tick, null });
+		}
 
 		/// <summary>Feeds a full observed set straight into the controller's apply funnel.</summary>
 		private static void ApplyObserved(BuffController controller, params ObservedBuffEntry[] entries)

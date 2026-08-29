@@ -1005,6 +1005,61 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// The attribute reconcile must run AFTER the buff and equipment reconciles, or their
+		/// incremental modifier writes compound instead of being overwritten.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>CharacterPredictionController.Reconcile</c> walks the controllers sorted by
+		/// <c>Order</c>. <c>BuffController</c> and <c>EquipmentController</c> restore INCREMENTALLY —
+		/// <c>Buff.Apply</c> and <c>ItemGenerator.ApplyAttributes</c> both call <c>AddModifier</c> —
+		/// while <c>CharacterAttributeController.ApplyAttributeSnapshot</c> installs the server's
+		/// TOTAL absolutely with <c>SetModifierDirect</c>. Running the absolute write last is what
+		/// makes the incremental ones harmless.
+		/// </para>
+		/// <para>
+		/// Asserted because nothing else does. The values were 85 / 93 / 95 with the reason recorded
+		/// only in prose, so lowering the attribute controller to fix some unrelated ordering
+		/// problem would have silently reintroduced compounding on the owner's sheet — a drift with
+		/// no exception, no log line and no failing test to catch it.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void AttributeReconcile_RunsAfterBuffAndEquipment()
+		{
+			int attributes = OrderOf<CharacterAttributeController>();
+			int buffs = OrderOf<BuffController>();
+			int equipment = OrderOf<EquipmentController>();
+
+			LogAssert.IsTrue(attributes > buffs,
+				$"CharacterAttributeController.Order ({attributes}) must exceed BuffController.Order ({buffs}): " +
+				"the buff reconcile re-applies modifiers with AddModifier and the attribute reconcile " +
+				"overwrites the total with SetModifierDirect, so the overwrite has to come second.");
+			LogAssert.IsTrue(attributes > equipment,
+				$"CharacterAttributeController.Order ({attributes}) must exceed EquipmentController.Order ({equipment}): " +
+				"equipping during reconcile runs ItemGenerator.ApplyAttributes → AddModifier, which the " +
+				"attribute snapshot must land on top of rather than under.");
+		}
+
+		/// <summary>
+		/// Reads a controller's pipeline order without a live NetworkManager. <c>Order</c> is an
+		/// instance property on <c>IPredictableController</c>, and these are all
+		/// <c>MonoBehaviour</c>s, so the instance is built on a throwaway GameObject.
+		/// </summary>
+		private static int OrderOf<T>() where T : MonoBehaviour, IPredictableController
+		{
+			GameObject go = new GameObject("OrderProbe_" + typeof(T).Name);
+			try
+			{
+				return go.AddComponent<T>().Order;
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
 		/// A pooled object must not inherit the previous occupant's permanent buffs — they carry
 		/// attribute modifiers.
 		/// </summary>
@@ -1497,12 +1552,43 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The rewind must be anchored to the tick of the INPUT being simulated, not the server's
-		/// present tick — the two differ by however much of that client's input the server has
-		/// buffered, which is exactly the per-client quantity that varies.
+		/// The rewind anchors on the SERVER's tick, because that is the domain the history is keyed
+		/// in. Supersedes an earlier guard that required the replicate input's tick instead.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>This test previously asserted the opposite, and the assertion was wrong.</b> It
+		/// required <c>TryResolve</c> to anchor on
+		/// <c>CharacterPredictionController.CurrentReplicateTickSnapshot</c>, on the reasoning that
+		/// the server's present tick and the input's tick "differ by however much of that client's
+		/// input the server has buffered". They do differ — but not by that, and not by a small
+		/// amount. On the server a replicate carries the OWNING CLIENT'S <c>TimeManager.LocalTick</c>:
+		/// <c>Buffer.CopySegment</c> stamps every packet with the sender's <c>LocalTick</c>,
+		/// <c>NetworkBehaviour.Replicate_Reader</c> stamps the read datas from that value, and
+		/// <c>TimeManager.LocalTick</c> is documented as "a tick that is not synchronized", reset to
+		/// zero whenever that client connects. The server's own <c>LocalTick</c> returns
+		/// <c>TimeManager.Tick</c>, which has been running since the process started.
+		/// </para>
+		/// <para>
+		/// The gap is therefore an arbitrary per-connection constant, not a queue depth — which is
+		/// exactly what <c>BuffController.OnReplicate</c> already computes with
+		/// <c>GetSignedTickOffset(TimeManager.LocalTick, input.GetTick())</c> in order to shift
+		/// pre-replicate buffs between the two domains. That code would be a no-op if the ticks
+		/// agreed.
+		/// </para>
+		/// <para>
+		/// The consequence of anchoring in the client's domain was total and silent: every target
+		/// landed outside <c>CharacterPositionHistory</c>'s recorded window, so every <c>Rewind</c>
+		/// declined, <c>LagCompensationRegistry.Rewind</c> returned an inactive scope, and every hit
+		/// resolved against live positions — the precise behaviour the subsystem exists to prevent,
+		/// reached without a log line. The queue-depth correction it was bought for is not even
+		/// observable here: <c>NetworkObject.SetReplicateTick</c> stamps the owner's
+		/// <c>ReplicateTick</c> immediately before the replicate body, so the difference the old
+		/// rationale wanted reads as zero for the same reason <c>LocalTickDifference</c> does.
+		/// </para>
+		/// </remarks>
 		[Test]
-		public void RewindAnchor_IsTheInputTick_NotTheServersPresent()
+		public void RewindAnchor_IsTheServersOwnTick_NotTheOwningClientsInputTick()
 		{
 			string source = File.ReadAllText(Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs"));
@@ -1510,14 +1596,23 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(start >= 0, "TryResolve must be locatable.");
 			string body = source.Substring(start);
 
-			LogAssert.IsTrue(body.Contains("CurrentReplicateTickSnapshot"),
-				"The rewind must anchor on the replicate's own tick when one is being simulated.");
-			int anchorAssign = body.IndexOf("anchorTick = replicateTick", StringComparison.Ordinal);
+			LogAssert.IsFalse(body.Contains("CurrentReplicateTickSnapshot"),
+				"TryResolve must not anchor on the replicate input's tick: that value is the owning " +
+				"client's unsynchronised counter and cannot index a history keyed by the server's, so " +
+				"using it disables compensation outright.");
+
+			int anchorAssign = body.IndexOf("anchorTick = ServerTickDomain(timeManager)", StringComparison.Ordinal);
 			int rewindBuild = body.IndexOf("new RewindTarget(anchorTick", StringComparison.Ordinal);
-			LogAssert.IsTrue(anchorAssign >= 0 && rewindBuild > anchorAssign,
-				"The input tick must be adopted as the anchor before the target is built.");
+			LogAssert.IsTrue(anchorAssign >= 0,
+				"The anchor must come from LagCompensationTick.ServerTickDomain, the one function that " +
+				"also keys CharacterPositionHistory, so the two cannot drift into different domains.");
+			LogAssert.IsTrue(rewindBuild > anchorAssign,
+				"The anchor must be established before the target is built.");
+
 			LogAssert.IsTrue(body.Contains("CurrentViewOffsetFraction"),
-				"The sub-tick remainder must reach the rewind, or it quantises back to a tick boundary.");
+				"The sub-tick remainder must still reach the rewind, or it quantises back to a tick " +
+				"boundary. Only the ANCHOR changed; the offset subtracted from it is still the client's " +
+				"measured view lag, whole part and fraction.");
 		}
 
 		/// <summary>The sub-tick remainder must survive the wire like the whole part does.</summary>
@@ -1955,6 +2050,116 @@ namespace FishMMO.UnitTests
 				LogAssert.IsTrue(margin >= sweepTravel,
 					$"{name}: a {margin:F1} m hide margin is under the {sweepTravel:F1} m a player crosses between observer sweeps on a full 200-player channel — characters will flicker under exactly the load the caps exist for.");
 			}
+		}
+
+		/// <summary>
+		/// Only a peer that APPLIED a buff's modifiers is allowed to reverse them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An observer holds real <c>Buff</c> instances — <c>MaterializeObservedBuffs</c> builds them
+		/// so Inspect, the target frame and aggro read state rather than a display list — but never
+		/// runs <c>Buff.Apply</c>, because the attribute broadcast it already receives carries those
+		/// bonuses inside <c>ExternalModifier</c>. <c>Apply</c> and <c>Remove</c> both gate on
+		/// <c>SimulatesBuffEffects</c> for that reason; <c>RemoveAll</c> did not, so a teardown
+		/// subtracted modifiers this peer had never added and left the observed character's sheet
+		/// permanently low.
+		/// </para>
+		/// <para>
+		/// An unspawned controller has no <c>NetworkObject</c>, so it is neither the server nor an
+		/// owner — exactly the tracking-only role this guards.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void BuffRemoveAll_DoesNotReverseModifiersOnATrackingOnlyPeer()
+		{
+			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+				"Scripts/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
+
+			Match removeAll = Regex.Match(source,
+				@"public void RemoveAll\([^)]*\)\s*\{(?<body>.*?)\n\t\t\}", RegexOptions.Singleline);
+			LogAssert.IsTrue(removeAll.Success, "RemoveAll must be findable to check its gating.");
+
+			string body = removeAll.Groups["body"].Value;
+			LogAssert.IsTrue(body.Contains("SimulatesBuffEffects"),
+				"BuffController.RemoveAll must consult SimulatesBuffEffects before running " +
+				"TryRemoveBuffEffects. Without it a tracking-only observer reverses modifiers it never " +
+				"applied — the mirror of the double-count Apply already avoids.");
+
+			LogAssert.IsFalse(Regex.IsMatch(body, @"if \(!TryRemoveBuffEffects\("),
+				"RemoveAll must not call TryRemoveBuffEffects unconditionally.");
+		}
+
+		/// <summary>
+		/// Equipment teardown does not reverse bonuses on a peer that never applied them.
+		/// </summary>
+		/// <remarks>
+		/// <c>Item.Destroy</c> unequips before detaching its handlers — deliberately, so a real
+		/// unequip cannot orphan its modifiers — and <c>SetEquippedCharacterSilently</c> re-attaches
+		/// <c>OnUnequip</c> after suppressing only the equip half. So an observer's
+		/// <c>ResetState</c> ran <c>ItemGenerator.RemoveAttributes</c> for gear whose bonuses the
+		/// server had already accounted for in the broadcast <c>ExternalModifier</c>.
+		/// </remarks>
+		[Test]
+		public void EquipmentResetState_DoesNotReverseModifiersOnATrackingOnlyPeer()
+		{
+			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+				"Scripts/Shared/Implementation/Entity/Prediction/Equipment/EquipmentController.cs"));
+
+			LogAssert.IsTrue(source.Contains("SimulatesEquipmentEffects"),
+				"EquipmentController must express whether this peer applied its items' modifiers.");
+
+			Match reset = Regex.Match(source,
+				@"public override void ResetState\(bool asServer\)\s*\{(?<body>.*?)\n\t\t\}", RegexOptions.Singleline);
+			LogAssert.IsTrue(reset.Success, "ResetState must be findable to check its gating.");
+
+			string body = reset.Groups["body"].Value;
+			int silent = body.IndexOf("ClearEquippedCharacterSilently", StringComparison.Ordinal);
+			int clear = body.IndexOf("Clear();", StringComparison.Ordinal);
+
+			LogAssert.IsTrue(silent >= 0,
+				"ResetState must detach a non-simulating peer's items before Clear(), or Item.Destroy " +
+				"raises OnUnequip and subtracts bonuses this peer never added.");
+			LogAssert.IsTrue(clear > silent,
+				"The silent detach must come BEFORE Clear(); afterwards the items are already destroyed " +
+				"and the modifiers already gone.");
+		}
+
+		/// <summary>
+		/// No ECA action gates authoritative state on a build-target define.
+		/// </summary>
+		/// <remarks>
+		/// <c>#if UNITY_SERVER</c> is undefined in the editor the scene server is developed in, so it
+		/// deletes the body there rather than restricting it — the action still exists, still
+		/// serialises and still fires, and simply never has an effect. <c>EcaAuthority</c> asks the
+		/// same question of the peer the character actually belongs to. The inverse form,
+		/// <c>#if !UNITY_SERVER</c>, is left alone: it guards client-side visuals and audio, where
+		/// running in the editor is what you want.
+		/// </remarks>
+		[Test]
+		public void EcaActions_DoNotGateAuthoritativeStateOnABuildDefine()
+		{
+			string root = Path.Combine(Application.dataPath, "Scripts/Shared/Implementation/Entity/ECA/Actions");
+			List<string> offenders = new List<string>();
+
+			foreach (string path in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+			{
+				foreach (string line in File.ReadAllLines(path))
+				{
+					string trimmed = line.Trim();
+					if (trimmed.StartsWith("#if", StringComparison.Ordinal) &&
+						trimmed.Contains("UNITY_SERVER") &&
+						!trimmed.Contains("!UNITY_SERVER"))
+					{
+						offenders.Add(Path.GetFileName(path));
+						break;
+					}
+				}
+			}
+
+			LogAssert.AreEqual(0, offenders.Count,
+				$"These actions gate server-authoritative work on the UNITY_SERVER build define, so they " +
+				$"do nothing in the editor: {string.Join(", ", offenders)}. Use EcaAuthority.IsServer instead.");
 		}
 
 		private static string GuidFromMeta(string metaPath)

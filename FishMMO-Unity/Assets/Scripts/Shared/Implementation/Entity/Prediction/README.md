@@ -213,7 +213,7 @@ AbilityController (Order=100)  → Activates abilities, checks cooldowns + resou
 | Check | How to Verify | Expected Result |
 |-------|---------------|-----------------|
 | Controller discovery | Enter Play mode, break on `Awake()` | `controllers` array contains all 5 controllers sorted by Order |
-| State Forwarding | Inspect `NetworkObject` Prediction settings | `EnableStateForwarding == true`. `CharacterPredictionController.OnStartNetwork` logs a warning otherwise — observers desync without it |
+| State Forwarding | Inspect `NetworkObject` Prediction settings | `EnableStateForwarding == false` on every shipped prefab — the interpolated open-world mode. Observers are fed by per-controller broadcasts, not by a forwarded reconcile; see `ObserverSyncMode`. `CharacterPredictionController.OnStartNetwork` warns only when forwarding is off AND there is no `NetworkTransform`, because then nothing replicates position at all |
 | Tick execution | Place a breakpoint in `TimeManager_OnTick` | Called every server tick; `PopulateInput` runs only for owner |
 | Replicate pipeline | Activate an ability on client | `OnReplicate` fires on both client and server with identical tick |
 | Reconcile pipeline | Force a mismatch (server modifies ability state) | `OnReconcile` fires on client, restoring server state |

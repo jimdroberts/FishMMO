@@ -151,14 +151,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Checks whether an existing container holds the same spawn (same seed and tick).
-		/// </summary>
-		/// <remarks>
-		/// Children copy their root's seed and spawn tick, so any live member answers for the
-		/// container. All of them are scanned rather than just the first, so a container whose
-		/// root has already expired still reports its identity correctly.
-		/// </remarks>
-		/// <summary>
 		/// True when this exact cast — same seed, same spawn tick — is already running on this peer.
 		/// </summary>
 		/// <remarks>
@@ -179,6 +171,14 @@ namespace FishMMO.Shared
 				   IsSameSpawn(existing, seed, spawnTick);
 		}
 
+		/// <summary>
+		/// Checks whether an existing container holds the same spawn (same seed and tick).
+		/// </summary>
+		/// <remarks>
+		/// Children copy their root's seed and spawn tick, so any live member answers for the
+		/// container. All of them are scanned rather than just the first, so a container whose
+		/// root has already expired still reports its identity correctly.
+		/// </remarks>
 		private static bool IsSameSpawn(Dictionary<int, AbilityObject> container, int seed, PredictionTick spawnTick)
 		{
 			if (container == null || container.Count == 0) return false;

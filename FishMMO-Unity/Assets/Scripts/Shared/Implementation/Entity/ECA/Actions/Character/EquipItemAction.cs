@@ -20,7 +20,20 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data containing the <see cref="ItemEventData"/> with item and slot information.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-#if UNITY_SERVER
+			/* Server only, decided at runtime rather than by a build define.
+			 *
+			 * This body was wrapped in `#if UNITY_SERVER`, which is a BUILD TARGET define and is
+			 * undefined in the editor the scene server is developed in — so the action compiled away
+			 * entirely there and did nothing on the server either. That failure is invisible: the
+			 * action still exists, still serialises, and its trigger still fires; it simply never has
+			 * an effect, which reads as "the quest/item/achievement hook is broken" rather than as a
+			 * build-configuration problem. EcaAuthority asks the question that was meant all along,
+			 * of the peer the character actually belongs to. See EcaAuthority's own remarks. */
+			if (!EcaAuthority.IsServer(initiator, eventData))
+			{
+				return;
+			}
+
 			if (initiator == null || eventData == null)
 			{
 				Log.Warning("EquipItemAction", "Initiator or EventData is null. Cannot execute action.");
@@ -65,7 +78,6 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("EquipItemAction", $"Failed to equip {itemToEquip.Template.name} to {targetSlot}.");
 			}
-#endif
 		}
 	}
 }

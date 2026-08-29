@@ -23,6 +23,14 @@ namespace FishMMO.UnitTests
 		private readonly List<GameObject> gameObjects = new List<GameObject>();
 		private readonly List<long> predicted = new List<long>();
 		private readonly List<long> rejected = new List<long>();
+		private readonly List<long> confirmed = new List<long>();
+
+		/// <summary>
+		/// The character doing the hitting. Every prediction has one, because confirmation pairs on
+		/// the attacker as well as the victim — a combat report reaches every client observing the
+		/// victim, so without the attacker any other player's hit would consume this one's prediction.
+		/// </summary>
+		private ICharacter attacker;
 
 		[SetUp]
 		public void SetUp()
@@ -31,8 +39,11 @@ namespace FishMMO.UnitTests
 			PredictedCombatEvents.ConfirmationWindowSeconds = 1.0f;
 			predicted.Clear();
 			rejected.Clear();
+			confirmed.Clear();
 			PredictedCombatEvents.OnPredicted += RecordPredicted;
 			PredictedCombatEvents.OnPredictionRejected += RecordRejected;
+			PredictedCombatEvents.OnPredictionConfirmed += RecordConfirmed;
+			attacker = MakeCharacter("Attacker", objectId: 1);
 		}
 
 		[TearDown]
@@ -40,6 +51,7 @@ namespace FishMMO.UnitTests
 		{
 			PredictedCombatEvents.OnPredicted -= RecordPredicted;
 			PredictedCombatEvents.OnPredictionRejected -= RecordRejected;
+			PredictedCombatEvents.OnPredictionConfirmed -= RecordConfirmed;
 			PredictedCombatEvents.Clear();
 
 			for (int i = 0; i < gameObjects.Count; ++i)
@@ -57,13 +69,15 @@ namespace FishMMO.UnitTests
 
 		private void RecordRejected(long id) => rejected.Add(id);
 
+		private void RecordConfirmed(long id) => confirmed.Add(id);
+
 		/// <summary>A prediction must announce itself so the display can draw it at once.</summary>
 		[Test]
 		public void Predict_AnnouncesImmediately()
 		{
 			ICharacter target = MakeCharacter("PredictTarget", objectId: 5);
 
-			PredictedCombatEvents.Predict(target, 42, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 42, PredictedCombatEvents.Kind.Damage, null, 0f);
 
 			LogAssert.AreEqual(1, predicted.Count,
 				"The number must be announced on the predicting tick; waiting for the server is the " +
@@ -79,9 +93,9 @@ namespace FishMMO.UnitTests
 		public void TryConfirm_ConsumesTheMatchingPrediction()
 		{
 			ICharacter target = MakeCharacter("ConfirmTarget", objectId: 7);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
-			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(target, PredictedCombatEvents.Kind.Damage),
+			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Damage),
 				"The report describes a hit already on screen; the display must skip it rather than " +
 				"drawing a second number for one hit.");
 			LogAssert.AreEqual(0, PredictedCombatEvents.PendingCount, "The prediction must be consumed.");
@@ -104,9 +118,9 @@ namespace FishMMO.UnitTests
 		public void TryConfirm_MatchesDespiteAnAmountMismatch()
 		{
 			ICharacter target = MakeCharacter("AmountTarget", objectId: 9);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
-			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(target, PredictedCombatEvents.Kind.Damage),
+			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Damage),
 				"A differing amount must still pair. Matching on the amount would grey out a hit that " +
 				"actually landed and draw the server's number next to it.");
 		}
@@ -117,9 +131,9 @@ namespace FishMMO.UnitTests
 		{
 			ICharacter target = MakeCharacter("MineTarget", objectId: 11);
 			ICharacter other = MakeCharacter("OtherTarget", objectId: 12);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
-			LogAssert.IsFalse(PredictedCombatEvents.TryConfirm(other, PredictedCombatEvents.Kind.Damage),
+			LogAssert.IsFalse(PredictedCombatEvents.TryConfirm(attacker, other, PredictedCombatEvents.Kind.Damage),
 				"A hit on somebody else must be drawn, not silently swallowed by an unrelated prediction.");
 			LogAssert.AreEqual(1, PredictedCombatEvents.PendingCount, "The original prediction must survive.");
 		}
@@ -129,9 +143,9 @@ namespace FishMMO.UnitTests
 		public void TryConfirm_DoesNotMatchAcrossKinds()
 		{
 			ICharacter target = MakeCharacter("KindTarget", objectId: 13);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
-			LogAssert.IsFalse(PredictedCombatEvents.TryConfirm(target, PredictedCombatEvents.Kind.Heal),
+			LogAssert.IsFalse(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Heal),
 				"A heal report must not consume a damage prediction; the two are different numbers on " +
 				"the same character and swallowing one hides a real event.");
 		}
@@ -145,7 +159,7 @@ namespace FishMMO.UnitTests
 		public void Sweep_RejectsAnUnconfirmedPrediction()
 		{
 			ICharacter target = MakeCharacter("StaleTarget", objectId: 15);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
 			PredictedCombatEvents.Sweep(0.5f);
 			LogAssert.AreEqual(0, rejected.Count,
@@ -163,7 +177,7 @@ namespace FishMMO.UnitTests
 		public void Sweep_RejectsEachPredictionOnlyOnce()
 		{
 			ICharacter target = MakeCharacter("OnceTarget", objectId: 17);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
 			PredictedCombatEvents.Sweep(2f);
 			PredictedCombatEvents.Sweep(3f);
@@ -177,10 +191,10 @@ namespace FishMMO.UnitTests
 		public void TryConfirm_ConsumesOldestFirst()
 		{
 			ICharacter target = MakeCharacter("MultiTarget", objectId: 19);
-			PredictedCombatEvents.Predict(target, 10, PredictedCombatEvents.Kind.Damage, null, 0f);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0.1f);
+			PredictedCombatEvents.Predict(attacker, target, 10, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0.1f);
 
-			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(target, PredictedCombatEvents.Kind.Damage));
+			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Damage));
 			LogAssert.AreEqual(1, PredictedCombatEvents.PendingCount,
 				"One report confirms one prediction; a burst must not be collapsed into a single match.");
 
@@ -194,7 +208,7 @@ namespace FishMMO.UnitTests
 		public void Clear_DropsPendingWithoutRejecting()
 		{
 			ICharacter target = MakeCharacter("ClearTarget", objectId: 21);
-			PredictedCombatEvents.Predict(target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 20, PredictedCombatEvents.Kind.Damage, null, 0f);
 
 			PredictedCombatEvents.Clear();
 			PredictedCombatEvents.Sweep(10f);
@@ -211,11 +225,84 @@ namespace FishMMO.UnitTests
 		{
 			ICharacter target = MakeCharacter("ZeroTarget", objectId: 23);
 
-			PredictedCombatEvents.Predict(target, 0, PredictedCombatEvents.Kind.Damage, null, 0f);
-			PredictedCombatEvents.Predict(target, -5, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 0, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, -5, PredictedCombatEvents.Kind.Damage, null, 0f);
 
 			LogAssert.AreEqual(0, predicted.Count, "Fully resisted or zero-effective hits draw nothing.");
 			LogAssert.AreEqual(0, PredictedCombatEvents.PendingCount, "And leave nothing pending.");
+		}
+
+		/// <summary>
+		/// Another player's hit on the same target must not consume this client's prediction.
+		/// </summary>
+		/// <remarks>
+		/// The regression this pins is the routine case, not an exotic one: a combat report is
+		/// broadcast to everyone observing the VICTIM, so two players on one mob was enough. With the
+		/// attacker left out of the match, the other player's report paired with this client's pending
+		/// entry — the caller draws nothing on a match, so their real number vanished — and this
+		/// client's own report then arrived to find nothing pending and was drawn a second time.
+		/// </remarks>
+		[Test]
+		public void TryConfirm_DoesNotMatchAnotherAttackersReport()
+		{
+			ICharacter target = MakeCharacter("SharedTarget", objectId: 25);
+			ICharacter otherAttacker = MakeCharacter("OtherAttacker", objectId: 26);
+
+			PredictedCombatEvents.Predict(attacker, target, 120, PredictedCombatEvents.Kind.Damage, null, 0f);
+
+			LogAssert.IsFalse(PredictedCombatEvents.TryConfirm(otherAttacker, target, PredictedCombatEvents.Kind.Damage),
+				"Somebody else's damage on the same target must be drawn. Swallowing it hides their " +
+				"number entirely and leaves this client's own report to be drawn twice.");
+			LogAssert.AreEqual(1, PredictedCombatEvents.PendingCount,
+				"This client's prediction must still be waiting for its OWN report.");
+
+			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Damage),
+				"And that report must still pair when it arrives.");
+		}
+
+		/// <summary>
+		/// A prediction with no resolvable attacker is not recorded.
+		/// </summary>
+		/// <remarks>
+		/// Same reasoning as the missing-target case: confirmation now matches on the source, so an
+		/// entry without one could never be paired and would always end up greyed out. Drawing nothing
+		/// beats drawing a number guaranteed to be marked wrong.
+		/// </remarks>
+		[Test]
+		public void Predict_IgnoresAPredictionWithNoAttacker()
+		{
+			ICharacter target = MakeCharacter("NoSourceTarget", objectId: 27);
+
+			PredictedCombatEvents.Predict(null, target, 30, PredictedCombatEvents.Kind.Damage, null, 0f);
+
+			LogAssert.AreEqual(0, predicted.Count, "An unpairable prediction must not be announced.");
+			LogAssert.AreEqual(0, PredictedCombatEvents.PendingCount, "And must leave nothing pending.");
+		}
+
+		/// <summary>
+		/// Confirmation must be announced, so the display can release the handle it kept.
+		/// </summary>
+		/// <remarks>
+		/// The display keeps one entry per prediction so it can grey that number out later. Only
+		/// rejection used to be announced, so the entries for every prediction that turned out RIGHT —
+		/// nearly all of them — accumulated for the whole session, each pinning a pooled label that had
+		/// long since been recycled onto some other number.
+		/// </remarks>
+		[Test]
+		public void TryConfirm_AnnouncesTheConfirmation_SoTheDisplayCanReleaseItsHandle()
+		{
+			ICharacter target = MakeCharacter("HandleTarget", objectId: 29);
+			PredictedCombatEvents.Predict(attacker, target, 15, PredictedCombatEvents.Kind.Damage, null, 0f);
+
+			LogAssert.AreEqual(1, predicted.Count, "One handle was issued.");
+			LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Damage));
+
+			LogAssert.AreEqual(1, confirmed.Count,
+				"The confirmed handle must be announced; without it the display can only ever free the " +
+				"handles for predictions that were wrong.");
+			LogAssert.AreEqual(predicted[0], confirmed[0],
+				"And it must name the handle that was issued, or the display frees the wrong entry.");
+			LogAssert.AreEqual(0, rejected.Count, "A confirmed prediction is never also rejected.");
 		}
 
 		// ── Helpers ──────────────────────────────────────────────────────────────────

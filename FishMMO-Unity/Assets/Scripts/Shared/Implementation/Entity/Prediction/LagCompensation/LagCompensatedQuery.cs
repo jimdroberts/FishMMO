@@ -53,7 +53,15 @@ namespace FishMMO.Shared
 			 * Callers cap at a MaxHits, take the first match, or roll an index against this array; all
 			 * three were reading a broadphase ordering that is neither reproducible across runs nor
 			 * agreed between peers. Sorting here fixes every caller at once rather than asking each to
-			 * remember. */
+			 * remember.
+			 *
+			 * Deliberately OUTSIDE the rewind scope, and safe there because this ordering does not
+			 * read position: SortColliders ranks by NetworkObject.ObjectId, then a stable hash of the
+			 * name. TargetRank's third key IS a position hash, but two distinct networked characters
+			 * never tie on ObjectId, so it is only ever reached for un-networked scene objects that
+			 * share a name. A selector that needs to rank BY DISTANCE must not use this — it has to
+			 * hold one scope across the query AND the ranking, which is what
+			 * TargetSelector.GatherRewound is for. */
 			TargetOrdering.SortColliders(hits, count);
 			return count;
 		}
@@ -87,8 +95,11 @@ namespace FishMMO.Shared
 				count = physicsScene.Raycast(origin, direction, hits, distance, mask, QueryTriggerInteraction.UseGlobal);
 			}
 
-			// Ordered along the ray: the only reading a line effect can act on, and the one Unity's
-			// non-allocating overload explicitly does not provide.
+			/* Ordered along the ray: the only reading a line effect can act on, and the one Unity's
+			 * non-allocating overload explicitly does not provide. Safe outside the rewind scope for
+			 * the same reason as the overlap sort above, plus a stronger one — RaycastHit.distance was
+			 * measured by the query itself, inside the scope, and is carried in the struct rather than
+			 * recomputed from a transform that has since been restored. */
 			TargetOrdering.SortRaycastHits(hits, count);
 			return count;
 		}

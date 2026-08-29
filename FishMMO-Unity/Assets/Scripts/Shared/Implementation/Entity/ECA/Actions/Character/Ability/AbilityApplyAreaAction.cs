@@ -67,9 +67,19 @@ namespace FishMMO.Shared
 					int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 					float radius = RadiusValue.GetValue(initiator, eventData);
 
-					if (hits == null || hits.Length != maxHits)
+					/* Query WIDE, cap late. Sizing the buffer at exactly maxHits makes the physics
+					 * broadphase perform the truncation, in its own order, before anything here sees
+					 * the candidates — so a cap of 5 in a crowd of 20 hit five arbitrary characters
+					 * and the deterministic sort inside LagCompensatedQuery had nothing left to
+					 * order. The cap is applied to the sorted result below instead, which is what
+					 * makes it mean "the first five in a defined order". Same rule, and the same
+					 * arithmetic, as TargetSelector.QueryBufferSize; it is duplicated rather than
+					 * shared because that helper is protected on the selector base and this is an
+					 * action. */
+					int bufferSize = Mathf.Clamp(Mathf.Max(1, maxHits) * 4, 32, 256);
+					if (hits == null || hits.Length != bufferSize)
 					{
-						hits = new Collider[maxHits];
+						hits = new Collider[bufferSize];
 					}
 
 					Vector3 center = abilityObject.Transform.position;
@@ -78,6 +88,14 @@ namespace FishMMO.Shared
 					 * motion is deterministic, so every peer already agrees on it. */
 					int hitCount = LagCompensatedQuery.OverlapSphere(
 						eventData, abilityObject.GameObject, center, radius, hits, TargetLayerMask);
+
+					// The buffer is intentionally wider than the cap; truncate the ORDERED result.
+					// maxHits <= 0 means "no cap", matching TargetOrdering.CappedCount.
+					if (maxHits > 0 && hitCount > maxHits)
+					{
+						hitCount = maxHits;
+					}
+
 					var onHitEvents = abilityObject.OnHitEvents;
 					if (onHitEvents == null)
 					{
