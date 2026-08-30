@@ -67,8 +67,9 @@ namespace FishMMO.Shared
 			 * that total, so the reversal is just letting go of the entry, and the two can no longer
 			 * drift apart. CumulativeTickMultiplier is still what OnTick uses to compute the entry.
 			 */
-			ModifierSource source = ModifierSource.Buff(ID);
-
+			/* Released by CONTRIBUTOR: OnTick writes one entry per TickAttributes ENTRY, so a
+			 * single-key release would strand every entry but one. See
+			 * CharacterAttribute.ClearSourceGroup. */
 			for (int i = 0; i < TickAttributes.Count; i++)
 			{
 				BuffAttributeTemplate tickAttribute = TickAttributes[i];
@@ -76,11 +77,11 @@ namespace FishMMO.Shared
 
 				if (attributeController.TryGetAttribute(tickAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.ClearSource(source);
+					characterAttribute.ClearSourceGroup(ModifierSourceKind.Buff, ID);
 				}
 				else if (attributeController.TryGetResourceAttribute(tickAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.ClearSource(source);
+					characterResourceAttribute.ClearSourceGroup(ModifierSourceKind.Buff, ID);
 				}
 			}
 		}
@@ -124,12 +125,16 @@ namespace FishMMO.Shared
 			 * means a tick that fires twice for the same buff — a replay, a duplicated dispatch —
 			 * leaves the same number rather than twice the number. */
 			int cumulative = buff.CumulativeTickMultiplier + 1 + buff.Stacks;
-			ModifierSource source = ModifierSource.Buff(ID);
 
 			for (int i = 0; i < TickAttributes.Count; i++)
 			{
 				BuffAttributeTemplate tickAttribute = TickAttributes[i];
 				if (tickAttribute?.Template == null) continue;
+
+				/* Keyed by the entry's POSITION as well as by this buff: TickAttributes is an
+				 * authored list and two entries may name one attribute, which a single key per buff
+				 * silently collapsed to whichever was written last. See ModifierSource.Index. */
+				ModifierSource source = ModifierSource.Buff(ID, i);
 
 				int modifier = tickAttribute.Value * cumulative;
 

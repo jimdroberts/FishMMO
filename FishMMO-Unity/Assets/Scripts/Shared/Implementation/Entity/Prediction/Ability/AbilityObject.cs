@@ -230,8 +230,9 @@ namespace FishMMO.Shared
 		/// True when this ability object is running on the server.
 		/// Collision-based hit effects (damage, healing, buffs) are only applied on the
 		/// server to avoid visual fighting between client-side prediction and authoritative
-		/// server broadcasts. Clients still see the projectile, decrement hit counts, and
-		/// destroy the visual object on collision — but the gameplay effects are server-only.
+		/// server broadcasts. The caster's own client also resolves hits, as a prediction; every
+		/// other peer is told what was hit and spends no hit count of its own — see
+		/// <see cref="ResolvesHitsLocally"/>.
 		/// </summary>
 		private bool isServer;
 
@@ -240,6 +241,64 @@ namespace FishMMO.Shared
 		/// (damage, healing, buffs, area queries) are only applied where this is true.
 		/// </summary>
 		public bool IsServer => isServer;
+
+		/// <summary>
+		/// True when this peer may decide for itself what this object hit.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The server, which resolves authoritatively inside a rewind to the caster's view; and the
+		/// caster's own client, which resolves the same question against the world it aimed in and
+		/// is therefore predicting rather than guessing. Everybody else is told — see
+		/// <see cref="ResolveSweptHits"/> and <c>AbilityObjectHitBroadcast</c>.
+		/// </para>
+		/// <para>
+		/// Read live rather than latched at spawn: ownership can change while an object is in the
+		/// air, and the peer that may resolve its remaining hits changes with it.
+		/// </para>
+		/// </remarks>
+		private bool ResolvesHitsLocally
+		{
+			get
+			{
+				NetworkObject casterNob = Caster?.NetworkObject;
+				return ResolvesHitsOnThisPeer(isServer, casterNob != null && casterNob.IsOwner);
+			}
+		}
+
+		/// <summary>
+		/// The whole rule <see cref="ResolvesHitsLocally"/> applies, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// Separated so the truth table can be asserted directly rather than inferred from two
+		/// live NetworkBehaviour facts that only exist on a spawned object. The row that matters is
+		/// the last one: before <c>AbilityObjectHitBroadcast</c> existed this answered TRUE for
+		/// every peer, and a third-party observer decided for itself what a projectile had hit.
+		/// </remarks>
+		/// <param name="isServer">Whether this object is simulating on the server.</param>
+		/// <param name="casterIsOwner">Whether this peer owns the casting character.</param>
+		/// <returns>True when this peer may decide the hit set for itself.</returns>
+		internal static bool ResolvesHitsOnThisPeer(bool isServer, bool casterIsOwner)
+		{
+			return isServer || casterIsOwner;
+		}
+
+		/// <summary>
+		/// How many distinct bodies this object has already hit. For diagnostics and tests.
+		/// </summary>
+		internal int HitTargetCount => hitTargets?.Count ?? 0;
+
+		/// <summary>
+		/// How many hits this object has published to observers. For diagnostics and tests.
+		/// </summary>
+		/// <remarks>
+		/// Counts ATTEMPTS, taken before the send's own guards, so it measures the one thing worth
+		/// pinning: that a hit is published once per body rather than once per tick. The sweep
+		/// re-runs every tick and the shipped abilities are stationary and live five seconds, so a
+		/// publish on the wrong side of the dedupe is 150 reliable messages per observer instead of
+		/// one.
+		/// </remarks>
+		internal int PublishedHitCount { get; private set; }
 
 		/// <summary>
 		/// True once this object has ended, whether by lifetime, collision or eviction.
@@ -440,32 +499,43 @@ namespace FishMMO.Shared
 		/// damage numbers that retracted.
 		/// </para>
 		/// <para>
-		/// <b>That symmetry does not extend to a third-party observer, and is not made to.</b> The
-		/// server rewinds to the CASTER'S view offset, not to the observer's, so an observer's local
-		/// sweep answers a question nobody asked: it resolves the caster's projectile against the
-		/// observer's own interpolated world. Two outcomes follow, and they are handled differently
-		/// on purpose.
+		/// <b>That symmetry does not extend to a third-party observer, so it no longer sweeps.</b>
+		/// The server rewinds to the CASTER'S view offset, not to the observer's, so an observer's
+		/// local sweep answered a question nobody asked: it resolved the caster's projectile against
+		/// the observer's own interpolated world. Two outcomes followed, and only one of them was
+		/// ever corrected.
 		/// <list type="bullet">
-		/// <item>The observer MISSES a hit the server landed — corrected, by
-		/// <c>AbilityObjectDestroyedBroadcast</c>, which is why that message is reliable.</item>
-		/// <item>The observer HITS where the server did not — <b>not corrected</b>. Its copy ends
-		/// early and plays its impact effect at a place nothing happened, while the server's keeps
-		/// flying. No message can revive a copy that has already ended.</item>
+		/// <item>The observer MISSED a hit the server landed — corrected by
+		/// <c>AbilityObjectDestroyedBroadcast</c>, which is why that message is reliable. But the
+		/// impact effect still never played: the correction ends the object, and the OnHit events
+		/// belong to a hit this peer never resolved.</item>
+		/// <item>The observer HIT where the server did not — <b>never corrected</b>. Its copy ended
+		/// early, played its impact effect where nothing had happened, and with a fork carried on
+		/// down a heading the server never took. No message can revive a copy that has ended.</item>
 		/// </list>
-		/// Deferring the end-of-life decision to the server would close that second case and was
-		/// considered; it is the wrong trade. It would make EVERY observed hit — including the
-		/// overwhelming majority that this peer resolves correctly — wait half a round trip, so the
-		/// projectile visibly overshoots its target and detonates late on every single kill. A rare
-		/// impact effect in the wrong place is much cheaper than a universal delay, and neither
-		/// outcome touches gameplay: damage self-gates through <c>EcaAuthority.MayPredict</c>, which
-		/// an observer fails. Revisit only with a measurement showing the false-positive rate is high
-		/// enough to be worth that delay.
+		/// <para>
+		/// Both are closed by having the server publish the hit it resolved
+		/// (<c>AbilityObjectHitBroadcast</c>) and by <see cref="ResolvesHitsLocally"/> keeping the
+		/// query to the two peers whose world can answer it.
 		/// </para>
 		/// <para>
-		/// <b>Dispatched on every peer</b>, like the tick events. What each action then does about it
-		/// is the action's own decision: visual actions run where there is a screen, state-changing
-		/// actions run where they are authoritative or predicted (<c>EcaAuthority.MayPredict</c>).
-		/// Each <see cref="AbilityOnHitEvent"/> is executed independently and its inherited
+		/// <b>Deferring to the server was previously rejected as too slow, and that reasoning does
+		/// not survive the numbers.</b> It assumed every observed hit would wait half a round trip.
+		/// It does not: an observer's copy is deliberately run
+		/// <c>LagCompensationTick.SpectatorInterpolationTicks</c> behind the server's so it stays
+		/// consistent with the interpolated peers it is drawn against — see
+		/// <c>AbilityController.ComputeObserverFastForwardTicks</c> — which is 66&#160;ms at the
+		/// shipped tick rate and is a head start the message already holds. Inside roughly
+		/// 133&#160;ms round trip the authoritative answer arrives BEFORE the local guess would have
+		/// fired; past it, the impact is late by one-way latency minus that 66&#160;ms rather than by
+		/// a round trip. Against that, a wrong impact was permanent.
+		/// </para>
+		/// <para>
+		/// <b>Dispatched on every peer</b>, like the tick events — what differs is only WHERE the
+		/// hit is decided, not where its events run. What each action then does about it is the
+		/// action's own decision: visual actions run where there is a screen, state-changing actions
+		/// run where they are authoritative or predicted (<c>EcaAuthority.MayPredict</c>). Each
+		/// <see cref="AbilityOnHitEvent"/> is executed independently and its inherited
 		/// <c>Trigger.TargetSelector</c> selects the final targets, defaulting to the direct hit.
 		/// </para>
 		/// </remarks>
@@ -476,12 +546,35 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Only a peer whose world can answer the question asks it.
+			 *
+			 * The SERVER resolves authoritatively, inside a rewind to the caster's view. The
+			 * CASTER'S OWNER resolves as a prediction, and is entitled to: its world already IS
+			 * that rewound one, which is what makes its predicted hit and the server's agree by
+			 * construction rather than by luck.
+			 *
+			 * A third-party observer is neither. It holds every character interpolated against its
+			 * OWN latency, so the same query run here answers a question nobody asked — and while
+			 * a missed hit was corrected by AbilityObjectDestroyedBroadcast, an invented one never
+			 * was: this copy ended early, played its impact where nothing happened, and a fork sent
+			 * it down a heading the server never took. It is told instead, by
+			 * AbilityObjectHitBroadcast. */
 			Transform shapeTransform = Transform != null ? Transform : transform;
 			Vector3 from = lastSweepPosition;
 			Vector3 to = shapeTransform.position;
 			// Advanced before anything can throw or destroy: a segment must never be swept twice,
 			// which would re-hit everything along it that the hit set has not already absorbed.
 			lastSweepPosition = to;
+
+			/* Advanced ABOVE this gate, not below it. Ownership can change while an object is in
+			 * the air, and a peer that starts resolving part-way through would otherwise sweep from
+			 * wherever the origin was last written — the spawn point — and resolve the entire flight
+			 * path as one segment. Tracking it on every peer costs two Vector3 writes a tick and
+			 * makes the hand-over start from where the object actually is. */
+			if (!ResolvesHitsLocally)
+			{
+				return;
+			}
 
 			GameObject self = GameObject != null ? GameObject : gameObject;
 			/* The object's own scene, never the global Physics API. A scene server hosts many scenes
@@ -549,14 +642,56 @@ namespace FishMMO.Shared
 			 * not. One implementation is what keeps them honest. */
 			GameObject hitRoot = TargetOrdering.ResolveHitRoot(collider, out ICharacter hitCharacter);
 
+			return ApplyHit(hitCharacter, hitRoot, hit.Point, hit.Normal);
+		}
+
+		/// <summary>
+		/// Applies one resolved hit: the per-object dedupe, the OnHit events, and the hit count.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Shared by the two ways a hit reaches this object — the local sweep on the server and on
+		/// the caster's owner, and <c>AbilityObjectHitBroadcast</c> on everybody else — so the two
+		/// cannot drift into treating the same hit differently. In particular the dedupe below is
+		/// what makes the broadcast a no-op on a peer that had already predicted the hit, which is
+		/// why the message can be sent to the owner as well without doubling its effects.
+		/// </para>
+		/// </remarks>
+		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
+		/// <param name="hitKey">The body to dedupe on when there is no character.</param>
+		/// <param name="point">World point of impact.</param>
+		/// <param name="normal">Surface normal at the impact.</param>
+		/// <returns>False when this object has ended and the rest of the sweep must be abandoned.</returns>
+		private bool ApplyHit(ICharacter hitCharacter, GameObject hitKey, Vector3 point, Vector3 normal)
+		{
 			/* Once per target for this object's whole life, keyed on the character where there is one
 			 * so two hitboxes on one body cost one hit. The sweep runs every tick, and a pierce that
 			 * ends up inside a character overlaps it on all of them; without this it would drain its
 			 * entire hit count into one victim in a fraction of a second. */
-			hitTargets ??= new HashSet<GameObject>();
-			if (!hitTargets.Add(hitCharacter != null ? hitCharacter.GameObject : hitRoot))
+			GameObject dedupeKey = hitCharacter != null ? hitCharacter.GameObject : hitKey;
+			if (dedupeKey == null)
 			{
 				return true;
+			}
+			hitTargets ??= new HashSet<GameObject>();
+			if (!hitTargets.Add(dedupeKey))
+			{
+				return true;
+			}
+
+			/* Published the moment the hit is ACCEPTED, and never before.
+			 *
+			 * The dedupe above is what makes this once per target rather than once per tick. The
+			 * sweep re-runs every tick and a stationary object sitting on a character reports it on
+			 * all of them — the authored abilities are stationary and live five seconds, so
+			 * broadcasting ahead of this guard sent the same hit 150 times to every observer, on the
+			 * reliable channel, against a per-peer budget of roughly 400 B/s.
+			 *
+			 * Still before the OnHit events and before anything can end this object, so an observer
+			 * is told about a hit even if an authored action destroys the object while handling it. */
+			if (isServer)
+			{
+				BroadcastHitToObservers(hitCharacter, point, normal);
 			}
 
 			if (Caster != null && Caster.IsSpawned)
@@ -572,7 +707,7 @@ namespace FishMMO.Shared
 					{
 						// The trigger's own TargetSelector handles fan-out.
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
-							Caster, hitCharacter, this, hit.Point, hit.Normal, RNG);
+							Caster, hitCharacter, this, point, normal, RNG);
 
 						collisionEvent.Add(new TickEventData(Caster, collisionTick));
 						hitEvent.Execute(collisionEvent);
@@ -587,22 +722,115 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			// Decrement hit count and destroy if exhausted.
+			/* The hit count is spent only by a peer that decided the hit.
+			 *
+			 * On an observer this object's end-of-life belongs to AbilityObjectDestroyedBroadcast,
+			 * which the server sends from exactly the tick its own count ran out. Spending the
+			 * count here as well would end the copy early on the peer whose answer is not the one
+			 * that matters, which is the whole failure this path was rebuilt to remove — and it
+			 * cannot be right anyway, since an observer is only told about the hits the server
+			 * resolved and never sees the ones it declined. */
+			if (!ResolvesHitsLocally)
+			{
+				return true;
+			}
+
 			// NOTE: HitCount decrements even for orphaned objects (Ability == null,
 			// Snapshot != null) so they drain via collision rather than persisting
 			// indefinitely as invulnerable ghosts.
 			HitCount--;
 			if (HitCount < 1)
 			{
-				/* A hit is the one end-of-life that is NOT deterministic across peers: a client
-				 * resolves it against interpolated characters and can miss a hit the server landed,
-				 * leaving a ghost flying to the end of its lifetime. Lifetime expiry is identical
-				 * everywhere and needs no message. */
+				/* A hit is the one end-of-life that is NOT deterministic across peers: it is
+				 * resolved against the caster's world, which no observer holds, so the server tells
+				 * them. Lifetime expiry is identical everywhere and needs no message. */
 				DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: true);
 				return false;
 			}
 
 			return true;
+		}
+
+		/// <summary>
+		/// Applies a hit the server resolved, on a peer that does not resolve its own.
+		/// </summary>
+		/// <remarks>
+		/// Idempotent through <see cref="ApplyHit"/>'s per-object hit set, so a message that
+		/// duplicates a hit the receiver already predicted — the caster's own client, normally —
+		/// does nothing.
+        /// </remarks>
+		/// <param name="hitCharacter">The character the server hit, or null for scenery.</param>
+		/// <param name="point">World point of impact, as measured on the server.</param>
+		/// <param name="normal">Surface normal at the impact.</param>
+		internal void ApplyObservedHit(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		{
+			if (destroyed)
+			{
+				return;
+			}
+
+			/* Scenery has no networked identity to name, so a hit that resolved to none is keyed on
+			 * this object itself: it runs the OnHit events once (an impact decal, a sound) and
+			 * cannot run them twice.
+			 *
+			 * The bound that buys is ONE scenery hit per object on a peer that is told. Exact for
+			 * every shipped ability, which all carry HitCount 1, and an under-report only for a
+			 * pierce that passes through two separate pieces of scenery — it would draw the first
+			 * impact and not the second.
+			 *
+			 * Keying on the impact POINT instead was the obvious alternative and does not work: the
+			 * dedupe exists so that a peer which already predicted this hit absorbs the server's
+			 * report of it, and the two peers resolve against different worlds, so their points
+			 * differ by a little and every report would look like a new hit. A body is the only key
+			 * both sides agree on, and scenery has none to send. */
+			GameObject key = hitCharacter != null
+				? hitCharacter.GameObject
+				: (GameObject != null ? GameObject : gameObject);
+
+			ApplyHit(hitCharacter, key, point, normal);
+		}
+
+		/// <summary>
+		/// Publishes one server-resolved hit to the caster's observers.
+		/// </summary>
+		/// <remarks>
+		/// Sent to every observer of the caster INCLUDING the owner, exactly like
+		/// <see cref="BroadcastDestroyedToObservers"/> and for the same reason: the owner normally
+		/// predicted this hit and the receiver's dedupe makes the message free, but an owner that
+		/// mispredicted a MISS had no correction at all and its impact effect never played.
+		/// Reliable, because there is no repeat behind it — a lost hit message is an impact nobody
+		/// off the server ever sees.
+		/// </remarks>
+		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
+		/// <param name="point">World point of impact.</param>
+		/// <param name="normal">Surface normal at the impact.</param>
+		private void BroadcastHitToObservers(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		{
+			PublishedHitCount++;
+
+			if (!isServer || Ability == null)
+			{
+				return;
+			}
+
+			NetworkObject casterNob = Caster?.NetworkObject;
+			if (casterNob == null || casterNob.NetworkManager == null || !casterNob.IsSpawned)
+			{
+				return;
+			}
+
+			NetworkObject victimNob = hitCharacter?.NetworkObject;
+
+			casterNob.NetworkManager.ServerManager.Broadcast(casterNob, new AbilityObjectHitBroadcast
+			{
+				CasterObjectID = casterNob.ObjectId,
+				AbilityID = Ability.ID,
+				ContainerID = ContainerID,
+				ObjectID = ID,
+				VictimObjectID = victimNob != null && victimNob.IsSpawned ? victimNob.ObjectId : 0,
+				Point = point,
+				Normal = normal,
+			}, true, Channel.Reliable);
 		}
 
 		/// <summary>

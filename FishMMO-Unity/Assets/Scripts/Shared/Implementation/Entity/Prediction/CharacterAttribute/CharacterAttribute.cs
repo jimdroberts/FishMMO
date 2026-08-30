@@ -317,6 +317,59 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes every contribution from one contributor, whichever of its entries they are.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The release half of <see cref="ModifierSource.Index"/>. A contributor that writes to this
+		/// attribute more than once — an item with two affixes raising Armor, a buff whose
+		/// <c>BonusAttributes</c> names Strength twice — holds one ledger entry per contribution, and
+		/// <see cref="ClearSource"/> would let go of exactly one of them. Releasing by contributor
+		/// rather than by entry means the apply side is free to pick whatever index scheme suits it
+		/// (a template id, a list position) without the release side having to reconstruct it.
+		/// </para>
+		/// <para>
+		/// A contributor that is not present is a no-op, for the same reason <see cref="ClearSource"/>
+		/// is: it is the correct answer for a peer that never applied it. An observer applies neither
+		/// items nor buffs, so every release reaches this and correctly does nothing.
+		/// </para>
+		/// </remarks>
+		/// <param name="kind">The kind of contributor to release.</param>
+		/// <param name="id">Which contributor, within that kind.</param>
+		public void ClearSourceGroup(ModifierSourceKind kind, long id = 0)
+		{
+			if (modifierSources == null || modifierSources.Count == 0)
+			{
+				return;
+			}
+
+			ModifierSource probe = new ModifierSource(kind, id);
+			int previous = externalModifier;
+			bool removedAny = false;
+
+			// Backwards so a removal cannot skip the entry that shifts into its slot.
+			for (int i = modifierSources.Count - 1; i >= 0; --i)
+			{
+				if (modifierSources[i].Source.IsSameContributor(probe))
+				{
+					modifierSources.RemoveAt(i);
+					removedAny = true;
+				}
+			}
+
+			if (!removedAny)
+			{
+				return;
+			}
+
+			RecomputeExternalModifier();
+			if (externalModifier != previous)
+			{
+				UpdateValues();
+			}
+		}
+
 		/// <summary>The contribution currently recorded for one source, or zero when it has none.</summary>
 		public int GetSourceValue(ModifierSource source)
 		{

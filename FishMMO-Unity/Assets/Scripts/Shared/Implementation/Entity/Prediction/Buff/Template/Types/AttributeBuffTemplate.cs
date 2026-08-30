@@ -85,10 +85,12 @@ namespace FishMMO.Shared
 		/// States this buff's whole contribution at a given stack multiplier.
 		/// </summary>
 		/// <remarks>
-		/// One ledger entry per attribute, keyed by this template — which is also the buff's key in
-		/// the character's buff container, so one buff instance owns exactly one entry. Restating is
-		/// idempotent, so a payload restore or a reconcile replay that re-applies the same buff
-		/// cannot double its bonus.
+		/// One ledger entry per <see cref="BonusAttributes"/> ENTRY, keyed by this template — which
+		/// is also the buff's key in the character's buff container — and by the entry's position.
+		/// Restating is idempotent, so a payload restore or a reconcile replay that re-applies the
+		/// same buff cannot double its bonus; and because the position is part of the key, two
+		/// entries naming one attribute sum instead of one overwriting the other. See
+		/// <see cref="ModifierSource.Index"/>.
 		/// </remarks>
 		/// <param name="target">The character to modify.</param>
 		/// <param name="buff">The buff instance whose entry is being written.</param>
@@ -98,12 +100,17 @@ namespace FishMMO.Shared
 			if (target == null || BonusAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			ModifierSource source = ModifierSource.Buff(ID);
-
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
 				if (buffAttribute?.Template == null) continue;
+
+				/* Keyed by the entry's POSITION as well as by this buff. BonusAttributes is an
+				 * authored list and nothing stops two entries naming one attribute — a flat part and
+				 * a scalar part, say — and SetSource states a whole contribution rather than adding
+				 * to one, so a single key per buff silently kept only the last of them. See
+				 * ModifierSource.Index. */
+				ModifierSource source = ModifierSource.Buff(ID, i);
 
 				int modifier = buffAttribute.Value * multiplier;
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
@@ -123,8 +130,9 @@ namespace FishMMO.Shared
 			if (target == null || BonusAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			ModifierSource source = ModifierSource.Buff(ID);
-
+			/* Released by CONTRIBUTOR, so every entry this buff wrote goes whatever it was keyed
+			 * as — see CharacterAttribute.ClearSourceGroup. Reproducing WriteModifiers' index
+			 * scheme here would mean the two halves must agree forever. */
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
@@ -132,11 +140,11 @@ namespace FishMMO.Shared
 
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.ClearSource(source);
+					characterAttribute.ClearSourceGroup(ModifierSourceKind.Buff, ID);
 				}
 				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.ClearSource(source);
+					characterResourceAttribute.ClearSourceGroup(ModifierSourceKind.Buff, ID);
 				}
 			}
 		}

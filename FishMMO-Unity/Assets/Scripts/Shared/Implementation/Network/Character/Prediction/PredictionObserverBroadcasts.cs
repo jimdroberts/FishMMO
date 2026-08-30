@@ -155,12 +155,14 @@ namespace FishMMO.Shared
 	/// Tells observers that an ability object ended on the server through a collision.
 	/// </summary>
 	/// <remarks>
-	/// Lifetime expiry is deterministic and needs no message, but collisions are resolved on each
-	/// client against interpolated characters: a client can miss a hit the server landed and keep
-	/// a ghost flying to the end of its lifetime. Sent reliably — it is one small message per
+	/// Lifetime expiry is deterministic and needs no message; a collision is not. Only the server
+	/// and the caster's own client resolve hits — see <c>AbilityObject.ResolvesHitsLocally</c> — so
+	/// for a third-party observer this is the ONLY thing that ends a collided object, and for the
+	/// caster it corrects a predicted miss. Sent reliably: it is one small message per
 	/// collision-ended object, and a lost one is a ghost that flies on for the rest of its life.
 	/// The container id is a pure function of (seed, spawn tick) on every peer, so the pair below
-	/// names the same object everywhere.
+	/// names the same object everywhere. Paired with <see cref="AbilityObjectHitBroadcast"/>, which
+	/// carries the impact itself — this message says the object ended, not what it struck.
 	/// </remarks>
 	public struct AbilityObjectDestroyedBroadcast : IBroadcast
 	{
@@ -175,6 +177,73 @@ namespace FishMMO.Shared
 
 		/// <summary>Object id within the container (identical on every peer).</summary>
 		public int ObjectID;
+	}
+
+	/// <summary>
+	/// Tells observers which body an ability object hit, so they can draw the impact the server
+	/// resolved instead of guessing at one.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why an observer is told rather than left to work it out.</b> An ability object's
+	/// trajectory is deterministic and every peer agrees on it; its HIT SET is not. The server
+	/// resolves hits inside a rewind to the CASTER'S view, and a third-party observer holds every
+	/// character interpolated against its own latency — so an observer running the same query
+	/// answered a question nobody asked. It could miss a hit the server landed (corrected, by
+	/// <see cref="AbilityObjectDestroyedBroadcast"/>) and it could resolve one the server did not,
+	/// which nothing corrected: its copy ended early, played its impact effect where nothing had
+	/// happened, and — with a fork — carried on down a heading the server never took.
+	/// </para>
+	/// <para>
+	/// <b>What it costs, and why that is less than it looks.</b> An observer's copy is deliberately
+	/// run <c>SpectatorInterpolationTicks</c> behind the server's, so it stays consistent with the
+	/// interpolated peers it is drawn against — see <c>ComputeObserverFastForwardTicks</c>. That is
+	/// 66&#160;ms at the shipped tick rate, and it is a head start this message already holds: for
+	/// an observer inside roughly 133&#160;ms round trip the authoritative answer arrives BEFORE
+	/// the local guess would have fired. Only observers past that see the impact late, and by
+	/// less than their one-way latency rather than by a round trip.
+	/// </para>
+	/// <para>
+	/// <b>Sent to every observer of the caster, the owner included</b>, exactly like
+	/// <see cref="AbilityObjectDestroyedBroadcast"/>. The owner predicts its own hits and normally
+	/// has this one already, in which case the receiver's per-object hit set makes the message a
+	/// no-op — but an owner that MISPREDICTED A MISS had no correction at all before this, and its
+	/// impact effect simply never played.
+	/// </para>
+	/// <para>
+	/// Reliable, and for the same reason its sibling is: there is no repeat behind it. A lost hit
+	/// message is an impact nobody outside the server ever sees.
+	/// </para>
+	/// </remarks>
+	public struct AbilityObjectHitBroadcast : IBroadcast
+	{
+		/// <summary>NetworkObject id of the casting character.</summary>
+		public int CasterObjectID;
+
+		/// <summary>Ability the object belonged to.</summary>
+		public long AbilityID;
+
+		/// <summary>Deterministic container id the object lived in (identical on every peer).</summary>
+		public int ContainerID;
+
+		/// <summary>Object id within the container (identical on every peer).</summary>
+		public int ObjectID;
+
+		/// <summary>
+		/// NetworkObject id of the character that was hit, or 0 when the hit resolved to scenery.
+		/// </summary>
+		/// <remarks>
+		/// Zero is a real outcome rather than a failure: a projectile is free to end on a wall, and
+		/// the OnHit events still run for it with no target character — which is what an authored
+		/// impact decal or sound needs.
+		/// </remarks>
+		public int VictimObjectID;
+
+		/// <summary>World point of impact, measured on the server inside the rewind scope.</summary>
+		public Vector3 Point;
+
+		/// <summary>Surface normal at <see cref="Point"/>.</summary>
+		public Vector3 Normal;
 	}
 
 	/// <summary>

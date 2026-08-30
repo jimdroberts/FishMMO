@@ -23,21 +23,18 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Runs on every peer, like the rest of the OnHit chain.</b> The new heading is drawn from the
 	/// ability object's own <see cref="AbilityObject.RNG"/>, whose state is carried in the reconcile,
-	/// so the server and the caster's owner turn the same way for the same hit. A peer that did not
-	/// resolve the hit does not fork — its copy is corrected by
-	/// <c>AbilityObjectDestroyedBroadcast</c> or by lifetime expiry, exactly as for any other
-	/// locally-resolved hit.
+	/// so the server and the caster's owner turn the same way for the same hit.
 	/// </para>
 	/// <para>
-	/// <b>The reverse case is louder here than elsewhere, and is accepted.</b> A third-party observer
-	/// sweeps against its own interpolated world rather than the one the server rewound to for the
-	/// caster (see <see cref="AbilityObject.ResolveSweptHits"/>), so it can resolve a hit the server
-	/// did not. For most OnHit actions that costs an effect in the wrong place; for this one the
-	/// observer's copy also veers onto a heading the server never took, and stays wrong until the
-	/// destroy message or its lifetime ends it. Gating the fork to the server and the owner is not the
-	/// answer — observers would then watch every REAL fork fly straight on, which is the far more
-	/// common case. It is a visual on a peer that resolves nothing authoritative: damage self-gates
-	/// through <c>EcaAuthority.MayPredict</c>, which an observer fails.
+	/// <b>An observer forks on the server's hit, not on one of its own.</b> This action used to be
+	/// the loudest symptom of a third-party observer resolving hits against its own interpolated
+	/// world: for most OnHit actions an invented hit cost an effect in the wrong place, but for this
+	/// one the observer's copy veered onto a heading the server never took and stayed wrong for the
+	/// rest of its life — and, because the trajectory is a closed form re-anchored by
+	/// <see cref="AbilityObject.Redirect"/>, the destroy message then ended it somewhere the server's
+	/// copy had never been. Observers no longer sweep; they are told which body was hit
+	/// (<c>AbilityObjectHitBroadcast</c>) and run this action from that, so the fork they draw is the
+	/// one that happened. See <see cref="AbilityObject.ResolveSweptHits"/>.
 	/// </para>
 	/// </remarks>
 	[Serializable]

@@ -24,8 +24,10 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// Runs on every peer, deliberately — the caster's predicted copy of the object and the server's
-	/// must reach the same hit count or they end at different moments. What an observer's copy does
-	/// is allowed to differ, and is documented on <c>AbilityObject.ResolveSweptHits</c>.
+	/// must reach the same hit count or they end at different moments. An observer runs it too, from
+	/// the server's own hit report, but no longer acts on the result: its copy's end-of-life belongs
+	/// to <c>AbilityObjectDestroyedBroadcast</c>, so it spends no hit count of its own. See
+	/// <c>AbilityObject.ResolveSweptHits</c>.
 	/// </para>
 	/// </remarks>
 	[Serializable]

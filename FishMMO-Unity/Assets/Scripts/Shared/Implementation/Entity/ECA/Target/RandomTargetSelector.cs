@@ -43,9 +43,6 @@ namespace FishMMO.Shared
 		[Min(1)]
 		public int MaxHits = 16;
 
-		/// <summary>
-		/// Preallocated array for storing collider hits during OverlapSphere queries.
-		/// </summary>
 
 
 		/// <summary>
@@ -77,8 +74,23 @@ namespace FishMMO.Shared
 		/// <para>
 		/// <b>The order is half of the determinism.</b> A reproducible index into an unordered list is
 		/// still an arbitrary choice — the index means a different character depending on what order
-		/// the broadphase happened to fill the buffer in. Sorting by network identity first is what
-		/// makes "index 3" name the same character on every peer and on every run.
+		/// the broadphase happened to fill the buffer in. Sorting is what makes "index 3" name the
+		/// same character on every run.
+		/// </para>
+		/// <para>
+		/// <b>The order is distance, not identity, and that bounds what it guarantees.</b>
+		/// <see cref="TargetOrdering.SortByDistance"/> ranks by distance from the origin and only
+		/// breaks exact ties by identity, so two peers holding a character at different interpolated
+		/// positions can order the candidates differently and draw a different winner from the same
+		/// generator state. That is not a defect here because this selector is server-only
+		/// (<see cref="TargetSelector.IsAuthoritativePeer"/>) — the roll is made once, where the
+		/// positions are authoritative, and its result reaches everyone else through the
+		/// authoritative paths. It is stated because it is the reason this must stay server-only:
+		/// a distance-ordered cap can never be made peer-agreed by arithmetic.
+		/// </para>
+		/// <para>
+		/// <b><see cref="MaxHits"/> is applied BEFORE the draw</b>, so the roll is taken from the
+		/// <see cref="MaxHits"/> nearest bodies rather than from every candidate in the radius.
 		/// </para>
 		/// <para>
 		/// <b>The generator is the other half.</b> This used to fall back to
@@ -179,10 +191,6 @@ namespace FishMMO.Shared
 			return eventData.DeriveRNG(RandomSelectionSalt);
 		}
 
-		/// <summary>
-		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
-		/// by this selector rather than by the broadphase.
-		/// </summary>
 		/// <summary>
 		/// A query buffer wide enough that the cap is applied by this selector rather than by the
 		/// broadphase.

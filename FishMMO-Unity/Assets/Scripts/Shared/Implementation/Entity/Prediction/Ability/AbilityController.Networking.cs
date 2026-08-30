@@ -589,7 +589,23 @@ namespace FishMMO.Shared
 				writer.WriteUInt32(rngS3);
 			}
 
-			// Write the abilities for the clients
+			/* The ability LIST goes to everyone, unlike the generator above and the cooldowns below.
+			 *
+			 * It is what lets an observer reproduce a cast at all: AbilityActivatedBroadcast carries
+			 * an ability id and nothing else — casts are frequent and learns are rare, so the
+			 * template and its events belong here once rather than on every cast — and
+			 * TryGetAbilityForVisuals has to resolve that id or the cast draws nothing.
+			 * AbilityLearnedObserverBroadcast covers abilities learned AFTER this observer arrived;
+			 * this block is the seed for everything learned before, which a late joiner has no other
+			 * source for.
+			 *
+			 * So an observer learns the caster's whole spellbook at spawn rather than one ability at
+			 * a time as it sees them used. That is a real disclosure and it is accepted rather than
+			 * overlooked: it is the set of things the character can visibly do, and closing it would
+			 * mean lazily seeding on first cast, which trades a permanent property for a one-cast
+			 * delay on the first use of every ability. What must NOT travel is state that predicts
+			 * the future — the generator above — or that reveals what the caster can do NEXT, which
+			 * is why the cooldown entries below are owner-only. */
 			writer.WriteInt32(KnownAbilities.Count);
 			foreach (Ability ability in KnownAbilities.Values)
 			{

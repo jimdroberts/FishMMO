@@ -178,12 +178,15 @@ namespace FishMMO.Shared
 			if (target == null || BonusAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			ModifierSource source = ModifierSource.Buff(ID);
-
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
 				if (buffAttribute?.Template == null) continue;
+
+				/* Keyed by the entry's POSITION as well as by this buff: BonusAttributes is an
+				 * authored list and two entries may name one attribute, which a single key per buff
+				 * silently collapsed to whichever was written last. See ModifierSource.Index. */
+				ModifierSource source = ModifierSource.Buff(ID, i);
 
 				int modifier = buffAttribute.Value * multiplier;
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
@@ -203,8 +206,9 @@ namespace FishMMO.Shared
 			if (target == null || BonusAttributes == null) return;
 			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
 
-			ModifierSource source = ModifierSource.Buff(ID);
-
+			/* Released by CONTRIBUTOR: WriteBonusAttributes writes one entry per BonusAttributes
+			 * ENTRY, so a single-key release would strand every entry but one. See
+			 * CharacterAttribute.ClearSourceGroup. */
 			for (int i = 0; i < BonusAttributes.Count; i++)
 			{
 				BuffAttributeTemplate buffAttribute = BonusAttributes[i];
@@ -212,11 +216,11 @@ namespace FishMMO.Shared
 
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.ClearSource(source);
+					characterAttribute.ClearSourceGroup(ModifierSourceKind.Buff, ID);
 				}
 				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.ClearSource(source);
+					characterResourceAttribute.ClearSourceGroup(ModifierSourceKind.Buff, ID);
 				}
 			}
 		}

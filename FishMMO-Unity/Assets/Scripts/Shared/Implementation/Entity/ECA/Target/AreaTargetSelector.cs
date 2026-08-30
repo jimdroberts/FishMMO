@@ -122,10 +122,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
-		/// by this selector rather than by the broadphase.
-		/// </summary>
-		/// <summary>
 		/// A query buffer wide enough that the cap is applied by this selector rather than by the
 		/// broadphase.
 		/// </summary>

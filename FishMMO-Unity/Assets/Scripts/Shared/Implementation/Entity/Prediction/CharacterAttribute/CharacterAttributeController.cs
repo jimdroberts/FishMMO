@@ -578,9 +578,29 @@ namespace FishMMO.Shared
 		/// next pushed that attribute.
 		/// </para>
 		/// <para>
-		/// Runs from <see cref="OnStartNetwork"/>, which FishNet invokes from a later loop than the
-		/// one that reads payloads (<c>ObjectCaching.Iterate</c> reads every cached object's payload,
-		/// then initializes them), so every behaviour on this object has finished reading by now.
+		/// <b>Only the OWNER ever doubles, and that is why the total is installed early rather than
+		/// deferred.</b> An observer applies none of these contributors — <c>BuffController</c> gates
+		/// <c>Buff.Apply</c> on <c>SimulatesBuffEffects</c>, and an observer's items carry no id so
+		/// <c>ItemGenerator.TryResolveLedgerSource</c> declines — so its ledger is the single
+		/// authoritative entry this method installed and it is correct from the first read. Deferring
+		/// the total until this method ran would fix a transient the owner alone sees and would
+		/// regress every observer to showing unbuffed values for the length of the spawn pass.
+		/// </para>
+		/// <para>
+		/// <b>The ordering it depends on is guaranteed by FishNet's structure, not by component
+		/// order.</b> <c>ObjectCaching.Iterate</c> reads every cached object's payload in one loop
+		/// and activates them in a second one, and <c>ManagedObjects.ReadPayload</c> walks every
+		/// <c>NetworkBehaviour</c> on an object in a single pass — so <see cref="OnStartNetwork"/> is
+		/// after every <c>ReadPayload</c> on this object no matter where this controller sits in the
+		/// component list, and adding a behaviour that reads a payload cannot move the repair ahead
+		/// of it.
+		/// </para>
+		/// <para>
+		/// What the window does still cost is that the owner's sheet reads DOUBLED between this
+		/// controller's <see cref="ReadPayload"/> and this method. Nothing reads it there today: the
+		/// buff and equipment restores only WRITE ledger entries. A hook that read a derived
+		/// attribute during a payload restore and kept the number would capture the doubled one, so
+		/// anything added to those restores must write and not read.
 		/// </para>
 		/// </remarks>
 		private void ReassertPayloadModifiers()
@@ -943,8 +963,19 @@ namespace FishMMO.Shared
 		/// contributor the sheet forgot on one half would be exactly the orphaned modifier the ledger
 		/// exists to prevent.
 		/// </para>
+		/// <para>
+		/// <b>Every entry the contributor holds, not the one entry <paramref name="source"/> names.</b>
+		/// A contributor may write to one attribute more than once — see
+		/// <see cref="ModifierSource.Index"/> — and this is the call for a source whose owner is
+		/// going away, so releasing one index and stranding the rest would be exactly the orphaned
+		/// modifier above. <see cref="ModifierSource.Index"/> is therefore ignored here: the caller
+		/// names the CONTRIBUTOR and gets all of it.
+		/// </para>
 		/// </remarks>
-		/// <param name="source">The contributor to release everywhere.</param>
+		/// <param name="source">
+		/// The contributor to release everywhere. Only its <see cref="ModifierSource.Kind"/> and
+		/// <see cref="ModifierSource.Id"/> are read.
+		/// </param>
 		public void ClearModifierSource(ModifierSource source)
 		{
 			BeginPropagation();
@@ -952,11 +983,11 @@ namespace FishMMO.Shared
 			{
 				foreach (CharacterAttribute attribute in Attributes.Values)
 				{
-					attribute.ClearSource(source);
+					attribute.ClearSourceGroup(source.Kind, source.Id);
 				}
 				foreach (CharacterResourceAttribute resource in ResourceAttributes.Values)
 				{
-					resource.ClearSource(source);
+					resource.ClearSourceGroup(source.Kind, source.Id);
 				}
 			}
 			finally

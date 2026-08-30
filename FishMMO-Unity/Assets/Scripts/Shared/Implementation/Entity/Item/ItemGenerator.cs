@@ -241,7 +241,7 @@ namespace FishMMO.Shared
 						 * AddModifier(-oldValue) followed by AddModifier(newValue), which is only
 						 * correct while oldValue is exactly what had been added — and nothing
 						 * enforced that. Naming the source makes the old value irrelevant. */
-						if (!TryResolveLedgerSource(out ModifierSource source))
+						if (!TryResolveLedgerSource(attribute.Template.ID, out ModifierSource source))
 						{
 							return;
 						}
@@ -286,12 +286,21 @@ namespace FishMMO.Shared
 		/// understatement, against a silent and permanent loss.
 		/// </para>
 		/// </remarks>
+		/// <param name="attributeTemplateID">
+		/// The <see cref="ItemAttributeTemplate"/> whose contribution is being keyed. One item is
+		/// free to carry two attributes that raise the SAME character attribute — a weapon's base
+		/// Attack Power plus a rolled Attack Power affix — and <c>SetSource</c> states a whole
+		/// contribution rather than adding to one, so a single key per item kept only the last of
+		/// them. The template id separates them and, unlike a list position, is stable and
+		/// independent of the order <see cref="attributes"/> happens to enumerate in. See
+		/// <see cref="ModifierSource.Index"/>.
+		/// </param>
 		/// <param name="source">The item's ledger key, when it has an identity.</param>
 		/// <returns>True when this item may write to a ledger.</returns>
-		private bool TryResolveLedgerSource(out ModifierSource source)
+		private bool TryResolveLedgerSource(int attributeTemplateID, out ModifierSource source)
 		{
 			long id = item != null ? item.ID : 0;
-			source = ModifierSource.Item(id);
+			source = ModifierSource.Item(id, attributeTemplateID);
 			return id > 0;
 		}
 
@@ -314,12 +323,15 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			if (!TryResolveLedgerSource(out ModifierSource source))
-			{
-				return;
-			}
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
+				/* Keyed per ITEM ATTRIBUTE, not per item. Two of this item's attributes may raise
+				 * the same character attribute, and a single key per item silently kept only the
+				 * last of them. See TryResolveLedgerSource. */
+				if (!TryResolveLedgerSource(pair.Value.Template.ID, out ModifierSource source))
+				{
+					return;
+				}
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
 					characterAttribute.SetSource(source, pair.Value.Value);
@@ -345,19 +357,28 @@ namespace FishMMO.Shared
 			 * owner whose ledger the reconcile had already restated — there is no entry and this is
 			 * correctly a no-op. The negation it replaces subtracted regardless and drove the sheet
 			 * below the server's number until the next authoritative push. */
-			if (!TryResolveLedgerSource(out ModifierSource source))
+			long itemID = item != null ? item.ID : 0;
+			if (itemID <= 0)
 			{
+				// Nothing was ever written; see TryResolveLedgerSource.
 				return;
 			}
+
+			/* Released by CONTRIBUTOR, not entry by entry. ApplyAttributes writes one ledger entry
+			 * per item attribute (keyed by ItemAttributeTemplate.ID), and reproducing that key
+			 * scheme here would mean the two halves must agree forever — including across a
+			 * Generate() that rebuilt `attributes` from a new seed between the apply and the
+			 * release, which is exactly what AssignPersistentID does. ClearSourceGroup drops
+			 * everything this item holds whatever the entries were keyed as. */
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.ClearSource(source);
+					characterAttribute.ClearSourceGroup(ModifierSourceKind.Item, itemID);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.ClearSource(source);
+					characterResourceAttribute.ClearSourceGroup(ModifierSourceKind.Item, itemID);
 				}
 			}
 		}

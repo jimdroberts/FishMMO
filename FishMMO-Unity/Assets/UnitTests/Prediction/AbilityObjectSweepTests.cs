@@ -576,13 +576,33 @@ namespace FishMMO.UnitTests
 			return (bool)DispatchSweptHit.Invoke(abilityObject, new object[] { hit });
 		}
 
-		/// <summary>An ability object with no caster, so dispatch exercises the bookkeeping alone.</summary>
+		private static readonly FieldInfo IsServerField = typeof(AbilityObject)
+			.GetField("isServer", BindingFlags.Instance | BindingFlags.NonPublic);
+
+		/// <summary>
+		/// An ability object with no caster, so dispatch exercises the bookkeeping alone.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Marked as the server's copy.</b> The hit-count and dedupe accounting below belongs to a
+		/// peer that RESOLVES its own hits — see <c>AbilityObject.ResolvesHitsOnThisPeer</c> — and a
+		/// bare component is not one: <c>isServer</c> is false and there is no caster to own, which
+		/// is the observer case, and an observer deliberately spends no hit count because its copy is
+		/// ended by <c>AbilityObjectDestroyedBroadcast</c> instead.
+		/// </para>
+		/// <para>
+		/// Set by reflection rather than through <c>Initialize</c>, which wants a live caster and a
+		/// TimeManager. The broadcast the server would normally send from the dispatch is inert here:
+		/// it returns early on a null <c>Ability</c>.
+		/// </para>
+		/// </remarks>
 		private AbilityObject MakeAbilityObject(int hitCount)
 		{
 			GameObject go = Track(new GameObject("SweptAbilityObject"));
 			go.transform.position = Arena;
 			AbilityObject abilityObject = go.AddComponent<AbilityObject>();
 			abilityObject.HitCount = hitCount;
+			IsServerField.SetValue(abilityObject, true);
 			return abilityObject;
 		}
 

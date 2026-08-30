@@ -39,9 +39,6 @@ namespace FishMMO.Shared
 		[Min(0)]
 		public int MaxHits = 16;
 
-		/// <summary>
-		/// Preallocated array for storing raycast hits during line queries.
-		/// </summary>
 
 
 		/// <summary>
@@ -131,10 +128,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Ensures the reusable raycast buffer is wide enough that <see cref="MaxHits"/> is applied
-		/// by this selector rather than by the broadphase.
-		/// </summary>
 		/// <summary>
 		/// A query buffer wide enough that the cap is applied by this selector rather than by the
 		/// broadphase.

@@ -72,13 +72,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Re-keys the item's attribute contribution, which is why this is a method.</b> An item
-		/// equipped before its first persist returned has already written ledger entries under
-		/// <c>ModifierSource.Item(0)</c>. Simply moving the field would strand those: the release on
-		/// unequip would look for the new key, find nothing, and leave the bonus applied for the rest
-		/// of the character's session. Releasing under the old key and re-applying under the new one
-		/// is idempotent — <c>SetSource</c> states a whole contribution rather than adding to one —
-		/// so the character's totals do not move.
+		/// <b>Publishes the item's attribute contribution, which is why this is a method.</b> An item
+		/// equipped before its first persist returned has written NO ledger entries at all:
+		/// <c>ItemGenerator.TryResolveLedgerSource</c> declines for a zero id, because zero is the
+		/// absence of an identity and two such items would collide on <c>ModifierSource.Item(0)</c>.
+		/// The release/re-apply pair below is what states the contribution for the first time, under
+		/// the identity the database has just issued. The release half is a no-op today (there is
+		/// nothing under the old key to release) and is kept because it is the correct shape if the
+		/// zero-id rule ever changes; <c>SetSource</c> states a whole contribution rather than adding
+		/// to one, so running both is idempotent either way.
 		/// </para>
 		/// <para>
 		/// <b>And derives the generation seed, for the same reason.</b> <see cref="Initialize"/>

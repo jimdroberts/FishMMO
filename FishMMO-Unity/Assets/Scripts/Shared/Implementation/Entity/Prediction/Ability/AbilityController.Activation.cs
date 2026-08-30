@@ -637,9 +637,74 @@ namespace FishMMO.Shared
 				return;
 			}
 			networkManager.ClientManager.RegisterBroadcast<AbilityActivatedBroadcast>(OnAbilityActivatedBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityObjectHitBroadcast>(OnAbilityObjectHitBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityLearnedObserverBroadcast>(OnAbilityLearnedObserverBroadcast);
 			activationBroadcastRegistered = true;
+		}
+
+		/// <summary>
+		/// Applies a hit the server resolved to this client's copy of an ability object.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The counterpart to <c>AbilityObject.ResolveSweptHits</c>'s peer gate: a third-party
+		/// observer no longer decides what a projectile hit, because it holds every character
+		/// interpolated against its own latency and the server resolves inside a rewind to the
+		/// CASTER'S view. It is told instead, and plays the impact where the server measured it.
+		/// </para>
+		/// <para>
+		/// The victim is resolved back through the spawned map rather than re-traced, for the same
+		/// reason <see cref="OnAbilityActivatedBroadcast"/> resolves its target that way: re-tracing
+		/// would reintroduce exactly the divergence this removes. A victim id of zero is a hit on
+		/// scenery and is applied with no target character, which is what an authored impact decal
+		/// or sound needs; a NON-zero id this client cannot resolve is a victim it is not observing,
+		/// and is dropped rather than downgraded to a scenery hit, which would fire target-less
+		/// effects for a character that is really there.
+		/// </para>
+		/// <para>
+		/// A copy already gone — the lifetime got there first, or a destroy message overtook this —
+		/// is simply not found, exactly as for the destroy broadcast.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityObjectHitBroadcast(AbilityObjectHitBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null ||
+				!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability) ||
+				ability.Objects == null ||
+				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
+				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
+				abilityObject == null)
+			{
+				return;
+			}
+
+			ICharacter hitCharacter = null;
+			if (msg.VictimObjectID != 0)
+			{
+				if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.VictimObjectID, out NetworkObject victimNob) ||
+					victimNob == null ||
+					!victimNob.TryGetComponent(out hitCharacter))
+				{
+					// A character this client is not observing. Dropping the hit is right: applying
+					// it target-less would run the OnHit events as though it had struck scenery.
+					return;
+				}
+			}
+
+			abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal);
 		}
 
 		/// <summary>
@@ -1437,12 +1502,99 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Queues an interrupt for the current ability, to be processed on the next tick.
+		/// Interrupts the current ability: through the input stream where this peer writes it,
+		/// and directly where it does not.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The queued half only works for the peer that produces this character's input.</b>
+		/// <c>localInputFlags</c> is read by <c>HandleCharacterInput</c>, which runs only from
+		/// <c>PopulateInput</c>, which <see cref="CharacterPredictionController"/> invokes only
+		/// where <c>HasInputAuthority</c> — the owning client for a player, the server for an AI
+		/// character or a pet. That covers a player interrupting itself and every server-side AI
+		/// call site, and it is the better path for them: the cancel then happens inside the
+		/// deterministic replicate and is reconciled like any other predicted state.
+		/// </para>
+		/// <para>
+		/// <b>It did nothing at all for the case the mechanic exists for.</b>
+		/// <c>InterruptAction</c> is server-only and its target is normally a PLAYER — which is
+		/// neither server-driven nor owned by the server, so the bit was set on a peer that never
+		/// reads it, never cleared (only <c>HandleCharacterInput</c> clears it), and the cast simply
+		/// ran to completion. Cast interruption worked against NPCs and pets and failed silently
+		/// against players.
+		/// </para>
+		/// <para>
+		/// So the server cancels directly when it is not the peer that writes this character's
+		/// input. It is authoritative for the activation either way — <c>currentAbilityID</c>,
+		/// <c>remainingTicks</c>, <c>chargedHoldTicks</c> and <c>replicatedFlags</c> all ride
+		/// <see cref="CharacterReconcileData"/> — so the owner's next reconcile carries the cleared
+		/// state and its prediction is corrected by the same machinery that corrects a denied
+		/// activation. The owner's cast bar is cleared by <c>ReconcilePredictedHistory</c>, which
+		/// already fires <c>OnCancel</c> when it predicted an ability the server does not have.
+		/// </para>
+		/// <para>
+		/// No cooldown is added, matching <see cref="ProcessInterrupt"/>: an interrupted cast is
+		/// lost, not put on cooldown. <c>OnCancel</c> is suppressed for the reason it is suppressed
+		/// there too — <c>OnInterrupt</c> is the event UI subscribers pair with, and firing both
+		/// makes a cast bar flicker.
+		/// </para>
+		/// </remarks>
 		/// <param name="attacker">The character causing the interrupt (not used).</param>
 		public void Interrupt(ICharacter attacker)
 		{
+			Interrupt(base.IsServerStarted, HasInputAuthority);
+		}
+
+		/// <summary>
+		/// The body of <see cref="Interrupt(ICharacter)"/>, with the two peer facts as arguments.
+		/// </summary>
+		/// <remarks>
+		/// Separated so the rule can be exercised without a NetworkManager: both facts come from
+		/// <see cref="FishNet.Object.NetworkBehaviour"/> state that only exists on a spawned object,
+		/// and the case that was broken is precisely the one an edit-mode test cannot otherwise
+		/// reach — the server acting on a character it does not own.
+		/// </remarks>
+		/// <param name="isServerStarted">Whether this peer is the server.</param>
+		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
+		internal void Interrupt(bool isServerStarted, bool hasInputAuthority)
+		{
 			localInputFlags.EnableBit(AbilityActivationFlags.Interrupt);
+
+			if (!ServerCancelsDirectly(isServerStarted, hasInputAuthority))
+			{
+				return;
+			}
+
+			OnInterrupt?.Invoke();
+			Cancel(ReplicateState.Invalid, suppressCancelEvent: true);
+		}
+
+		/// <summary>
+		/// Whether an interrupt has to be applied here and now rather than queued as input.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The whole rule <see cref="Interrupt(ICharacter)"/> turns on, as a pure function, so the
+		/// truth table can be asserted directly instead of inferred. Both inputs matter and neither
+		/// alone is sufficient.
+		/// </para>
+		/// <list type="bullet">
+		/// <item><b>Server, no input authority</b> — a player being interrupted by something the
+		/// server resolved. TRUE: nobody would ever read the queued flag, which is the defect this
+		/// exists to close.</item>
+		/// <item><b>Server, input authority</b> — an NPC or a pet, whose input the server writes.
+		/// FALSE: the queued flag is read on the very next tick and the cancel then happens inside
+		/// the deterministic replicate, which is strictly better.</item>
+		/// <item><b>Owning client</b> — a player interrupting its own cast. FALSE, same reason.</item>
+		/// <item><b>Observer</b> — no authority over anything. FALSE; it is told what happened.</item>
+		/// </list>
+		/// </remarks>
+		/// <param name="isServerStarted">Whether this peer is the server.</param>
+		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
+		/// <returns>True when the interrupt must be applied directly.</returns>
+		internal static bool ServerCancelsDirectly(bool isServerStarted, bool hasInputAuthority)
+		{
+			return isServerStarted && !hasInputAuthority;
 		}
 
 		/// <summary>
