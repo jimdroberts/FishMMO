@@ -73,7 +73,7 @@ FishMMO is a complete multiplayer online game framework consisting of:
 
 | Component | Description |
 |---|---|
-| **FishMMO-Unity** | Unity project containing client, server, and shared game code (900+ C# files) — full prediction pipeline, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
+| **FishMMO-Unity** | Unity project containing client, server, and shared game code (900+ C# files) — a unified client-side prediction pipeline with lag-compensated hit resolution, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
 | **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, X25519 ECDH, token auth, TOTP 2FA) |
 | **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (41 entities/tables, 42 services) |
 | **FishMMO-WebTransport** | C++ native library wrapping MsQuic (QUIC/HTTP3) — P/Invoked from C# as a FishNet transport plugin |
@@ -2319,6 +2319,27 @@ The 5-phase server startup sequence is documented in [SERVER_INITIALIZATION_ORDE
 | 5. Runtime | Frame-based LateUpdate, client connections, periodic callbacks |
 
 Key guarantee: **RuntimeDataContainers are always initialized before ServerBehaviours** — no race conditions between logic and data.
+
+### Gameplay Simulation
+
+Combat and movement run through one prediction pipeline rather than per-subsystem ones. The
+details are in
+[`Assets/Scripts/Shared/Implementation/Entity/Prediction/README.md`](FishMMO-Unity/Assets/Scripts/Shared/Implementation/Entity/Prediction/README.md);
+the shape is:
+
+| Layer | What it does |
+|---|---|
+| **One entry point** | `CharacterPredictionController` owns the single `[Replicate]` / `[Reconcile]` pair on a character and drives every subsystem through it in `Order`: KCC movement (80) → buffs (85) → cooldowns (90) → equipment (93) → attributes (95) → abilities (100). The order encodes real data dependencies — contributors settle before the authoritative total that subsumes them is installed. |
+| **Input, not state** | `CharacterReplicateData` carries only input, quantised on the producer *before* it predicts, so the owner never simulates at a precision the wire cannot carry. |
+| **A loss-detecting delta chain** | `CharacterReconcileData` is delta-encoded against the previous state the server *sent*, with a one-byte sequence so a dropped datagram costs "no correction until the next snapshot" rather than "a wrong correction for a second". |
+| **Lag compensation** | Hits resolve against where the caster's client *saw* its peers. The client contributes its full round trip plus its interpolation buffer; the server adds its own replicate queue depth and rewinds every character in the scene for the duration of one query. Every latency term cancels exactly. |
+| **Observers are told, not simulating** | State forwarding is deliberately off. Observers receive position via `NetworkTransform` and everything else via explicit broadcasts, and the spawn payload carries an observer-shaped form of each so a late joiner reconstructs what a continuous observer holds. |
+| **Server-only physics** | A physics query is not reproducible across peers, so every target selector and hit action runs on the server, inside the caster's rewound world, and caps its result only after ranking and per-body dedupe. |
+
+Behaviour is pinned by roughly **1,080 EditMode tests**
+([`Assets/UnitTests/README.md`](FishMMO-Unity/Assets/UnitTests/README.md)), including a
+closed-loop fixture that composes both halves of the lag-compensation derivation across a spread
+of round-trip times and asserts the server resolves to the position the shooter was rendering.
 
 ### Flow Diagram
 

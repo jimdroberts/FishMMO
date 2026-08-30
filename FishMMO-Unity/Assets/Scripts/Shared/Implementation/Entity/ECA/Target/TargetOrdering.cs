@@ -644,6 +644,7 @@ namespace FishMMO.Shared
 				keyNames[i] = rank.NameKey;
 				keySecondary[i] = rank.SecondaryKey;
 				keyDistance[i] = rank.Distance;
+				keyIndex[i] = i;
 			}
 
 			for (int i = 1; i < count; ++i)
@@ -654,15 +655,18 @@ namespace FishMMO.Shared
 				int currentSecondary = keySecondary[i];
 				float currentDistance = keyDistance[i];
 
+				int currentIndex = keyIndex[i];
+
 				int j = i - 1;
-				while (j >= 0 && CompareKeys(keyObjectIds[j], keyNames[j], keySecondary[j], keyDistance[j],
-											currentObjectId, currentName, currentSecondary, currentDistance) > 0)
+				while (j >= 0 && CompareKeys(keyObjectIds[j], keyNames[j], keySecondary[j], keyDistance[j], keyIndex[j],
+											currentObjectId, currentName, currentSecondary, currentDistance, currentIndex) > 0)
 				{
 					hits[j + 1] = hits[j];
 					keyObjectIds[j + 1] = keyObjectIds[j];
 					keyNames[j + 1] = keyNames[j];
 					keySecondary[j + 1] = keySecondary[j];
 					keyDistance[j + 1] = keyDistance[j];
+					keyIndex[j + 1] = keyIndex[j];
 					--j;
 				}
 				hits[j + 1] = current;
@@ -670,6 +674,7 @@ namespace FishMMO.Shared
 				keyNames[j + 1] = currentName;
 				keySecondary[j + 1] = currentSecondary;
 				keyDistance[j + 1] = currentDistance;
+				keyIndex[j + 1] = currentIndex;
 			}
 		}
 
@@ -678,6 +683,13 @@ namespace FishMMO.Shared
 		private static int[] keyNames = new int[32];
 		private static int[] keySecondary = new int[32];
 		private static float[] keyDistance = new float[32];
+
+		/// <summary>
+		/// The candidate's position in the buffer the query returned, carried so
+		/// <see cref="CompareKeys"/> is a TOTAL order rather than one that leans on the sort being
+		/// stable. See the remarks there.
+		/// </summary>
+		private static int[] keyIndex = new int[32];
 
 		private static void EnsureKeyBuffers(int count)
 		{
@@ -694,6 +706,7 @@ namespace FishMMO.Shared
 			keyNames = new int[size];
 			keySecondary = new int[size];
 			keyDistance = new float[size];
+			keyIndex = new int[size];
 		}
 
 		/// <summary>
@@ -705,9 +718,28 @@ namespace FishMMO.Shared
 		/// <c>SortColliders</c>, which ordered an overlap by identity and is gone — see the note where
 		/// it used to be.
 		/// </remarks>
+		/// <summary>
+		/// Orders two ray hits: distance first, then the identity keys, then buffer position.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Total, matching <see cref="CompareStable"/>.</b> The identity keys separate every pair
+		/// that is genuinely two different things, so the final index test only decides between two
+		/// colliders on ONE body that also share a name and a millimetre — a duplicated hitbox. That
+		/// case has no cross-peer agreed key and cannot be given one: buffer position is the
+		/// broadphase's order, which differs between peers. What the tiebreak buys is that the result
+		/// stops depending on the sort algorithm staying stable, so swapping the insertion sort for
+		/// <c>Array.Sort</c> could not silently make an already-arbitrary case vary run to run as
+		/// well as peer to peer.
+		/// </para>
+		/// <para>
+		/// Distance is compared before identity because a ray is a sequence: pierce, falloff and
+		/// "the first thing you hit" all read it that way.
+		/// </para>
+		/// </remarks>
 		private static int CompareKeys(
-			int aObjectId, int aName, int aSecondary, float aDistance,
-			int bObjectId, int bName, int bSecondary, float bDistance)
+			int aObjectId, int aName, int aSecondary, float aDistance, int aIndex,
+			int bObjectId, int bName, int bSecondary, float bDistance, int bIndex)
 		{
 			if (aDistance != bDistance)
 			{
@@ -724,6 +756,10 @@ namespace FishMMO.Shared
 			if (aSecondary != bSecondary)
 			{
 				return aSecondary < bSecondary ? -1 : 1;
+			}
+			if (aIndex != bIndex)
+			{
+				return aIndex < bIndex ? -1 : 1;
 			}
 			return 0;
 		}

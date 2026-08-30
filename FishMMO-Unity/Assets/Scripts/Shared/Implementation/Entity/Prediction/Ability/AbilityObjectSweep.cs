@@ -76,7 +76,6 @@ namespace FishMMO.Shared
 		public const float MinimumSweepDistance = 1e-4f;
 
 		/// <summary>Largest buffer the query is allowed to grow to before results are truncated.</summary>
-		private const int MaximumBufferSize = 256;
 
 		private static RaycastHit[] castBuffer = new RaycastHit[32];
 		private static Collider[] overlapBuffer = new Collider[32];
@@ -237,11 +236,15 @@ namespace FishMMO.Shared
 						return;
 				}
 
-				if (count < overlapBuffer.Length || overlapBuffer.Length >= MaximumBufferSize)
+				/* The shared grow-on-full helper, not a private copy of it. Behaviourally the same
+				 * doubling against the same ceiling, but it is also the one place that REPORTS a
+				 * saturated query — TargetOrdering.WarnQueryBufferSaturated. A sweep that filled its
+				 * buffer used to truncate in broadphase order and say nothing, while every other
+				 * spatial query in the project said so once per session. */
+				if (!TargetOrdering.TryGrowQueryBuffer(ref overlapBuffer, count))
 				{
 					break;
 				}
-				overlapBuffer = new Collider[overlapBuffer.Length * 2];
 			}
 
 			// The reverse of travel is the only normal an overlap can honestly report: the shape is
@@ -290,11 +293,11 @@ namespace FishMMO.Shared
 						break;
 				}
 
-				if (count < castBuffer.Length || castBuffer.Length >= MaximumBufferSize)
+				// The shared grow-on-full helper, for the same reason as the overlap above.
+				if (!TargetOrdering.TryGrowQueryBuffer(ref castBuffer, count))
 				{
 					break;
 				}
-				castBuffer = new RaycastHit[castBuffer.Length * 2];
 			}
 
 			for (int i = 0; i < count; ++i)

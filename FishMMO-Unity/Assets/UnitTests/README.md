@@ -1,12 +1,50 @@
-# FishMMO Auth Unit Tests
+# FishMMO Unit Tests
 
-EditMode unit tests for the FishMMO authentication stack. The harness pairs
-`ClientAuthenticatorCore` and `SrpAuthenticatorCore<TConnection>` from the
+EditMode unit tests for FishMMO. The assembly now covers three broad areas, all of
+them running without a NetworkManager, a physics simulation, or a live server —
+roughly **1,080 cases in about 25 seconds**:
+
+| Area | Folder | What it covers |
+| --- | --- | --- |
+| **Authentication** | root (`LoginTests.cs`, `SecurityTests.cs`, …) | SRP-6a + X25519 ECDH handshake, TOTP, account locking, kick requests, rate limiting |
+| **Prediction & combat** | `Prediction/` (76 files) | The unified prediction pipeline, delta serialization, lag compensation, the attribute ledger, buffs, cooldowns, abilities, observer sync, bandwidth budgets |
+| **Gameplay systems** | `AI/`, `Currency/`, `Map/`, `Server/`, root | AI states and target selection, currency, world map projection, item stack conservation, chat sanitisation, character grounding |
+
+`PlayMode/` holds the small number of tests that genuinely need a running player loop.
+
+### The authentication harness
+
+Pairs `ClientAuthenticatorCore` and `SrpAuthenticatorCore<TConnection>` from the
 `FishMMO-Auth` DLLs in-process and routes all `Send*` / `Broadcast*` calls
-synchronously, completely bypassing FishNet and the network transport. This
-gives deterministic, fast (sub-second) coverage of the full SRP-6a + X25519
-ECDH handshake, TOTP enrollment, account-locking, and kick-request flows
-without spinning up servers or network sockets.
+synchronously, completely bypassing FishNet and the network transport.
+
+### The prediction harness
+
+There is no equivalent single harness — the prediction fixtures instead lean on the
+production code having been **shaped for testability**, which is a deliberate and
+recurring pattern rather than an accident:
+
+- **Pure functions extracted from behaviours.** `LagCompensationTick.ResolveViewOffset` /
+  `ResolveAnchor`, `CharacterPredictionController.IsTransformRedundant`,
+  `Buff.DurationToTicks`, `AbilityController.ResolveInterruptDisposition`,
+  `TargetOrdering.*`. These exist so a rule can be exercised against production
+  rather than re-implemented in a test — a re-implementation only ever proves the
+  test agrees with itself.
+- **`internal` + `InternalsVisibleTo("FishMMO.UnitTests")`** (`Shared/AssemblyInfo.cs`)
+  for test seams that should not be public API.
+- **`ScriptableObject.CreateInstance` + `AddToCache`/`RemoveFromCache`** to stand up
+  templates without assets. Remember that a `CreateInstance` template leaves
+  collection fields null where an authored asset would serialise them empty.
+- **`AddComponent` + an explicit `OnAwake()`**, since Unity's own callbacks do not run
+  for a bare `AddComponent` in edit mode.
+- **Reflection**, but only for genuinely private mechanism (`CharacterPositionHistory.Record`,
+  `BuffController.ApplyObservedBuffs`).
+
+**Prefer a behavioural assertion to a source-text one.** Several fixtures used to grep the
+source for a literal spelling; those break on any refactor while proving less than the
+consequence does. Where a property has no behavioural expression at all — "this number is
+read live from `PredictionManager.StateInterpolation` rather than assumed" — a source
+assertion is the right tool, and should say why it is one.
 
 ## Table of Contents
 
@@ -111,6 +149,30 @@ Or use the Unity menu shortcuts:
 | `ServerAuthenticatorIntegrationTests.cs` | 2 | End-to-end SRP→token integration and token lifecycle |
 | `RateLimiterTests.cs` | 3 | Per-source-IP handshake burst / sustained-flood throttling |
 | `TestAssemblySetup.cs` | — | `[SetUpFixture]` — initialises `FishMMO.Logging.Log` once for the assembly |
+
+### Prediction & combat fixtures (`Prediction/`)
+
+Too many to list individually; these are the ones that pin a **whole invariant** rather than a
+single method, and are the right place to start reading:
+
+| File | Pins |
+| --- | --- |
+| `PredictionAuditRegressionTests.cs` | The 2026-08-28 audit's 35 defects across three rounds |
+| `CombatAuditRoundTwoTests.cs`, `CombatAuditFollowUpTests.cs`, `CombatAudit20260830Tests.cs` | The 2026-08-29 and 2026-08-30 combat audits |
+| `CombatAudit20260830FixTests.cs` | The post-audit fixes: shared ability-object resolution, the observer equip path, exclusion-inside-the-cap, total ray ordering, per-character chain-break reporting, shared buffer growth, reproducible heal targeting |
+| `LagCompensationClosedLoopTests.cs` | **"You hit what you saw"** — composes the client and server halves of the rewind derivation across a spread of round trips and asserts sub-millimetre agreement |
+| `LagCompensationTests.cs` | The position ring's resolution, clamping and refusal rules |
+| `AttributeLedgerContractTests.cs`, `AttributeStackLedgerTests.cs` | The attributed-modifier ledger: residual arithmetic, contributor release, exact stack inverses |
+| `ReconcileDeltaChainTests.cs`, `DeltaSerializerStreamAlignmentTests.cs` | The delta chain's loss detection and framing |
+| `ObserverSynchronizationProofTests.cs`, `AbilityObserverReproductionTests.cs`, `LateJoinerReplayTests.cs` | That a late joiner reconstructs what a continuous observer holds |
+| `TargetSelectorBodyIdentityTests.cs`, `SpatialQueryGrowLoopTests.cs`, `OverlapHitRootResolutionTests.cs` | Hit-root resolution, per-body dedupe, grow-on-full |
+| `PredictionQuantizationTests.cs`, `RotationPrecisionTests.cs`, `AimDirectionTests.cs` | That `Encode`/`Decode` round trips are fixed points |
+| `PredictionBandwidthBenchmarkTests.cs`, `ObserverChannelCostTests.cs`, `BandwidthCompositionTests.cs` | Per-peer byte budgets, so a new field's cost is visible when it lands |
+| `PrefabNetworkAuthoringTests.cs`, `RegionAssetIntegrityTests.cs` | That the shipped prefabs and assets still match what the code expects |
+
+Several fixtures are **measurement** rather than assertion: they `TestContext.WriteLine` a
+`MEASURE …` line so a bandwidth or cost regression is legible in the run log even when it stays
+inside its budget.
 
 ### Harness files (`Harness/`)
 

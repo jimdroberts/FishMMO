@@ -58,7 +58,9 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **Consumable and mount activation** through the same prediction pipeline
 - **ECA-based activation conditions** for resource costs, attribute requirements, faction, and archetype checks
 - **Multiple spawn targets** — Self, PointBlank, Target, Forward, Camera, Spawner, SpawnerWithCameraRotation
-- **Hit count tracking** with automatic destruction on hit count depletion
+- **Swept hit resolution** — `AbilityObjectSweep` covers the segment travelled each tick with an overlap at the start (a cast cannot see what it begins inside of) plus a cast along the segment, ordered by distance
+- **Hit dedupe per object per target** — once per body for the object's whole life, so a stationary field does not drain its hit count into one victim in a fraction of a second
+- **Hit count tracking** with automatic destruction on hit count depletion, spent only by the peer that decided the hit
 - **Pet ability support** with dedicated PetAbilityTemplate and spawn bounding boxes
 
 ### Security Features
@@ -66,6 +68,8 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - All ability activations are validated server-side — cooldowns, resource costs, and `CanManipulate()` checks
 - Deterministic RNG seeds prevent clients from influencing spawned ability outcomes
 - Prediction mismatches trigger rollback, preventing exploits from client-side ability state manipulation
+- Hits are resolved only by the server and by the caster's own client; a third-party observer is **told** (`AbilityObjectHitBroadcast`) rather than deciding for itself, because its world is interpolated against its own latency and would invent hits nothing would ever correct
+- The observer spawn payload carries no generator state and no owner-only ability internals; `RegisterObservedAbility` refuses to run on the owner at all
 
 ## Prerequisites
 
@@ -364,7 +368,10 @@ A `MonoBehaviour` attached to the spawned ability prefab. Manages lifetime count
 | `Snapshot`         | `AbilityObjectSnapshot`  | Immutable fallback data when `Ability` is null      |
 | `HitCount`         | `int`                    | Remaining collision hits before destruction          |
 | `RemainingLifeTime`| `float`                  | Countdown timer in seconds                           |
-| `SpawnTick`        | `uint`                   | Network tick at spawn (for prediction rollback)      |
+| `SpawnTick`        | `PredictionTick`         | Replicate-domain tick at spawn (for prediction rollback) |
+| `ContainerID`      | `int`                    | Deterministic container id, allocated by `AbilityContainerAllocator` so predicted and authoritative objects agree |
+| `ElapsedTicks`     | `uint`                   | Integer tick count, so closed-form trajectories never accumulate float error |
+| `PublishedHitCount`| `int`                    | How many hits have been broadcast to observers |
 | `RNG`              | `DeterministicRNG`         | Deterministic RNG seeded from the controller         |
 
 #### Snapshot Fallback
@@ -490,14 +497,43 @@ The `AbilityController` uses FishNet's **Replicate/Reconcile** prediction model 
 | Field           | Type                              | Description                                     |
 |-----------------|-----------------------------------|-------------------------------------------------|
 | `AbilityID`     | `long`                            | The currently active ability (or `NO_ABILITY`)  |
-| `RemainingTime` | `float`                           | Remaining activation/cooldown time              |
+| `RemainingTicks`| `uint`                            | Remaining activation time, in **ticks** — deterministic, so it cannot drift the way a float seconds counter did |
+| `ChargedHoldTicks` | `uint`                         | Ticks a charged ability has been held past full charge. Carried rather than derived: the owner increments it once per invocation of the replicate body, and a reconcile replays every tick since the correction — so without an authoritative value the owner counts each replayed tick again and cancels its own charge early |
+| `PackedFlagsAndSlot` | `int`                        | Persistent activation flags (bits 0–15) + consumable slot as a signed short (bits 16–31). Local input flags are deliberately excluded so inputs queued between ticks survive a reconcile |
 | `Seed`          | `int`                             | Deterministic RNG seed for mismatch detection   |
+| `RngS0`–`RngS3` | `uint` × 4                        | The generator's **full 128-bit state**. The seed alone cannot reconstruct it, so without these one mismatch permanently desynchronised the generator and every later activation mismatched too |
 | `ResourceState` | `CharacterAttributeResourceState` | Current resource values for reconciliation      |
 | `Cooldowns`     | `CooldownReconcileEntry[]`        | Snapshot of active cooldowns (AbilityID, StartTick, DurationTicks) |
 
+The activation **phase is implicit** and reconstructible from these fields — there is no phase enum:
+
+| State | Condition |
+|-------|-----------|
+| Idle | `AbilityID == NO_ABILITY` |
+| Casting | `AbilityID != NO_ABILITY`, `RemainingTicks > 0`, `IsHeld` clear |
+| Channeling | `AbilityID != NO_ABILITY`, `RemainingTicks > 0`, `IsHeld` set |
+| Charged / holding | `AbilityID != NO_ABILITY`, `RemainingTicks == 0`, `IsHeld` set |
+
 #### Deterministic RNG Seeds
 
-The server generates a seed via `playerSeedGenerator` and sends it in reconcile data. Both client and server use the same seed to drive ability object spawning, ensuring identical outcomes. On reconcile, if the client's `currentSeed` differs from the server's `Seed`, the client knows its prediction was wrong and rolls back any erroneously spawned ability objects (identified by `SpawnTick`).
+The server generates a seed via `playerSeedGenerator` and sends it in reconcile data. Both client and server use the same seed to drive ability object spawning, ensuring identical outcomes.
+
+Reconciliation of predicted spawns is **owner-only** and compares like with like:
+`PredictedAbilityStateHistory` records what this client's simulation left behind for each tick, and
+the reconcile for tick *T* is compared against the history entry for *T* — not against the live
+state, which has moved on. A mismatch destroys objects spawned after that tick, restricted to the
+ability whose activation diverged where one is identified.
+
+Three signals are distinguished, because they mean different things:
+
+| Signal | Meaning |
+|--------|---------|
+| `Seed` mismatch | The client's simulation of that tick produced a different roll — it spawned something the server did not, or vice versa |
+| `Denied` flag | The server refused the activation. Authoritative and **independent of the RNG state**, since a rejection can happen before any seed advance — tying the callback to a seed mismatch dropped legitimate denials |
+| `NoSpawn` flag | The server demonstrably spawned nothing at that tick while the client did |
+
+A denied activation refunds itself: the cooldown table and the resource state both ride the same
+reconcile, so the authoritative snapshot simply has no cooldown and full resources.
 
 ## Project Structure
 

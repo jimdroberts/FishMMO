@@ -12,6 +12,7 @@
 - [Quick Start Guides](#quick-start-guides)
 - [Configuration](#configuration)
 - [Usage Examples](#usage-examples)
+  - [The attributed-modifier ledger](#the-attributed-modifier-ledger)
 - [Operational Checks](#operational-checks)
 - [Flow Diagram](#flow-diagram)
 - [Project Structure](#project-structure)
@@ -41,9 +42,9 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - Formula-driven modifiers (flat bonus, percentage bonus) via ScriptableObject templates
 - Depletable resource attributes (Health, Mana, Stamina) with current/max tracking
 - Damage and resistance calculations with linked damage/resistance template pairs
-- Tick-based regeneration (configurable `regenTickRate`, default 5 seconds) for resource attributes
-- External modifier accumulation from items, buffs, and region effects — preserved across formula recalculations
-- FishNet network synchronization with owner and observer broadcast paths
+- Tick-based regeneration on a **1 second pulse** (`regenTickRate`), delivering a share of the amount authored against a 5 second window (`REGEN_AUTHORING_WINDOW_SECONDS`), so the pulse got finer without getting stronger. A 1 second consumption lockout suppresses regen right after a spend.
+- An **attributed-modifier ledger**: every external contribution is keyed by `ModifierSource(Kind, Id, Index)` so it can be restated idempotently and released by contributor, and the server's total is installed as a residual over whatever this peer has attributed
+- Two distinct sync paths, because state forwarding is off: the owner reconciles every tick, observers receive `CharacterAttributesBroadcast` / `CharacterResourcesBroadcast` on a change-driven scheduler
 - Replicate/Reconcile prediction support via `IPredictableController` (Order=95) and `CharacterAttributeResourceState` snapshots
 - Static events for damage, kill, and heal for cross-system integration
 - Immortality flag to prevent all damage and kill processing
@@ -70,7 +71,7 @@ This system is an integrated module of the FishMMO Unity project. No separate in
 3. **Assign formulas** — In each template's `Formulas` dictionary, map child templates to `CharacterAttributeFormulaTemplate` assets (`FlatBonusFormulaTemplate` or `PercentageBonusFormulaTemplate`).
 4. **Attach controllers** — Add `CharacterAttributeController` and `CharacterDamageController` NetworkBehaviour components to your character prefab.
 5. **Runtime wiring** — On initialization the controller calls `AddDependents()` which resolves all parent, child, and dependency links between attribute instances.
-6. **External modifiers** — Call `AddModifier(amount)` on any attribute to apply item, buff, or region bonuses. These persist across formula recalculations.
+6. **External modifiers** — Call `SetSource(ModifierSource, value)` on any attribute to state an item, buff, dungeon-scaling, NPC or region bonus, and `ClearSourceGroup(kind, id)` to release everything one contributor added. These persist across formula recalculations. `SetSource` states a whole contribution rather than adding to one, so restating the same value every tick is idempotent — which is what makes an `OnRegionStay` trigger usable at all.
 
 ## Configuration
 
@@ -122,7 +123,7 @@ Each `CharacterAttribute` has four value layers:
 |-------|-------------|
 | `Value` | Base value, set from template or database. |
 | `FormulaModifier` | Derived from child attribute formulas. Reset and recalculated each `ApplyChildren()`. |
-| `ExternalModifier` | Accumulated from external sources (items, buffs, regions). Persistent across recalculations. |
+| `ExternalModifier` | The **sum of the attributed ledger** — one named entry per contributor (items, buffs, regions, dungeon scaling, NPC bonuses, and the server's residual). Persistent across recalculations. |
 | `FinalValue` | `Value + FormulaModifier + ExternalModifier`, optionally clamped to `[MinValue, MaxValue]`. |
 
 ```
@@ -139,21 +140,106 @@ The `Modifier` property returns the total: `FormulaModifier + ExternalModifier`.
 |-------|-------------|
 | `CurrentValue` | Depletable float representing current HP/MP/Stamina. Clamped between `0` and `FinalValue`. |
 
+### The attributed-modifier ledger
+
+`ExternalModifier` is not a running total that anyone may add to. It is the sum of a list of
+named contributions, each keyed by a `ModifierSource` — a `(Kind, Id, Index)` triple:
+
+| Kind | Id | Index | Written by |
+|------|----|-------|-----------|
+| `Item` | `Item.ID` | item-attribute template id | `ItemGenerator.ApplyAttributes` |
+| `Buff` | buff template id | position in `BonusAttributes` | `AttributeBuffTemplate` and friends |
+| `Region` | region `NetworkObject.ObjectId` | authored entry index | `ApplyRegionAttributeAction` |
+| `DungeonScaling` | scalar template id | — | `NPC` |
+| `NpcBonus` | template id | entry index | `NPC` |
+| `Authoritative` | — | — | the server's total, installed as a residual |
+| `Unattributed` | — | — | `AddModifier`, which has no production caller |
+
+**Why it exists.** Every contributor used to call `AddModifier(delta)` and nothing recorded who
+had added what, so releasing a contribution meant adding its negation and trusting that the value
+being subtracted was still the value that had been added. Nothing enforced that. `SetSource`
+states a whole contribution instead, so restating it is idempotent and `ClearSourceGroup(kind, id)`
+releases everything one contributor wrote whatever it keyed the entries as — which means the apply
+and release halves do not have to agree on an index scheme forever.
+
+**The `Index` matters.** Two authored entries may name the same attribute — a flat part and a
+scalar part — and a single key per contributor would silently keep only the last of them.
+
+#### The authoritative residual
+
+The server's total arrives at the owner every tick and it already contains every buff and every
+equipped item, because the server computed it by applying them. The owner has ALSO applied them
+locally, because that is what predicting them means. So the total is installed as a **residual**:
+
+```
+Authoritative = serverTotal - (sum of everything this peer has attributed)
+ExternalModifier = serverTotal        // by construction
+```
+
+This is not compensating for a mistake — the double application is structural and there is no
+upstream fix short of giving up prediction of equip and buff bonuses. The residual is what
+reconciles the two views, and it can legitimately go **negative** when the owner has predicted a
+bonus the server has not granted yet.
+
+**Where it can be briefly wrong.** The residual is derived at install time from whatever was
+attributed *then*. If a total lands before its contributor is applied locally, the residual
+absorbs the contributor and the next local apply counts it twice — until the next install
+re-derives it. That window is **zero** for the reconcile path, because `IPredictableController.Order`
+runs `BuffController` (85) and `EquipmentController` (93) before `CharacterAttributeController`
+(95) in the same pass, so contributors are settled before the total is installed. For an
+out-of-band apply it is one tick.
+
+#### Pooled characters
+
+`RestoreTemplateBaseline` must use `ClearAllModifierSources()`, never `SetModifierDirect(0)`. The
+latter installs an authoritative residual of minus the attributed sum — a total of zero today, and
+the previous occupant's items and buffs still sitting in the ledger for the next one.
+
 ### Network Synchronization
 
 #### Payload Serialization (FishNet Reader/Writer)
 
-- **WritePayload**: Writes `(templateID, value)` for regular attributes; `(templateID, value, currentValue)` for resource attributes. Used during initial spawn / state transfer only.
-- **ReadPayload**: Reads and applies via `SetAttribute()` / `SetResourceAttribute()`.
+The spawn payload has **two shapes**, chosen per connection by `PayloadVisibility.IsOwner`, and
+the shape flag is carried in the stream rather than re-derived at read time. The whole block is
+framed by a 4-byte length prefix: every `NetworkBehaviour` on an object shares one unframed
+buffer, so a reader that stopped early would leave every behaviour after it reading from the
+wrong offset. Every defensive abort seeks to the end of the frame before returning.
+
+| Shape | Regular attributes | Resource attributes |
+|-------|--------------------|---------------------|
+| **Owner** | `(templateID, value)` — base only | `(templateID, value, currentValue)` — base only |
+| **Observer** | `(templateID, value, externalModifier)` | `(templateID, value, currentValue, externalModifier)` |
+
+**The external modifier goes to observers only, and the asymmetry is the point.** It is the
+server's TOTAL, so it already contains every buff and every equipped item. An observer applies
+none of those locally — `BuffController.MaterializeObservedBuffs` deliberately bypasses
+`Apply`/`Remove`, and `EquipmentController` equips an observer's items silently — so the total is
+the only thing it has and it is complete. The owner DOES apply them locally, as predictions, so
+sending it the total as well would double every bonus. The owner instead builds its external
+modifier from the buff and equipment restores that follow, and completes it on the first
+reconcile's authoritative residual, which is the only thing that carries the region,
+dungeon-scaling and NPC-bonus contributions no client can reconstruct.
+
+The owner's resource *current* values are deferred to `OnStartNetwork` rather than applied during
+the read: a depletable value is clamped against its maximum, and the owner's maximum is not
+complete until the buff and equipment restores have run.
 
 #### Reconcile-Driven Synchronization (unified)
 
-**There are no client broadcast handlers for attributes.** Both base (non-resource) and
-resource attributes are replicated each prediction tick via `CharacterReconcileData`
-and reach owner *and* observers automatically through FishNet Prediction V2 state
-forwarding. The previous `CharacterAttributeUpdateBroadcast` /
-`CharacterAttributeUpdateMultipleBroadcast` / `CharacterObserverAttributeUpdateBroadcast`
-types were removed entirely along with the per-tick dirty-flush pipeline.
+**State forwarding is OFF for playable characters, and that is the intended configuration.**
+Observers do not simulate their peers, so there are two distinct delivery paths and they carry
+different things:
+
+- **The owner** receives every attribute each prediction tick via `CharacterReconcileData`
+  (`Attributes[]` for non-resource attributes, `ResourceState` for HP/MP/Stamina). This is the
+  only path that carries the authoritative residual.
+- **Observers** receive `CharacterAttributesBroadcast` and `CharacterResourcesBroadcast` — real
+  broadcasts, never RPCs, sent to the observer set except the owner. Resources are pushed on a
+  scheduler rather than per tick: `observedResourcePushInterval` (6 ticks) in combat and
+  `observedResourceOutOfCombatPushInterval` (12 ticks) out of it, and only when something changed.
+
+Derived and diagnostic values stay server-side; an observer is sent what it must display, not the
+state that produced it.
 
 | Reconcile field | Carries |
 |-----------------|---------|
@@ -214,19 +300,26 @@ Delta serialization uses a 7-bit byte bitmask — only changed fields are transm
 The attribute system is consumed by many other systems:
 
 - **Ability System** — Checks/consumes mana, applies damage via attributes.
-- **Buff System** — Applies/removes external modifiers via `AddModifier()` / `AddModifier(-amount)`.
-- **Item System** — Applies item attribute bonuses via `AddModifier()` on equip, reversed on unequip.
+- **Buff System** — States and releases external modifiers via `SetSource(ModifierSource.Buff(templateID, entryIndex), value)` / `ClearSourceGroup(ModifierSourceKind.Buff, templateID)`. A stacking buff restates `(1 + Stacks) * Value`; it does not add a delta per stack.
+- **Item System** — `ItemGenerator.ApplyAttributes` states one entry per item attribute under `ModifierSource.Item(item.ID, attributeTemplateID)`; `RemoveAttributes` releases the contributor. An item with no database identity yet (`ID == 0`) writes nothing — see the Item README.
 - **Quest System** — Checks attribute prerequisites.
 - **KCC (Movement)** — Reads stamina for sprint/jump.
 - **Party System** — Gets health percentages (`CurrentValue / FinalValue`).
 - **UI** — Resource bars, target frames, pet controls.
-- **Region Effects** — Zone-based attribute modification via `AddModifier()`.
+- **Region Effects** — `ApplyRegionAttributeAction` states `ModifierSource.Region(regionObjectID, entryIndex)`; leaving releases every entry that region wrote.
 - **Pet System** — Manages pet attributes.
 - **Achievement System** — Tracks damage/heal/kill milestones.
 - **Faction System** — Adjusted on kill events.
 - **Database Layer** — Persists/loads via `CharacterAttributeData` DTO and `ICharacterAttributeService`.
 
-All external systems use `AddModifier()` / `SetModifier()` which operate on `ExternalModifier`, ensuring their contributions are never overwritten by the formula recalculation system.
+Every external system writes through the **attributed-modifier ledger** (`ModifierSource`), so
+`ExternalModifier` is the sum of named contributions rather than an anonymous running total, and
+each contributor can be released without knowing what anyone else added. See
+[The attributed-modifier ledger](#the-attributed-modifier-ledger) below.
+
+`AddModifier(amount)` still exists and writes into the `Unattributed` bucket. It has no production
+caller and should not gain one: nothing can release an unattributed contribution except by adding
+its negation, which is the failure the ledger exists to end.
 
 ## Operational Checks
 
@@ -236,8 +329,9 @@ All external systems use `AddModifier()` / `SetModifier()` which operate on `Ext
 | Parent/child wiring | Enter Play mode, inspect `CharacterAttributeController` | Attributes show correct parent/child links |
 | Formula propagation | Modify a child attribute's base value | Parent `FinalValue` updates automatically |
 | External modifier persistence | Apply a buff, then trigger formula recalculation | `ExternalModifier` value unchanged |
+| Ledger release | Equip an item, note `ExternalModifier`, unequip it | Returns to exactly the pre-equip value, with the item's entry gone from `ModifierSourceCount` |
 | Damage/resistance calculation | Deal damage with a `DamageAttributeTemplate` | Health reduced by `RawDamage - Resistance.FinalValue` (clamped ≥ 0) |
-| Regeneration tick | Wait for `regenTickRate` seconds (default 5.0) in Play mode with regen attributes set | Resource `CurrentValue` increases by regen amount |
+| Regeneration tick | Wait `regenTickRate` seconds (default **1.0**) in Play mode with regen attributes set | Resource `CurrentValue` increases by one pulse's share |
 | Network sync (owner)    | Modify any attribute server-side          | Owner receives the change in the next `CharacterReconcileData` (resources via `ResourceState`, others via `Attributes[]`) |
 | Network sync (observer) | Modify another character's attribute      | Observer receives the change via FishNet Prediction V2 state forwarding (no broadcast)                                   |
 | Reconciliation | Simulate prediction mismatch | `ApplyResourceState()` corrects client resource values |

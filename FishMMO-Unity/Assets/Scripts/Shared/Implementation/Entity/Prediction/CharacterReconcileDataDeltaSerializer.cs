@@ -582,8 +582,27 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		/// <summary>True while a sequence gap is being ridden out, so the log line fires once per gap.</summary>
-		private static bool chainBreakLogged;
+/// <summary>
+		/// How many delta packets have been rejected for a broken chain since the last report.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A counting throttle rather than a latch that clears on the next good packet. This reader
+		/// is a static registered against the type, so it sees EVERY character's reconciles and has
+		/// no identity to attribute a gap to — <c>ReadDelta</c> receives a reader and the previous
+		/// state and nothing else. The latch this replaces therefore coupled unrelated characters:
+		/// one character's break claimed the report, and ANY character's next good delta cleared it,
+		/// so in a busy scene a real gap was usually swallowed by a neighbour.
+		/// </para>
+		/// <para>
+		/// Counting instead means the first gap always reports and a storm is bounded, without one
+		/// object's recovery deciding what another object may say.
+		/// </para>
+		/// </remarks>
+		private static int chainBreaksSinceReport;
+
+		/// <summary>One report, then one per this many further rejections.</summary>
+		private const int CHAIN_BREAK_REPORT_INTERVAL = 256;
 
 		/// <summary>
 		/// Consumes a delta payload's remaining bytes without applying them, keeping the shared
@@ -648,19 +667,18 @@ namespace FishMMO.Shared
 				 * from it (ReconcileDeltaGuard). The baseline stays where it is; every further
 				 * delta is rejected the same way until the next absolute snapshot — at most one
 				 * second — resynchronises the chain. Logged once per gap, not per rejected packet. */
-				if (!chainBreakLogged)
+				if (chainBreaksSinceReport % CHAIN_BREAK_REPORT_INTERVAL == 0)
 				{
-					chainBreakLogged = true;
 					Log.Debug("CharacterReconcileDataDeltaSerializer",
 						$"ReadDelta: reconcile sequence {sequence} does not follow baseline {prev.Sequence}; " +
-						"a state update was lost. Ignoring reconciles until the next absolute snapshot.");
+						"a state update was lost. Ignoring reconciles until the next absolute snapshot. " +
+						$"(Reported once per {CHAIN_BREAK_REPORT_INTERVAL} rejections across all characters.)");
 				}
+				unchecked { ++chainBreaksSinceReport; }
 				DrainDeltaPayload(reader, prev);
 				FishNet.Object.ReconcileDeltaGuard.RejectLastRead();
 				return prev;
 			}
-			chainBreakLogged = false;
-
 			ushort flags = reader.ReadUInt16();
 			CharacterReconcileData result = prev;
 			result.Sequence = sequence;

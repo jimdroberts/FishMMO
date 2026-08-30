@@ -109,6 +109,15 @@ namespace FishMMO.Shared
 		/// reaching the history at all. It applies BEFORE the server's replicate queue term is added,
 		/// so the queue depth is never something a client can inflate.
 		/// </para>
+		/// <para>
+		/// <b>The gap between the two is deliberate and settled.</b> 500&#160;ms RTT is the worst case
+		/// this game designs for, and the shipped 500&#160;ms recording covers it; past that the
+		/// history clamps to its oldest sample, which is the safe direction because it returns a pose
+		/// that was actually recorded rather than falling through to a live one. Do not lower this
+		/// constant to match the ring — a claim capped BELOW the recorded window would be the real
+		/// defect. If the worst case moves, widen
+		/// <c>CharacterPositionHistory.maximumRewindMilliseconds</c> on the prefab instead.
+		/// </para>
 		/// </remarks>
 		public const uint MaximumCompensationTicks = 30;
 

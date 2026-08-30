@@ -147,7 +147,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (eventData == null || !TryGetAbilityObject(eventData, out AbilityObject abilityObject))
+			if (!AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject))
 			{
 				Log.Warning("AbilityApplyHitscanAction",
 					"Expected an event carrying an AbilityObject — wire this to OnSpawn, OnTick or OnHit.");
@@ -207,9 +207,22 @@ namespace FishMMO.Shared
 				 * replicated aim origin and direction, and carries it verbatim to observers, so every
 				 * peer agrees on the ray without any of them re-deriving it from an interpolated
 				 * caster. The object needs no lag compensation of its own for the same reason. */
+				/* The shooter is excluded INSIDE the query, before the cap is charged.
+				 *
+				 * The object's own collider sits on the ray's origin, so with BlockedByScenery on it
+				 * is a legitimate non-character hit — and skipping it out here, after the query had
+				 * already spent one of maxHits on it, meant a MaxHits of 1 produced a shot that hit
+				 * nothing at all. Same reasoning as charactersOnly, which the query has always
+				 * applied before the cap for exactly this reason. Children go with it, since a
+				 * prefab is free to hang the visual's collider off one.
+				 *
+				 * The CASTER is deliberately not excluded: whether a shot can hit its own owner is a
+				 * gameplay question, and the OnHit triggers' own conditions are where it is
+				 * answered — the same place friendly fire is. */
 				int hitCount = LagCompensatedQuery.RaycastNearest(
 					eventData, abilityObject.GameObject, shooter.position, shooter.forward, range,
-					TargetLayerMask, maxHits, charactersOnly: !BlockedByScenery, hitBuffer);
+					TargetLayerMask, maxHits, charactersOnly: !BlockedByScenery, hitBuffer,
+					ignoreRoot: shooter);
 
 				// Inherited once so each child collision event carries the same tick; without it a
 				// downstream ApplyBuffAction falls back to TimeManager.LocalTick and loses alignment.
@@ -218,20 +231,6 @@ namespace FishMMO.Shared
 				for (int i = 0; i < hitCount; i++)
 				{
 					LagCompensatedQuery.CompensatedHit hit = hitBuffer[i];
-
-					/* The object never shoots itself. Its collider sits exactly on the ray's origin, so
-					 * with BlockedByScenery on it would otherwise be the first non-character hit and stop
-					 * every shot at zero range. Children go with it, since a prefab is free to hang the
-					 * visual's collider off one. This is the same exclusion AbilityObjectSweep.Accept
-					 * applies for the same reason.
-					 *
-					 * The CASTER is deliberately not excluded here: whether a shot can hit its own owner
-					 * is a gameplay question, and the OnHit triggers' own conditions are where it is
-					 * answered — the same place friendly fire is. */
-					if (hit.Collider != null && hit.Collider.transform.IsChildOf(shooter))
-					{
-						continue;
-					}
 
 					/* Scenery ENDS the shot rather than being skipped, when it is in the set at all.
 					 * Anything past it is behind cover, and the query already handed these back in ray
@@ -267,33 +266,5 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Pulls the ability object out of whichever event shape this action was wired to.
-		/// </summary>
-		/// <remarks>
-		/// A spawn event and a collision event carry it on different payloads, and this action is
-		/// meaningful on both — OnSpawn for a bullet or a beam tick, OnHit for a shot that fires a
-		/// second ray from wherever the first one landed.
-		/// </remarks>
-		private static bool TryGetAbilityObject(EventData eventData, out AbilityObject abilityObject)
-		{
-			if (eventData.TryGet(out AbilityCollisionEventData collision) && collision.AbilityObject != null)
-			{
-				abilityObject = collision.AbilityObject;
-				return true;
-			}
-			if (eventData.TryGet(out AbilitySpawnEventData spawn) && spawn.InitialAbilityObject != null)
-			{
-				abilityObject = spawn.InitialAbilityObject;
-				return true;
-			}
-			if (eventData.TryGet(out AbilityTickEventData tick) && tick.AbilityObject != null)
-			{
-				abilityObject = tick.AbilityObject;
-				return true;
-			}
-			abilityObject = null;
-			return false;
-		}
 	}
 }

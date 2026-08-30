@@ -311,10 +311,15 @@ namespace FishMMO.Shared
 		/// not stop a shot, so set it false when a wall should block one.
 		/// </param>
 		/// <param name="results">Receives the hits, nearest first. Cleared first.</param>
+		/// <param name="ignoreRoot">
+		/// Optional transform whose own colliders and children are skipped BEFORE the cap is
+		/// charged — for a projectile excluding itself, whose collider sits on the ray origin.
+		/// </param>
 		/// <returns>The number of hits written to <paramref name="results"/>.</returns>
 		public static int RaycastNearest(
 			EventData eventData, GameObject context, Vector3 origin, Vector3 direction, float distance,
-			LayerMask mask, int maxHits, bool charactersOnly, List<CompensatedHit> results)
+			LayerMask mask, int maxHits, bool charactersOnly, List<CompensatedHit> results,
+			Transform ignoreRoot = null)
 		{
 			if (results == null)
 			{
@@ -334,12 +339,12 @@ namespace FishMMO.Shared
 			{
 				using (LagCompensationRegistry.Rewind(context.scene, target, caster))
 				{
-					GatherAlongRay(physicsScene, origin, heading, distance, mask, maxHits, charactersOnly, results);
+					GatherAlongRay(physicsScene, origin, heading, distance, mask, maxHits, charactersOnly, results, ignoreRoot);
 				}
 			}
 			else
 			{
-				GatherAlongRay(physicsScene, origin, heading, distance, mask, maxHits, charactersOnly, results);
+				GatherAlongRay(physicsScene, origin, heading, distance, mask, maxHits, charactersOnly, results, ignoreRoot);
 			}
 
 			return results.Count;
@@ -350,7 +355,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static void GatherAlongRay(
 			PhysicsScene physicsScene, Vector3 origin, Vector3 direction, float distance,
-			LayerMask mask, int maxHits, bool charactersOnly, List<CompensatedHit> results)
+			LayerMask mask, int maxHits, bool charactersOnly, List<CompensatedHit> results,
+			Transform ignoreRoot)
 		{
 			// Grown until the query stops filling it, for the same reason as the overlap above.
 			int count;
@@ -380,6 +386,16 @@ namespace FishMMO.Shared
 				RaycastHit hit = rayBuffer[i];
 				GameObject key = TargetOrdering.ResolveHitKey(hit.collider, out ICharacter character);
 				if (key == null)
+				{
+					continue;
+				}
+
+				/* Skipped BEFORE the cap is charged, like charactersOnly below and for the same
+				 * reason. A projectile's own collider sits on the ray's origin, so a caller that
+				 * filtered it out AFTER this loop had already spent one of maxHits on it — and a
+				 * MaxHits of 1 then produced a shot that hit nothing at all. Children go with the
+				 * root, since a prefab is free to hang the visual's collider off one. */
+				if (ignoreRoot != null && hit.collider != null && hit.collider.transform.IsChildOf(ignoreRoot))
 				{
 					continue;
 				}

@@ -12,6 +12,7 @@
 - [Quick Start Guide](#quick-start-guide)
 - [Configuration](#configuration)
 - [Usage Examples](#usage-examples)
+  - [Item identity and the zero-id rule](#item-identity-and-the-zero-id-rule)
 - [Operational Checks](#operational-checks)
 - [Flow Diagrams](#flow-diagrams)
 - [Project Structure](#project-structure)
@@ -157,13 +158,38 @@ Each `Item` holds references to its optional sub-components and template:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `ID` | `long` | Unique database instance ID |
+| `ID` | `long` | Database identity. **Zero means "not yet written"** — see [Item identity and the zero-id rule](#item-identity-and-the-zero-id-rule). |
 | `Version` | `long` | Incremented on state changes that affect client sync |
 | `Slot` | `int` | Current slot index in its container (-1 if unslotted) |
 | `Template` | `BaseItemTemplate` | The ScriptableObject blueprint |
 | `Stackable` | `ItemStackable` | Stack management (null if non-stackable) |
 | `Equippable` | `ItemEquippable` | Equip/unequip + owner tracking (null if non-equippable) |
 | `Generator` | `ItemGenerator` | Seed-based attribute generation (null if non-generated) |
+
+#### Item identity and the zero-id rule
+
+`Item.ID` is the identity the `character_item` row is keyed by, and it survives a move between
+slots, a move between containers, and a relog. An item created at runtime — loot, a quest reward,
+a merchant purchase, a stack split — has **no identity until its first persist returns one**, and
+`AssignPersistentID` is what records it.
+
+Nothing may key durable state by a zero id, because two such items would collide. That has one
+consequence worth knowing:
+
+> **An item equipped before its first persist contributes no attribute bonuses.**
+> `ItemGenerator.TryResolveLedgerSource` declines for `ID <= 0`, so `ApplyAttributes` writes no
+> ledger entries at all. The server and the owning client agree on this — nothing diverges — but
+> the gear reads as having no stats until the identity is issued.
+
+`AssignPersistentID` is a method rather than a setter precisely because it has to publish that
+contribution: it releases anything under the old key, records the id, derives the generation seed
+from it if one was not supplied, and re-applies. It also **refuses** to reassign an identity that
+has already been issued, since that would move the item's ledger key out from under contributions
+it has already applied.
+
+Deriving the seed there closes a related trap: `Initialize` derives a generated item's seed from
+its id, so a looted weapon with no id rolled its attributes from seed 0 and the reload after
+logout re-derived a real seed and rolled a *different* set.
 
 #### ItemStackable
 
@@ -248,7 +274,10 @@ The `ItemGenerator` uses deterministic seed-based generation:
 3. **Random attributes**: Up to `MaxItemAttributes` drawn from `RandomAttributeDatabases`, each with randomized values.
 4. **Additional attributes**: `BaseItemTemplate.Attributes` list merged/summed into generated attributes.
 
-`SetAttribute(name, newValue)` updates a generated attribute and, if the item is equipped, immediately adjusts the character's attribute modifiers (removes old value, applies new value).
+`SetAttribute(name, newValue)` updates a generated attribute and, if the item is equipped,
+restates its whole ledger contribution under `ModifierSource.Item(item.ID, attributeTemplateID)`.
+It states rather than adjusting: an "add the difference" form is only correct while the old value
+is exactly what had been added, and nothing enforced that.
 
 ### Events
 
@@ -277,10 +306,24 @@ The `ItemGenerator` uses deterministic seed-based generation:
 
 The `EquipmentController` implements `ReadPayload` / `WritePayload` for initial character synchronization:
 
-| Direction | Data per item |
-|-----------|---------------|
-| Write | `ID, TemplateID, Slot, Seed, StackSize` |
-| Read | Creates `Item`, calls `SetItemSlot`, calls `Equippable.Equip(Character)` |
+The payload has **two shapes**, chosen per connection by `PayloadVisibility.IsOwner`, and the
+block is framed by a 4-byte length prefix so a defensive abort cannot misalign the behaviours read
+after it.
+
+| Shape | Data per item | On read |
+|-------|---------------|---------|
+| **Owner** | `ID, TemplateID, Slot, Seed, StackSize` | Creates `Item`, `SetItemSlot`, then `Equippable.Equip(Character)` — which raises `OnEquip` and applies the item's attribute bonuses. |
+| **Observer** | `TemplateID, Slot, Seed` | Creates `Item`, `SetItemSlot`, then points the item at the character **silently** — no `OnEquip`, no attribute bonuses. |
+
+**The observer must not apply bonuses**, because the attribute payload it receives in the same
+spawn already carries the server's TOTAL `ExternalModifier`, which contains every equipped item.
+Applying them again would count each item twice. The observer's interest in an equip is the mesh.
+The same rule governs `ApplyObservedSlot`, which handles the equipment broadcast path, and
+`ResetState`, which detaches silently on a peer that never applied.
+
+A refused slot is skipped rather than equipped: the slot arrives off the wire, and an
+out-of-range one would otherwise apply the item's modifiers to the character while the item itself
+lived in no container, leaving nothing that could ever unequip it.
 
 #### Broadcast Types — Inventory
 
@@ -317,7 +360,7 @@ Swap broadcasts include an `InventoryType` field (`Inventory`, `Equipment`, `Ban
 
 | System | Integration |
 |--------|-------------|
-| **CharacterAttribute** | `ItemGenerator.ApplyAttributes` / `RemoveAttributes` calls `AddModifier()` on character attributes via `ExternalModifier` |
+| **CharacterAttribute** | `ItemGenerator.ApplyAttributes` states one ledger entry per item attribute under `ModifierSource.Item(item.ID, attributeTemplateID)`; `RemoveAttributes` releases the whole contributor with `ClearSourceGroup(Item, item.ID)` |
 | **Ability System** | `ScrollConsumableTemplate` teaches abilities via `IAbilityController.LearnBaseAbilities` |
 | **Cooldown System** | `ConsumableTemplate` adds cooldowns via `ICooldownController.AddCooldown` |
 | **Damage System** | `ItemContainer.CanManipulate()` checks `ICharacterDamageController.IsAlive` |
@@ -376,7 +419,7 @@ EquipmentController.Equip(item, inventoryIndex, sourceContainer, toSlot)
           └── Item.ItemEquippable_OnEquip(character)
               └── Generator.ApplyAttributes(character)
                   └── For each generated attribute:
-                      └── characterAttribute.AddModifier(value)
+                      └── characterAttribute.SetSource(ModifierSource.Item(item.ID, attrID), value)
 ```
 
 ### Unequipping an Item
@@ -390,7 +433,7 @@ EquipmentController.Unequip(targetContainer, slot, out modifiedItems)
   │       └── Item.ItemEquippable_OnUnequip(character)
   │           └── Generator.RemoveAttributes(character)
   │               └── For each generated attribute:
-  │                   └── characterAttribute.AddModifier(-value)
+  │                   └── characterAttribute.ClearSourceGroup(ModifierSourceKind.Item, item.ID)
   └── SetItemSlot(null, slot)
 ```
 

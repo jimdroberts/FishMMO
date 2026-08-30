@@ -42,8 +42,8 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **ECA-driven periodic effects** — `OnTickEvents` fires `BuffTickEvent` triggers each tick, so a DoT is an `ApplyDamageAction` and a HoT an `ApplyHealAction` — no bespoke template subclass
 - **DoTs behave like hits** — health ticks route through `CharacterDamageController.Damage` / `.Heal`, so they mitigate, generate threat, credit the caster and can kill
 - **Caster attribution** — the applying character is snapshotted on the `Buff` and used as the attacker for every subsequent tick
-- **Stacking** — Buffs support up to `MaxStacks` with symmetric modifier accounting
-- **Attribute modification** — `AttributeBuffTemplate` grants bonus attributes via `AddModifier()` on the `ExternalModifier` layer
+- **Stacking** — Buffs support up to `MaxStacks`. Each hook states the whole contribution for the resulting stack count rather than adding a delta, so apply and remove are exact inverses at every count by construction
+- **Attribute modification** — `AttributeBuffTemplate` states bonus attributes through the attributed ledger, under `ModifierSource.Buff(templateID, entryIndex)`
 - **FX instantiation** — Client-side visual effect prefabs attached to character mesh
 - **FishNet prediction support** — `BuffController` implements `IPredictableController` (Order=85) with Replicate/Reconcile via `BuffReconcileEntry[]`
 - **Permanent buffs** — `IsPermanent` flag keeps buffs from expiring and protects them from mass-removal operations
@@ -138,21 +138,34 @@ buffController.RemoveRandom(rng, includeBuffs: true, includeDebuffs: true);
 
 `AttributeBuffTemplate` is one of five concrete template types. It modifies character attributes and holds a `List<BuffAttributeTemplate> BonusAttributes` where each entry pairs a `CharacterAttributeTemplate Template` with an `int Value`.
 
-| Hook | Effect |
-|------|--------|
-| `OnApply` | For each entry in `BonusAttributes`: `characterAttribute.AddModifier(+Value)` |
-| `OnRemove` | For each entry in `BonusAttributes`: `characterAttribute.AddModifier(-Value)` |
-| `OnApplyStack` | Delegates to `OnApply` (adds another `+Value`) |
-| `OnRemoveStack` | Delegates to `OnRemove` (adds another `-Value`) |
-| `OnTick` | No-op for attribute buffs |
+Each hook **states the whole contribution** for the stack count that will be in effect once the
+hook returns, through `SetSource(ModifierSource.Buff(ID, entryIndex), Value * multiplier)`. It does
+not add a delta.
 
-All modifications go through `CharacterAttribute.AddModifier()`, which operates on the `ExternalModifier` layer. This ensures buff bonuses are never overwritten by the formula recalculation system (see CharacterAttribute README).
+| Hook | Multiplier written | Why that expression |
+|------|--------------------|---------------------|
+| `OnApply` | `1 + Stacks` | The base application. `Stacks` is 0 on a fresh buff. |
+| `OnApplyStack` | `2 + Stacks` | `Buff.AddStack` raises the hook **before** it increments `Stacks`, so the count that will be in effect is `Stacks + 1`, plus the base application. |
+| `OnRemoveStack` | `Stacks` | `Buff.RemoveStack` raises the hook **before** it decrements, so the count that will remain is `Stacks - 1`, plus the base application. |
+| `OnRemove` | — | `ClearSourceGroup(ModifierSourceKind.Buff, ID)` releases every entry this buff wrote, whatever index it used. |
+| `OnTick` | — | No-op for attribute buffs. |
+
+The off-by-one in `OnApplyStack` and `OnRemoveStack` is load-bearing and nothing in the type system
+holds it, so `AttributeStackLedgerTests` walks every stack count in both directions.
+
+The `entryIndex` is the entry's position in `BonusAttributes`. Two authored entries may name the
+same character attribute — a flat part and a scalar part — and a single key per buff would silently
+keep only the last of them.
+
+Stating rather than adding is what makes the model safe: a reconcile that restores a buff at a
+different stack count simply calls `AddStack`/`RemoveStack` until the counts match, and the final
+call is the only one whose value survives.
 
 #### All Template Types
 
 | Template | Description |
 |----------|-------------|
-| `AttributeBuffTemplate` | Grants flat attribute bonuses via `AddModifier()`. No tick effect. |
+| `AttributeBuffTemplate` | States flat attribute bonuses through the ledger. No tick effect. |
 | `AttributeTickBuffTemplate` | Grants attribute bonuses on apply, plus periodic attribute modification on each tick. |
 | `CompositeBuffTemplate` | Composes multiple `BaseBuffTemplate` references, delegating all hooks to each child template. |
 | `ResourceTickBuffTemplate` | Periodically ticks resource attributes (e.g., health/mana regen or drain over time). Health ticks route through the damage pipeline. |
@@ -226,7 +239,7 @@ All events are defined on `IBuffController`:
 The buff system is consumed by and interacts with:
 
 - **Ability System** — Abilities apply buffs/debuffs to targets via `BuffController.Apply(template, currentTick)` (prefer passing `TickEventData.Tick` from triggers or `ICharacter.LocalTick` as a fallback).
-- **CharacterAttribute System** — `AttributeBuffTemplate` modifies attributes via `AddModifier()` on the `ExternalModifier` layer.
+- **CharacterAttribute System** — `AttributeBuffTemplate` states attribute contributions through the attributed ledger (`SetSource` / `ClearSourceGroup`) on the `ExternalModifier` layer.
 - **CharacterDamageController** — `RemoveAll()` is called on kill to clear all non-permanent buffs.
 - **Item System** — Items may apply buffs on use or equip.
 - **Database Layer** — Buffs are persisted and restored via `CharacterBuffData` DTO and loaded through `ReadPayload` → `Apply(Buff buff)`.
@@ -315,11 +328,11 @@ A buff enters the system through one of two `Apply` overloads on `BuffController
 Apply(template, currentTick)
   ├── Buff already exists?
   │   └── No  → Create Buff(template.ID)
-  │            → buff.Apply(Character)           // Template.OnApply → AddModifier(+V) per attribute
+  │            → buff.Apply(Character)           // Template.OnApply → SetSource(1 x V) per attribute
   │            → Add to dictionary
   │            → Fire OnAddBuff / OnAddDebuff
   ├── Stacking allowed? (MaxStacks > 0 && Stacks < MaxStacks)
-  │   └── Yes → buff.AddStack(Character)         // Template.OnApplyStack → AddModifier(+V) again
+  │   └── Yes → buff.AddStack(Character)         // OnApplyStack → SetSource((2 + Stacks) x V)
   │            → ++Stacks
   │            → ResetDuration
   │   └── No  → ResetDuration only
@@ -332,7 +345,7 @@ Apply(template, currentTick)
 Apply(buff)
   ├── Already tracked? → skip
   └── Not tracked:
-      → buff.Apply(Character)                    // Base application: OnApply → AddModifier(+V)
+      → buff.Apply(Character)                    // Base application: OnApply → SetSource(1 x V)
       → Add to dictionary
       → Loop buff.Stacks times:
       │   → Template.OnApplyStack(buff, Character) // Re-apply each stack's modifiers
@@ -348,7 +361,7 @@ Apply(buff)
 foreach buff:
   if HasExpired(currentTick):
     if Stacks > 0:
-      RemoveStack(Character)                     // Template.OnRemoveStack → AddModifier(-V)
+      RemoveStack(Character)                     // OnRemoveStack → SetSource(Stacks x V)
       --Stacks
       ResetDuration(currentTick)                 // Continue with remaining stacks
     else:
@@ -366,7 +379,7 @@ Timing uses absolute network ticks (`ExpiryTick`, `NextTickTick`) for determinis
 
 ```
 Remove(buffID)
-  → buff.Remove(Character)                       // Template.OnRemove → AddModifier(-V) per attribute
+  → buff.Remove(Character)                       // OnRemove → ClearSourceGroup(Buff, ID)
   → Remove from dictionary
   → Fire OnRemoveBuff / OnRemoveDebuff
 ```
@@ -375,19 +388,22 @@ Remove(buffID)
 
 Each buff can have up to `Template.MaxStacks` stacks. The modifier accounting works as follows:
 
-| Action | Modifier Calls | Stacks After |
-|--------|---------------|-------------|
-| Initial apply | `OnApply` → `AddModifier(+V)` × 1 | 0 |
-| Add 1st stack | `OnApplyStack` → `AddModifier(+V)` × 1, then `++Stacks` | 1 |
-| Add 2nd stack | `OnApplyStack` → `AddModifier(+V)` × 1, then `++Stacks` | 2 |
-| Duration expires (Stacks=2) | `OnRemoveStack` → `AddModifier(-V)` × 1, then `--Stacks`, reset duration | 1 |
-| Duration expires (Stacks=1) | `OnRemoveStack` → `AddModifier(-V)` × 1, then `--Stacks`, reset duration | 0 |
-| Duration expires (Stacks=0) | `Remove` → `OnRemove` → `AddModifier(-V)` × 1 | removed |
+Each buff can have up to `Template.MaxStacks` stacks. The ledger entry is **restated** at every
+transition, so the contribution is always exactly `(1 + Stacks) * Value` — the base application
+plus one multiple per stack:
 
-**Total modifiers applied**: `1 (base) + N (stacks)` = `N + 1` calls to `AddModifier(+V)`.
-**Total modifiers removed**: `N (stack expirations) + 1 (final remove)` = `N + 1` calls to `AddModifier(-V)`.
+| Action | Ledger entry after | Stacks after |
+|--------|--------------------|--------------|
+| Initial apply | `1 × V` | 0 |
+| Add 1st stack | `2 × V` | 1 |
+| Add 2nd stack | `3 × V` | 2 |
+| Duration expires (Stacks=2) | `2 × V`, reset duration | 1 |
+| Duration expires (Stacks=1) | `1 × V`, reset duration | 0 |
+| Duration expires (Stacks=0) | entry released | removed |
 
-The system is balanced: every `+V` is paired with a `-V`.
+Because every write is absolute, the model is balanced by construction rather than by pairing: any
+sequence of stack changes that ends at count *N* leaves the same value as any other, and a
+mismatched pair cannot drift the sheet the way the previous additive `AddModifier(±V)` shape could.
 
 ### Prediction Pipeline
 
@@ -432,7 +448,7 @@ Buff/
     ├── Events/
     │   └── BuffTickEvent.cs           # ECA trigger fired on each tick (DoT / HoT and anything periodic)
     └── Types/
-        ├── AttributeBuffTemplate.cs       # Concrete template: grants bonus attributes via AddModifier()
+        ├── AttributeBuffTemplate.cs       # Concrete template: states bonus attributes via SetSource
         ├── AttributeTickBuffTemplate.cs   # Grants attributes on apply + periodic attribute modification on tick
         ├── CompositeBuffTemplate.cs       # Composes multiple BaseBuffTemplate children, delegating all hooks
         ├── ResourceTickBuffTemplate.cs    # Periodic resource attribute modification (regen/drain over time)
@@ -461,7 +477,7 @@ Buff                               # Standalone class (no inheritance)
 ```
 CachedScriptableObject<BaseBuffTemplate>
 └── BaseBuffTemplate                   # Abstract: Duration, TickRate, MaxStacks, IsPermanent, IsDebuff
-    ├── AttributeBuffTemplate          # Concrete: Applies BonusAttributes via AddModifier()
+    ├── AttributeBuffTemplate          # Concrete: states BonusAttributes via SetSource
     ├── AttributeTickBuffTemplate      # Concrete: Attributes on apply + periodic attribute ticks
     ├── CompositeBuffTemplate          # Concrete: Composes multiple child templates
     ├── ResourceTickBuffTemplate       # Concrete: Periodic resource modification (regen/drain)

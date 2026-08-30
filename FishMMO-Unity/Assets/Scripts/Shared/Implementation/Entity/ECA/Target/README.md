@@ -154,18 +154,64 @@ Every selector inherits these slots from the abstract base ([TargetSelector.cs](
 ```csharp
 public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 {
+    // 1. Server only. A physics query is not reproducible across peers.
+    if (!IsAuthoritativePeer(eventData)) yield break;
+
     GameObject context = GetContext(eventData);
     if (context == null) yield break;
 
-    // ... query (overlap, raycast, hierarchy, …) ...
+    // 2. Gather EAGERLY inside one rewind scope, then yield after it has closed.
+    List<GameObject> results = new List<GameObject>();
+    GatherRewound(eventData, context, results, Gather);
 
-    foreach (var candidate in candidates)
+    for (int i = 0; i < results.Count; ++i) yield return results[i];
+}
+
+private void Gather(EventData eventData, GameObject context, List<GameObject> results)
+{
+    Collider[] hits = new Collider[QueryBufferSize(MaxHits)];
+    List<GameObject> candidates = new List<GameObject>();
+    List<GameObject> keys = new List<GameObject>();   // one BODY key per candidate
+    List<TargetRank> ranks = new List<TargetRank>();
+
+    Vector3 center = context.transform.position;
+    PhysicsScene physicsScene = context.scene.GetPhysicsScene();
+
+    // 3. Re-query until the buffer stops coming back full.
+    int hitCount;
+    while (true)
     {
-        if (AreConditionsMet(candidate, eventData))
-            yield return candidate;
+        hitCount = physicsScene.OverlapSphere(center, Radius, hits, TargetLayer, QueryTriggerInteraction.UseGlobal);
+        if (!TargetOrdering.TryGrowQueryBuffer(ref hits, hitCount)) break;
     }
+
+    for (int i = 0; i < hitCount; i++)
+    {
+        Collider hit = hits[i];
+        if (hit == null || !AreConditionsMet(hit.gameObject, eventData)) continue;
+
+        candidates.Add(hit.gameObject);
+        keys.Add(TargetOrdering.ResolveHitKey(hit, out ICharacter _));
+        ranks.Add(TargetOrdering.Rank(candidates.Count - 1, hit.gameObject,
+                                      Vector3.Distance(center, hit.transform.position)));
+    }
+
+    // 4. rank -> dedupe -> cap, in that order and never another.
+    TargetOrdering.SortByDistance(ranks);
+    TargetOrdering.DedupeByBody(ranks, keys);
+    TargetOrdering.ApplyMaxHits(ranks, MaxHits);
+
+    for (int i = 0; i < ranks.Count; ++i) results.Add(candidates[ranks[i].Index]);
 }
 ```
+
+**Why the gather is a separate eager method.** Selectors are iterators, and the consumer between
+two `yield return`s is the damage/ECA pipeline. Running that while the world is displaced by a
+rewind would apply effects against a world hundreds of milliseconds stale, so everything is
+materialised first and the scope closes before anything downstream runs. `GatherRewound` also
+means one scope for the whole gather rather than one per query — the registry refuses nested
+rewinds, so a selector invoked from inside somebody else's scope runs against that outer rewind
+instead of corrupting it.
 
 ---
 
@@ -178,18 +224,18 @@ public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 | `EventTargetSelector` | `eventData.Target` as-is (optional `FallbackToInitiator`). Use for **OnHit / region / interaction** triggers where the caller already resolved the target. |
 
 ### Spatial (use `GetContext` as origin)
-| Selector | Shape | Yields |
-|---|---|---|
-| `AreaTargetSelector` | Sphere | All colliders within `Radius` |
-| `ConeTargetSelector` | Cone | Colliders within `Radius` and `Angle` of context's forward |
-| `LineTargetSelector` | Ray | RaycastAll hits along context's forward for `Length` |
-| `ChainTargetSelector` | Chained spheres | Up to `ChainLength` targets, each within `ChainRadius` of the previous |
+| Selector | Shape | Yields | What caps it |
+|---|---|---|---|
+| `AreaTargetSelector` | Sphere | Bodies within `Radius`, nearest first | `MaxHits`, applied after ranking and per-body dedupe |
+| `ConeTargetSelector` | Cone | Bodies within `Radius` and `Angle` of context's forward, nearest first | `MaxHits`, same order |
+| `LineTargetSelector` | Ray | Bodies along context's forward for `Length`, in ray order | `MaxHits` bodies, streamed as the ray is walked. **`MaxHits <= 0` means pierce everything.** |
+| `ChainTargetSelector` | Chained spheres | Up to `ChainLength` bodies, each the nearest unvisited one within `ChainRadius` of the previous | `ChainLength`. Its `MaxHits` field only sizes the per-jump buffer. |
 
 ### Distance-ranked
 | Selector | Yields |
 |---|---|
-| `NearestTargetSelector` | The single closest candidate within `Radius` (excluding the context itself) |
-| `FurthestTargetSelector` | The single furthest candidate within `Radius` |
+| `NearestTargetSelector` | The single closest candidate within `Radius` (excluding the context's own body). Its `MaxHits` field only sizes the buffer. |
+| `FurthestTargetSelector` | The single furthest candidate within `Radius` (same exclusion, same `MaxHits` caveat). |
 
 ### Random
 | Selector | Yields |
@@ -289,11 +335,42 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
 - **Ordering is part of determinism.** Any selector that caps, takes "the first", or rolls an index must
   impose a total order first — `TargetOrdering.SortByDistance` when the cap should mean "nearest",
   `SortStable` when it should mean "a stable set". Ties fall through to network ObjectId, then a hash of
-  the name, then a hash of the authored world position. Never break a tie on `GetInstanceID()`: it is a
-  per-process number and puts two same-named scene objects in a different order on each peer.
+  the name, then a hash of the authored world position, then buffer position. Never break a tie on
+  `GetInstanceID()`: it is a per-process number and puts two same-named scene objects in a different
+  order on each peer.
+
 - **Query wide, cap late.** Size the physics buffer with `TargetSelector.QueryBufferSize(MaxHits)`, never
   at `MaxHits` — a buffer the size of the cap lets the broadphase choose which candidates the sort ever
-  sees, in its own order.
+  sees, in its own order. Then **re-query while the buffer comes back full**
+  (`TargetOrdering.TryGrowQueryBuffer`): a non-allocating query returns at most `buffer.Length` results
+  and says nothing about how many it discarded. `TryGrowQueryBuffer` is grow-only — a
+  reallocate-on-mismatch would silently undo the previous cast's growth every time.
+
+- **The pipeline is fixed: query → grow while full → resolve hit root → rank → dedupe by body → cap.**
+  Each step is where it is for a reason:
+  - *Resolve* through `TargetOrdering.ResolveHitKey`, never a bare `GetComponent` on the collider. A
+    character is free to hang its hitbox off a child transform, and a bare lookup finds no `ICharacter`
+    there — such a character is invisible to the selector while remaining perfectly able to fight back.
+  - *Dedupe after the sort, before the cap.* The entry kept for a body is the first one met, which on a
+    distance-ordered list is that body's nearest collider. Deduping earlier keeps an arbitrary one;
+    capping earlier counts colliders instead of bodies, so a target rigged with two hitboxes eats two
+    slots of `MaxHits`.
+  - *Cap last.* Capping the raw overlap orders an arbitrary subset chosen by the broadphase.
+
+- **`MaxHits <= 0` means uncapped, everywhere.** `TargetOrdering.CappedCount` defines it and every
+  selector and action matches. A beam authored with `MaxHits = 0` pierces everything on the line.
+
+- **A capped selection must never be computed by a peer that cannot agree on the answer.** A
+  distance-ordered cap cannot be made peer-agreed by arithmetic, because peers hold different
+  positions — identity order is the only perfectly agreed key and it is gameplay nonsense. So every
+  capped selection must be either **(a)** server-only, or **(b)** run inside a rewind to the caster's
+  view, where both peers see the same world. Every selector here is (a) via `IsAuthoritativePeer`, and
+  additionally (b) via `GatherRewound`. A selector that is neither is a bug, and a different bug from
+  cap ordering.
+
+- **Rank inside the rewind scope.** `GatherRewound` holds one scope open across the query, the ranking
+  and the conditions. Measuring distances after the scope closes selects out of the caster's world and
+  then decides between the candidates using the server's — at 300 ms, a different answer.
 
 ---
 
@@ -303,9 +380,21 @@ The convention `eventData?.TargetCharacter ?? initiator` reads the base-class fi
 2. Inherit `TargetSelector`, mark `[Serializable]`.
 3. Implement `SelectTargets(EventData)` using the skeleton above.
 4. Surface tunable fields with `[Tooltip]` so they render usefully in the Inspector.
-5. Reuse a preallocated `Collider[] hits` buffer for physics queries (see `AreaTargetSelector`).
-6. If your selector references scene physics, query `context.scene.GetPhysicsScene()` rather than the global physics scene — this keeps multi-scene servers correct.
-7. For every yielded candidate, call `AreConditionsMet(candidate, eventData)` so designers' per-candidate condition filters work uniformly.
+5. Gate on `IsAuthoritativePeer(eventData)` first. A physics query is not reproducible across peers,
+   so it runs where hits are authoritative and nowhere else.
+6. Gather **eagerly** through `GatherRewound`, then yield from the materialised list. Never `yield`
+   while the world is displaced.
+7. Allocate the hit buffer **locally**, not as a shared field. A candidate's conditions can themselves
+   carry selectors and fire nested triggers, so a shared scratch buffer is one authored composition
+   away from being cleared out from under the gather that owns it.
+8. Size it with `QueryBufferSize(MaxHits)` and re-query through `TargetOrdering.TryGrowQueryBuffer`
+   until it stops coming back full.
+9. If your selector references scene physics, query `context.scene.GetPhysicsScene()` rather than the
+   global physics scene — this keeps multi-scene servers correct. (`Physics.OverlapSphere` searches the
+   default scene, which on a scene server holds none of these colliders.)
+10. For every yielded candidate, call `AreConditionsMet(candidate, eventData)` so designers'
+    per-candidate condition filters work uniformly.
+11. If you cap, follow the fixed pipeline in [7. Determinism notes](#7-determinism-notes) exactly.
 
 ---
 

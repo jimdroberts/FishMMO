@@ -292,6 +292,59 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Pulls the ability object out of whichever event shape an action was wired to.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The three ability event payloads carry the object on three different fields, and an
+		/// action that resolves hits is meaningful on all of them: <c>OnSpawn</c> for a blast that
+		/// goes off where it appears, <c>OnTick</c> for a lingering field, <c>OnHit</c> for a second
+		/// effect fired from wherever the first one landed.
+		/// </para>
+		/// <para>
+		/// <b>Shared because the actions disagreed.</b> <c>AbilityApplyHitscanAction</c> resolved all
+		/// three; <c>AbilityApplyAreaAction</c> tested only <see cref="AbilityCollisionEventData"/>
+		/// and so silently did nothing on <c>OnSpawn</c> or <c>OnTick</c> — which is exactly the
+		/// failure a previous fix to that action believed it had removed, having corrected the peer
+		/// gate while leaving the payload gate in place. One implementation is what stops the two
+		/// drifting apart again.
+		/// </para>
+		/// <para>
+		/// The collision payload is tried first: an action wired to <c>OnHit</c> is asking about the
+		/// object that produced THAT hit, and a fork or a chain can carry a spawn payload alongside
+		/// it describing a different object.
+		/// </para>
+		/// </remarks>
+		/// <param name="eventData">The event the action was invoked with. Null yields false.</param>
+		/// <param name="abilityObject">The resolved object, or null.</param>
+		/// <returns>True when an ability object was found on any of the three payloads.</returns>
+		public static bool TryResolveFrom(EventData eventData, out AbilityObject abilityObject)
+		{
+			abilityObject = null;
+			if (eventData == null)
+			{
+				return false;
+			}
+
+			if (eventData.TryGet(out AbilityCollisionEventData collision) && collision.AbilityObject != null)
+			{
+				abilityObject = collision.AbilityObject;
+				return true;
+			}
+			if (eventData.TryGet(out AbilitySpawnEventData spawn) && spawn.InitialAbilityObject != null)
+			{
+				abilityObject = spawn.InitialAbilityObject;
+				return true;
+			}
+			if (eventData.TryGet(out AbilityTickEventData tick) && tick.AbilityObject != null)
+			{
+				abilityObject = tick.AbilityObject;
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// How many distinct bodies this object has already hit. For diagnostics and tests.
 		/// </summary>
 		internal int HitTargetCount => hitTargets?.Count ?? 0;

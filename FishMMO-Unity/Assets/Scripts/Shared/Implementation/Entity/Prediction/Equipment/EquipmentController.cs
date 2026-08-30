@@ -850,7 +850,32 @@ namespace FishMMO.Shared
 
 				if (item.IsEquippable)
 				{
-					item.Equippable.Equip(Character);
+					/* The OWNER equips for real; everybody else is pointed at this character without
+					 * applying the item's bonuses.
+					 *
+					 * Equip raises OnEquip, which runs ItemGenerator.ApplyAttributes and writes the
+					 * item's ledger entries. On an observer that is a double-apply by construction:
+					 * the attribute payload this same spawn carries is the OBSERVER shape, whose
+					 * ExternalModifier is the server's TOTAL and already contains every equipped
+					 * item — see CharacterAttributeController.WritePayload. This is the identical
+					 * mistake ApplyObservedSlot was rewritten to remove for the broadcast path, and
+					 * the rule SimulatesEquipmentEffects states; the payload path was simply never
+					 * brought into line with it.
+					 *
+					 * It was inert rather than harmless: the observer shape omits the item id, so
+					 * ItemGenerator.TryResolveLedgerSource declined for a zero id and wrote nothing.
+					 * That is an accident of the wire format standing in for a rule, and it would
+					 * have become a live double-apply the moment the observer payload carried an id.
+					 * ResetState already assumes this path never applied — it detaches silently on a
+					 * peer that does not simulate equipment effects — so the two halves now agree. */
+					if (ownerShape)
+					{
+						item.Equippable.Equip(Character);
+					}
+					else
+					{
+						SetEquippedCharacterSilently(item);
+					}
 				}
 			}
 

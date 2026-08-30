@@ -346,8 +346,15 @@ namespace FishMMO.Shared
 				if (!candidate.TryGet(out IFactionController candidateFaction)) continue;
 				if (candidateFaction.GetAllianceLevel(ourFaction) != FactionAllianceLevel.Ally) continue;
 
+				/* Ties broken by network identity, not by whichever collider the broadphase listed
+				 * first. A group standing at full health is the COMMON case for a healer scan, not a
+				 * corner one, so a strict comparison alone made the choice depend on overlap order —
+				 * which is not reproducible between two runs of the same fight. Server-side, so this
+				 * buys reproducibility rather than cross-peer agreement, but a heal that lands on a
+				 * different ally each time a scenario is replayed is not debuggable. */
 				float healthPct = AITargetSelection.GetHealthPercent(candidate);
-				if (healthPct < bestHealthPct)
+				if (healthPct < bestHealthPct ||
+					(healthPct == bestHealthPct && IdentityKey(candidate) < IdentityKey(bestAlly)))
 				{
 					bestHealthPct = healthPct;
 					bestAlly = candidate;
@@ -355,6 +362,16 @@ namespace FishMMO.Shared
 			}
 
 			return bestAlly;
+		}
+
+		/// <summary>
+		/// A candidate's cross-run stable sort key: its <c>NetworkObject.ObjectId</c>, or
+		/// <see cref="int.MaxValue"/> for anything unspawned or absent so it never wins a tie.
+		/// </summary>
+		private static int IdentityKey(ICharacter candidate)
+		{
+			FishNet.Object.NetworkObject networkObject = candidate?.NetworkObject;
+			return networkObject != null ? networkObject.ObjectId : int.MaxValue;
 		}
 
 		/// <summary>
