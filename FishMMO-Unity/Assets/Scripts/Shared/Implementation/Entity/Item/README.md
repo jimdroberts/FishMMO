@@ -12,6 +12,7 @@
 - [Quick Start Guide](#quick-start-guide)
 - [Configuration](#configuration)
 - [Usage Examples](#usage-examples)
+  - [Persistence shape](#persistence-shape)
   - [Item identity and the zero-id rule](#item-identity-and-the-zero-id-rule)
 - [Operational Checks](#operational-checks)
 - [Flow Diagrams](#flow-diagrams)
@@ -191,6 +192,23 @@ Deriving the seed there closes a related trap: `Initialize` derives a generated 
 its id, so a looted weapon with no id rolled its attributes from seed 0 and the reload after
 logout re-derived a real seed and rolled a *different* set.
 
+#### Persistence shape
+
+Every item a character owns — inventory, equipment and bank alike — is **one row in
+`character_item`, keyed by the item's own `ID`**. `ItemContainerType` (`Inventory` / `Equipment` /
+`Bank`) and `Slot` are ordinary columns on that row.
+
+This replaced three slot-keyed tables and their three services (`ICharacterInventoryService`,
+`ICharacterEquipmentService`, `ICharacterBankService`) with one table and `ICharacterItemService`.
+The old shape gave an item no identity of its own: a row was addressed by *(character, container,
+slot)*, so moving an item destroyed one row and created another, and nothing durable could be keyed
+by the item itself. That is exactly what `Item.ID` and the attribute ledger's
+`ModifierSource.Item(item.ID, …)` need, and it is why an item's identity now survives a move between
+slots, a move between containers, and a relog.
+
+It also makes a cross-container move — dragging from the bank into the inventory — an `UPDATE` of
+two columns rather than a delete and an insert across two different tables.
+
 #### ItemStackable
 
 | Field | Type | Description |
@@ -367,7 +385,7 @@ Swap broadcasts include an `InventoryType` field (`Inventory`, `Equipment`, `Ban
 | **Achievement System** | Item rewards delivered via `InventoryController.TryAddItem` |
 | **Quest System** | Checks item prerequisites via `ContainsItem` / `GetItemCount` |
 | **Trade / Merchant** | Uses `Price` field and container add/remove operations |
-| **Database Layer** | Persists/loads via item DTOs and services (`ICharacterInventoryService`, `ICharacterEquipmentService`, `ICharacterBankService`) |
+| **Database Layer** | Persists/loads through `ICharacterItemService` and `CharacterItemData` — **one `character_item` row per item**, keyed by the item's own id, with `ItemContainerType` and `Slot` as ordinary columns. See [Persistence shape](#persistence-shape). |
 | **UI** | Inventory, equipment, and bank panels subscribe to `OnSlotUpdated` events |
 
 ## Operational Checks

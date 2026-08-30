@@ -48,7 +48,7 @@ assertion is the right tool, and should say why it is one.
 
 ## Table of Contents
 
-- [Description](#fishmmo-auth-unit-tests)
+- [Description](#fishmmo-unit-tests)
 - [Supported Platforms](#supported-platforms)
 - [Architecture](#architecture)
 - [Key Components](#key-components)

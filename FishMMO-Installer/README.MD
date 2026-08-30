@@ -450,7 +450,6 @@ Database operations require `appsettings.json` in the working directory. Non-sen
   }
 }
 ```
-```
 
 ### Npgsql connection string format (for web servers, Discord bot, CMS)
 

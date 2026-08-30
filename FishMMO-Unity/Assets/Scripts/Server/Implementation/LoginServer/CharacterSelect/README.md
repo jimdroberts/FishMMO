@@ -85,7 +85,7 @@ All request flows guarantee a response to the client, even on failure, to preven
   - `ICharacterService`
   - `IWorldServerService`
   - `IUnitOfWorkService`
-  - `ICharacterAbilityService`, `ICharacterAchievementService`, `ICharacterAttributeService`, `ICharacterBankService`, `ICharacterBuffService`, `ICharacterEquipmentService`, `ICharacterFactionService`, `ICharacterFriendService`, `ICharacterHotkeyService`, `ICharacterInventoryService`, `ICharacterKnownAbilityService`, `ICharacterPetService`
+  - `ICharacterAbilityService`, `ICharacterAchievementService`, `ICharacterAttributeService`, `ICharacterItemService`, `ICharacterBuffService`, `ICharacterItemService`, `ICharacterFactionService`, `ICharacterFriendService`, `ICharacterHotkeyService`, `ICharacterItemService`, `ICharacterKnownAbilityService`, `ICharacterPetService`
 - `AccountManager` for connection-to-account mapping
 - `AsyncWorkerData` runtime data container for background task dispatch
 - `DataContainerRegistry` with required containers registered

@@ -30,8 +30,8 @@ The Target Selector system is the **targeting layer** of FishMMO's ECA (Event-Co
 | Headless Linux Server | Supported | Selectors run on the SceneServer for authoritative target resolution. |
 | Android / iOS / WebGL | Supported | As above: only the five peer-agnostic selectors evaluate on a client. |
 
-**Authority.** Nine of the fifteen selectors — every one that runs a physics query, plus `AllCharacters`
-and `TargetedEntity` — open with `IsAuthoritativePeer` (`EcaAuthority.IsServer`) and `yield break` on a
+**Authority.** Nine of the fourteen selectors — every one that runs a physics query, plus
+`AllCharactersTargetSelector` and `TargetedEntitySelector` — open with `IsAuthoritativePeer` (`EcaAuthority.IsServer`) and `yield break` on a
 client. They exist to resolve hits authoritatively, and a client asking the same question against
 interpolated peer positions would answer differently. The five that DO run on both peers are
 `Initiator`, `Event`, `Children`, `NamedSceneObject` and `TaggedSceneObject`; only those need to agree

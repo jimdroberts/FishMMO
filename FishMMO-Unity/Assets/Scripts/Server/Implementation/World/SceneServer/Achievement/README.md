@@ -59,7 +59,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 1. Ensure `AchievementSystem` is present on the scene server GameObject (it inherits from `ServerBehaviour` and implements `IAchievementSystem`).
 2. Verify that `IAchievementController` is registered and firing `OnUpdateAchievement` and `OnCompleteAchievement` events.
-3. Confirm that the required persistence services (`ICharacterKnownAbilityService`, `ICharacterInventoryService`, `ICharacterBankService`) are registered in the DB registry for reward persistence.
+3. Confirm that the required persistence services (`ICharacterKnownAbilityService`, `ICharacterItemService`) are registered in the DB registry for reward persistence.
 4. Confirm that `IAsyncWorkerData` is available for non-blocking DB write queuing.
 5. On initialize, `AchievementSystem` automatically subscribes to the controller events; on deinitialize, it unsubscribes.
 
@@ -72,8 +72,7 @@ The following optional persistence services are resolved from the DB registry at
 | Service | Purpose |
 |---|---|
 | `ICharacterKnownAbilityService` | Persists newly learned abilities and ability events |
-| `ICharacterInventoryService` | Persists inventory item slot changes from rewards |
-| `ICharacterBankService` | Persists bank item slot changes from rewards |
+| `ICharacterItemService` | Persists inventory item slot changes from rewards |
 
 ### Threading Model
 
@@ -189,8 +188,7 @@ IAchievementController_HandleAchievementRewards(...)
 ├─ 1. Validate character/template/tier
 ├─ 2. Resolve optional persistence services from DB registry
 │      ├── ICharacterKnownAbilityService
-│      ├── ICharacterInventoryService
-│      └── ICharacterBankService
+│      └── ICharacterItemService
 │
 ├─ 3. Apply reward groups
 │      ├── Ability rewards (HandleAbilityGenericRewards<BaseAbilityTemplate>)

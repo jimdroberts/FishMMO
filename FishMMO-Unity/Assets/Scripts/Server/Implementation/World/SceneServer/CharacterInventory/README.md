@@ -71,7 +71,7 @@ A per-connection ingress guard provides debounce, global rate limiting, and in-f
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `ICharacterInventorySystem`, `ICharacterInventorySystemRuntimeData`, `IngressGuard`, `AsyncWorkerData`, broadcast types, and container interfaces
 - **FishMMO Shared** — provides `IPlayerCharacter`, `IInventoryController`, `IEquipmentController`, `IBankController`, `ICharacterAttributeController`, `IItemContainer`, `Item`, `ItemSlot`, `InventoryType`, `ISceneObject`, `IInteractable`, `Banker`
-- **FishMMO Database** — provides `ICharacterInventoryService`, `ICharacterBankService`, `ICharacterEquipmentService`, `ICharacterAttributeService`, and DTO types (`CharacterInventoryData`, `CharacterBankData`, `CharacterEquipmentData`, `CharacterAttributeData`)
+- **FishMMO Database** — provides `ICharacterItemService`, `ICharacterAttributeService`, and DTO types (`CharacterItemData`, `CharacterAttributeData`)
 
 ## Installation / Build
 
@@ -85,9 +85,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `CharacterInventorySystemRuntimeData` → `ICharacterInventorySystemRuntimeData`
    - `AsyncWorkerData` (shared async work queue)
 4. Verify the following database services are registered in `Server.Database.ServiceRegistry`:
-   - `ICharacterInventoryService`
-   - `ICharacterBankService`
-   - `ICharacterEquipmentService`
+   - `ICharacterItemService`
    - `ICharacterAttributeService`
 5. On initialize, `CharacterInventorySystem` validates all dependencies and registers broadcast handlers for inventory, equipment, and bank operations.
 6. On deinitialize, it unregisters all broadcast handlers and clears the ingress guard.
@@ -260,7 +258,7 @@ On initialization, inspector values are clamped to safe minimums:
 |---|---|
 | Initialization success | Confirm `CharacterInventorySystem` logs "Initialized" without errors on server startup |
 | Data containers available | Verify `ICharacterInventorySystemRuntimeData` and `AsyncWorkerData` resolve from `DataContainerRegistry` |
-| Database services available | Verify `ICharacterInventoryService`, `ICharacterBankService`, `ICharacterEquipmentService`, and `ICharacterAttributeService` resolve from `Server.Database.ServiceRegistry` |
+| Database services available | Verify `ICharacterItemService`, and `ICharacterAttributeService` resolve from `Server.Database.ServiceRegistry` |
 | Inventory remove | Remove an inventory item; confirm client receives `InventoryRemoveItemBroadcast` back and slot is deleted from database |
 | Inventory swap (same container) | Swap two inventory slots; confirm client receives `InventorySwapItemSlotsBroadcast` back and both slots are persisted |
 | Bank → inventory swap | Swap a bank item to inventory while near a banker; confirm both containers updated and persisted |
@@ -497,18 +495,18 @@ RuntimeDataContainer
 ### DTO Types Used
 
 ```
-CharacterInventoryData   ← inventory item persistence
-CharacterBankData        ← bank item persistence
-CharacterEquipmentData   ← equipment item persistence
+CharacterItemData   ← inventory item persistence
+CharacterItemData        ← bank item persistence
+CharacterItemData   ← equipment item persistence
 CharacterAttributeData   ← character attribute persistence
 ```
 
 ### Database Services
 
 ```
-ICharacterInventoryService   ← PersistAsync / DeleteAsync for inventory slots
-ICharacterBankService        ← PersistAsync / DeleteAsync for bank slots
-ICharacterEquipmentService   ← PersistAsync / DeleteAsync for equipment slots
+ICharacterItemService   ← PersistAsync / DeleteAsync for inventory slots
+ICharacterItemService        ← PersistAsync / DeleteAsync for bank slots
+ICharacterItemService   ← PersistAsync / DeleteAsync for equipment slots
 ICharacterAttributeService   ← PersistAsync for character attributes
 ```
 

@@ -246,11 +246,11 @@ public class FriendSystem : ServerBehaviour { }
 
 ```csharp
 [RequiresDataContainer(typeof(CharacterMappingData), InitializationPriority = 0)]
-[RequiresDataContainer(typeof(CharacterInventoryData), InitializationPriority = 10)]
+[RequiresDataContainer(typeof(CharacterItemData), InitializationPriority = 10)]
 public class CharacterInventorySystem : ServerBehaviour { }
 
 // CharacterMappingData initialized first (priority 0)
-// CharacterInventoryData initialized second (priority 10)
+// CharacterItemData initialized second (priority 10)
 ```
 
 ### Monitoring Async Worker Health

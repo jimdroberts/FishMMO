@@ -11,7 +11,6 @@ A set of three transport-agnostic .NET authentication libraries (AuthShared, Cli
 - [Installation / Build](#installation--build)
 - [Quick Start Guides](#quick-start-guides)
 - [Configuration](#configuration)
-- [Usage Examples](#usage-examples)
 - [Operational Checks](#operational-checks)
 - [Flow Diagram](#flow-diagram)
 - [Project Structure](#project-structure)

@@ -197,7 +197,7 @@ When a tier is completed, `AchievementSystem.IAchievementController_HandleAchiev
 |-------------|---------|-------------|
 | `AbilityRewards` | `HandleAbilityRewards` — Learns ability, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
 | `AbilityEventRewards` | `HandleAbilityEventRewards` — Learns ability event, broadcasts to client | Fire-and-forget async via `ICharacterKnownAbilityService` |
-| `ItemRewards` | `HandleItemRewards` — Adds to inventory (preferred) or bank (fallback), broadcasts to client | Fire-and-forget async via `ICharacterInventoryService` or `ICharacterBankService` |
+| `ItemRewards` | `HandleItemRewards` — Adds to inventory (preferred) or bank (fallback), broadcasts to client | Fire-and-forget async via `ICharacterItemService` or `ICharacterItemService` |
 | `BuffRewards` | Not yet implemented | — |
 | `TitleRewards` | Not yet implemented | — |
 
@@ -210,7 +210,7 @@ Item rewards attempt inventory first. If the inventory lacks sufficient free slo
 - **Item System** — Achievement rewards can grant items to inventory or bank.
 - **Buff System** — Achievement tiers can define buff rewards (not yet handled server-side).
 - **Title System** — Achievement tiers can define title rewards (not yet handled server-side).
-- **Database Layer** — Achievements are persisted and restored via `CharacterAchievementData` DTO. Reward persistence (abilities, items) uses fire-and-forget async via `ICharacterKnownAbilityService`, `ICharacterInventoryService`, and `ICharacterBankService`.
+- **Database Layer** — Achievements are persisted and restored via `CharacterAchievementData` DTO. Reward persistence (abilities, items) uses fire-and-forget async via `ICharacterKnownAbilityService`, `ICharacterItemService`.
 - **UI** — `UITKAchievements` panel subscribes to `OnUpdateAchievement` for real-time progress display.
 - **Client** — `Client.cs` subscribes to `OnCompleteAchievement` for client-side completion effects (messages, sounds).
 

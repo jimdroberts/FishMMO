@@ -6,7 +6,7 @@ This document describes the project layout, the supported platforms, and — at 
 
 ## Table of Contents
 
-- [Description](#description)
+- [Description](#fishmmo-db)
 - [Supported Platforms](#supported-platforms)
 - [Architecture](#architecture)
 - [Key Components](#key-components)

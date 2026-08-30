@@ -70,8 +70,7 @@ All Unity object access (templates, prefabs, `SpawnablePrefabs`) occurs on the m
   - `ICharacterService`
   - `ICharacterFactionService`
   - `ICharacterAbilityService`
-  - `ICharacterInventoryService`
-  - `ICharacterEquipmentService`
+  - `ICharacterItemService`
   - `ICharacterAttributeService`
   - `IUnitOfWorkService`
 - Configured `WorldSceneDetailsCache` asset with scene spawn positions and allowed races
