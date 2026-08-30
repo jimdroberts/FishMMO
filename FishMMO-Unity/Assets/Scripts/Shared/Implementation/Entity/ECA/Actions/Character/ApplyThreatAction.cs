@@ -75,14 +75,18 @@ namespace FishMMO.Shared
 		/// It grows because a saturated overlap buffer is silently truncated by the broadphase, in
 		/// its own order. At a fixed 32 that meant a pull larger than 32 NPCs gave threat to an
 		/// arbitrary subset of them and the rest never noticed the cast — the failure being invisible
-		/// and load-dependent, which is the worst combination for a threat mechanic. Doubling on
-		/// saturation is the same treatment <c>AbilityObjectSweep</c> gives its own buffer.
+		/// and load-dependent, which is the worst combination for a threat mechanic.
+		/// </para>
+		/// <para>
+		/// <b>Grown through <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/>, not by hand.</b> The
+		/// loop was duplicated here with a local ceiling of 512, against
+		/// <see cref="TargetOrdering.MaximumQueryBufferSize"/> of 256 — so this was the one query in
+		/// the project that truncated somewhere else, and it did so SILENTLY: the shared helper's
+		/// once-per-session saturation warning is the only thing that reports the case no ordering
+		/// downstream can repair, and a hand-rolled loop never reaches it.
 		/// </para>
 		/// </remarks>
-		private static Collider[] hits = new Collider[32];
-
-		/// <summary>Upper bound on the overlap buffer, so a pathological scene cannot grow it without limit.</summary>
-		private const int MaximumBufferSize = 512;
+		private static Collider[] hits = new Collider[TargetOrdering.QueryBufferSize(0)];
 
 		/// <summary>
 		/// Bodies already granted threat this sweep, so a multi-collider NPC is credited once.
@@ -143,11 +147,10 @@ namespace FishMMO.Shared
 					NPCLayers,
 					QueryTriggerInteraction.Ignore);
 
-				if (count < hits.Length || hits.Length >= MaximumBufferSize)
+				if (!TargetOrdering.TryGrowQueryBuffer(ref hits, count))
 				{
 					break;
 				}
-				hits = new Collider[hits.Length * 2];
 			}
 
 			/* Keyed per BODY, through the same resolver every other hit-resolving path uses.

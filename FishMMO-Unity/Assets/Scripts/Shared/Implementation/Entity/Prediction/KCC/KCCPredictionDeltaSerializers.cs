@@ -477,7 +477,8 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Custom delta serializers for <see cref="KinematicCharacterMotorState"/>.
 	/// <para>
-	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (14 bits for 14 fields)
+	/// <b>Delta serializer</b>: Writes a 2-byte bitmask over 14 bit positions carrying 13 fields
+	/// (bit 4 is a retired gap — see the constants below)
 	/// followed by delta-encoded values for only the changed fields.
 	/// On a typical grounded walking tick, only Position, Rotation, BaseVelocity, and
 	/// GroundingStatus change. On an idle tick where the character stands still this writer declines
@@ -585,7 +586,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="KinematicCharacterMotorState"/>.
-		/// Writes a 2-byte bitmask indicating which of the 14 fields changed,
+		/// Writes a 2-byte bitmask indicating which of the 13 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <param name="writer">Writer to serialize to.</param>

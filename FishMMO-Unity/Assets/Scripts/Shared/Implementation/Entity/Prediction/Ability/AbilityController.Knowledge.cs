@@ -321,6 +321,15 @@ namespace FishMMO.Shared
 			}
 
 			KnownAbilities[abilityID] = new Ability(abilityID, template, abilityEvents);
+			/* The reverse index too, exactly as LearnAbility maintains it.
+			 *
+			 * It was left out on the reasoning that KnowsLearnedAbility only ever gates the local
+			 * player, which never reaches this method. But the index is not only read — RemoveAbility
+			 * WRITES to it, keyed by template, and an ability that is in KnownAbilities without a
+			 * matching entry made those two structures disagree about what a template names. See
+			 * RemoveAbility for the removal that used to take the wrong entry out. */
+			templateToAbilityID ??= new Dictionary<int, long>();
+			templateToAbilityID[template.ID] = abilityID;
 			longestKnownAbilityRangeDirty = true;
 		}
 
@@ -348,10 +357,19 @@ namespace FishMMO.Shared
 		/// <param name="referenceID">The ability reference ID to remove.</param>
 		public void RemoveAbility(long referenceID)
 		{
-			// Update reverse index before removing.
+			/* Update the reverse index before removing — but only when the entry it holds for this
+			 * template actually names the ability being removed.
+			 *
+			 * The index maps ONE template to ONE ability id, and the last writer wins, so two
+			 * abilities built from the same template leave the index naming only the later of them.
+			 * Removing the earlier one then deleted the mapping for an ability that is still known,
+			 * and KnowsLearnedAbility reported false for something the character still has. Testing
+			 * the mapped id first makes the removal precise. */
 			if (KnownAbilities.TryGetValue(referenceID, out Ability removedAbility) &&
 				removedAbility.Template != null &&
-				templateToAbilityID != null)
+				templateToAbilityID != null &&
+				templateToAbilityID.TryGetValue(removedAbility.Template.ID, out long mappedAbilityID) &&
+				mappedAbilityID == referenceID)
 			{
 				templateToAbilityID.Remove(removedAbility.Template.ID);
 			}

@@ -931,33 +931,14 @@ namespace FishMMO.Shared
 
 		// ── Observer broadcast ──────────────────────────────────────────
 
-		/// <summary>Scratch recipient set; <c>BroadcastExcept</c> mutates the set it is given.</summary>
-		private static readonly HashSet<NetworkConnection> observerRecipients = new HashSet<NetworkConnection>();
-
-		/// <summary>
-		/// Copies <paramref name="observers"/> into <paramref name="into"/> without <paramref name="owner"/>.
-		/// </summary>
-		/// <remarks>
-		/// <c>ServerManager.BroadcastExcept(HashSet, NetworkConnection, ...)</c> removes the
-		/// exclusion from the set it is handed. Handing it <c>NetworkObject.Observers</c> directly
-		/// would silently drop the owner from the character's observer list.
-		/// </remarks>
-		internal static void CollectObserverRecipients(IEnumerable<NetworkConnection> observers, NetworkConnection owner, HashSet<NetworkConnection> into)
-		{
-			into.Clear();
-			if (observers == null)
-			{
-				return;
-			}
-			foreach (NetworkConnection conn in observers)
-			{
-				if (conn == null || ReferenceEquals(conn, owner))
-				{
-					continue;
-				}
-				into.Add(conn);
-			}
-		}
+		/* The private observerRecipients set and CollectObserverRecipients were REMOVED, not left
+		 * unused. They were a line-for-line copy of ObserverBroadcastScope, which is the one place
+		 * that knows why the copy is mandatory — ServerManager.BroadcastExcept calls Remove on the
+		 * set it is handed, so passing NetworkObject.Observers to it permanently drops the owner
+		 * from that object's observer set rather than excluding it for one message. A second
+		 * implementation of a rule that subtle is how the next one gets it wrong; the copy here
+		 * also never cleared its static set after a send, so it retained a NetworkConnection
+		 * reference per observer between equipment pushes. */
 
 		/// <summary>
 		/// Tells this character's observers (never its owner) what a slot now holds.
@@ -999,12 +980,7 @@ namespace FishMMO.Shared
 				msg.Seed = item.IsGenerated ? item.Generator.Seed : 0;
 			}
 
-			CollectObserverRecipients(nob.Observers, nob.Owner, observerRecipients);
-			if (observerRecipients.Count == 0)
-			{
-				return;
-			}
-			nob.NetworkManager.ServerManager.Broadcast(observerRecipients, msg, true, Channel.Reliable);
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(nob, msg, Channel.Reliable);
 		}
 
 		/// <summary>True once this client has registered the shared observer handler.</summary>

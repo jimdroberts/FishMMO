@@ -178,31 +178,73 @@ namespace FishMMO.Shared
 		/// Low health and low mana targets get a multiplier so the AI finishes weak enemies
 		/// and pressures casters running out of resources.
 		/// </summary>
+		/// <remarks>
+		/// <b>This, not <see cref="GetPoints"/>, is what decides who an NPC attacks</b> — see
+		/// <see cref="PickTarget"/>. Anything that means to move a character up or down the target
+		/// order has to reason in this space; <c>ApplyTauntAction</c> compared raw points and its
+		/// "guarantee" was therefore not one.
+		/// </remarks>
 		public float GetThreatScore(long characterId, ICharacter character)
 		{
 			float points = GetPoints(characterId);
 			if (points <= 0f || character == null) return points;
 
-			// Apply vulnerability multipliers.
-			if (character.TryGet(out ICharacterAttributeController attrs))
-			{
-				if (attrs.TryGetHealthAttribute(out CharacterResourceAttribute health) && health.FinalValue > 0)
-				{
-					float healthPct = health.CurrentValue / health.FinalValue;
-					if (healthPct < LowHealthThreshold)
-						points *= LowHealthThreatMultiplier;
-				}
+			return points * VulnerabilityMultiplier(character);
+		}
 
-				if (attrs.TryGetManaAttribute(out CharacterResourceAttribute mana) && mana.FinalValue > 0)
-				{
-					float manaPct = mana.CurrentValue / mana.FinalValue;
-					if (manaPct < LowResourceThreshold)
-						points *= LowResourceThreatMultiplier;
-				}
+		/// <summary>
+		/// The vulnerability scaling <see cref="GetThreatScore"/> applies to a character's raw points.
+		/// </summary>
+		/// <remarks>
+		/// Split out of <see cref="GetThreatScore"/> so a caller that needs to work backwards from a
+		/// desired SCORE to the raw points that produce it uses the same rule the forward direction
+		/// does, rather than a second copy of it that can drift.
+		/// </remarks>
+		/// <param name="character">The character to weigh. Null scores no scaling.</param>
+		/// <returns>The multiplier, never less than the neutral 1.</returns>
+		public float VulnerabilityMultiplier(ICharacter character)
+		{
+			float multiplier = 1f;
+			if (character == null || !character.TryGet(out ICharacterAttributeController attrs))
+			{
+				return multiplier;
 			}
 
-			return points;
+			if (attrs.TryGetHealthAttribute(out CharacterResourceAttribute health) && health.FinalValue > 0)
+			{
+				float healthPct = health.CurrentValue / health.FinalValue;
+				if (healthPct < LowHealthThreshold)
+					multiplier *= LowHealthThreatMultiplier;
+			}
+
+			if (attrs.TryGetManaAttribute(out CharacterResourceAttribute mana) && mana.FinalValue > 0)
+			{
+				float manaPct = mana.CurrentValue / mana.FinalValue;
+				if (manaPct < LowResourceThreshold)
+					multiplier *= LowResourceThreatMultiplier;
+			}
+
+			return multiplier;
 		}
+
+		/// <summary>
+		/// The largest <see cref="VulnerabilityMultiplier"/> any character could currently receive.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The bound a taunt needs. The table stores raw points and holds no character references,
+		/// so it cannot compute another entry's SCORE — but score is bounded above by
+		/// <c>raw * this</c> for every entry, so beating <c>highestRaw * this</c> beats every actual
+		/// score whichever entry happens to carry it. Both multipliers can apply at once (a caster
+		/// that is both wounded and out of mana), so they compound here exactly as they do there.
+		/// </para>
+		/// <para>
+		/// Floored at the neutral 1 per factor, so a multiplier a designer tuned BELOW one cannot
+		/// turn this bound into an under-estimate.
+		/// </para>
+		/// </remarks>
+		public float MaximumVulnerabilityMultiplier =>
+			Mathf.Max(1f, LowHealthThreatMultiplier) * Mathf.Max(1f, LowResourceThreatMultiplier);
 
 		/// <summary>
 		/// Decays all entries and removes stale ones.

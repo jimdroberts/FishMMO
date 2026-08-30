@@ -257,7 +257,15 @@ namespace FishMMO.Shared
 		/// air, and the peer that may resolve its remaining hits changes with it.
 		/// </para>
 		/// </remarks>
-		private bool ResolvesHitsLocally
+		/// <remarks>
+		/// <para>
+		/// Internal rather than private so <c>AbilityHitCountAction</c> can ask the same question
+		/// before it MOVES the count. A peer that does not resolve hits never spends the count
+		/// either (see <see cref="ApplyHit"/>), so an action that added to it on every peer walked
+		/// an observer's copy away from the authoritative number.
+		/// </para>
+		/// </remarks>
+		internal bool ResolvesHitsLocally
 		{
 			get
 			{

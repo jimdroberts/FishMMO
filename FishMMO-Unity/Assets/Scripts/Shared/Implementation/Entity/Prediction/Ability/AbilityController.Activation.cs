@@ -1558,15 +1558,73 @@ namespace FishMMO.Shared
 		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
 		internal void Interrupt(bool isServerStarted, bool hasInputAuthority)
 		{
-			localInputFlags.EnableBit(AbilityActivationFlags.Interrupt);
-
-			if (!ServerCancelsDirectly(isServerStarted, hasInputAuthority))
+			switch (ResolveInterruptDisposition(isServerStarted, hasInputAuthority))
 			{
-				return;
+				case InterruptDisposition.Applied:
+					OnInterrupt?.Invoke();
+					Cancel(ReplicateState.Invalid, suppressCancelEvent: true);
+					return;
+
+				case InterruptDisposition.Queued:
+					localInputFlags.EnableBit(AbilityActivationFlags.Interrupt);
+					return;
+
+				default:
+					return;
+			}
+		}
+
+		/// <summary>What an <see cref="Interrupt(ICharacter)"/> does on one peer.</summary>
+		internal enum InterruptDisposition : byte
+		{
+			/// <summary>This peer neither writes the input nor owns the decision. Nothing happens.</summary>
+			Ignored = 0,
+
+			/// <summary>Raised as a one-shot input flag, read out of the replicate on the next tick.</summary>
+			Queued = 1,
+
+			/// <summary>Cancelled here and now, because no input stream will carry it.</summary>
+			Applied = 2,
+		}
+
+		/// <summary>
+		/// The whole rule <see cref="Interrupt(ICharacter)"/> turns on, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The Interrupt bit is a ONE-SHOT flag, and only one peer drains it.</b>
+		/// <c>HandleCharacterInput</c> copies <c>localInputFlags</c> into the replicate and clears
+		/// the bit in the same breath — but it returns early for a peer with no input authority,
+		/// BEFORE that clear. So raising the bit anywhere else does not queue anything: it latches,
+		/// for the object's whole life, and the guards in <see cref="Activate"/> then read a flag
+		/// that can never go down again. That is why the third state exists. It used to be raised
+		/// unconditionally, ahead of the branch, on every peer.
+		/// </para>
+		/// <list type="bullet">
+		/// <item><b>Server, no input authority</b> — a player interrupted by something the server
+		/// resolved. <see cref="InterruptDisposition.Applied"/>: nobody would read a queued flag,
+		/// and nobody would clear one either.</item>
+		/// <item><b>Server, input authority</b> — an NPC or a pet, whose input the server writes.
+		/// <see cref="InterruptDisposition.Queued"/>: the flag is read on the very next tick and
+		/// the cancel then happens inside the deterministic replicate, which is strictly better.</item>
+		/// <item><b>Owning client</b> — a player interrupting its own cast.
+		/// <see cref="InterruptDisposition.Queued"/>, same reason.</item>
+		/// <item><b>Observer</b> — no authority over anything and no input stream.
+		/// <see cref="InterruptDisposition.Ignored"/>; it is told what happened.</item>
+		/// </list>
+		/// </remarks>
+		/// <param name="isServerStarted">Whether this peer is the server.</param>
+		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
+		internal static InterruptDisposition ResolveInterruptDisposition(bool isServerStarted, bool hasInputAuthority)
+		{
+			if (ServerCancelsDirectly(isServerStarted, hasInputAuthority))
+			{
+				return InterruptDisposition.Applied;
 			}
 
-			OnInterrupt?.Invoke();
-			Cancel(ReplicateState.Invalid, suppressCancelEvent: true);
+			/* Queued only where HandleCharacterInput will actually drain it. An observer reaches
+			 * neither branch: it has no input stream to carry the flag and no authority to cancel. */
+			return hasInputAuthority ? InterruptDisposition.Queued : InterruptDisposition.Ignored;
 		}
 
 		/// <summary>

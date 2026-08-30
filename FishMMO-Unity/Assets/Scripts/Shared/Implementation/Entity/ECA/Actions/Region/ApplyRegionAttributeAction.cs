@@ -54,6 +54,30 @@ namespace FishMMO.Shared
 		[Tooltip("Amount added to the resource's current value. Negative drains it.")]
 		public int Value;
 
+		/// <summary>
+		/// Distinguishes this action's contribution from another action on the SAME region that
+		/// modifies the SAME attribute.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Leave it at zero unless a region carries two of these actions pointed at one attribute.
+		/// <c>CharacterAttribute.SetSource</c> STATES a whole contribution rather than adding to
+		/// one, so two actions sharing a key are not two contributions — the second silently
+		/// replaces the first and half the region's bonus disappears with no error anywhere. This is
+		/// the same hazard <see cref="ModifierSource.Index"/> exists for and that
+		/// <c>ItemGenerator</c> (keyed by item attribute template) and
+		/// <c>AttributeBuffTemplate</c> (keyed by list position) already answer; the region action
+		/// was the one contributor still passing the default.
+		/// </para>
+		/// <para>
+		/// The release side needs no knowledge of this. <c>Region.ReleaseAttributeContributions</c>
+		/// goes through <c>ClearSourceGroup</c>, which drops every entry sharing the region's
+		/// (Kind, Id) whatever index wrote it.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Only needed when one region has two of these actions modifying the same attribute. Give them different values so their bonuses sum instead of overwriting each other.")]
+		public int EntryIndex = 0;
+
 		/// <inheritdoc />
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
@@ -113,7 +137,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			c.SetSource(ModifierSource.Region(regionEvent.Region.NetworkObject.ObjectId), Value);
+			c.SetSource(ModifierSource.Region(regionEvent.Region.NetworkObject.ObjectId, EntryIndex), Value);
 		}
 	}
 }

@@ -34,9 +34,20 @@ namespace FishMMO.Shared
 		/// threat past the current highest entry plus <see cref="LeadOverHighest"/>.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// A flat bonus alone is unreliable in a long fight: after a minute of sustained damage
 		/// the top threat entry can be far beyond any fixed number, so the taunt lands and nothing
 		/// changes. This makes the guarantee explicit rather than hoping the number is big enough.
+		/// </para>
+		/// <para>
+		/// <b>The guarantee is computed in SCORE space, not in raw points.</b> An NPC chooses its
+		/// target with <c>AggressionController.GetThreatScore</c>, which multiplies raw points by a
+		/// vulnerability factor for a wounded or out-of-mana character — so a taunt that merely put
+		/// the taunter above the highest RAW entry still lost to a wounded ally on the very next
+		/// re-evaluation, and <see cref="ForceImmediateTargetSwitch"/> hid it for exactly one
+		/// switch. Comparing where the comparison actually happens is what makes this a guarantee
+		/// rather than a strong suggestion.
+		/// </para>
 		/// </remarks>
 		[Tooltip("Guarantee the taunter becomes the highest-threat target, not merely a higher one.")]
 		public bool GuaranteeTopThreat = true;
@@ -99,9 +110,28 @@ namespace FishMMO.Shared
 
 			if (GuaranteeTopThreat)
 			{
-				float highest = controller.Aggression.GetHighestPoints(initiator.ID);
-				float current = controller.Aggression.GetPoints(initiator.ID);
-				float required = (highest + LeadOverHighest) - current;
+				/* Worked in SCORE space and converted back, because score is what PickTarget reads.
+				 *
+				 * The table holds raw points and no character references, so it cannot evaluate
+				 * another entry's score directly — but every entry's score is at most its raw points
+				 * times MaximumVulnerabilityMultiplier, so clearing that bound clears every actual
+				 * score whichever entry carries it. Conservative by up to that factor and never
+				 * short, which is the direction a guarantee has to err in.
+				 *
+				 * The taunter's OWN multiplier is known exactly (we hold the character), so the
+				 * required score is divided by it rather than bounded: a wounded taunter needs
+				 * proportionally fewer raw points to reach the same score. */
+				float highestRaw = controller.Aggression.GetHighestPoints(initiator.ID);
+				float ceilingScore = highestRaw * controller.Aggression.MaximumVulnerabilityMultiplier;
+
+				float taunterMultiplier = controller.Aggression.VulnerabilityMultiplier(initiator);
+				if (taunterMultiplier <= 0f)
+				{
+					taunterMultiplier = 1f;
+				}
+
+				float requiredPoints = (ceilingScore + LeadOverHighest) / taunterMultiplier;
+				float required = requiredPoints - controller.Aggression.GetPoints(initiator.ID);
 				if (required > points)
 				{
 					points = required;

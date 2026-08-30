@@ -65,6 +65,18 @@ namespace FishMMO.Shared
 
 				if (abilityObject != null)
 				{
+					/* Only a peer that SPENDS the count may move it.
+					 *
+					 * AbilityObject.ApplyHit returns before its HitCount-- on any peer that does not
+					 * resolve its own hits — a third-party observer, whose copy ends when
+					 * AbilityObjectDestroyedBroadcast says the server's count ran out. Adding here on
+					 * every peer therefore walked the observer's count away from the authoritative
+					 * one in a direction nothing would ever correct. Asking the same question the
+					 * spend asks keeps the two in step. */
+					if (!abilityObject.ResolvesHitsLocally)
+					{
+						return;
+					}
 					abilityObject.HitCount += AmountValue.GetValue(initiator, eventData);
 				}
 				else

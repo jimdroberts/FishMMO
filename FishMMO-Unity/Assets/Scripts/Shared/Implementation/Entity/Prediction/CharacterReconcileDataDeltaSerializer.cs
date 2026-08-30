@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Custom delta serializers for <see cref="CharacterReconcileData"/>.
 	/// <para>
-	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (11 bits for 11 fields)
+	/// <b>Delta serializer</b>: Writes a 2-byte bitmask (12 bits for 12 fields)
 	/// followed by delta-encoded values for only the changed fields.
 	/// The nested <see cref="KinematicCharacterController.KinematicCharacterMotorState"/> and
 	/// <see cref="CharacterAttributeResourceState"/> use their own delta serializers,
