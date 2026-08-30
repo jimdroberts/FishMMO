@@ -536,101 +536,78 @@ namespace FishMMO.Shared
 		private const int ATTRIBUTE_PAYLOAD_LENGTH_BYTES = 4;
 
 		/// <summary>
-		/// External modifiers exactly as the spawn payload delivered them, keyed by template ID,
-		/// held until every behaviour on this object has finished reading. See
-		/// <see cref="ReassertPayloadModifiers"/>.
+		/// Marks the owner-shaped spawn payload, which carries no external modifiers.
 		/// </summary>
-		private readonly Dictionary<int, int> payloadAttributeModifiers = new Dictionary<int, int>();
+		/// <remarks>
+		/// A shape byte rather than a silent difference in length, for the reason
+		/// <c>AbilityController</c> gives for its own: the reader must know which shape it is
+		/// reading rather than infer it from its own idea of ownership, which is a thing the two
+		/// peers could briefly disagree about during a possession change.
+		/// </remarks>
+		private const byte ATTRIBUTE_PAYLOAD_SHAPE_OWNER = 1;
 
 		/// <summary>
-		/// Resource external modifiers and current values from the spawn payload, keyed by template
-		/// ID. See <see cref="ReassertPayloadModifiers"/>.
+		/// Resource current values from the owner-shaped spawn payload, keyed by template ID, held
+		/// until every behaviour on this object has finished reading.
 		/// </summary>
-		private readonly Dictionary<int, (int Modifier, float CurrentValue)> payloadResourceModifiers = new Dictionary<int, (int, float)>();
+		/// <remarks>
+		/// See <see cref="ApplyDeferredResourceValues"/>. Empty on an observer, which receives a
+		/// complete maximum in its own payload and applies its current values inline.
+		/// </remarks>
+		private readonly Dictionary<int, float> payloadResourceCurrentValues = new Dictionary<int, float>();
 
 		/// <summary>
-		/// Re-installs the external modifiers the spawn payload carried, discarding anything the
-		/// behaviours read after this one added on top of them.
+		/// Applies the owner's resource current values, now that its maximum is complete.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// The payload's <c>ExternalModifier</c> is the server's TOTAL — it already contains the
-		/// contribution of every buff and every equipped item, because the server computed it by
-		/// applying them. Buffs and equipment are then restored from their own payload blocks, which
-		/// are read after this one on every character prefab, and both of those restores state their
-		/// own contribution on top of it: <c>BuffController.ReadPayload</c> calls <c>Apply</c>, which
-		/// runs <c>AttributeBuffTemplate.OnApply → SetSource</c>, and
-		/// <c>EquipmentController.ReadPayload</c> equips each item, which runs
-		/// <c>ItemGenerator.ApplyAttributes → SetSource</c>. Every buffed or equipped attribute
-		/// therefore reads doubled at the end of the payload pass.
+		/// <b>A depletable value is clamped against its maximum, so it cannot be restored before the
+		/// maximum is.</b> The owner's payload carries base values only — its external modifier is
+		/// built by the buff and equipment restores, which are read AFTER this behaviour on every
+		/// prefab — so at the moment this controller reads its own block the maximum is missing every
+		/// buff and every equipped item. Applying a current value there would clamp a character at
+		/// 950/1000 down to its unbuffed 700 and lose the difference permanently: nothing recomputes
+		/// it, because <c>UpdateValues</c> derives the MAXIMUM and never revisits the current value.
 		/// </para>
 		/// <para>
-		/// <b>The ledger does not fix this on its own, which is why this method still exists.</b>
-		/// <c>SetSource</c> makes each contributor idempotent — a buff applied twice is still one
-		/// entry — but the payload total and the buff's own entry are two DIFFERENT contributors as
-		/// far as the ledger is concerned, and both are live. What repairs it is re-installing the
-		/// total afterwards: <see cref="CharacterAttribute.SetModifier"/> recomputes the
-		/// <see cref="ModifierSourceKind.Authoritative"/> residual against the sources that now
-		/// exist, so the sheet lands on exactly the server's number with the buff and item entries
-		/// intact underneath it. That is the same operation the owner's reconcile performs every
-		/// tick with <c>SetModifierDirect</c>, which is why the owner used to self-heal within a tick
-		/// and an observer, which receives no reconcile, kept the doubled maximum until the server
-		/// next pushed that attribute.
+		/// So the value waits here for one pass instead. <see cref="OnStartNetwork"/> is after every
+		/// <c>ReadPayload</c> on this object whatever order the components sit in — <c>ObjectCaching</c>
+		/// reads every cached object's payload in one loop and activates them in a second, and
+		/// <c>ManagedObjects.ReadPayload</c> walks every <c>NetworkBehaviour</c> on an object in a
+		/// single pass — so the maximum is settled by the time this runs.
 		/// </para>
 		/// <para>
-		/// <b>Only the OWNER ever doubles, and that is why the total is installed early rather than
-		/// deferred.</b> An observer applies none of these contributors — <c>BuffController</c> gates
-		/// <c>Buff.Apply</c> on <c>SimulatesBuffEffects</c>, and an observer's items carry no id so
-		/// <c>ItemGenerator.TryResolveLedgerSource</c> declines — so its ledger is the single
-		/// authoritative entry this method installed and it is correct from the first read. Deferring
-		/// the total until this method ran would fix a transient the owner alone sees and would
-		/// regress every observer to showing unbuffed values for the length of the spawn pass.
+		/// <b>Not the same mechanism as the repair pass it replaces.</b> <c>ReassertPayloadModifiers</c>
+		/// re-installed the server's TOTAL to undo a double-apply the payload itself created, by
+		/// sending the owner an already-summed modifier and the components that produced it. The
+		/// owner is no longer sent the total, so there is nothing to double and nothing to repair;
+		/// what remains is an ordering rule, stated in one place, about when a clamp may run.
 		/// </para>
 		/// <para>
-		/// <b>The ordering it depends on is guaranteed by FishNet's structure, not by component
-		/// order.</b> <c>ObjectCaching.Iterate</c> reads every cached object's payload in one loop
-		/// and activates them in a second one, and <c>ManagedObjects.ReadPayload</c> walks every
-		/// <c>NetworkBehaviour</c> on an object in a single pass — so <see cref="OnStartNetwork"/> is
-		/// after every <c>ReadPayload</c> on this object no matter where this controller sits in the
-		/// component list, and adding a behaviour that reads a payload cannot move the repair ahead
-		/// of it.
-		/// </para>
-		/// <para>
-		/// What the window does still cost is that the owner's sheet reads DOUBLED between this
-		/// controller's <see cref="ReadPayload"/> and this method. Nothing reads it there today: the
-		/// buff and equipment restores only WRITE ledger entries. A hook that read a derived
-		/// attribute during a payload restore and kept the number would capture the doubled one, so
-		/// anything added to those restores must write and not read.
+		/// The region, dungeon-scaling and NPC-bonus contributions no client can reconstruct are
+		/// still absent at this point — they arrive as the <see cref="ModifierSourceKind.Authoritative"/>
+		/// residual on the owner's first reconcile, which also carries the authoritative current
+		/// value. So a character that logs in inside a +maximum-health region is clamped against a
+		/// maximum one tick stale and is corrected on the next one, rather than being wrong until
+		/// something happens to touch the resource.
 		/// </para>
 		/// </remarks>
-		private void ReassertPayloadModifiers()
+		private void ApplyDeferredResourceValues()
 		{
-			if (payloadAttributeModifiers.Count == 0 &&
-				payloadResourceModifiers.Count == 0)
+			if (payloadResourceCurrentValues.Count == 0)
 			{
 				return;
 			}
 
-			foreach (KeyValuePair<int, int> entry in payloadAttributeModifiers)
-			{
-				if (Attributes.TryGetValue(entry.Key, out CharacterAttribute attribute))
-				{
-					attribute.SetModifier(entry.Value);
-				}
-			}
-
-			foreach (KeyValuePair<int, (int Modifier, float CurrentValue)> entry in payloadResourceModifiers)
+			foreach (KeyValuePair<int, float> entry in payloadResourceCurrentValues)
 			{
 				if (ResourceAttributes.TryGetValue(entry.Key, out CharacterResourceAttribute attribute))
 				{
-					// Modifier first: it moves the maximum the current value is clamped against.
-					attribute.SetModifier(entry.Value.Modifier);
-					attribute.SetCurrentValue(entry.Value.CurrentValue);
+					attribute.SetCurrentValue(entry.Value);
 				}
 			}
 
-			payloadAttributeModifiers.Clear();
-			payloadResourceModifiers.Clear();
+			payloadResourceCurrentValues.Clear();
 		}
 
 		/// <summary>
@@ -642,8 +619,7 @@ namespace FishMMO.Shared
 		{
 			const int maxPayloadAttributes = 4096;
 
-			payloadAttributeModifiers.Clear();
-			payloadResourceModifiers.Clear();
+			payloadResourceCurrentValues.Clear();
 
 			/* Where this behaviour's data ends, whatever happens below. See WritePayload for why
 			 * the block is framed at all; in short, FishNet packs every NetworkBehaviour's spawn
@@ -665,6 +641,19 @@ namespace FishMMO.Shared
 			int attributeBlockLength = (int)declaredLength;
 			int attributeBlockEnd = reader.Position + attributeBlockLength;
 
+			/* Which shape follows. Only an OBSERVER's payload carries external modifiers — see
+			 * WritePayload for why sending them to the owner was a double-apply by construction. */
+			if (attributeBlockLength < 1)
+			{
+				Log.Error("CharacterAttributeController",
+					$"ReadPayload: framed block of {attributeBlockLength} bytes cannot contain the shape " +
+					"flag. Skipping this behaviour's payload.");
+				reader.Position = attributeBlockEnd;
+				return;
+			}
+			byte shape = reader.ReadUInt8Unpacked();
+			bool ownerShape = (shape & ATTRIBUTE_PAYLOAD_SHAPE_OWNER) != 0;
+
 			int attributeCount = reader.ReadInt32();
 			if (attributeCount < 0)
 			{
@@ -684,11 +673,18 @@ namespace FishMMO.Shared
 				{
 					int templateID = reader.ReadInt32();
 					int value = reader.ReadInt32();
-					int modifier = reader.ReadInt32();
-					SetAttribute(templateID, value, modifier);
-					// Kept so the buff and equipment restores that follow cannot leave this
-					// attribute doubled. See ReassertPayloadModifiers.
-					payloadAttributeModifiers[templateID] = modifier;
+					if (ownerShape)
+					{
+						/* Base only. The owner's external modifier is built by the buff and
+						 * equipment restores that follow, and completed by the first reconcile's
+						 * authoritative residual — which is the only thing that carries the region,
+						 * dungeon-scaling and NPC-bonus contributions no client can reconstruct. */
+						SetAttribute(templateID, value);
+					}
+					else
+					{
+						SetAttribute(templateID, value, reader.ReadInt32());
+					}
 				}
 			}
 
@@ -712,9 +708,18 @@ namespace FishMMO.Shared
 					int templateID = reader.ReadInt32();
 					int value = reader.ReadInt32();
 					float currentValue = reader.ReadSingle();
-					int modifier = reader.ReadInt32();
-					SetResourceAttribute(templateID, value, currentValue, modifier);
-					payloadResourceModifiers[templateID] = (modifier, currentValue);
+					if (ownerShape)
+					{
+						/* The base now, the current value later. A depletable value is clamped
+						 * against a maximum the owner's payload does not yet contain — see
+						 * ApplyDeferredResourceValues. */
+						SetResourceBaseValue(templateID, value);
+						payloadResourceCurrentValues[templateID] = currentValue;
+					}
+					else
+					{
+						SetResourceAttribute(templateID, value, currentValue, reader.ReadInt32());
+					}
 				}
 			}
 
@@ -740,6 +745,51 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to serialize attribute data into.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			WritePayload(writer, PayloadVisibility.IsOwner(this, conn));
+		}
+
+		/// <summary>
+		/// Writes the attribute payload in one of two shapes.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The external modifier goes to observers only, and that asymmetry is the whole point.</b>
+		/// It is the server's TOTAL — it already contains every buff and every equipped item, because
+		/// the server computed it by applying them.
+		/// </para>
+		/// <para>
+		/// An OBSERVER applies none of those components and cannot: <c>BuffController.ReadPayload</c>
+		/// tracks a buff without applying it (<c>SimulatesBuffEffects</c>), and an observer's items
+		/// carry no id, so <c>ItemGenerator.TryResolveLedgerSource</c> declines. The total is
+		/// therefore the only thing that can be right for it, and it is right immediately, with
+		/// nothing to double.
+		/// </para>
+		/// <para>
+		/// The OWNER runs both of those restores for real, so sending it the total as well was a
+		/// double-apply by construction — the payload total and each component are different
+		/// contributors as far as the ledger is concerned, and both were live. Every buffed or
+		/// equipped attribute read DOUBLED from this behaviour's <see cref="ReadPayload"/> until a
+		/// repair pass re-installed the total on top of the components in <see cref="OnStartNetwork"/>.
+		/// That repair worked, but it left a standing constraint that nothing enforced: any hook
+		/// added to the buff or equipment restores had to WRITE and never READ a derived attribute,
+		/// or it captured the doubled number. Not sending the total removes the double rather than
+		/// undoing it, and the constraint goes with it.
+		/// </para>
+		/// <para>
+		/// What the owner loses is the region, dungeon-scaling and NPC-bonus contributions, which are
+		/// server-only (<c>RegionActionGate.ShouldExecuteGameplay</c>) and which no client
+		/// reconstructs. Those arrive on its first reconcile as the
+		/// <see cref="ModifierSourceKind.Authoritative"/> residual, which the owner receives every
+		/// tick and an observer never receives at all — which is the same split, from the other end.
+		/// </para>
+		/// <para>
+		/// Split out from the override so both shapes can be produced without a live connection.
+		/// </para>
+		/// </remarks>
+		/// <param name="writer">Writer to append to.</param>
+		/// <param name="ownerShape">True to write the owner-shaped block.</param>
+		internal void WritePayload(Writer writer, bool ownerShape)
+		{
 			/* Everything below is framed by a byte count.
 			 *
 			 * FishNet packs every NetworkBehaviour's payload into one buffer with no per-behaviour
@@ -756,18 +806,22 @@ namespace FishMMO.Shared
 			writer.Skip(ATTRIBUTE_PAYLOAD_LENGTH_BYTES);
 			int attributeBlockStart = writer.Position;
 
+			writer.WriteUInt8Unpacked(ownerShape ? ATTRIBUTE_PAYLOAD_SHAPE_OWNER : (byte)0);
+
 			/* The whole attribute sheet, to every receiver.
 			 *
-			 * Base value AND external modifier for each attribute, so the receiver can compute the
-			 * same FinalValue the server holds. Sending base values alone was the old bug: a
-			 * character standing still in +max-health gear showed its UNBUFFED maximum to every new
-			 * observer, because the modifier that produced the real maximum never travelled.
+			 * Every attribute travels to every receiver; only the MODIFIER is shaped. Trimming the
+			 * set itself is not an option — a resource's maximum is a formula over these attributes,
+			 * so a peer missing one cannot recompute anything.
 			 *
-			 * Observers get the same sheet as the owner. While state forwarding was on this arrived
-			 * as CharacterReconcileData.Attributes on every tick; with forwarding off that channel
-			 * is gone, so the payload seeds the set and CharacterAttributesBroadcast keeps it up to
-			 * date. Trimming the set for observers is not an option — a resource's maximum is a
-			 * formula over these attributes, so a peer missing them cannot recompute anything.
+			 * An observer needs the modifier because it reconstructs nothing: sending base values
+			 * alone was the old bug, and a character standing still in +max-health gear showed its
+			 * UNBUFFED maximum to every new observer. With state forwarding off there is no
+			 * CharacterReconcileData.Attributes to correct that, so the payload seeds the set and
+			 * CharacterAttributesBroadcast keeps it current.
+			 *
+			 * The owner needs the opposite: it applies those components itself, so a modifier here
+			 * would be counted twice. See the remarks above.
 			 */
 			// Sort keys for deterministic wire order. WritePayload is a one-shot
 			// initialisation call, so the allocation is acceptable.
@@ -780,7 +834,10 @@ namespace FishMMO.Shared
 				CharacterAttribute attribute = Attributes[sortedAttrIDs[i]];
 				writer.WriteInt32(attribute.Template.ID);
 				writer.WriteInt32(attribute.Value);
-				writer.WriteInt32(attribute.ExternalModifier);
+				if (!ownerShape)
+				{
+					writer.WriteInt32(attribute.ExternalModifier);
+				}
 			}
 
 			var sortedResIDs = new List<int>(ResourceAttributes.Keys);
@@ -793,7 +850,10 @@ namespace FishMMO.Shared
 				writer.WriteInt32(resourceAttribute.Template.ID);
 				writer.WriteInt32(resourceAttribute.Value);
 				writer.WriteSingle(resourceAttribute.CurrentValue);
-				writer.WriteInt32(resourceAttribute.ExternalModifier);
+				if (!ownerShape)
+				{
+					writer.WriteInt32(resourceAttribute.ExternalModifier);
+				}
 			}
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - attributeBlockStart),
@@ -808,8 +868,7 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
-			payloadAttributeModifiers.Clear();
-			payloadResourceModifiers.Clear();
+			payloadResourceCurrentValues.Clear();
 
 			/* The observer push baselines belong to the previous occupant of a pooled object. Left
 			 * behind, the first resource push after a respawn is rate-gated against that character's
@@ -1028,12 +1087,40 @@ namespace FishMMO.Shared
 		{
 			if (ResourceAttributes.TryGetValue(id, out CharacterResourceAttribute attribute))
 			{
+				/* Base, then MODIFIER, then the current value. The order is the whole correctness of
+				 * this method: SetCurrentValue clamps against FinalValue, and FinalValue is not
+				 * complete until the modifier is in. Setting the current value first clamped a
+				 * character at 950/1000 down to its unbuffed 700 and lost the difference for good —
+				 * UpdateValues derives the MAXIMUM and never revisits the current value, so nothing
+				 * downstream recomputes it. It survived because ClampCurrentValue happens to decline
+				 * to clamp while the character is not yet flagged IsLoaded, which on a client depends
+				 * on whether the behaviour carrying Flags was read before this one. That is a
+				 * component-order accident, not a rule; this is the rule. */
 				attribute.SetValue(value);
-				attribute.SetCurrentValue(currentValue);
 				if (modifier.HasValue)
 				{
 					attribute.SetModifier(modifier.Value);
 				}
+				attribute.SetCurrentValue(currentValue);
+			}
+		}
+
+		/// <summary>
+		/// Sets a resource attribute's base value alone, leaving its current value untouched.
+		/// </summary>
+		/// <remarks>
+		/// For the owner-shaped spawn payload, whose maximum is not complete until the buff and
+		/// equipment restores have run — see <see cref="ApplyDeferredResourceValues"/>, which
+		/// applies the current value once it is.
+		/// </remarks>
+		/// <param name="id">The template ID of the resource attribute.</param>
+		/// <param name="value">The new base value.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void SetResourceBaseValue(int id, int value)
+		{
+			if (ResourceAttributes.TryGetValue(id, out CharacterResourceAttribute attribute))
+			{
+				attribute.SetValue(value);
 			}
 		}
 
@@ -1333,8 +1420,9 @@ namespace FishMMO.Shared
 		{
 			base.OnStartNetwork();
 
-			// Undo the doubling that the buff and equipment payload restores leave behind.
-			ReassertPayloadModifiers();
+			/* The owner's resource current values, now that the buff and equipment restores have
+			 * completed the maximum they are clamped against. See ApplyDeferredResourceValues. */
+			ApplyDeferredResourceValues();
 
 			// Compute the integer regen interval so both client and server agree on
 			// exactly which ticks produce a regen pulse. Recomputed on demand by

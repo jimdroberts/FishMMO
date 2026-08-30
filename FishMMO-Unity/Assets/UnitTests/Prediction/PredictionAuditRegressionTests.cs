@@ -532,16 +532,28 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── 9. Buff and equipment restores doubled the attribute modifier the payload carried ──
+		// ── 9. The owner is no longer sent a total AND the components that produced it ──
 
 		/// <summary>
-		/// The payload's <c>ExternalModifier</c> is the server's total and already contains every
-		/// buff and item contribution; the buff and equipment blocks are read afterwards and add
-		/// theirs again. The owner's reconcile hid it within a tick — an observer, which receives no
-		/// reconcile, kept the doubled maximum until the server next pushed that attribute.
+		/// The owner's payload carries base values only, so the restores that follow cannot double it.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This test used to assert the opposite half of the same problem: that a repair pass
+		/// re-installed the server's total after the buff and equipment blocks had added their
+		/// contributions on top of it. The repair worked, but the double it repaired was created by
+		/// the payload itself — the total already contained every buff and item, and the owner
+		/// applies those components for real.
+		/// </para>
+		/// <para>
+		/// The upstream fix is that the owner is no longer sent the total. There is nothing to
+		/// double and nothing to undo, and the standing constraint the repair imposed — that
+		/// anything added to the buff or equipment restores must WRITE and never READ a derived
+		/// attribute, or capture the doubled number — goes with it.
+		/// </para>
+		/// </remarks>
 		[Test]
-		public void PayloadModifier_SurvivesTheBuffAndEquipmentRestores()
+		public void OwnerPayload_CarriesNoExternalModifier_SoTheRestoresCannotDoubleIt()
 		{
 			GameObject writerGo = new GameObject("AttrWriter");
 			GameObject readerGo = new GameObject("AttrReader");
@@ -560,7 +572,7 @@ namespace FishMMO.UnitTests
 				sourceAttribute.SetModifier(25);
 
 				Writer payload = new Writer();
-				source.WritePayload(null, payload);
+				source.WritePayload(payload, ownerShape: true);
 
 				CharacterAttributeController target = readerGo.AddComponent<CharacterAttributeController>();
 				target.InitializeOnce(new MockCharacter());
@@ -568,18 +580,18 @@ namespace FishMMO.UnitTests
 				target.AddAttribute(targetAttribute);
 
 				target.ReadPayload(null, new Reader(payload.GetArraySegment(), null));
-				LogAssert.AreEqual(25, targetAttribute.ExternalModifier, "The payload carries the server's total.");
+				LogAssert.AreEqual(0, targetAttribute.ExternalModifier,
+					"The owner reconstructs its own modifier from the components. Receiving the " +
+					"server's total here as well is what made every buffed attribute read doubled.");
+				LogAssert.AreEqual(100, targetAttribute.Value, "The base value still travels.");
 
 				// What BuffController.ReadPayload and EquipmentController.ReadPayload do next.
-				targetAttribute.AddModifier(25);
-				LogAssert.AreEqual(50, targetAttribute.ExternalModifier, "The restores add their contribution on top.");
-
-				MethodInfo reassert = typeof(CharacterAttributeController).GetMethod("ReassertPayloadModifiers", Any);
-				LogAssert.IsNotNull(reassert, "CharacterAttributeController must re-assert the payload's modifiers.");
-				reassert.Invoke(target, null);
+				targetAttribute.SetSource(ModifierSource.Item(1), 25);
 
 				LogAssert.AreEqual(25, targetAttribute.ExternalModifier,
-					"Once every behaviour has read, the payload's total must be the one that stands.");
+					"...so once the restores have run the owner holds exactly the server's number, " +
+					"with no repair pass in between.");
+				LogAssert.AreEqual(125, targetAttribute.FinalValue, "...and the final value agrees.");
 			}
 			finally
 			{
@@ -589,17 +601,81 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		/// <summary>
+		/// An observer's payload still carries the total, because it reconstructs nothing.
+		/// </summary>
+		/// <remarks>
+		/// The other half of the shape, and the reason the fix could not simply be "send base values
+		/// only". <c>BuffController.ReadPayload</c> tracks a buff without applying it, and an
+		/// observer's items carry no id so <c>ItemGenerator.TryResolveLedgerSource</c> declines — so
+		/// an observer applies no components at all. Sending it base values alone showed every peer
+		/// unbuffed and unequipped, which is the bug the modifier was added to the payload to fix.
+		/// </remarks>
 		[Test]
-		public void PayloadModifierReassert_RunsAfterEveryBehaviourHasRead()
+		public void ObserverPayload_StillCarriesTheAuthoritativeTotal()
+		{
+			GameObject writerGo = new GameObject("AttrWriter");
+			GameObject readerGo = new GameObject("AttrReader");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				CharacterAttributeTemplate template = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				template.name = "Audit_Observer_Health"; template.InitialValue = 100;
+				template.AddToCache(template.name); assets.Add(template);
+
+				CharacterAttributeController source = writerGo.AddComponent<CharacterAttributeController>();
+				source.InitializeOnce(new MockCharacter());
+				CharacterAttribute sourceAttribute = new CharacterAttribute(source, template.ID, 100, 0);
+				source.AddAttribute(sourceAttribute);
+				sourceAttribute.SetModifier(25);
+
+				Writer payload = new Writer();
+				source.WritePayload(payload, ownerShape: false);
+
+				CharacterAttributeController target = readerGo.AddComponent<CharacterAttributeController>();
+				target.InitializeOnce(new MockCharacter());
+				CharacterAttribute targetAttribute = new CharacterAttribute(target, template.ID, 100, 0);
+				target.AddAttribute(targetAttribute);
+
+				target.ReadPayload(null, new Reader(payload.GetArraySegment(), null));
+
+				LogAssert.AreEqual(25, targetAttribute.ExternalModifier,
+					"An observer applies no buffs and no item bonuses, so the server's total is the " +
+					"only thing that can be right for it — and it is right from the first read.");
+				LogAssert.AreEqual(125, targetAttribute.FinalValue,
+					"...so a peer in +max-health gear shows its BUFFED maximum, not its base one.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(writerGo);
+				UnityEngine.Object.DestroyImmediate(readerGo);
+			}
+		}
+
+		/// <summary>
+		/// The owner's deferred resource values are applied after every behaviour has read.
+		/// </summary>
+		/// <remarks>
+		/// A depletable value is clamped against its maximum, and the owner's maximum is not complete
+		/// until the buff and equipment restores have run. <c>OnStartNetwork</c> is the first hook
+		/// that runs after every behaviour on the object has read its payload — FishNet initialises
+		/// objects in a later loop than the one that reads them — so it is where the clamp may
+		/// finally run honestly.
+		/// </remarks>
+		[Test]
+		public void DeferredResourceValues_AreAppliedAfterEveryBehaviourHasRead()
 		{
 			string path = Path.Combine(Application.dataPath,
 				"Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterAttributeController.cs");
 			string source = File.ReadAllText(path);
 			int start = source.IndexOf("public override void OnStartNetwork()", StringComparison.Ordinal);
 			LogAssert.IsTrue(start >= 0, "CharacterAttributeController must override OnStartNetwork.");
-			int call = source.IndexOf("ReassertPayloadModifiers();", start, StringComparison.Ordinal);
+			int call = source.IndexOf("ApplyDeferredResourceValues();", start, StringComparison.Ordinal);
 			LogAssert.IsTrue(call > start && call - start < 800,
-				"OnStartNetwork must re-assert the payload modifiers; FishNet initialises objects in a later loop than the one that reads their payloads, so it is the first hook that runs after every behaviour on the object has read.");
+				"OnStartNetwork must apply the owner's deferred resource current values; it is the " +
+				"first hook that runs after every behaviour on the object has read its payload, and " +
+				"so the first point at which the maximum they are clamped against is complete.");
 		}
 
 		// ── 10. NPC factions: derived from the race template, not sent; pet rosters were discarded ──

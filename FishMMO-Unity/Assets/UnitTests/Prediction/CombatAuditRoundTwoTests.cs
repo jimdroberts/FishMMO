@@ -1,5 +1,6 @@
 using System.Reflection;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using NUnit.Framework;
 using UnityEngine;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -576,6 +577,78 @@ namespace FishMMO.UnitTests
 
 		#endregion
 
+		#region Upstream — a clamp only runs against a settled maximum.
+
+		/// <summary>
+		/// A restored resource keeps its current value when its maximum comes from a modifier.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>SetResourceAttribute</c> applied the current value BEFORE the modifier, so the clamp in
+		/// <c>SetCurrentValue</c> ran against a maximum that did not yet include it. A character at
+		/// 950/1000 with 300 of that maximum from gear was clamped to its unbuffed 700, and the
+		/// difference was gone for good: <c>UpdateValues</c> derives the MAXIMUM and never revisits
+		/// the current value, so raising the maximum afterwards restores nothing.
+		/// </para>
+		/// <para>
+		/// It survived only because <c>ClampCurrentValue</c> happens to decline to clamp while the
+		/// character is not yet flagged <c>IsLoaded</c> — which on a client depends on whether the
+		/// behaviour carrying <c>Flags</c> was read before this one. This test flags the character
+		/// loaded precisely so the clamp is live and the ordering has to be right on its own.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void RestoredResource_KeepsItsCurrentValue_WhenTheMaximumComesFromAModifier()
+		{
+			CharacterAttributeController controller = host.GetComponent<CharacterAttributeController>()
+				?? host.AddComponent<CharacterAttributeController>();
+			LoadedMockCharacter character = new LoadedMockCharacter();
+			character.EnableFlags(CharacterFlags.IsLoaded);
+			controller.InitializeOnce(character);
+
+			CharacterResourceAttribute health = new CharacterResourceAttribute(controller, template.ID, 700, 0f, 0);
+			controller.AddResourceAttribute(health);
+
+			// The observer shape: base 700, current 950, and 300 of maximum from gear.
+			controller.SetResourceAttribute(template.ID, 700, 950f, 300);
+
+			LogAssert.AreEqual(1000, health.FinalValue,
+				"The modifier must be in before anything is clamped against the maximum.");
+			LogAssert.AreEqual(950f, health.CurrentValue,
+				"A character at 950/1000 must restore at 950. Clamping before the modifier landed " +
+				"took it to its unbuffed 700 and nothing downstream ever put it back.");
+		}
+
+		/// <summary>
+		/// The clamp is not skipped — it is merely deferred until the maximum is settled.
+		/// </summary>
+		/// <remarks>
+		/// The counterpart to the test above, and the reason the fix is an ordering rule rather than
+		/// an unclamped restore. A current value genuinely above the completed maximum must still
+		/// come down; storing it raw and hoping something clamps it later would leave the resource
+		/// permanently above its own maximum, because nothing in the graph pass revisits it.
+		/// </remarks>
+		[Test]
+		public void RestoredResource_IsStillClamped_AgainstTheSettledMaximum()
+		{
+			CharacterAttributeController controller = host.GetComponent<CharacterAttributeController>()
+				?? host.AddComponent<CharacterAttributeController>();
+			LoadedMockCharacter character = new LoadedMockCharacter();
+			character.EnableFlags(CharacterFlags.IsLoaded);
+			controller.InitializeOnce(character);
+
+			CharacterResourceAttribute health = new CharacterResourceAttribute(controller, template.ID, 700, 0f, 0);
+			controller.AddResourceAttribute(health);
+
+			controller.SetResourceAttribute(template.ID, 700, 5000f, 300);
+
+			LogAssert.AreEqual(1000f, health.CurrentValue,
+				"5000 of a 1000 maximum is not a value to preserve. Deferring the clamp must not " +
+				"become skipping it, or a resource sits above its own maximum indefinitely.");
+		}
+
+		#endregion
+
 		// ── Fixture ──────────────────────────────────────────────────────────────────
 
 		private CharacterAttributeTemplate template;
@@ -614,6 +687,50 @@ namespace FishMMO.UnitTests
 			CharacterAttributeController controller = host.GetComponent<CharacterAttributeController>()
 				?? host.AddComponent<CharacterAttributeController>();
 			return new CharacterAttribute(controller, template.ID, baseValue, 0);
+		}
+
+		/// <summary>
+		/// The minimum <see cref="ICharacter"/> the resource clamp reads: it consults
+		/// <c>Character.Flags</c> for <see cref="CharacterFlags.IsLoaded"/> and nothing else.
+		/// </summary>
+		private sealed class LoadedMockCharacter : ICharacter
+		{
+			public long ID { get; set; } = 1;
+			public string Name => "LoadedMockCharacter";
+			public Transform Transform => null;
+			public GameObject GameObject => null;
+			public Collider Collider { get; set; }
+			public FishNet.Connection.NetworkConnection Owner => null;
+			public FishNet.Object.NetworkObject NetworkObject => null;
+			public FishNet.Managing.Predicting.PredictionManager PredictionManager => null;
+			public System.Collections.Generic.HashSet<FishNet.Connection.NetworkConnection> Observers { get; } =
+				new System.Collections.Generic.HashSet<FishNet.Connection.NetworkConnection>();
+			public bool IsTeleporting => false;
+			public bool IsSpawned => true;
+			public int Flags { get; set; }
+			public WorldLabel CharacterNameLabel { get; set; }
+			public WorldLabel CharacterGuildLabel { get; set; }
+			public Transform MeshRoot => null;
+#if !UNITY_SERVER
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
+#endif
+			/* CharacterFlags is a SEQUENTIAL enum of bit POSITIONS (Idle = 0, IsMoving = 1, ...),
+			 * not a bitmask of powers of two — IntBitExtensions.IsFlagged tests (flag & 1 << pos).
+			 * Modelling it as a mask here made EnableFlags(IsLoaded) set an unrelated bit, the
+			 * production clamp read false, and the ordering test below passed without the clamp
+			 * ever running. Mirror the real semantics or the mock proves nothing. */
+			public void EnableFlags(CharacterFlags flags) => Flags |= 1 << (int)flags;
+			public void DisableFlags(CharacterFlags flags) => Flags &= ~(1 << (int)flags);
+			public bool IsFlagged(CharacterFlags flags) => (Flags & (1 << (int)flags)) != 0;
+			public void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
+			{
+				control = null;
+				return false;
+			}
+			public void Invoke(System.Collections.Generic.List<Trigger> triggers, EventData eventData) { }
 		}
 	}
 }
