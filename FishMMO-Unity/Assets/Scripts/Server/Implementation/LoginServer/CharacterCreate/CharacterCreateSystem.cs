@@ -205,8 +205,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				!registry.TryGet<ICharacterService>(out var characterService) ||
 				!registry.TryGet<ICharacterFactionService>(out var factionService) ||
 				!registry.TryGet<ICharacterAbilityService>(out var abilityService) ||
-				!registry.TryGet<ICharacterInventoryService>(out var inventoryService) ||
-				!registry.TryGet<ICharacterEquipmentService>(out var equipmentService) ||
+				!registry.TryGet<ICharacterItemService>(out var itemService) ||
 				!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
 				!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService))
 			{
@@ -331,7 +330,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				preparedAttributes, preparedFactions, preparedAbilities,
 				preparedInventory, preparedEquipment,
 				characterService, factionService, abilityService,
-				inventoryService, equipmentService, attributeService,
+				itemService, attributeService,
 				unitOfWorkService), conn.ClientId))
 			{
 				EndCreateRequest(conn);
@@ -358,8 +357,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="characterService">Resolved character service.</param>
 		/// <param name="factionService">Resolved faction service.</param>
 		/// <param name="abilityService">Resolved ability service.</param>
-		/// <param name="inventoryService">Resolved inventory service.</param>
-		/// <param name="equipmentService">Resolved equipment service.</param>
+		/// <param name="itemService">Resolved item service, covering every container.</param>
 		/// <param name="attributeService">Resolved attribute service.</param>
 		/// <param name="unitOfWorkService">Resolved unit of work service for transactional consistency.</param>
 		private async Task ProcessCharacterCreateAsync(
@@ -376,8 +374,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			ICharacterService characterService,
 			ICharacterFactionService factionService,
 			ICharacterAbilityService abilityService,
-			ICharacterInventoryService inventoryService,
-			ICharacterEquipmentService equipmentService,
+			ICharacterItemService itemService,
 			ICharacterAttributeService attributeService,
 			IUnitOfWorkService unitOfWorkService)
 		{
@@ -497,8 +494,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 					Dictionary<int, CharacterAttributeData> initialAttributes = BuildStartingAttributes(characterID, preparedAttributes);
 					List<CharacterFactionData> factions = BuildStartingFactions(characterID, preparedFactions);
 					List<CharacterAbilityData> abilities = BuildStartingAbilities(characterID, preparedAbilities);
-					List<CharacterInventoryData> inventoryItems = BuildStartingItems(characterID, preparedInventory);
-					List<CharacterEquipmentData> equipment = BuildStartingEquipment(characterID, preparedEquipment);
+					List<CharacterItemData> inventoryItems = BuildStartingItems(characterID, preparedInventory);
+					List<CharacterItemData> equipment = BuildStartingEquipment(characterID, preparedEquipment);
 
 					// --- Persist all sub-entities within the same transaction ---
 
@@ -553,7 +550,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						 * were dropped, and a character handed to the player missing part of its
 						 * starting inventory is worse than a failed creation they can retry. */
 						if (!await BulkWriteReporting.RequireCompleteAsync(
-								"CharacterCreateSystem", "Starting inventory", await inventoryService.PersistAsync(inventoryItems), $"character {characterID}"))
+								"CharacterCreateSystem", "Starting inventory", await itemService.PersistAsync(inventoryItems), $"character {characterID}"))
 						{
 							TryEnqueueMainThread(() =>
 							{
@@ -575,7 +572,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 						 * were dropped, and a character handed to the player missing part of its
 						 * starting equipment is worse than a failed creation they can retry. */
 						if (!await BulkWriteReporting.RequireCompleteAsync(
-								"CharacterCreateSystem", "Starting equipment", await equipmentService.PersistAsync(equipment), $"character {characterID}"))
+								"CharacterCreateSystem", "Starting equipment", await itemService.PersistAsync(equipment), $"character {characterID}"))
 						{
 							TryEnqueueMainThread(() =>
 							{
@@ -925,9 +922,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		/// <param name="characterID">ID of the character to add items to.</param>
 		/// <param name="preparedItems">Prepared inventory entries.</param>
-		private List<CharacterInventoryData> BuildStartingItems(long characterID, List<PreparedInventoryEntry> preparedItems)
+		private List<CharacterItemData> BuildStartingItems(long characterID, List<PreparedInventoryEntry> preparedItems)
 		{
-			var items = new List<CharacterInventoryData>(preparedItems?.Count ?? 0);
+			var items = new List<CharacterItemData>(preparedItems?.Count ?? 0);
 			if (preparedItems == null)
 			{
 				return items;
@@ -936,10 +933,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			for (int i = 0; i < preparedItems.Count; ++i)
 			{
 				PreparedInventoryEntry itemTemplate = preparedItems[i];
-				items.Add(new CharacterInventoryData(
+				items.Add(new CharacterItemData(
+					// The database issues the identity; these rows are the character's first write.
 					id: 0,
 					version: 1,
 					characterID: characterID,
+					container: ItemContainerType.Inventory,
 					templateID: itemTemplate.TemplateID,
 					slot: itemTemplate.Slot,
 					seed: 0,
@@ -957,9 +956,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		/// <param name="characterID">ID of the character to add equipment to.</param>
 		/// <param name="preparedEquipment">Prepared equipment entries.</param>
-		private List<CharacterEquipmentData> BuildStartingEquipment(long characterID, List<PreparedEquipmentEntry> preparedEquipment)
+		private List<CharacterItemData> BuildStartingEquipment(long characterID, List<PreparedEquipmentEntry> preparedEquipment)
 		{
-			var equipment = new List<CharacterEquipmentData>(preparedEquipment?.Count ?? 0);
+			var equipment = new List<CharacterItemData>(preparedEquipment?.Count ?? 0);
 			if (preparedEquipment == null)
 			{
 				return equipment;
@@ -968,10 +967,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			for (int i = 0; i < preparedEquipment.Count; ++i)
 			{
 				PreparedEquipmentEntry itemTemplate = preparedEquipment[i];
-				equipment.Add(new CharacterEquipmentData(
+				equipment.Add(new CharacterItemData(
 					id: 0,
 					version: 1,
 					characterID: characterID,
+					container: ItemContainerType.Equipment,
 					templateID: itemTemplate.TemplateID,
 					slot: itemTemplate.Slot,
 					seed: itemTemplate.Seed,

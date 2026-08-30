@@ -141,8 +141,8 @@ namespace FishMMO.UnitTests
 				{
 					EquipmentReconcileEntry[] prev =
 					{
-						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
-						new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, InstanceID = 901 },
+						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
+						new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 },
 					};
 					// Distinct instance with identical contents — ReferenceEquals must not be what saves us.
 					EquipmentReconcileEntry[] next = (EquipmentReconcileEntry[])prev.Clone();
@@ -212,7 +212,7 @@ namespace FishMMO.UnitTests
 					CharacterReconcileData prev = MakeReconcileData();
 					prev.Equipment = new[]
 					{
-						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
+						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
 					};
 
 					CharacterReconcileData next = prev;
@@ -367,7 +367,7 @@ namespace FishMMO.UnitTests
 					};
 					value.Equipment = new[]
 					{
-						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
+						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
 					};
 					value.Attributes = new[]
 					{
@@ -455,7 +455,7 @@ namespace FishMMO.UnitTests
 				{
 					CharacterReconcileData prev = MakeReconcileData();
 					prev.Attributes = new[] { new AttributeReconcileEntry { TemplateID = 1, Value = 10, ExternalModifier = 2 } };
-					prev.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 } };
+					prev.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 } };
 
 					// Identical next: under Unset this writes nothing at all.
 					CharacterReconcileData next = prev;
@@ -519,8 +519,8 @@ namespace FishMMO.UnitTests
 					prev.Buffs = new[] { new BuffReconcileEntry { TemplateID = 3, ExpiryTick = 500, NextTickTick = 20, Stacks = 1, TickCount = 4, CumulativeTickMultiplier = 1 } };
 					prev.Equipment = new[]
 					{
-						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
-						new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, InstanceID = 901 },
+						new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
+						new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 },
 					};
 					prev.Attributes = new[]
 					{

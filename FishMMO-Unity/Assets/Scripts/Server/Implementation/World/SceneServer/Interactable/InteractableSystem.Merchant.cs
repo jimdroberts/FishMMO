@@ -388,8 +388,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 					removed.Version++;
 					long version = removed.Version;
+					long itemID = removed.ID;
 					int slot = msg.Slot;
-					if (!EnqueuePersistence(() => DeleteMerchantSoldSlotAsync(characterID, slot, version), characterID))
+					/* Addressed by the item. An item the database has never seen has no row to
+					 * remove, and DeleteItemAsync refuses a zero id — so the enqueue is skipped
+					 * entirely rather than queuing a statement that can only fail. The sale still
+					 * stands: there is nothing persisted that could bring the item back. */
+					if (itemID > 0 &&
+						!EnqueuePersistence(() => DeleteCharacterItemAsync(characterID, itemID, version), characterID))
 					{
 						/* Could not record the removal, so undo it. Selling an item whose deletion
 						 * is never written means the item comes back on the next login while the
@@ -408,12 +414,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					item.Stackable.Remove((uint)quantity);
 					item.Version++;
 
-					List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>
+					List<CharacterItemData> itemsToSave = new List<CharacterItemData>
 					{
-						new CharacterInventoryData(
+						new CharacterItemData(
 							id: item.ID,
 							version: item.Version,
 							characterID: characterID,
+							container: ItemContainerType.Inventory,
 							templateID: item.Template.ID,
 							slot: item.Slot,
 							seed: item.IsGenerated ? item.Generator.Seed : 0,
@@ -482,34 +489,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Deletes an inventory slot emptied by a merchant sale.
+		/// Removes one of a character's items from the database.
 		/// </summary>
 		/// <remarks>
-		/// The version is the item's own, incremented once by the caller, rather than
-		/// <c>long.MaxValue</c>. Stamping the maximum makes the surviving soft-deleted row
-		/// permanently unwritable, because every later write is version-gated against it — see the
-		/// per-slot persistence poisoning in the audit findings. A sale must not create one.
+		/// <para>
+		/// Shared by the merchant sale and the mail-attachment path: both destroy an item the
+		/// character no longer owns, and neither is a move.
+		/// </para>
+		/// <para>
+		/// Addressed by the item's own identity, and version-gated by the item's own version — the
+		/// caller increments it once before enqueuing. The predecessor named a <c>(character, slot)</c>
+		/// pair, which had no item whose version could authorise it, so callers passed
+		/// <c>long.MaxValue</c> and left behind a soft-deleted row nothing could ever outrank. There
+		/// is no such ambiguity when the row and the item are the same thing.
+		/// </para>
 		/// </remarks>
-		private async Task DeleteMerchantSoldSlotAsync(long characterID, int slot, long version)
+		private async Task DeleteCharacterItemAsync(long characterID, long itemID, long version)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
+					!Server.Database.ServiceRegistry.TryGet<ICharacterItemService>(out var itemService))
 				{
-					await Log.Error("InteractableSystem", "DeleteMerchantSoldSlotAsync: Failed to resolve ICharacterInventoryService");
+					await Log.Error("InteractableSystem", "DeleteCharacterItemAsync: Failed to resolve ICharacterItemService");
 					return;
 				}
 
-				DatabaseResult result = await inventoryService.DeleteAsync(characterID, slot, version);
+				DatabaseResult result = await itemService.DeleteItemAsync(characterID, itemID, version);
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("InteractableSystem", $"DeleteMerchantSoldSlotAsync DB error (CharID={characterID}, Slot={slot}): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Warning("InteractableSystem", $"DeleteCharacterItemAsync DB error (CharID={characterID}, ItemID={itemID}): {result.ErrorCode} - {result.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("InteractableSystem", $"DeleteMerchantSoldSlotAsync failed (CharID={characterID}, Slot={slot}): {ex}");
+				await Log.Error("InteractableSystem", $"DeleteCharacterItemAsync failed (CharID={characterID}, ItemID={itemID}): {ex}");
 			}
 		}
 

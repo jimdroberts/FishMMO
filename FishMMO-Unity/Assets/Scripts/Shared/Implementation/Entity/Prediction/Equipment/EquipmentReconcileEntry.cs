@@ -20,8 +20,23 @@ namespace FishMMO.Shared
 		public byte Slot;
 		/// <summary>Item generation seed (0 if not generated).</summary>
 		public int Seed;
-		/// <summary>Item instance ID.</summary>
-		public long InstanceID;
+		/// <summary>
+		/// The item's identity — its <c>character_item</c> row id, and the same value the attribute
+		/// ledger keys its contribution by.
+		/// </summary>
+		/// <remarks>
+		/// This used to be called <c>InstanceID</c> and carried a number that could not identify an
+		/// item: rows were keyed <c>(character_id, slot)</c> across three tables with three identity
+		/// sequences, so it changed when the item moved and collided across containers. The owner's
+		/// reconcile could therefore not match a runtime item to its entry, and materialised a clone
+		/// into the slot while the original stayed in the inventory. One table, one identity, and the
+		/// match works.
+		/// <para>
+		/// Zero for an item the database has not written yet. <c>EquipmentController</c> treats that
+		/// as "cannot be matched" rather than as a value.
+		/// </para>
+		/// </remarks>
+		public long ItemID;
 
 		/// <summary>Returns true if this entry matches the other entry on all fields.</summary>
 		/// <param name="other">The other entry to compare.</param>
@@ -31,7 +46,7 @@ namespace FishMMO.Shared
 			return TemplateID == other.TemplateID
 				&& Slot == other.Slot
 				&& Seed == other.Seed
-				&& InstanceID == other.InstanceID;
+				&& ItemID == other.ItemID;
 		}
 
 		/// <summary>Returns true if obj is an EquipmentReconcileEntry with matching fields.</summary>
@@ -52,7 +67,7 @@ namespace FishMMO.Shared
 				hash = hash * 31 + TemplateID;
 				hash = hash * 31 + Slot;
 				hash = hash * 31 + Seed;
-				hash = hash * 31 + InstanceID.GetHashCode();
+				hash = hash * 31 + ItemID.GetHashCode();
 				return hash;
 			}
 		}
@@ -65,7 +80,7 @@ namespace FishMMO.Shared
 			writer.WriteInt32(entry.TemplateID);
 			writer.WriteUInt8Unpacked(entry.Slot);
 			writer.WriteInt32(entry.Seed);
-			writer.WriteInt64(entry.InstanceID);
+			writer.WriteInt64(entry.ItemID);
 		}
 
 		/// <summary>Reads a single entry from a FishNet Reader.</summary>
@@ -78,7 +93,7 @@ namespace FishMMO.Shared
 				TemplateID = reader.ReadInt32(),
 				Slot = reader.ReadUInt8Unpacked(),
 				Seed = reader.ReadInt32(),
-				InstanceID = reader.ReadInt64(),
+				ItemID = reader.ReadInt64(),
 			};
 		}
 

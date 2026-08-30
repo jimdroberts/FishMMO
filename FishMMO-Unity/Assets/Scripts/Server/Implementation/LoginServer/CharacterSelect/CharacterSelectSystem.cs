@@ -281,13 +281,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 					!TryGetDbService(out ICharacterAbilityService abilityService) ||
 					!TryGetDbService(out ICharacterAchievementService achievementService) ||
 					!TryGetDbService(out ICharacterAttributeService attributeService) ||
-					!TryGetDbService(out ICharacterBankService bankService) ||
 					!TryGetDbService(out ICharacterBuffService buffService) ||
-					!TryGetDbService(out ICharacterEquipmentService equipmentService) ||
 					!TryGetDbService(out ICharacterFactionService factionService) ||
 					!TryGetDbService(out ICharacterFriendService friendService) ||
 					!TryGetDbService(out ICharacterHotkeyService hotkeyService) ||
-					!TryGetDbService(out ICharacterInventoryService inventoryService) ||
+					!TryGetDbService(out ICharacterItemService itemService) ||
 					!TryGetDbService(out ICharacterKnownAbilityService knownAbilityService) ||
 					!TryGetDbService(out ICharacterPetService petService) ||
 					!TryGetDbService(out ICharacterPetAttributeService petAttributeService) ||
@@ -350,20 +348,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete achievements for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await attributeService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete attributes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
-						r = await bankService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete bank for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await buffService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete buffs for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
-						r = await equipmentService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete equipment for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await factionService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete factions for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await friendService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete friends for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await hotkeyService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete hotkeys for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
-						r = await inventoryService.DeleteAsync(characterId, deleteVersion);
-						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete inventory for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						// One statement for the inventory, the bank and the equipment: they share a
+						// table now, so there is nothing left to sequence between them.
+						r = await itemService.DeleteAsync(characterId, deleteVersion);
+						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete items for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await knownAbilityService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete known abilities for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						r = await petService.DeleteAsync(characterId, deleteVersion);

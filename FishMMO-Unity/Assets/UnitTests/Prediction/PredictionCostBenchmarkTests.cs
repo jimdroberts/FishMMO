@@ -175,7 +175,7 @@ namespace FishMMO.UnitTests
 			d.Equipment = new EquipmentReconcileEntry[equipment];
 			for (int i = 0; i < equipment; i++)
 			{
-				d.Equipment[i] = new EquipmentReconcileEntry { Slot = (byte)i, TemplateID = 300 + i, Seed = i * 7, InstanceID = 5000 + i };
+				d.Equipment[i] = new EquipmentReconcileEntry { Slot = (byte)i, TemplateID = 300 + i, Seed = i * 7, ItemID = 5000 + i };
 			}
 
 			d.Attributes = new AttributeReconcileEntry[attributes];

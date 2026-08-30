@@ -35,6 +35,17 @@ namespace FishMMO.Shared
 		public float DetectionRadius = 10;
 
 		/// <summary>
+		/// Bodies already accepted by the current <see cref="SweepForEnemies"/> pass.
+		/// </summary>
+		/// <remarks>
+		/// Static and reused: the sweep is fully consumed inside one synchronous call, and AI runs
+		/// on the server's single thread. States are <c>ScriptableObject</c> assets shared by every
+		/// NPC that references them, so a per-instance field here would be shared anyway — cleared
+		/// on entry is what makes it safe either way.
+		/// </remarks>
+		private static readonly List<GameObject> sweepKeys = new List<GameObject>(16);
+
+		/// <summary>
 		/// The layers considered as enemies for detection.
 		/// </summary>
 		public LayerMask EnemyLayers;
@@ -199,37 +210,72 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			// Use physics overlap sphere to find nearby colliders in enemy layers.
-			int overlapCount = controller.PhysicsScene.OverlapSphere(
-					controller.Character.Transform.position,
-					DetectionRadius,
-					controller.SweepHits,
-					EnemyLayers,
-					QueryTriggerInteraction.Ignore);
+			/* Re-queried until the buffer stops coming back full. A non-allocating overlap returns
+			 * at most buffer.Length results and says nothing about how many it discarded, and the
+			 * broadphase chose which ones — so an NPC in a fight bigger than its buffer aggroed an
+			 * arbitrary subset of its attackers and simply never noticed the rest, differently on
+			 * each run. */
+			int overlapCount;
+			while (true)
+			{
+				overlapCount = controller.PhysicsScene.OverlapSphere(
+						controller.Character.Transform.position,
+						DetectionRadius,
+						controller.SweepHits,
+						EnemyLayers,
+						QueryTriggerInteraction.Ignore);
 
+				if (!TargetOrdering.TryGrowQueryBuffer(ref controller.SweepHits, overlapCount))
+				{
+					break;
+				}
+			}
+
+			/* Resolved through TargetOrdering, not with a bare GetComponent on the collider.
+			 *
+			 * The collider a query returns is frequently not the body anything cares about: a
+			 * character is free to hang its hitbox off a child transform, and GetComponent on that
+			 * child finds no ICharacter — so such a character was INVISIBLE to every NPC's enemy
+			 * sweep, while remaining perfectly able to attack them. The same walk also collapses a
+			 * character rigged with several colliders, which would otherwise be added to
+			 * detectedEnemies once per collider and weighted that many times by whatever picks a
+			 * target from the list. Same resolver the hit-resolving paths use. */
+			sweepKeys.Clear();
 			for (int i = 0; i < overlapCount && i < controller.SweepHits.Length; ++i)
 			{
 				Collider hitCollider = controller.SweepHits[i];
-				// Ignore self collider.
-				if (hitCollider != controller.Character.Collider)
+				if (hitCollider == null)
 				{
-					ICharacter def = controller.SweepHits[i].gameObject.GetComponent<ICharacter>();
+					continue;
+				}
 
-					// Check faction alliance and only add enemies.
-					if (def != null &&
-						def.TryGet(out IFactionController defenderFactionController) &&
-						defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)
-					{
-						bool lineOfSight = HasLineOfSight(controller, def);
+				GameObject key = TargetOrdering.ResolveHitKey(hitCollider, out ICharacter def);
+				// Ignore ourselves, and anything that is not a character.
+				if (key == null || def == null || def == controller.Character)
+				{
+					continue;
+				}
+
+				// One body, one entry, however many colliders it owns.
+				if (TargetOrdering.ContainsBody(sweepKeys, key))
+				{
+					continue;
+				}
+				sweepKeys.Add(key);
+
+				// Check faction alliance and only add enemies.
+				if (def.TryGet(out IFactionController defenderFactionController) &&
+					defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)
+				{
+					bool lineOfSight = HasLineOfSight(controller, def);
 
 #if UNITY_EDITOR
-						Log.Debug("BaseAIState", $"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
+					Log.Debug("BaseAIState", $"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
 #endif
 
-						if (lineOfSight)
-						{
-							detectedEnemies.Add(def);
-						}
+					if (lineOfSight)
+					{
+						detectedEnemies.Add(def);
 					}
 				}
 			}

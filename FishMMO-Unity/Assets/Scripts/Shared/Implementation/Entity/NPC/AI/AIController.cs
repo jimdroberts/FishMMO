@@ -17,8 +17,17 @@ namespace FishMMO.Shared
 	public partial class AIController : CharacterBehaviour, IAIController
 	{
 		/// <summary>
-		/// Buffer for storing colliders hit during enemy sweep.
+		/// Buffer for storing colliders hit during enemy sweep. Grown on demand — see
+		/// <see cref="BaseAIState.SweepForEnemies"/>.
 		/// </summary>
+		/// <remarks>
+		/// Not a fixed 20. A non-allocating overlap returns at most <c>buffer.Length</c> results and
+		/// says nothing about how many it discarded, and the ones it discarded were chosen by the
+		/// physics broadphase — so an NPC in a fight larger than its buffer detected an arbitrary,
+		/// run-varying subset of its attackers and ignored the rest. The sweep re-queries into a
+		/// larger buffer through <c>TargetOrdering.TryGrowQueryBuffer</c> until it stops coming back
+		/// full, which is the same treatment every other spatial query in the project gets.
+		/// </remarks>
 		public Collider[] SweepHits = new Collider[20];
 
 		/// <summary>

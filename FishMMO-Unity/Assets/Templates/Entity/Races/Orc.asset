@@ -19,7 +19,6 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Models: []
   Description: 
   InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
   InitialFaction: {fileID: 11400000, guid: e5859044195c03e44adebc73805dd570, type: 2}

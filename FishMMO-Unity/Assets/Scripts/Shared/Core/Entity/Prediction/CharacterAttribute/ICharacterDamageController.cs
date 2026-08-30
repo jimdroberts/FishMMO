@@ -173,6 +173,25 @@ namespace FishMMO.Shared.Core
 		bool TryConsumeContributors(out List<long> contributors);
 
 		/// <summary>
+		/// True when <paramref name="characterID"/> has contributed to this character's current
+		/// combat.
+		/// </summary>
+		/// <remarks>
+		/// A peek, unlike <see cref="TryConsumeContributors"/>, which hands the list out and clears
+		/// it — this is asked once per viewer per observer-scheduling pass and must not disturb the
+		/// loot-rights ledger it reads.
+		/// <para>
+		/// Exists so observer streaming can pin the characters a player is actually fighting. The
+		/// visibility budget can otherwise despawn an enemy mid-fight when it is neither the
+		/// player's current target nor a party member, and a despawned victim takes its combat
+		/// reports with it — no damage numbers, and the player's own predicted numbers greying out
+		/// as unconfirmed while every hit is landing.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterID">The character to look for.</param>
+		bool HasCombatContributor(long characterID);
+
+		/// <summary>
 		/// Drops all contribution bookkeeping in both directions.
 		/// </summary>
 		void ClearCombatContributions();

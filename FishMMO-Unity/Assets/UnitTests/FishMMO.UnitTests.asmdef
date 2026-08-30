@@ -24,6 +24,7 @@
         "FishMMO-ServerAuth.dll",
         "FishMMO-Logger.dll",
         "FishMMO-SharedUtility.dll",
+        "FishMMO-DB.dll",
         "srp.dll",
         "BouncyCastle.Cryptography.dll",
         "Otp.NET.dll",

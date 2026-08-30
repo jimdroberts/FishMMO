@@ -100,15 +100,30 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The ring evicts oldest-first and refuses ticks that have fallen out of the window.
+		/// The ring evicts oldest-first, clamps a tick a little past the window, and refuses one
+		/// wildly past it.
 		/// </summary>
 		/// <remarks>
-		/// Refusing rather than clamping is the security-relevant half. A client that reports an
-		/// implausible latency is asking to resolve against a tick the server no longer holds; the
-		/// honest answer is "no compensation", not "as much as I have".
+		/// <para>
+		/// The two out-of-window cases answer different questions and must not share an answer.
+		/// </para>
+		/// <para>
+		/// <b>A little past the window is a real client that is simply slower than the recording.</b>
+		/// Refusing it was a cliff, not a defence: the ceiling on how far back anybody can shoot is
+		/// the recording itself, and an attacker reaches that ceiling by claiming a value just INSIDE
+		/// the window — which was always accepted. Refusing only rejected claims that overshot, and
+		/// those buy strictly less, so the rule deterred nobody and cut off honest high-latency
+		/// players entirely.
+		/// </para>
+		/// <para>
+		/// <b>Wildly past it is a tick-domain error</b>, and clamping that would hand back a
+		/// real-looking pose for a tick nobody recorded. See
+		/// <see cref="History_AndCompensationAnchor_ShareOneTickDomain"/>, which is the test that
+		/// depends on this half.
+		/// </para>
 		/// </remarks>
 		[Test]
-		public void History_EvictsOldest_AndRefusesTicksOutsideTheWindow()
+		public void History_EvictsOldest_ClampsNearMissesAndRefusesFarOnes()
 		{
 			Allocate(8);
 			for (uint i = 0; i < 20; i++)
@@ -119,8 +134,17 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(8, history.Capacity, "The ring must not grow past its allocation.");
 			LogAssert.AreEqual(8, history.RecordedTicks, "A saturated ring holds exactly its capacity.");
 
-			LogAssert.IsTrue(!history.TryResolve(100, out _),
-				"Tick 100 has been evicted and must be refused rather than clamped.");
+			// Oldest held is 112 (ticks 112..119). 100 is 12 ticks past it, inside one window of grace.
+			LogAssert.IsTrue(history.TryResolve(100, out CharacterPositionHistory.Snapshot clamped),
+				"Tick 100 has been evicted but is within one window of the oldest sample, so it must " +
+				"clamp rather than decline — refusing it is the cliff that cut off high-ping players.");
+			LogAssert.IsTrue(Mathf.Abs(clamped.Position.z - 12f) < 0.001f,
+				$"A clamped resolve must return the OLDEST held sample (z=12), not z={clamped.Position.z}.");
+
+			LogAssert.IsFalse(history.TryResolve(50, out _),
+				"Tick 50 is more than one window past the oldest sample. Nothing a latency claim can " +
+				"produce reaches that far — only a tick-domain error does — so it must be refused.");
+
 			LogAssert.IsTrue(history.TryResolve(115, out CharacterPositionHistory.Snapshot recent),
 				"A tick still inside the window must resolve.");
 			LogAssert.IsTrue(Mathf.Abs(recent.Position.z - 15f) < 0.001f,
@@ -408,7 +432,13 @@ namespace FishMMO.UnitTests
 				$"Expected the sample recorded for tick {serverTickNow - 2u} (z=13) but resolved to z={inDomain.Position.z}.");
 
 			/* The owning client's domain does not, and must not be quietly clamped to the oldest
-			 * sample either — that would hand back a real-looking pose for a tick nobody recorded. */
+			 * sample either — that would hand back a real-looking pose for a tick nobody recorded,
+			 * turning a dead subsystem into a silently wrong one.
+			 *
+			 * This is the half of the out-of-window rule that survives the clamp added for
+			 * high-latency clients: a near miss clamps, but a domain error overshoots by the
+			 * client's entire uptime and is still refused. The separation is enormous and not a
+			 * tuned threshold — see History_EvictsOldest_ClampsNearMissesAndRefusesFarOnes. */
 			LogAssert.IsFalse(
 				history.TryResolve(new RewindTarget(clientDomainTick), out _),
 				"A target built from the owning client's replicate tick is not in this history's domain " +
@@ -509,6 +539,98 @@ namespace FishMMO.UnitTests
 			TestContext.WriteLine($"MEASURE predicted character prefabs carrying position history: {checkedPrefabs}");
 			LogAssert.IsTrue(checkedPrefabs > 0,
 				"No predicted character prefab was found — this guard is not actually checking anything.");
+		}
+
+		#endregion
+
+		#region View offset composition.
+
+		/// <summary>
+		/// The client's claim covers the FULL round trip, not half of it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The offset is subtracted from the server tick at which the replicate body RUNS. Two
+		/// network trips separate that instant from the one the client built the input on: the state
+		/// it was looking at travelled server → client, and the input travelled client → server.
+		/// Half the round trip covered only the first, so every shot resolved against a world a
+		/// one-way trip newer than the one the shooter aimed in — an error that grew with ping, on
+		/// exactly the connections compensation exists for.
+		/// </para>
+		/// <para>
+		/// Pinned against the source rather than by calling <c>ResolveViewOffset</c>, which is a
+		/// private instance method on a <c>NetworkBehaviour</c> that needs a live TimeManager to say
+		/// anything at all. The arithmetic itself is one line and reverting it is one token.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void ViewOffset_UsesFullRoundTrip_NotHalf()
+		{
+			string source = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlayer.cs");
+
+			LogAssert.IsFalse(source.Contains("HalfRoundTripTime"),
+				"KCCPlayer must not build the view offset from HalfRoundTripTime. The anchor is the " +
+				"tick the replicate RUNS on, so the input's own trip to the server is part of the gap " +
+				"and both halves of the round trip count.");
+			LogAssert.IsTrue(source.Contains("timeManager.RoundTripTime"),
+				"The view offset must be built from the full RoundTripTime.");
+		}
+
+		/// <summary>
+		/// The server adds its own replicate queue depth, which the client cannot see.
+		/// </summary>
+		/// <remarks>
+		/// FishNet deliberately holds <c>StateInterpolation</c> entries in the replicates queue
+		/// before consuming one, so an input that has ARRIVED has still not RUN for that many ticks.
+		/// The client's claim ends at "sent"; without this term every player was compensated two
+		/// ticks short of their real view, whatever their ping.
+		/// </remarks>
+		[Test]
+		public void ViewOffset_AddsTheServerReplicateQueueDepth()
+		{
+			LogAssert.AreEqual(0u, LagCompensationTick.ResolveReplicateQueueTicks(null),
+				"With no network object to read a PredictionManager from, the queue term is zero " +
+				"rather than a throw — that loses compensation, it does not break the hit.");
+
+			string source = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs");
+			LogAssert.IsTrue(source.Contains("wholeTicks += ResolveReplicateQueueTicks(nob)"),
+				"TryResolve must add the server's replicate queue depth to the client's claim.");
+			LogAssert.IsTrue(source.Contains("predictionManager.StateInterpolation"),
+				"The queue depth must be read live from PredictionManager.StateInterpolation rather " +
+				"than assumed — it is authored per deployment.");
+		}
+
+		/// <summary>
+		/// The queue term is added AFTER the client's claim is capped, so it cannot be inflated.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="LagCompensationTick.MaximumCompensationTicks"/> bounds the attacker-controlled
+		/// half. Adding the server's own term afterwards keeps it outside anything a client can
+		/// influence; folding it in before the cap would let a maximal claim absorb it instead.
+		/// </remarks>
+		[Test]
+		public void ViewOffset_CapsTheClaimBeforeAddingTheServerTerm()
+		{
+			string source = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs");
+
+			int capIndex = source.IndexOf("claimed > MaximumCompensationTicks");
+			int queueIndex = source.IndexOf("wholeTicks += ResolveReplicateQueueTicks(nob)");
+
+			LogAssert.IsTrue(capIndex >= 0, "The client claim must still be capped.");
+			LogAssert.IsTrue(queueIndex >= 0, "The server queue term must still be added.");
+			LogAssert.IsTrue(capIndex < queueIndex,
+				"MaximumCompensationTicks must cap the CLIENT's claim before the server's queue depth " +
+				"is added, so the server-side term is never something a client can inflate.");
+		}
+
+		private static string ReadSource(string relativePath)
+		{
+			string path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), relativePath);
+			LogAssert.IsTrue(System.IO.File.Exists(path), $"Expected source at {path}.");
+			return System.IO.File.ReadAllText(path);
 		}
 
 		#endregion

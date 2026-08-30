@@ -23,7 +23,4 @@ MonoBehaviour:
   Resources:
     m_keys: []
     m_values: 
-  Requirements:
-    m_keys: []
-    m_values: 
   OverrideAbilityType: 6

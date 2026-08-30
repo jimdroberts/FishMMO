@@ -937,20 +937,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Resolve DB services for fire-and-forget persistence
-			TryGetDbService<ICharacterInventoryService>(out var inventoryService);
-			TryGetDbService<ICharacterBankService>(out var bankService);
+			TryGetDbService<ICharacterItemService>(out var itemService);
 
 			// Try inventory first
 			if (character.TryGet(out IInventoryController inventoryController) &&
 				inventoryController.FreeSlots() >= allRewards.Count)
 			{
-				GrantItemsToInventory(character, inventoryController, inventoryService, allRewards);
+				GrantItemsToInventory(character, inventoryController, itemService, allRewards);
 			}
 			// Fall back to bank
 			else if (character.TryGet(out IBankController bankController) &&
 					 bankController.FreeSlots() >= allRewards.Count)
 			{
-				GrantItemsToBank(character, bankController, bankService, allRewards);
+				GrantItemsToBank(character, bankController, itemService, allRewards);
 			}
 			else
 			{
@@ -967,7 +966,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Grants item rewards to the player's inventory and broadcasts updates.
 		/// </summary>
 		private void GrantItemsToInventory(IPlayerCharacter character, IInventoryController inventoryController,
-			ICharacterInventoryService inventoryService, List<BaseItemTemplate> rewards)
+			ICharacterItemService itemService, List<BaseItemTemplate> rewards)
 		{
 			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 
@@ -985,19 +984,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							continue;
 						}
 
-						if (inventoryService != null)
+						if (itemService != null)
 						{
 							item.Version++;
-							var dto = new CharacterInventoryData(
+							var dto = new CharacterItemData(
 								id: item.ID,
 								version: item.Version,
 								characterID: character.ID,
+								container: ItemContainerType.Inventory,
 								templateID: item.Template.ID,
 								slot: item.Slot,
 								seed: item.IsGenerated ? item.Generator.Seed : 0,
 								amount: item.IsStackable ? item.Stackable.Amount : 0
 							);
-							EnqueuePersistence(() => PersistInventorySlotAsync(inventoryService, dto), character.ID);
+							EnqueuePersistence(() => PersistItemAsync(itemService, dto), character.ID);
 						}
 
 						modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -1025,7 +1025,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Grants item rewards to the player's bank and broadcasts updates.
 		/// </summary>
 		private void GrantItemsToBank(IPlayerCharacter character, IBankController bankController,
-			ICharacterBankService bankService, List<BaseItemTemplate> rewards)
+			ICharacterItemService itemService, List<BaseItemTemplate> rewards)
 		{
 			List<BankSetItemBroadcast> modifiedItemBroadcasts = new List<BankSetItemBroadcast>();
 
@@ -1043,19 +1043,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							continue;
 						}
 
-						if (bankService != null)
+						if (itemService != null)
 						{
 							item.Version++;
-							var dto = new CharacterBankData(
+							var dto = new CharacterItemData(
 								id: item.ID,
 								version: item.Version,
 								characterID: character.ID,
+								container: ItemContainerType.Bank,
 								templateID: item.Template.ID,
 								slot: item.Slot,
 								seed: item.IsGenerated ? item.Generator.Seed : 0,
 								amount: item.IsStackable ? item.Stackable.Amount : 0
 							);
-							EnqueuePersistence(() => PersistBankSlotAsync(bankService, dto), character.ID);
+							EnqueuePersistence(() => PersistItemAsync(itemService, dto), character.ID);
 						}
 
 						modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
@@ -1116,40 +1117,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		#region Async Persistence Helpers
 
 		/// <summary>
-		/// Asynchronously persists an inventory item slot to the database.
+		/// Asynchronously persists one item row to the database.
 		/// </summary>
-		private async Task PersistInventorySlotAsync(ICharacterInventoryService service, CharacterInventoryData dto)
+		/// <remarks>
+		/// The identity the write returns is discarded, which is the same known shortcoming the
+		/// achievement reward path carries: this is fire-and-forget with no main-thread hand-off, so
+		/// there is nowhere to put the id. The item keeps <c>ID == 0</c> until
+		/// <c>CharacterInventorySystem</c>'s next snapshot writes it and reports the identity back.
+		/// </remarks>
+		private async Task PersistItemAsync(ICharacterItemService service, CharacterItemData dto)
 		{
 			try
 			{
 				DatabaseResult<long> result = await service.PersistAsync(dto);
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("QuestSystem", $"PersistInventorySlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Warning("QuestSystem", $"PersistItemAsync DB error (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("QuestSystem", $"Error persisting inventory slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Asynchronously persists a bank item slot to the database.
-		/// </summary>
-		private async Task PersistBankSlotAsync(ICharacterBankService service, CharacterBankData dto)
-		{
-			try
-			{
-				DatabaseResult<long> result = await service.PersistAsync(dto);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("QuestSystem", $"PersistBankSlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("QuestSystem", $"Error persisting bank slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
+				await Log.Error("QuestSystem", $"Error persisting item (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {ex}");
 			}
 		}
 

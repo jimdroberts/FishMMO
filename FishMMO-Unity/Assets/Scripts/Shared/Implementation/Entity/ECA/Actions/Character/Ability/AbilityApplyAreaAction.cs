@@ -33,12 +33,28 @@ namespace FishMMO.Shared
 		public LayerMask TargetLayerMask = ~0;
 
 		/// <summary>
-		/// Reused result list. Not static: an OnHit trigger fired from the loop below can author
-		/// another area effect, and a shared list would be cleared out from under the fan-out that
-		/// owns it.
+		/// Reused result list, lent out for the duration of one <see cref="Execute"/>.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Not static, because two different area actions can be mid-fan-out at once. But an
+		/// instance field is not enough on its own either: an OnHit trigger fired from the loop below
+		/// is free to reach the SAME serialized action instance again — an ability whose hit event
+		/// re-enters itself — and the re-entrant call would clear the list the outer loop is still
+		/// walking. <see cref="inUse"/> is what closes that: the outer call owns the field, and any
+		/// nested one allocates its own.
+		/// </para>
+		/// <para>
+		/// The nested case is rare enough to be worth an allocation and common enough to be worth
+		/// surviving; the ordinary path still allocates once for the life of the asset.
+		/// </para>
+		/// </remarks>
 		[NonSerialized]
 		private List<LagCompensatedQuery.CompensatedHit> hits;
+
+		/// <summary>True while <see cref="hits"/> is lent to an <see cref="Execute"/> still running.</summary>
+		[NonSerialized]
+		private bool inUse;
 
 		/// <summary>
 		/// Executes the area effect, applying the ability to all valid targets within the radius.
@@ -73,7 +89,19 @@ namespace FishMMO.Shared
 					int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 					float radius = RadiusValue.GetValue(initiator, eventData);
 
-					hits ??= new List<LagCompensatedQuery.CompensatedHit>(16);
+					/* Borrow the shared list, or allocate a private one when a nested execution already
+					 * holds it. See the remarks on `hits`. */
+					bool ownsSharedList = !inUse;
+					List<LagCompensatedQuery.CompensatedHit> hitBuffer;
+					if (ownsSharedList)
+					{
+						inUse = true;
+						hitBuffer = hits ??= new List<LagCompensatedQuery.CompensatedHit>(16);
+					}
+					else
+					{
+						hitBuffer = new List<LagCompensatedQuery.CompensatedHit>(16);
+					}
 
 					Vector3 center = abilityObject.Transform.position;
 					/* Resolved against where the caster's client saw these characters, not where
@@ -89,52 +117,66 @@ namespace FishMMO.Shared
 					 * the broadphase before any of that ran, and it resolved characters with a bare
 					 * GetComponent on the collider, which drops a character whose hitbox is a child
 					 * and counts a character with two hitboxes twice. */
-					int hitCount = LagCompensatedQuery.OverlapSphereNearest(
-						eventData, abilityObject.GameObject, center, radius, TargetLayerMask,
-						maxHits, charactersOnly: true, hits);
-
-					var onHitEvents = abilityObject.OnHitEvents;
-					if (onHitEvents == null)
+					/* try/finally around everything that touches the borrowed list. An OnHit trigger
+					 * below runs arbitrary authored actions and may throw, and the early return for a
+					 * missing OnHitEvents set is inside this block too — either would otherwise leave
+					 * `inUse` latched true for the life of the asset, so every later cast on every
+					 * character allocated a fresh list forever. */
+					try
 					{
-						Log.Warning("AbilityApplyAreaAction", "No OnHitEvents available.");
-						return;
+						int hitCount = LagCompensatedQuery.OverlapSphereNearest(
+							eventData, abilityObject.GameObject, center, radius, TargetLayerMask,
+							maxHits, charactersOnly: true, hitBuffer);
+
+						var onHitEvents = abilityObject.OnHitEvents;
+						if (onHitEvents == null)
+						{
+							Log.Warning("AbilityApplyAreaAction", "No OnHitEvents available.");
+							return;
+						}
+
+						// Extract tick context once from the parent event so each child collision
+						// event inherits it. Without this, downstream ApplyBuffAction falls back
+						// to TimeManager.LocalTick and loses tick alignment in prediction paths.
+						eventData.TryGet(out TickEventData tickToPropagate);
+
+						for (int i = 0; i < hitCount; i++)
+						{
+							/* Already deduplicated per character, ordered nearest-first and filtered to
+							 * characters by the query, so this loop neither re-resolves components nor has
+							 * to guard against the same body arriving twice. */
+							ICharacter targetCharacter = hitBuffer[i].Character;
+							if (targetCharacter == null)
+							{
+								continue;
+							}
+
+							/* The impact point and normal travel now that the query measures them inside the
+							 * rewind scope. An OnHit effect on an area ability used to be placed with no
+							 * point at all and defaulted to the target's origin, so a blast marked every
+							 * victim at its feet rather than on the side facing the explosion. */
+							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
+								initiator, targetCharacter, abilityObject, hitBuffer[i].Point, hitBuffer[i].Normal, abilityObject.RNG);
+							if (tickToPropagate != null)
+							{
+								collisionEvent.Add(tickToPropagate);
+							}
+
+							foreach (var trigger in onHitEvents.Values)
+							{
+								trigger?.Execute(collisionEvent);
+							}
+						}
 					}
-
-					// Extract tick context once from the parent event so each child collision
-					// event inherits it. Without this, downstream ApplyBuffAction falls back
-					// to TimeManager.LocalTick and loses tick alignment in prediction paths.
-					eventData.TryGet(out TickEventData tickToPropagate);
-
-					for (int i = 0; i < hitCount; i++)
+					finally
 					{
-						/* Already deduplicated per character, ordered nearest-first and filtered to
-						 * characters by the query, so this loop neither re-resolves components nor has
-						 * to guard against the same body arriving twice. */
-						ICharacter targetCharacter = hits[i].Character;
-						if (targetCharacter == null)
+						// Nothing holds a reference into the query's reusable buffers past this point.
+						hitBuffer.Clear();
+						if (ownsSharedList)
 						{
-							continue;
-						}
-
-						/* The impact point and normal travel now that the query measures them inside the
-						 * rewind scope. An OnHit effect on an area ability used to be placed with no
-						 * point at all and defaulted to the target's origin, so a blast marked every
-						 * victim at its feet rather than on the side facing the explosion. */
-						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
-							initiator, targetCharacter, abilityObject, hits[i].Point, hits[i].Normal, abilityObject.RNG);
-						if (tickToPropagate != null)
-						{
-							collisionEvent.Add(tickToPropagate);
-						}
-
-						foreach (var trigger in onHitEvents.Values)
-						{
-							trigger?.Execute(collisionEvent);
+							inUse = false;
 						}
 					}
-
-					// Nothing holds a reference into the query's reusable buffers past this point.
-					hits.Clear();
 				}
 				else
 				{

@@ -398,12 +398,36 @@ namespace FishMMO.Shared
 					/* Pins: never evicted, whatever the crowd.
 					 *
 					 * Party members inside the ability ceiling, because a group that cannot see each
-					 * other cannot play together — and the character the viewer currently targets,
+					 * other cannot play together; the character the viewer currently targets,
 					 * because losing your target mid-fight is the worst possible moment for a
-					 * despawn. Pins still occupy budget slots, so a full party in a crowd simply
-					 * leaves fewer slots for strangers. */
+					 * despawn; and anything the viewer is ACTUALLY FIGHTING, which is the case the
+					 * first two miss.
+					 *
+					 * That third one closes a real hole. An enemy that is neither targeted nor a
+					 * party member could be evicted by the budget mid-fight — and a despawned victim
+					 * takes its combat reports with it, because CharacterDamageController.
+					 * FlushCombatEvents broadcasts to the VICTIM's observers. The player then sees
+					 * no damage numbers at all, and their own predicted numbers grey out as
+					 * unconfirmed after a second, while every hit is landing. Nothing about that
+					 * reads as "the server stopped sending me this creature".
+					 *
+					 * Both directions, because either one means a fight: the viewer has damaged the
+					 * observed character, or the observed character has damaged the viewer. Bounded
+					 * by the ability ceiling like the party pin, so a fight that has genuinely moved
+					 * out of range stops holding a slot.
+					 *
+					 * Pins still occupy budget slots, so a player fighting several enemies simply
+					 * leaves fewer slots for strangers — which is the right trade. */
+					bool engagedWith = observed.InCombat &&
+						distance <= ObserverStreamingPolicy.EngagementRangeCeiling &&
+						viewer.Character != null &&
+						observed.Character != null &&
+						(observed.IsFoughtBy(viewer.Character.ID) ||
+						 viewer.IsFoughtBy(observed.Character.ID));
+
 					bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
-						(viewerTargetId != 0 && observed.NetworkObject.ObjectId == viewerTargetId);
+						(viewerTargetId != 0 && observed.NetworkObject.ObjectId == viewerTargetId) ||
+						engagedWith;
 					if (pinned)
 					{
 						pins.Add(observed.NetworkObject.ObjectId);

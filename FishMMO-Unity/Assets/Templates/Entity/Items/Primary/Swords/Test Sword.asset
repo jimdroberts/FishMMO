@@ -20,7 +20,6 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: e04e6c970b950d946a782ea08e5f971d, type: 3}
   Slot: 7
   MaxItemAttributes: 0
-  AttributeDatabases: []
   ModelSeed: 0
   ModelPools: 
   AttackPower: {fileID: 11400000, guid: 23b76e39682ae764690280034e76f280, type: 2}

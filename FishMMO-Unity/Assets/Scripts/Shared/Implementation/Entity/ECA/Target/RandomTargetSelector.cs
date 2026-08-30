@@ -46,7 +46,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Preallocated array for storing collider hits during OverlapSphere queries.
 		/// </summary>
-		private Collider[] hits;
+
 
 		/// <summary>
 		/// Returns a random <see cref="GameObject"/> from all within <see cref="Radius"/> of the context.
@@ -91,7 +91,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
 		{
-			EnsureHitBuffer();
+			Collider[] hits = NewHitBuffer();
 			List<GameObject> candidates = new List<GameObject>();
 			/* One key per candidate, so the roll below draws from a set of BODIES rather than of
 			 * colliders — see TargetOrdering.DedupeByBody. The candidate itself stays the collider's
@@ -183,16 +183,26 @@ namespace FishMMO.Shared
 		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
 		/// by this selector rather than by the broadphase.
 		/// </summary>
-		private void EnsureHitBuffer()
-		{
-			int size = QueryBufferSize(MaxHits);
-			/* Grow-only. This used to reallocate whenever the length differed from the authored
-			 * size, which silently undid any growth TryGrowQueryBuffer had bought on the previous
-			 * query — so a selector in a dense crowd re-truncated on every single cast. */
-			if (hits == null || hits.Length < size)
-			{
-				hits = new Collider[size];
-			}
-		}
+		/// <summary>
+		/// A query buffer wide enough that the cap is applied by this selector rather than by the
+		/// broadphase.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Local to one gather, not a field.</b> Selectors are serialized inline on shared assets,
+		/// so one instance serves every character that casts the ability — and a candidate's authored
+		/// conditions can fire nested triggers that reach this same instance again. A re-entrant gather
+		/// re-ran the query into the shared array while the outer loop was still walking it, so the
+		/// outer cast resolved against another cast's colliders. The scratch LISTS were made local for
+		/// exactly this reason; the buffer was missed.
+		/// </para>
+		/// <para>
+		/// Deliberately wider than the cap: sizing it at exactly MaxHits makes the broadphase perform
+		/// the truncation, in its own order, before the selector sees the candidates. The caller still
+		/// grows it through <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> when a query comes back
+		/// full.
+		/// </para>
+		/// </remarks>
+		private Collider[] NewHitBuffer() => new Collider[QueryBufferSize(MaxHits)];
 	}
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -37,61 +38,127 @@ namespace FishMMO.Shared
 		public BaseItemTemplate Template { get; private set; }
 
 		/// <summary>
-		/// The unique ID for this item instance.
-		/// </summary>
-		public long ID;
-
-		/// <summary>Counter behind <see cref="InstanceID"/>.</summary>
-		private static long nextInstanceID;
-
-		/// <summary>Backing field; assigned on first use so no constructor has to remember.</summary>
-		[NonSerialized]
-		private long instanceID;
-
-		/// <summary>
-		/// A process-unique identity for this item object, used to key its contribution to a
-		/// character's attributes.
+		/// This item's identity: the primary key of its row in <c>character_item</c>.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Deliberately not <see cref="ID"/>, and the reason is not that the item is unsaved.</b>
-		/// Items ARE persisted the moment they are created, and the database does generate and return
-		/// an id — <c>CharacterInventoryService.PersistAsync</c> ends in <c>RETURNING id</c>. Two
-		/// things still make that id the wrong key.
+		/// <b>There is exactly one item identity, and this is it.</b> There used to be two — this,
+		/// and a process-local <c>InstanceID</c> counter that the attribute ledger keyed on — because
+		/// the database could not supply an identity that was usable. Items lived in three tables
+		/// (<c>character_inventory</c>, <c>character_equipment</c>, <c>character_bank</c>), each row
+		/// was keyed <c>(character_id, slot)</c>, and each table had its own identity sequence. So a
+		/// row id named a SLOT rather than an item: it changed when the item moved, it was reused by
+		/// the next item through that slot, and the same number named three different items across
+		/// the three tables. Keying an attribute contribution by it would have merged the bonuses of
+		/// every item that ever passed through a socket.
 		/// </para>
 		/// <para>
-		/// <b>It is a SLOT identity, not an item identity.</b> The upsert is
-		/// <c>ON CONFLICT (character_id, slot) DO UPDATE</c>, so the row belongs to the slot rather
-		/// than to the thing in it. Move one item between two slots and it is two different rows;
-		/// put two different items through one slot and they share a row id. Keying an item's
-		/// attribute contribution by that would merge the contributions of every item that ever
-		/// occupied the slot.
+		/// The single <c>character_item</c> table removed all three problems at once, so the second
+		/// identity had nothing left to do. <c>container</c> and <c>slot</c> are now ordinary columns
+		/// on a row keyed by this value, which means it survives a move between slots, a move between
+		/// containers, and a relog.
 		/// </para>
 		/// <para>
-		/// <b>And it arrives too late.</b> The persist is enqueued fire-and-forget onto a worker
-		/// (<c>EnqueuePersistence</c>), so the item is in the inventory and equippable before the id
-		/// comes back. A ledger key has to be stable for the lifetime of the contribution: equipping
-		/// at <c>ID == 0</c> and releasing after the write-back landed would clear a key that was
-		/// never written, orphaning the bonus permanently. Nothing writes the returned id back onto
-		/// the item today in any case — the service returns it as a stale-version signal, which is
-		/// what <c>id &lt;= 0</c> throws on.
-		/// </para>
-		/// <para>
-		/// It does not matter that two peers assign different numbers to the same logical item: a
-		/// ledger is local to the peer that built it and is never compared across the wire. See
-		/// <see cref="ModifierSource"/>.
+		/// <b>Zero means "not yet written".</b> An item created at runtime — loot, a quest reward, a
+		/// merchant purchase, a stack split — has no identity until its first persist returns one,
+		/// which is what <see cref="AssignPersistentID"/> is for. Nothing may key durable state by a
+		/// zero id.
 		/// </para>
 		/// </remarks>
-		public long InstanceID
+		public long ID { get; private set; }
+
+		/// <summary>
+		/// Records the identity the database assigned to this item on its first write.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Re-keys the item's attribute contribution, which is why this is a method.</b> An item
+		/// equipped before its first persist returned has already written ledger entries under
+		/// <c>ModifierSource.Item(0)</c>. Simply moving the field would strand those: the release on
+		/// unequip would look for the new key, find nothing, and leave the bonus applied for the rest
+		/// of the character's session. Releasing under the old key and re-applying under the new one
+		/// is idempotent — <c>SetSource</c> states a whole contribution rather than adding to one —
+		/// so the character's totals do not move.
+		/// </para>
+		/// <para>
+		/// <b>And derives the generation seed, for the same reason.</b> <see cref="Initialize"/>
+		/// derives a generated item's seed from its id, and an item built with no id could not do
+		/// that — so a looted weapon rolled its attributes from seed 0, and the reload after logout
+		/// re-derived a real seed from the id the database had meanwhile assigned and rolled a
+		/// DIFFERENT set. Deriving here closes that: the item's stats stop changing behind the
+		/// player's back at the next relog. The re-key above then publishes the corrected values,
+		/// because it re-reads the generator after this runs.
+		/// </para>
+		/// <para>
+		/// Ignores a second call with the same id, and refuses a non-positive one. Reassigning a
+		/// live identity is not a thing that can legitimately happen and would silently move the
+		/// item's ledger key, so it is refused rather than accommodated.
+		/// </para>
+		/// </remarks>
+		/// <param name="id">The identity the database assigned. Must be positive.</param>
+		/// <returns>True when the identity was applied.</returns>
+		public bool AssignPersistentID(long id)
 		{
-			get
+			if (id <= 0 || ID == id)
 			{
-				if (instanceID == 0)
-				{
-					instanceID = ++nextInstanceID;
-				}
-				return instanceID;
+				return false;
 			}
+
+			if (ID != 0)
+			{
+				Log.Error("Item", $"Refusing to reassign item identity {ID} to {id} ('{Name}'). " +
+					"An item's id is fixed once the database has issued one; changing it would move " +
+					"its attribute-ledger key out from under any contribution it has applied.");
+				return false;
+			}
+
+			// Non-null only while this item is equipped AND generated, which is the only combination
+			// that has written ledger entries under the old key.
+			ICharacter equippedTo = IsGenerated && IsEquippable ? Equippable.Character : null;
+			if (equippedTo != null)
+			{
+				Generator.RemoveAttributes(equippedTo);
+			}
+
+			ID = id;
+
+			if (IsGenerated && Generator.Seed == 0)
+			{
+				Generator.Seed = DeriveSeed(id);
+			}
+
+			if (equippedTo != null)
+			{
+				Generator.ApplyAttributes(equippedTo);
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// The generation seed an item with this identity rolls its attributes from.
+		/// </summary>
+		/// <remarks>
+		/// Shared by <see cref="Initialize"/> and <see cref="AssignPersistentID"/> so the seed an
+		/// item is created with and the seed it is reloaded with cannot drift apart — which is
+		/// exactly what happened while only the load path derived one.
+		/// </remarks>
+		/// <param name="id">The item's identity. Zero yields zero: there is nothing to derive from.</param>
+		public static int DeriveSeed(long id)
+		{
+			if (id == 0)
+			{
+				return 0;
+			}
+
+			byte[] longBytes = BitConverter.GetBytes(id);
+
+			// Integers from the first and last 4 bytes of the long. The high word is preferred so
+			// that consecutive ids do not produce consecutive seeds; it is zero for small ids, in
+			// which case the low word is the only thing there is.
+			int high = BitConverter.ToInt32(longBytes, 4);
+			int low = BitConverter.ToInt32(longBytes, 0);
+			return high > 0 ? high : low;
 		}
 
 		/// <summary>
@@ -148,10 +215,11 @@ namespace FishMMO.Shared
 		/// <see cref="Item(long, int, int, uint)"/>, which does call <see cref="Initialize"/>. Both
 		/// constructors now go through the same initialization; there is no second, weaker kind of Item.
 		/// <para>
-		/// The seed is passed as 0 deliberately. <see cref="Initialize"/> derives a seed from the item
-		/// ID, and the ID is not known until the row is written, so a generated item created here gets
-		/// its seed on the round trip through the database — which is the behaviour the persistence
-		/// layer already assumed (<c>seed: item.IsGenerated ? item.Generator.Seed : 0</c>).
+		/// The seed is passed as 0 deliberately: <see cref="Initialize"/> derives one from the item's
+		/// id, and an item built here has none yet. <see cref="AssignPersistentID"/> derives it when
+		/// the first persist returns the id, so the attributes this item rolls are the same ones it
+		/// will roll when it is reloaded. (They were not, before that: a looted weapon generated from
+		/// seed 0 and came back after a relog with a different roll.)
 		/// </para>
 		/// </remarks>
 		/// <param name="template">The item template.</param>
@@ -205,10 +273,15 @@ namespace FishMMO.Shared
 		/// Initializes the item, setting up stackable, equippable, and generator components as needed.
 		/// Handles seed logic for random generation and event wiring for attribute changes.
 		/// </summary>
+		/// <remarks>
+		/// Internal because it writes <see cref="ID"/> directly. Reassigning an item's identity is
+		/// <see cref="AssignPersistentID"/>'s job — it re-keys any contribution the item has already
+		/// applied, which this does not — so the only callers are this type's own constructors.
+		/// </remarks>
 		/// <param name="id">The item ID.</param>
 		/// <param name="amount">The stack amount.</param>
 		/// <param name="seed">The random seed for generation.</param>
-		public void Initialize(long id, uint amount, int seed)
+		internal void Initialize(long id, uint amount, int seed)
 		{
 			ID = id;
 
@@ -246,21 +319,12 @@ namespace FishMMO.Shared
 				initializeGenerator = true;
 				Generator = new ItemGenerator();
 
-				// Get the item's seed if none is provided.
-				if (seed == 0 && ID != 0)
+				// Get the item's seed if none is provided. Shared with AssignPersistentID so an
+				// item that gets its identity later rolls the same attributes it will roll when it
+				// is reloaded from that identity.
+				if (seed == 0)
 				{
-					var longBytes = BitConverter.GetBytes(ID);
-
-					// Get integers from the first and the last 4 bytes of long.
-					int[] ints = new int[] {
-					   BitConverter.ToInt32(longBytes, 0),
-					   BitConverter.ToInt32(longBytes, 4)
-				   };
-					if (ints != null && ints.Length > 1)
-					{
-						// Use the ID of the item as a unique seed value instead of generating a seed value per item.
-						seed = ints[1] > 0 ? ints[1] : ints[0];
-					}
+					seed = DeriveSeed(ID);
 				}
 			}
 

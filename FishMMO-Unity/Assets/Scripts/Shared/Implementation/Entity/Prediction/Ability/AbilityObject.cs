@@ -580,7 +580,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// An OnHit action is allowed to end this object (and AbilityPierceHitAction is allowed to
+			// An OnHit action is allowed to end this object (and AbilityHitCountAction is allowed to
 			// extend it); either way the decision below must read the state the actions left behind.
 			if (destroyed)
 			{

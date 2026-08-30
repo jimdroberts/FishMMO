@@ -112,12 +112,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService);
-			Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService);
-			Server.Database.ServiceRegistry.TryGet<ICharacterBankService>(out var bankService);
+			Server.Database.ServiceRegistry.TryGet<ICharacterItemService>(out var itemService);
 
 			HandleAbilityRewards(knownAbilityService, playerCharacter, tier);
 			HandleAbilityEventRewards(knownAbilityService, playerCharacter, tier);
-			HandleItemRewards(inventoryService, bankService, playerCharacter, tier);
+			HandleItemRewards(itemService, playerCharacter, tier);
 		}
 
 		/// <summary>
@@ -243,11 +242,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Handles item rewards for achievement tiers, adds items to inventory or bank and broadcasts updates to the client.
 		/// Game logic and Broadcasts are synchronous. DB persistence is fire-and-forget async.
 		/// </summary>
-		/// <param name="inventoryService">Async service for persisting inventory items, or null if unavailable.</param>
-		/// <param name="bankService">Async service for persisting bank items, or null if unavailable.</param>
+		/// <param name="itemService">Async service for persisting items, or null if unavailable.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="tier">Achievement tier containing item rewards.</param>
-		private void HandleItemRewards(ICharacterInventoryService inventoryService, ICharacterBankService bankService, IPlayerCharacter character, AchievementTier tier)
+		private void HandleItemRewards(ICharacterItemService itemService, IPlayerCharacter character, AchievementTier tier)
 		{
 			List<BaseItemTemplate> itemRewards = tier.ItemRewards;
 			if (itemRewards == null ||
@@ -274,19 +272,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 
 							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
-							if (inventoryService != null)
+							if (itemService != null)
 							{
 								item.Version++;
-								var dto = new CharacterInventoryData(
+								var dto = new CharacterItemData(
 									id: item.ID,
 									version: item.Version,
 									characterID: character.ID,
+									container: ItemContainerType.Inventory,
 									templateID: item.Template.ID,
 									slot: item.Slot,
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								EnqueuePersistence(() => PersistInventorySlotAsync(inventoryService, dto));
+								EnqueuePersistence(() => PersistItemAsync(itemService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -327,19 +326,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 
 							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
-							if (bankService != null)
+							if (itemService != null)
 							{
 								item.Version++;
-								var dto = new CharacterBankData(
+								var dto = new CharacterItemData(
 									id: item.ID,
 									version: item.Version,
 									characterID: character.ID,
+									container: ItemContainerType.Bank,
 									templateID: item.Template.ID,
 									slot: item.Slot,
 									seed: item.IsGenerated ? item.Generator.Seed : 0,
 									amount: item.IsStackable ? item.Stackable.Amount : 0
 								);
-								EnqueuePersistence(() => PersistBankSlotAsync(bankService, dto));
+								EnqueuePersistence(() => PersistItemAsync(itemService, dto));
 							}
 
 							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
@@ -374,45 +374,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Asynchronously persists an inventory item slot to the database.
+		/// Asynchronously persists one item row to the database.
 		/// </summary>
-		/// <param name="service">The inventory service.</param>
-		/// <param name="dto">Pre-built DTO captured on the main thread.</param>
-		private async Task PersistInventorySlotAsync(ICharacterInventoryService service, CharacterInventoryData dto)
+		/// <remarks>
+		/// <para>
+		/// The identity the write returns is deliberately discarded here, and that is a known
+		/// shortcoming rather than an oversight. This grant path is fire-and-forget with no
+		/// main-thread hand-off of its own, so there is nowhere to put the id — the item keeps
+		/// <c>ID == 0</c> until <c>CharacterInventorySystem</c>'s next snapshot writes it and reports
+		/// the identity back. Until then the item's attribute-ledger key is zero, which is correct
+		/// but shared with any other unwritten item, and a second write of the same item creates a
+		/// second row. Both are repaired by that snapshot.
+		/// </para>
+		/// <para>
+		/// Routing achievement rewards through <c>CharacterInventorySystem</c>'s batch machinery
+		/// would close it properly; that is a larger change than this one and is not attempted here.
+		/// </para>
+		/// </remarks>
+		/// <param name="service">The item service.</param>
+		/// <param name="dto">Pre-built row captured on the main thread.</param>
+		private async Task PersistItemAsync(ICharacterItemService service, CharacterItemData dto)
 		{
 			try
 			{
 				DatabaseResult<long> result = await service.PersistAsync(dto);
 				if (!result.IsSuccess)
 				{
-					await Log.Warning("AchievementSystem", $"PersistInventorySlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+					await Log.Warning("AchievementSystem", $"PersistItemAsync DB error (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
 				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("AchievementSystem", $"Error persisting inventory slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
+				await Log.Error("AchievementSystem", $"Error persisting item (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {ex}");
 			}
 		}
 
-		/// <summary>
-		/// Asynchronously persists a bank item slot to the database.
-		/// </summary>
-		/// <param name="service">The bank service.</param>
-		/// <param name="dto">Pre-built DTO captured on the main thread.</param>
-		private async Task PersistBankSlotAsync(ICharacterBankService service, CharacterBankData dto)
-		{
-			try
-			{
-				DatabaseResult<long> result = await service.PersistAsync(dto);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("AchievementSystem", $"PersistBankSlotAsync DB error (CharID={dto.CharacterID}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("AchievementSystem", $"Error persisting bank slot (CharID={dto.CharacterID}, Slot={dto.Slot}): {ex}");
-			}
-		}
 	}
 }

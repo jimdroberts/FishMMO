@@ -90,10 +90,19 @@ namespace FishMMO.Shared
 		/// Buffer for storing colliders hit during the ally sweep.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Static and shared: the sweep is fully consumed inside a single synchronous
 		/// <see cref="FindMostInjuredAlly"/> call, so no two NPCs can be mid-scan at once.
+		/// </para>
+		/// <para>
+		/// Not <c>readonly</c>, because <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> replaces
+		/// it when a query comes back full. A fixed twenty entries meant the broadphase chose which
+		/// allies a healer could see in any group larger than that, in its own order — so the most
+		/// wounded ally was silently invisible to the healer whenever it happened to be one of the
+		/// ones discarded.
+		/// </para>
 		/// </remarks>
-		private static readonly Collider[] allyHits = new Collider[20];
+		private static Collider[] allyHits = new Collider[TargetOrdering.QueryBufferSize(20)];
 
 		/// <summary>Random score jitter applied when choosing between heal abilities.</summary>
 		private const float HEAL_ABILITY_JITTER = 30f;
@@ -295,22 +304,42 @@ namespace FishMMO.Shared
 				}
 			}
 
-			int overlapCount = controller.PhysicsScene.OverlapSphere(
-				controller.Character.Transform.position,
-				AllyScanRadius,
-				allyHits,
-				AllyLayers,
-				QueryTriggerInteraction.Ignore);
+			/* Re-queried until the buffer stops coming back full, the same loop every other spatial
+			 * query in the project uses. A non-allocating overlap returns at most buffer.Length
+			 * results and says nothing about how many it discarded, and the broadphase chose which
+			 * ones — so a healer in a group bigger than its buffer scanned an arbitrary subset of
+			 * its allies and never saw the rest, differently on each run. */
+			int overlapCount;
+			while (true)
+			{
+				overlapCount = controller.PhysicsScene.OverlapSphere(
+					controller.Character.Transform.position,
+					AllyScanRadius,
+					allyHits,
+					AllyLayers,
+					QueryTriggerInteraction.Ignore);
+
+				if (!TargetOrdering.TryGrowQueryBuffer(ref allyHits, overlapCount))
+				{
+					break;
+				}
+			}
 
 			for (int i = 0; i < overlapCount && i < allyHits.Length; i++)
 			{
 				Collider col = allyHits[i];
 				if (col == null) continue;
 
-				// Skip self.
-				if (col == controller.Character.Collider) continue;
+				/* Resolved through TargetOrdering rather than with a bare GetComponent on the
+				 * collider: an ally whose hitbox hangs off a child transform resolved to no
+				 * ICharacter at all and could never be healed. Skipping self is asked of the
+				 * resolved body too, so a healer rigged that way does not fail its own CanHealSelf
+				 * check by matching on one collider and not another. No dedupe pass is needed —
+				 * this loop keeps a single best candidate, and a body's duplicate colliders all
+				 * report the same health. */
+				GameObject key = TargetOrdering.ResolveHitKey(col, out ICharacter candidate);
+				if (key == null || candidate == controller.Character) continue;
 
-				ICharacter candidate = col.GetComponent<ICharacter>();
 				if (!AITargetSelection.IsValidTarget(candidate)) continue;
 
 				// Check faction alliance — only heal allies.

@@ -1017,9 +1017,16 @@ namespace FishMMO.Shared
 					int scaled = Mathf.Max(1, Mathf.RoundToInt(current * difficulty.EnemyResourceMultiplier));
 					/* Named, so it can be released. Dungeon scaling had NO reversal at all: it was
 					 * added once at spawn and survived until RestoreTemplateBaseline zeroed every
-					 * modifier on the way back into the pool. */
-					resource.SetSource(ModifierSource.DungeonScaling, scaled - current);
-					resource.SetCurrentValue(scaled);
+					 * modifier on the way back into the pool.
+					 *
+					 * Id ZERO: this is the sheet-wide multiplier and names no template, which is what
+					 * keeps it distinct from the per-template entries written below. */
+					resource.SetSource(ModifierSource.DungeonScaling(), scaled - current);
+					/* Filled from the SETTLED final value, not from the local `scaled`. A resource
+					 * this loop touches may also be named by EnemyAttributeScalars below, or carry an
+					 * NpcBonus, and `scaled` accounts for none of that — it would leave the NPC
+					 * spawning on a fraction of its own maximum. */
+					resource.SetCurrentValue(resource.FinalValue);
 				}
 			}
 
@@ -1039,20 +1046,30 @@ namespace FishMMO.Shared
 					continue;
 				}
 
+				/* Keyed by the template this entry NAMES, so it sits alongside the sheet-wide
+				 * resource multiplier written above rather than replacing it. Both were keyed
+				 * DungeonScaling with id zero, and SetSource states a contribution rather than adding
+				 * to it — so a resource singled out for extra scaling silently lost the group
+				 * multiplier and came out weaker than one that was not mentioned at all. Two entries
+				 * also mean two things a designer can reason about independently. */
 				if (attributeController.TryGetAttribute(scalar.Template, out CharacterAttribute attribute))
 				{
 					int current = attribute.Value;
-					attribute.SetSource(ModifierSource.DungeonScaling, Mathf.RoundToInt(current * scalar.Multiplier) - current);
+					attribute.SetSource(ModifierSource.DungeonScaling(scalar.Template.ID),
+						Mathf.RoundToInt(current * scalar.Multiplier) - current);
 				}
 				else if (attributeController.TryGetResourceAttribute(scalar.Template, out CharacterResourceAttribute resource))
 				{
 					/* A resource named explicitly as well as covered by the group multiplier is
 					 * scaled twice, and that is intended: the group figure is "everything tougher"
-					 * and a named entry is "this one especially". */
+					 * and a named entry is "this one especially". The two contributions ADD, which is
+					 * what the separate keys restore — x2 group and x1.5 named leave the resource at
+					 * 2.5x its base, the behaviour this had before the ledger collapsed them. */
 					int current = resource.Value;
 					int scaled = Mathf.Max(1, Mathf.RoundToInt(current * scalar.Multiplier));
-					resource.SetSource(ModifierSource.DungeonScaling, scaled - current);
-					resource.SetCurrentValue(scaled);
+					resource.SetSource(ModifierSource.DungeonScaling(scalar.Template.ID), scaled - current);
+					// The settled maximum, which now includes the group multiplier as well as this entry.
+					resource.SetCurrentValue(resource.FinalValue);
 				}
 			}
 		}
@@ -1070,8 +1087,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			foreach (NPCAttribute attribute in AttributeBonuses.Attributes)
+			for (int entryIndex = 0; entryIndex < AttributeBonuses.Attributes.Count; ++entryIndex)
 			{
+				NPCAttribute attribute = AttributeBonuses.Attributes[entryIndex];
 				int value;
 				if (attribute.IsRandom)
 				{
@@ -1088,43 +1106,53 @@ namespace FishMMO.Shared
 					continue;
 				}
 
+				/* Keyed by the template this bonus NAMES *and* its position in the list.
+				 * AttributeBonuses is authored and nothing stops it naming one template twice — a
+				 * designer splitting a roll into a flat part and a scalar part, say. The template
+				 * alone does not tell those two apart: they key the same entry, the second replaces
+				 * the first, and half the roll vanishes with no warning. The index is what differs. */
 				if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))
 				{
 					int old = characterAttribute.Value;
+					ModifierSource source = ModifierSource.NpcBonus(attribute.Template.ID, entryIndex);
 
 					if (attribute.IsScalar)
 					{
 						int newValue = characterAttribute.Value.GetPercentOf(value);
-						characterAttribute.SetSource(ModifierSource.NpcBonus, newValue - old);
+						characterAttribute.SetSource(source, newValue - old);
 					}
 					else
 					{
-						characterAttribute.SetSource(ModifierSource.NpcBonus, value - old);
+						characterAttribute.SetSource(source, value - old);
 					}
 				}
 				else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
 				{
 					int old = characterResourceAttribute.Value;
+					ModifierSource source = ModifierSource.NpcBonus(attribute.Template.ID, entryIndex);
 
 					if (attribute.IsScalar)
 					{
 						int newValue = characterResourceAttribute.Value.GetPercentOf(value);
 						int modifier = newValue - old;
 
-						characterResourceAttribute.SetSource(ModifierSource.NpcBonus, modifier);
+						characterResourceAttribute.SetSource(source, modifier);
 						if (asServer)
 						{
-							characterResourceAttribute.SetCurrentValue(newValue);
+							/* The settled maximum, not this entry's own arithmetic: the same resource
+							 * may also carry dungeon scaling, and filling to `newValue` would spawn
+							 * the NPC on a fraction of the maximum its health bar reports. */
+							characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);
 						}
 					}
 					else
 					{
 						int modifier = value - old;
 
-						characterResourceAttribute.SetSource(ModifierSource.NpcBonus, modifier);
+						characterResourceAttribute.SetSource(source, modifier);
 						if (asServer)
 						{
-							characterResourceAttribute.SetCurrentValue(value);
+							characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);
 						}
 					}
 				}

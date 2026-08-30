@@ -259,8 +259,8 @@ namespace FishMMO.UnitTests
 			d.Buffs = new[] { new BuffReconcileEntry { TemplateID = 3, ExpiryTick = 500, NextTickTick = 20, Stacks = 1, TickCount = 4, CumulativeTickMultiplier = 1 } };
 			d.Equipment = new[]
 			{
-				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
-				new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, InstanceID = 901 },
+				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
+				new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 },
 			};
 			d.Attributes = new[]
 			{

@@ -338,7 +338,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
-			List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>();
+			List<CharacterItemData> itemsToSave = new List<CharacterItemData>();
 
 			// see if we have successfully added the item
 			if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
@@ -356,10 +356,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 					// collect items for async DB persistence
 					item.Version++;
-					itemsToSave.Add(new CharacterInventoryData(
+					itemsToSave.Add(new CharacterItemData(
 						id: item.ID,
 						version: item.Version,
 						characterID: character.ID,
+						container: ItemContainerType.Inventory,
 						templateID: item.Template.ID,
 						slot: item.Slot,
 						seed: item.IsGenerated ? item.Generator.Seed : 0,
@@ -418,7 +419,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>
 		/// Persists inventory items to the database asynchronously.
 		/// </summary>
-		private async Task PersistInventoryItemsAsync(List<CharacterInventoryData> items)
+		private async Task PersistInventoryItemsAsync(List<CharacterItemData> items)
 		{
 			try
 			{
@@ -426,13 +427,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					return;
 				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
+				if (!Server.Database.ServiceRegistry.TryGet<ICharacterItemService>(out var itemService))
 				{
 					return;
 				}
 
 				await BulkWriteReporting.ReportAsync("InteractableSystem", "Inventory item save",
-					await inventoryService.PersistAsync(items), $"{items.Count} items");
+					await itemService.PersistAsync(items), $"{items.Count} items");
 			}
 			catch (Exception ex)
 			{

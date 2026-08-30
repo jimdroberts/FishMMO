@@ -45,10 +45,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <b>Must stay below <see cref="CharacterAttributeController.Order"/> (95).</b> Restoring a
-		/// buff re-applies its modifier incrementally through <c>AddModifier</c>; the attribute
-		/// reconcile then overwrites the total absolutely. Raising this above 95 would leave those
-		/// increments on top of a total that already contains them. See the remarks on
-		/// <see cref="CharacterAttributeController.Order"/>.
+		/// buff restates its own ledger entry through <c>CharacterAttribute.SetSource</c>; the
+		/// attribute reconcile then installs the server's total as the residual over whatever those
+		/// entries sum to. Raising this above 95 would have that residual computed before this
+		/// tick's buffs are settled, so a buff gained on the reconciled tick counts twice. See the
+		/// remarks on <see cref="CharacterAttributeController.Order"/>.
 		/// </remarks>
 		public int Order => 85;
 

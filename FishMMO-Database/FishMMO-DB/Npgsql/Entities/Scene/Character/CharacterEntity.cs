@@ -164,12 +164,14 @@ namespace FishMMO.Database.Npgsql.Entities
 		public ICollection<CharacterAchievementEntity> Achievements { get; set; }
 		/// <summary>Navigation collection of active character buffs.</summary>
 		public ICollection<CharacterBuffEntity> Buffs { get; set; }
-		/// <summary>Navigation collection of character inventory slots.</summary>
-		public ICollection<CharacterInventoryEntity> Inventory { get; set; }
-		/// <summary>Navigation collection of character equipment slots.</summary>
-		public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
-		/// <summary>Navigation collection of character bank/chest slots.</summary>
-		public ICollection<CharacterBankEntity> Bank { get; set; }
+		/// <summary>
+		/// Navigation collection of every item this character owns, across all containers.
+		/// </summary>
+		/// <remarks>
+		/// Replaces the separate Inventory, Equipment and Bank collections; the container an item
+		/// sits in is now a column on the row rather than a choice of table.
+		/// </remarks>
+		public ICollection<CharacterItemEntity> Items { get; set; }
 		/// <summary>Navigation reference to the guild membership record.</summary>
 		public CharacterGuildEntity Guild { get; set; }
 		/// <summary>Navigation reference to the party membership record.</summary>

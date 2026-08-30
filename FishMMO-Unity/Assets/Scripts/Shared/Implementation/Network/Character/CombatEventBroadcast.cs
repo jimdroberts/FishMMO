@@ -61,6 +61,26 @@ namespace FishMMO.Shared
 		/// table to keep in step; it is packed, so a small id costs one byte.
 		/// </remarks>
 		public int DamageTemplateID;
+
+		/// <summary>
+		/// How many separate hits <see cref="Amount"/> was summed from. Always at least one.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The caster predicted each of them separately.</b> The coalescer merges every hit
+		/// sharing a (source, kind, damage type) within one tick into a single entry, which is right
+		/// for display — one readable number instead of a stack of labels. But the caster's client
+		/// drew one predicted label PER HIT, and <c>PredictedCombatEvents.TryConfirm</c> consumes one
+		/// pending entry per report. A three-projectile volley landing together therefore confirmed
+		/// one prediction and left the other two to time out and grey themselves out, marking hits
+		/// that landed as hits that were denied — the one place the prediction display lied.
+		/// </para>
+		/// <para>
+		/// One packed byte-ish int, and it is 1 for every hit outside a multi-hit burst, so it costs
+		/// a single byte in the overwhelming case.
+		/// </para>
+		/// </remarks>
+		public int Occurrences;
 	}
 
 	/// <summary>
@@ -81,6 +101,10 @@ namespace FishMMO.Shared
 			writer.WriteInt32(value.Amount);
 			writer.WriteUInt8Unpacked(value.Kind);
 			writer.WriteInt32(value.DamageTemplateID);
+			/* Written last so the field's arrival does not move any existing one. Clamped to at least
+			 * one: a producer that leaves it default must still confirm the single prediction its hit
+			 * produced, or every un-updated call site silently stops confirming anything. */
+			writer.WriteInt32(value.Occurrences < 1 ? 1 : value.Occurrences);
 		}
 
 		/// <summary>Reads a <see cref="CombatEventBroadcast"/> in the order <see cref="WriteCombatEventBroadcast"/> wrote it.</summary>
@@ -93,6 +117,7 @@ namespace FishMMO.Shared
 				Amount = reader.ReadInt32(),
 				Kind = reader.ReadUInt8Unpacked(),
 				DamageTemplateID = reader.ReadInt32(),
+				Occurrences = reader.ReadInt32(),
 			};
 		}
 	}

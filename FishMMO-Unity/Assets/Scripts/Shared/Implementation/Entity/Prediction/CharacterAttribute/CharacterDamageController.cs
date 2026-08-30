@@ -318,10 +318,12 @@ namespace FishMMO.Shared
 		/// </para>
 		/// <para>
 		/// Arguments: source (may be null for environmental damage or an unobserved attacker),
-		/// target, amount, damage type (null for heals), and the kind.
+		/// target, amount, damage type (null for heals), the kind, and how many separate hits the
+		/// amount was merged from — always at least one. The last is what lets the caster's display
+		/// settle every predicted label a coalesced report stands for rather than only the first.
 		/// </para>
 		/// </remarks>
-		public static event Action<ICharacter, ICharacter, int, DamageAttributeTemplate, CombatEventKind> OnCombatEventReceived;
+		public static event Action<ICharacter, ICharacter, int, DamageAttributeTemplate, CombatEventKind, int> OnCombatEventReceived;
 
 		/// <summary>Per-tick merge buffer for events landing on this character. Server only.</summary>
 		private readonly CombatEventCoalescer combatEvents = new CombatEventCoalescer();
@@ -405,6 +407,8 @@ namespace FishMMO.Shared
 					Amount = entry.Amount,
 					Kind = (byte)entry.Kind,
 					DamageTemplateID = entry.DamageTemplateID,
+					// How many predicted labels this one report settles. See CombatEventBroadcast.
+					Occurrences = entry.Occurrences,
 				}, true, Channel.Unreliable);
 			}
 
@@ -469,7 +473,12 @@ namespace FishMMO.Shared
 				? DamageAttributeTemplate.Get<DamageAttributeTemplate>(msg.DamageTemplateID)
 				: null;
 
-			OnCombatEventReceived?.Invoke(source, target, msg.Amount, damageAttribute, kind);
+			/* Occurrences rides along so the display can settle every predicted label this one
+			 * report stands for. Clamped on read as well as on write: a report from a peer that has
+			 * not been updated carries zero, and confirming zero predictions would grey out a hit
+			 * that landed — the exact failure the field exists to remove. */
+			int occurrences = msg.Occurrences < 1 ? 1 : msg.Occurrences;
+			OnCombatEventReceived?.Invoke(source, target, msg.Amount, damageAttribute, kind, occurrences);
 		}
 
 		// ───── Combat Timer ─────────────────────────────────────────────────
@@ -801,6 +810,12 @@ namespace FishMMO.Shared
 			contributorIDs = new List<long>(contributors.Keys);
 			ClearCombatContributions();
 			return true;
+		}
+
+		/// <inheritdoc />
+		public bool HasCombatContributor(long characterID)
+		{
+			return contributors != null && contributors.ContainsKey(characterID);
 		}
 
 		/// <inheritdoc />

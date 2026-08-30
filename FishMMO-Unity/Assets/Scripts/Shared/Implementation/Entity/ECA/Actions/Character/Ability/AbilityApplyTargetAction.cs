@@ -17,6 +17,21 @@ namespace FishMMO.Shared
 		/// <param name="eventData">Event data containing context for the action.</param>
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			/* Server only, like every other action that resolves an ability onto a target.
+			 *
+			 * This was the one ability action with no gate of its own. Its downstream actions each
+			 * self-gate, so nothing authoritative leaked — but "safe because of what it happens to
+			 * call" is not a property this can keep while the OnHit set is designer-authored. Every
+			 * sibling states its peer explicitly; this one stated nothing.
+			 *
+			 * WIRING: this re-executes the ability's whole OnHit set, so it belongs on OnSpawn or
+			 * OnTick — an event that is NOT itself part of that set. Wired to OnHit it re-enters the
+			 * chain that invoked it and recurses until the stack gives out. */
+			if (!EcaAuthority.IsServer(initiator, eventData))
+			{
+				return;
+			}
+
 			if (eventData.TryGet(out AbilityCollisionEventData abilityEventData))
 			{
 				AbilityObject abilityObject = abilityEventData.AbilityObject;

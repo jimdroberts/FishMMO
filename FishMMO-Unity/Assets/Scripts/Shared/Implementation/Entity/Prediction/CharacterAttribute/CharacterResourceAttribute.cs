@@ -52,6 +52,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			MarkPersistenceDirty();
 			Internal_OnAttributeChanged(this);
 		}
 
@@ -98,6 +99,7 @@ namespace FishMMO.Shared
 			}
 
 			currentValue = clamped;
+			MarkPersistenceDirty();
 			//UnityEngine.Log.Debug($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
 			Internal_OnAttributeChanged(this);
 		}
@@ -116,6 +118,7 @@ namespace FishMMO.Shared
 			}
 
 			currentValue = clamped;
+			MarkPersistenceDirty();
 			Internal_OnAttributeChanged(this);
 		}
 
@@ -155,7 +158,16 @@ namespace FishMMO.Shared
 		/// <param name="attribute">The attribute that was changed.</param>
 		protected override void Internal_OnAttributeChanged(CharacterAttribute attribute)
 		{
+			/* The clamp is a write to a PERSISTED field, so it marks. This is the path a falling
+			 * maximum takes: a buff expiring or gear coming off lowers FinalValue, and the current
+			 * value follows it down. Nothing else would notice — the change originates in the
+			 * external modifier, which is not persisted and no longer marks anything by itself. */
+			float before = currentValue;
 			currentValue = ClampCurrentValue(currentValue);
+			if (currentValue != before)
+			{
+				MarkPersistenceDirty();
+			}
 			base.Internal_OnAttributeChanged(attribute);
 		}
 	}

@@ -607,10 +607,12 @@ namespace FishMMO.Shared
 		 * caps already ranked by distance and disagreed with it.
 		 *
 		 * The deeper problem is that the query boundary cannot know the answer. Distance and identity
-		 * are both legitimate orders and only the CALLER knows which one its cap means, which is why
-		 * LagCompensatedQuery.OverlapSphere now returns the buffer unordered and every consumer states
-		 * its own order. SortRaycastHits survives because a ray genuinely has only one reading —
-		 * distance along the line — and Unity's non-allocating overload promises none.
+		 * are both legitimate orders and only the CALLER knows which one its cap means. So no shared
+		 * helper imposes one any more: the selectors rank their own candidates (SortByDistance, then
+		 * DedupeByBody, then ApplyMaxHits), and LagCompensatedQuery.OverlapSphereNearest ranks, dedupes
+		 * and caps inside its own rewind scope because it is the caller as well as the query.
+		 * SortRaycastHits survives because a ray genuinely has only one reading — distance along the
+		 * line — and Unity's non-allocating overload promises none.
 		 *
 		 * Leaving this in place as a shorter-looking option is how the next caller re-introduces an
 		 * identity-ordered cap. */

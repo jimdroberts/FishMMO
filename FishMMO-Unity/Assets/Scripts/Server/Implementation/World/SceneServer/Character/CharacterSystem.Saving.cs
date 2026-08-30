@@ -985,9 +985,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Appends a snapshot of the character's attributes (base + resources) including external modifier.
-		/// Main-thread only. Each appended DTO has its Version bumped on the runtime attribute.
+		/// Appends a snapshot of the character's attributes: the BASE value for every attribute, plus
+		/// the current value for resources. Main-thread only; each appended DTO has its Version
+		/// bumped on the runtime attribute.
 		/// </summary>
+		/// <remarks>
+		/// <b>The external modifier is deliberately not written, and the doc used to claim it was.</b>
+		/// It is the sum of live contributors — equipped items, active buffs, region effects, NPC
+		/// scaling — and every one of those is independently persisted or re-derived on load, so the
+		/// modifier rebuilds itself. Storing it as well would mean storing a cache of rows the
+		/// database already holds, and a stale one would be indistinguishable from a real bonus.
+		/// <para>
+		/// A resource's CURRENT value is the exception and must be written: it is depletable state,
+		/// not a derived one. Nothing reconstructs "logged out on 43 health".
+		/// </para>
+		/// </remarks>
 		private void AppendAttributeData(IPlayerCharacter character, List<CharacterAttributeData> attributes)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attrController))

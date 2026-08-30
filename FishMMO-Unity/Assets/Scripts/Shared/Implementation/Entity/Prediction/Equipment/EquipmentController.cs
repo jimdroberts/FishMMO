@@ -57,10 +57,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <b>Must stay below <see cref="CharacterAttributeController.Order"/> (95).</b> Restoring an
-		/// item re-applies its modifiers incrementally through
-		/// <c>ItemGenerator.ApplyAttributes</c> → <c>AddModifier</c>; the attribute reconcile then
-		/// overwrites the total absolutely. Raising this above 95 would leave those increments on
-		/// top of a total that already contains them. See the remarks on
+		/// item restates its own ledger entry through
+		/// <c>ItemGenerator.ApplyAttributes</c> → <c>CharacterAttribute.SetSource</c>; the attribute
+		/// reconcile then installs the server's total as the residual over whatever those entries sum
+		/// to. Raising this above 95 would have that residual computed before this tick's equipment is
+		/// settled, so an item equipped on the reconciled tick counts twice. See the remarks on
 		/// <see cref="CharacterAttributeController.Order"/>.
 		/// </remarks>
 		public int Order => 93;
@@ -96,7 +97,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private struct PendingEquip
 		{
-			public long InstanceID;
+			public long ItemID;
 			public int InventoryIndex;
 			public InventoryType FromInventory;
 			/// <summary>Set once the reconcile has placed the item; the acknowledgement is then a no-op.</summary>
@@ -106,7 +107,7 @@ namespace FishMMO.Shared
 		/// <summary>A client-initiated unequip the server has not yet answered.</summary>
 		private struct PendingUnequip
 		{
-			public long InstanceID;
+			public long ItemID;
 			public InventoryType ToInventory;
 			/// <summary>Set once the reconcile has moved the item out; the acknowledgement is then a no-op.</summary>
 			public bool AppliedByReconcile;
@@ -198,7 +199,7 @@ namespace FishMMO.Shared
 						TemplateID = item.Template != null ? item.Template.ID : 0,
 						Slot = (byte)i,
 						Seed = item.IsGenerated ? item.Generator.Seed : 0,
-						InstanceID = item.ID,
+						ItemID = item.ID,
 					};
 				}
 			}
@@ -281,7 +282,7 @@ namespace FishMMO.Shared
 					if (currentItem != null &&
 						currentItem.Template != null &&
 						currentItem.Template.ID == entry.TemplateID &&
-						currentItem.ID == entry.InstanceID)
+						currentItem.ID == entry.ItemID)
 					{
 						// Already correct. If the acknowledgement placed it, the pending record
 						// was cleared then; if a reconcile placed it earlier, the record is already
@@ -293,7 +294,19 @@ namespace FishMMO.Shared
 					// equipment slots reads both sides before either is written.
 					IItemContainer sourceContainer = null;
 					int sourceIndex = -1;
-					Item realItem = FindOwnedInstance(entry.InstanceID, (byte)slot, out sourceContainer, out sourceIndex);
+					Item realItem = FindOwnedInstance(entry.ItemID, (byte)slot, out sourceContainer, out sourceIndex);
+
+					/* An item the database has not written yet has no identity to match on, and the
+					 * clone below would then put a second copy of it in the slot while the original
+					 * stayed in the inventory. The pending record is what still names it: the client
+					 * asked for this equip and recorded where the item came from, so the source is
+					 * known even though the id is not. Narrow window — it closes as soon as the
+					 * first persist returns — but it is exactly the window a freshly looted weapon
+					 * is equipped in. */
+					if (realItem == null && entry.ItemID == 0)
+					{
+						realItem = TakeUnidentifiedPendingSource((byte)slot, entry.TemplateID, out sourceContainer, out sourceIndex);
+					}
 
 					// Unequip old item if present. It goes back to wherever the incoming item came
 					// from — that is what the server's Equip did — or, when the incoming item was
@@ -318,7 +331,7 @@ namespace FishMMO.Shared
 					Item newItem = realItem;
 					if (newItem == null)
 					{
-						newItem = new Item(entry.InstanceID, entry.Seed, entry.TemplateID, 1); // Equipment items are never stackable
+						newItem = new Item(entry.ItemID, entry.Seed, entry.TemplateID, 1); // Equipment items are never stackable
 					}
 
 					SetItemSlot(newItem, slot);
@@ -327,7 +340,7 @@ namespace FishMMO.Shared
 						newItem.Equippable.Equip(Character);
 					}
 
-					if (pendingEquips.TryGetValue((byte)slot, out PendingEquip pending) && pending.InstanceID == entry.InstanceID)
+					if (pendingEquips.TryGetValue((byte)slot, out PendingEquip pending) && pending.ItemID == entry.ItemID)
 					{
 						pending.AppliedByReconcile = true;
 						pendingEquips[(byte)slot] = pending;
@@ -342,6 +355,66 @@ namespace FishMMO.Shared
 			{
 				equipmentSnapshotDirty = true;
 			}
+		}
+
+		/// <summary>
+		/// Takes the item a pending equip named, for a reconcile entry that carries no identity yet.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Matched on the pending record's source index and the entry's template rather than on an
+		/// id, because the id is the thing that does not exist yet. That is weaker than an identity
+		/// match and deliberately so: the alternative is materialising a clone, which leaves the
+		/// player holding the same item in two places until the next full resync.
+		/// </para>
+		/// <para>
+		/// The template check is what keeps it honest. The pending record names one inventory index,
+		/// and if the item sitting there is not the kind of thing the server says it equipped, this
+		/// declines and the caller falls back to the clone.
+		/// </para>
+		/// </remarks>
+		/// <param name="targetSlot">The equipment slot being filled.</param>
+		/// <param name="templateID">The template the server says is in that slot.</param>
+		/// <param name="container">The container the item was taken from, or null.</param>
+		/// <param name="index">The now-vacant index it came from, or -1.</param>
+		private Item TakeUnidentifiedPendingSource(byte targetSlot, int templateID, out IItemContainer container, out int index)
+		{
+			container = null;
+			index = -1;
+
+			if (Character == null ||
+				!pendingEquips.TryGetValue(targetSlot, out PendingEquip pending) ||
+				pending.ItemID != 0)
+			{
+				return null;
+			}
+
+			IItemContainer named = ResolveContainer(pending.FromInventory);
+			if (named == null ||
+				!named.TryGetItem(pending.InventoryIndex, out Item namedItem) ||
+				namedItem == null ||
+				namedItem.ID != 0 ||
+				namedItem.Template == null ||
+				namedItem.Template.ID != templateID)
+			{
+				return null;
+			}
+
+			Item removed = named.RemoveItem(pending.InventoryIndex);
+			if (!ReferenceEquals(removed, namedItem))
+			{
+				// A locked slot or a refused manipulation. Put back whatever came out and let the
+				// caller take the clone path rather than tearing the slot open.
+				if (removed != null)
+				{
+					named.SetItemSlot(removed, pending.InventoryIndex);
+				}
+				return null;
+			}
+
+			container = named;
+			index = pending.InventoryIndex;
+			return removed;
 		}
 
 		/// <summary>
@@ -363,7 +436,7 @@ namespace FishMMO.Shared
 			}
 
 			// Pending record first: it names the exact source.
-			if (pendingEquips.TryGetValue(targetSlot, out PendingEquip pending) && pending.InstanceID == instanceID)
+			if (pendingEquips.TryGetValue(targetSlot, out PendingEquip pending) && pending.ItemID == instanceID)
 			{
 				IItemContainer named = ResolveContainer(pending.FromInventory);
 				if (named != null &&
@@ -451,7 +524,7 @@ namespace FishMMO.Shared
 			DetachFromSlot(item, slot);
 
 			InventoryType? preferred = null;
-			if (pendingUnequips.TryGetValue(slot, out PendingUnequip pending) && pending.InstanceID == item.ID)
+			if (pendingUnequips.TryGetValue(slot, out PendingUnequip pending) && pending.ItemID == item.ID)
 			{
 				preferred = pending.ToInventory;
 				pending.AppliedByReconcile = true;
@@ -550,7 +623,7 @@ namespace FishMMO.Shared
 			}
 			pendingEquips[(byte)toSlot] = new PendingEquip
 			{
-				InstanceID = item.ID,
+				ItemID = item.ID,
 				InventoryIndex = inventoryIndex,
 				FromInventory = fromInventory,
 				AppliedByReconcile = false,
@@ -566,7 +639,7 @@ namespace FishMMO.Shared
 			}
 			pendingUnequips[(byte)slot] = new PendingUnequip
 			{
-				InstanceID = item.ID,
+				ItemID = item.ID,
 				ToInventory = toInventory,
 				AppliedByReconcile = false,
 			};
@@ -1114,7 +1187,7 @@ namespace FishMMO.Shared
 			{
 				pendingEquips.Remove(slot);
 				if (pending.AppliedByReconcile ||
-					(TryGetItem(slot, out Item already) && already != null && already.ID == pending.InstanceID))
+					(TryGetItem(slot, out Item already) && already != null && already.ID == pending.ItemID))
 				{
 					return;
 				}

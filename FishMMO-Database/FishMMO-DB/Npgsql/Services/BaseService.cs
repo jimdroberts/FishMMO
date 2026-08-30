@@ -1372,7 +1372,16 @@ namespace FishMMO.Database.Npgsql.Services
 			return sb.ToString();
 		}
 
-		private static readonly Regex ParameterPlaceholderRegex =
+		/// <summary>
+		/// Rewrites the <c>{0}</c>-style placeholders these services write into raw SQL as Npgsql
+		/// <c>@p0</c> parameters.
+		/// </summary>
+		/// <remarks>
+		/// Protected rather than private so a service that needs a result-set shape this class does
+		/// not provide — a multi-row <c>RETURNING</c>, say — can reuse the ambient connection and
+		/// the same placeholder convention instead of duplicating both.
+		/// </remarks>
+		protected static readonly Regex ParameterPlaceholderRegex =
 			new Regex(@"\{(\d+)\}", RegexOptions.Compiled);
 
 

@@ -55,12 +55,20 @@ namespace FishMMO.Shared
 		/// changes nothing at all between one save and the next.
 		/// </para>
 		/// <para>
-		/// Set from <see cref="MarkPersistenceDirty"/>, reached from
-		/// <see cref="Internal_OnAttributeChanged"/> — the single funnel every real change already
-		/// passes through — and from the two setters that deliberately bypass that funnel. The
-		/// setters ahead of it compare before they assign, so an assignment of the same value never
-		/// reaches it and never marks anything dirty. Cleared only by <see cref="MarkPersisted"/>,
-		/// once a write has actually landed.
+		/// <b>Marked by the writers of the PERSISTED fields, and by nothing else.</b> Those fields
+		/// are <see cref="Value"/> for every attribute and <c>CurrentValue</c> for a resource —
+		/// <see cref="ExternalModifier"/> and <see cref="FinalValue"/> are not written to the
+		/// database, because they are rebuilt from the ledger and the formula graph on load. Every
+		/// writer compares before it assigns, so setting a field to the value it already holds marks
+		/// nothing.
+		/// </para>
+		/// <para>
+		/// <b>It used to be marked from <see cref="Internal_OnAttributeChanged"/> instead</b>, which
+		/// is the funnel every change passes through — including changes that move no persisted
+		/// field at all. Equipping an item, a buff ticking, walking into a region: each marked its
+		/// attribute dirty, and the periodic save then rewrote a row whose contents were identical.
+		/// In combat that was most of the sheet, most of the time, which is precisely the case the
+		/// flag was introduced to avoid.
 		/// </para>
 		/// </remarks>
 		public bool PersistenceDirty { get; private set; }
@@ -208,13 +216,10 @@ namespace FishMMO.Shared
 		/// <param name="item">The attribute that was changed.</param>
 		protected virtual void Internal_OnAttributeChanged(CharacterAttribute item)
 		{
-			/* Marked on the attribute that moved, not on this one. Propagation calls this on the
-			 * dependent whose value changed, and it is that attribute the database is now behind
-			 * on. */
-			if (item != null)
-			{
-				item.MarkPersistenceDirty();
-			}
+			/* Deliberately does NOT mark persistence dirty. This fires for every change, and most
+			 * changes move nothing the database stores: an external modifier arriving, a formula
+			 * recomputing because a child moved, a propagation pass reaching a parent. The writers
+			 * of the persisted fields mark themselves — see PersistenceDirty. */
 
 			if (characterAttributeController != null && characterAttributeController.IsPropagating)
 			{
@@ -238,7 +243,14 @@ namespace FishMMO.Shared
 		{
 			if (forceUpdate || value != newValue)
 			{
+				bool moved = value != newValue;
 				value = newValue;
+				// Only when the number actually moved. forceUpdate asks for a graph pass, not for a
+				// database write, and marking on it would rewrite the row on every forced refresh.
+				if (moved)
+				{
+					MarkPersistenceDirty();
+				}
 				UpdateValues(forceUpdate);
 			}
 		}
@@ -253,7 +265,12 @@ namespace FishMMO.Shared
 			int tmp = value + amount;
 			if (forceUpdate || value != tmp)
 			{
+				bool moved = value != tmp;
 				value = tmp;
+				if (moved)
+				{
+					MarkPersistenceDirty();
+				}
 				UpdateValues(forceUpdate);
 			}
 		}

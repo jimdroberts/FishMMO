@@ -36,16 +36,55 @@ namespace FishMMO.Shared
 		/// </remarks>
 		Authoritative = 1,
 
-		/// <summary>An equipped item, keyed by <see cref="Item.InstanceID"/>.</summary>
+		/// <summary>
+		/// An equipped item, keyed by <see cref="Item.ID"/> — its row in <c>character_item</c>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The item's real, durable identity, which survives a move between slots, a move between
+		/// containers and a relog. It used to be a process-local counter (<c>Item.InstanceID</c>)
+		/// because the database could not supply an id that identified an item: rows lived in three
+		/// tables keyed <c>(character_id, slot)</c>, each with its own identity sequence, so a row id
+		/// named a slot and the same number named three different items. The single
+		/// <c>character_item</c> table removed that, and with it the need for a second identity.
+		/// </para>
+		/// <para>
+		/// <b>Zero is a real key here, and a transient one.</b> An item created at runtime has no
+		/// identity until its first persist returns one, and it can be equipped in the meantime. The
+		/// contribution it writes under key zero is re-keyed by <c>Item.AssignPersistentID</c> when
+		/// the id arrives — released under the old key and restated under the new one — so nothing
+		/// is stranded and the character's totals do not move.
+		/// </para>
+		/// </remarks>
 		Item = 2,
 
 		/// <summary>A buff, keyed by its template id — which is also its instance key in the buff container.</summary>
 		Buff = 3,
 
-		/// <summary>Dungeon difficulty scaling applied to an NPC. One per attribute, so the id is unused.</summary>
+		/// <summary>
+		/// Dungeon difficulty scaling applied to an NPC, keyed by the attribute template the scaling
+		/// entry names — or zero for the sheet-wide resource multiplier, which names none.
+		/// </summary>
+		/// <remarks>
+		/// The id is what keeps the two halves of a difficulty definition separate.
+		/// <c>EnemyResourceMultiplier</c> applies to every resource and takes id zero;
+		/// <c>EnemyAttributeScalars</c> names one template each and takes that template's id. Sharing
+		/// one key made the named entry REPLACE the sheet-wide one, so a resource singled out for
+		/// extra scaling silently lost the group multiplier instead of compounding with it.
+		/// </remarks>
 		DungeonScaling = 4,
 
-		/// <summary>An NPC's authored attribute bonus roll. One per attribute, so the id is unused.</summary>
+		/// <summary>
+		/// An NPC's authored attribute bonus roll, keyed by the template it names AND its position
+		/// in the authored list.
+		/// </summary>
+		/// <remarks>
+		/// <c>AttributeBonuses</c> is an authored LIST and nothing stops it naming the same template
+		/// twice — a designer splitting a roll into a flat part and a scalar part, say. The template
+		/// alone is not enough to tell those two apart: they produce the same key, the second
+		/// overwrites the first, and half the roll silently disappears. The list index is what
+		/// separates them. See <see cref="ModifierSource.NpcBonus"/> for how the two are packed.
+		/// </remarks>
 		NpcBonus = 5,
 
 		/// <summary>A region the character is standing in, keyed by the region's instance id.</summary>
@@ -109,11 +148,35 @@ namespace FishMMO.Shared
 		/// <summary>A buff's attribute bonuses, keyed by template id.</summary>
 		public static ModifierSource Buff(int templateID) => new ModifierSource(ModifierSourceKind.Buff, templateID);
 
-		/// <summary>Dungeon difficulty scaling on an NPC.</summary>
-		public static ModifierSource DungeonScaling => new ModifierSource(ModifierSourceKind.DungeonScaling);
+		/// <summary>
+		/// Dungeon difficulty scaling on an NPC, keyed by the attribute template the scaling entry
+		/// names. Pass zero for the sheet-wide resource multiplier, which names no template.
+		/// </summary>
+		public static ModifierSource DungeonScaling(int templateID = 0) => new ModifierSource(ModifierSourceKind.DungeonScaling, templateID);
 
-		/// <summary>An NPC's authored attribute bonus.</summary>
-		public static ModifierSource NpcBonus => new ModifierSource(ModifierSourceKind.NpcBonus);
+		/// <summary>
+		/// An NPC's authored attribute bonus, keyed by the template it names and its position in the
+		/// authored list.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The two are packed into the one 64-bit id: the template in the high word, the index in
+		/// the low. Keying on the template alone merged two entries that named it — the exact case
+		/// the template-level key was introduced to fix, and which it did not actually fix, because
+		/// two entries naming one template still produce one key. The index is the part that differs.
+		/// </para>
+		/// <para>
+		/// The index is a position in an authored list, so it is stable for as long as the asset is:
+		/// re-ordering <c>AttributeBonuses</c> re-keys its entries, which matters only if a
+		/// designer edits the list while an NPC carrying it is alive. The bonuses are applied once
+		/// at spawn and released wholesale by <c>ClearAllModifierSources</c>, so nothing outlives
+		/// that.
+		/// </para>
+		/// </remarks>
+		/// <param name="templateID">The attribute template this entry names.</param>
+		/// <param name="entryIndex">The entry's position in the NPC's authored bonus list.</param>
+		public static ModifierSource NpcBonus(int templateID, int entryIndex) =>
+			new ModifierSource(ModifierSourceKind.NpcBonus, ((long)templateID << 32) | (uint)entryIndex);
 
 		/// <summary>A region effect, keyed by the region's instance id.</summary>
 		public static ModifierSource Region(long instanceID) => new ModifierSource(ModifierSourceKind.Region, instanceID);

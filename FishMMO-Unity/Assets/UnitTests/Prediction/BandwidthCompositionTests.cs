@@ -224,7 +224,7 @@ namespace FishMMO.UnitTests
 			d.RngS0 = 0xDEADBEEF; d.RngS1 = 0x12345678; d.RngS2 = 0x0BADF00D; d.RngS3 = 0xFEEDFACE;
 			d.Cooldowns = new[] { new CooldownReconcileEntry { AbilityID = 42, StartTick = 100, DurationTicks = 60 } };
 			d.Buffs = new[] { new BuffReconcileEntry { TemplateID = 3, ExpiryTick = 500, NextTickTick = 20, Stacks = 1, TickCount = 4, CumulativeTickMultiplier = 1 } };
-			d.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 }, new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, InstanceID = 901 } };
+			d.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 }, new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 } };
 			d.Attributes = new AttributeReconcileEntry[24];
 			for (int i = 0; i < d.Attributes.Length; i++) d.Attributes[i] = new AttributeReconcileEntry { TemplateID = 100 + i, Value = 10 + i, ExternalModifier = 0 };
 			d.Sequence = 7;

@@ -56,6 +56,25 @@ namespace FishMMO.Shared
 		public uint RemainingTicks;
 
 		/// <summary>
+		/// How many ticks a charged ability has been held past full charge.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Predicted state, and it has to travel for the same reason <see cref="RemainingTicks"/>
+		/// does. The owner increments it once per invocation of the replicate body, and a reconcile
+		/// replays every tick since the correction — so without an authoritative value the owner
+		/// counts each replayed tick a second time, runs two to four times the server's rate, and
+		/// cancels its own charge well before the server does. What the player sees is the cast bar
+		/// dropping and the ability then firing by itself when the server's own counter expires.
+		/// </para>
+		/// <para>
+		/// Carried rather than derived: it counts ticks since <c>RemainingTicks</c> reached zero,
+		/// and the tick that happened on is not in the reconcile either.
+		/// </para>
+		/// </remarks>
+		public uint ChargedHoldTicks;
+
+		/// <summary>
 		/// The current deterministic RNG seed for ability spawning.
 		/// Used by the client to detect prediction mismatches and roll back predicted ability objects.
 		/// </summary>

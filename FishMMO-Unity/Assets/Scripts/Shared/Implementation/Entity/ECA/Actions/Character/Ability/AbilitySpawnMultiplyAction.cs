@@ -20,6 +20,25 @@ namespace FishMMO.Shared
 		public IIntValueProvider SpawnCountValue;
 
 		/// <summary>
+		/// Hard ceiling on how many copies one spawn event may produce.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The count comes from an authored value provider, and several of those are computed —
+		/// <c>StatScaledValue</c> reads a character attribute, <c>RandomRangeValue</c> draws a
+		/// number. Nothing bounded the result, so a provider wired to a stat that scales with gear
+		/// would instantiate that many GameObjects on every peer, per cast, and a mis-authored
+		/// range could do it by accident.
+		/// </para>
+		/// <para>
+		/// Thirty is far above any shotgun or nova a designer would author and far below a number
+		/// that costs a frame. It is a backstop, not a tuning knob: an ability that legitimately
+		/// wants more should say so here rather than through a provider nobody checks.
+		/// </para>
+		/// </remarks>
+		public const int MaximumSpawnCount = 30;
+
+		/// <summary>
 		/// Spawns multiple copies of the initial ability object, each with the same properties as the original.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
@@ -51,6 +70,14 @@ namespace FishMMO.Shared
 			var nextID = spawnEventData.CurrentAbilityObjectID;
 
 			int spawnCount = SpawnCountValue.GetValue(initiator, eventData);
+			if (spawnCount > MaximumSpawnCount)
+			{
+				Log.Warning("AbilitySpawnMultiplyAction",
+					$"Spawn count {spawnCount} exceeds the {MaximumSpawnCount} ceiling; clamping. " +
+					"A computed value provider produced this — check what it is scaling from.");
+				spawnCount = MaximumSpawnCount;
+			}
+
 			for (int i = 0; i < spawnCount; ++i)
 			{
 				GameObject go = UnityEngine.Object.Instantiate(initialObject.gameObject);

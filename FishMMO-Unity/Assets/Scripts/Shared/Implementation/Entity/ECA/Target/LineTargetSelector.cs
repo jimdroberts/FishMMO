@@ -26,16 +26,23 @@ namespace FishMMO.Shared
 		public LayerMask TargetLayer = ~0;
 
 		/// <summary>
-		/// Maximum number of hits to process.
+		/// How many distinct bodies the line may hit. Zero or less pierces everything on it.
 		/// </summary>
-		[Tooltip("Maximum number of hits to process.")]
-		[Min(1)]
+		/// <remarks>
+		/// <c>[Min(0)]</c>, not <c>[Min(1)]</c>. The gather below treats a non-positive cap as
+		/// uncapped — matching <see cref="TargetOrdering.CappedCount"/> and every other selector —
+		/// and that was introduced precisely so a beam could be authored to pierce everything on its
+		/// line. The attribute still clamped the Inspector to 1, so the behaviour existed and could
+		/// not be reached.
+		/// </remarks>
+		[Tooltip("How many distinct bodies the line may hit. 1 stops at the first; 0 pierces everything on the line.")]
+		[Min(0)]
 		public int MaxHits = 16;
 
 		/// <summary>
 		/// Preallocated array for storing raycast hits during line queries.
 		/// </summary>
-		private RaycastHit[] hits;
+
 
 		/// <summary>
 		/// Returns all <see cref="GameObject"/>s hit by a raycast from the context in its forward direction.
@@ -64,7 +71,7 @@ namespace FishMMO.Shared
 		/// <summary>Casts, orders along the ray and caps — inside the caller's rewind scope.</summary>
 		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
 		{
-			EnsureHitBuffer();
+			RaycastHit[] hits = NewHitBuffer();
 
 			Vector3 origin = context.transform.position;
 			Vector3 direction = context.transform.forward;
@@ -128,16 +135,26 @@ namespace FishMMO.Shared
 		/// Ensures the reusable raycast buffer is wide enough that <see cref="MaxHits"/> is applied
 		/// by this selector rather than by the broadphase.
 		/// </summary>
-		private void EnsureHitBuffer()
-		{
-			int size = QueryBufferSize(MaxHits);
-			/* Grow-only. This used to reallocate whenever the length differed from the authored
-			 * size, which silently undid any growth TryGrowQueryBuffer had bought on the previous
-			 * query — so a selector in a dense crowd re-truncated on every single cast. */
-			if (hits == null || hits.Length < size)
-			{
-				hits = new RaycastHit[size];
-			}
-		}
+		/// <summary>
+		/// A query buffer wide enough that the cap is applied by this selector rather than by the
+		/// broadphase.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Local to one gather, not a field.</b> Selectors are serialized inline on shared assets,
+		/// so one instance serves every character that casts the ability — and a candidate's authored
+		/// conditions can fire nested triggers that reach this same instance again. A re-entrant gather
+		/// re-ran the query into the shared array while the outer loop was still walking it, so the
+		/// outer cast resolved against another cast's colliders. The scratch LISTS were made local for
+		/// exactly this reason; the buffer was missed.
+		/// </para>
+		/// <para>
+		/// Deliberately wider than the cap: sizing it at exactly MaxHits makes the broadphase perform
+		/// the truncation, in its own order, before the selector sees the candidates. The caller still
+		/// grows it through <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> when a query comes back
+		/// full.
+		/// </para>
+		/// </remarks>
+		private RaycastHit[] NewHitBuffer() => new RaycastHit[QueryBufferSize(MaxHits)];
 	}
 }

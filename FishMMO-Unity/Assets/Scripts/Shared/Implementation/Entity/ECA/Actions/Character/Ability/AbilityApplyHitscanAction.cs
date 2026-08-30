@@ -111,12 +111,28 @@ namespace FishMMO.Shared
 		public bool BlockedByScenery = true;
 
 		/// <summary>
-		/// Reused result list. Not static: an OnHit trigger fired from the loop below can author
-		/// another hitscan, and a shared list would be cleared out from under the fan-out that owns
-		/// it.
+		/// Reused result list, lent out for the duration of one <see cref="Execute"/>.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Not static, because two different hitscan actions can be mid-fan-out at once. But an
+		/// instance field is not enough on its own either: an OnHit trigger fired from the loop below
+		/// is free to reach the SAME serialized action instance again — an ability whose hit event
+		/// re-enters itself — and the re-entrant call would clear the list the outer loop is still
+		/// walking. <see cref="inUse"/> is what closes that: the outer call owns the field, and any
+		/// nested one allocates its own.
+		/// </para>
+		/// <para>
+		/// The nested case is rare enough to be worth an allocation and common enough to be worth
+		/// surviving; the ordinary path still allocates once for the life of the asset.
+		/// </para>
+		/// </remarks>
 		[NonSerialized]
 		private List<LagCompensatedQuery.CompensatedHit> hits;
+
+		/// <summary>True while <see cref="hits"/> is lent to an <see cref="Execute"/> still running.</summary>
+		[NonSerialized]
+		private bool inUse;
 
 		/// <summary>
 		/// Resolves the ray and runs the ability's OnHit events for each character it found.
@@ -168,63 +184,87 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			hits ??= new List<LagCompensatedQuery.CompensatedHit>(8);
-
-			/* The object's own pose IS the aim. AbilityObject.ResolveSpawnPose builds it from the
-			 * replicated aim origin and direction, and carries it verbatim to observers, so every
-			 * peer agrees on the ray without any of them re-deriving it from an interpolated caster.
-			 * The object needs no lag compensation of its own for the same reason. */
-			int hitCount = LagCompensatedQuery.RaycastNearest(
-				eventData, abilityObject.GameObject, shooter.position, shooter.forward, range,
-				TargetLayerMask, maxHits, charactersOnly: !BlockedByScenery, hits);
-
-			// Inherited once so each child collision event carries the same tick; without it a
-			// downstream ApplyBuffAction falls back to TimeManager.LocalTick and loses alignment.
-			eventData.TryGet(out TickEventData tickToPropagate);
-
-			for (int i = 0; i < hitCount; i++)
+			/* Borrow the shared list, or allocate a private one when a nested execution already holds
+			 * it. See the remarks on `hits`. */
+			bool ownsSharedList = !inUse;
+			List<LagCompensatedQuery.CompensatedHit> hitBuffer;
+			if (ownsSharedList)
 			{
-				LagCompensatedQuery.CompensatedHit hit = hits[i];
-
-				/* The object never shoots itself. Its collider sits exactly on the ray's origin, so
-				 * with BlockedByScenery on it would otherwise be the first non-character hit and stop
-				 * every shot at zero range. Children go with it, since a prefab is free to hang the
-				 * visual's collider off one. This is the same exclusion AbilityObjectSweep.Accept
-				 * applies for the same reason.
-				 *
-				 * The CASTER is deliberately not excluded here: whether a shot can hit its own owner
-				 * is a gameplay question, and the OnHit triggers' own conditions are where it is
-				 * answered — the same place friendly fire is. */
-				if (hit.Collider != null && hit.Collider.transform.IsChildOf(shooter))
-				{
-					continue;
-				}
-
-				/* Scenery ENDS the shot rather than being skipped, when it is in the set at all.
-				 * Anything past it is behind cover, and the query already handed these back in ray
-				 * order — so the first non-character is exactly where the shot stops. When
-				 * BlockedByScenery is false the query filtered scenery out entirely and this never
-				 * fires. */
-				if (hit.Character == null)
-				{
-					break;
-				}
-
-				AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
-					initiator, hit.Character, abilityObject, hit.Point, hit.Normal, abilityObject.RNG);
-				if (tickToPropagate != null)
-				{
-					collisionEvent.Add(tickToPropagate);
-				}
-
-				foreach (var trigger in onHitEvents.Values)
-				{
-					trigger?.Execute(collisionEvent);
-				}
+				inUse = true;
+				hitBuffer = hits ??= new List<LagCompensatedQuery.CompensatedHit>(8);
+			}
+			else
+			{
+				hitBuffer = new List<LagCompensatedQuery.CompensatedHit>(8);
 			}
 
-			// Nothing holds a reference into the query's reusable buffers past this point.
-			hits.Clear();
+			/* try/finally around everything that touches the borrowed list: an OnHit trigger below
+			 * runs arbitrary authored actions and may throw, which would otherwise leave `inUse`
+			 * latched true for the life of the asset and make every later shot allocate. */
+			try
+			{
+				/* The object's own pose IS the aim. AbilityObject.ResolveSpawnPose builds it from the
+				 * replicated aim origin and direction, and carries it verbatim to observers, so every
+				 * peer agrees on the ray without any of them re-deriving it from an interpolated
+				 * caster. The object needs no lag compensation of its own for the same reason. */
+				int hitCount = LagCompensatedQuery.RaycastNearest(
+					eventData, abilityObject.GameObject, shooter.position, shooter.forward, range,
+					TargetLayerMask, maxHits, charactersOnly: !BlockedByScenery, hitBuffer);
+
+				// Inherited once so each child collision event carries the same tick; without it a
+				// downstream ApplyBuffAction falls back to TimeManager.LocalTick and loses alignment.
+				eventData.TryGet(out TickEventData tickToPropagate);
+
+				for (int i = 0; i < hitCount; i++)
+				{
+					LagCompensatedQuery.CompensatedHit hit = hitBuffer[i];
+
+					/* The object never shoots itself. Its collider sits exactly on the ray's origin, so
+					 * with BlockedByScenery on it would otherwise be the first non-character hit and stop
+					 * every shot at zero range. Children go with it, since a prefab is free to hang the
+					 * visual's collider off one. This is the same exclusion AbilityObjectSweep.Accept
+					 * applies for the same reason.
+					 *
+					 * The CASTER is deliberately not excluded here: whether a shot can hit its own owner
+					 * is a gameplay question, and the OnHit triggers' own conditions are where it is
+					 * answered — the same place friendly fire is. */
+					if (hit.Collider != null && hit.Collider.transform.IsChildOf(shooter))
+					{
+						continue;
+					}
+
+					/* Scenery ENDS the shot rather than being skipped, when it is in the set at all.
+					 * Anything past it is behind cover, and the query already handed these back in ray
+					 * order — so the first non-character is exactly where the shot stops. When
+					 * BlockedByScenery is false the query filtered scenery out entirely and this never
+					 * fires. */
+					if (hit.Character == null)
+					{
+						break;
+					}
+
+					AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
+						initiator, hit.Character, abilityObject, hit.Point, hit.Normal, abilityObject.RNG);
+					if (tickToPropagate != null)
+					{
+						collisionEvent.Add(tickToPropagate);
+					}
+
+					foreach (var trigger in onHitEvents.Values)
+					{
+						trigger?.Execute(collisionEvent);
+					}
+				}
+			}
+			finally
+			{
+				// Nothing holds a reference into the query's reusable buffers past this point.
+				hitBuffer.Clear();
+				if (ownsSharedList)
+				{
+					inUse = false;
+				}
+			}
 		}
 
 		/// <summary>

@@ -746,10 +746,10 @@ namespace FishMMO.UnitTests
 			};
 			d.Equipment = new[]
 			{
-				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
-				new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, InstanceID = 901 },
-				new EquipmentReconcileEntry { TemplateID = 7, Slot = 3, Seed = 79, InstanceID = 902 },
-				new EquipmentReconcileEntry { TemplateID = 8, Slot = 4, Seed = 80, InstanceID = 903 },
+				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
+				new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 },
+				new EquipmentReconcileEntry { TemplateID = 7, Slot = 3, Seed = 79, ItemID = 902 },
+				new EquipmentReconcileEntry { TemplateID = 8, Slot = 4, Seed = 80, ItemID = 903 },
 			};
 			d.Attributes = new[]
 			{

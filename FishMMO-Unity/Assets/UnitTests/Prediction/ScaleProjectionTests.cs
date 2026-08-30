@@ -99,7 +99,7 @@ namespace FishMMO.UnitTests
 			prev.ResourceState.MaxHealth = 1200; prev.ResourceState.Health = 1200f;
 			prev.Cooldowns = new[] { new CooldownReconcileEntry { AbilityID = 42, StartTick = 100, DurationTicks = 60 } };
 			prev.Buffs = new[] { new BuffReconcileEntry { TemplateID = 3, ExpiryTick = 500, NextTickTick = 20, Stacks = 1, TickCount = 4, CumulativeTickMultiplier = 1 } };
-			prev.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 } };
+			prev.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 } };
 			prev.Attributes = new[]
 			{
 				new AttributeReconcileEntry { TemplateID = 1, Value = 25, ExternalModifier = 4 },

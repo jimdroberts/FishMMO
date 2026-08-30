@@ -162,14 +162,23 @@ namespace FishMMO.Shared
 		/// differ is the lesser error.
 		/// </para>
 		/// <para>
-		/// The caller draws the server's number only when this returns false.
+		/// The caller draws the server's number only when this returns false — that is, only when the
+		/// report settled NOTHING. A report that settles some but not all of what it claims does not
+		/// produce a second label: the numbers already on screen are the caster's own predictions of
+		/// the same hits, and drawing the server's merged total beside them would show the damage
+		/// twice.
 		/// </para>
 		/// </remarks>
 		/// <param name="source">The attacker named by the report. A report with none matches nothing.</param>
 		/// <param name="target">The character named by the report.</param>
 		/// <param name="kind">Damage or heal.</param>
+		/// <param name="occurrences">
+		/// How many separate hits the report's amount was merged from — <c>CombatEventBroadcast.Occurrences</c>.
+		/// That many pending predictions are settled, because the caster drew one label per hit while
+		/// the server sent one message for all of them. Values below one are treated as one.
+		/// </param>
 		/// <returns>True when this report was already drawn as a prediction.</returns>
-		public static bool TryConfirm(ICharacter source, ICharacter target, Kind kind)
+		public static bool TryConfirm(ICharacter source, ICharacter target, Kind kind, int occurrences = 1)
 		{
 			if (source == null || target == null || pending.Count == 0)
 			{
@@ -183,7 +192,22 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			for (int i = 0; i < pending.Count; ++i)
+			/* Settle up to `occurrences` predictions, oldest first.
+			 *
+			 * The server coalesces every hit sharing a (source, kind, type) within one tick into ONE
+			 * report; the caster predicted each of them separately and drew a label for each. Settling
+			 * a single prediction per report therefore left the rest of a volley to time out and grey
+			 * themselves out — landed hits displayed as denied ones.
+			 *
+			 * Fewer pending than claimed is normal rather than an error: the client may have predicted
+			 * only some of the hits (a replayed tick draws none), and a report can legitimately
+			 * describe hits this client never predicted at all. Whatever is left over falls through to
+			 * the caller, which draws the server's number for it.
+			 */
+			int remaining = occurrences < 1 ? 1 : occurrences;
+			bool confirmedAny = false;
+
+			for (int i = 0; i < pending.Count && remaining > 0; )
 			{
 				if (pending[i].SourceObjectId == sourceObjectId &&
 					pending[i].TargetObjectId == targetObjectId &&
@@ -192,10 +216,14 @@ namespace FishMMO.Shared
 					long id = pending[i].Id;
 					pending.RemoveAt(i);
 					OnPredictionConfirmed?.Invoke(id);
-					return true;
+					confirmedAny = true;
+					--remaining;
+					// Do not advance i: RemoveAt shifted the next candidate into this slot.
+					continue;
 				}
+				++i;
 			}
-			return false;
+			return confirmedAny;
 		}
 
 		/// <summary>

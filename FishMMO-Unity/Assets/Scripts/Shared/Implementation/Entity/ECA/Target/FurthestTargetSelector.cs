@@ -26,16 +26,28 @@ namespace FishMMO.Shared
 		public LayerMask TargetLayer = ~0;
 
 		/// <summary>
-		/// Maximum number of hits to process.
+		/// Starting size of the overlap buffer. <b>Not a cap on the result.</b>
 		/// </summary>
-		[Tooltip("Maximum number of hits to process.")]
+		/// <remarks>
+		/// This selector emits exactly one target — the furthest candidate — so there is nothing for a
+		/// cap to truncate. The value only chooses the buffer's starting size through
+		/// <see cref="TargetSelector.QueryBufferSize"/>, and
+		/// <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> grows past it whenever a query comes
+		/// back full, so setting it low costs a reallocation in a crowd and never a lost candidate.
+		/// <para>
+		/// The tooltip said "maximum number of hits to process", which is what
+		/// <c>ChainTargetSelector</c>'s used to say for the same non-reason: a designer lowering it
+		/// expects fewer victims and gets a smaller buffer.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Starting size of the overlap buffer. This selector returns one target; the value only affects allocation.")]
 		[Min(1)]
 		public int MaxHits = 16;
 
 		/// <summary>
 		/// Preallocated array for storing collider hits during OverlapSphere queries.
 		/// </summary>
-		private Collider[] hits;
+
 
 		/// <summary>
 		/// Returns the furthest <see cref="GameObject"/> from the context within <see cref="Radius"/>.
@@ -67,7 +79,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
 		{
-			EnsureHitBuffer();
+			Collider[] hits = NewHitBuffer();
 			List<GameObject> candidates = new List<GameObject>();
 			List<TargetRank> ranks = new List<TargetRank>();
 
@@ -125,16 +137,26 @@ namespace FishMMO.Shared
 		/// Ensures the reusable collider buffer is wide enough that <see cref="MaxHits"/> is applied
 		/// by this selector rather than by the broadphase.
 		/// </summary>
-		private void EnsureHitBuffer()
-		{
-			int size = QueryBufferSize(MaxHits);
-			/* Grow-only. This used to reallocate whenever the length differed from the authored
-			 * size, which silently undid any growth TryGrowQueryBuffer had bought on the previous
-			 * query — so a selector in a dense crowd re-truncated on every single cast. */
-			if (hits == null || hits.Length < size)
-			{
-				hits = new Collider[size];
-			}
-		}
+		/// <summary>
+		/// A query buffer wide enough that the cap is applied by this selector rather than by the
+		/// broadphase.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Local to one gather, not a field.</b> Selectors are serialized inline on shared assets,
+		/// so one instance serves every character that casts the ability — and a candidate's authored
+		/// conditions can fire nested triggers that reach this same instance again. A re-entrant gather
+		/// re-ran the query into the shared array while the outer loop was still walking it, so the
+		/// outer cast resolved against another cast's colliders. The scratch LISTS were made local for
+		/// exactly this reason; the buffer was missed.
+		/// </para>
+		/// <para>
+		/// Deliberately wider than the cap: sizing it at exactly MaxHits makes the broadphase perform
+		/// the truncation, in its own order, before the selector sees the candidates. The caller still
+		/// grows it through <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> when a query comes back
+		/// full.
+		/// </para>
+		/// </remarks>
+		private Collider[] NewHitBuffer() => new Collider[QueryBufferSize(MaxHits)];
 	}
 }

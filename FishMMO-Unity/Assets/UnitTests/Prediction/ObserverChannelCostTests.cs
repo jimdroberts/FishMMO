@@ -88,7 +88,7 @@ namespace FishMMO.UnitTests
 			};
 			d.Cooldowns = new[] { new CooldownReconcileEntry { AbilityID = 8842, StartTick = 900, DurationTicks = 60 } };
 			d.Buffs = new[] { new BuffReconcileEntry { TemplateID = 200, Stacks = 1, ExpiryTick = 1200, NextTickTick = 930 } };
-			d.Equipment = new[] { new EquipmentReconcileEntry { Slot = 0, TemplateID = 300, Seed = 7, InstanceID = 5001 } };
+			d.Equipment = new[] { new EquipmentReconcileEntry { Slot = 0, TemplateID = 300, Seed = 7, ItemID = 5001 } };
 			d.Attributes = new[] { new AttributeReconcileEntry { TemplateID = 400, Value = 42, ExternalModifier = 3 } };
 			return d;
 		}

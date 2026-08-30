@@ -21,6 +21,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterInventorySystem", menuName = "FishMMO/Server/SceneServer/Character Inventory System", order = 1)]
 	[RequiresDataContainer(typeof(CharacterInventorySystemRuntimeData))]
+	[RequiresDataContainer(typeof(CharacterInventorySystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
 	public class CharacterInventorySystem : ServerBehaviour, ICharacterInventorySystem
 	{
@@ -120,9 +121,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			var registry = Server.Database.ServiceRegistry;
-			if (!registry.TryGet<ICharacterInventoryService>(out _) ||
-				!registry.TryGet<ICharacterBankService>(out _) ||
-				!registry.TryGet<ICharacterEquipmentService>(out _) ||
+			if (!registry.TryGet<ICharacterItemService>(out _) ||
 				!registry.TryGet<ICharacterAttributeService>(out _))
 			{
 				Log.Error("CharacterInventorySystem", "InitializeOnce: One or more required database services could not be resolved");
@@ -229,6 +228,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// happen here rather than on the worker thread that discovered it, because capturing a
 			// container is a main-thread operation.
 			DrainReconcileRequests();
+
+			// Database-assigned item identities, applied to the live Item objects. Same reason: the
+			// write happens on a worker and every container here is main-thread only.
+			DrainMainThreadQueue<ICharacterInventorySystemMainThreadQueueData>(maxIdentityWriteBacksPerFrame, drainAll: false);
 		}
 
 		#region Atomic Item Persistence
@@ -465,20 +468,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// One slot vacancy to write, with the version that authorises it.
+		/// One item to remove from the database, with the version that authorises it.
 		/// </summary>
-		private readonly struct ItemSlotDelete
+		/// <remarks>
+		/// <para>
+		/// Addressed by the ITEM, not by the slot it was sitting in. That is the change the single
+		/// <c>character_item</c> table bought: a row is an item, so a delete names the thing that
+		/// ceased to exist rather than the hole it left.
+		/// </para>
+		/// <para>
+		/// <b>Most of the deletes this replaced were not deletions at all.</b> Under the per-slot
+		/// schema, moving an item — between two inventory slots, into an equipment socket, out to
+		/// the bank — vacated a row that had to be deleted separately, because the destination was a
+		/// different row (often in a different table). Those call sites are gone: a move is now an
+		/// UPDATE of the item's own row, carried by the ordinary write that states its new container
+		/// and slot. What remains here is only the genuine case, an item that was destroyed.
+		/// </para>
+		/// </remarks>
+		private readonly struct ItemDelete
 		{
-			/// <summary>Slot index being vacated.</summary>
-			public readonly int Slot;
+			/// <summary>Identity of the item being removed.</summary>
+			public readonly long ItemID;
 
-			/// <summary>Version the delete is authorised against. See the SLOT VERSIONING CONTRACT on the services.</summary>
+			/// <summary>Version the delete is authorised against.</summary>
 			public readonly long Version;
 
-			/// <summary>Initializes a slot vacancy.</summary>
-			public ItemSlotDelete(int slot, long version)
+			/// <summary>Initializes an item removal.</summary>
+			public ItemDelete(long itemID, long version)
 			{
-				Slot = slot;
+				ItemID = itemID;
 				Version = version;
 			}
 		}
@@ -524,26 +542,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>Short description used in log lines when the batch fails.</summary>
 			public string Operation;
 
-			/// <summary>Inventory rows to upsert; for a snapshot, the container's entire contents.</summary>
-			public List<CharacterInventoryData> InventoryWrites;
+			/// <summary>Item rows to upsert; for a snapshot, the whole of every container in <see cref="SnapshotContainers"/>.</summary>
+			public List<CharacterItemData> ItemWrites;
 
-			/// <summary>Inventory slots to vacate. Unused by snapshots, which prune instead.</summary>
-			public List<ItemSlotDelete> InventoryDeletes;
+			/// <summary>Items that ceased to exist. Unused by snapshots, which prune instead.</summary>
+			public List<ItemDelete> ItemDeletes;
 
-			/// <summary>Bank rows to upsert; for a snapshot, the container's entire contents.</summary>
-			public List<CharacterBankData> BankWrites;
-
-			/// <summary>Bank slots to vacate.</summary>
-			public List<ItemSlotDelete> BankDeletes;
-
-			/// <summary>Equipment rows to upsert; for a snapshot, the container's entire contents.</summary>
-			public List<CharacterEquipmentData> EquipmentWrites;
-
-			/// <summary>Equipment slots to vacate.</summary>
-			public List<ItemSlotDelete> EquipmentDeletes;
+			/// <summary>
+			/// For a snapshot, the containers it speaks for. Null for an incremental batch.
+			/// </summary>
+			/// <remarks>
+			/// A snapshot prunes, so it has to say what it read. A character missing one of its three
+			/// controllers must not have that container emptied on the strength of a list nobody
+			/// built — which is exactly what "an empty list means empty container" would do.
+			/// </remarks>
+			public List<ItemContainerType> SnapshotContainers;
 
 			/// <summary>Attribute rows to upsert. Equipping changes stats, and the stat write belongs to the same operation.</summary>
 			public List<CharacterAttributeData> AttributeWrites;
+
+			/// <summary>
+			/// Identities the database minted for items that had never been written, filled in by
+			/// the worker and applied back on the main thread.
+			/// </summary>
+			/// <remarks>
+			/// Written once by the worker after a successful commit and read once by the main thread
+			/// after that, with the queue hand-off between them — so no lock is needed, and the
+			/// batch is still immutable as far as anything else is concerned.
+			/// </remarks>
+			public IReadOnlyList<CharacterItemIdAssignment> AssignedIdentities;
 
 			/// <summary>True when the batch would write nothing at all.</summary>
 			/// <remarks>
@@ -556,66 +583,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// </remarks>
 			public bool IsEmpty =>
 				IsSnapshot
-					? InventoryWrites == null &&
-						BankWrites == null &&
-						EquipmentWrites == null &&
+					? (SnapshotContainers == null || SnapshotContainers.Count == 0) &&
 						(AttributeWrites == null || AttributeWrites.Count == 0)
-					: (InventoryWrites == null || InventoryWrites.Count == 0) &&
-						(InventoryDeletes == null || InventoryDeletes.Count == 0) &&
-						(BankWrites == null || BankWrites.Count == 0) &&
-						(BankDeletes == null || BankDeletes.Count == 0) &&
-						(EquipmentWrites == null || EquipmentWrites.Count == 0) &&
-						(EquipmentDeletes == null || EquipmentDeletes.Count == 0) &&
+					: (ItemWrites == null || ItemWrites.Count == 0) &&
+						(ItemDeletes == null || ItemDeletes.Count == 0) &&
 						(AttributeWrites == null || AttributeWrites.Count == 0);
 
-			/// <summary>Adds inventory rows to upsert.</summary>
-			public void AddInventoryWrites(List<CharacterInventoryData> dtos)
+			/// <summary>Adds item rows to upsert.</summary>
+			public void AddItemWrites(List<CharacterItemData> dtos)
 			{
 				if (dtos == null || dtos.Count == 0) return;
-				(InventoryWrites ??= new List<CharacterInventoryData>(dtos.Count)).AddRange(dtos);
+				(ItemWrites ??= new List<CharacterItemData>(dtos.Count)).AddRange(dtos);
 			}
 
-			/// <summary>Adds one inventory row to upsert.</summary>
-			public void AddInventoryWrite(CharacterInventoryData dto)
+			/// <summary>Adds one item row to upsert.</summary>
+			public void AddItemWrite(CharacterItemData dto)
 			{
-				(InventoryWrites ??= new List<CharacterInventoryData>(1)).Add(dto);
+				(ItemWrites ??= new List<CharacterItemData>(1)).Add(dto);
 			}
 
-			/// <summary>Marks an inventory slot vacant.</summary>
-			public void AddInventoryDelete(int slot, long version)
+			/// <summary>
+			/// Records that an item no longer exists.
+			/// </summary>
+			/// <remarks>
+			/// An item that was never persisted has no row to remove, and asking to delete identity
+			/// zero would be a request the service refuses anyway. Dropping it here keeps the batch
+			/// free of statements that cannot succeed.
+			/// </remarks>
+			public void AddItemDelete(long itemID, long version)
 			{
-				(InventoryDeletes ??= new List<ItemSlotDelete>(1)).Add(new ItemSlotDelete(slot, version));
-			}
-
-			/// <summary>Adds bank rows to upsert.</summary>
-			public void AddBankWrites(List<CharacterBankData> dtos)
-			{
-				if (dtos == null || dtos.Count == 0) return;
-				(BankWrites ??= new List<CharacterBankData>(dtos.Count)).AddRange(dtos);
-			}
-
-			/// <summary>Adds one bank row to upsert.</summary>
-			public void AddBankWrite(CharacterBankData dto)
-			{
-				(BankWrites ??= new List<CharacterBankData>(1)).Add(dto);
-			}
-
-			/// <summary>Marks a bank slot vacant.</summary>
-			public void AddBankDelete(int slot, long version)
-			{
-				(BankDeletes ??= new List<ItemSlotDelete>(1)).Add(new ItemSlotDelete(slot, version));
-			}
-
-			/// <summary>Adds one equipment row to upsert.</summary>
-			public void AddEquipmentWrite(CharacterEquipmentData dto)
-			{
-				(EquipmentWrites ??= new List<CharacterEquipmentData>(1)).Add(dto);
-			}
-
-			/// <summary>Marks an equipment slot vacant.</summary>
-			public void AddEquipmentDelete(int slot, long version)
-			{
-				(EquipmentDeletes ??= new List<ItemSlotDelete>(1)).Add(new ItemSlotDelete(slot, version));
+				if (itemID <= 0) return;
+				(ItemDeletes ??= new List<ItemDelete>(1)).Add(new ItemDelete(itemID, version));
 			}
 
 			/// <summary>Adds attribute rows to upsert.</summary>
@@ -630,7 +628,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Per-character write ordering, ownership caching and repair queue. Created in
 		/// <c>InitializeOnce</c> and cleared in <c>OnDeinitialize</c>.
 		/// </summary>
+		/// <summary>
+		/// How many queued identity write-backs are applied per frame.
+		/// </summary>
+		/// <remarks>
+		/// One action per batch that created items, and a batch creates a handful at most, so this
+		/// is a back-pressure ceiling rather than a rate that is ever reached. It exists because
+		/// the drain runs on the main thread and an unbounded drain would let a burst of item
+		/// grants stall a frame.
+		/// </remarks>
+		private const int maxIdentityWriteBacksPerFrame = 64;
+
 		private ItemWriteJournal itemWriteJournal = new ItemWriteJournal();
+
+		/// <summary>
+		/// Stand-in for a snapshot whose containers are all empty.
+		/// </summary>
+		/// <remarks>
+		/// "Every container I read holds nothing" is a real statement that must still prune, so the
+		/// snapshot cannot be skipped just because it has no rows — it needs a list, and an empty
+		/// one allocated per call would be pure waste.
+		/// </remarks>
+		private static readonly List<CharacterItemData> EmptyItemWrites = new List<CharacterItemData>();
 
 		/// <summary>
 		/// THE MEMORY / DATABASE INVARIANT — read this before changing anything below.
@@ -830,6 +849,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: unit of work disposal reported {unitOfWork.DisposeFault.Value.ErrorCode} - {unitOfWork.DisposeFault.Value.ErrorMessage}");
 				}
+
+				/* Only after the commit. An identity written back from a transaction that then
+				 * rolled back would name a row that does not exist, and the next write would quote
+				 * it as an existing item — an upsert that updates nothing and reports a stale
+				 * version forever. */
+				if (batch.AssignedIdentities != null && batch.AssignedIdentities.Count > 0)
+				{
+					IReadOnlyList<CharacterItemIdAssignment> assignments = batch.AssignedIdentities;
+					long characterID = batch.CharacterID;
+					if (!TryEnqueueMainThread<ICharacterInventorySystemMainThreadQueueData>(
+							() => ApplyAssignedIdentities(characterID, assignments)))
+					{
+						// The queue is full. The items keep id 0, so the next write creates fresh
+						// rows for them and the snapshot after that assigns identities again — churn,
+						// not loss. Worth a line because sustained back-pressure here means the main
+						// thread is stalling.
+						await Log.Warning("CharacterInventorySystem",
+							$"ApplyItemBatchAsync: could not queue {assignments.Count} item identity write-back(s) for character {characterID}; they will be reassigned on a later write.");
+					}
+				}
 			}
 			catch (Exception ex)
 			{
@@ -838,6 +877,82 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 				}
+			}
+		}
+
+		/// <summary>
+		/// Writes database-assigned identities onto the live items. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Verified against the slot, not trusted.</b> The assignment names a container and a slot
+		/// as they were when the batch was captured, and the player has had a round trip to move
+		/// things since. Applying an id to whatever now occupies that slot would hand one item's
+		/// identity to another — which is the exact failure the whole single-table change exists to
+		/// remove. The item is only accepted when it still has no identity of its own and its
+		/// template matches the row that was written.
+		/// </para>
+		/// <para>
+		/// An item that fails those checks is left at id 0. It is not lost: the next write creates a
+		/// row for it and offers an identity again, and the periodic snapshot does the same. The cost
+		/// of declining is one more round trip; the cost of guessing is a mis-keyed item.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterID">The character the batch belonged to.</param>
+		/// <param name="assignments">Container, slot and the identity the database issued.</param>
+		private void ApplyAssignedIdentities(long characterID, IReadOnlyList<CharacterItemIdAssignment> assignments)
+		{
+			if (assignments == null || assignments.Count == 0)
+			{
+				return;
+			}
+
+			if (Server == null ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData) ||
+				!mappingData.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character) ||
+				character == null)
+			{
+				// The character left this scene server between the write and the drain. Its items
+				// went with it, and the server that has it now will assign identities of its own.
+				return;
+			}
+
+			for (int i = 0; i < assignments.Count; ++i)
+			{
+				CharacterItemIdAssignment assignment = assignments[i];
+				if (assignment.ID <= 0)
+				{
+					continue;
+				}
+
+				IItemContainer container = ResolveContainer(character, assignment.Container);
+				if (container == null ||
+					!container.TryGetItem(assignment.Slot, out Item item) ||
+					item == null ||
+					item.ID != 0)
+				{
+					continue;
+				}
+
+				item.AssignPersistentID(assignment.ID);
+			}
+		}
+
+		/// <summary>
+		/// Resolves one of a character's containers by its persistence container type.
+		/// </summary>
+		private static IItemContainer ResolveContainer(IPlayerCharacter character, ItemContainerType container)
+		{
+			switch (container)
+			{
+				case ItemContainerType.Inventory:
+					return character.TryGet(out IInventoryController inventory) ? inventory : null;
+				case ItemContainerType.Bank:
+					return character.TryGet(out IBankController bank) ? bank : null;
+				case ItemContainerType.Equipment:
+					return character.TryGet(out IEquipmentController equipment) ? equipment : null;
+				default:
+					return null;
 			}
 		}
 
@@ -856,108 +971,83 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private static async Task<DatabaseResult> ApplyBatchStepsAsync(IDatabaseServiceRegistry registry, ItemWriteBatch batch)
 		{
-			if (batch.IsSnapshot)
+			bool hasItemWork = batch.IsSnapshot
+				? batch.SnapshotContainers != null && batch.SnapshotContainers.Count > 0
+				: (batch.ItemDeletes != null && batch.ItemDeletes.Count > 0) ||
+					(batch.ItemWrites != null && batch.ItemWrites.Count > 0);
+
+			if (hasItemWork)
 			{
-				// A snapshot list that is present but empty is a legitimate statement — "this
-				// container holds nothing" — and must still prune. A null list means the character
-				// has no such container and it is left entirely alone.
-				if (batch.InventoryWrites != null)
+				if (!registry.TryGet<ICharacterItemService>(out var itemService))
 				{
-					if (!registry.TryGet<ICharacterInventoryService>(out var inventoryService))
-					{
-						return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterInventoryService is not registered.");
-					}
-					DatabaseResult result = await inventoryService.SaveSnapshotAsync(batch.CharacterID, batch.InventoryWrites);
-					if (!result.IsSuccess) return result;
-				}
-				if (batch.BankWrites != null)
-				{
-					if (!registry.TryGet<ICharacterBankService>(out var bankService))
-					{
-						return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterBankService is not registered.");
-					}
-					DatabaseResult result = await bankService.SaveSnapshotAsync(batch.CharacterID, batch.BankWrites);
-					if (!result.IsSuccess) return result;
-				}
-				if (batch.EquipmentWrites != null)
-				{
-					if (!registry.TryGet<ICharacterEquipmentService>(out var equipmentService))
-					{
-						return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterEquipmentService is not registered.");
-					}
-					DatabaseResult result = await equipmentService.SaveSnapshotAsync(batch.CharacterID, batch.EquipmentWrites);
-					if (!result.IsSuccess) return result;
-				}
-			}
-			else
-			{
-				if (batch.InventoryDeletes != null || batch.InventoryWrites != null)
-				{
-					if (!registry.TryGet<ICharacterInventoryService>(out var inventoryService))
-					{
-						return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterInventoryService is not registered.");
-					}
-					if (batch.InventoryDeletes != null)
-					{
-						foreach (ItemSlotDelete vacancy in batch.InventoryDeletes)
-						{
-							DatabaseResult result = await inventoryService.DeleteAsync(batch.CharacterID, vacancy.Slot, vacancy.Version);
-							if (!result.IsSuccess) return result;
-						}
-					}
-					if (batch.InventoryWrites != null && batch.InventoryWrites.Count > 0)
-					{
-						DatabaseResult result = RequireCompleteWrite("inventory write", batch.CharacterID,
-							await inventoryService.PersistAsync(batch.InventoryWrites));
-						if (!result.IsSuccess) return result;
-					}
+					return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterItemService is not registered.");
 				}
 
-				if (batch.BankDeletes != null || batch.BankWrites != null)
+				if (batch.IsSnapshot)
 				{
-					if (!registry.TryGet<ICharacterBankService>(out var bankService))
+					/* The snapshot names the containers it read, so a character missing one of its
+					 * controllers leaves that container's rows alone rather than having them pruned
+					 * on the strength of a list nobody built. */
+					DatabaseResult<IReadOnlyList<CharacterItemIdAssignment>> result =
+						await itemService.SaveSnapshotAsync(
+							batch.CharacterID,
+							batch.SnapshotContainers,
+							batch.ItemWrites ?? EmptyItemWrites);
+
+					if (!result.IsSuccess)
 					{
-						return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterBankService is not registered.");
+						return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 					}
-					if (batch.BankDeletes != null)
+
+					/* Identities the database minted for items that had never been written. They are
+					 * reported back to the main thread rather than applied here: this runs on a
+					 * worker, and Item is not thread safe. Until the write-back lands the item's
+					 * attribute-ledger key is still zero, which is why it is a queued follow-up
+					 * rather than something the next snapshot can be relied on to repeat. */
+					if (result.Data != null && result.Data.Count > 0)
 					{
-						foreach (ItemSlotDelete vacancy in batch.BankDeletes)
-						{
-							DatabaseResult result = await bankService.DeleteAsync(batch.CharacterID, vacancy.Slot, vacancy.Version);
-							if (!result.IsSuccess) return result;
-						}
-					}
-					if (batch.BankWrites != null && batch.BankWrites.Count > 0)
-					{
-						DatabaseResult result = RequireCompleteWrite("bank write", batch.CharacterID,
-							await bankService.PersistAsync(batch.BankWrites));
-						if (!result.IsSuccess) return result;
+						batch.AssignedIdentities = result.Data;
 					}
 				}
-
-				if (batch.EquipmentDeletes != null || batch.EquipmentWrites != null)
+				else
 				{
-					if (!registry.TryGet<ICharacterEquipmentService>(out var equipmentService))
+					/* Deletes first. Nothing in the current handler set needs the ordering — an item
+					 * that is destroyed is never also written — but it is the order that stays
+					 * correct if one ever does, because a destroyed item's row must not outlive the
+					 * statement that replaced whatever took its slot. */
+					if (batch.ItemDeletes != null)
 					{
-						return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterEquipmentService is not registered.");
-					}
-					if (batch.EquipmentDeletes != null)
-					{
-						foreach (ItemSlotDelete vacancy in batch.EquipmentDeletes)
+						foreach (ItemDelete removal in batch.ItemDeletes)
 						{
-							DatabaseResult result = await equipmentService.DeleteAsync(batch.CharacterID, vacancy.Slot, vacancy.Version);
+							DatabaseResult result = await itemService.DeleteItemAsync(batch.CharacterID, removal.ItemID, removal.Version);
 							if (!result.IsSuccess) return result;
 						}
 					}
-					if (batch.EquipmentWrites != null && batch.EquipmentWrites.Count > 0)
+
+					if (batch.ItemWrites != null && batch.ItemWrites.Count > 0)
 					{
-						foreach (CharacterEquipmentData dto in batch.EquipmentWrites)
+						/* One row at a time rather than the bulk path, because each write returns the
+						 * identity the database assigned and a bulk upsert cannot report one per row.
+						 * An item that never learns its id is written as a new row on every save and
+						 * its ledger key moves underneath it, so the identity is not optional. Item
+						 * batches are a handful of rows; this is not the hot path. */
+						List<CharacterItemIdAssignment> assigned = null;
+						foreach (CharacterItemData dto in batch.ItemWrites)
 						{
-							DatabaseResult<long> result = await equipmentService.PersistAsync(dto);
+							DatabaseResult<long> result = await itemService.PersistAsync(dto);
 							if (!result.IsSuccess)
 							{
 								return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 							}
+							if (dto.ID <= 0 && result.Data > 0)
+							{
+								(assigned ??= new List<CharacterItemIdAssignment>(1))
+									.Add(new CharacterItemIdAssignment(dto.Container, dto.Slot, result.Data));
+							}
+						}
+						if (assigned != null)
+						{
+							batch.AssignedIdentities = assigned;
 						}
 					}
 				}
@@ -1130,18 +1220,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// transaction. Three separate snapshots could interleave with an incremental
 			// write between them and leave the three tables describing different moments.
 			ItemWriteBatch batch = BeginItemBatch(characterID, "ItemSnapshot", isSnapshot: true);
+
+			/* The containers this snapshot speaks for. A container whose controller is missing is
+			 * NOT listed, so its rows are left alone rather than pruned on the strength of a list
+			 * nobody built — the same distinction the three separate snapshot calls used to draw by
+			 * leaving a null list. */
+			var containers = new List<ItemContainerType>(3);
+			List<CharacterItemData> rows = null;
+
 			if (character.TryGet(out IInventoryController inventoryController))
 			{
-				batch.InventoryWrites = BuildInventorySnapshot(characterID, inventoryController);
+				containers.Add(ItemContainerType.Inventory);
+				rows = BuildContainerSnapshot(characterID, inventoryController, ItemContainerType.Inventory, rows);
 			}
 			if (character.TryGet(out IBankController bankController))
 			{
-				batch.BankWrites = BuildBankSnapshot(characterID, bankController);
+				containers.Add(ItemContainerType.Bank);
+				rows = BuildContainerSnapshot(characterID, bankController, ItemContainerType.Bank, rows);
 			}
 			if (character.TryGet(out IEquipmentController equipmentController))
 			{
-				batch.EquipmentWrites = BuildEquipmentSnapshot(characterID, equipmentController);
+				containers.Add(ItemContainerType.Equipment);
+				rows = BuildContainerSnapshot(characterID, equipmentController, ItemContainerType.Equipment, rows);
 			}
+
+			batch.SnapshotContainers = containers;
+			batch.ItemWrites = rows;
 			EnqueueItemBatch(batch);
 		}
 
@@ -1175,11 +1279,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Builds the inventory snapshot DTO list from a live container. Main thread only.
+		/// Builds the snapshot rows for one container. Main thread only.
 		/// </summary>
-		private List<CharacterInventoryData> BuildInventorySnapshot(long characterID, IItemContainer container)
+		private List<CharacterItemData> BuildContainerSnapshot(long characterID, IItemContainer container, ItemContainerType containerType, List<CharacterItemData> into)
 		{
-			var dtos = new List<CharacterInventoryData>(container.Items.Count);
+			into ??= new List<CharacterItemData>(container.Items.Count);
 			for (int i = 0; i < container.Items.Count; ++i)
 			{
 				Item item = container.Items[i];
@@ -1191,47 +1295,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// snapshot's whole job is to be right when something else has gone wrong, and a slot
 				// field that disagrees with its container would otherwise write the item twice.
 				item.Slot = i;
-				dtos.Add(BuildInventoryItemData(characterID, item));
+				into.Add(BuildItemData(characterID, item, containerType));
 			}
-			return dtos;
-		}
-
-		/// <summary>
-		/// Builds the bank snapshot DTO list from a live container. Main thread only.
-		/// </summary>
-		private List<CharacterBankData> BuildBankSnapshot(long characterID, IItemContainer container)
-		{
-			var dtos = new List<CharacterBankData>(container.Items.Count);
-			for (int i = 0; i < container.Items.Count; ++i)
-			{
-				Item item = container.Items[i];
-				if (item == null || item.Template == null)
-				{
-					continue;
-				}
-				item.Slot = i;
-				dtos.Add(BuildBankItemData(characterID, item));
-			}
-			return dtos;
-		}
-
-		/// <summary>
-		/// Builds the equipment snapshot DTO list from a live container. Main thread only.
-		/// </summary>
-		private List<CharacterEquipmentData> BuildEquipmentSnapshot(long characterID, IItemContainer container)
-		{
-			var dtos = new List<CharacterEquipmentData>(container.Items.Count);
-			for (int i = 0; i < container.Items.Count; ++i)
-			{
-				Item item = container.Items[i];
-				if (item == null || item.Template == null)
-				{
-					continue;
-				}
-				item.Slot = i;
-				dtos.Add(BuildEquipmentItemData(characterID, item));
-			}
-			return dtos;
+			return into;
 		}
 
 		#endregion
@@ -1508,7 +1574,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					item.Version++;
 
 					ItemWriteBatch batch = BeginItemBatch(characterID, "InventoryRemove");
-					batch.AddInventoryDelete(slot, item.Version);
+					// A real destruction, so a real delete — addressed by the item, not the hole.
+					batch.AddItemDelete(item.ID, item.Version);
 					if (EnqueueItemBatch(batch))
 					{
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -1585,16 +1652,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						// swap the items in the inventory
 						if (msg.To != msg.From &&
-							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected, out int invVacated))
+							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected, out int _))
 						{
 							ItemWriteBatch batch = BeginItemBatch(characterID, "InventorySwap");
-							batch.AddInventoryWrites(BuildInventoryItemDataList(characterID, invAffected));
-							// A move onto an empty slot writes the item at its new index and would
-							// otherwise leave the old row behind — the same item in two slots.
-							if (invVacated >= 0)
-							{
-								batch.AddInventoryDelete(invVacated, long.MaxValue);
-							}
+							/* No delete for the vacated slot. A row is an item now, so writing the
+							 * item at its new index UPDATES the row it already had — there is no old
+							 * row to leave behind. The vacated-slot delete this replaces existed
+							 * solely because the row was keyed by slot. */
+							batch.AddItemWrites(BuildItemDataList(characterID, invAffected, ItemContainerType.Inventory));
 							if (EnqueueItemBatch(batch))
 							{
 								// tell the client we succeeded
@@ -1630,28 +1695,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							}
 
 							if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
-								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
+								out List<Item> fromItems, out List<long> _, out List<Item> toItems))
 							{
 								// ONE batch for the whole withdraw: the bank rows that stayed behind, the bank
 								// slots that were vacated, and the inventory rows that received the item.
 								ItemWriteBatch batch = BeginItemBatch(characterID, "BankWithdraw");
 								if (fromItems != null && fromItems.Count > 0)
 								{
-									batch.AddBankWrites(BuildBankItemDataList(characterID, fromItems));
+									batch.AddItemWrites(BuildItemDataList(characterID, fromItems, ItemContainerType.Bank));
 								}
-								if (deletedSlots != null)
-								{
-									foreach (long slot in deletedSlots)
-									{
-										// A vacated slot has no item whose version could authorise the delete, so
-										// long.MaxValue reads as "unconditional". Since the CRIT-2 fix that hard
-										// deletes the row rather than leaving a poisoned tombstone behind.
-										batch.AddBankDelete((int)slot, long.MaxValue);
-									}
-								}
+								/* The vacated bank slots need no statement of their own. Every item
+								 * that left one is in toItems and is written below with its new
+								 * container and slot, which updates the row it already had. Under the
+								 * per-slot schema the destination was a different row in a different
+								 * table, which is the only reason a delete was ever needed here. */
 								if (toItems != null && toItems.Count > 0)
 								{
-									batch.AddInventoryWrites(BuildInventoryItemDataList(characterID, toItems));
+									batch.AddItemWrites(BuildItemDataList(characterID, toItems, ItemContainerType.Inventory));
 								}
 
 								if (EnqueueItemBatch(batch))
@@ -1753,15 +1813,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							// did we replace an already equipped item?
 							if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 							{
-								batch.AddInventoryWrite(BuildInventoryItemData(characterID, prevItem));
+								batch.AddItemWrite(BuildItemData(characterID, prevItem, ItemContainerType.Inventory));
 							}
 							// the inventory slot the item came from is now empty
 							else
 							{
-								batch.AddInventoryDelete(msg.InventoryIndex, long.MaxValue);
+								/* Nothing to delete: the item that left this slot is written below
+								 * as equipment, which moves its row rather than creating a new one. */
 							}
 
-							batch.AddEquipmentWrite(BuildEquipmentItemData(characterID, inventoryItem));
+							batch.AddItemWrite(BuildItemData(characterID, inventoryItem, ItemContainerType.Equipment));
 							batch.AddAttributeWrites(BuildAttributeDataList(character));
 
 							if (EnqueueItemBatch(batch))
@@ -1811,15 +1872,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								// did we replace an already equipped item?
 								if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
 								{
-									batch.AddBankWrite(BuildBankItemData(characterID, prevItem));
+									batch.AddItemWrite(BuildItemData(characterID, prevItem, ItemContainerType.Bank));
 								}
 								// the bank slot the item came from is now empty
 								else
 								{
-									batch.AddBankDelete(msg.InventoryIndex, long.MaxValue);
+									/* Nothing to delete: the item that left this slot is written
+									 * below as equipment, which moves its row. */
 								}
 
-								batch.AddEquipmentWrite(BuildEquipmentItemData(characterID, bankItem));
+								batch.AddItemWrite(BuildItemData(characterID, bankItem, ItemContainerType.Equipment));
 								batch.AddAttributeWrites(BuildAttributeDataList(character));
 
 								if (EnqueueItemBatch(batch))
@@ -1902,11 +1964,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					case InventoryType.Inventory:
 						if (character.TryGet(out IInventoryController inventoryController) &&
-							equipmentController.TryGetItem(msg.Slot, out Item toInventory))
+							equipmentController.TryGetItem(msg.Slot, out Item _))
 						{
-							// save the old slot index so we can delete the item
-							int oldSlot = toInventory.Slot;
-
 							// if we found the item we should unequip it
 							if (!equipmentController.Unequip(inventoryController, msg.Slot, out List<Item> modifiedItems))
 							{
@@ -1924,8 +1983,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							// left, and the stat change unequipping caused. Persisting the arrival without
 							// the departure duplicates the item on next login; the reverse destroys it.
 							ItemWriteBatch batch = BeginItemBatch(characterID, "UnequipToInventory");
-							batch.AddInventoryWrites(BuildInventoryItemDataList(characterID, modifiedItems));
-							batch.AddEquipmentDelete(oldSlot, long.MaxValue);
+							batch.AddItemWrites(BuildItemDataList(characterID, modifiedItems, ItemContainerType.Inventory));
+							/* No equipment delete. The item that left the socket is in modifiedItems
+							 * and is written above with container Inventory, which moves its row. */
 							batch.AddAttributeWrites(BuildAttributeDataList(character));
 
 							if (EnqueueItemBatch(batch))
@@ -1955,10 +2015,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								return;
 							}
 
-							if (equipmentController.TryGetItem(msg.Slot, out Item toBank))
+							if (equipmentController.TryGetItem(msg.Slot, out Item _))
 							{
-								int oldSlot = toBank.Slot;
-
 								if (!equipmentController.Unequip(bankController, msg.Slot, out List<Item> modifiedItems))
 								{
 									return;
@@ -1974,8 +2032,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								// ONE batch: the bank rows that received the item, the equipment slot it
 								// left, and the stat change unequipping caused.
 								ItemWriteBatch batch = BeginItemBatch(characterID, "UnequipToBank");
-								batch.AddBankWrites(BuildBankItemDataList(characterID, modifiedItems));
-								batch.AddEquipmentDelete(oldSlot, long.MaxValue);
+								batch.AddItemWrites(BuildItemDataList(characterID, modifiedItems, ItemContainerType.Bank));
+								/* No equipment delete — see UnequipToInventory above. */
 								batch.AddAttributeWrites(BuildAttributeDataList(character));
 
 								if (EnqueueItemBatch(batch))
@@ -2066,7 +2124,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					item.Version++;
 
 					ItemWriteBatch batch = BeginItemBatch(characterID, "BankRemove");
-					batch.AddBankDelete(slot, item.Version);
+					// A real destruction, so a real delete — addressed by the item, not the hole.
+					batch.AddItemDelete(item.ID, item.Version);
 					if (EnqueueItemBatch(batch))
 					{
 						Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
@@ -2156,7 +2215,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							ItemWriteBatch batch = BeginItemBatch(characterID, "BankDeposit");
 							if (fromItems != null && fromItems.Count > 0)
 							{
-								batch.AddInventoryWrites(BuildInventoryItemDataList(characterID, fromItems));
+								batch.AddItemWrites(BuildItemDataList(characterID, fromItems, ItemContainerType.Inventory));
 							}
 							if (deletedSlots != null)
 							{
@@ -2165,12 +2224,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									// A vacated slot has no item whose version could authorise the delete, so
 									// long.MaxValue reads as "unconditional". Since the CRIT-2 fix that hard
 									// deletes the row rather than leaving a poisoned tombstone behind.
-									batch.AddInventoryDelete((int)slot, long.MaxValue);
+									/* No delete: the item that left this inventory slot is written
+									 * below as a bank row, which moves its row. */
 								}
 							}
 							if (toItems != null && toItems.Count > 0)
 							{
-								batch.AddBankWrites(BuildBankItemDataList(characterID, toItems));
+								batch.AddItemWrites(BuildItemDataList(characterID, toItems, ItemContainerType.Bank));
 							}
 
 							if (EnqueueItemBatch(batch))
@@ -2199,11 +2259,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected, out int bankVacated))
 						{
 							ItemWriteBatch batch = BeginItemBatch(characterID, "BankSwap");
-							batch.AddBankWrites(BuildBankItemDataList(characterID, bankAffected));
+							batch.AddItemWrites(BuildItemDataList(characterID, bankAffected, ItemContainerType.Bank));
 							// Same reasoning as the inventory swap above.
 							if (bankVacated >= 0)
 							{
-								batch.AddBankDelete(bankVacated, long.MaxValue);
+								/* No delete for the vacated slot — the item is written above at its
+								 * new index, which updates the row it already had. */
 							}
 							if (EnqueueItemBatch(batch))
 							{
@@ -2283,21 +2344,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		#region DTO Builders
 
 		/// <summary>
-		/// Builds a CharacterInventoryData DTO from a live Item instance.
+		/// Builds a persistence row from a live Item.
 		/// Increments item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
+		/// <remarks>
+		/// One builder for all three containers. There used to be three, differing only in the type
+		/// they constructed — which is what three tables bought, and what one table gives back. The
+		/// container is now a value the row carries rather than a choice of destination.
+		/// </remarks>
 		/// <param name="characterID">Owning character identifier.</param>
 		/// <param name="item">Runtime item instance to serialize.</param>
-		/// <returns>Inventory DTO ready for persistence.</returns>
+		/// <param name="container">Which container the item is in.</param>
+		/// <returns>Item row ready for persistence.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private CharacterInventoryData BuildInventoryItemData(long characterID, Item item)
+		private CharacterItemData BuildItemData(long characterID, Item item, ItemContainerType container)
 		{
 			item.Version++;
-			return new CharacterInventoryData(
+			return new CharacterItemData(
+				// Zero for an item the database has not written yet. The write returns the identity
+				// it assigns and ApplyAssignedIdentities puts it back on this object.
 				id: item.ID,
 				version: item.Version,
 				characterID: characterID,
+				container: container,
 				templateID: item.Template.ID,
 				slot: item.Slot,
 				seed: item.IsGenerated ? item.Generator.Seed : 0,
@@ -2306,87 +2376,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Builds a list of CharacterInventoryData DTOs from live Item instances.
+		/// Builds persistence rows from live Items.
 		/// Increments each item.Version for sequence-based optimistic concurrency.
 		/// Must be called on the main thread.
 		/// </summary>
 		/// <param name="characterID">Owning character identifier.</param>
 		/// <param name="items">Runtime item instances to serialize.</param>
-		/// <returns>List of inventory DTOs ready for persistence.</returns>
-		private List<CharacterInventoryData> BuildInventoryItemDataList(long characterID, List<Item> items)
+		/// <param name="container">Which container the items are in.</param>
+		/// <returns>List of item rows ready for persistence.</returns>
+		private List<CharacterItemData> BuildItemDataList(long characterID, List<Item> items, ItemContainerType container)
 		{
-			var dtos = new List<CharacterInventoryData>(items.Count);
+			var dtos = new List<CharacterItemData>(items.Count);
 			foreach (Item item in items)
 			{
 				if (item == null) continue;
-				dtos.Add(BuildInventoryItemData(characterID, item));
+				dtos.Add(BuildItemData(characterID, item, container));
 			}
 			return dtos;
-		}
-
-		/// <summary>
-		/// Builds a CharacterBankData DTO from a live Item instance.
-		/// Increments item.Version for sequence-based optimistic concurrency.
-		/// Must be called on the main thread.
-		/// </summary>
-		/// <param name="characterID">Owning character identifier.</param>
-		/// <param name="item">Runtime item instance to serialize.</param>
-		/// <returns>Bank DTO ready for persistence.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private CharacterBankData BuildBankItemData(long characterID, Item item)
-		{
-			item.Version++;
-			return new CharacterBankData(
-				id: item.ID,
-				version: item.Version,
-				characterID: characterID,
-				templateID: item.Template.ID,
-				slot: item.Slot,
-				seed: item.IsGenerated ? item.Generator.Seed : 0,
-				amount: item.IsStackable ? item.Stackable.Amount : 1
-			);
-		}
-
-		/// <summary>
-		/// Builds a list of CharacterBankData DTOs from live Item instances.
-		/// Increments each item.Version for sequence-based optimistic concurrency.
-		/// Must be called on the main thread.
-		/// </summary>
-		/// <param name="characterID">Owning character identifier.</param>
-		/// <param name="items">Runtime item instances to serialize.</param>
-		/// <returns>List of bank DTOs ready for persistence.</returns>
-		private List<CharacterBankData> BuildBankItemDataList(long characterID, List<Item> items)
-		{
-			var dtos = new List<CharacterBankData>(items.Count);
-			foreach (Item item in items)
-			{
-				if (item == null) continue;
-				dtos.Add(BuildBankItemData(characterID, item));
-			}
-			return dtos;
-		}
-
-		/// <summary>
-		/// Builds a CharacterEquipmentData DTO from a live Item instance.
-		/// Increments item.Version for sequence-based optimistic concurrency.
-		/// Must be called on the main thread.
-		/// </summary>
-		/// <param name="characterID">Owning character identifier.</param>
-		/// <param name="item">Runtime item instance to serialize.</param>
-		/// <returns>Equipment DTO ready for persistence.</returns>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private CharacterEquipmentData BuildEquipmentItemData(long characterID, Item item)
-		{
-			item.Version++;
-			return new CharacterEquipmentData(
-				id: item.ID,
-				version: item.Version,
-				characterID: characterID,
-				templateID: item.Template.ID,
-				slot: item.Slot,
-				seed: item.IsGenerated ? item.Generator.Seed : 0,
-				amount: item.IsStackable ? item.Stackable.Amount : 1
-			);
 		}
 
 		/// <summary>
@@ -2404,9 +2410,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return dtos;
 			}
 
+			/* Version++ AND MarkPersistPending, together — the pair is what makes the dirty flag
+			 * work. This used to bump the version alone, which quietly broke the OTHER save path:
+			 * CharacterSystem.AppendAttributeData records the version it stamped and clears the mark
+			 * only when the confirmation quotes that same version back. A bump from here moved the
+			 * attribute past the version an in-flight save was waiting on, so its MarkPersisted
+			 * never matched, the attribute stayed dirty forever, and the periodic save wrote it on
+			 * every pass from then on — the exact cost the flag exists to avoid.
+			 *
+			 * Unlike that path this one does NOT skip a clean attribute. Equipping changes stats,
+			 * and the stat write belongs to the same transaction as the item write; a batch that
+			 * silently dropped the attributes because they happened to be clean would commit half
+			 * the operation. */
 			foreach (var kvp in attributeController.Attributes)
 			{
 				kvp.Value.Version++;
+				kvp.Value.MarkPersistPending(kvp.Value.Version);
 				dtos.Add(new CharacterAttributeData(
 					id: 0,
 					version: kvp.Value.Version,
@@ -2419,6 +2438,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in attributeController.ResourceAttributes)
 			{
 				kvp.Value.Version++;
+				kvp.Value.MarkPersistPending(kvp.Value.Version);
 				dtos.Add(new CharacterAttributeData(
 					id: 0,
 					version: kvp.Value.Version,

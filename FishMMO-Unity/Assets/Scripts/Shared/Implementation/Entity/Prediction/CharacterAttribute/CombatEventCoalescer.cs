@@ -19,6 +19,11 @@ namespace FishMMO.Shared
 	/// hits are folded into an anonymous entry (source 0) for their kind and type so the total is
 	/// still right and the message count is not. Pure C# so the merge rules are unit tested.
 	/// </para>
+	/// <para>
+	/// <b>Each entry counts its hits as well as summing them.</b> Merging is the right answer for
+	/// display and the wrong one for the caster's predicted numbers, which are drawn one per hit and
+	/// settled one per report. See <see cref="Entry.Occurrences"/>.
+	/// </para>
 	/// </remarks>
 	public sealed class CombatEventCoalescer
 	{
@@ -36,6 +41,17 @@ namespace FishMMO.Shared
 			public int DamageTemplateID;
 			/// <summary>Summed amount.</summary>
 			public int Amount;
+
+			/// <summary>
+			/// How many separate hits were summed into <see cref="Amount"/>.
+			/// </summary>
+			/// <remarks>
+			/// Merging is right for display and wrong for confirmation: the caster's client drew one
+			/// predicted label per hit, so the report has to say how many predictions it settles or
+			/// the ones it does not settle grey themselves out as denied. See
+			/// <c>CombatEventBroadcast.Occurrences</c>.
+			/// </remarks>
+			public int Occurrences;
 		}
 
 		private readonly List<Entry> entries = new List<Entry>(MaxEntries);
@@ -82,6 +98,11 @@ namespace FishMMO.Shared
 			{
 				Entry merged = entries[index];
 				merged.Amount = ClampedAdd(merged.Amount, amount);
+				/* Counted even when the fold above redirected this hit into the anonymous bucket or
+				 * into the oldest entry. The count exists to settle the caster's predictions, and the
+				 * caster predicted the hit whichever entry ends up carrying its amount — losing the
+				 * count would grey out a landed hit, which is worse than attributing it oddly. */
+				merged.Occurrences = ClampedAdd(merged.Occurrences, 1);
 				entries[index] = merged;
 				return;
 			}
@@ -92,6 +113,7 @@ namespace FishMMO.Shared
 				Kind = kind,
 				DamageTemplateID = damageTemplateID,
 				Amount = amount,
+				Occurrences = 1,
 			});
 		}
 

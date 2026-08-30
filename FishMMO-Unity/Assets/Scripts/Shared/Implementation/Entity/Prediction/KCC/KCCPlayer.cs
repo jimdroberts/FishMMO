@@ -183,14 +183,34 @@ namespace FishMMO.Shared
 			AimDirectionCompression.QuantizedFallbackDirection;
 
 		/// <summary>
-		/// How far behind server-present this client is rendering its peers: half the round trip plus
-		/// the interpolation buffer it deliberately holds, split into whole ticks and a 1/256 tick
-		/// remainder.
+		/// How far behind the server this client's rendered view of its peers will be BY THE TIME THE
+		/// SERVER RUNS THIS INPUT: the full round trip plus the interpolation buffer it deliberately
+		/// holds, split into whole ticks and a 1/256 tick remainder.
 		/// </summary>
 		/// <remarks>
-		/// Computed here because this is the only peer that knows both terms. See
+		/// <para>
+		/// <b>The full round trip, not half of it.</b> The offset is subtracted from the server's tick
+		/// at the moment the query runs, and that instant is not the instant this input was produced —
+		/// the input still has to cross the network. Both halves of the trip are therefore in play and
+		/// they are different halves:
+		/// </para>
+		/// <list type="number">
+		/// <item>The state this client is looking at left the server one way trip ago, and it is
+		/// rendered <see cref="LagCompensationTick.SpectatorInterpolationTicks"/> behind even that.</item>
+		/// <item>The input built from that view takes another one way trip to reach the server.</item>
+		/// </list>
+		/// <para>
+		/// Half the round trip covers only the first, so a shot resolved against it landed half a
+		/// round trip ahead of where the shooter aimed — at 200&#160;ms and 6&#160;m/s, most of a
+		/// character's width, and the error grew with ping. There is a third term, the server's own
+		/// replicate queue, which this client cannot see; <see cref="LagCompensationTick.TryResolve"/>
+		/// adds it from <c>PredictionManager.StateInterpolation</c> on arrival.
+		/// </para>
+		/// <para>
+		/// Computed here because this is the only peer that knows the latency terms. See
 		/// <see cref="CharacterReplicateData.ViewOffsetTicks"/> for why the server cannot derive it,
 		/// and <see cref="LagCompensationTick"/> for the cap applied to it on arrival.
+		/// </para>
 		/// </remarks>
 		private void ResolveViewOffset(out byte wholeTicks, out byte fraction)
 		{
@@ -209,12 +229,12 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			/* RoundTripTime is milliseconds; half of it is the one-way trip the server's state took
-			 * to reach this client. Kept as a REAL number rather than rounded up to a whole tick:
-			 * the fractional part is carried in its own byte, because the interpolated view this is
-			 * describing does not sit on a tick boundary either. */
-			double oneWaySeconds = timeManager.HalfRoundTripTime / 1000d;
-			double ticks = (oneWaySeconds / tickDelta) + LagCompensationTick.SpectatorInterpolationTicks;
+			/* RoundTripTime is milliseconds, and BOTH halves of it are in play — see the remarks
+			 * above. Kept as a REAL number rather than rounded up to a whole tick: the fractional
+			 * part is carried in its own byte, because the interpolated view this is describing does
+			 * not sit on a tick boundary either. */
+			double roundTripSeconds = timeManager.RoundTripTime / 1000d;
+			double ticks = (roundTripSeconds / tickDelta) + LagCompensationTick.SpectatorInterpolationTicks;
 
 			if (ticks < 0d)
 			{
@@ -291,23 +311,47 @@ namespace FishMMO.Shared
 		{
 			TryResolvePendingPlatform();
 
-			// Server-authoritative movement gate: reject movement input from characters
-			// that are dead, frozen, teleporting, or unloaded. IsInCombat is intentionally
-			// excluded — players can move freely during combat. Only teleportation is
-			// blocked while in combat (see CharacterSystem.Connection.cs).
-			if (base.IsServerStarted &&
-				CharacterController != null &&
+			/* Movement gate. IsInCombat is intentionally excluded — players move freely during
+			 * combat; only teleportation is blocked (see CharacterSystem.Connection.cs).
+			 *
+			 * Split into a PREDICTED half and a SERVER-ONLY half, and the split is the whole point.
+			 * The gate used to be entirely server-side, so a stunned owner carried on predicting
+			 * movement while the server refused it, and the reconcile snapped the character back on
+			 * every tick for the stun's whole duration. What the player saw was rubber-banding
+			 * rather than a stun — the correction was real, but the feedback was wrong. */
+			if (CharacterController != null &&
 				CharacterController.Character != null)
 			{
 				IPlayerCharacter character = CharacterController.Character;
-				/* IsFrozen used to be the only crowd-control flag tested here. IsStunned and
-				 * IsMesmerized were set by StateBuffTemplate / CompositeBuffTemplate and read
-				 * nowhere at all, so a stunned or mesmerized player kept moving normally.
-				 * CharacterIncapacitation is the one definition all three gates now share. */
-				if (character.IsFlagged(CharacterFlags.IsDead) ||
-					character.IsTeleporting ||
-					CharacterIncapacitation.IsIncapacitated(character) ||
-					!character.IsFlagged(CharacterFlags.IsLoaded))
+
+				/* Predicted on BOTH peers, because both can reach the same answer on the same tick.
+				 *
+				 * IsFrozen, IsStunned and IsMesmerized are set by StateBuffTemplate and
+				 * CompositeBuffTemplate, which run wherever BuffController.SimulatesBuffEffects is
+				 * true — the server AND the owner. So the owner already knows it is stunned; it
+				 * simply was not asked. (Those two flags used to be set and read nowhere at all,
+				 * which is why CharacterIncapacitation exists: one definition, shared by all three
+				 * gates that need it.)
+				 *
+				 * Death is tested on the replicated HEALTH VALUE, never on CharacterFlags.IsDead.
+				 * Flags ride the spawn payload and are never re-synced, so a client's copy is stale
+				 * from its first death onward and gating on it would freeze the owner permanently
+				 * after one death. Resource state is reconciled every tick, so both sides evaluate
+				 * this identically — the same substitution AbilityController.CanStartActivation
+				 * makes for the same reason. */
+				if (CharacterIncapacitation.IsIncapacitated(character) ||
+					IsHealthDepleted(character))
+				{
+					return;
+				}
+
+				/* Server-only, because these are server bookkeeping the client cannot evaluate.
+				 * IsTeleporting is set and cleared entirely server-side, and IsLoaded is a flag from
+				 * the spawn payload that a client holds as "true" for its whole session — testing
+				 * either on the owner would gate movement on a value that never changes there. */
+				if (base.IsServerStarted &&
+					(character.IsTeleporting ||
+					 !character.IsFlagged(CharacterFlags.IsLoaded)))
 				{
 					return;
 				}
@@ -418,6 +462,25 @@ namespace FishMMO.Shared
 			}
 
 			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
+		}
+
+		/// <summary>
+		/// True when this character has a health resource and it has been reduced to zero.
+		/// </summary>
+		/// <remarks>
+		/// The shared definition of "dead" for prediction-path code: derived purely from replicated
+		/// resource state, so the owner and the server reach the same answer on the same tick.
+		/// <para>
+		/// A character with no health resource configured is NOT treated as dead — it has no health
+		/// to lose, and freezing it would be a movement bug for anything that simply cannot be
+		/// attacked. Same rule as <c>CharacterAttributeController.IsHealthDepleted</c>.
+		/// </para>
+		/// </remarks>
+		private static bool IsHealthDepleted(IPlayerCharacter character)
+		{
+			return character.TryGet(out ICharacterDamageController damageController) &&
+				damageController.ResourceInstance != null &&
+				damageController.ResourceInstance.CurrentValue <= 0.0f;
 		}
 
 		/// <inheritdoc/>

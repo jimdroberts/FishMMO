@@ -241,7 +241,10 @@ namespace FishMMO.Shared
 						 * AddModifier(-oldValue) followed by AddModifier(newValue), which is only
 						 * correct while oldValue is exactly what had been added — and nothing
 						 * enforced that. Naming the source makes the old value irrelevant. */
-						ModifierSource source = ModifierSource.Item(item.InstanceID);
+						if (!TryResolveLedgerSource(out ModifierSource source))
+						{
+							return;
+						}
 						if (attributeController.TryGetAttribute(attrId, out CharacterAttribute characterAttribute))
 						{
 							characterAttribute.SetSource(source, newValue);
@@ -256,8 +259,54 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// The ledger key for this item's contribution, when it has one.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>An item the database has not written yet does not contribute.</b> Its
+		/// <see cref="Item.ID"/> is zero, and zero is not an identity — it is the absence of one. If
+		/// two such items were both applied they would share the key <c>Item(0)</c>, and because
+		/// <c>SetSource</c> STATES a contribution rather than adding to one, the second would
+		/// silently replace the first and one item's bonus would vanish. Declining until the
+		/// identity arrives is the only answer that cannot lose a bonus;
+		/// <see cref="Item.AssignPersistentID"/> applies it the moment the id lands.
+		/// </para>
+		/// <para>
+		/// <b>This is also what keeps an observer's sheet honest.</b> An observer builds its copy of
+		/// a peer's equipment with no ids at all — <c>EquipmentController.WritePayload</c> does not
+		/// send them to non-owners — so an observer now applies nothing, which is correct: the
+		/// server's authoritative <c>ExternalModifier</c> already contains every equipped item's
+		/// bonus and arrives through the attribute broadcast. Before this, the payload restore
+		/// equipped for real and every equipped attribute read DOUBLED until
+		/// <c>ReassertPayloadModifiers</c> re-installed the total on top of it.
+		/// </para>
+		/// <para>
+		/// The cost is that a freshly created item equipped before its first persist returns carries
+		/// no stats for that window — one database round trip. That is a visible-but-brief
+		/// understatement, against a silent and permanent loss.
+		/// </para>
+		/// </remarks>
+		/// <param name="source">The item's ledger key, when it has an identity.</param>
+		/// <returns>True when this item may write to a ledger.</returns>
+		private bool TryResolveLedgerSource(out ModifierSource source)
+		{
+			long id = item != null ? item.ID : 0;
+			source = ModifierSource.Item(id);
+			return id > 0;
+		}
+
+		/// <summary>
 		/// Applies all generated attributes to the specified character, adding values to their stats/resources.
 		/// </summary>
+		/// <remarks>
+		/// Keyed by the item, so applying twice is applying once. A character loaded from the
+		/// database, restored from a spawn payload and then corrected by a reconcile can reach this
+		/// more than once for the same item; under the old accumulate-and-negate shape each arrival
+		/// doubled the bonus and something downstream had to undo it.
+		/// <para>
+		/// Does nothing for an item with no identity yet — see <see cref="TryResolveLedgerSource"/>.
+		/// </para>
+		/// </remarks>
 		/// <param name="character">The character to apply attributes to.</param>
 		public void ApplyAttributes(ICharacter character)
 		{
@@ -265,11 +314,10 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			/* Keyed by the item, so applying twice is applying once. A character loaded from the
-			 * database, restored from a spawn payload and then corrected by a reconcile can reach
-			 * this more than once for the same item; under the old accumulate-and-negate shape each
-			 * arrival doubled the bonus and something downstream had to undo it. */
-			ModifierSource source = ModifierSource.Item(item != null ? item.InstanceID : 0);
+			if (!TryResolveLedgerSource(out ModifierSource source))
+			{
+				return;
+			}
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
@@ -297,7 +345,10 @@ namespace FishMMO.Shared
 			 * owner whose ledger the reconcile had already restated — there is no entry and this is
 			 * correctly a no-op. The negation it replaces subtracted regardless and drove the sheet
 			 * below the server's number until the next authoritative push. */
-			ModifierSource source = ModifierSource.Item(item != null ? item.InstanceID : 0);
+			if (!TryResolveLedgerSource(out ModifierSource source))
+			{
+				return;
+			}
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))

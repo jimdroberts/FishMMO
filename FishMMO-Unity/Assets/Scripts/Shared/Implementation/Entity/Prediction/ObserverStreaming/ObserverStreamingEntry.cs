@@ -66,6 +66,21 @@ namespace FishMMO.Shared
 		/// <summary>Combat state cached for the current scheduling pass.</summary>
 		public bool InCombat { get; private set; }
 
+		/// <summary>
+		/// True when <paramref name="otherCharacterID"/> has contributed to this character's current
+		/// combat — that is, when the two are actually fighting each other.
+		/// </summary>
+		/// <remarks>
+		/// Read live rather than cached with the rest of the pass state: it is a question about a
+		/// PAIR, so there is nothing to cache on one entry, and the underlying lookup is a
+		/// dictionary probe on a set holding a handful of attackers.
+		/// </remarks>
+		/// <param name="otherCharacterID">The other character's id.</param>
+		public bool IsFoughtBy(long otherCharacterID)
+		{
+			return damageController != null && damageController.HasCombatContributor(otherCharacterID);
+		}
+
 		/// <summary>World position cached for the current scheduling pass.</summary>
 		public Vector3 Position { get; private set; }
 

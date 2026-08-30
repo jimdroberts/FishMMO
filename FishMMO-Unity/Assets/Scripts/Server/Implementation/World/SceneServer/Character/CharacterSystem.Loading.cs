@@ -482,9 +482,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				// --- Fetch all sub-entity data within a single Unit of Work (consistent snapshot) ---
-				IReadOnlyList<CharacterInventoryData> inventoryData = null;
-				IReadOnlyList<CharacterBankData> bankData = null;
-				IReadOnlyList<CharacterEquipmentData> equipmentData = null;
+				IReadOnlyList<CharacterItemData> itemData = null;
 				IReadOnlyList<CharacterAttributeData> attributeData = null;
 				IReadOnlyList<CharacterAbilityData> abilityData = null;
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = null;
@@ -676,20 +674,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await using (IUnitOfWork uow = uowResult.Data)
 				{
 					// All fetches share the same ambient DbContext/transaction (sequential, consistent snapshot)
-					if (serviceRegistry.TryGet<ICharacterInventoryService>(out var inventoryService))
+					// One fetch for the inventory, the bank and the equipment. They were three
+					// queries against three tables; the container is a column now.
+					if (serviceRegistry.TryGet<ICharacterItemService>(out var itemService))
 					{
-						var result = await inventoryService.FetchAsync(characterID);
-						if (result.IsSuccess) inventoryData = result.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterBankService>(out var bankService))
-					{
-						var result = await bankService.FetchAsync(characterID);
-						if (result.IsSuccess) bankData = result.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterEquipmentService>(out var equipmentService))
-					{
-						var result = await equipmentService.FetchAsync(characterID);
-						if (result.IsSuccess) equipmentData = result.Data;
+						var result = await itemService.FetchAsync(characterID);
+						if (result.IsSuccess) itemData = result.Data;
 					}
 					if (serviceRegistry.TryGet<ICharacterAttributeService>(out var attributeService))
 					{
@@ -808,7 +798,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				var loadContext = new CharacterLoadContext(
 					conn, charData, sessionToken, serverID,
 					instanceSceneName, instanceSceneHandle,
-					inventoryData, bankData, equipmentData,
+					itemData,
 					attributeData, abilityData, knownAbilityData,
 					achievementData, friendData,
 					guildData, partyData,
@@ -1156,9 +1146,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterData charData = ctx.CharacterData;
 			Guid sessionToken = ctx.SessionToken;
 			long serverID = ctx.ServerID;
-			IReadOnlyList<CharacterInventoryData> inventoryData = ctx.InventoryData;
-			IReadOnlyList<CharacterBankData> bankData = ctx.BankData;
-			IReadOnlyList<CharacterEquipmentData> equipmentData = ctx.EquipmentData;
+			IReadOnlyList<CharacterItemData> itemData = ctx.ItemData;
 			IReadOnlyList<CharacterAttributeData> attributeData = ctx.AttributeData;
 			IReadOnlyList<CharacterAbilityData> abilityData = ctx.AbilityData;
 			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = ctx.KnownAbilityData;
@@ -1346,77 +1334,79 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			// Inventory
-			if (inventoryData != null && inventoryData.Count > 0 &&
-				character.TryGet(out IInventoryController inventoryController))
+			// Items — inventory, bank and equipment, in one pass over one list.
+			if (itemData != null && itemData.Count > 0)
 			{
-				foreach (CharacterInventoryData inv in inventoryData)
-				{
-					Item item = new Item(inv.ID, inv.Seed, inv.TemplateID, inv.Amount);
-					item.Version = inv.Version;
-					/* The return value is not a formality. SetItemSlot refuses any slot outside the
-					 * container, and a refusal here means the item is in no container at all — at
-					 * which point memory is authoritative, the next snapshot prunes the row it came
-					 * from, and the item is destroyed for good. Relocating a row we cannot place
-					 * where it claims to belong is strictly better than dropping it silently. */
-					if (!inventoryController.SetItemSlot(item, inv.Slot))
-					{
-						if (inventoryController.TryAddItem(item, out _))
-						{
-							Log.Warning("CharacterSystem", $"Character {character.ID}: inventory slot {inv.Slot} is out of range; relocated item {inv.ID} to the first free slot.");
-						}
-						else
-						{
-							Log.Error("CharacterSystem", $"Character {character.ID}: could not place inventory item {inv.ID} from slot {inv.Slot}; it will be pruned by the next snapshot.");
-						}
-					}
-				}
-			}
+				character.TryGet(out IInventoryController inventoryController);
+				character.TryGet(out IBankController bankController);
+				character.TryGet(out IEquipmentController equipmentController);
 
-			// Bank
-			if (bankData != null && bankData.Count > 0 &&
-				character.TryGet(out IBankController bankController))
-			{
-				foreach (CharacterBankData bank in bankData)
+				foreach (CharacterItemData row in itemData)
 				{
-					Item item = new Item(bank.ID, bank.Seed, bank.TemplateID, bank.Amount);
-					item.Version = bank.Version;
-					// Same reasoning as the inventory load above.
-					if (!bankController.SetItemSlot(item, bank.Slot))
-					{
-						if (bankController.TryAddItem(item, out _))
-						{
-							Log.Warning("CharacterSystem", $"Character {character.ID}: bank slot {bank.Slot} is out of range; relocated item {bank.ID} to the first free slot.");
-						}
-						else
-						{
-							Log.Error("CharacterSystem", $"Character {character.ID}: could not place bank item {bank.ID} from slot {bank.Slot}; it will be pruned by the next snapshot.");
-						}
-					}
-				}
-			}
+					Item item = new Item(row.ID, row.Seed, row.TemplateID, row.Amount);
+					item.Version = row.Version;
 
-			// Equipment
-			if (equipmentData != null && equipmentData.Count > 0 &&
-				character.TryGet(out IEquipmentController equipmentController))
-			{
-				foreach (CharacterEquipmentData equip in equipmentData)
-				{
-					Item item = new Item(equip.ID, equip.Seed, equip.TemplateID, equip.Amount);
-					item.Version = equip.Version;
-					/* Equipment sockets are typed, so an out-of-range slot is corrupt data rather
-					 * than a resizing artefact and there is no sensible slot to relocate to. Report
-					 * it loudly — silently dropping it lets the next snapshot delete the row. */
-					if (!equipmentController.SetItemSlot(item, equip.Slot))
+					switch (row.Container)
 					{
-						Log.Error("CharacterSystem", $"Character {character.ID}: equipment slot {equip.Slot} is not a valid socket; item {equip.ID} could not be loaded and will be pruned by the next snapshot.");
-						continue;
-					}
+						case ItemContainerType.Inventory:
+							if (inventoryController == null) break;
+							/* The return value is not a formality. SetItemSlot refuses any slot outside
+							 * the container, and a refusal here means the item is in no container at
+							 * all — at which point memory is authoritative, the next snapshot prunes
+							 * the row it came from, and the item is destroyed for good. Relocating a
+							 * row we cannot place where it claims to belong is strictly better than
+							 * dropping it silently. */
+							if (!inventoryController.SetItemSlot(item, row.Slot))
+							{
+								if (inventoryController.TryAddItem(item, out _))
+								{
+									Log.Warning("CharacterSystem", $"Character {character.ID}: inventory slot {row.Slot} is out of range; relocated item {row.ID} to the first free slot.");
+								}
+								else
+								{
+									Log.Error("CharacterSystem", $"Character {character.ID}: could not place inventory item {row.ID} from slot {row.Slot}; it will be pruned by the next snapshot.");
+								}
+							}
+							break;
 
-					// Apply equipment attribute modifiers via externalModifier
-					if (item.IsEquippable)
-					{
-						item.Equippable.Equip(character);
+						case ItemContainerType.Bank:
+							if (bankController == null) break;
+							// Same reasoning as the inventory load above.
+							if (!bankController.SetItemSlot(item, row.Slot))
+							{
+								if (bankController.TryAddItem(item, out _))
+								{
+									Log.Warning("CharacterSystem", $"Character {character.ID}: bank slot {row.Slot} is out of range; relocated item {row.ID} to the first free slot.");
+								}
+								else
+								{
+									Log.Error("CharacterSystem", $"Character {character.ID}: could not place bank item {row.ID} from slot {row.Slot}; it will be pruned by the next snapshot.");
+								}
+							}
+							break;
+
+						case ItemContainerType.Equipment:
+							if (equipmentController == null) break;
+							/* Equipment sockets are typed, so an out-of-range slot is corrupt data
+							 * rather than a resizing artefact and there is no sensible slot to
+							 * relocate to. Report it loudly — silently dropping it lets the next
+							 * snapshot delete the row. */
+							if (!equipmentController.SetItemSlot(item, row.Slot))
+							{
+								Log.Error("CharacterSystem", $"Character {character.ID}: equipment slot {row.Slot} is not a valid socket; item {row.ID} could not be loaded and will be pruned by the next snapshot.");
+								break;
+							}
+
+							// Apply equipment attribute modifiers via externalModifier
+							if (item.IsEquippable)
+							{
+								item.Equippable.Equip(character);
+							}
+							break;
+
+						default:
+							Log.Error("CharacterSystem", $"Character {character.ID}: item {row.ID} names container {row.Container}, which this build does not know. It will be pruned by the next snapshot.");
+							break;
 					}
 				}
 			}
@@ -1966,12 +1956,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly string InstanceSceneName;
 			/// <summary>Scene row ID of the instance, or 0 when not entering one.</summary>
 			public readonly long InstanceSceneHandle;
-			/// <summary>Pre-fetched inventory item data.</summary>
-			public readonly IReadOnlyList<CharacterInventoryData> InventoryData;
-			/// <summary>Pre-fetched bank item data.</summary>
-			public readonly IReadOnlyList<CharacterBankData> BankData;
-			/// <summary>Pre-fetched equipment item data.</summary>
-			public readonly IReadOnlyList<CharacterEquipmentData> EquipmentData;
+			/// <summary>Pre-fetched items, across every container. See <c>CharacterItemData.Container</c>.</summary>
+			public readonly IReadOnlyList<CharacterItemData> ItemData;
 			/// <summary>Pre-fetched attribute and resource data.</summary>
 			public readonly IReadOnlyList<CharacterAttributeData> AttributeData;
 			/// <summary>Pre-fetched crafted ability data.</summary>
@@ -2004,9 +1990,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="serverID">Server ID that claimed the session.</param>
 			/// <param name="instanceSceneName">Resolved instance scene name, or null.</param>
 			/// <param name="instanceSceneHandle">Resolved instance scene handle, or 0.</param>
-			/// <param name="inventoryData">Pre-fetched inventory items.</param>
-			/// <param name="bankData">Pre-fetched bank items.</param>
-			/// <param name="equipmentData">Pre-fetched equipment items.</param>
+			/// <param name="itemData">Pre-fetched items, across every container.</param>
 			/// <param name="attributeData">Pre-fetched attribute data.</param>
 			/// <param name="abilityData">Pre-fetched crafted ability data.</param>
 			/// <param name="knownAbilityData">Pre-fetched known base ability data.</param>
@@ -2022,9 +2006,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				NetworkConnection connection, CharacterData characterData,
 				Guid sessionToken, long serverID,
 				string instanceSceneName, long instanceSceneHandle,
-				IReadOnlyList<CharacterInventoryData> inventoryData,
-				IReadOnlyList<CharacterBankData> bankData,
-				IReadOnlyList<CharacterEquipmentData> equipmentData,
+				IReadOnlyList<CharacterItemData> itemData,
 				IReadOnlyList<CharacterAttributeData> attributeData,
 				IReadOnlyList<CharacterAbilityData> abilityData,
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
@@ -2043,9 +2025,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ServerID = serverID;
 				InstanceSceneName = instanceSceneName;
 				InstanceSceneHandle = instanceSceneHandle;
-				InventoryData = inventoryData;
-				BankData = bankData;
-				EquipmentData = equipmentData;
+				ItemData = itemData;
 				AttributeData = attributeData;
 				AbilityData = abilityData;
 				KnownAbilityData = knownAbilityData;

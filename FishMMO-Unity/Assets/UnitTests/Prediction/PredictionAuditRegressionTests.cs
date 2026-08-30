@@ -311,10 +311,15 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(~0, selector.TargetLayer.value,
 				"A fresh chain selector must target every layer like the other physics selectors, not Nothing.");
 
-			MethodInfo ensure = typeof(ChainTargetSelector).GetMethod("EnsureHitBuffer", Any);
-			LogAssert.IsNotNull(ensure);
-			ensure.Invoke(selector, null);
-			Collider[] hits = (Collider[])typeof(ChainTargetSelector).GetField("hits", Any).GetValue(selector);
+			/* NewHitBuffer, not EnsureHitBuffer: the buffer is allocated per gather now rather than
+			 * held in a field. Selectors are serialized inline on shared assets, so one instance
+			 * serves every caster — and a nested trigger fired by a candidate's conditions could
+			 * re-enter the same instance and re-run the query into the array the outer gather was
+			 * still walking. What this test asserts is unchanged: the STARTING size is wider than
+			 * the cap, so the broadphase cannot truncate before the ranking runs. */
+			MethodInfo newBuffer = typeof(ChainTargetSelector).GetMethod("NewHitBuffer", Any);
+			LogAssert.IsNotNull(newBuffer);
+			Collider[] hits = (Collider[])newBuffer.Invoke(selector, null);
 			MethodInfo size = typeof(TargetSelector).GetMethod("QueryBufferSize", Any);
 			int expected = (int)size.Invoke(null, new object[] { 4 });
 			LogAssert.AreEqual(expected, hits.Length,
@@ -2418,25 +2423,34 @@ namespace FishMMO.UnitTests
 		/// single cast, and the growth loop above would have been dead weight.
 		/// </remarks>
 		[Test]
-		public void SelectorHitBuffer_IsGrowOnly()
+		public void SelectorHitBuffer_StartsWiderThanTheCap_AndGrowsWithinTheGather()
 		{
 			AreaTargetSelector selector = new AreaTargetSelector { MaxHits = 4 };
-			FieldInfo hitsField = typeof(AreaTargetSelector).GetField("hits", Any);
-			MethodInfo ensure = typeof(AreaTargetSelector).GetMethod("EnsureHitBuffer", Any);
-			LogAssert.IsNotNull(hitsField);
-			LogAssert.IsNotNull(ensure);
+			MethodInfo newBuffer = typeof(AreaTargetSelector).GetMethod("NewHitBuffer", Any);
+			LogAssert.IsNotNull(newBuffer);
 
-			ensure.Invoke(selector, null);
-			int authored = ((Collider[])hitsField.GetValue(selector)).Length;
-			LogAssert.IsTrue(authored > 4, "The authored size is wider than the cap.");
+			Collider[] hits = (Collider[])newBuffer.Invoke(selector, null);
+			LogAssert.IsTrue(hits.Length > 4,
+				"The starting size is wider than the cap, so the broadphase cannot truncate the " +
+				"candidates in its own order before the ranking runs.");
 
-			// Stand in for a buffer the growth loop widened on a previous, denser query.
-			hitsField.SetValue(selector, new Collider[TargetOrdering.MaximumQueryBufferSize]);
-			ensure.Invoke(selector, null);
+			/* The growth this replaces used to persist in a FIELD across casts, and the property
+			 * asserted here was that re-entering the sizing helper could not shrink it back. The
+			 * buffer is per-gather now — a shared one was one authored nested trigger away from
+			 * being re-queried out from under the loop walking it — so there is nothing to shrink,
+			 * and the property that matters is the one that survived: a query that comes back full
+			 * grows and is re-run, within the gather, until it does not.
+			 *
+			 * That costs a fresh allocation per cast in a crowd where the starting size is not
+			 * enough. Selectors resolve once per cast rather than per tick, which is what makes the
+			 * trade the right way round. */
+			int before = hits.Length;
+			LogAssert.IsTrue(TargetOrdering.TryGrowQueryBuffer(ref hits, before),
+				"A query that filled its buffer must grow it and ask to be re-run.");
+			LogAssert.IsTrue(hits.Length > before, "...and the buffer must actually be wider.");
 
-			LogAssert.AreEqual(TargetOrdering.MaximumQueryBufferSize,
-				((Collider[])hitsField.GetValue(selector)).Length,
-				"A buffer that already grew must not be shrunk back to the authored size.");
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref hits, hits.Length - 1),
+				"A query that came back short of full is complete and must not re-run.");
 		}
 
 		/// <summary>
@@ -2856,7 +2870,7 @@ namespace FishMMO.UnitTests
 			ModifierSource itemA = ModifierSource.Item(1);
 			ModifierSource itemB = ModifierSource.Item(2);
 			ModifierSource buff = ModifierSource.Buff(7);
-			ModifierSource dungeon = ModifierSource.DungeonScaling;
+			ModifierSource dungeon = ModifierSource.DungeonScaling();
 
 			attribute.SetSource(itemA, 5);
 			attribute.SetSource(itemB, 7);

@@ -311,6 +311,7 @@ namespace FishMMO.UnitTests
 			public void RecordCombatContribution(ICharacter contributor, CombatContributionKind kind) { }
 			public void PropagateCombatContribution(ICharacter supporter) { }
 			public bool TryConsumeContributors(out List<long> contributors) { contributors = null; return false; }
+			public bool HasCombatContributor(long characterID) => false;
 			public void ClearCombatContributions() { }
 
 			public ICharacter OwningCharacter;

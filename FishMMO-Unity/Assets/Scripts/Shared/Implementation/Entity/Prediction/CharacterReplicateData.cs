@@ -44,10 +44,17 @@ namespace FishMMO.Shared
 		/// </para>
 		/// <para>
 		/// The client does know: it has <c>TimeManager.RoundTripTime</c> and its own interpolation
-		/// setting. Client-supplied, so the server treats it as a claim rather than a fact —
-		/// <see cref="LagCompensationTick"/> caps it, and <c>CharacterPositionHistory</c> refuses a
-		/// tick outside its window outright, so an inflated value buys no compensation rather than
-		/// the maximum available. One byte, which at 30 Hz covers 8.5 seconds of claimed view lag.
+		/// setting. It carries the FULL round trip, not half of it — the offset is subtracted from
+		/// the server tick at which the replicate body RUNS, and the input's own trip to the server
+		/// is part of that gap. The server adds the one term the client cannot see, its replicate
+		/// queue depth; see <see cref="LagCompensationTick"/>.
+		/// </para>
+		/// <para>
+		/// Client-supplied, so the server treats it as a claim rather than a fact:
+		/// <see cref="LagCompensationTick.MaximumCompensationTicks"/> caps it, and
+		/// <c>CharacterPositionHistory</c> clamps anything still older to the oldest sample it holds,
+		/// so an inflated value buys the recorded window and never more than it. One byte, which at
+		/// 30 Hz covers 8.5 seconds of claimed view lag.
 		/// </para>
 		/// </remarks>
 		public byte ViewOffsetTicks;

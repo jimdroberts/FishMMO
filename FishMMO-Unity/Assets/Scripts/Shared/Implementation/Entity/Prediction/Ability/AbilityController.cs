@@ -882,6 +882,7 @@ namespace FishMMO.Shared
 
 			reconcileData.AbilityID = currentAbilityID;
 			reconcileData.RemainingTicks = remainingTicks;
+			reconcileData.ChargedHoldTicks = chargedHoldTicks;
 			reconcileData.Seed = currentSeed;
 			reconcileData.PackedFlagsAndSlot = CharacterReconcileData.Pack(flags, consumableSlot);
 			reconcileData.RngS0 = rngS0;
@@ -1141,6 +1142,11 @@ namespace FishMMO.Shared
 		{
 			currentAbilityID = rd.AbilityID;
 			remainingTicks = rd.RemainingTicks;
+			/* Restored like every other predicted counter. The owner increments this once per
+			 * invocation of the replicate body, and a reconcile replays every tick since the
+			 * correction — so left to itself it runs at several times the server's rate and the
+			 * owner cancels its own charge early. See CharacterReconcileData.ChargedHoldTicks. */
+			chargedHoldTicks = rd.ChargedHoldTicks;
 			currentSeed = rd.Seed;
 
 			// Restore the full xoshiro128** generator state so that subsequent

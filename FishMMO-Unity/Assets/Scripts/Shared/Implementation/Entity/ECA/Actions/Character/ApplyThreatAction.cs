@@ -85,6 +85,17 @@ namespace FishMMO.Shared
 		private const int MaximumBufferSize = 512;
 
 		/// <summary>
+		/// Bodies already granted threat this sweep, so a multi-collider NPC is credited once.
+		/// </summary>
+		/// <remarks>
+		/// Shared for the same reason <see cref="hits"/> is: it is filled and consumed inside one
+		/// synchronous <see cref="Execute"/> call, and the loop that uses it only reads faction and
+		/// writes threat — nothing in it can re-enter this action.
+		/// </remarks>
+		private static readonly System.Collections.Generic.List<GameObject> threatKeys =
+			new System.Collections.Generic.List<GameObject>(16);
+
+		/// <summary>
 		/// Applies threat to hostile NPCs around the initiator.
 		/// </summary>
 		/// <param name="initiator">The casting character.</param>
@@ -139,19 +150,35 @@ namespace FishMMO.Shared
 				hits = new Collider[hits.Length * 2];
 			}
 
+			/* Keyed per BODY, through the same resolver every other hit-resolving path uses.
+			 *
+			 * A bare GetComponent on the collider gets two things wrong at once, and this call site
+			 * was the last one still doing it: it drops an NPC whose hitbox hangs off a child
+			 * transform — that NPC never notices the cast at all — and it counts an NPC rigged with
+			 * two colliders twice, so the threat it gains depends on how it happens to be rigged
+			 * rather than on what the caster did. TargetOrdering.ResolveHitKey walks to the
+			 * rigidbody (then the parents) and collapses both cases. See its remarks. */
+			threatKeys.Clear();
 			for (int i = 0; i < count && i < hits.Length; ++i)
 			{
 				Collider collider = hits[i];
-				if (collider == null || collider == initiator.Collider)
+				if (collider == null)
 				{
 					continue;
 				}
 
-				ICharacter candidate = collider.GetComponent<ICharacter>();
-				if (candidate == null || candidate == initiator)
+				GameObject key = TargetOrdering.ResolveHitKey(collider, out ICharacter candidate);
+				if (key == null || candidate == null || candidate == initiator)
 				{
 					continue;
 				}
+
+				// One body, one grant. The buffer reports every collider the body owns.
+				if (TargetOrdering.ContainsBody(threatKeys, key))
+				{
+					continue;
+				}
+				threatKeys.Add(key);
 
 				// Only hostiles care. An ally noticing your mana bar is not a threat mechanic.
 				if (!candidate.TryGet(out IFactionController candidateFaction) ||

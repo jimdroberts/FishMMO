@@ -81,12 +81,14 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
 		/// <summary>Per-character dialogue choice bitmasks.</summary>
 		public DbSet<CharacterDialogueChoiceEntity> CharacterDialogueChoices { get; set; }
-		/// <summary>Character inventory items.</summary>
-		public DbSet<CharacterInventoryEntity> CharacterInventoryItems { get; set; }
-		/// <summary>Character equipped items.</summary>
-		public DbSet<CharacterEquipmentEntity> CharacterEquippedItems { get; set; }
-		/// <summary>Character bank items.</summary>
-		public DbSet<CharacterBankEntity> CharacterBankItems { get; set; }
+		/// <summary>
+		/// Every item a character owns, in whichever container holds it.
+		/// </summary>
+		/// <remarks>
+		/// One table rather than the three it replaces. Three tables meant three identity
+		/// sequences, so a row id could not identify an item — see <see cref="CharacterItemEntity"/>.
+		/// </remarks>
+		public DbSet<CharacterItemEntity> CharacterItems { get; set; }
 		/// <summary>Character hotkeys.</summary>
 		public DbSet<CharacterHotkeyEntity> CharacterHotkeys { get; set; }
 		/// <summary>Character mail.</summary>

@@ -248,14 +248,22 @@ namespace FishMMO.Client
 		/// as before. The SOURCE is part of the match: this report reaches every client observing the
 		/// victim, so without it another player's hit on the same target would consume this client's
 		/// prediction and go undrawn.
+		/// <para>
+		/// <paramref name="occurrences"/> is how many hits the server merged into this one report,
+		/// and therefore how many predicted labels it settles. See
+		/// <c>CombatEventBroadcast.Occurrences</c>.
+		/// </para>
 		/// </remarks>
-		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind)
+		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind, int occurrences)
 		{
 			PredictedCombatEvents.Kind predictedKind = kind == CombatEventKind.Heal
 				? PredictedCombatEvents.Kind.Heal
 				: PredictedCombatEvents.Kind.Damage;
 
-			if (PredictedCombatEvents.TryConfirm(source, target, predictedKind))
+			/* One report can stand for several hits — the server merges everything sharing a
+			 * (source, kind, type) within a tick — and this client drew one predicted label for each
+			 * of them. Settling only one left the rest to grey themselves out as denied. */
+			if (PredictedCombatEvents.TryConfirm(source, target, predictedKind, occurrences))
 			{
 				return;
 			}

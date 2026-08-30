@@ -398,8 +398,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 					removed.Version++;
 					long version = removed.Version;
+					long itemID = removed.ID;
 					int slot = msg.AttachmentSlot;
-					if (!EnqueuePersistence(() => DeleteMerchantSoldSlotAsync(characterID, slot, version), characterID))
+					/* An item the database has never seen has no row to remove, so the enqueue is
+					 * skipped rather than queuing a statement that can only fail. Attaching it still
+					 * stands: nothing persisted could bring it back. */
+					if (itemID > 0 &&
+						!EnqueuePersistence(() => DeleteCharacterItemAsync(characterID, itemID, version), characterID))
 					{
 						// Could not record the removal; putting it back is the only safe answer.
 						inventoryController.SetItemSlot(removed, slot);
@@ -418,12 +423,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					item.Stackable.Remove((uint)quantity);
 					item.Version++;
 
-					List<CharacterInventoryData> itemsToSave = new List<CharacterInventoryData>
+					List<CharacterItemData> itemsToSave = new List<CharacterItemData>
 					{
-						new CharacterInventoryData(
+						new CharacterItemData(
 							id: item.ID,
 							version: item.Version,
 							characterID: characterID,
+							container: ItemContainerType.Inventory,
 							templateID: item.Template.ID,
 							slot: item.Slot,
 							seed: item.IsGenerated ? item.Generator.Seed : 0,

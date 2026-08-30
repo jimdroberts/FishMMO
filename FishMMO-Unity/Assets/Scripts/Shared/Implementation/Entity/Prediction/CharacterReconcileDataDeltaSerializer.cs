@@ -63,9 +63,15 @@ namespace FishMMO.Shared
 		/// Bit flag for the equipment array field in the delta bitmask.
 		/// </summary>
 		private const ushort EQUIPMENT_BIT = 1 << 10;
-		// Bits 11..15 are reserved for future fields. The flag mask is a ushort (16 bits);
-		// 11 are currently in use. When adding new fields, take the next bit and update
-		// both WriteDelta and ReadDelta in lock-step.
+		/// <summary>
+		/// Bit flag for the charged-hold tick counter in the delta bitmask.
+		/// </summary>
+		private const ushort CHARGED_HOLD_BIT = 1 << 11;
+		// Bits 12..15 are reserved for future fields. The flag mask is a ushort (16 bits);
+		// 12 are currently in use. When adding new fields, take the next bit and update
+		// WriteDelta, ReadDelta and DrainDeltaPayload in lock-step — the three read the same
+		// fields in the same order, and a field added to one of them only silently misaligns
+		// every field after it.
 
 		/// <summary>
 		/// Leading byte: the rest of the payload is a delta against the reader's previous snapshot.
@@ -86,11 +92,35 @@ namespace FishMMO.Shared
 		private const ushort MaxArrayEntries = 4096;
 
 		/// <summary>
+		/// Width of the length prefix <see cref="WriteCharacterReconcileData"/> puts in front of the
+		/// absolute snapshot. Fixed, so <c>InsertUInt32Unpacked</c> can backfill it.
+		/// </summary>
+		private const int RECONCILE_SNAPSHOT_LENGTH_BYTES = 4;
+
+		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="CharacterReconcileData"/>.
 		/// Nested types use their full serializers. Arrays write count + entries.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Framed by a byte count</b>, the same shape the four <c>WritePayload</c> implementations
+		/// use and for the same reason. FishNet packs every predicted behaviour's reconcile into one
+		/// <c>StateUpdate</c> reader, so a reader that stops early does not merely lose its own state
+		/// — every behaviour after it decodes from the wrong offset.
+		/// </para>
+		/// <para>
+		/// <see cref="ReadCharacterReconcileData"/> has four defensive aborts for array counts that
+		/// cannot be trusted, and no way to drain past them: the per-entry sizes it would need to skip
+		/// are derived from the count it just rejected. The length recorded here is what lets it
+		/// resynchronise instead. Four bytes, and only on the absolute form — which FishNet emits once
+		/// per second per owner, not on the per-tick deltas.
+		/// </para>
+		/// </remarks>
 		public static void WriteCharacterReconcileData(this Writer writer, CharacterReconcileData value)
 		{
+			writer.Skip(RECONCILE_SNAPSHOT_LENGTH_BYTES);
+			int snapshotStart = writer.Position;
+
 			KinematicCharacterMotorStateDeltaSerializer.WriteKinematicCharacterMotorState(writer, value.MotorState);
 			writer.WriteInt64(value.AbilityID);
 			writer.WriteUInt32(value.RemainingTicks);
@@ -149,7 +179,7 @@ namespace FishMMO.Shared
 					writer.WriteInt32(value.Equipment[i].TemplateID);
 					writer.WriteUInt8Unpacked(value.Equipment[i].Slot);
 					writer.WriteInt32(value.Equipment[i].Seed);
-					writer.WriteInt64(value.Equipment[i].InstanceID);
+					writer.WriteInt64(value.Equipment[i].ItemID);
 				}
 			}
 
@@ -176,9 +206,16 @@ namespace FishMMO.Shared
 			writer.WriteUInt32(value.RngS2);
 			writer.WriteUInt32(value.RngS3);
 
+			// Charged hold counter. Appended after the fields that predate it so the frame's
+			// existing layout is untouched; the length prefix is what makes appending safe.
+			writer.WriteUInt32(value.ChargedHoldTicks);
+
 			// Chain sequence — see CharacterReconcileData.Sequence. Written last so older readers
 			// of the absolute form would have read every field before reaching it.
 			writer.WriteUInt8Unpacked(value.Sequence);
+
+			writer.InsertUInt32Unpacked((uint)(writer.Position - snapshotStart),
+				snapshotStart - RECONCILE_SNAPSHOT_LENGTH_BYTES);
 		}
 
 		/// <summary>
@@ -206,7 +243,7 @@ namespace FishMMO.Shared
 
 			Log.Error("CharacterReconcileDataDeltaSerializer",
 				$"ReadCharacterReconcileData: {field} count {count} exceeds the writer's cap of {cap}. " +
-				"The reconcile stream is corrupt; abandoning the remainder of this payload.");
+				"The reconcile stream is corrupt; seeking to the end of this snapshot's frame.");
 			return false;
 		}
 
@@ -216,6 +253,28 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static CharacterReconcileData ReadCharacterReconcileData(this Reader reader)
 		{
+			/* Where this snapshot ends, whatever happens below. Every abort seeks here before
+			 * returning, so the shared StateUpdate reader is left where the NEXT predicted behaviour
+			 * expects it — see WritePayload-style framing in the four spawn payloads, and
+			 * WriteCharacterReconcileData for why the aborts cannot simply drain.
+			 *
+			 * The length is validated against what the reader actually holds before it is trusted.
+			 * This frame exists to survive a stream that cannot be trusted, which makes its own
+			 * length the one value that has to be checked rather than believed: Reader.Position is a
+			 * plain field with no bounds check, so a length that overflows int or overruns the buffer
+			 * would turn a recoverable abort into an out-of-range read for whoever reads next. */
+			uint declaredLength = reader.ReadUInt32Unpacked();
+			int remainingBytes = reader.Remaining;
+			if (declaredLength > (uint)remainingBytes)
+			{
+				Log.Error("CharacterReconcileDataDeltaSerializer",
+					$"ReadCharacterReconcileData: framed length {declaredLength} exceeds the {remainingBytes} bytes " +
+					"remaining in the state reader. The stream cannot be resynchronised; discarding the remainder.");
+				reader.Position += remainingBytes;
+				return default;
+			}
+			int snapshotEnd = reader.Position + (int)declaredLength;
+
 			var result = new CharacterReconcileData
 			{
 				MotorState = KinematicCharacterMotorStateDeltaSerializer.ReadKinematicCharacterMotorState(reader),
@@ -230,6 +289,7 @@ namespace FishMMO.Shared
 			ushort cdCount = reader.ReadUInt16();
 			if (!IsValidArrayCount(cdCount, MaxArrayEntries, "cooldown"))
 			{
+				reader.Position = snapshotEnd;
 				return result;
 			}
 			if (cdCount > 0)
@@ -250,6 +310,7 @@ namespace FishMMO.Shared
 			ushort buffCount = reader.ReadUInt16();
 			if (!IsValidArrayCount(buffCount, MaxArrayEntries, "buff"))
 			{
+				reader.Position = snapshotEnd;
 				return result;
 			}
 			if (buffCount > 0)
@@ -273,6 +334,7 @@ namespace FishMMO.Shared
 			ushort equipCount = reader.ReadUInt16();
 			if (!IsValidArrayCount(equipCount, EquipmentReconcileEntry.MaxEntries, "equipment"))
 			{
+				reader.Position = snapshotEnd;
 				return result;
 			}
 			if (equipCount > 0)
@@ -285,7 +347,7 @@ namespace FishMMO.Shared
 						TemplateID = reader.ReadInt32(),
 						Slot = reader.ReadUInt8Unpacked(),
 						Seed = reader.ReadInt32(),
-						InstanceID = reader.ReadInt64(),
+						ItemID = reader.ReadInt64(),
 					};
 				}
 			}
@@ -294,6 +356,7 @@ namespace FishMMO.Shared
 			ushort attrCount = reader.ReadUInt16();
 			if (!IsValidArrayCount(attrCount, MaxArrayEntries, "attribute"))
 			{
+				reader.Position = snapshotEnd;
 				return result;
 			}
 			if (attrCount > 0)
@@ -316,7 +379,21 @@ namespace FishMMO.Shared
 			result.RngS2 = reader.ReadUInt32();
 			result.RngS3 = reader.ReadUInt32();
 
+			result.ChargedHoldTicks = reader.ReadUInt32();
+
 			result.Sequence = reader.ReadUInt8Unpacked();
+
+			/* Belt and braces on the success path too. If the two sides ever disagree about the shape
+			 * of this snapshot the frame absorbs it here rather than corrupting the behaviour after
+			 * this one, and says so once instead of failing invisibly. */
+			if (reader.Position != snapshotEnd)
+			{
+				Log.Error("CharacterReconcileDataDeltaSerializer",
+					$"ReadCharacterReconcileData consumed {reader.Position - (snapshotEnd - (int)declaredLength)} of " +
+					$"{declaredLength} framed bytes. Seeking to the end of the snapshot; the reconcile state " +
+					"read above may be incomplete.");
+				reader.Position = snapshotEnd;
+			}
 
 			return result;
 		}
@@ -445,6 +522,9 @@ namespace FishMMO.Shared
 			if (EquipmentReconcileEntry.WriteArrayDelta(writer, prev.Equipment, next.Equipment, fieldOption))
 				flags |= EQUIPMENT_BIT;
 
+			if (writer.WriteDeltaUInt32(prev.ChargedHoldTicks, next.ChargedHoldTicks, fieldOption))
+				flags |= CHARGED_HOLD_BIT;
+
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
@@ -529,6 +609,7 @@ namespace FishMMO.Shared
 			if ((flags & RNG_STATE_BIT) != 0) { reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); }
 			if ((flags & ATTRIBUTE_BIT) != 0) AttributeReconcileEntry.ReadArrayDelta(reader, prev.Attributes);
 			if ((flags & EQUIPMENT_BIT) != 0) EquipmentReconcileEntry.ReadArrayDelta(reader, prev.Equipment);
+			if ((flags & CHARGED_HOLD_BIT) != 0) reader.ReadDeltaUInt32(prev.ChargedHoldTicks);
 		}
 
 		/// <summary>
@@ -621,6 +702,9 @@ namespace FishMMO.Shared
 
 			if ((flags & EQUIPMENT_BIT) != 0)
 				result.Equipment = EquipmentReconcileEntry.ReadArrayDelta(reader, prev.Equipment);
+
+			if ((flags & CHARGED_HOLD_BIT) != 0)
+				result.ChargedHoldTicks = reader.ReadDeltaUInt32(prev.ChargedHoldTicks);
 
 			return result;
 		}

@@ -48,10 +48,19 @@ namespace FishMMO.Shared
 		/// How far back the server is willing to rewind, in milliseconds.
 		/// </summary>
 		/// <remarks>
-		/// Sets both the memory cost and the cheating ceiling. A client cannot claim to have seen a
-		/// target further in the past than this, so a inflated latency report buys an attacker at
-		/// most this much rewind. 500&#160;ms covers a 300&#160;ms connection plus the interpolation
-		/// buffer with margin, and refuses anything beyond.
+		/// <para>
+		/// <b>This is the security parameter.</b> It sets the memory cost and, on its own, the
+		/// cheating ceiling: no claim can shoot further into the past than the recording reaches, so
+		/// an inflated latency report buys an attacker exactly this much rewind and no more. A claim
+		/// beyond it is clamped to it rather than refused — see <see cref="TryResolve(uint, out Snapshot)"/>
+		/// for why refusing never actually lowered this ceiling.
+		/// </para>
+		/// <para>
+		/// The number to weigh is "how long can a victim have been behind cover and still be shot".
+		/// 500&#160;ms at the shipped tick rate is 15 samples, 420&#160;bytes per character, and
+		/// covers a round trip of roughly 370&#160;ms plus the interpolation buffer. Players past that
+		/// are compensated as far as the recording reaches rather than being cut off.
+		/// </para>
 		/// </remarks>
 		[Tooltip("Maximum rewind window in milliseconds. Also bounds how far a client can claim to have seen into the past.")]
 		[Range(100f, 1000f)]
@@ -260,11 +269,42 @@ namespace FishMMO.Shared
 				snapshot = newest;
 				return true;
 			}
-			// Older than the window. Refusing rather than clamping keeps the rewind ceiling honest —
-			// a client claiming an implausible latency gets no compensation instead of the maximum.
+
 			if (tick < oldest.Tick)
 			{
-				return false;
+				/* A LITTLE older than the window clamps to the oldest sample; wildly older is still
+				 * refused. The two cases are not the same question.
+				 *
+				 * Clamping the near case, because refusing it was a cliff and not a defence. The
+				 * ceiling on how far into the past anybody can shoot is the RECORDING, which is
+				 * bounded by maximumRewindMilliseconds either way; an attacker reaches that ceiling
+				 * by claiming a value just INSIDE the window, which refusal always accepted.
+				 * Refusing only rejected claims that overshot, and an overshooting claim buys
+				 * strictly less than one sitting at the edge — so it deterred nobody and penalised
+				 * exactly one population: honest clients whose real latency exceeds the window. With
+				 * the view offset corrected to a full round trip that population starts at roughly
+				 * 370 ms, and it got full compensation at 360 ms and none at all at 380 ms.
+				 *
+				 * Refusing the far case, because it is not a latency claim at all. The only thing
+				 * that produces a tick thousands out is a TICK DOMAIN error — a target built from
+				 * the owning client's replicate counter rather than the server's, which is the bug
+				 * LagCompensationTick exists to prevent and which History_AndCompensationAnchor_
+				 * ShareOneTickDomain pins. Clamping that would hand back a real-looking pose for a
+				 * tick nobody recorded and turn a dead subsystem into a silently WRONG one. The two
+				 * are separated by orders of magnitude, and the bound is measured from the PRESENT
+				 * rather than from the oldest sample so it does not move with the window length.
+				 * LagCompensationTick caps a claim at MaximumCompensationTicks and adds a queue depth
+				 * of a couple of ticks, so the deepest honest request sits a few tens of ticks behind
+				 * the newest sample; a domain error sits the client's entire uptime behind it —
+				 * hundreds of thousands. Twice the maximum claim is far above the first and four
+				 * orders of magnitude below the second, so nothing here is a tuned threshold. */
+				uint age = newest.Tick - tick;
+				if (age > LagCompensationTick.MaximumCompensationTicks * 2u)
+				{
+					return false;
+				}
+				snapshot = oldest;
+				return true;
 			}
 
 			for (int i = 1; i < count; i++)

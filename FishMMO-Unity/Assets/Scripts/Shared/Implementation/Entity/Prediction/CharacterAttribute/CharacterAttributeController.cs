@@ -32,13 +32,15 @@ namespace FishMMO.Shared
 		/// <see cref="EquipmentController.Order"/> (93).</b> This is what stops attribute modifiers
 		/// compounding on every reconcile, and it is load-bearing rather than tidy.
 		/// <see cref="CharacterPredictionController.Reconcile"/> walks the controllers in this
-		/// order. Buff and equipment restore INCREMENTALLY — <c>Buff.Apply</c> and
-		/// <c>ItemGenerator.ApplyAttributes</c> both call <c>AddModifier</c> — while
-		/// <see cref="ApplyAttributeSnapshot"/> installs the server's TOTAL absolutely, with
-		/// <c>SetModifierDirect</c>. Running last is what makes those incremental writes harmless:
-		/// they are overwritten, not added to. Reorder this below either of them and every reconcile
-		/// leaves buff and equipment contributions stacked on top of a total that already contains
-		/// them, drifting the owner's sheet with nothing to correct it.
+		/// order. Buff and equipment restore their own ATTRIBUTED entries — <c>Buff.Apply</c> and
+		/// <c>ItemGenerator.ApplyAttributes</c> both call <c>CharacterAttribute.SetSource</c> —
+		/// while <see cref="ApplyAttributeSnapshot"/> installs the server's TOTAL, with
+		/// <c>SetModifierDirect</c>, as the residual between that total and whatever those sources
+		/// currently sum to. Running last is what makes the residual right: it is computed against a
+		/// ledger this tick's buff and equipment restores have already settled. Reorder this below
+		/// either of them and the residual is measured against the PREVIOUS tick's sources, so every
+		/// buff gained or item equipped on the reconciled tick lands on the sheet twice until the
+		/// next reconcile happens to be measured after it.
 		/// Pinned by <c>PredictionAuditRegressionTests.AttributeReconcile_RunsAfterBuffAndEquipment</c>.
 		/// </remarks>
 		public int Order => 95;
@@ -555,20 +557,25 @@ namespace FishMMO.Shared
 		/// The payload's <c>ExternalModifier</c> is the server's TOTAL — it already contains the
 		/// contribution of every buff and every equipped item, because the server computed it by
 		/// applying them. Buffs and equipment are then restored from their own payload blocks, which
-		/// are read after this one on every character prefab, and both of those restores add their
-		/// contribution again: <c>BuffController.ReadPayload</c> calls <c>Apply</c>, which runs
-		/// <c>AttributeBuffTemplate.OnApply → AddModifier</c>, and <c>EquipmentController.ReadPayload</c>
-		/// equips each item, which runs <c>ItemGenerator.ApplyAttributes → AddModifier</c>. Every
-		/// buffed or equipped attribute therefore arrived doubled.
+		/// are read after this one on every character prefab, and both of those restores state their
+		/// own contribution on top of it: <c>BuffController.ReadPayload</c> calls <c>Apply</c>, which
+		/// runs <c>AttributeBuffTemplate.OnApply → SetSource</c>, and
+		/// <c>EquipmentController.ReadPayload</c> equips each item, which runs
+		/// <c>ItemGenerator.ApplyAttributes → SetSource</c>. Every buffed or equipped attribute
+		/// therefore reads doubled at the end of the payload pass.
 		/// </para>
 		/// <para>
-		/// Re-asserting is used rather than suppressing those adds because the adds have to keep
-		/// happening: <c>ItemGenerator</c> removes a modifier by adding its negation on unequip, so
-		/// an equip whose add was suppressed would subtract on unequip something it never added and
-		/// drift the attribute negative. Letting both restores run and then overwriting the total is
-		/// symmetric — it is the same thing the owner's reconcile does with <c>SetModifierDirect</c>,
-		/// which is why the owner used to self-heal within a tick and an observer, who receives no
-		/// reconcile, kept the doubled maximum until the server next pushed that attribute.
+		/// <b>The ledger does not fix this on its own, which is why this method still exists.</b>
+		/// <c>SetSource</c> makes each contributor idempotent — a buff applied twice is still one
+		/// entry — but the payload total and the buff's own entry are two DIFFERENT contributors as
+		/// far as the ledger is concerned, and both are live. What repairs it is re-installing the
+		/// total afterwards: <see cref="CharacterAttribute.SetModifier"/> recomputes the
+		/// <see cref="ModifierSourceKind.Authoritative"/> residual against the sources that now
+		/// exist, so the sheet lands on exactly the server's number with the buff and item entries
+		/// intact underneath it. That is the same operation the owner's reconcile performs every
+		/// tick with <c>SetModifierDirect</c>, which is why the owner used to self-heal within a tick
+		/// and an observer, which receives no reconcile, kept the doubled maximum until the server
+		/// next pushed that attribute.
 		/// </para>
 		/// <para>
 		/// Runs from <see cref="OnStartNetwork"/>, which FishNet invokes from a later loop than the
@@ -1538,6 +1545,21 @@ namespace FishMMO.Shared
 		/// Future maintainers must NOT assume replay-deterministic regen — gameplay systems
 		/// that depend on intermediate regen events during replay will not observe them.
 		/// </para>
+		/// <para>
+		/// <b>KNOWN OMISSION — the lockout state is predicted and NOT reconciled.</b>
+		/// <see cref="lastProcessedRegenTick"/>, <see cref="lastConsumedResourceTicks"/> and
+		/// <see cref="lastObservedResourceValues"/> are all written from inside the replicate body
+		/// and none of them travels in <c>CharacterReconcileData</c>. The owner and the server can
+		/// therefore disagree about whether a resource is still inside the no-regeneration window
+		/// that spending it opened, so a pulse can fire on one and not the other.
+		/// </para>
+		/// <para>
+		/// Left that way deliberately, and it is bounded: the resource VALUE is reconciled every
+		/// tick, so a disagreement costs at most one pulse's worth of regeneration before the
+		/// server's number overwrites it. Carrying three more fields — one of them a dictionary —
+		/// on every reconcile to correct a sub-pulse timing difference is not a trade worth making.
+		/// Anything that comes to depend on the lockout being exact must reconcile it first.
+		/// </para>
 		/// </summary>
 		/// <param name="tick">Authoritative simulation tick for this replicate step.</param>
 		public void Regenerate(uint tick)
@@ -1766,7 +1788,7 @@ namespace FishMMO.Shared
 		/// overwrite it with a locally-computed formula result. It back-solves
 		/// <c>ExternalModifier</c> as well as writing the final, so the next recompute reproduces
 		/// the server's number instead of throwing it away; a bare <c>SetFinal</c> left the
-		/// authoritative maximum one <c>AddModifier</c> away from being recomputed out of existence.
+		/// authoritative maximum one <c>SetSource</c> away from being recomputed out of existence.
 		/// <see cref="PropagateToParents"/> propagates the new max upward so any parent
 		/// whose formula reads this resource's max value recomputes correctly.
 		/// Callers must bracket calls with <see cref="BeginPropagation"/>/<see cref="EndPropagation"/>.
@@ -1782,7 +1804,7 @@ namespace FishMMO.Shared
 
 			/* Derive the modifier rather than only stamping the final — see
 			 * CharacterAttribute.SetFinalDerivingModifier. Stamping alone left the authoritative
-			 * maximum one AddModifier away from being recomputed out of existence. */
+			 * maximum one SetSource away from being recomputed out of existence. */
 			resource.SetFinalDerivingModifier(maxValue);
 			PropagateToParents(resource);
 			resource.SetCurrentValue(currentValue, false);

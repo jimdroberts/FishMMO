@@ -281,8 +281,8 @@ namespace FishMMO.UnitTests
 			d.Buffs = new[] { new BuffReconcileEntry { TemplateID = 3, ExpiryTick = 500, NextTickTick = 20, Stacks = 1, TickCount = 4, CumulativeTickMultiplier = 1 } };
 			d.Equipment = new[]
 			{
-				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
-				new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, InstanceID = 901 },
+				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
+				new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 },
 			};
 			d.Attributes = new AttributeReconcileEntry[24];
 			for (int i = 0; i < d.Attributes.Length; i++)
@@ -365,9 +365,9 @@ namespace FishMMO.UnitTests
 			};
 			burst.Equipment = new[]
 			{
-				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, InstanceID = 900 },
-				new EquipmentReconcileEntry { TemplateID = 61, Slot = 2, Seed = 4242, InstanceID = 9501 },
-				new EquipmentReconcileEntry { TemplateID = 62, Slot = 4, Seed = 4243, InstanceID = 9502 },
+				new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 },
+				new EquipmentReconcileEntry { TemplateID = 61, Slot = 2, Seed = 4242, ItemID = 9501 },
+				new EquipmentReconcileEntry { TemplateID = 62, Slot = 4, Seed = 4243, ItemID = 9502 },
 			};
 			for (int i = 0; i < 4; i++)
 			{
@@ -440,7 +440,7 @@ namespace FishMMO.UnitTests
 
 			// EquipmentController (Order 93).
 			CharacterReconcileData eq = Detach(NextTick(prev));
-			eq.Equipment[1] = new EquipmentReconcileEntry { TemplateID = 61, Slot = 2, Seed = 4242, InstanceID = 9501 };
+			eq.Equipment[1] = new EquipmentReconcileEntry { TemplateID = 61, Slot = 2, Seed = 4242, ItemID = 9501 };
 			Record("rec.ablation.equipmentOneSlotChanged", Delta(prev, eq) - floor);
 
 			// CharacterAttributeController (Order 95) — resources and the attribute sheet.
