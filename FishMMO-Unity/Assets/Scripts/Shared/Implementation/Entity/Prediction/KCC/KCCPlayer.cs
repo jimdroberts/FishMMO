@@ -223,34 +223,12 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			double tickDelta = timeManager.TickDelta;
-			if (tickDelta <= 0d)
-			{
-				return;
-			}
-
-			/* RoundTripTime is milliseconds, and BOTH halves of it are in play — see the remarks
-			 * above. Kept as a REAL number rather than rounded up to a whole tick: the fractional
-			 * part is carried in its own byte, because the interpolated view this is describing does
-			 * not sit on a tick boundary either. */
-			double roundTripSeconds = timeManager.RoundTripTime / 1000d;
-			double ticks = (roundTripSeconds / tickDelta) + LagCompensationTick.SpectatorInterpolationTicks;
-
-			if (ticks < 0d)
-			{
-				ticks = 0d;
-			}
-			if (ticks > byte.MaxValue)
-			{
-				ticks = byte.MaxValue;
-			}
-
-			double whole = System.Math.Floor(ticks);
-			wholeTicks = (byte)whole;
-
-			// 1/256 of a tick is 0.13 ms at tick rate 30 — far finer than the estimate feeding it.
-			int scaled = (int)System.Math.Round((ticks - whole) * 256d);
-			fraction = (byte)(scaled < 0 ? 0 : scaled > 255 ? 255 : scaled);
+			/* The arithmetic itself lives beside the server half it has to cancel against — see
+			 * LagCompensationTick.ResolveViewOffset. This method supplies the two measurements only
+			 * the owning client can take and adds nothing of its own, which is what lets a test
+			 * compose both halves of the loop and assert they cancel exactly. */
+			LagCompensationTick.ResolveViewOffset(
+				timeManager.RoundTripTime, timeManager.TickDelta, out wholeTicks, out fraction);
 		}
 
 

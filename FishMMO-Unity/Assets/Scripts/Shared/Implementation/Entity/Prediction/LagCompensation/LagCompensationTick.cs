@@ -185,9 +185,6 @@ namespace FishMMO.Shared
 			 * type. It is a claim, not a fact, so it is capped here and CharacterPositionHistory
 			 * refuses anything outside its recorded window outright — an inflated claim buys no
 			 * compensation rather than the deepest rewind available. */
-			uint wholeTicks = SpectatorInterpolationTicks;
-			float fraction = 0f;
-
 			/* ALWAYS the server's own tick. The replicate input's tick is the owning client's
 			 * unsynchronised counter and cannot index a history keyed by the server's — anchoring on
 			 * it put every target outside the recorded window, so nothing rewound and every hit
@@ -198,23 +195,65 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			byte claimedTicks = (byte)SpectatorInterpolationTicks;
+			byte claimedFraction = 0;
 			if (nob.TryGetComponent(out CharacterPredictionController predictionController))
 			{
-				uint claimed = predictionController.CurrentViewOffsetTicks;
-				wholeTicks = claimed > MaximumCompensationTicks ? MaximumCompensationTicks : claimed;
-				fraction = predictionController.CurrentViewOffsetFraction / 256f;
+				claimedTicks = predictionController.CurrentViewOffsetTicks;
+				claimedFraction = predictionController.CurrentViewOffsetFraction;
 			}
 
-			/* The server's own replicate queue, which the client cannot see and so cannot include.
-			 *
-			 * The client's claim ends at "the input has been sent". It has not been RUN yet:
-			 * FishNet deliberately holds StateInterpolation entries in the replicates queue before
-			 * consuming one (NetworkBehaviour.Prediction's leaveInBuffer), so an input waits that
-			 * many ticks after arrival before the replicate body sees it — and the anchor below is
-			 * the tick at which that body runs. Leaving it out compensated every player two ticks
-			 * short of their real view, whatever their ping. Read live rather than assumed: the
-			 * setting is authored on the PredictionManager and can differ per deployment. */
-			wholeTicks += ResolveReplicateQueueTicks(nob);
+			/* The server's own replicate queue, which the client cannot see and so cannot include,
+			 * is added by ResolveAnchor. Read live rather than assumed: the setting is authored on
+			 * the PredictionManager and can differ per deployment. */
+			return ResolveAnchor(anchorTick, claimedTicks, claimedFraction,
+				ResolveReplicateQueueTicks(nob), out target);
+		}
+
+		/// <summary>
+		/// The whole server-side half of the rewind derivation, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Separated from <see cref="TryResolve"/> so the arithmetic can be exercised directly
+		/// against production rather than re-implemented in a test — the same reason
+		/// <c>CharacterPredictionController.IsTransformRedundant</c> and
+		/// <c>Buff.DurationToTicks</c> are shaped this way. <see cref="TryResolve"/> supplies the
+		/// three inputs from the live object and adds nothing of its own.
+		/// </para>
+		/// <para>
+		/// The three terms and why each is here:
+		/// <list type="number">
+		/// <item><description><paramref name="claimedTicks"/>/<paramref name="claimedFraction"/> —
+		/// the client's measured full round trip plus its interpolation buffer, capped at
+		/// <see cref="MaximumCompensationTicks"/> because it is a claim rather than a fact.</description></item>
+		/// <item><description><paramref name="queueTicks"/> — FishNet's replicate queue depth, which
+		/// the client cannot see; the input waits this long after arrival before the replicate body
+		/// runs, and <paramref name="anchorTick"/> is the tick at which that body runs.</description></item>
+		/// <item><description><paramref name="anchorTick"/> — the SERVER's tick, never the replicate
+		/// input's, which belongs to the owning client's unsynchronised counter.</description></item>
+		/// </list>
+		/// </para>
+		/// <para>
+		/// The cap is applied to the CLAIM alone and the queue depth is added afterwards, so a
+		/// deployment that holds more states never loses the queue term to the cap.
+		/// </para>
+		/// </remarks>
+		/// <param name="anchorTick">The server tick at which the replicate body runs.</param>
+		/// <param name="claimedTicks">Whole ticks of view offset the client claimed.</param>
+		/// <param name="claimedFraction">Sub-tick remainder of that claim, in 1/256ths of a tick.</param>
+		/// <param name="queueTicks">The server's replicate queue depth.</param>
+		/// <param name="target">The resolved rewind target, or <see cref="RewindTarget.None"/>.</param>
+		/// <returns>True when there is anything to compensate.</returns>
+		internal static bool ResolveAnchor(uint anchorTick, byte claimedTicks, byte claimedFraction,
+			uint queueTicks, out RewindTarget target)
+		{
+			target = RewindTarget.None;
+
+			uint wholeTicks = claimedTicks > MaximumCompensationTicks ? MaximumCompensationTicks : claimedTicks;
+			float fraction = claimedFraction / 256f;
+
+			wholeTicks += queueTicks;
 
 			if (wholeTicks == 0u && fraction <= 0f)
 			{
@@ -227,6 +266,63 @@ namespace FishMMO.Shared
 
 			target = new RewindTarget(anchorTick - wholeTicks, fraction);
 			return true;
+		}
+
+		/// <summary>
+		/// The whole client-side half of the derivation: how far behind server-present this client's
+		/// rendered view of its peers will be BY THE TIME THE SERVER RUNS the input it is producing.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The FULL round trip plus the interpolation buffer, split into whole ticks and a 1/256
+		/// tick remainder. Both halves of the trip are in play and they are different halves: the
+		/// state being looked at left the server one way trip ago and is rendered
+		/// <see cref="SpectatorInterpolationTicks"/> behind even that, and the input built from
+		/// that view takes another one way trip to reach the server.
+		/// </para>
+		/// <para>
+		/// Lives here rather than on <c>KCCPlayer</c> so both halves of the loop sit in one file and
+		/// can be composed in a test without a live <c>TimeManager</c>. <c>KCCPlayer</c> supplies
+		/// the two measurements and adds nothing of its own.
+		/// </para>
+		/// </remarks>
+		/// <param name="roundTripMilliseconds"><c>TimeManager.RoundTripTime</c>.</param>
+		/// <param name="tickDelta"><c>TimeManager.TickDelta</c>, in seconds.</param>
+		/// <param name="wholeTicks">Whole ticks of view offset.</param>
+		/// <param name="fraction">Sub-tick remainder, in 1/256ths of a tick.</param>
+		public static void ResolveViewOffset(double roundTripMilliseconds, double tickDelta,
+			out byte wholeTicks, out byte fraction)
+		{
+			wholeTicks = (byte)SpectatorInterpolationTicks;
+			fraction = 0;
+
+			if (tickDelta <= 0d)
+			{
+				return;
+			}
+
+			/* RoundTripTime is milliseconds, and BOTH halves of it are in play. Kept as a REAL
+			 * number rather than rounded up to a whole tick: the fractional part is carried in its
+			 * own byte, because the interpolated view this is describing does not sit on a tick
+			 * boundary either. */
+			double roundTripSeconds = roundTripMilliseconds / 1000d;
+			double ticks = (roundTripSeconds / tickDelta) + SpectatorInterpolationTicks;
+
+			if (ticks < 0d)
+			{
+				ticks = 0d;
+			}
+			if (ticks > byte.MaxValue)
+			{
+				ticks = byte.MaxValue;
+			}
+
+			double whole = System.Math.Floor(ticks);
+			wholeTicks = (byte)whole;
+
+			// 1/256 of a tick is 0.13 ms at tick rate 30 — far finer than the estimate feeding it.
+			int scaled = (int)System.Math.Round((ticks - whole) * 256d);
+			fraction = (byte)(scaled < 0 ? 0 : scaled > 255 ? 255 : scaled);
 		}
 
 		/// <summary>

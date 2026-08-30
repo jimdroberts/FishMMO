@@ -593,13 +593,29 @@ namespace FishMMO.UnitTests
 				"With no network object to read a PredictionManager from, the queue term is zero " +
 				"rather than a throw — that loses compensation, it does not break the hit.");
 
+			/* Asserted through the arithmetic rather than by grepping TryResolve's body. The two
+			 * halves of the derivation now live in ResolveViewOffset and ResolveAnchor precisely so
+			 * they can be exercised directly (see LagCompensationClosedLoopTests, which composes
+			 * them); a source-text assertion could only pin one spelling of the addition. */
+			const uint anchor = 50_000;
+			LogAssert.IsTrue(LagCompensationTick.ResolveAnchor(anchor, 5, 0, 0, out RewindTarget noQueue),
+				"A claim of five ticks must resolve.");
+			LogAssert.IsTrue(LagCompensationTick.ResolveAnchor(anchor, 5, 0, 2, out RewindTarget withQueue),
+				"The same claim with a queue depth must also resolve.");
+
+			LogAssert.AreEqual(anchor - 5u, noQueue.Tick,
+				"With no queue the rewind is the client's claim alone.");
+			LogAssert.AreEqual(anchor - 7u, withQueue.Tick,
+				"The server's replicate queue depth must be ADDED to the client's claim. Without it " +
+				"every player is compensated the queue depth short of their real view, whatever " +
+				"their ping.");
+
 			string source = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs");
-			LogAssert.IsTrue(source.Contains("wholeTicks += ResolveReplicateQueueTicks(nob)"),
-				"TryResolve must add the server's replicate queue depth to the client's claim.");
 			LogAssert.IsTrue(source.Contains("predictionManager.StateInterpolation"),
 				"The queue depth must be read live from PredictionManager.StateInterpolation rather " +
-				"than assumed — it is authored per deployment.");
+				"than assumed — it is authored per deployment. No behavioural assertion can cover " +
+				"this one: it is about where the number comes from, not what is done with it.");
 		}
 
 		/// <summary>
@@ -613,17 +629,29 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ViewOffset_CapsTheClaimBeforeAddingTheServerTerm()
 		{
-			string source = ReadSource(
-				"Assets/Scripts/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs");
+			/* Ordering asserted by its consequence rather than by the order two statements appear
+			 * in. An over-cap claim is the only input that can tell the two orderings apart: cap
+			 * first and the queue term survives on top of the cap; cap the sum and it is swallowed. */
+			const uint anchor = 100_000;
+			byte overCap = (byte)(LagCompensationTick.MaximumCompensationTicks + 50);
+			const uint queue = 2;
 
-			int capIndex = source.IndexOf("claimed > MaximumCompensationTicks");
-			int queueIndex = source.IndexOf("wholeTicks += ResolveReplicateQueueTicks(nob)");
+			LogAssert.IsTrue(
+				LagCompensationTick.ResolveAnchor(anchor, overCap, 0, queue, out RewindTarget target),
+				"An over-cap claim must still resolve; it simply buys no more than the cap.");
 
-			LogAssert.IsTrue(capIndex >= 0, "The client claim must still be capped.");
-			LogAssert.IsTrue(queueIndex >= 0, "The server queue term must still be added.");
-			LogAssert.IsTrue(capIndex < queueIndex,
+			LogAssert.AreEqual(anchor - (LagCompensationTick.MaximumCompensationTicks + queue), target.Tick,
 				"MaximumCompensationTicks must cap the CLIENT's claim before the server's queue depth " +
-				"is added, so the server-side term is never something a client can inflate.");
+				"is added, so the server-side term is never something a client can inflate — and so a " +
+				"deployment that holds more states does not lose that many ticks of compensation for " +
+				"its worst-connected players.");
+
+			LogAssert.IsTrue(
+				LagCompensationTick.ResolveAnchor(anchor, (byte)LagCompensationTick.MaximumCompensationTicks,
+					0, queue, out RewindTarget atCap),
+				"A claim exactly at the cap must resolve.");
+			LogAssert.AreEqual(atCap.Tick, target.Tick,
+				"A claim above the cap must buy exactly what a claim at the cap buys, and no more.");
 		}
 
 		private static string ReadSource(string relativePath)
