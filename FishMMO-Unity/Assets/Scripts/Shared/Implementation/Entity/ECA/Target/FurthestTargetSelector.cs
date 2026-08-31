@@ -59,7 +59,7 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable containing the furthest <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (!IsAuthoritativePeer(eventData))
+			if (!ResolvesTargetsLocally(eventData))
 			{
 				yield break;
 			}

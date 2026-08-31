@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f82567995697b1942a9b53bd194bb741, type: 3}
+  m_Name: Mock Pre Spawn Cost Event
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnPreSpawnEvent
+  TargetSelector:
+    rid: -2
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 1701798431167611010
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  icon: {fileID: 0}
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 0
+  Price: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 1701798431167611010
+      type: {class: ConsumeResourceAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 1
+        ResourceTemplateID: 1606168262
+        AmountValue:
+          rid: 1701798431167611011
+    - rid: 1701798431167611011
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Amount: 2

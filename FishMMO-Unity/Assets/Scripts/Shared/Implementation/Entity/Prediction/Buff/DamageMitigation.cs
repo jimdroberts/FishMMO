@@ -491,12 +491,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Removes every buff the walk emptied, after the walk has finished and the shared list has
-		/// been released.
+		/// Removes every buff the walk emptied, after the walk over <c>Buffs</c> has finished —
+		/// and while the shared spent list is STILL BORROWED.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Ordered by the ids the walk collected, which is template order, so two shields that empty
 		/// on one hit are removed in the same sequence on every peer.
+		/// </para>
+		/// <para>
+		/// The borrow ordering is load-bearing: buff removal fires buff-removed triggers, which can
+		/// re-enter <c>Negate</c>. Releasing the shared list before calling this handed the
+		/// re-entrant pass the very list this method was iterating — <c>BorrowSpentBuffs</c> clears
+		/// it — so a second emptied shield was stranded at zero charges. Every caller now releases
+		/// the borrow only AFTER this returns; the re-entrant pass sees the borrow held and
+		/// allocates privately.
+		/// </para>
 		/// </remarks>
 		private static void RemoveSpent(IBuffController buffController, List<int> spent)
 		{

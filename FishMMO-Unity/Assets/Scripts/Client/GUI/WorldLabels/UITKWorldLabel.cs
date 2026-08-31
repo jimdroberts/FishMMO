@@ -55,6 +55,19 @@ namespace FishMMO.Client
 		public bool IsManuallyCached => manualCache;
 
 		/// <summary>
+		/// Checkout counter, incremented every <see cref="Initialize"/>.
+		/// </summary>
+		/// <remarks>
+		/// A caller that keeps a reference across frames — the predicted-number display holds one
+		/// per pending prediction so it can grey the number out later — must capture this at
+		/// checkout and compare before mutating. The pool hands the same component to caller after
+		/// caller, so the reference alone cannot say whether it still shows what it showed at
+		/// capture time; a mismatched lease means the label was recycled and now belongs to someone
+		/// else, and recoloring it would mark an unrelated live number.
+		/// </remarks>
+		public uint Lease { get; private set; }
+
+		/// <summary>
 		/// Remaining time in seconds before the label is automatically cached.
 		/// </summary>
 		private float remainingTime;
@@ -305,6 +318,9 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			// New checkout: invalidate every reference captured against the previous occupant.
+			Lease++;
 
 			transform.position = position;
 

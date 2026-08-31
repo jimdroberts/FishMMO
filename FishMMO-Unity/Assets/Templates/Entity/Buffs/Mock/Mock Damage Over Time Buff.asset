@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 875884366fb607e29b6a3b4ad989d51e, type: 3}
+  m_Name: Mock Damage Over Time Buff
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.ResourceTickBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Mock damage over time. 3 health per second for 6 seconds.
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 6
+  TickRate: 1
+  OnTickEvents: []
+  MaxStacks: 3
+  IsPermanent: 0
+  IsDebuff: 1
+  TickAttributes:
+  - Value: -3
+    Template: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
+  DamageAttribute: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a, type: 2}

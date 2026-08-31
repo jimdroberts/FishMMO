@@ -144,7 +144,13 @@ namespace FishMMO.Shared.Core
 		/// the point. Use a distinct constant salt per call site.
 		/// </para>
 		/// </remarks>
-		/// <param name="salt">Distinguishes one consumer's stream from another's within one event.</param>
+		/// <param name="salt">
+		/// Distinguishes one consumer's stream from another's within one event. <b>Salt 0 is
+		/// reserved</b>: the lazily-derived shared <see cref="RNG"/> is <c>DeriveRNG(0)</c>, so an
+		/// independent stream taken with salt 0 would start at the identical sequence and walk in
+		/// lockstep with it — exactly the correlation this method exists to avoid. Use a distinct
+		/// non-zero constant per call site (existing: "RAND" 0x52414E44, "DSPL" 0x4453504C).
+		/// </param>
 		/// <returns>The shared-per-chain generator for <paramref name="salt"/>.</returns>
 		public DeterministicRNG IndependentRNG(int salt)
 		{
@@ -160,10 +166,54 @@ namespace FishMMO.Shared.Core
 			independentStreams ??= new Dictionary<int, DeterministicRNG>(1);
 			if (!independentStreams.TryGetValue(salt, out DeterministicRNG stream))
 			{
-				stream = DeriveRNG(salt);
+				stream = DeriveRNG(AugmentSaltWithTarget(salt));
 				independentStreams[salt] = stream;
 			}
 			return stream;
+		}
+
+		/// <summary>
+		/// Folds the chain root's TARGET identity into an independent stream's seed salt.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="DeriveRNG(int)"/> seeds from (initiator, tick, salt) alone, and a hit or a
+		/// tick dispatch builds one chain root PER VICTIM — so without this, every sibling root in
+		/// one tick walked a byte-identical sequence: a beam hitting three victims stripped
+		/// correlated dispel slots, and two per-victim selections rolled the same index. The target
+		/// identity is resolved by the same rule the initiator uses (replicated ObjectId first,
+		/// persistent character id as the unspawned fallback), so the augmented seed is exactly as
+		/// peer-agreed and run-reproducible as the un-augmented one.
+		/// </para>
+		/// <para>
+		/// Residual, accepted: two DIFFERENT triggers firing on the SAME victim in the same tick
+		/// still share a per-salt sequence — distinguishing them would need a trigger identity the
+		/// event chain does not carry. Use distinct salts per call site, which is already the rule.
+		/// </para>
+		/// <para>
+		/// The memo key stays the caller's raw salt — the augment shapes only the seed — and an
+		/// augment that lands on 0 falls back to the raw salt, because salt 0 is reserved for the
+		/// shared <see cref="RNG"/> stream.
+		/// </para>
+		/// </remarks>
+		private int AugmentSaltWithTarget(int salt)
+		{
+			ICharacter target = TargetCharacter;
+			if (target == null)
+			{
+				return salt;
+			}
+
+			int targetIdentity = target.NetworkObject != null
+				? target.NetworkObject.ObjectId
+				: (int)target.ID;
+			if (targetIdentity == 0)
+			{
+				return salt;
+			}
+
+			int augmented = unchecked(salt ^ (targetIdentity * 397));
+			return augmented != 0 ? augmented : salt;
 		}
 
 		/// <summary>

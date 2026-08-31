@@ -329,6 +329,7 @@ namespace FishMMO.Shared
 				 * that is tens of thousands of interface lookups a second to answer a question
 				 * whose answer only changes when the target does. */
 				cachedTargetCharacter = value != null ? value.GetComponent<ICharacter>() : null;
+				cachedTargetCharacterID = cachedTargetCharacter != null ? cachedTargetCharacter.ID : 0;
 
 				if (!AgentIsUsable())
 					return;
@@ -394,12 +395,28 @@ namespace FishMMO.Shared
 		private ICharacter cachedTargetCharacter;
 
 		/// <summary>
+		/// <see cref="ICharacter.ID"/> of the cached target at the moment it was targeted.
+		/// </summary>
+		/// <remarks>
+		/// The identity check the Transform cannot provide. A pooled NetworkObject keeps its
+		/// Transform and its components across occupants, so when the targeted character despawns
+		/// and the pooled object is reactivated as somebody else, <see cref="Target"/> still
+		/// compares equal, the setter never re-runs, and every null/active/alive validity check
+		/// passes — the NPC silently continues its attack against the new occupant, who never
+		/// engaged it. Comparing the character ID recorded at target time detects the swap.
+		/// </remarks>
+		private long cachedTargetCharacterID;
+
+		/// <summary>
 		/// The current combat target as an <see cref="ICharacter"/>, or null.
 		/// </summary>
 		/// <remarks>
 		/// Prefer this over calling <c>Target.GetComponent&lt;ICharacter&gt;()</c>. The result is
 		/// cached against the transform, so it costs a field read rather than an interface
-		/// component lookup.
+		/// component lookup. Returns null when the pooled object behind the transform has been
+		/// re-issued to a different character since targeting — see
+		/// <see cref="cachedTargetCharacterID"/> — so every consumer's null check drops the stale
+		/// target instead of attacking the pool's next occupant.
 		/// </remarks>
 		public ICharacter TargetCharacter
 		{
@@ -407,6 +424,10 @@ namespace FishMMO.Shared
 			{
 				// The transform can be destroyed under us without the setter running.
 				if (target == null)
+				{
+					return null;
+				}
+				if (cachedTargetCharacter != null && cachedTargetCharacter.ID != cachedTargetCharacterID)
 				{
 					return null;
 				}

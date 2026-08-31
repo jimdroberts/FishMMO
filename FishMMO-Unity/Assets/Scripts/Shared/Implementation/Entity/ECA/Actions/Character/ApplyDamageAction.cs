@@ -78,13 +78,21 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
+				int applied = defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
 
 				/* The caster's own floating number, drawn now rather than on the server's report.
-				 * The three cases that must NOT draw one are all in MayDrawPredictedNumber. */
-				if (MayDrawPredictedNumber(initiator, eventData))
+				 * The three cases that must NOT draw one are all in MayDrawPredictedNumber.
+				 *
+				 * Drawn from APPLIED, not from the raw provider amount. Damage() runs resistances and
+				 * mitigation on this peer too (see the mitigation note in
+				 * CharacterDamageController.Damage), and the server's report carries the mitigated
+				 * number — so a label drawn from the raw amount showed a hit at full value on the
+				 * caster's screen forever, because TryConfirm deliberately does not match amounts and
+				 * the confirmation left the wrong number standing. A fully blocked hit returns zero
+				 * and Predict refuses zero, which is the honest display. */
+				if (applied > 0 && MayDrawPredictedNumber(initiator, eventData))
 				{
-					PredictedCombatEvents.Predict(initiator, target, amount, PredictedCombatEvents.Kind.Damage,
+					PredictedCombatEvents.Predict(initiator, target, applied, PredictedCombatEvents.Kind.Damage,
 						DamageAttributeTemplate, UnityEngine.Time.unscaledTime);
 				}
 			}

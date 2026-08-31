@@ -74,7 +74,8 @@ namespace FishMMO.Shared
 			}
 
 			// Heals carry no damage type; normalising it here keeps the merge key honest.
-			if (kind != CombatEventKind.Damage)
+			// Periodic damage keeps its type — the client colours DoT numbers by it.
+			if (kind != CombatEventKind.Damage && kind != CombatEventKind.PeriodicDamage)
 			{
 				damageTemplateID = 0;
 			}
@@ -83,14 +84,27 @@ namespace FishMMO.Shared
 			if (index < 0 && entries.Count >= MaxEntries)
 			{
 				/* Full. Fold into the anonymous bucket for this kind and type so the total still
-				 * reaches the client. The bucket itself may need a slot; if even that is refused
-				 * the oldest entry absorbs the hit, which keeps the sum correct at the cost of
-				 * attributing it to the wrong source — the least visible thing to get wrong. */
+				 * reaches the client; failing that, any same-kind-and-type entry (wrong source —
+				 * the least visible thing to get wrong), then any same-kind entry (wrong colour,
+				 * but damage stays damage). Never an entry of a DIFFERENT kind: entry 0 used to
+				 * absorb the overflow whatever it was, so a raid victim's ninth damage stream
+				 * inflated a heal number, and its Occurrences then settled the wrong kind's
+				 * predictions on the caster's client. If no same-kind host exists the hit is
+				 * dropped — under this load a missing number reads better than damage displayed
+				 * as healing. */
 				sourceObjectID = 0;
 				index = IndexOf(0, kind, damageTemplateID);
 				if (index < 0)
 				{
-					index = 0;
+					index = IndexOfKindAndType(kind, damageTemplateID);
+				}
+				if (index < 0)
+				{
+					index = IndexOfKind(kind);
+				}
+				if (index < 0)
+				{
+					return;
 				}
 			}
 
@@ -142,6 +156,32 @@ namespace FishMMO.Shared
 			{
 				Entry e = entries[i];
 				if (e.SourceObjectID == sourceObjectID && e.Kind == kind && e.DamageTemplateID == damageTemplateID)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+
+		/// <summary>First entry of the given kind and damage type, any source. Overflow fallback.</summary>
+		private int IndexOfKindAndType(CombatEventKind kind, int damageTemplateID)
+		{
+			for (int i = 0; i < entries.Count; ++i)
+			{
+				if (entries[i].Kind == kind && entries[i].DamageTemplateID == damageTemplateID)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+
+		/// <summary>First entry of the given kind, any type or source. Last-resort overflow fallback.</summary>
+		private int IndexOfKind(CombatEventKind kind)
+		{
+			for (int i = 0; i < entries.Count; ++i)
+			{
+				if (entries[i].Kind == kind)
 				{
 					return i;
 				}

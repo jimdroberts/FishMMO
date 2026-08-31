@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8136b5d45d0dc424d8dd6607909c74a4, type: 3}
+  m_Name: Mock Slow Debuff
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AttributeBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Mock slow debuff. -2 move speed for 10 seconds.
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 10
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 0
+  IsPermanent: 0
+  IsDebuff: 1
+  BonusAttributes:
+  - Value: -2
+    Template: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}

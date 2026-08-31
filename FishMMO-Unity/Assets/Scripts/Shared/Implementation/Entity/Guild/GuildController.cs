@@ -160,6 +160,50 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Drops the character's guild standing and every UI subscriber before the object is
+		/// pooled.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="ID"/> needs no help — it is a SyncVar and FishNet's own
+		/// <c>ResetState</c> returns it to its default. The three plain fields behind it do not:
+		/// <see cref="RankOrder"/>, <see cref="Permissions"/> and <see cref="LeaderRankOrder"/>
+		/// are written from roster broadcasts and were left exactly as the previous occupant of
+		/// this pool slot last saw them. A guildless character inheriting a leader's permission
+		/// mask draws every officer control in the guild panel, and the server refuses each one
+		/// with a result the panel has no way to explain.
+		/// </para>
+		/// <para>
+		/// <see cref="ClearGuildStanding"/> is reused rather than repeated here — it is the same
+		/// three fields the leave path already clears, and keeping one writer is what stops the
+		/// two copies drifting.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			ClearGuildStanding();
+
+			/* Subscribers are per-spawn. Every one of these is held by an owner-side panel bound
+			 * to the character being torn down, and a recycled controller that kept them would
+			 * push the next character's roster into the previous character's UI. */
+			OnReceiveGuildInvite = null;
+			OnAddGuildMember = null;
+			OnValidateGuildMembers = null;
+			OnRemoveGuildMember = null;
+			OnLeaveGuild = null;
+			OnReceiveGuildResult = null;
+			OnReceiveGuildInfo = null;
+			OnReceiveGuildLog = null;
+			OnReceiveGuildRanks = null;
+			OnReceiveGuildRecruitmentInfo = null;
+			OnReceiveGuildDirectory = null;
+			OnReceiveGuildApplications = null;
+		}
+
+		/// <summary>
 		/// SyncVar for the guild ID, used for network synchronization. Configured for unreliable channel and server-only writes.
 		/// </summary>
 		private readonly SyncVar<long> GID = new SyncVar<long>(0, new SyncTypeSettings()

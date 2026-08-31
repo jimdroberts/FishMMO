@@ -67,6 +67,8 @@ namespace FishMMO.Shared
 			public int SourceObjectId;
 			public int TargetObjectId;
 			public Kind Kind;
+			/// <summary>Damage attribute template id, 0 for heals and typeless damage. Part of the pairing key.</summary>
+			public int DamageTypeId;
 			public int Amount;
 			public float PredictedAt;
 		}
@@ -135,6 +137,7 @@ namespace FishMMO.Shared
 				SourceObjectId = sourceObjectId,
 				TargetObjectId = targetObjectId,
 				Kind = kind,
+				DamageTypeId = damageAttribute != null ? damageAttribute.ID : 0,
 				Amount = amount,
 				PredictedAt = now,
 			});
@@ -147,12 +150,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Matched on SOURCE, target and kind</b>, oldest first. The source is what makes this a
-		/// pairing rather than a guess: a combat report is broadcast to everyone observing the victim,
-		/// so with source ignored any other player's hit on the same target consumed this client's
-		/// pending entry. Two players on one mob was enough — the other player's real number was
-		/// swallowed (the caller draws nothing on a match) and this client's own report, arriving to
-		/// find no pending entry left, was then drawn a second time.
+		/// <b>Matched on SOURCE, target, kind and damage TYPE</b>, oldest first. The source is what
+		/// makes this a pairing rather than a guess: a combat report is broadcast to everyone
+		/// observing the victim, so with source ignored any other player's hit on the same target
+		/// consumed this client's pending entry. Two players on one mob was enough — the other
+		/// player's real number was swallowed (the caller draws nothing on a match) and this
+		/// client's own report, arriving to find no pending entry left, was then drawn a second
+		/// time. The damage type is in the key for the same reason within one source: the server
+		/// coalesces per (source, kind, type), and this caster can have several streams onto one
+		/// victim at once — a poison it applied earlier ticks server-side with no prediction here,
+		/// and with type ignored that DoT report consumed the pending projectile entry, leaving the
+		/// poison undrawn and the projectile drawn twice.
 		/// </para>
 		/// <para>
 		/// Deliberately NOT matched on the amount. The two numbers agree whenever the RNG states
@@ -177,8 +185,12 @@ namespace FishMMO.Shared
 		/// That many pending predictions are settled, because the caster drew one label per hit while
 		/// the server sent one message for all of them. Values below one are treated as one.
 		/// </param>
+		/// <param name="damageAttribute">
+		/// Damage type named by the report; null for heals and typeless damage. Matched against the
+		/// type recorded at <see cref="Predict"/> time.
+		/// </param>
 		/// <returns>True when this report was already drawn as a prediction.</returns>
-		public static bool TryConfirm(ICharacter source, ICharacter target, Kind kind, int occurrences = 1)
+		public static bool TryConfirm(ICharacter source, ICharacter target, Kind kind, int occurrences = 1, DamageAttributeTemplate damageAttribute = null)
 		{
 			if (source == null || target == null || pending.Count == 0)
 			{
@@ -201,9 +213,11 @@ namespace FishMMO.Shared
 			 *
 			 * Fewer pending than claimed is normal rather than an error: the client may have predicted
 			 * only some of the hits (a replayed tick draws none), and a report can legitimately
-			 * describe hits this client never predicted at all. Whatever is left over falls through to
-			 * the caller, which draws the server's number for it.
+			 * describe hits this client never predicted at all. Nothing extra is drawn for the excess:
+			 * the numbers already on screen are this caster's own predictions of those same hits, and
+			 * the caller draws the server's number only when NOTHING here matched.
 			 */
+			int damageTypeId = damageAttribute != null ? damageAttribute.ID : 0;
 			int remaining = occurrences < 1 ? 1 : occurrences;
 			bool confirmedAny = false;
 
@@ -211,7 +225,8 @@ namespace FishMMO.Shared
 			{
 				if (pending[i].SourceObjectId == sourceObjectId &&
 					pending[i].TargetObjectId == targetObjectId &&
-					pending[i].Kind == kind)
+					pending[i].Kind == kind &&
+					pending[i].DamageTypeId == damageTypeId)
 				{
 					long id = pending[i].Id;
 					pending.RemoveAt(i);

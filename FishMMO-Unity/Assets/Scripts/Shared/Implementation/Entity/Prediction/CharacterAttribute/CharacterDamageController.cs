@@ -385,14 +385,18 @@ namespace FishMMO.Shared
 		/// damage landing on them, and it is the server's number rather than the one they predicted.
 		/// </para>
 		/// <para>
-		/// Unreliable. A lost number is a number nobody sees; resending it late would place stale
-		/// text over a character that has since moved, which reads worse than the gap. The health
-		/// bar it corresponds to has its own delivery path and is not affected by a loss here.
+		/// Unreliable to observers — a lost number is a number nobody sees, and resending it late
+		/// would place stale text over a character that has since moved. But RELIABLE to the
+		/// connection that owns the SOURCE of each entry: for the caster, absence of a report is
+		/// the prediction system's only rejection signal, so a lost packet used to grey out a
+		/// landed hit as denied. One reliable send per entry to one connection is cheap; the
+		/// health bar has its own delivery path either way.
 		/// </para>
 		/// <para>
 		/// An attacker standing outside the target's observer set — sniping from beyond the
 		/// streaming range — is not covered here and would need its own send. That case does not
-		/// arise while ability range is inside observer range.
+		/// arise while ability range is inside observer range (and the streaming pass now floors
+		/// in-combat ranges at the engagement ceiling to keep it true).
 		/// </para>
 		/// </remarks>
 		private void FlushCombatEvents()
@@ -412,10 +416,19 @@ namespace FishMMO.Shared
 			combatEventFlushBuffer.Clear();
 			combatEvents.Flush(combatEventFlushBuffer);
 
+			/* Copied before sending — the same discipline ObserverBroadcastScope documents. The
+			 * per-connection sends below must not iterate the live observer set while FishNet is
+			 * free to mutate it. */
+			combatEventObserverBuffer.Clear();
+			foreach (FishNet.Connection.NetworkConnection observer in nob.Observers)
+			{
+				combatEventObserverBuffer.Add(observer);
+			}
+
 			for (int i = 0; i < combatEventFlushBuffer.Count; ++i)
 			{
 				CombatEventCoalescer.Entry entry = combatEventFlushBuffer[i];
-				nob.NetworkManager.ServerManager.Broadcast(nob, new CombatEventBroadcast()
+				CombatEventBroadcast message = new CombatEventBroadcast()
 				{
 					TargetObjectID = nob.ObjectId,
 					SourceObjectID = entry.SourceObjectID,
@@ -424,11 +437,38 @@ namespace FishMMO.Shared
 					DamageTemplateID = entry.DamageTemplateID,
 					// How many predicted labels this one report settles. See CombatEventBroadcast.
 					Occurrences = entry.Occurrences,
-				}, true, Channel.Unreliable);
+				};
+
+				/* The one connection whose predictions this entry settles. Resolved per entry:
+				 * different entries in one flush can have different sources. */
+				FishNet.Connection.NetworkConnection sourceOwner = null;
+				if (entry.SourceObjectID != 0 &&
+					nob.NetworkManager.ServerManager.Objects.Spawned.TryGetValue(entry.SourceObjectID, out FishNet.Object.NetworkObject sourceNob) &&
+					sourceNob != null)
+				{
+					sourceOwner = sourceNob.Owner;
+				}
+
+				for (int o = 0; o < combatEventObserverBuffer.Count; ++o)
+				{
+					FishNet.Connection.NetworkConnection conn = combatEventObserverBuffer[o];
+					if (conn == null || !conn.IsValid)
+					{
+						continue;
+					}
+					Channel channel = sourceOwner != null && conn == sourceOwner
+						? Channel.Reliable
+						: Channel.Unreliable;
+					nob.NetworkManager.ServerManager.Broadcast(conn, message, true, channel);
+				}
 			}
 
+			combatEventObserverBuffer.Clear();
 			combatEventFlushBuffer.Clear();
 		}
+
+		/// <summary>Scratch copy of the observer set for <see cref="FlushCombatEvents"/>. Server work is single threaded.</summary>
+		private static readonly List<FishNet.Connection.NetworkConnection> combatEventObserverBuffer = new List<FishNet.Connection.NetworkConnection>();
 
 		/// <summary>
 		/// Registers the process-wide client handler for <see cref="CombatEventBroadcast"/>.
@@ -484,7 +524,8 @@ namespace FishMMO.Shared
 			}
 
 			CombatEventKind kind = (CombatEventKind)msg.Kind;
-			DamageAttributeTemplate damageAttribute = kind == CombatEventKind.Damage && msg.DamageTemplateID != 0
+			DamageAttributeTemplate damageAttribute =
+				(kind == CombatEventKind.Damage || kind == CombatEventKind.PeriodicDamage) && msg.DamageTemplateID != 0
 				? DamageAttributeTemplate.Get<DamageAttributeTemplate>(msg.DamageTemplateID)
 				: null;
 
@@ -1084,22 +1125,24 @@ namespace FishMMO.Shared
 		/// <param name="amount">Base damage before resistance is applied.</param>
 		/// <param name="damageAttribute">The damage type; determines which resistance stat is checked.</param>
 		/// <param name="ignoreAchievements">If true, suppresses ECA trigger dispatch for this hit.</param>
-		public void Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false)
+		/// <param name="periodic">True for a DoT tick — reported as <see cref="CombatEventKind.PeriodicDamage"/>. See <see cref="IDamageable.Damage"/>.</param>
+		/// <returns>The post-resistance, post-mitigation amount that landed; zero when nothing did. See <see cref="IDamageable.Damage"/>.</returns>
+		public int Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false, bool periodic = false)
 		{
 			if (Immortal)
 			{
-				return;
+				return 0;
 			}
 
 			if (ResourceInstance == null)
 			{
-				return;
+				return 0;
 			}
 
 			// We are already dead.
 			if (ResourceInstance.CurrentValue <= 0.0f)
 			{
-				return;
+				return 0;
 			}
 
 			amount = ApplyModifiers(Character, amount, damageAttribute);
@@ -1133,7 +1176,7 @@ namespace FishMMO.Shared
 				{
 					blockedAttackerDamageController.EnterCombat();
 				}
-				return;
+				return 0;
 			}
 			ResourceInstance.Consume(amount);
 
@@ -1151,8 +1194,10 @@ namespace FishMMO.Shared
 			RecordCombatContribution(attacker, CombatContributionKind.Damage);
 
 			/* Queued for this tick's observer message before the local event, because the local
-			 * event no longer reaches anybody's floating text — see QueueCombatEvent. */
-			QueueCombatEvent(attacker, CombatEventKind.Damage, damageAttribute, amount);
+			 * event no longer reaches anybody's floating text — see QueueCombatEvent. Periodic
+			 * ticks report under their own kind so they coalesce and pair separately from the
+			 * direct hits the caster's client actually predicted. */
+			QueueCombatEvent(attacker, periodic ? CombatEventKind.PeriodicDamage : CombatEventKind.Damage, damageAttribute, amount);
 
 			/* Suppressed on a replayed tick along with the triggers below.
 			 *
@@ -1184,6 +1229,11 @@ namespace FishMMO.Shared
 			{
 				Kill(attacker);
 			}
+
+			/* The number that landed — the exact value QueueCombatEvent put in the server's report,
+			 * so a predicted label drawn from this return can never disagree with the report that
+			 * later confirms it. */
+			return amount;
 		}
 
 		/// <summary>
@@ -1219,9 +1269,18 @@ namespace FishMMO.Shared
 			 * corpse it creates is only correct for something already marked dead. */
 			Character.EnableFlags(CharacterFlags.IsDead);
 
-			// Clear combat state on death.
+			/* Clear combat state on death — and TELL the clients. The timer-expiry path can never
+			 * fire for this engagement once the timer is cleared here, and that path was the only
+			 * sender of InCombat=false: every client that saw this character enter combat kept its
+			 * IsInCombat flag set on the corpse, through revive, until the character's NEXT fight
+			 * ended by timer. Guarded so a character killed outside combat broadcasts nothing. */
+			bool wasInCombat = Character.IsFlagged(CharacterFlags.IsInCombat);
 			combatTimerActive = false;
 			Character.DisableFlags(CharacterFlags.IsInCombat);
+			if (wasInCombat)
+			{
+				BroadcastCombatState(false);
+			}
 
 			/* Credit the owner, not the pet.
 			 *
@@ -1312,7 +1371,7 @@ namespace FishMMO.Shared
 		/// <param name="healer">The character providing the healing, or null.</param>
 		/// <param name="amount">The amount to heal.</param>
 		/// <param name="ignoreAchievements">If true, suppresses ECA trigger dispatch.</param>
-		public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false)
+		public int Heal(ICharacter healer, int amount, bool ignoreAchievements = false, bool periodic = false)
 		{
 			/* A character at zero health is dead and cannot be healed — only revived.
 			 *
@@ -1328,7 +1387,7 @@ namespace FishMMO.Shared
 			 * entirely while health is depleted — see CharacterAttributeController.Regenerate. */
 			if (ResourceInstance == null || ResourceInstance.CurrentValue <= 0.0f)
 			{
-				return;
+				return 0;
 			}
 
 			float valueBefore = ResourceInstance.CurrentValue;
@@ -1339,7 +1398,7 @@ namespace FishMMO.Shared
 			// and can cause false achievement awards.
 			if (ResourceInstance.CurrentValue <= valueBefore)
 			{
-				return;
+				return 0;
 			}
 
 			// Enter combat: the healed target always enters combat.
@@ -1364,7 +1423,7 @@ namespace FishMMO.Shared
 			}
 
 			// See the matching call in Damage for why this precedes the local event.
-			QueueCombatEvent(healer, CombatEventKind.Heal, null, amount);
+			QueueCombatEvent(healer, periodic ? CombatEventKind.PeriodicHeal : CombatEventKind.Heal, null, amount);
 
 			// Suppressed on a replayed tick for the same reason as the damage path above.
 			if (!ignoreAchievements)
@@ -1384,6 +1443,11 @@ namespace FishMMO.Shared
 				// Invoke healed character's OnHealed triggers (e.g. achievements for being healed)
 				Character.Invoke(OnHealedTriggers, new HealEventData(Character, healer, amount));
 			}
+
+			/* The amount QueueCombatEvent reported — the raw request, since the report carries the
+			 * requested heal rather than the clipped delta. Returning the same number keeps a
+			 * predicted label identical to the report that confirms it. */
+			return amount;
 		}
 
 		/// <summary>

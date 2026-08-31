@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
+  m_Name: Mock Projectile Impact Damage Event
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnHitEvent
+  TargetSelector:
+    rid: 1701798431167610885
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 1701798431167610886
+  - rid: 1701798431167610887
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  icon: {fileID: 0}
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 0
+  Price: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 1701798431167610885
+      type: {class: EventTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Conditions: []
+        FallbackToInitiator: 0
+    - rid: 1701798431167610886
+      type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        DamageValue:
+          rid: 1701798431167610888
+        DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
+          type: 2}
+    - rid: 1701798431167610887
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        FXPrefab: {fileID: 5773491593115871611, guid: 81dd6c8841df66e44ad306e2ef34aaee,
+          type: 3}
+    - rid: 1701798431167610888
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Amount: 4

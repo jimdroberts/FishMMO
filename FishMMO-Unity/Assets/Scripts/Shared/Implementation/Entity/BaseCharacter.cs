@@ -292,6 +292,46 @@ namespace FishMMO.Shared
 		public virtual void OnDestroying() { }
 
 		/// <summary>
+		/// Drops the identity every character carries before the object returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why this lives on the base and not in each character.</b> <see cref="Flags"/> is
+		/// per-spawn state — written by the load path, the spawn payload, and combat — and
+		/// nothing rewrote it before the next occupant of a pool slot was already live. A
+		/// recycled object that kept <see cref="CharacterFlags.IsDead"/> comes back dead, and one
+		/// that lost <see cref="CharacterFlags.IsLoaded"/> is treated as still loading. <c>NPC</c>
+		/// already cleared this for exactly that reason; players and pets did not, and the fix
+		/// belongs where the field does.
+		/// </para>
+		/// <para>
+		/// <b><see cref="ID"/> is deliberately left alone here.</b> For an <c>ISceneObject</c> —
+		/// every NPC and pet — the ID is a <c>SceneObject</c> registry key that is meant to
+		/// survive pool reuse: <c>SceneObject.Register</c> re-registering is a no-op precisely so
+		/// a respawned NPC keeps the ID clients already hold, and the registry entry is only
+		/// dropped on destroy. Zeroing it here would strand that entry and mint a second one on
+		/// the next spawn. <c>PlayerCharacter</c>, whose ID is a database key issued per load and
+		/// held in no such registry, clears its own.
+		/// </para>
+		/// <para>
+		/// The client dictionary is keyed by <see cref="ID"/> and is pruned here for both — the
+		/// same removal <c>OnDestroy</c> performs for the destroy path, and the reason subclasses
+		/// no longer repeat it.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server, false if on the client.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			ClientCharacters.Remove(ID);
+#endif
+
+			Flags = 0;
+		}
+
+		/// <summary>
 		/// Registers a character behaviour implementation for all supported interfaces.
 		/// Only interfaces derived from ICharacterBehaviour are registered.
 		/// </summary>

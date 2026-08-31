@@ -276,19 +276,25 @@ namespace FishMMO.UnitTests
 			public int LastAmount;
 			public bool LastSuppressTriggers;
 
-			public void Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false)
+			public int Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false, bool periodic = false)
 			{
 				++DamageCalls;
 				LastAmount = amount;
 				LastSuppressTriggers = ignoreAchievements;
+				LastPeriodic = periodic;
+				return amount;
 			}
 
-			public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false)
+			public int Heal(ICharacter healer, int amount, bool ignoreAchievements = false, bool periodic = false)
 			{
 				++HealCalls;
 				LastAmount = amount;
 				LastSuppressTriggers = ignoreAchievements;
+				LastPeriodic = periodic;
+				return amount;
 			}
+
+			public bool LastPeriodic;
 
 			public bool Immortal { get; set; }
 			public bool IsAlive => true;

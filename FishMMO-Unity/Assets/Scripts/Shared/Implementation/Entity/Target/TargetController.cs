@@ -64,11 +64,62 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public List<Trigger> OnTargetClearTriggers => onTargetClearTriggers;
 
+		/// <inheritdoc />
+		public int ClientSelectedTargetObjectId { get; private set; }
+
+		/// <inheritdoc />
+		public bool HasClientSelectedTarget { get; private set; }
+
+		/// <inheritdoc />
+		public void ServerSetClientSelectedTarget(int targetObjectId)
+		{
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+			ClientSelectedTargetObjectId = targetObjectId;
+			HasClientSelectedTarget = true;
+		}
+
+		/// <summary>
+		/// Clears client-reported target state on despawn/pool reuse: the next occupant of a
+		/// pooled object must not inherit the previous player's target frame.
+		/// </summary>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+			ClientSelectedTargetObjectId = 0;
+			HasClientSelectedTarget = false;
+#if !UNITY_SERVER
+			hasSentTargetSelection = false;
+			lastSentTargetObjectId = 0;
+			nextTargetSendAllowed = 0f;
+#endif
+		}
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Internal timer for controlling target update rate.
 		/// </summary>
 		private float nextTick = 0.0f;
+
+		/// <summary>Minimum seconds between target selection reports to the server.</summary>
+		/// <remarks>
+		/// The hover trace runs every <see cref="TARGET_UPDATE_RATE"/> and a mouse sweeping a
+		/// crowd changes targets far faster than the server has any use for. Five reports a
+		/// second bounds the traffic; the change-dedupe below means a stable frame sends nothing
+		/// at all, and a change swallowed by the rate limit is retried on the next trace tick.
+		/// </remarks>
+		private const float TARGET_SELECTION_SEND_INTERVAL = 0.2f;
+
+		/// <summary>The last target object id reported to the server, valid once <see cref="hasSentTargetSelection"/>.</summary>
+		private int lastSentTargetObjectId;
+
+		/// <summary>True once any report has been sent this spawn.</summary>
+		private bool hasSentTargetSelection;
+
+		/// <summary>Unscaled time before which no further report may be sent.</summary>
+		private float nextTargetSendAllowed;
 
 		/// <summary>
 		/// The transform this controller last told its subscribers was the target.
@@ -201,8 +252,53 @@ namespace FishMMO.Shared
 						OnUpdateTarget?.Invoke(resolvedTarget);
 					}
 				}
+
+				/* Every trace tick, not only on change: a change swallowed by the rate limit
+				 * below is naturally retried here until it goes through. */
+				MaybeReportTargetSelection(resolvedTarget);
 			}
 			nextTick -= Time.deltaTime;
+		}
+
+		/// <summary>
+		/// Reports the owner's target frame to the server when it changed — see
+		/// <see cref="TargetSelectionBroadcast"/> for why the server wants it and how it verifies
+		/// the claim. Characters only: hovering scenery or nothing reports 0.
+		/// </summary>
+		/// <param name="resolvedTarget">The transform the frame currently shows, or null.</param>
+		private void MaybeReportTargetSelection(Transform resolvedTarget)
+		{
+			if (base.NetworkManager == null || base.ClientManager == null || !base.IsClientStarted)
+			{
+				return;
+			}
+
+			int targetObjectId = 0;
+			if (resolvedTarget != null &&
+				resolvedTarget.TryGetComponent(out FishNet.Object.NetworkObject targetNob) &&
+				targetNob.IsSpawned &&
+				resolvedTarget.GetComponent<ICharacter>() != null)
+			{
+				targetObjectId = targetNob.ObjectId;
+			}
+
+			if (hasSentTargetSelection && targetObjectId == lastSentTargetObjectId)
+			{
+				return;
+			}
+			if (Time.unscaledTime < nextTargetSendAllowed)
+			{
+				return;
+			}
+
+			hasSentTargetSelection = true;
+			lastSentTargetObjectId = targetObjectId;
+			nextTargetSendAllowed = Time.unscaledTime + TARGET_SELECTION_SEND_INTERVAL;
+
+			base.ClientManager.Broadcast(new TargetSelectionBroadcast()
+			{
+				TargetObjectID = targetObjectId,
+			}, FishNet.Transporting.Channel.Reliable);
 		}
 #endif
 

@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Mock Charged Shot
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Mock: charged/held ability. Requires AbilityController.ChargedTemplate
+    to point at ''Mock Charge Marker Event''.'
+  ActivationTime: 1.5
+  LifeTime: 2
+  Speed: 20
+  Cooldown: 6
+  Price: 0
+  ActivationConditions:
+  - rid: 1701798431167611032
+  AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
+    type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 1
+  Type: 2
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: bd663c781351766ddbb65be6d3962765, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: 5899517cb0158aef98141abd0d8e2536, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents:
+  - {fileID: 11400000, guid: 90b51210c46f889fab3a3a7a9be6404b, type: 2}
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 1701798431167611032
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 8

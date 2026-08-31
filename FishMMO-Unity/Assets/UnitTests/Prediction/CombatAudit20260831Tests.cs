@@ -270,14 +270,18 @@ namespace FishMMO.UnitTests
 				"if (!EcaAuthority.MayPredict(initiator, eventData))", "AmountValue.GetValue(");
 			AssertDrawsBeforeGate(actions + "KnockbackHitAction.cs",
 				"if (!EcaAuthority.IsServer(initiator, eventData))", "ForceValue.GetValue(");
+			/* These two moved from a server-only gate to ResolvesHitsLocally when client-side
+			 * prediction was opened to every ability shape. The RULE is unchanged and is what this
+			 * asserts: the draw stays above whatever the gate is, so every peer that runs the chain
+			 * advances the shared generator by the same amount. */
 			AssertDrawsBeforeGate(actions + "Ability/AbilityApplyAreaAction.cs",
-				"if (!abilityObject.IsServer)", "MaxHitsValue.GetValue(");
+				"if (!abilityObject.ResolvesHitsLocally)", "MaxHitsValue.GetValue(");
 			AssertDrawsBeforeGate(actions + "Ability/AbilityApplyAreaAction.cs",
-				"if (!abilityObject.IsServer)", "RadiusValue.GetValue(");
+				"if (!abilityObject.ResolvesHitsLocally)", "RadiusValue.GetValue(");
 			AssertDrawsBeforeGate(actions + "Ability/AbilityApplyHitscanAction.cs",
-				"if (!abilityObject.IsServer)", "RangeValue.GetValue(");
+				"if (!abilityObject.ResolvesHitsLocally)", "RangeValue.GetValue(");
 			AssertDrawsBeforeGate(actions + "Ability/AbilityApplyHitscanAction.cs",
-				"if (!abilityObject.IsServer)", "MaxHitsValue.GetValue(");
+				"if (!abilityObject.ResolvesHitsLocally)", "MaxHitsValue.GetValue(");
 			AssertDrawsBeforeGate(actions + "Ability/AbilityHitCountAction.cs",
 				"if (!abilityObject.ResolvesHitsLocally)", "AmountValue.GetValue(");
 		}
@@ -484,11 +488,14 @@ namespace FishMMO.UnitTests
 		/// <remarks>
 		/// <para>
 		/// The first gate sweep fixed every ACTION that drew behind a peer gate and stopped there,
-		/// so two server-only consumers reaching the shared stream by a different route survived it.
+		/// so two consumers reaching the shared stream by a different route survived it.
 		/// <c>RandomTargetSelector</c> is gated wholesale by
-		/// <c>TargetSelector.IsAuthoritativePeer</c> — it cannot hoist its draw above the gate the
-		/// way an action can, because the gate IS the selector — and it took <c>eventData.RNG</c>
-		/// whenever one had been threaded on, which is every ability event.
+		/// <c>TargetSelector.ResolvesTargetsLocally</c> — it cannot hoist its draw above the gate
+		/// the way an action can, because the gate IS the selector — and it took
+		/// <c>eventData.RNG</c> whenever one had been threaded on, which is every ability event.
+		/// (That gate has since widened from server-only to "server or the casting client", which
+		/// changes nothing here: an OBSERVER still returns before the draw, so the shared stream
+		/// would still advance on some peers and not others.)
 		/// <c>ApplyDispelAction</c> is worse: its <c>RemoveRandom</c> loop draws a VARIABLE number
 		/// of times, so the two streams do not merely differ by one draw.
 		/// </para>

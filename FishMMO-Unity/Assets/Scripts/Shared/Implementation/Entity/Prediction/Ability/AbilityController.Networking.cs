@@ -166,6 +166,14 @@ namespace FishMMO.Shared
 					continue;
 				}
 
+				/* A cull/uncull cycle would otherwise DOUBLE this projectile: the earlier despawn
+				 * detached the live copy as a visual phantom, and the spawn below is the same cast
+				 * again, authoritatively placed. The phantom is unreachable by every later hit or
+				 * destroy broadcast, so it is reclaimed quietly here — the container id is the
+				 * same pure function of (seed, spawn tick) both sides already derive. */
+				AbilityObject.ReclaimDetached(entry.AbilityID,
+					AbilityContainerAllocator.ComputeContainerId(entry.Seed, new PredictionTick(entry.SpawnTick)));
+
 				AbilityObject spawned = AbilityObject.Spawn(ability, Character, AbilitySpawner,
 					new TargetInfo(null, entry.Position),
 					entry.Position, entry.Rotation * Vector3.forward,
@@ -174,8 +182,16 @@ namespace FishMMO.Shared
 
 				if (spawned != null)
 				{
-					spawned.FastForward(ComputeObserverFastForwardTicks(timeManager.Tick, entry.ServerStartTick,
-						LagCompensationTick.SpectatorInterpolationTicks));
+					/* Legs flown before a redirect: lifetime only, never pose — the pose is fully
+					 * described by the current leg the fast-forward below reproduces. Charged first
+					 * so an object with almost nothing left dies here instead of running its spawn
+					 * chain and then expiring one tick later. */
+					spawned.ConsumeLifetime(entry.LifeElapsedBeforeStartTicks);
+					if (!spawned.IsDestroyed)
+					{
+						spawned.FastForward(ComputeObserverFastForwardTicks(timeManager.Tick, entry.ServerStartTick,
+							LagCompensationTick.SpectatorInterpolationTicks));
+					}
 				}
 			}
 
@@ -346,8 +362,14 @@ namespace FishMMO.Shared
 			public int Seed;
 			/// <summary>Replicate tick the object spawned on, in the caster's domain.</summary>
 			public uint SpawnTick;
-			/// <summary>Server tick the object started on, for the fast-forward.</summary>
+			/// <summary>Server tick the object's CURRENT leg started on, for the fast-forward.</summary>
 			public uint ServerStartTick;
+			/// <summary>
+			/// Lifetime ticks the object consumed on legs before <see cref="ServerStartTick"/> —
+			/// non-zero only after a redirect, whose leg reset makes the fast-forward blind to the
+			/// flight before the turn. See <see cref="AbilityObject.PreRedirectElapsedTicks"/>.
+			/// </summary>
+			public uint LifeElapsedBeforeStartTicks;
 			/// <summary>World position the object spawned at.</summary>
 			public Vector3 Position;
 			/// <summary>World rotation the object spawned with.</summary>
@@ -534,6 +556,7 @@ namespace FishMMO.Shared
 				int inFlightSeed = reader.ReadInt32();
 				uint inFlightSpawnTick = reader.ReadUInt32();
 				uint inFlightServerStartTick = reader.ReadUInt32();
+				uint inFlightLifeElapsedBeforeStart = reader.ReadUInt32();
 				Vector3 inFlightPosition = reader.ReadVector3();
 				Quaternion inFlightRotation = reader.ReadQuaternion64();
 
@@ -543,6 +566,7 @@ namespace FishMMO.Shared
 					Seed = inFlightSeed,
 					SpawnTick = inFlightSpawnTick,
 					ServerStartTick = inFlightServerStartTick,
+					LifeElapsedBeforeStartTicks = inFlightLifeElapsedBeforeStart,
 					Position = inFlightPosition,
 					Rotation = inFlightRotation,
 				});
@@ -702,6 +726,7 @@ namespace FishMMO.Shared
 				writer.WriteInt32(entry.Seed);
 				writer.WriteUInt32(entry.SpawnTick);
 				writer.WriteUInt32(entry.ServerStartTick);
+				writer.WriteUInt32(entry.LifeElapsedBeforeStartTicks);
 				writer.WriteVector3(entry.Position);
 				/* 64-bit, matching the activation broadcast's SpawnRotation. This pose is used as
 				 * both the spawn transform and the aim direction the object flies along, so the
@@ -788,11 +813,14 @@ namespace FishMMO.Shared
 						AbilityID = ability.ID,
 						Seed = root.SpawnSeed,
 						SpawnTick = root.SpawnTick.Value,
-						/* The server tick this object STARTED on, not the current one. The
-						 * receiver compares it against its own estimate of the server tick and
-						 * fast-forwards by the difference, which is what places the object where
-						 * the server holds it rather than at its launch point. */
+						/* The server tick this object's CURRENT LEG started on, not the current
+						 * tick. The receiver compares it against its own estimate of the server
+						 * tick and fast-forwards by the difference, which is what places the
+						 * object where the server holds it rather than at its launch point. After
+						 * a redirect, ElapsedTicks counts only the leg — the pose is right, and
+						 * the earlier legs' lifetime rides separately below. */
 						ServerStartTick = unchecked(serverTick - root.ElapsedTicks),
+						LifeElapsedBeforeStartTicks = root.PreRedirectElapsedTicks,
 						Position = root.SpawnPosition,
 						Rotation = root.SpawnRotation,
 					});

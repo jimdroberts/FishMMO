@@ -52,7 +52,7 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable containing one random <see cref="GameObject"/>, or empty if none found.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (!IsAuthoritativePeer(eventData))
+			if (!ResolvesTargetsLocally(eventData))
 			{
 				yield break;
 			}
@@ -181,7 +181,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Never <c>eventData.RNG</c>, precisely because this selector is server-only.</b> The
+		/// <b>Never <c>eventData.RNG</c>, and the reason survives this selector no longer being
+		/// server-only.</b> The
 		/// shared generator is threaded onto an ability object's OnSpawn/OnTick/OnHit/OnDestroy
 		/// payloads and is advanced by side effect, so a draw taken behind a peer gate advances it
 		/// only on the peers that pass — and an ungated action later in the same chain
@@ -191,10 +192,20 @@ namespace FishMMO.Shared
 		/// </para>
 		/// <para>
 		/// An ACTION satisfies that rule by evaluating its value providers above its gate. This
-		/// selector cannot: <see cref="TargetSelector.IsAuthoritativePeer"/> gates the whole
-		/// selection, which is the point of it. So it takes a stream of its own instead. This used
-		/// to read <c>eventData.RNG</c> whenever one had been threaded on — which is every ability
-		/// event, i.e. exactly the case where the desynchronisation bites.
+		/// selector cannot: <see cref="TargetSelector.ResolvesTargetsLocally"/> gates the whole
+		/// selection, which is the point of it — an OBSERVER still returns before reaching the draw,
+		/// so the shared stream would still advance on some peers and not others. So it takes a
+		/// stream of its own instead. This used to read <c>eventData.RNG</c> whenever one had been
+		/// threaded on — which is every ability event, i.e. exactly the case where the
+		/// desynchronisation bites.
+		/// </para>
+		/// <para>
+		/// <b>Exactly one draw per selection, whatever the candidate count.</b> That is what lets
+		/// the caster's client take this draw alongside the server: the two may hold candidate lists
+		/// of different LENGTH at the volume boundary and so pick different indices, but each
+		/// consumes a single value, so the stream stays at the same position on both. A mispick is
+		/// then an ordinary mispredicted target — corrected by the next authoritative push, and
+		/// bounded to one round trip — rather than a permanent divergence of the generator itself.
 		/// </para>
 		/// <para>
 		/// <see cref="EventData.IndependentRNG(int)"/> rather than <c>DeriveRNG</c>: the latter is a

@@ -345,8 +345,21 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
+			/* Safe to clear, unlike an NPC's — see BaseCharacter.ResetState. A player's ID is a
+			 * database key written fresh by the load path on every spawn, and the base has
+			 * already used it to prune the client character dictionary. */
+			ID = 0;
+
 #if !UNITY_SERVER
-			ClientCharacters.Remove(ID);
+			/* Unlatch local-client initialization.
+			 *
+			 * TryInitializeLocalClient is deliberately once-only, but "once" meant once per
+			 * pooled INSTANCE rather than once per spawn: the latch is a plain field and nothing
+			 * cleared it. A character object that came back out of the pool for a second spawn —
+			 * an instance entry and its return are the common pair — therefore skipped
+			 * OnStartCharacter entirely, so no behaviour re-registered its client broadcast
+			 * handlers and the whole owner-side UI came up inert with no error anywhere. */
+			localClientInitialized = false;
 #endif
 
 			TeleporterName = "";

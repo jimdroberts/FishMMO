@@ -70,10 +70,14 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			/* Server only. The old guard refused any event carrying a replicate tick, on the theory
-			 * that such an event is a client replay — but the server's own ability dispatches carry
-			 * one too, so a targeted ability resolved nowhere. See TargetSelector.IsAuthoritativePeer. */
-			if (!IsAuthoritativePeer(eventData))
+			/* The server, or the client that owns the caster — see
+			 * TargetSelector.ResolvesTargetsLocally. This selector is the EASIEST of the family to
+			 * predict, not the hardest: it resolves an entity reference rather than a volume, so
+			 * the two peers agree as long as they agree about who is targeted, and the range check
+			 * that follows has metres of tolerance. (Before that it was server-only, and before THAT
+			 * it refused any event carrying a replicate tick — which the server's own ability
+			 * dispatches also carry, so a targeted ability resolved nowhere.) */
+			if (!ResolvesTargetsLocally(eventData))
 			{
 				yield break;
 			}

@@ -63,13 +63,49 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			// Clear previous state and re-discover from the now-loaded model
-			regionRenderers.Clear();
-			regionHideCounts.Clear();
-			slotHiddenRegions.Clear();
+			ForgetDiscoveredModel();
 
 			TryDiscoverRegionRenderers();
 #endif
 		}
+
+		/// <summary>
+		/// Forgets the model this manager discovered before the object returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// Everything here points into a character model that is about to be destroyed: renderers
+		/// keyed by body region, the per-slot hide counts that decide which of them are visible,
+		/// and the skeleton root <c>CharacterAppearanceManager</c> and
+		/// <c>EquipmentVisualController</c> both read from this component. Only
+		/// <see cref="OnModelReady"/> cleared them, and that fires when the next model finishes
+		/// loading — asynchronously, and not at all if the next occupant of the pool slot fails
+		/// to load a model. Until then the two readers above would bind their meshes to a dead
+		/// skeleton, and the inherited hide counts would leave body regions switched off on a
+		/// character wearing nothing that hides them.
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			ForgetDiscoveredModel();
+#endif
+		}
+
+#if !UNITY_SERVER
+		/// <summary>
+		/// Drops every reference discovered from the current model. Shared by
+		/// <see cref="OnModelReady"/> (re-discovery) and <see cref="ResetState(bool)"/> (pool).
+		/// </summary>
+		private void ForgetDiscoveredModel()
+		{
+			regionRenderers.Clear();
+			regionHideCounts.Clear();
+			slotHiddenRegions.Clear();
+			skeletonRoot = null;
+		}
+#endif
 
 #if !UNITY_SERVER
 		/// <summary>

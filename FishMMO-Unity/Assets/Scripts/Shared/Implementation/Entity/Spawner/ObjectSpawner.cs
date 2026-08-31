@@ -308,6 +308,40 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Drops the spawner's per-session bookkeeping when its NetworkObject is reset.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="OnStopNetwork"/> takes the spawner out of the schedule but leaves what it
+		/// was scheduled to do: <see cref="Spawned"/> still lists objects that were despawned
+		/// alongside it, and <see cref="SpawnableRespawnTimers"/> still holds deadlines measured
+		/// against the previous session's clock. A spawner brought back up would read
+		/// <c>Spawned.Count</c> as already at <see cref="MaxSpawnCount"/> and never spawn
+		/// anything, while <c>OnStartNetwork</c> appended a second full set of timers on top of
+		/// the first.
+		/// </para>
+		/// <para>
+		/// The scheduler is left to <see cref="OnStopNetwork"/>, which always runs first on this
+		/// path — this method deliberately does not repeat that call.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			Spawned.Clear();
+			SpawnableRespawnTimers.Clear();
+
+			nextRespawnCheckTime = 0.0f;
+			lastSpawnIndex = 0;
+
+			// Force the spawn-chance cache to be rebuilt against whatever Spawnables holds next.
+			cachedTotalSpawnChance = 0f;
+			IsCacheDirty = true;
+		}
+
+		/// <summary>
 		/// Drops this spawner from the respawn sweep when it is destroyed.
 		/// </summary>
 		/// <remarks>

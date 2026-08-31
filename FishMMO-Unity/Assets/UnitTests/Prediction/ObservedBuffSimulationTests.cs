@@ -368,9 +368,12 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		private static void ApplyResolved(BuffController controller, BaseBuffTemplate template, uint tick)
 		{
+			// predictedByThisPeer: false — these tests exercise the SERVER-DRIVEN apply funnel,
+			// which confirms rather than marks; the provisional path has its own fixture
+			// (CombatAudit20260831RecommendedFixTests).
 			typeof(BuffController)
 				.GetMethod("ApplyResolved", Private)
-				.Invoke(controller, new object[] { template, tick, null });
+				.Invoke(controller, new object[] { template, tick, null, false });
 		}
 
 		/// <summary>Feeds a full observed set straight into the controller's apply funnel.</summary>

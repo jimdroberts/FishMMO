@@ -62,6 +62,40 @@ namespace FishMMO.Shared
 #endif
 	}
 
+	/// <summary>
+	/// Drops the appearance discovered from the current model before the object is pooled.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <see cref="OnModelReady"/> clears the body renderers and the skeleton on its way to
+	/// re-discovering them, but it only runs once the NEXT model has finished loading, and the
+	/// three things it does not touch have no other writer at all: the blend shape values, the
+	/// equipment renderers registered by <c>EquipmentVisualController</c>, and
+	/// <see cref="currentAppearance"/> itself.
+	/// </para>
+	/// <para>
+	/// Left in place, the blend shapes are re-applied wholesale to the next occupant's model —
+	/// <c>ReapplyBlendShapes</c> walks that dictionary and writes every entry — so a recycled
+	/// object carried the previous character's face and body sliders onto a different character.
+	/// The equipment renderer list is worse than stale: its entries belong to renderers that the
+	/// visual controller destroys on teardown, so every later blend shape write iterated a list
+	/// of dead Unity objects.
+	/// </para>
+	/// </remarks>
+	/// <param name="asServer">True if called on the server.</param>
+	public override void ResetState(bool asServer)
+	{
+		base.ResetState(asServer);
+
+#if !UNITY_SERVER
+		bodyRenderers.Clear();
+		equipmentRenderers.Clear();
+		blendShapeValues.Clear();
+		currentAppearance = default;
+		skeletonRoot = null;
+#endif
+	}
+
 	/// <inheritdoc />
 	public void OnModelReady()
 	{

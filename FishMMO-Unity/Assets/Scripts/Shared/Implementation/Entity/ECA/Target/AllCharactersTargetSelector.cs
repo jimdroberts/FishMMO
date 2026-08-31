@@ -28,9 +28,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Server only.</b> This feeds gameplay — it is the fan-out behind "everyone in the zone"
-		/// effects — so it resolves where those effects are authoritative, for the same reason the
-		/// physics selectors do.
+		/// <b>Server only, and the one spatial-family selector that stayed that way</b> when the
+		/// rest were opened up for client-side prediction. The others ask "which bodies are inside
+		/// this volume", a question the caster's client can answer for itself because its live world
+		/// is the same world the server rewinds to. This one asks "who is in the ZONE", and a client
+		/// simply does not hold that set: observer streaming gives it only the characters currently
+		/// spawned for that viewer, so predicting here would not be a boundary mispick but a
+		/// systematic under-selection — every culled character silently missing from an effect that
+		/// is defined as hitting everyone. It is also the only selector that pays a full-scene
+		/// component scan, which does not belong on a player's machine once per tick.
+		/// </para>
+		/// <para>
+		/// The consequence is honest and deliberate: a zone-wide effect has no predicted feedback and
+		/// lands when the server says so. See <see cref="TargetSelector.ResolvesTargetsLocally"/>.
 		/// </para>
 		/// <para>
 		/// <b>Ordered.</b> <c>FindObjectsByType</c> is called with <c>FindObjectsSortMode.None</c>,
@@ -56,6 +66,7 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of character GameObjects, ordered by network identity.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
+			// Server only — see the remarks above; a client does not hold the zone's character set.
 			if (!IsAuthoritativePeer(eventData))
 			{
 				yield break;

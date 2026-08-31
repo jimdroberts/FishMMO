@@ -34,7 +34,11 @@ namespace FishMMO.Shared
 			{
 				if (collider != null)
 				{
-					if (collider.gameObject != template.AbilityObjectPrefab)
+					/* Identity is judged by the collider's ROOT object, not its own GameObject —
+					 * the lookup below reaches child hitboxes, whose own GameObject is never the
+					 * prefab root, and comparing against it would evict a valid child entry (and
+					 * log the collision warning) on every call. */
+					if (collider.transform.root.gameObject != template.AbilityObjectPrefab)
 					{
 						Debug.LogWarning(
 							"[AbilityPrefabColliderCache] ID collision or stale prefab detected. Self-healing. " +
@@ -52,7 +56,11 @@ namespace FishMMO.Shared
 				}
 			}
 
-			collider = template.AbilityObjectPrefab.GetComponent<Collider>();
+			/* Children included, matching AbilityObject.CacheComponents — the two lookups must
+			 * resolve the same collider on every peer or the sweep shape diverges. Root-first is
+			 * GetComponentInChildren's documented order, so a root collider still wins when both
+			 * exist. */
+			collider = template.AbilityObjectPrefab.GetComponentInChildren<Collider>(true);
 			Cache[template.ID] = collider;
 			return collider;
 		}

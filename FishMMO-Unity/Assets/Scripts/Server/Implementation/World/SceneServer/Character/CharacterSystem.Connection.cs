@@ -634,6 +634,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="conn">The network connection of the dead player.</param>
 		/// <param name="msg">The respawn-at-bind-point broadcast message.</param>
 		/// <param name="channel">The channel on which the broadcast was received.</param>
+		/// <summary>
+		/// Installs a client's reported target frame onto its character's
+		/// <see cref="ITargetController"/>, after verifying the claim.
+		/// </summary>
+		/// <remarks>
+		/// Verification is the whole job here — the value feeds the observer-streaming target pin
+		/// (see <see cref="TargetSelectionBroadcast"/>), and an unverified id would let a modified
+		/// client pin arbitrary objects into its own observer budget. A non-zero id must resolve
+		/// to a spawned CHARACTER in the sender's own scene; anything else is stored as no-target
+		/// rather than dropped, so a bad report cannot leave a stale pin standing. Range is
+		/// deliberately not checked at receipt — the pin bounds it at use, where the live distance
+		/// is already in hand, and rejecting here on a moving value would flap.
+		/// </remarks>
+		private void OnClientTargetSelectionBroadcastReceived(NetworkConnection conn, TargetSelectionBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+				return;
+			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
+				return;
+			if (player == null || !player.TryGet(out ITargetController targetController))
+				return;
+
+			int verifiedTargetId = 0;
+			if (msg.TargetObjectID != 0 &&
+				player.NetworkObject != null &&
+				player.NetworkObject.NetworkManager != null &&
+				player.NetworkObject.NetworkManager.ServerManager.Objects.Spawned.TryGetValue(
+					msg.TargetObjectID, out FishNet.Object.NetworkObject targetNob) &&
+				targetNob != null &&
+				targetNob.gameObject.scene == player.GameObject.scene &&
+				targetNob.GetComponent<ICharacter>() != null)
+			{
+				verifiedTargetId = msg.TargetObjectID;
+			}
+
+			targetController.ServerSetClientSelectedTarget(verifiedTargetId);
+		}
+
 		private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
 		{
 			if (!TryBeginRespawnResurrectGuard(conn.ClientId, RespawnOperation, out long guardKey))

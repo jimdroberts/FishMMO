@@ -381,22 +381,20 @@ namespace FishMMO.Shared
 			eligibleLooters.Clear();
 			lootViewers.Clear();
 
+			/* Zeroes Flags and prunes the client dictionary keyed by this NPC's ID. The ID
+			 * itself is kept: it is this NPC's SceneObject registry key, and re-registration on
+			 * the next spawn is a no-op that relies on it still being here. */
 			base.ResetState(asServer);
 
-#if !UNITY_SERVER
-			ClientCharacters.Remove(ID);
-#endif
-
-			/* Reset flags to the baseline a freshly spawned NPC expects.
+			/* Re-arm the baseline a freshly spawned NPC expects, on top of the zeroed flags.
 			 *
 			 * This is the only place it can happen. OnAwake sets IsLoaded and runs exactly once
 			 * per pooled instance, while Despawn clears it on every death — so from its second
 			 * life onwards a recycled NPC came back permanently unloaded, which
 			 * CharacterResourceAttribute.ClampCurrentValue reads to mean "do not clamp to
 			 * FinalValue" and therefore left its health able to sit above its own maximum.
-			 * IsDead is cleared here for the same reason: Kill now sets it, and a corpse returned
-			 * to the pool still carrying it would come back dead and unkillable. */
-			Flags = 0;
+			 * IsDead is cleared by the base for the same reason: Kill now sets it, and a corpse
+			 * returned to the pool still carrying it would come back dead and unkillable. */
 			EnableFlags(CharacterFlags.IsLoaded);
 
 			npcRNG = null;

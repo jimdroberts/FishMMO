@@ -786,6 +786,9 @@ namespace FishMMO.Shared
 
 				materializeSeenBuffer.Add(entry.TemplateID);
 
+				// The server named it: a predicted entry for this template is confirmed.
+				predictedUnconfirmedBuffs?.Remove(entry.TemplateID);
+
 				uint expiryTick = TimeManager.UNSET_TICK;
 				if (entry.RemainingSeconds > 0f && currentTick != TimeManager.UNSET_TICK)
 				{
@@ -823,11 +826,53 @@ namespace FishMMO.Shared
 			for (int i = 0; i < materializeRemoveBuffer.Count; ++i)
 			{
 				buffs.Remove(materializeRemoveBuffer[i]);
+				// A predicted entry the server's strip does not name is settled either way now.
+				predictedUnconfirmedBuffs?.Remove(materializeRemoveBuffer[i]);
 			}
 
 			materializeSeenBuffer.Clear();
 			materializeRemoveBuffer.Clear();
 		}
+
+		/// <summary>
+		/// Template ids this peer applied by PREDICTION into a controller it does not simulate,
+		/// mapped to the observer-domain tick by which the server must have named them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The caster's client tracks a cross-character buff the moment its own ECA predicts it
+		/// (see the `simulates` note in <see cref="ApplyResolved"/>). When the server REFUSES that
+		/// apply — the target died on the server's tick, say — no correction ever arrives on its
+		/// own: the observed-buff delta is computed against a server baseline that never contained
+		/// the entry, and a full reconciling push only happens when something else changes. A
+		/// finite phantom at least ran out its local countdown; a PERMANENT template's phantom
+		/// icon and FX survived indefinitely.
+		/// </para>
+		/// <para>
+		/// So a predicted entry is provisional: any server message that names the template
+		/// confirms it (authoritative apply or observed-strip materialise), and one that goes
+		/// unnamed past its deadline is removed by <see cref="ObserverTimeManager_OnTick"/> the
+		/// same way an observed buff that ran out locally is. Deadlines are recorded in THIS
+		/// controller's observer domain — the clock the sweep reads — never in the caster's
+		/// replicate domain, so no cross-domain tick comparison occurs. Lazily allocated: only a
+		/// caster's client ever holds entries.
+		/// </para>
+		/// </remarks>
+		private Dictionary<int, uint> predictedUnconfirmedBuffs;
+
+		/// <summary>
+		/// How long a predicted cross-character buff may wait for the server to name it.
+		/// </summary>
+		/// <remarks>
+		/// Comfortably past a round trip plus the observed-buff push cadence, for the same reason
+		/// <c>PredictedCombatEvents.ConfirmationWindowSeconds</c> errs long: dropping a buff the
+		/// server DID apply (the confirmation was merely late) re-adds it on the next push, which
+		/// flickers — worse than a phantom lingering a moment longer.
+		/// </remarks>
+		private const float PredictedBuffConfirmationSeconds = 3f;
+
+		/// <summary>Scratch list of predicted-buff template ids whose confirmation deadline passed.</summary>
+		private readonly List<int> predictedUnconfirmedExpiredBuffer = new List<int>();
 
 		/// <summary>Scratch set of template ids named by the message being materialised.</summary>
 		private readonly HashSet<int> materializeSeenBuffer = new HashSet<int>();
@@ -1107,6 +1152,33 @@ namespace FishMMO.Shared
 			if (currentTick == TimeManager.UNSET_TICK)
 			{
 				return;
+			}
+
+			/* Predicted entries the server never confirmed. Swept here — the observer-side
+			 * housekeeping tick — because a refused apply produces NO correcting message of its
+			 * own (see predictedUnconfirmedBuffs): absence past the deadline is the only signal,
+			 * exactly as it is for predicted combat numbers. Removed the way an observed buff
+			 * that ran out locally is: directly, with its FX torn down. */
+			if (predictedUnconfirmedBuffs != null && predictedUnconfirmedBuffs.Count > 0)
+			{
+				predictedUnconfirmedExpiredBuffer.Clear();
+				foreach (KeyValuePair<int, uint> pending in predictedUnconfirmedBuffs)
+				{
+					if ((int)(currentTick - pending.Value) >= 0)
+					{
+						predictedUnconfirmedExpiredBuffer.Add(pending.Key);
+					}
+				}
+				for (int i = 0; i < predictedUnconfirmedExpiredBuffer.Count; ++i)
+				{
+					int templateID = predictedUnconfirmedExpiredBuffer[i];
+					predictedUnconfirmedBuffs.Remove(templateID);
+					if (buffs.Remove(templateID))
+					{
+						DespawnBuffFX(templateID);
+					}
+				}
+				predictedUnconfirmedExpiredBuffer.Clear();
 			}
 
 			/* Snapshot before iterating: Remove mutates the dictionary. Reuses the same buffer the
@@ -2080,8 +2152,9 @@ namespace FishMMO.Shared
 		{
 			// The prediction path already holds a replicate-domain tick (it came from
 			// CharacterReplicateData.GetPredictionTick), so pass its raw value straight
-			// into the single apply core.
-			ApplyResolved(template, currentTick.Value, caster);
+			// into the single apply core. This entry point is the PREDICTED one — see
+			// predictedUnconfirmedBuffs for what that means on a non-simulating peer.
+			ApplyResolved(template, currentTick.Value, caster, predictedByThisPeer: true);
 		}
 
 		/// <summary>
@@ -2097,7 +2170,13 @@ namespace FishMMO.Shared
 		/// <param name="template">The buff template to apply.</param>
 		/// <param name="replicateDomainTick">Application tick, guaranteed to be in the replicate domain.</param>
 		/// <param name="caster">The character applying the buff, snapshotted for attribution. May be null.</param>
-		private void ApplyResolved(BaseBuffTemplate template, uint replicateDomainTick, ICharacter caster = null)
+		/// <param name="predictedByThisPeer">
+		/// True when this apply came from this peer's own prediction (the ECA path) rather than
+		/// from a server message. On a peer that does not simulate this controller, a predicted
+		/// apply is PROVISIONAL until the server names the template — see
+		/// <see cref="predictedUnconfirmedBuffs"/>; a server-driven apply confirms it.
+		/// </param>
+		private void ApplyResolved(BaseBuffTemplate template, uint replicateDomainTick, ICharacter caster = null, bool predictedByThisPeer = false)
 		{
 			if (template == null) return;
 
@@ -2178,6 +2257,25 @@ namespace FishMMO.Shared
 			 * land the first stack. SetCaster ignores nulls, so a refresh from a source with no
 			 * initiator leaves existing attribution intact. */
 			buffInstance.SetCaster(caster);
+
+			/* Provisional vs confirmed — see predictedUnconfirmedBuffs. A prediction on a
+			 * non-simulating peer gets a deadline in THIS controller's observer domain (the clock
+			 * the sweep reads); a server-driven apply naming the same template lifts one. The
+			 * simulating peers (server, owner) never mark: their applies are reconciled state. */
+			if (predictedByThisPeer && !simulates)
+			{
+				uint domainTick = GetCurrentDomainTick();
+				if (domainTick != TimeManager.UNSET_TICK && tickDelta > 0f)
+				{
+					predictedUnconfirmedBuffs ??= new Dictionary<int, uint>(1);
+					predictedUnconfirmedBuffs[template.ID] =
+						domainTick + (uint)Mathf.CeilToInt(PredictedBuffConfirmationSeconds / tickDelta);
+				}
+			}
+			else if (!predictedByThisPeer)
+			{
+				predictedUnconfirmedBuffs?.Remove(template.ID);
+			}
 
 			/* Only an EXISTING buff stacks. A new one already applied its modifier through
 			 * Buff.Apply in the isNew branch above, so stacking it here as well applied the value
@@ -2848,6 +2946,9 @@ namespace FishMMO.Shared
 			 * previous one's — buffs its observers never saw, and removals for buffs that were
 			 * never there. Dropping it forces the next push to be a full set. */
 			ResetObservedBuffBaseline();
+
+			// Same pooling rule: the next occupant inherits no provisional predictions.
+			predictedUnconfirmedBuffs?.Clear();
 
 			RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
 

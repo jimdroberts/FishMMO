@@ -204,10 +204,6 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
-#if !UNITY_SERVER
-			ClientCharacters.Remove(ID);
-#endif
-
 			PetOwner = null;
 			PetAbilityTemplate = null;
 			Stance = PetStance.Defensive;

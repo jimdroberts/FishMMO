@@ -56,9 +56,19 @@ namespace FishMMO.Shared
 		/// <returns>A GameObject to use as a spatial reference, or null.</returns>
 
 		/// <summary>
-		/// True when this peer is the one allowed to resolve a physics query into targets.
+		/// True when this peer is the SERVER.
 		/// </summary>
 		/// <remarks>
+		/// <para>
+		/// <b>No current callers, and that is not an oversight.</b> Every spatial selector now gates
+		/// on <see cref="ResolvesTargetsLocally"/> instead, so the caster's own client predicts its
+		/// selections. This is kept for a future selector whose consumer is genuinely
+		/// server-authoritative and has nothing to predict — one that resolves loot rights, or picks
+		/// a persistence target. Reach for it only when you can say why a client must see NOTHING;
+		/// if the answer is "the effect is authoritative", that is already handled a level down by
+		/// the action's own <see cref="EcaAuthority.IsServer"/> gate, and this one would merely also
+		/// delete the caster's feedback.
+		/// </para>
 		/// <para>
 		/// <b>Server only, and not "not a replicate tick".</b> Every physics selector used to open
 		/// with <c>if (tickData.IsReplicateTick) yield break;</c>, on the theory that a replicate tick
@@ -77,6 +87,85 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		protected static bool IsAuthoritativePeer(EventData eventData) => EcaAuthority.IsServer(eventData);
+
+		/// <summary>
+		/// True when this peer may resolve a spatial selection for ITSELF — the server, or the
+		/// client that owns the initiator.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>This is the gate every spatial selector uses, and it is deliberately wider than
+		/// <see cref="IsAuthoritativePeer"/>.</b> Selection used to be server-only, which made the
+		/// cap trivially agreed — the client computed nothing, so it could not compute something
+		/// different. The cost was that an area, cone, line or chain ability produced NO client-side
+		/// prediction at all: the selector yielded an empty set on the caster's own machine, so no
+		/// action downstream ever ran, and the entire "hit what you see" path (predicted numbers,
+		/// immediate resource movement, impact FX at the predicted tick) applied only to projectiles,
+		/// whose hits are resolved by <c>AbilityObject</c>'s sweep rather than by a selector.
+		/// </para>
+		/// <para>
+		/// <b>Why widening it is safe: selection is not authority.</b> A selector answers "which
+		/// bodies are in this volume", never "what may be done to them". Every action re-asks that
+		/// question for itself one level down — <c>ApplyDamageAction</c>, <c>ApplyHealAction</c> and
+		/// <c>ApplyBuffAction</c> gate on <see cref="EcaAuthority.MayPredict"/> and predict
+		/// feedback, while <c>ApplyThreatAction</c>, <c>ApplyTauntAction</c>, <c>ApplyReviveAction</c>,
+		/// <c>ApplyDispelAction</c>, the equip actions and the achievement action gate on
+		/// <see cref="EcaAuthority.IsServer"/> and stay server-only. So opening the selector grants a
+		/// client exactly the predictions it was already trusted to make for a projectile hit, and
+		/// nothing else: no kill, no combat report, no loot rights, no threat.
+		/// </para>
+		/// <para>
+		/// <b>What makes the two peers agree.</b> The same thing that already makes the projectile
+		/// sweep agree, and it is not reproducible float arithmetic. The server runs its gather
+		/// inside <see cref="GatherRewound"/>, rewound to the caster's view; the client runs the
+		/// identical gather against its live world, which IS that view — this is precisely why
+		/// <c>LagCompensationTick.TryResolve</c> answers false off-server rather than trying to
+		/// rewind a second time. Both therefore query the same world, rank it with the same
+		/// distance-then-identity order, and cap the same list. The residual disagreement is
+		/// interpolation error at the volume boundary, exactly the bound a swept projectile hit has
+		/// always carried.
+		/// </para>
+		/// <para>
+		/// <b>And when they do disagree, it self-corrects.</b> A body the client picked and the
+		/// server did not gets its predicted damage undone by the next authoritative resource push,
+		/// and its predicted number greys out unconfirmed
+		/// (<c>PredictedCombatEvents</c>); a predicted buff the server never applies is dropped by
+		/// the confirmation deadline in <c>BuffController</c>. A body the server picked and the
+		/// client did not simply arrives as an ordinary combat report. Both are bounded to about a
+		/// round trip and neither can accumulate.
+		/// </para>
+		/// <para>
+		/// An OBSERVER still answers false, and that part has not moved. It holds every character
+		/// interpolated against its own latency, has no input stream for the caster, and is going to
+		/// be told what happened — a third party resolving somebody else's area ability for itself
+		/// is the failure this whole gate exists to prevent.
+		/// </para>
+		/// <para>
+		/// <b>The DETACHED-object case is why this is not simply <see cref="EcaAuthority.MayPredict"/>.</b>
+		/// When a caster despawns — including merely leaving an observer's streaming range — its
+		/// in-flight ability objects are detached and their caster replaced by a
+		/// <c>SnapshotCharacter</c> phantom, which has no <c>NetworkObject</c>. Both
+		/// <c>MayPredict</c> and <c>IsServer</c> treat "nothing networked to ask" as permission
+		/// (the undecidable case that keeps scene-authored triggers and edit-mode tests working), so
+		/// a phantom's OnTick trigger would pass the peer gate on EVERY client and let a third party
+		/// resolve selections — and, one level down, run the server-only actions too. Deferring to
+		/// the ability object closes it: <c>ResolvesHitsLocally</c> reads the caster's NetworkObject
+		/// and so answers server-only for a phantom, which is exactly the treatment
+		/// <c>AbilityApplyAreaAction</c>, <c>AbilityApplyHitscanAction</c> and
+		/// <c>AbilityApplyTargetAction</c> already take. Selections with no ability object in the
+		/// event (a buff tick, a region trigger) keep the plain <c>MayPredict</c> answer.
+		/// </para>
+		/// </remarks>
+		protected static bool ResolvesTargetsLocally(EventData eventData)
+		{
+			/* An ability-driven selection is judged by the OBJECT, not by the event's initiator —
+			 * see the detached-object note above. */
+			if (AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject))
+			{
+				return abilityObject.ResolvesHitsLocally;
+			}
+			return EcaAuthority.MayPredict(eventData);
+		}
 
 		/// <summary>
 		/// Delegate for the body of a rewound gather.

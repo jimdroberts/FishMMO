@@ -60,9 +60,22 @@ namespace FishMMO.Shared
 		private bool nameGenerated;
 
 		/// <summary>
+		/// The GameObject's authored name, captured before any generated name replaces it.
+		/// </summary>
+		private string authoredName;
+
+		/// <summary>
 		/// The selected gender for this object's generated name.
 		/// </summary>
 		public CharacterGender SelectedGender => selectedGender;
+
+		/// <summary>
+		/// Captures the authored name so a pooled reuse has something to fall back to.
+		/// </summary>
+		private void Awake()
+		{
+			authoredName = gameObject.name;
+		}
 
 		/// <summary>
 		/// Called when the server starts. Randomizes name IDs for the object name.
@@ -72,6 +85,41 @@ namespace FishMMO.Shared
 			base.OnStartServer();
 
 			GenerateNameIfNeeded();
+		}
+
+		/// <summary>
+		/// Forgets the generated name so the next occupant of this pool slot draws its own.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="nameGenerated"/> is a once-only latch and <see cref="GenerateNameIfNeeded"/>
+		/// returns early on it, so without this every NPC that ever came out of a given pool slot
+		/// wore the name the first occupant drew — on the server, in the spawn payload, and
+		/// therefore on every client's name label too. A pool of eight skeletons produced eight
+		/// distinct names for the lifetime of the scene no matter how many hundreds of skeletons
+		/// were spawned from it.
+		/// </para>
+		/// <para>
+		/// The GameObject name is put back rather than left alone. Re-generation normally
+		/// overwrites it, but a prefab with no name sets configured — or one whose sets are
+		/// empty — makes <see cref="ApplyGeneratedName"/> return without writing anything, and
+		/// the previous occupant's name would then survive as this object's identity.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			nameGenerated = false;
+			firstNameID = -1;
+			lastNameID = -1;
+			selectedGender = CharacterGender.Unspecified;
+
+			if (!string.IsNullOrEmpty(authoredName))
+			{
+				gameObject.name = authoredName;
+			}
 		}
 
 		/// <summary>

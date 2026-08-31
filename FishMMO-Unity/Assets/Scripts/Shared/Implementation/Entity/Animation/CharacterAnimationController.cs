@@ -54,6 +54,27 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		/// <summary>
+		/// Drops the cached animator before the object returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// The reference points at the Animator of a model that <c>BaseCharacter</c> destroys and
+		/// replaces on the next spawn, and nothing else clears it. Every setter here guards with
+		/// <c>animator != null</c>, which Unity answers correctly for a destroyed object — but
+		/// only after the engine has already been asked, once per call, for the rest of the
+		/// object's life in the pool. Re-acquisition happens in
+		/// <see cref="OnModelReady"/> either way, so there is nothing to lose by letting go.
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			animator = null;
+#endif
+		}
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Attempts to find the Animator. Gets it from the NetworkAnimator if available

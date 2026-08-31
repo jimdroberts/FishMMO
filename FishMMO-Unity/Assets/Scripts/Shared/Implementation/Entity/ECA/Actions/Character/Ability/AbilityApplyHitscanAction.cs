@@ -173,7 +173,12 @@ namespace FishMMO.Shared
 			float range = RangeValue.GetValue(initiator, eventData);
 			int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 
-			if (!abilityObject.IsServer)
+			/* The server, or the client that owns the caster — see the matching note in
+			 * AbilityApplyAreaAction and TargetSelector.ResolvesTargetsLocally. A hitscan shot is
+			 * the case that suffers most from waiting for the echo: it has no projectile to watch
+			 * in flight, so before this the caster saw literally nothing happen until the report
+			 * arrived. */
+			if (!abilityObject.ResolvesHitsLocally)
 			{
 				return;
 			}
@@ -259,8 +264,19 @@ namespace FishMMO.Shared
 					 * Tested in the victim's own space against the volume authored on their block
 					 * buff — the same gate AbilityObject.ApplyHit applies to a projectile, so an
 					 * arrow and a bullet meet the same shield. `break` rather than `continue`
-					 * because a shield is solid: anything further along the ray is behind it. */
-					if (DamageMitigation.TryBlockAtVolume(hit.Character, hit.LocalPoint, mutate: true))
+					 * because a shield is solid: anything further along the ray is behind it.
+					 *
+					 * `mutate: IsServer`, matching the projectile's two calls in
+					 * AbilityObject.ApplyHit. The caster's client SHOULD ask whether the shot was
+					 * blocked — that is what makes its predicted damage and its stop-point honest —
+					 * but it must never SPEND the charges, because the pool belongs to the victim
+					 * and this peer only holds a copy of it. This was hardcoded true, which was
+					 * inert while the action was server-only and became a real desync the moment
+					 * the client started resolving hitscans: the caster's copy of the victim's
+					 * shield drained locally, and once it hit zero the buff was removed from that
+					 * client entirely, so the caster predicted damage straight through a shield the
+					 * server was still blocking with. See DamageMitigation's note on owning a pool. */
+					if (DamageMitigation.TryBlockAtVolume(hit.Character, hit.LocalPoint, mutate: abilityObject.IsServer))
 					{
 						break;
 					}

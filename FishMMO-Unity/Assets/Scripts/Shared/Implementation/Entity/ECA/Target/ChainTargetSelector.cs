@@ -64,10 +64,12 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s representing the chain of selected targets, starting with the context object.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			/* Server only. The old guard here refused any event carrying a replicate tick, which
-			 * the server's own spawn and self-target dispatches also carry — see
-			 * TargetSelector.IsAuthoritativePeer. */
-			if (!IsAuthoritativePeer(eventData))
+			/* The server, or the client that owns the caster — see
+			 * TargetSelector.ResolvesTargetsLocally for why selection is predicted and what makes
+			 * the two peers walk the same chain. (Before that it was server-only, and before THAT
+			 * it refused any event carrying a replicate tick, which the server's own spawn and
+			 * self-target dispatches also carry, so it selected nothing anywhere.) */
+			if (!ResolvesTargetsLocally(eventData))
 			{
 				yield break;
 			}

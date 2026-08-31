@@ -434,8 +434,15 @@ namespace FishMMO.Shared
 					 * nothing else in the reconcile expresses the difference: the seed still advances
 					 * below, the cost and cooldown still apply, and no denial is raised — so the
 					 * owner's object had no reason to be rolled back and flew its full lifetime
-					 * hitting nothing. Flagging it lets the reconcile take that object back. */
-					if (spawned == null && base.IsServerStarted)
+					 * hitting nothing. Flagging it lets the reconcile take that object back.
+					 *
+					 * Gated on SpawnsWorldObject, because Spawn also returns null for pet, self-target
+					 * and prefab-less templates — deterministically, on every peer, from the template
+					 * alone. The owner spawned nothing for those either, so there is nothing to take
+					 * back; flagging them stamped NoSpawn onto every completed self-buff or summon
+					 * cast, and the owner-side NoSpawn handling then destroyed CONFIRMED objects the
+					 * owner had predicted on later ticks. Only a target-miss can differ per peer. */
+					if (spawned == null && base.IsServerStarted && AbilityObject.SpawnsWorldObject(ability.Template))
 					{
 						/* Stamped with the tick it happened on, not raised as a bare flag. The
 						 * reconcile built after this tick's replicates only carries it if the two
@@ -638,6 +645,7 @@ namespace FishMMO.Shared
 			}
 			networkManager.ClientManager.RegisterBroadcast<AbilityActivatedBroadcast>(OnAbilityActivatedBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectHitBroadcast>(OnAbilityObjectHitBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityObjectRedirectBroadcast>(OnAbilityObjectRedirectBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
 			networkManager.ClientManager.RegisterBroadcast<AbilityLearnedObserverBroadcast>(OnAbilityLearnedObserverBroadcast);
 			activationBroadcastRegistered = true;
@@ -718,18 +726,54 @@ namespace FishMMO.Shared
 					 * it target-less would run the OnHit events as though it had struck scenery,
 					 * firing impact effects for a body that is really there.
 					 *
-					 * What is knowingly given up with it is any trajectory change those events would
-					 * have produced — today that is AbilityForkHitAction, whose redirect is drawn
-					 * from the object's own DeterministicRNG, so a dropped hit also skips a draw and
-					 * walks this copy's generator out of step with the server's for the rest of the
-					 * object's life. Deflection does not have that problem because it is not an
-					 * authored event and carries its own bit above. A fork that must survive an
-					 * unobservable victim needs its heading on the wire, not re-derived here. */
+					 * The trajectory change those events would have produced is NOT lost with it:
+					 * a fork's post-chain heading arrives separately in
+					 * AbilityObjectRedirectBroadcast (reliable, same ordered channel, so always
+					 * after this message) and is applied whether or not the victim resolved. The
+					 * skipped RNG draw still walks this copy's generator out of step, but nothing
+					 * peer-visible is derived from it any more — headings come from the wire, and
+					 * damage rolls are server-authoritative. */
 					return;
 				}
 			}
 
 			abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal);
+		}
+
+		/// <summary>
+		/// Applies a server-resolved fork redirect to this client's copy of the object.
+		/// </summary>
+		/// <remarks>
+		/// Resolved exactly like the hit message, and deliberately WITHOUT needing the victim: the
+		/// whole reason this message exists is the receiver that could not resolve the victim and
+		/// dropped the hit. <c>ApplyObservedRedirect</c> compares before turning, so a peer that
+		/// already ran the fork itself treats this as confirmation rather than a second turn.
+		/// </remarks>
+		private static void OnAbilityObjectRedirectBroadcast(AbilityObjectRedirectBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null ||
+				!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability) ||
+				ability.Objects == null ||
+				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
+				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
+				abilityObject == null)
+			{
+				return;
+			}
+
+			abilityObject.ApplyObservedRedirect(AimDirectionCompression.Decode(msg.PackedHeading));
 		}
 
 		/// <summary>
@@ -1146,12 +1190,23 @@ namespace FishMMO.Shared
 		/// Completes a consumable activation. Both client and server execute the same code path
 		/// for prediction parity: invoke the consumable (handles cooldown, charge reduction,
 		/// item destruction, and the consumable effect), then clean up the inventory slot.
-		/// Server-side subscribers of <see cref="OnConsumableUsed"/> send the authoritative
-		/// inventory broadcast to correct any client misprediction.
 		/// During reconcile replay the effect, inventory mutation, and event are skipped because
 		/// the server's authoritative state was already restored — re-applying them would
-		/// double-consume the item and fire duplicate events.
+		/// double-consume the item and fire duplicate events — but the COOLDOWN is re-applied,
+		/// exactly as <see cref="FinishAbility"/> re-applies its cooldown and cost: every reconcile
+		/// for a tick BEFORE the use carries no entry for this consumable, so the restore wipes the
+		/// predicted cooldown, and the replay of the use tick is the only thing that can put it
+		/// back. Skipping it left the hotkey overlay dark for ~1 RTT per use and let a second press
+		/// pass the deterministic cooldown check and predict a use the server denies.
 		/// </summary>
+		/// <remarks>
+		/// NOTE: <see cref="OnConsumableUsed"/> has no server-side subscriber, and it fires only
+		/// when the server actually consumes — on the success path client and server mutated
+		/// identically, so no correction is needed there. The case that DOES need one, a DENIED
+		/// predicted use, is corrected where the denial is known:
+		/// <c>AbilityController.SendConsumableDenialCorrection</c> sends the owner the slot's
+		/// authoritative state.
+		/// </remarks>
 		/// <param name="consumable">The consumable template being activated.</param>
 		/// <param name="activationData">The replicate data for this tick, used for tick-based cooldown checks.</param>
 		/// <param name="state">The prediction state, forwarded to Cancel for replay guarding.</param>
@@ -1202,6 +1257,15 @@ namespace FishMMO.Shared
 						OnConsumableUsed?.Invoke(Character, consumable.ID, slot);
 					}
 				}
+			}
+			else if (consumable.Cooldown > 0.0f && cachedCooldownController != null)
+			{
+				/* Replay re-applies ONLY the cooldown — see the summary above. AddCooldown is an
+				 * indexer write, so re-adding the same (tick, duration) entry is idempotent; the
+				 * inventory mutation and OnConsumableUsed stay replay-guarded because the restore
+				 * did not undo them. */
+				cachedCooldownController.AddCooldown(consumable.ID, new CooldownInstance(
+					activationData.GetTick(), consumable.Cooldown, (float)base.TimeManager.TickDelta));
 			}
 
 			Cancel(state);
@@ -1347,8 +1411,10 @@ namespace FishMMO.Shared
 			}
 
 			// Pet state is broadcast-synced, not reconciled. During replay the pet
-			// reference may be stale. Check here as a best-effort pre-filter;
-			// the server will reject if the character already has a pet.
+			// reference may be stale. Check here as a best-effort pre-filter. NOTE the
+			// server does NOT reject a re-summon — CanActivate has no pet check and
+			// PetSystem replaces the existing pet (despawn-then-assign) — so this filter
+			// is the only thing refusing to queue one; remove it and re-summoning works.
 			if (validatedAbility != null)
 			{
 				PetAbilityTemplate petAbilityTemplate = validatedAbility.Template as PetAbilityTemplate;

@@ -75,12 +75,14 @@ namespace FishMMO.Shared
 		/// The collider whose dimensions the swept hit query uses.
 		/// </summary>
 		/// <remarks>
-		/// The instance's own collider where there is one, so the sweep reads the live scale and
-		/// rotation; <see cref="AbilityPrefabColliderCache"/> supplies the shape for an object whose
-		/// prefab put the collider somewhere this component cannot reach. Resolved once at
-		/// initialisation rather than per tick because it must outlive the ability: an orphaned
-		/// object keeps flying after its caster disconnects, and by then there is no template left to
-		/// ask.
+		/// The instance's own collider where there is one — root first, then children, so an
+		/// authored child hitbox works — and the sweep reads the live scale and rotation.
+		/// <see cref="AbilityPrefabColliderCache"/> re-resolves the SAME child-inclusive lookup
+		/// against the prefab for an instance whose component was added before its collider
+		/// existed; the two lookups must stay identical or peers sweep different shapes. Resolved
+		/// once at initialisation rather than per tick because it must outlive the ability: an
+		/// orphaned object keeps flying after its caster disconnects, and by then there is no
+		/// template left to ask.
 		/// </remarks>
 		private Collider sweepShape;
 
@@ -176,6 +178,24 @@ namespace FishMMO.Shared
 		/// events dispatch, so the first tick's events see a value of 1.
 		/// </summary>
 		public uint ElapsedTicks;
+
+		/// <summary>
+		/// Ticks this object simulated on legs BEFORE the current one. Zero until a
+		/// <see cref="Redirect"/> resets <see cref="ElapsedTicks"/> for a new leg.
+		/// </summary>
+		/// <remarks>
+		/// Lifetime and trajectory age at different clocks once an object has been redirected:
+		/// the closed-form pose reads the CURRENT leg's <see cref="ElapsedTicks"/>, but
+		/// <see cref="RemainingLifeTime"/> has been running since the original spawn. The spawn
+		/// payload's in-flight block anchors its fast-forward to the current leg (that is what
+		/// reproduces the pose), so without this counter a late joiner rebuilt a redirected
+		/// object with its FULL lifetime less only the current leg — the copy outlived the
+		/// server's by however long the object flew before the turn, then played its authored
+		/// OnDestroy effects at a place and time where nothing happened. The payload sends this
+		/// so the receiver can charge the earlier legs against lifetime too; see
+		/// <see cref="ConsumeLifetime"/>.
+		/// </remarks>
+		public uint PreRedirectElapsedTicks;
 
 		/// <summary>
 		/// Immutable snapshot of the ability data captured at spawn time.
@@ -363,6 +383,14 @@ namespace FishMMO.Shared
 				abilityObject = tick.AbilityObject;
 				return true;
 			}
+			/* OnDestroy, last because it is the rarest. Without it every object-scoped action wired
+			 * to a destroy trigger resolved nothing and silently did nothing — see
+			 * AbilityDestroyEventData. */
+			if (eventData.TryGet(out AbilityDestroyEventData destroy) && destroy.AbilityObject != null)
+			{
+				abilityObject = destroy.AbilityObject;
+				return true;
+			}
 			return false;
 		}
 
@@ -427,7 +455,11 @@ namespace FishMMO.Shared
 			GameObject ??= gameObject;
 			Transform ??= transform;
 			CachedRigidBody ??= GetComponent<Rigidbody>();
-			sweepShape ??= GetComponent<Collider>();
+			/* Children included, and the prefab cache's lookup matches: an authored child hitbox
+			 * (a fat projectile whose collider hangs off a scaled child) used to be found by
+			 * NEITHER lookup, silently degrading the sweep to a ray on every peer. The inactive
+			 * flag is deliberate — Spawn deactivates the instance before components are cached. */
+			sweepShape ??= GetComponentInChildren<Collider>(true);
 			if (CachedRigidBody != null)
 			{
 				CachedRigidBody.isKinematic = true;
@@ -442,7 +474,10 @@ namespace FishMMO.Shared
 			cachedTickEventData = null;
 			destroyed = false;
 			initialized = false;
+			// A reused clone must not linger in the phantom registry under its previous identity.
+			UnregisterDetached();
 			ElapsedTicks = 0;
+			PreRedirectElapsedTicks = 0;
 			lastSweepPosition = Transform != null ? Transform.position : transform.position;
 			hitTargets?.Clear();
 			sweepHits?.Clear();
@@ -553,6 +588,9 @@ namespace FishMMO.Shared
 				timeManager.OnTick -= OnTick;
 				timeManager = null;
 			}
+			// A scene teardown that never routed through DestroyAbilityObjectInternal must not
+			// leave a dead reference in the phantom registry.
+			UnregisterDetached();
 		}
 
 		/// <summary>
@@ -857,6 +895,11 @@ namespace FishMMO.Shared
 				BroadcastHitToObservers(hitCharacter, point, normal);
 			}
 
+			/* Captured before the events so a redirect they apply is detectable after. The hit
+			 * broadcast above deliberately precedes the events; a heading change inside them gets
+			 * its own follow-up message below. */
+			Quaternion preEventHeading = SpawnRotation;
+
 			if (Caster != null && Caster.IsSpawned)
 			{
 				var hitEvents = OnHitEvents;
@@ -886,6 +929,15 @@ namespace FishMMO.Shared
 			if (destroyed)
 			{
 				return false;
+			}
+
+			/* The chain turned the survivor — a fork. The heading travels as its own reliable
+			 * message so a receiver that had to DROP the hit (unobservable victim, so it skipped
+			 * the fork's RNG draw and cannot re-derive anything) still turns its copy where the
+			 * server did. See AbilityObjectRedirectBroadcast. */
+			if (isServer && SpawnRotation != preEventHeading)
+			{
+				BroadcastRedirectToObservers();
 			}
 
 			/* The hit count is spent only by a peer that decided the hit.
@@ -1072,6 +1124,169 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Publishes this object's post-OnHit heading to the caster's observers. Server only; sent
+		/// when the hit chain redirected the object. See <see cref="AbilityObjectRedirectBroadcast"/>.
+		/// </summary>
+		/// <remarks>
+		/// The heading sent is the QUANTISED forward the redirect itself applied
+		/// (<see cref="AbilityForkHitAction"/> quantises before <see cref="Redirect"/>), so what a
+		/// receiver decodes is bit-identical to what the deciding peers simulate — the same
+		/// invariant the deflect heading keeps.
+		/// </remarks>
+		private void BroadcastRedirectToObservers()
+		{
+			if (!isServer || Ability == null)
+			{
+				return;
+			}
+
+			NetworkObject casterNob = Caster?.NetworkObject;
+			if (casterNob == null || casterNob.NetworkManager == null || !casterNob.IsSpawned)
+			{
+				return;
+			}
+
+			casterNob.NetworkManager.ServerManager.Broadcast(casterNob, new AbilityObjectRedirectBroadcast
+			{
+				CasterObjectID = casterNob.ObjectId,
+				AbilityID = Ability.ID,
+				ContainerID = ContainerID,
+				ObjectID = ID,
+				PackedHeading = AimDirectionCompression.Encode(SpawnRotation * Vector3.forward),
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Applies a redirect the server's hit chain resolved, on a peer that did not run it.
+		/// </summary>
+		/// <remarks>
+		/// Compared before re-anchoring, because <see cref="Redirect"/> restarts the trajectory
+		/// leg: a peer that already turned onto this exact heading (the owner's prediction, or an
+		/// observer that resolved the hit locally) must treat the message as confirmation, not as
+		/// a second turn that would reset its leg clock and jump the pose.
+		/// </remarks>
+		/// <param name="heading">The absolute post-chain heading, already decoded.</param>
+		internal void ApplyObservedRedirect(Vector3 heading)
+		{
+			if (destroyed || heading.sqrMagnitude < 1e-8f)
+			{
+				return;
+			}
+
+			Vector3 current = SpawnRotation * Vector3.forward;
+			if (Vector3.Dot(current.normalized, heading.normalized) > 0.99999f)
+			{
+				return;
+			}
+
+			Redirect(AimDirectionCompression.ToRotation(AimDirectionCompression.Quantize(heading)));
+		}
+
+		// ── Detached-phantom registry ──────────────────────────────────────────────
+		//
+		// Client-side only. A caster despawning from this client's view (an observer cull as much
+		// as a real despawn) detaches its in-flight objects as visual phantoms; if the caster is
+		// RE-observed, the spawn payload rematerialises the same objects as fresh, authoritative
+		// copies. The registry lets that rematerialisation reclaim the matching phantoms first, so
+		// the observer never renders two copies of one projectile — the phantom being unreachable
+		// by every later hit/destroy broadcast (its container mapping died with the detach).
+
+		/// <summary>Detached phantoms by (ability id, container id), for reclamation on re-observation.</summary>
+		private static readonly Dictionary<(long abilityId, int containerId), List<AbilityObject>> detachedByContainer =
+			new Dictionary<(long, int), List<AbilityObject>>();
+
+		/// <summary>Scratch list so reclamation never iterates the live registry list it is emptying.</summary>
+		private static readonly List<AbilityObject> reclaimBuffer = new List<AbilityObject>();
+
+		/// <summary>True while this object is filed in <see cref="detachedByContainer"/>.</summary>
+		private bool registeredDetached;
+
+		/// <summary>Registry key halves, valid while <see cref="registeredDetached"/>.</summary>
+		private long detachedAbilityId;
+		private int detachedContainerId;
+
+		/// <summary>
+		/// Files this object as a detached phantom. Called by <c>Ability.DetachAllAbilityObjects</c>;
+		/// no-op on the server, which detaches for pooling and never rematerialises from a payload.
+		/// </summary>
+		internal void RegisterDetached(long abilityId, int containerId)
+		{
+			if (isServer || destroyed || registeredDetached)
+			{
+				return;
+			}
+			registeredDetached = true;
+			detachedAbilityId = abilityId;
+			detachedContainerId = containerId;
+			(long, int) key = (abilityId, containerId);
+			if (!detachedByContainer.TryGetValue(key, out List<AbilityObject> list))
+			{
+				list = new List<AbilityObject>(1);
+				detachedByContainer[key] = list;
+			}
+			list.Add(this);
+		}
+
+		/// <summary>Removes this object from the phantom registry, if present.</summary>
+		private void UnregisterDetached()
+		{
+			if (!registeredDetached)
+			{
+				return;
+			}
+			registeredDetached = false;
+			(long, int) key = (detachedAbilityId, detachedContainerId);
+			if (detachedByContainer.TryGetValue(key, out List<AbilityObject> list))
+			{
+				list.Remove(this);
+				if (list.Count == 0)
+				{
+					detachedByContainer.Remove(key);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Quietly destroys every detached phantom belonging to one cast, ahead of that cast being
+		/// rematerialised from a spawn payload.
+		/// </summary>
+		/// <remarks>
+		/// Quietly — these are EVICTIONS, not endings: the fresh copy about to spawn is the same
+		/// projectile, authoritatively placed, and playing the phantom's authored OnDestroy effects
+		/// here would detonate a projectile that is still in flight. The container id is a pure
+		/// function of (seed, spawn tick), so the caller derives it from the payload entry alone.
+		/// </remarks>
+		internal static void ReclaimDetached(long abilityId, int containerId)
+		{
+			if (!detachedByContainer.TryGetValue((abilityId, containerId), out List<AbilityObject> list) ||
+				list.Count == 0)
+			{
+				return;
+			}
+
+			reclaimBuffer.Clear();
+			reclaimBuffer.AddRange(list);
+			for (int i = 0; i < reclaimBuffer.Count; ++i)
+			{
+				AbilityObject phantom = reclaimBuffer[i];
+				if (phantom != null && !phantom.destroyed)
+				{
+					// Unregisters itself via DestroyAbilityObjectInternal.
+					phantom.DestroyAbilityObjectInternal(dispatchDestroyEvents: false);
+				}
+			}
+			reclaimBuffer.Clear();
+		}
+
+		/// <summary>Clears the phantom registry on domain reload, like the prefab collider cache.</summary>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void ClearDetachedRegistryOnDomainReload()
+		{
+			detachedByContainer.Clear();
+			reclaimBuffer.Clear();
+		}
+
+		/// <summary>
 		/// Re-anchors the closed-form trajectory so this object carries on from where it is now, on a
 		/// new heading.
 		/// </summary>
@@ -1089,7 +1304,9 @@ namespace FishMMO.Shared
 		/// <see cref="RemainingLifeTime"/> is deliberately untouched. A redirect changes where the
 		/// object goes, not how long it lives — and lifetime expiry is the one end-of-life every peer
 		/// reproduces without being told, so trimming it here would make that no longer true for a peer
-		/// that did not resolve the hit which caused the fork.
+		/// that did not resolve the hit which caused the fork. A peer that starts observing only AFTER
+		/// the turn cannot re-derive the earlier legs from the leg-scoped counters, which is why they
+		/// are preserved in <see cref="PreRedirectElapsedTicks"/> for the spawn payload.
 		/// </para>
 		/// <para>
 		/// The hit set is not cleared either. The object is still overlapping whatever it just hit, so
@@ -1110,6 +1327,9 @@ namespace FishMMO.Shared
 
 			SpawnPosition = shapeTransform.position;
 			SpawnRotation = rotation;
+			/* The finished leg's ticks move to the lifetime-only counter before the trajectory
+			 * clock resets — see PreRedirectElapsedTicks for why the spawn payload needs them. */
+			PreRedirectElapsedTicks += ElapsedTicks;
 			ElapsedTicks = 0;
 			/* The next sweep starts from the turn, not from where the previous leg last resolved.
 			 * Without this the segment swept on the following tick spans the corner and reports
@@ -1150,6 +1370,36 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Charges ticks against this object's lifetime WITHOUT advancing its trajectory clock.
+		/// </summary>
+		/// <remarks>
+		/// For a streamed object that was redirected before this client saw it: the in-flight
+		/// payload anchors <see cref="FastForward"/> to the current leg so the pose lands where
+		/// the server holds it, and this separately charges the legs flown before the turn — see
+		/// <see cref="PreRedirectElapsedTicks"/>. Expiry here destroys quietly for the same
+		/// reason FastForward's does: an object this far through its life may already be gone on
+		/// the server, and its destroy effects have played there.
+		/// </remarks>
+		/// <param name="ticks">Lifetime ticks consumed on legs this client is not reproducing.</param>
+		public void ConsumeLifetime(uint ticks)
+		{
+			if (ticks == 0u || destroyed)
+			{
+				return;
+			}
+
+			float totalLifeTime = TotalLifeTime;
+			if (totalLifeTime > 0.0f)
+			{
+				RemainingLifeTime -= ticks * tickDelta;
+				if (RemainingLifeTime <= 0.0f)
+				{
+					DestroyAbilityObjectInternal(dispatchDestroyEvents: false);
+				}
+			}
+		}
+
+		/// <summary>
 		/// Destroys this ability object, dispatching OnDestroy events and cleaning up references.
 		/// Uses the snapshot for OnDestroy events when the live Ability is unavailable.
 		/// </summary>
@@ -1169,6 +1419,9 @@ namespace FishMMO.Shared
 			// set the flag, bail out immediately.
 			if (destroyed) return;
 			destroyed = true;
+
+			// A destroyed phantom leaves the reclamation registry, whatever destroyed it.
+			UnregisterDetached();
 
 			// Capture tick before unsubscribing — timeManager.LocalTick is unavailable
 			// after the subscription is removed and the reference is nulled.
@@ -1190,7 +1443,12 @@ namespace FishMMO.Shared
 			var destroyEvents = dispatchDestroyEvents ? ActiveOnDestroyEvents : null;
 			if (destroyEvents != null && Caster != null)
 			{
-				EventData destroyEvent = new EventData(Caster);
+				/* Carries the dying OBJECT, so an object-scoped action wired to OnDestroy can
+				 * resolve it — a bare EventData made every one of them a silent no-op, which is
+				 * what stopped "projectile detonates where it expired" from being authorable at
+				 * all. The payload also sets Target to the object, so a selector on the trigger
+				 * centres on the detonation rather than on the caster. See AbilityDestroyEventData. */
+				AbilityDestroyEventData destroyEvent = new AbilityDestroyEventData(Caster, this);
 				// Thread the raw authoritative destroy tick. TickEventData marks this as
 				// non-replicate, so prediction-domain consumers must use an authoritative fallback.
 				// Only added when a valid TimeManager tick was captured above.
@@ -1380,6 +1638,7 @@ namespace FishMMO.Shared
 			abilityObject.SpawnTick = spawnTick;
 			abilityObject.SpawnSeed = seed;
 			abilityObject.ElapsedTicks = 0;
+			abilityObject.PreRedirectElapsedTicks = 0;
 			// Spawn already positioned the transform (SetAbilitySpawnPosition runs before Initialize).
 			Transform spawnTransform = abilityObject.Transform;
 			abilityObject.SpawnPosition = spawnTransform.position;
@@ -1593,19 +1852,37 @@ namespace FishMMO.Shared
 				return null;
 			}
 
-			// Self-target abilities don't spawn ability objects and instead apply immediately.
-			// Effects are server-authoritative, same as projectile hits — the result reaches
-			// the client via reconcile (resources/buffs) or broadcast. During client-side
-			// prediction this path is skipped to avoid double-application.
-			// Each OnHitEvent's inherited Trigger.TargetSelector determines the final targets:
-			//   - InitiatorTargetSelector for self-buffs/self-heals
-			//   - AreaTargetSelector for PBAoE centered on the caster
-			// NOTE: The caller (ResolveTargetAndSpawn) is responsible for advancing the
-			// deterministic seed after this method returns, keeping client/server RNG in sync.
+			/* Self-target abilities spawn no world object and apply immediately.
+			 *
+			 * Each OnHitEvent's inherited Trigger.TargetSelector determines the final targets:
+			 *   - InitiatorTargetSelector for self-buffs/self-heals
+			 *   - AreaTargetSelector for PBAoE centered on the caster
+			 *
+			 * Dispatched by the SERVER and by the CASTER'S OWN CLIENT, the same predicate a swept
+			 * projectile hit uses. This was server-only, and it was the largest remaining hole in
+			 * predicted feedback: a self-buff or self-heal is the most immediate action a player
+			 * takes, and nothing whatsoever happened on their screen until the reconcile arrived —
+			 * no bar movement, no buff icon, no number.
+			 *
+			 * The "double-application" this used to guard against is the one the attribute ledger
+			 * exists to prevent, and it is prevented: the owner applies the buff into its own
+			 * controller (SimulatesBuffEffects is true for it) and separately receives an
+			 * authoritative total that already contains the same contribution, and
+			 * ModifierSource keys the two together so the residual install cannot count it twice.
+			 * A predicted heal is overwritten rather than accumulated by the next resource push.
+			 * Neither is a replay hazard either: ResolveTargetAndSpawn skips this whole call on a
+			 * replayed tick, so the effect runs once per real tick per peer.
+			 *
+			 * NOTE: The caller (ResolveTargetAndSpawn) is responsible for advancing the
+			 * deterministic seed after this method returns, keeping client/server RNG in sync. The
+			 * generator below is seeded from that same reconciled seed, so both peers draw
+			 * identically. */
 			if (template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
 			{
 				bool isServer = caster.NetworkObject?.NetworkManager?.IsServerStarted ?? false;
-				if (isServer && ability.OnHitEvents != null && ability.OnHitEvents.Count > 0)
+				bool casterIsOwner = caster.NetworkObject != null && caster.NetworkObject.IsOwner;
+				if (ResolvesHitsOnThisPeer(isServer, casterIsOwner) &&
+					ability.OnHitEvents != null && ability.OnHitEvents.Count > 0)
 				{
 					DeterministicRNG rng = new DeterministicRNG(seed);
 					foreach (var hitEvent in ability.OnHitEvents.Values)
@@ -1650,9 +1927,11 @@ namespace FishMMO.Shared
 		/// there is something for an observer to reproduce.
 		/// </summary>
 		/// <remarks>
-		/// Pet and self-target abilities apply on the server and reach clients through their own
-		/// paths (pet broadcasts, reconcile/resource broadcasts), so an activation broadcast for
-		/// them would be received, decoded and discarded by every observer for nothing.
+		/// Pet and self-target abilities create nothing for an observer to reproduce, so an
+		/// activation broadcast for them would be received, decoded and discarded for nothing.
+		/// Their effects reach an observer through the ordinary state paths instead (buff and
+		/// resource broadcasts, pet spawns). Note this is about what an OBSERVER must be told; the
+		/// caster's own client does dispatch a self-target ability's effects locally, for feedback.
 		/// </remarks>
 		public static bool SpawnsWorldObject(AbilityTemplate template)
 		{

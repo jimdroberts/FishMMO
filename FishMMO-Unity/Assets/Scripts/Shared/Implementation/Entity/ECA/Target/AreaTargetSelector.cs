@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 		/// <returns>An enumerable of <see cref="GameObject"/>s within the area, or empty if context is null.</returns>
 		public override IEnumerable<GameObject> SelectTargets(EventData eventData)
 		{
-			if (!IsAuthoritativePeer(eventData))
+			if (!ResolvesTargetsLocally(eventData))
 			{
 				yield break;
 			}

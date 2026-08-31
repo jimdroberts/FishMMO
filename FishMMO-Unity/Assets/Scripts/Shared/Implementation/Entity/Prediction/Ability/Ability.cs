@@ -710,9 +710,9 @@ namespace FishMMO.Shared
 			SnapshotCharacter phantomCaster = null;
 			AbilityObjectSnapshot sharedSnapshot = null;
 
-			foreach (Dictionary<int, AbilityObject> container in Objects.Values)
+			foreach (KeyValuePair<int, Dictionary<int, AbilityObject>> containerEntry in Objects)
 			{
-				foreach (AbilityObject obj in container.Values)
+				foreach (AbilityObject obj in containerEntry.Value.Values)
 				{
 					if (obj != null)
 					{
@@ -731,6 +731,16 @@ namespace FishMMO.Shared
 						sharedSnapshot ??= new AbilityObjectSnapshot(this);
 						obj.Snapshot ??= sharedSnapshot;
 						obj.Ability = null;
+
+						/* Filed so a RE-observation can reclaim it. A caster culled from this
+						 * client's observer set despawns through here, detaching its projectiles
+						 * as visual phantoms — and when the caster comes back into range, the
+						 * spawn payload rematerialises the same in-flight objects as fresh copies.
+						 * Without the registry the observer rendered both: the phantom (which no
+						 * hit or destroy broadcast can resolve any more) flew to lifetime expiry
+						 * regardless of what the server's copy did. See
+						 * AbilityObject.ReclaimDetached. */
+						obj.RegisterDetached(ID, containerEntry.Key);
 					}
 				}
 			}
@@ -758,6 +768,31 @@ namespace FishMMO.Shared
 		/// </param>
 		public void DestroyAbilityObjectsAfterTick(uint tick, bool includeTick = false)
 		{
+			DestroyAbilityObjectsInternal(tick, includeTick, onlyTick: false);
+		}
+
+		/// <summary>
+		/// Destroys only the ability objects spawned exactly ON the given tick, leaving every
+		/// other tick's objects alone.
+		/// </summary>
+		/// <remarks>
+		/// For the NoSpawn correction when the seeds AGREE at the reconcile tick: the server ran
+		/// the activation and produced no object, so the object this client spawned at that tick is
+		/// unconfirmed — but agreeing seeds mean nothing else diverged, so an object the client
+		/// spawned on a LATER tick is exactly as confirmed as it was before this reconcile arrived.
+		/// The <c>&gt;=</c> sweep used here previously deleted those later, confirmed objects too,
+		/// and the replay cannot restore them (it skips spawns), so a self-buff cast one tick before
+		/// a projectile erased the projectile permanently.
+		/// </remarks>
+		/// <param name="tick">The reconcile tick whose spawns must be removed.</param>
+		public void DestroyAbilityObjectsAtTick(uint tick)
+		{
+			DestroyAbilityObjectsInternal(tick, includeTick: true, onlyTick: true);
+		}
+
+		/// <summary>Shared body of the two reconcile-rollback destroy scopes.</summary>
+		private void DestroyAbilityObjectsInternal(uint tick, bool includeTick, bool onlyTick)
+		{
 			if (Objects == null)
 			{
 				return;
@@ -771,9 +806,15 @@ namespace FishMMO.Shared
 
 				foreach (KeyValuePair<int, AbilityObject> objEntry in containerEntry.Value)
 				{
-					if (objEntry.Value != null &&
-						(IsSpawnTickAfter(objEntry.Value.SpawnTick, tick) ||
-						 (includeTick && objEntry.Value.SpawnTick.Value == tick)))
+					if (objEntry.Value == null)
+					{
+						continue;
+					}
+					bool matches = onlyTick
+						? objEntry.Value.SpawnTick.Value == tick
+						: (IsSpawnTickAfter(objEntry.Value.SpawnTick, tick) ||
+						   (includeTick && objEntry.Value.SpawnTick.Value == tick));
+					if (matches)
 					{
 						// Null the Ability back-reference so DestroyAbilityObjectInternal
 						// skips RemoveAbilityObject (we handle dict removal below).

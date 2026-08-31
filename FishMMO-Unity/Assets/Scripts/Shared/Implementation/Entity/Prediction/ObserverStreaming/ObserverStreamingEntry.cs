@@ -149,10 +149,25 @@ namespace FishMMO.Shared
 			CurrentTargetObjectId = 0;
 			if (targetController != null)
 			{
-				Transform target = targetController.Current.Target;
-				if (target != null && target.TryGetComponent(out NetworkObject targetObject))
+				/* The client-reported frame first — it is the only thing that knows what the
+				 * player is LOOKING at. The server's own Current is cast-scoped (written on
+				 * ability acquisition, cleared by a miss), so before this the target pin did not
+				 * exist for an opponent the player had selected but not yet landed a cast on, and
+				 * the budget could evict them at the exact moment of engagement. The fallback
+				 * keeps NPCs (no reporting client) pinning their acquisition targets as before.
+				 * The report is server-verified on receipt and the pin is range-bounded at use,
+				 * so a forged id buys nothing — see TargetSelectionBroadcast. */
+				if (targetController.HasClientSelectedTarget)
 				{
-					CurrentTargetObjectId = targetObject.ObjectId;
+					CurrentTargetObjectId = targetController.ClientSelectedTargetObjectId;
+				}
+				else
+				{
+					Transform target = targetController.Current.Target;
+					if (target != null && target.TryGetComponent(out NetworkObject targetObject))
+					{
+						CurrentTargetObjectId = targetObject.ObjectId;
+					}
 				}
 			}
 

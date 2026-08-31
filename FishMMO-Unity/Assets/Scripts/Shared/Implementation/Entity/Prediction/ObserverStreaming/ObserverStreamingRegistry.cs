@@ -331,6 +331,20 @@ namespace FishMMO.Shared
 				}
 
 				float range = ObserverStreamingPolicy.ScaledRange(entry.BaseRange, Mathf.Max(0, neighbours));
+
+				/* A fight holds the line the pins promise. The engaged/target pins only answer the
+				 * BUDGET condition; this per-object range feeds the DISTANCE condition, which the
+				 * pins never see — so an unfloored density shrink could cut an in-combat character's
+				 * range to a fraction of ability reach and despawn them from their own attacker's
+				 * client mid-fight, the exact eviction the pin comment below claims is closed.
+				 * Floored at the engagement ceiling (never above the authored base): crowds still
+				 * shrink spectators, but a character in combat stays resolvable to everyone inside
+				 * the range abilities can actually reach. */
+				if (entry.InCombat)
+				{
+					range = Mathf.Max(range, Mathf.Min(entry.BaseRange, ObserverStreamingPolicy.EngagementRangeCeiling));
+				}
+
 				if (entry.ApplyRange(range))
 				{
 					LastPassRangeChanges++;
@@ -384,10 +398,19 @@ namespace FishMMO.Shared
 					 * Ranking only what the viewer already observes would deadlock the visibility
 					 * budget: a character that is not yet an observer would never be ranked, the
 					 * budget condition would never admit it, and it could never become an observer.
-					 * The viewer's applied range is the same one the distance condition is using,
-					 * so this ranks exactly the set that condition can admit. */
+					 *
+					 * Measured against the OBSERVED character's applied range, because that is the
+					 * range its DistanceCondition admits this viewer by — density scaling is
+					 * per-object, so the viewer's own range can be much smaller. Filtering by the
+					 * viewer's range left every (in observed's range, outside viewer's range) pair
+					 * unranked, and the budget condition admits ranked-viewer/unranked-object pairs
+					 * unconditionally on the premise that "unranked" means "out of range" — so those
+					 * characters bypassed both the visibility budget and the full-rate cap. */
 					float distance = Vector3.Distance(viewer.Position, observed.Position);
-					if (distance > viewerRange)
+					float admittingRange = observed.HasDistanceCondition && observed.AppliedRange > 0f
+						? observed.AppliedRange
+						: viewerRange;
+					if (distance > admittingRange)
 					{
 						continue;
 					}
@@ -425,8 +448,14 @@ namespace FishMMO.Shared
 						(observed.IsFoughtBy(viewer.Character.ID) ||
 						 viewer.IsFoughtBy(observed.Character.ID));
 
+					/* The target pin is bounded by the engagement ceiling like the other two.
+					 * Previously implicit (hover targeting reaches 50 m at most), it has to be
+					 * explicit now that the id can be client-reported: a forged or stale id naming
+					 * something across the map must not hold a budget slot. */
 					bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
-						(viewerTargetId != 0 && observed.NetworkObject.ObjectId == viewerTargetId) ||
+						(viewerTargetId != 0 &&
+						 observed.NetworkObject.ObjectId == viewerTargetId &&
+						 distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
 						engagedWith;
 					if (pinned)
 					{

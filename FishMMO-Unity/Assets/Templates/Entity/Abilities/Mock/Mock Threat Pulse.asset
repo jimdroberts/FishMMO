@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Mock Threat Pulse
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Mock: adds threat to every hostile NPC within 15m.'
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 6
+  Price: 0
+  ActivationConditions:
+  - rid: 1701798431167611033
+  AbilityObjectPrefab: {fileID: 0}
+  AbilitySpawnTarget: 0
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 1
+  Type: 1
+  IntentOverride: 0
+  OnTickEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: b3cd782e7ec43b4b7b5d6955a61954bd, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 1701798431167611033
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
+        RequiredAmount: 5

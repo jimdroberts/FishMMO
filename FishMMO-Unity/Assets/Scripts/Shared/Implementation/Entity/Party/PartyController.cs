@@ -70,6 +70,35 @@ namespace FishMMO.Shared
 		/// </summary>
 		public PartyRank Rank { get; set; }
 
+		/// <summary>
+		/// Drops the character's party membership and every UI subscriber before the object is
+		/// pooled.
+		/// </summary>
+		/// <remarks>
+		/// Unlike the guild's, neither of these fields is a SyncVar, so nothing else returns them
+		/// to their defaults. A recycled object that kept <see cref="ID"/> reports the previous
+		/// occupant's party to every caller that asks whether this character is grouped —
+		/// friendly-fire and loot-eligibility checks among them — until a party broadcast happens
+		/// to arrive and overwrite it, which for a character that never joins a party is never.
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			ID = 0;
+			Rank = PartyRank.None;
+
+			/* Subscribers are per-spawn; see GuildController.ResetState for the same reasoning. */
+			OnPartyCreated = null;
+			OnReceivePartyInvite = null;
+			OnAddPartyMember = null;
+			OnUpdatePartyVitals = null;
+			OnValidatePartyMembers = null;
+			OnRemovePartyMember = null;
+			OnLeaveParty = null;
+		}
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Called when the character starts. Registers broadcast listeners for party events if owner.

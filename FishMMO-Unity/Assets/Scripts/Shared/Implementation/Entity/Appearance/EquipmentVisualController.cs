@@ -96,19 +96,7 @@ namespace FishMMO.Shared
 		public override void OnStopCharacter()
 		{
 #if !UNITY_SERVER
-			if (equipmentController != null)
-			{
-				equipmentController.OnItemEquipped -= OnItemEquipped;
-				equipmentController.OnItemUnequipped -= OnItemUnequipped;
-			}
-			if (slotRenderers != null)
-			{
-				for (int i = 0; i < slotRenderers.Length; i++)
-				{
-					if (slotRenderers[i] != null)
-						ReleaseSlotRenderer(slotRenderers[i]);
-				}
-			}
+			TearDownVisuals();
 #endif
 			base.OnStopCharacter();
 		}
@@ -117,15 +105,41 @@ namespace FishMMO.Shared
 		public override void OnDestroying()
 		{
 #if !UNITY_SERVER
-			if (equipmentRoot != null)
-			{
-				Destroy(equipmentRoot.gameObject);
-				equipmentRoot = null;
-			}
-			if (skeletonRoot != null)
-				SkeletonBinder.ClearBoneCache(skeletonRoot);
+			TearDownVisuals();
 #endif
 			base.OnDestroying();
+		}
+
+		/// <summary>
+		/// Releases every equipment visual before the object returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Neither existing teardown covers a pooled despawn.</b> <see cref="OnDestroying"/> is
+		/// the destroy path, which a pooled object never takes, and
+		/// <see cref="OnStopCharacter"/> is dispatched by <c>PlayerCharacter.OnStopClient</c>
+		/// only when <c>IsOwner</c> — so an object recycled for a different character kept the
+		/// previous one's loaded prefabs. Each of those holds an Addressables handle and, for
+		/// weapons, an instantiated GameObject parented under a mesh root that is about to be
+		/// destroyed: a leak that grows by one handle per equipped slot per reuse and never
+		/// returns.
+		/// </para>
+		/// <para>
+		/// The generation counter is bumped as part of releasing. An equip whose Addressables
+		/// load is still in flight completes into a callback that tests
+		/// <c>EquipGeneration</c> to reject stale results, and without a bump here that test
+		/// passes — so a load started by the previous occupant would attach its mesh to the next
+		/// one, arriving out of nowhere some frames after the new character spawned.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+#if !UNITY_SERVER
+			TearDownVisuals();
+#endif
 		}
 
 		// ── IModelReadyHandler (must exist unconditionally) ──
@@ -336,12 +350,63 @@ namespace FishMMO.Shared
 		private void UnequipItemVisual(ItemSlot slot)
 		{
 			int i = (int)slot;
-			if (i < 0 || i >= slotRenderers.Length || slotRenderers[i] == null) return;
+			// slotRenderers is null before the first OnStartCharacter and again after
+			// TearDownVisuals, and unlike EquipItemVisual there is no modelReady test above to
+			// have caught it.
+			if (slotRenderers == null || i < 0 || i >= slotRenderers.Length || slotRenderers[i] == null) return;
 			SlotRenderer r = slotRenderers[i];
 			bodyVisibilityManager?.ShowRegionsForSlot(slot);
 			if (r.SkinnedRenderer != null && appearanceManager != null)
 				appearanceManager.UnregisterEquipmentRenderer(r.SkinnedRenderer);
 			ReleaseSlotRenderer(r);
+		}
+
+		/// <summary>
+		/// Releases every slot renderer, drops the equipment root and the discovered skeleton,
+		/// and detaches from the equipment controller. Shared by the pool, stop and destroy
+		/// paths.
+		/// </summary>
+		private void TearDownVisuals()
+		{
+			if (equipmentController != null)
+			{
+				equipmentController.OnItemEquipped -= OnItemEquipped;
+				equipmentController.OnItemUnequipped -= OnItemUnequipped;
+			}
+			if (slotRenderers != null)
+			{
+				for (int i = 0; i < slotRenderers.Length; i++)
+				{
+					SlotRenderer renderer = slotRenderers[i];
+					if (renderer == null)
+					{
+						continue;
+					}
+					// Invalidate in-flight loads before releasing what they would attach to.
+					++renderer.EquipGeneration;
+					ReleaseSlotRenderer(renderer);
+				}
+				slotRenderers = null;
+			}
+			if (skeletonRoot != null)
+			{
+				SkeletonBinder.ClearBoneCache(skeletonRoot);
+				skeletonRoot = null;
+			}
+			if (equipmentRoot != null)
+			{
+				Destroy(equipmentRoot.gameObject);
+				equipmentRoot = null;
+			}
+
+			/* Rediscovered by OnStartCharacter on the next spawn. Held references to sibling
+			 * behaviours are harmless in themselves, but modelReady must not stay true across a
+			 * despawn: RefreshAllEquipment reads it as "the skeleton is live". */
+			equipmentController = null;
+			bodyVisibilityManager = null;
+			appearanceManager = null;
+			modelReady = false;
+			slotCount = 0;
 		}
 
 		private void ReleaseSlotRenderer(SlotRenderer renderer)

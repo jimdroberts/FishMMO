@@ -89,7 +89,15 @@ namespace FishMMO.Shared
 				int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 				float radius = RadiusValue.GetValue(initiator, eventData);
 
-				if (!abilityObject.IsServer)
+				/* The server, or the client that owns the caster — the same predicate the swept
+				 * projectile hit uses, and for the same reason. This was server-only, which meant a
+				 * point-blank blast moved nothing on the caster's screen until the server's report
+				 * came back. The query below is lag-compensated: the server rewinds to the caster's
+				 * view, the client queries its live world (which is that view), so both resolve the
+				 * same bodies and cap the same ordered list. Everything authoritative downstream —
+				 * kill, combat report, loot rights, threat — self-gates a level lower. See
+				 * TargetSelector.ResolvesTargetsLocally. */
+				if (!abilityObject.ResolvesHitsLocally)
 				{
 					return;
 				}

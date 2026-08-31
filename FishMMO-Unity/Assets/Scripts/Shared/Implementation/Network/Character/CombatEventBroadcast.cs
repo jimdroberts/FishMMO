@@ -13,6 +13,22 @@ namespace FishMMO.Shared
 		Damage = 0,
 		/// <summary>Health was restored.</summary>
 		Heal = 1,
+		/// <summary>
+		/// Health was removed by a PERIODIC effect — a damage-over-time tick, not a direct hit.
+		/// <see cref="CombatEventBroadcast.DamageTemplateID"/> still names the type.
+		/// </summary>
+		/// <remarks>
+		/// A separate kind, not a flag, because the kind is the coalescer's merge key and the
+		/// prediction pairing's match key. The caster's client predicts DIRECT hits and never
+		/// predicts DoT ticks (they run server-side on the victim's buff controller) — so a DoT
+		/// report of the same damage type used to consume the pending prediction of a projectile
+		/// and leave the DoT undrawn while the projectile drew twice. Distinct kinds keep the two
+		/// streams apart end to end: they coalesce separately, and <c>PredictedCombatEvents</c>
+		/// only pairs against <see cref="Damage"/>/<see cref="Heal"/>.
+		/// </remarks>
+		PeriodicDamage = 2,
+		/// <summary>Health was restored by a periodic effect — a heal-over-time tick. See <see cref="PeriodicDamage"/>.</summary>
+		PeriodicHeal = 3,
 	}
 
 	/// <summary>

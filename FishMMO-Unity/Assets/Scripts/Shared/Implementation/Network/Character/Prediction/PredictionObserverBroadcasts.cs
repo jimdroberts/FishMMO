@@ -291,6 +291,48 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Tells observers that an ability object's OnHit chain turned it onto a new heading — the
+	/// fork case, where the hit was accepted and its events redirected the survivor.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The deflect redirect rides <see cref="AbilityObjectHitBroadcast"/> because a deflection IS
+	/// the whole outcome; a fork's redirect happens INSIDE the OnHit events, after that message
+	/// has already gone (it is deliberately sent before the events so a hit is reported even when
+	/// an authored action destroys the object handling it). So the post-chain heading travels as
+	/// its own message, on the same reliable ordered channel, and therefore always lands after
+	/// the hit it belongs to.
+	/// </para>
+	/// <para>
+	/// <b>An ABSOLUTE heading, for the same reason the deflect's is.</b> A peer that ran the fork
+	/// itself — the owner predicting with its reconciled RNG, or an observer that resolved the hit
+	/// locally — already holds this exact heading and applies the message as a no-op (the receiver
+	/// compares before re-anchoring, because <c>Redirect</c> resets the trajectory leg). The peer
+	/// this exists for is the one that could NOT resolve the victim: it dropped the hit, skipped
+	/// the fork's RNG draw, and without this flew the old line until the destroy caught up —
+	/// re-deriving the heading there was impossible by construction, its generator having missed
+	/// the draw.
+	/// </para>
+	/// </remarks>
+	public struct AbilityObjectRedirectBroadcast : IBroadcast
+	{
+		/// <summary>NetworkObject id of the casting character.</summary>
+		public int CasterObjectID;
+
+		/// <summary>Ability the object belongs to.</summary>
+		public long AbilityID;
+
+		/// <summary>Deterministic container id the object lives in (identical on every peer).</summary>
+		public int ContainerID;
+
+		/// <summary>Object id within the container (identical on every peer).</summary>
+		public int ObjectID;
+
+		/// <summary>The heading the object left on, packed by <see cref="AimDirectionCompression"/>.</summary>
+		public uint PackedHeading;
+	}
+
+	/// <summary>
 	/// Tells observers that a character learned an ability, so they can draw its casts.
 	/// </summary>
 	/// <remarks>

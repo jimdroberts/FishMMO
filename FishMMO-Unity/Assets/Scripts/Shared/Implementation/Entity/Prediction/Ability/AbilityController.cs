@@ -759,6 +759,18 @@ namespace FishMMO.Shared
 				if (base.IsServerStarted && tried && !started)
 				{
 					wasDenied = true;
+
+					/* A denied CONSUMABLE also corrects the owner's inventory. The owner predicted
+					 * the whole use — including the stack decrement or slot clear in
+					 * FinishConsumable — and a denial produces no other correcting message:
+					 * inventory is not reconciled state, the replay skips the mutation, and
+					 * OnConsumableUsed fires only on a server-side SUCCESS. Without this the
+					 * owner's stack showed one fewer charge than the server holds until some
+					 * unrelated system rewrote the slot. */
+					if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
+					{
+						SendConsumableDenialCorrection(activationData.QueuedAbilityID);
+					}
 				}
 			}
 
@@ -776,6 +788,52 @@ namespace FishMMO.Shared
 					ProcessActiveAbility(activationData, state, deltaTime);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Sends the owner the authoritative state of the inventory slot a denied consumable
+		/// prediction mutated. Server only; see the denial site in <c>ReplicateInternal</c>.
+		/// </summary>
+		/// <remarks>
+		/// The slot is re-derived with the same deterministic search the prediction used
+		/// (<see cref="FindConsumableItem"/> iterates slots in order on every peer), so when the
+		/// two inventories agreed at prediction time — the normal case, since this denial is what
+		/// would have made them disagree — the correction names exactly the item the owner
+		/// touched. When the server holds no such item at all, the owner is showing an item the
+		/// server does not have; there is no slot to name, and the next authoritative inventory
+		/// write settles it. Reliable: this is a correction, not a cosmetic.
+		/// </remarks>
+		/// <param name="queuedAbilityID">The denied activation's template id, as replicated.</param>
+		private void SendConsumableDenialCorrection(long queuedAbilityID)
+		{
+			if (!base.IsServerStarted ||
+				base.Owner == null || !base.Owner.IsValid ||
+				base.NetworkManager == null ||
+				queuedAbilityID < int.MinValue || queuedAbilityID > int.MaxValue)
+			{
+				return;
+			}
+
+			ConsumableTemplate consumable = BaseItemTemplate.Get<ConsumableTemplate>((int)queuedAbilityID);
+			if (consumable == null)
+			{
+				return;
+			}
+
+			Item item = FindConsumableItem(consumable.ID);
+			if (item == null || item.Template == null)
+			{
+				return;
+			}
+
+			base.NetworkManager.ServerManager.Broadcast(base.Owner, new InventorySetItemBroadcast()
+			{
+				InstanceID = item.ID,
+				TemplateID = item.Template.ID,
+				Slot = item.Slot,
+				Seed = item.IsGenerated ? item.Generator.Seed : 0,
+				StackSize = item.IsStackable ? item.Stackable.Amount : 0,
+			}, true, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -955,10 +1013,26 @@ namespace FishMMO.Shared
 			{
 				OnPredictionMismatch?.Invoke(reconcileTick);
 
+				/* NoSpawn with AGREEING seeds corrects exactly one tick. The flag says the server ran
+				 * the activation at T and produced no object, so the client's spawn AT T is
+				 * unconfirmed — but matching seeds say nothing else diverged, so every spawn on a
+				 * later tick is still confirmed and must survive. The >= sweep here destroyed those
+				 * later objects too, which the replay cannot restore (it skips spawns): a
+				 * RequiresTarget miss at T erased a confirmed projectile from T+1 permanently. Only a
+				 * genuine seed mismatch (or denial, which implies one at T) justifies the wider sweep. */
+				bool onlyAtTick = destroyAtTick && havePredicted && predictedSeed == rd.Seed;
+
 				if (predictedAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(predictedAbilityID, out Ability mismatchedAbility))
 				{
 					// Only destroy objects from the ability whose activation caused the seed divergence
-					mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick, destroyAtTick);
+					if (onlyAtTick)
+					{
+						mismatchedAbility.DestroyAbilityObjectsAtTick(reconcileTick);
+					}
+					else
+					{
+						mismatchedAbility.DestroyAbilityObjectsAfterTick(reconcileTick, destroyAtTick);
+					}
 				}
 				else
 				{
@@ -966,7 +1040,14 @@ namespace FishMMO.Shared
 					// this is the common path for them, not a sign of deeper desync.
 					foreach (Ability ability in KnownAbilities.Values)
 					{
-						ability.DestroyAbilityObjectsAfterTick(reconcileTick, destroyAtTick);
+						if (onlyAtTick)
+						{
+							ability.DestroyAbilityObjectsAtTick(reconcileTick);
+						}
+						else
+						{
+							ability.DestroyAbilityObjectsAfterTick(reconcileTick, destroyAtTick);
+						}
 					}
 				}
 			}
@@ -989,6 +1070,14 @@ namespace FishMMO.Shared
 			if (!denied && havePredicted && predictedAbilityID != NO_ABILITY && rd.AbilityID == NO_ABILITY)
 			{
 				OnCancel?.Invoke();
+
+				/* And the persistent animation state with it. Cancel() clears the Block bool, but a
+				 * SERVER-side interrupt runs Cancel on the server only — where SetBlocking compiles
+				 * out — and the owner learns of it exactly here, through the reconcile. Without this
+				 * the owner's animator held the blocking pose (and the client-authoritative
+				 * NetworkAnimator relayed it to every observer) until the player's next locally
+				 * cancelled ability. Trigger-based animations are transient and need no clear. */
+				cachedAnimationController?.SetBlocking(false);
 			}
 		}
 

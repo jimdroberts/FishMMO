@@ -59,12 +59,14 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				defenderDamageController.Heal(initiator, amount);
+				int applied = defenderDamageController.Heal(initiator, amount);
 
-				// The healer's own number, drawn now. See MayDrawPredictedNumber for the three guards.
-				if (MayDrawPredictedNumber(initiator, eventData))
+				/* The healer's own number, drawn now. See MayDrawPredictedNumber for the three guards.
+				 * Drawn from APPLIED: a heal that had no effect (dead or already-full target) sends no
+				 * combat report, so a label drawn from the raw amount could only ever grey out. */
+				if (applied > 0 && MayDrawPredictedNumber(initiator, eventData))
 				{
-					PredictedCombatEvents.Predict(initiator, target, amount, PredictedCombatEvents.Kind.Heal,
+					PredictedCombatEvents.Predict(initiator, target, applied, PredictedCombatEvents.Kind.Heal,
 						null, UnityEngine.Time.unscaledTime);
 				}
 			}

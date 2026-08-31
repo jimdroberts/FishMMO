@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Mock Hitscan Beam
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Mock: channelled beam. Re-spawns per tick and pierces everything
+    on the line. Requires AbilityController.ChanneledTemplate to point at ''Mock
+    Channel Marker Event''.'
+  ActivationTime: 2
+  LifeTime: 0.2
+  Speed: 0
+  Cooldown: 3
+  Price: 0
+  ActivationConditions: []
+  AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 81dd6c8841df66e44ad306e2ef34aaee,
+    type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 1
+  Type: 2
+  IntentOverride: 0
+  OnTickEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: 5899517cb0158aef98141abd0d8e2536, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents:
+  - {fileID: 11400000, guid: 5f19ad0614781477a8f7a053b7ece904, type: 2}
+  - {fileID: 11400000, guid: c03b3addd5a9a75bd9d5533cffe9eb55, type: 2}
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds: []

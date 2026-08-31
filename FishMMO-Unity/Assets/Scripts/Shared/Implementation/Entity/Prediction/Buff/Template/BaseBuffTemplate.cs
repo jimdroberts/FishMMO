@@ -462,11 +462,11 @@ namespace FishMMO.Shared
 				{
 					if (amount < 0)
 					{
-						damageController.Damage(caster, -amount, damageAttribute, suppressTriggers);
+						damageController.Damage(caster, -amount, damageAttribute, suppressTriggers, periodic: true);
 					}
 					else
 					{
-						damageController.Heal(caster, amount, suppressTriggers);
+						damageController.Heal(caster, amount, suppressTriggers, periodic: true);
 					}
 					continue;
 				}

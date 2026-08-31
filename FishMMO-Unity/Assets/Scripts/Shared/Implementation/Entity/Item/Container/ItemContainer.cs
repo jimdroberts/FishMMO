@@ -43,6 +43,48 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnDestroying()
 		{
+			DropSubscribersAndLocks();
+		}
+
+		/// <summary>
+		/// Drops the per-spawn container state before the object returns to the pool.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The locks are the reason this exists.</b> A slot is locked for the duration of an
+		/// operation — a consumable activation, an equip round trip — and unlocked when that
+		/// operation resolves. A despawn mid-flight resolves nothing, so the lock was still set
+		/// when the object went into the pool, and <c>OnDestroying</c> was the only thing that
+		/// cleared it: a path a pooled object never takes. The next character to occupy the slot
+		/// inherited a permanently locked inventory slot, which
+		/// <see cref="IsSlotLocked(int)"/> makes unswappable, unremovable and untransferable for
+		/// the rest of that character's session, with nothing in the UI to explain it.
+		/// </para>
+		/// <para>
+		/// The subscriber lists go with them. Both events are held by client panels bound to the
+		/// character that is being torn down; leaving them attached to a recycled container would
+		/// drive the previous occupant's UI from the next occupant's slot writes.
+		/// </para>
+		/// <para>
+		/// Items are deliberately NOT cleared here. Each concrete container clears its own in its
+		/// <c>ResetState</c>, and <c>EquipmentController</c> has to run work either side of that
+		/// call — see its override for why the order there cannot be inverted.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			DropSubscribersAndLocks();
+		}
+
+		/// <summary>
+		/// Shared teardown for <see cref="ResetState(bool)"/> (pool) and
+		/// <see cref="OnDestroying"/> (destroy).
+		/// </summary>
+		private void DropSubscribersAndLocks()
+		{
 			OnSlotUpdated = null;
 			OnSlotLockChanged = null;
 			lockedSlots?.Clear();
