@@ -27,40 +27,77 @@ namespace FishMMO.Shared
 
 #if !UNITY_SERVER
 		/// <summary>
+		/// Reproduces the ability objects the spawn payload said were already in the air.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Here rather than in <see cref="OnStartCharacter"/>, because that hook is OWNER ONLY.</b>
+		/// <c>PlayerCharacter.TryInitializeLocalClient</c> returns immediately unless
+		/// <c>base.IsOwner</c>, and it is the only thing in the project that fans
+		/// <c>OnStartCharacter</c> out over a character's behaviours — so the drain never ran on an
+		/// observer at all. The payload block exists precisely for the observer case ("anyone who
+		/// came into range a moment later saw an empty sky while the server had a fireball crossing
+		/// it"), and the server writes up to
+		/// <see cref="MAX_PAYLOAD_IN_FLIGHT_OBJECTS"/> entries to every receiver, so the bytes were
+		/// being spent and then dropped on the floor by everyone except the caster itself.
+		/// </para>
+		/// <para>
+		/// <c>OnStartClient</c> is the hook that actually means "a client finished spawning this
+		/// character": FishNet reads every behaviour's payload during <c>InitializeEarly</c> and
+		/// only then runs the start callbacks, so <see cref="KnownAbilities"/> — which
+		/// <see cref="MaterializePendingInFlightObjects"/> resolves each entry through, and which
+		/// every receiver gets, not just the owner — is populated by the time this runs. It fires
+		/// once per client per spawn, for the owner and observers alike, which is exactly the
+		/// audience the payload was written for.
+		/// </para>
+		/// <para>
+		/// The drain clears the pending list, so a later <see cref="OnStartCharacter"/> on the owner
+		/// finds nothing left to do whichever order the two callbacks happen to run in.
+		/// </para>
+		/// </remarks>
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+
+			/* Everyone who read a spawn payload gets the objects that were already in the air,
+			 * owner included. A fresh connection has predicted nothing, so it needs the catch-up
+			 * exactly as much as an observer does. */
+			MaterializePendingInFlightObjects();
+		}
+
+		/// <summary>
 		/// Called when the character starts. On the owning client, registers network broadcast
 		/// handlers for learning abilities and events, then fires <see cref="OnReset"/> and
 		/// <see cref="OnAddAbility"/> for all known abilities.
 		/// </summary>
+		/// <remarks>
+		/// <b>Owner only.</b> <c>PlayerCharacter.TryInitializeLocalClient</c> is the sole caller and
+		/// it returns unless <c>base.IsOwner</c>, so nothing an observer needs may live here — see
+		/// <see cref="OnStartClient"/>, which is where the in-flight drain moved for that reason.
+		/// </remarks>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 
-			/* Before the ownership split: everyone who read a spawn payload gets the objects that
-			 * were already in the air, owner included. A fresh connection has predicted nothing,
-			 * so it needs the catch-up exactly as much as an observer does. */
-			MaterializePendingInFlightObjects();
+			/* No ownership branch, because there is no other branch to be in. The `!IsOwner` arm
+			 * this used to carry — which disabled the component — could never run: the only caller
+			 * refuses a non-owner before it gets here, so the test read as a guard while guarding
+			 * nothing. Reading it as one is what put the in-flight drain above on a callback no
+			 * observer ever reaches; it is gone so the next reader is not told the same thing. */
+			ClientManager.RegisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
+			ClientManager.RegisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<KnownAbilityEventAddBroadcast>(OnClientKnownAbilityEventAddBroadcastReceived);
+			ClientManager.RegisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
+			ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 
-			if (!base.IsOwner)
+			// invoke client reset event
+			OnReset?.Invoke();
+
+			foreach (Ability ability in KnownAbilities.Values)
 			{
-				this.enabled = false;
-			}
-			else
-			{
-				ClientManager.RegisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
-				ClientManager.RegisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
-				ClientManager.RegisterBroadcast<KnownAbilityEventAddBroadcast>(OnClientKnownAbilityEventAddBroadcastReceived);
-				ClientManager.RegisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
-				ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
-				ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
-
-				// invoke client reset event
-				OnReset?.Invoke();
-
-				foreach (Ability ability in KnownAbilities.Values)
-				{
-					// update our client with abilities
-					OnAddAbility?.Invoke(ability);
-				}
+				// update our client with abilities
+				OnAddAbility?.Invoke(ability);
 			}
 		}
 

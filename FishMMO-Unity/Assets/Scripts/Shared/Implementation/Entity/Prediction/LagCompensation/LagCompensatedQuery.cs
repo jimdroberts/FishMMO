@@ -60,13 +60,27 @@ namespace FishMMO.Shared
 			/// </summary>
 			public readonly Vector3 Normal;
 
-			public CompensatedHit(Collider collider, ICharacter character, float distance, Vector3 point, Vector3 normal)
+			/// <summary>
+			/// <see cref="Point"/> in the hit BODY's own space, captured inside the rewind scope.
+			/// </summary>
+			/// <remarks>
+			/// The same field, for the same reason, as <see cref="AbilitySweepHit.LocalPoint"/>: a
+			/// world point measured inside a rewind describes a world that is gone by the time the
+			/// caller uses it, so anything compared against a live transform is comparing two
+			/// different worlds. A local point is stable across the two because the body carried its
+			/// own frame with it — which is what lets <see cref="ShieldVolume"/> be tested against a
+			/// hit after the scope has closed.
+			/// </remarks>
+			public readonly Vector3 LocalPoint;
+
+			public CompensatedHit(Collider collider, ICharacter character, float distance, Vector3 point, Vector3 normal, Vector3 localPoint)
 			{
 				Collider = collider;
 				Character = character;
 				Distance = distance;
 				Point = point;
 				Normal = normal;
+				LocalPoint = localPoint;
 			}
 		}
 
@@ -264,7 +278,8 @@ namespace FishMMO.Shared
 				Vector3 point = hit.bounds.ClosestPoint(center);
 				Vector3 away = point - center;
 				Vector3 normal = away.sqrMagnitude > 1e-8f ? away.normalized : Vector3.up;
-				results.Add(new CompensatedHit(hit, character, ranks[i].Distance, point, normal));
+				results.Add(new CompensatedHit(hit, character, ranks[i].Distance, point, normal,
+					ToBodyLocal(key, point)));
 			}
 
 			ranks.Clear();
@@ -420,10 +435,25 @@ namespace FishMMO.Shared
 				}
 
 				keptKeys.Add(key);
-				results.Add(new CompensatedHit(hit.collider, character, hit.distance, hit.point, hit.normal));
+				results.Add(new CompensatedHit(hit.collider, character, hit.distance, hit.point, hit.normal,
+					ToBodyLocal(key, hit.point)));
 			}
 
 			keptKeys.Clear();
+		}
+
+		/// <summary>
+		/// Expresses a world impact point in the hit body's own space, while the rewound world is
+		/// still standing.
+		/// </summary>
+		/// <remarks>
+		/// Takes the key the caller already resolved rather than resolving again: it is the same body
+		/// <see cref="TargetOrdering.ResolveHitKey"/> deduped on, so the shield volume and the dedupe
+		/// cannot disagree about which body a hit belongs to.
+		/// </remarks>
+		private static Vector3 ToBodyLocal(GameObject bodyKey, Vector3 worldPoint)
+		{
+			return bodyKey != null ? bodyKey.transform.InverseTransformPoint(worldPoint) : Vector3.zero;
 		}
 
 		/// <summary>Resolves the caster and the tick its client was rendering peers at.</summary>

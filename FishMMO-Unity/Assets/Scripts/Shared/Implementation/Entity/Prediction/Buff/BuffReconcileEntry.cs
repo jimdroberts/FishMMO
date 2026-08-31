@@ -40,6 +40,18 @@ namespace FishMMO.Shared
 		public int CumulativeTickMultiplier;
 
 		/// <summary>
+		/// What is left of a spendable buff — see <see cref="Buff.RemainingCharges"/>.
+		/// </summary>
+		/// <remarks>
+		/// Here for the same reason <see cref="CumulativeTickMultiplier"/> is: it is per-buff state
+		/// the owner and the server can move independently. The server SPENDS it as hits land, while
+		/// the owner REFILLS it every time a channelled block re-applies its buff — so left out, the
+		/// owner's shield would read full for the whole channel while the server's was already
+		/// empty, and the player would keep blocking against a barrier that was not there.
+		/// </remarks>
+		public int RemainingCharges;
+
+		/// <summary>
 		/// Compares all fields for equality. Used by the delta serializer
 		/// to determine which entries changed between ticks.
 		/// </summary>
@@ -50,7 +62,8 @@ namespace FishMMO.Shared
 				   NextTickTick == other.NextTickTick &&
 				   Stacks == other.Stacks &&
 				   TickCount == other.TickCount &&
-				   CumulativeTickMultiplier == other.CumulativeTickMultiplier;
+				   CumulativeTickMultiplier == other.CumulativeTickMultiplier &&
+				   RemainingCharges == other.RemainingCharges;
 		}
 
 		/// <inheritdoc/>
@@ -70,6 +83,7 @@ namespace FishMMO.Shared
 				hash = (hash * 397) ^ Stacks;
 				hash = (hash * 397) ^ TickCount;
 				hash = (hash * 397) ^ CumulativeTickMultiplier;
+				hash = (hash * 397) ^ RemainingCharges;
 				return hash;
 			}
 		}
@@ -85,6 +99,7 @@ namespace FishMMO.Shared
 			writer.WriteInt32(Stacks);
 			writer.WriteInt32(TickCount);
 			writer.WriteInt32(CumulativeTickMultiplier);
+			writer.WriteInt32(RemainingCharges);
 		}
 
 		/// <summary>
@@ -100,6 +115,7 @@ namespace FishMMO.Shared
 				Stacks = reader.ReadInt32(),
 				TickCount = reader.ReadInt32(),
 				CumulativeTickMultiplier = reader.ReadInt32(),
+				RemainingCharges = reader.ReadInt32(),
 			};
 		}
 

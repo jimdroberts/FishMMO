@@ -384,7 +384,10 @@ namespace FishMMO.UnitTests
 
 		private static void Dispatch(AbilityObject abilityObject, Collider collider)
 		{
-			AbilitySweepHit hit = new AbilitySweepHit(collider, Vector3.zero, Vector3.up, 1f);
+			AbilitySweepHit hit = new AbilitySweepHit(collider, Vector3.zero, Vector3.up, 1f,
+				// Local point: far outside any authored shield volume, so these fixtures exercise the
+				// ordinary hit path rather than the block gate.
+				new Vector3(0f, 0f, -1000f));
 			DispatchSweptHitMethod.Invoke(abilityObject, new object[] { hit });
 		}
 

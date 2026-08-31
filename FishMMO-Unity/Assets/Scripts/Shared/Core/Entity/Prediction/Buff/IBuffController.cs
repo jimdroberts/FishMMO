@@ -72,6 +72,47 @@ namespace FishMMO.Shared.Core
 		SortedDictionary<int, Buff> Buffs { get; }
 
 		/// <summary>
+		/// True when this peer runs this character's buff EFFECTS, rather than merely tracking the
+		/// strip for display.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The server always does; the owning client does too, because it predicts its own
+		/// simulation. A third-party observer holds real <see cref="Buff"/> instances — Inspect, the
+		/// target frame and aggro all read them — but has never run <c>Buff.Apply</c>, so it must
+		/// not run <c>Buff.Remove</c> either, and must not spend anything a buff is holding.
+		/// </para>
+		/// <para>
+		/// On the interface because mitigation asks it from outside the controller:
+		/// <c>DamageMitigation</c> is allowed to COMPUTE how much a shield would block on any peer —
+		/// which is what lets a caster predict a blocked hit honestly — but may only spend the pool
+		/// where this is true.
+		/// </para>
+		/// </remarks>
+		bool SimulatesBuffEffects { get; }
+
+		/// <summary>
+		/// Records that a buff's predicted state changed underneath the controller, so the next
+		/// reconcile snapshot is rebuilt rather than served from the cache.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Every ordinary mutation runs through the controller, which marks itself. Damage
+		/// mitigation does not: <c>DamageMitigation</c> spends <see cref="Buff.RemainingCharges"/>
+		/// on the <see cref="Buff"/> instance directly, from inside the damage pipeline, and the
+		/// controller has no way to notice. Left unmarked, <c>CreateReconcileSnapshot</c> keeps
+		/// handing back the cached array — so the server never reports the spent shield and the
+		/// owner never learns its pool moved.
+		/// </para>
+		/// <para>
+		/// Deliberately narrow: it dirties the snapshot and nothing else. The observed strip does
+		/// not carry charges, so a spend is not an observer-visible change and must not cost a
+		/// broadcast.
+		/// </para>
+		/// </remarks>
+		void MarkBuffStateDirty();
+
+		/// <summary>
 		/// Gets the current tick in the controller's replicate-domain. This is the reference tick used for all buff comparisons.
 		/// </summary>
 		/// <returns>The current replicate-domain tick.</returns>

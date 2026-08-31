@@ -691,6 +691,22 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* A DEFLECTION is not a hit and is applied first, because it applies even when the
+			 * victim cannot be resolved.
+			 *
+			 * The server ran no OnHit events for it, spent no hit count and dealt no damage — the
+			 * only thing that happened is that the object changed direction, and that is the one
+			 * consequence a receiver must reproduce whether or not it can see who caused it.
+			 * The heading is carried ABSOLUTE rather than re-derived from msg.Normal, so applying it
+			 * to the caster's own client — which predicted the same deflection and receives this
+			 * message like everybody else — is a no-op instead of a second mirror that would send
+			 * the object straight back at the defender. */
+			if (msg.Deflected)
+			{
+				abilityObject.ApplyObservedDeflection(AimDirectionCompression.Decode(msg.PackedDeflectHeading));
+				return;
+			}
+
 			ICharacter hitCharacter = null;
 			if (msg.VictimObjectID != 0)
 			{
@@ -698,8 +714,17 @@ namespace FishMMO.Shared
 					victimNob == null ||
 					!victimNob.TryGetComponent(out hitCharacter))
 				{
-					// A character this client is not observing. Dropping the hit is right: applying
-					// it target-less would run the OnHit events as though it had struck scenery.
+					/* A character this client is not observing. Dropping the HIT is right: applying
+					 * it target-less would run the OnHit events as though it had struck scenery,
+					 * firing impact effects for a body that is really there.
+					 *
+					 * What is knowingly given up with it is any trajectory change those events would
+					 * have produced — today that is AbilityForkHitAction, whose redirect is drawn
+					 * from the object's own DeterministicRNG, so a dropped hit also skips a draw and
+					 * walks this copy's generator out of step with the server's for the rest of the
+					 * object's life. Deflection does not have that problem because it is not an
+					 * authored event and carries its own bit above. A fork that must survive an
+					 * unobservable victim needs its heading on the wire, not re-derived here. */
 					return;
 				}
 			}

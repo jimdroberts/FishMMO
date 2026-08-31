@@ -251,6 +251,24 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="buff">The buff instance being applied.</param>
 		/// <param name="target">The character receiving the buff.</param>
+		/// <summary>
+		/// How many charges a fresh application of this buff carries. Zero — the default — means
+		/// this buff spends nothing and is bounded only by its duration.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The unit is this template's own: <see cref="DamageNegationBuffTemplate"/> counts damage
+		/// points, <see cref="DeflectBuffTemplate"/> counts deflections. See
+		/// <see cref="Buff.RemainingCharges"/> for why there is one counter rather than one per
+		/// template.
+		/// </para>
+		/// <para>
+		/// A property rather than a serialized field so a template can derive it from whatever it
+		/// already authors, instead of asking a designer to keep two numbers in step.
+		/// </para>
+		/// </remarks>
+		public virtual int InitialCharges => 0;
+
 		public abstract void OnApply(Buff buff, ICharacter target);
 
 		/// <summary>

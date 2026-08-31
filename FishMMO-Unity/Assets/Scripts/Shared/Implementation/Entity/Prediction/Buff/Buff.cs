@@ -58,6 +58,41 @@ namespace FishMMO.Shared
 		public int CumulativeTickMultiplier;
 
 		/// <summary>
+		/// What is LEFT of a buff that is spent rather than merely timed — damage points a shield
+		/// can still absorb, deflections a guard can still make. Zero for every buff that counts
+		/// nothing.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The unit belongs to the template, not to this field.</b>
+		/// <see cref="DamageNegationBuffTemplate"/> counts damage points and
+		/// <see cref="DeflectBuffTemplate"/> counts deflections; a template that spends nothing
+		/// leaves <see cref="BaseBuffTemplate.InitialCharges"/> at zero and never looks at this.
+		/// One counter rather than one per template is what keeps the reconcile entry from growing
+		/// a field every time a new consumable effect is authored — and the reconcile is where the
+		/// cost of this really lives.
+		/// </para>
+		/// <para>
+		/// <b>Predicted state, so it has to travel.</b> Spending happens on the server — the
+		/// defender's own client does not resolve incoming hits — but REFILLING happens on the owner
+		/// too: <c>BuffController</c> calls <see cref="RefreshCharges"/> every time a buff is
+		/// re-applied, which for a channelled block is every tick the button is held. Without an
+		/// authoritative value coming back, the owner's pool would be topped up locally and never
+		/// told what the server had spent, so its shield would read full while the server's was
+		/// empty. It rides <see cref="BuffReconcileEntry.RemainingCharges"/> for the same reason
+		/// <see cref="CumulativeTickMultiplier"/> does: both are per-buff state the two peers can
+		/// move independently.
+		/// </para>
+		/// <para>
+		/// <b>It is not sent to observers.</b> <c>ObservedBuffEntry</c> carries the strip a peer
+		/// DRAWS, and no observer resolves damage against somebody else's shield — the server does,
+		/// and tells them the resulting health. Sending it would disclose exactly how much more a
+		/// player has to hit through, which is information the game does not otherwise give.
+		/// </para>
+		/// </remarks>
+		public int RemainingCharges;
+
+		/// <summary>
 		/// The template that defines this buff's behavior and properties.
 		/// </summary>
 		public BaseBuffTemplate Template { get; private set; }
@@ -226,6 +261,10 @@ namespace FishMMO.Shared
 			NextTickTick = GetNextTickTick(Template, currentTick, tickDelta);
 			Stacks = stacks;
 			TickCount = tickCount;
+			/* A fresh application arrives with a full pool. The restore constructor deliberately
+			 * does NOT do this — it is handed the server's remaining value and must not overwrite
+			 * it with a full one. See RefreshCharges. */
+			RefreshCharges();
 		}
 
 		/// <summary>
@@ -254,6 +293,60 @@ namespace FishMMO.Shared
 			Stacks = stacks;
 			TickCount = tickCount;
 		}
+
+		/// <summary>
+		/// Fills <see cref="RemainingCharges"/> from the template, at this buff's current stack count.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Called on a fresh application and again whenever an existing buff is re-applied, so
+		/// holding a block up refreshes the shield rather than continuing to spend a pool that is
+		/// already half gone. Re-applying is the ONLY thing that refills it; nothing regenerates.
+		/// </para>
+		/// <para>
+		/// Scales as <c>1 + Stacks</c>, the same multiplier <see cref="AttributeBuffTemplate"/>
+		/// applies to its bonuses, so two applications of a stacking absorb shield hold twice the
+		/// damage rather than the same amount twice. A template with no charges stays at zero
+		/// whatever the stack count.
+		/// </para>
+		/// </remarks>
+		public void RefreshCharges()
+		{
+			int initial = Template != null ? Template.InitialCharges : 0;
+			RemainingCharges = initial <= 0 ? 0 : initial * (1 + (Stacks < 0 ? 0 : Stacks));
+		}
+
+		/// <summary>
+		/// Spends up to <paramref name="requested"/> charges and reports how many were available.
+		/// </summary>
+		/// <remarks>
+		/// Never spends more than it holds and never goes negative, so a caller can hand it the whole
+		/// incoming amount and read the return value as "how much this buff absorbed". A buff that
+		/// lands on zero is not removed here — <see cref="IsSpent"/> is what the caller tests,
+		/// because removal has to happen outside the loop walking the buff container.
+		/// </remarks>
+		/// <param name="requested">How many charges the caller would like to spend.</param>
+		/// <returns>How many were spent.</returns>
+		public int SpendCharges(int requested)
+		{
+			if (requested <= 0 || RemainingCharges <= 0)
+			{
+				return 0;
+			}
+			int spent = requested < RemainingCharges ? requested : RemainingCharges;
+			RemainingCharges -= spent;
+			return spent;
+		}
+
+		/// <summary>
+		/// True when this buff counted charges and has none left — the "disappears when the
+		/// remaining amount hits 0" half of a consumable shield.
+		/// </summary>
+		/// <remarks>
+		/// Asks the TEMPLATE whether charges were ever the point. A buff whose template counts
+		/// nothing sits at zero for its whole life and must not be mistaken for a spent one.
+		/// </remarks>
+		public bool IsSpent => Template != null && Template.InitialCharges > 0 && RemainingCharges <= 0;
 
 		/// <summary>
 		/// Returns true when this buff has expired at the given tick.

@@ -442,6 +442,14 @@ namespace FishMMO.UnitTests
 			public List<Trigger> OnBuffApplyTriggers { get; } = new List<Trigger>();
 			public List<Trigger> OnBuffRemoveTriggers { get; } = new List<Trigger>();
 			public SortedDictionary<int, Buff> Buffs { get; } = new SortedDictionary<int, Buff>();
+
+			/// <summary>This double stands in for the authoritative peer, which always simulates.</summary>
+			public bool SimulatesBuffEffects => true;
+
+			/// <summary>Counts snapshot invalidations, so a test can assert a spend was reported.</summary>
+			public int MarkBuffStateDirtyCalls { get; private set; }
+
+			public void MarkBuffStateDirty() => ++MarkBuffStateDirtyCalls;
 			public IReadOnlyList<ObservedBuffEntry> ObservedBuffs { get; } = new List<ObservedBuffEntry>();
 
 			public void InitializeOnce(ICharacter character) { }

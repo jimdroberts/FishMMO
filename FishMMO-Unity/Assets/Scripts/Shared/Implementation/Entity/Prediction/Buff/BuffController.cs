@@ -1035,7 +1035,10 @@ namespace FishMMO.Shared
 		/// drained value.
 		/// </para>
 		/// </remarks>
-		private bool SimulatesBuffEffects => IsAuthoritativePeer || IsOwningClient;
+		public bool SimulatesBuffEffects => IsAuthoritativePeer || IsOwningClient;
+
+		/// <inheritdoc/>
+		public void MarkBuffStateDirty() => snapshotDirty = true;
 
 		/// <summary>True once this controller subscribed the observer-side duration tick.</summary>
 		private bool observerTickSubscribed;
@@ -1841,9 +1844,14 @@ namespace FishMMO.Shared
 				int stacks = reader.ReadInt32();
 				int tickCount = reader.ReadInt32();
 				int cumulativeTickMultiplier = reader.ReadInt32();
+				int remainingCharges = reader.ReadInt32();
 
 				Buff buff = new Buff(templateID, expiryTick, nextTickTick, tickDelta, stacks, tickCount);
 				buff.CumulativeTickMultiplier = cumulativeTickMultiplier;
+				/* After construction, never through it: the restore constructor is deliberately the
+				 * one that does NOT call RefreshCharges, so the server's remaining pool survives
+				 * instead of being replaced by a full one. */
+				buff.RemainingCharges = remainingCharges;
 				Apply(buff, suppressFX: false);
 			}
 
@@ -1908,6 +1916,10 @@ namespace FishMMO.Shared
 					writer.WriteInt32(buff.Stacks);
 					writer.WriteInt32(buff.TickCount);
 					writer.WriteInt32(buff.CumulativeTickMultiplier);
+					/* The owner's shape only. An observer's block is built by
+					 * BuildObservedBuffEntries and carries what a peer DRAWS; how much more damage
+					 * somebody's shield can still eat is not that. See Buff.RemainingCharges. */
+					writer.WriteInt32(buff.RemainingCharges);
 				}
 			}
 			else
@@ -2210,6 +2222,26 @@ namespace FishMMO.Shared
 				{
 					buffInstance.ResetDuration(replicateDomainTick, tickDelta);
 					timingChange = true;
+				}
+
+				/* And the SPENDABLE half of the buff, for the same reason the duration is refreshed:
+				 * re-applying a shield restores it. Without this a channelled block — which
+				 * re-applies its buff on every tick the button is held — would keep the pool it had
+				 * spent on the first hit and be worth nothing for the rest of the channel.
+				 *
+				 * Gated on the value actually moving, because a fresh snapshot array defeats the
+				 * delta serialiser's ReferenceEquals shortcut for the WHOLE reconcile payload; a
+				 * buff that spends nothing must not dirty it thirty times a second. Only where this
+				 * peer simulates: a tracking observer holds real Buff instances and has never spent
+				 * anything from them, so refilling would be inventing state. */
+				if (simulates)
+				{
+					int before = buffInstance.RemainingCharges;
+					buffInstance.RefreshCharges();
+					if (buffInstance.RemainingCharges != before)
+					{
+						timingChange = true;
+					}
 				}
 			}
 
@@ -2599,6 +2631,7 @@ namespace FishMMO.Shared
 					Stacks = kvp.Value.Stacks,
 					TickCount = kvp.Value.TickCount,
 					CumulativeTickMultiplier = kvp.Value.CumulativeTickMultiplier,
+					RemainingCharges = kvp.Value.RemainingCharges,
 				};
 			}
 			snapshotDirty = false;
@@ -2679,6 +2712,15 @@ namespace FishMMO.Shared
 							existing.CumulativeTickMultiplier = entry.CumulativeTickMultiplier;
 							changed = true;
 						}
+						/* Restored to what the server says is left. The owner refills this itself
+						 * whenever a channelled block re-applies its buff, and never sees the hits
+						 * that spent it — so this is the only thing that tells it the shield is
+						 * emptier than the one it just topped up. */
+						if (existing.RemainingCharges != entry.RemainingCharges)
+						{
+							existing.RemainingCharges = entry.RemainingCharges;
+							changed = true;
+						}
 					}
 					else
 					{
@@ -2704,6 +2746,12 @@ namespace FishMMO.Shared
 						{
 							buff.AddStack(Character);
 						}
+
+						/* Last, and deliberately after the stack loop: DamageNegationBuffTemplate
+						 * and DeflectBuffTemplate both REFILL the pool from OnApplyStack, so seeding
+						 * it before the loop would hand the replay a full shield instead of the one
+						 * the server actually has left. */
+						buff.RemainingCharges = entry.RemainingCharges;
 
 						// Queue the add event for after the patch loop completes so subscribers
 						// cannot observe a half-restored buffs collection if they re-enter.

@@ -162,6 +162,7 @@ namespace FishMMO.Shared
 					writer.WriteInt32(value.Buffs[i].Stacks);
 					writer.WriteInt32(value.Buffs[i].TickCount);
 					writer.WriteInt32(value.Buffs[i].CumulativeTickMultiplier);
+					writer.WriteInt32(value.Buffs[i].RemainingCharges);
 				}
 			}
 
@@ -326,6 +327,7 @@ namespace FishMMO.Shared
 						Stacks = reader.ReadInt32(),
 						TickCount = reader.ReadInt32(),
 						CumulativeTickMultiplier = reader.ReadInt32(),
+						RemainingCharges = reader.ReadInt32(),
 					};
 				}
 			}

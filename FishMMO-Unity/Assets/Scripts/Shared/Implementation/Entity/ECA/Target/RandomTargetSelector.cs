@@ -39,8 +39,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Maximum number of hits to process.
 		/// </summary>
-		[Tooltip("Maximum number of hits to process.")]
-		[Min(1)]
+		[Tooltip("Size of the pool the single random target is drawn from, nearest first. 0 or less draws from every candidate in the radius.")]
+		[Min(0)]
 		public int MaxHits = 16;
 
 

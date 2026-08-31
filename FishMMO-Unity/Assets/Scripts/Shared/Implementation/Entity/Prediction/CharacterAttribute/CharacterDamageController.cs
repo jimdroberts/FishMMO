@@ -362,6 +362,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// True when this peer runs THIS character's buff effects, and may therefore spend what a
+		/// mitigation buff is holding.
+		/// </summary>
+		/// <remarks>
+		/// A character with no buff controller answers false, which is the safe direction: it has
+		/// nothing to spend either way.
+		/// </remarks>
+		private bool SimulatesOwnBuffEffects()
+		{
+			return Character != null &&
+				Character.TryGet(out IBuffController buffController) &&
+				buffController.SimulatesBuffEffects;
+		}
+
+		/// <summary>
 		/// Sends this tick's merged combat events to everyone who can see this character.
 		/// </summary>
 		/// <remarks>
@@ -1089,8 +1104,35 @@ namespace FishMMO.Shared
 
 			amount = ApplyModifiers(Character, amount, damageAttribute);
 
+			/* Block, after resistances and before anything is spent.
+			 *
+			 * Resistances are a property of the character sheet and negation is a property of what
+			 * the character is DOING right now, so a shield that says "absorbs 500" absorbs 500 of
+			 * the damage that was actually going to land rather than 500 of a number armour was
+			 * about to reduce anyway.
+			 *
+			 * The pool is spent only where this peer simulates the DEFENDER's buffs. The caster's
+			 * client reaches this method too (ApplyDamageAction predicts on the owner) and it holds
+			 * real Buff instances for the peer it is hitting — so it can and should compute the
+			 * reduction, and draw an honest blocked number, but it must never drain a pool it does
+			 * not own. An absorb pool it cannot see the remainder of is the one case it will
+			 * over-predict; the server's resource push corrects that on the next tick, which is the
+			 * same bound every other predicted damage number carries. */
+			amount = DamageMitigation.Negate(Character, attacker, amount, SimulatesOwnBuffEffects());
+
 			if (amount < 1)
 			{
+				/* A fully blocked hit still ENGAGES. Standing behind a shield does not mean nobody
+				 * attacked you, and returning before EnterCombat would let a blocking player leave
+				 * combat, regenerate and expire the attacker's loot rights mid-fight. Nothing else
+				 * runs: no damage was dealt, so there is no combat event, no contribution and no
+				 * death check. */
+				EnterCombat();
+				if (attacker != null &&
+					attacker.TryGet(out ICharacterDamageController blockedAttackerDamageController))
+				{
+					blockedAttackerDamageController.EnterCombat();
+				}
 				return;
 			}
 			ResourceInstance.Consume(amount);

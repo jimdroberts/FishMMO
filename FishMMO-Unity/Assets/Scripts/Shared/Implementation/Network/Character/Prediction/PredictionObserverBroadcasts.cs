@@ -244,6 +244,50 @@ namespace FishMMO.Shared
 
 		/// <summary>Surface normal at <see cref="Point"/>.</summary>
 		public Vector3 Normal;
+
+		/// <summary>
+		/// True when the victim TURNED THIS OBJECT AWAY rather than being struck by it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A deflect is a rejected hit: the server ran no OnHit events, spent no hit count and dealt
+		/// no damage, but the projectile changed direction — and a trajectory change is the one
+		/// thing an observer cannot reproduce on its own, because the buff that caused it is the
+		/// DEFENDER's and the observer never resolves hits. One bit is all it takes, because the new
+		/// heading is a pure function of the incoming one and <see cref="Normal"/>, which this
+		/// message already carries. See <c>DeflectBuffTemplate.ResolveDeflectedHeading</c>.
+		/// </para>
+		/// <para>
+		/// It is also what lets a receiver act on a hit whose VICTIM it cannot resolve. A character
+		/// outside this client's streaming budget is not spawned here, so the hit itself must be
+		/// dropped — running the OnHit events target-less would fire impact effects for a body that
+		/// is really there — but the redirect must not be, or the observer's copy flies on down a
+		/// heading the server never took until the destroy message catches up with it.
+		/// </para>
+		/// </remarks>
+		public bool Deflected;
+
+		/// <summary>
+		/// The heading the object left on after a deflection, packed by
+		/// <see cref="AimDirectionCompression"/>. Meaningless unless <see cref="Deflected"/> is set.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>An ABSOLUTE heading, not an instruction to mirror.</b> A receiver that recomputed the
+		/// reflection from <see cref="Normal"/> would be correct exactly once: reflecting twice about
+		/// the same normal returns the original vector, so the caster's own client — which predicts
+		/// its deflections and then receives this message like everybody else — would turn the
+		/// object straight back at the defender it had just been turned away from. Applying an
+		/// absolute heading is idempotent, which is what makes the message safe to send to the peer
+		/// that already worked it out.
+		/// </para>
+		/// <para>
+		/// Four bytes, on a message sent once per body per object, and it also removes the
+		/// receiver's need to know anything about WHY the object turned — a future deflection that
+		/// is not a simple mirror needs no wire change.
+		/// </para>
+		/// </remarks>
+		public uint PackedDeflectHeading;
 	}
 
 	/// <summary>
@@ -430,9 +474,16 @@ namespace FishMMO.Shared
 			int count = reader.ReadUInt16();
 			if (count > MAX_BUFFS)
 			{
-				/* A broadcast is its own message with no outer frame to seek past, so discarding
-				 * costs this one update and nothing after it. Returning a FULL empty set would tell
-				 * the receiver to clear the strip, so the discard is reported as a delta. */
+				/* Discarded rather than partially applied. Returning a FULL empty set would tell the
+				 * receiver to clear the strip, so the discard is reported as a delta and the strip
+				 * simply stays as it was until the next push.
+				 *
+				 * Note what this does NOT buy: FishNet writes a length in front of every broadcast
+				 * (Utility.GetPacketLength) but ClientManager.ParseBroadcast only uses it to SKIP a
+				 * key it has no handler for — it does not reposition the reader after a handler
+				 * runs. So a handler that reads the wrong number of bytes still misaligns whatever
+				 * shares the datagram. The cap below is what keeps this handler from being that
+				 * handler; it is not a frame to recover behind. */
 				Log.Warning("CharacterBuffsBroadcast",
 					$"Read buff count {count} exceeds limit {MAX_BUFFS}. Discarding this update.");
 				value.IsFullSet = false;

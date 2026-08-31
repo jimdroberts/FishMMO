@@ -703,7 +703,7 @@ namespace FishMMO.Shared
 			 * not. One implementation is what keeps them honest. */
 			GameObject hitRoot = TargetOrdering.ResolveHitRoot(collider, out ICharacter hitCharacter);
 
-			return ApplyHit(hitCharacter, hitRoot, hit.Point, hit.Normal);
+			return ApplyHit(hitCharacter, hitRoot, hit.Point, hit.Normal, hit.LocalPoint);
 		}
 
 		/// <summary>
@@ -722,8 +722,22 @@ namespace FishMMO.Shared
 		/// <param name="hitKey">The body to dedupe on when there is no character.</param>
 		/// <param name="point">World point of impact.</param>
 		/// <param name="normal">Surface normal at the impact.</param>
-		/// <returns>False when this object has ended and the rest of the sweep must be abandoned.</returns>
-		private bool ApplyHit(ICharacter hitCharacter, GameObject hitKey, Vector3 point, Vector3 normal)
+		/// <param name="localPoint">
+		/// The impact point in the hit body's own space, captured inside the rewind scope. The only
+		/// impact position it is safe to compare against anything defined relative to that body —
+		/// see <see cref="AbilitySweepHit.LocalPoint"/>.
+		/// </param>
+		/// <param name="isAuthoritativeEcho">
+		/// True when this hit arrived from the server rather than being resolved here. Reaches the
+		/// OnHit events on the collision payload; see
+		/// <see cref="AbilityCollisionEventData.IsAuthoritativeEcho"/>.
+		/// </param>
+		/// <returns>
+		/// False when the rest of this tick's sweep must be abandoned — either because the object
+		/// has ended, or because it was deflected and is no longer on the line those hits were
+		/// gathered along.
+		/// </returns>
+		private bool ApplyHit(ICharacter hitCharacter, GameObject hitKey, Vector3 point, Vector3 normal, Vector3 localPoint, bool isAuthoritativeEcho = false)
 		{
 			/* Once per target for this object's whole life, keyed on the character where there is one
 			 * so two hitboxes on one body cost one hit. The sweep runs every tick, and a pierce that
@@ -738,6 +752,72 @@ namespace FishMMO.Shared
 			if (!hitTargets.Add(dedupeKey))
 			{
 				return true;
+			}
+
+			/* DEFLECTION, before the hit is accepted as a hit at all.
+			 *
+			 * A block reduces damage and runs inside CharacterDamageController; a deflect rejects
+			 * the hit outright, so it has to happen here — ahead of the OnHit events, ahead of the
+			 * hit count, ahead of anything that could end this object. What the defender gets is a
+			 * projectile that never struck them; what the projectile gets is a new heading.
+			 *
+			 * Decided only by a peer that resolves hits (the server, and the caster's own client),
+			 * for the same reason the sweep is: an observer holds every character interpolated
+			 * against its own latency and would be answering a question nobody asked. It is TOLD,
+			 * by AbilityObjectHitBroadcast, which carries both the fact and the resulting heading —
+			 * absolute, so a peer that predicted the same deflection applies it as a no-op rather
+			 * than mirroring an already-mirrored vector back at the defender.
+			 *
+			 * The target stays in the hit set. It has had its answer to this object and must not be
+			 * offered another one every tick the two of them remain overlapping — the same rule
+			 * Redirect states for the fork case, and for the same reason. */
+			if (hitCharacter != null && !isAuthoritativeEcho && ResolvesHitsLocally)
+			{
+				Transform headingTransform = Transform != null ? Transform : transform;
+				if (DamageMitigation.TryDeflect(hitCharacter, headingTransform.forward, normal,
+						mutate: isServer, out Vector3 deflectedHeading))
+				{
+					if (isServer)
+					{
+						BroadcastHitToObservers(hitCharacter, point, normal,
+							deflected: true, deflectHeading: deflectedHeading);
+					}
+					ApplyDeflection(deflectedHeading);
+					/* The rest of this tick's sweep is abandoned. Those hits were gathered along the
+					 * segment the object travelled INTO the defender, and it is not on that line any
+					 * more — carrying on would let a projectile that was blocked by the shield in
+					 * front also strike whoever was standing behind it, in the same tick. */
+					return false;
+				}
+
+				/* THE SHIELD, after the parry.
+				 *
+				 * A deflect window is a timed, skilled action that gives the projectile back; a
+				 * raised shield is a standing object that eats it. When a player has both up the
+				 * parry should win, because it is the thing they had to time — so it is asked first
+				 * and this only sees what it declined.
+				 *
+				 * The point is compared in the DEFENDER'S OWN SPACE. Hits are dispatched after the
+				 * rewind scope has closed, so a world-space volume read here would sit where the
+				 * defender is now while the impact point came from where the defender was; a local
+				 * point against a local volume has no such disagreement to have. See
+				 * AbilitySweepHit.LocalPoint. */
+				if (DamageMitigation.TryBlockAtVolume(hitCharacter, localPoint, mutate: isServer))
+				{
+					if (isServer)
+					{
+						/* Told as an ordinary hit rather than a deflection: the object ENDED here,
+						 * and the destroy broadcast below is what an observer acts on. The point and
+						 * normal are the shield's, so the impact plays on the shield face. */
+						BroadcastHitToObservers(hitCharacter, point, normal);
+					}
+					/* Destroyed, not merely stopped: a blocked projectile is gone. Observers are told
+					 * through the same reliable message that ends any collision, so nothing new has
+					 * to travel for a block. Destroy events fire — an impact on a shield is exactly
+					 * the moment an authored effect wants to play. */
+					DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: isServer);
+					return false;
+				}
 			}
 
 			/* Published the moment the hit is ACCEPTED, and never before.
@@ -767,8 +847,11 @@ namespace FishMMO.Shared
 					foreach (var hitEvent in hitEvents.Values)
 					{
 						// The trigger's own TargetSelector handles fan-out.
+						/* The echo flag travels with the event so an action can tell "I decided this"
+						 * from "I was told this". ApplyDamageAction and ApplyHealAction are what read
+						 * it; see AbilityCollisionEventData.IsAuthoritativeEcho. */
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
-							Caster, hitCharacter, this, point, normal, RNG);
+							Caster, hitCharacter, this, point, normal, RNG, isAuthoritativeEcho);
 
 						collisionEvent.Add(new TickEventData(Caster, collisionTick));
 						hitEvent.Execute(collisionEvent);
@@ -813,6 +896,55 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Turns this object onto the heading a deflection sent it along.
+		/// </summary>
+		/// <remarks>
+		/// A thin wrapper over <see cref="Redirect"/> so the two callers — the peer that DECIDED the
+		/// deflection and the peer that was TOLD about it — cannot start a new leg differently.
+		/// Redirect is what actually re-anchors the closed-form trajectory; writing the rotation
+		/// alone would be overwritten on the next tick, which is the trap
+		/// <c>AbilityForkHitAction</c> fell into.
+		/// </remarks>
+		/// <param name="heading">Unit direction to travel along from here.</param>
+		private void ApplyDeflection(Vector3 heading)
+		{
+			if (heading.sqrMagnitude < 1e-8f)
+			{
+				return;
+			}
+			Redirect(AimDirectionCompression.ToRotation(heading));
+		}
+
+		/// <summary>
+		/// Applies a deflection the server resolved, on a peer that does not resolve its own.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The counterpart to <see cref="ApplyObservedHit"/> for a hit that was REJECTED. It runs no
+		/// events and touches no hit count — there was no hit — and does exactly one thing: put this
+		/// copy of the object on the heading the server's copy took.
+		/// </para>
+		/// <para>
+		/// Separated from <see cref="ApplyObservedHit"/> because it is the half that still applies
+		/// when the victim cannot be resolved. A character outside this client's streaming budget is
+		/// not spawned here, so the hit itself has to be dropped; the trajectory change does not,
+		/// and dropping it left the object flying at a target the server had already turned it away
+		/// from — which is also why the heading is carried rather than derived from the victim.
+		/// </para>
+		/// </remarks>
+		/// <param name="heading">The absolute heading the server's copy left on.</param>
+		internal void ApplyObservedDeflection(Vector3 heading)
+		{
+			if (destroyed)
+			{
+				return;
+			}
+			/* Absolute, so applying it to a peer that already predicted the same deflection is a
+			 * no-op rather than a second mirror — see AbilityObjectHitBroadcast.PackedDeflectHeading. */
+			ApplyDeflection(heading);
+		}
+
+		/// <summary>
 		/// Applies a hit the server resolved, on a peer that does not resolve its own.
 		/// </summary>
 		/// <remarks>
@@ -848,7 +980,12 @@ namespace FishMMO.Shared
 				? hitCharacter.GameObject
 				: (GameObject != null ? GameObject : gameObject);
 
-			ApplyHit(hitCharacter, key, point, normal);
+			/* Vector3.zero for the local point, and it is never read: the volume gate above is
+			 * skipped for an authoritative echo, because the peer that RESOLVED this hit already
+			 * asked whether a shield stopped it. A hit that reaches here is one the server decided
+			 * landed, and a receiver second-guessing that with its own copy of the defender's buffs
+			 * is exactly the observer-resolves-its-own-hits failure the echo exists to remove. */
+			ApplyHit(hitCharacter, key, point, normal, Vector3.zero, isAuthoritativeEcho: true);
 		}
 
 		/// <summary>
@@ -865,7 +1002,10 @@ namespace FishMMO.Shared
 		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
 		/// <param name="point">World point of impact.</param>
 		/// <param name="normal">Surface normal at the impact.</param>
-		private void BroadcastHitToObservers(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		/// <param name="deflected">True when the victim turned this object away instead of being struck.</param>
+		/// <param name="deflectHeading">The heading the object left on. Read only when <paramref name="deflected"/>.</param>
+		private void BroadcastHitToObservers(ICharacter hitCharacter, Vector3 point, Vector3 normal,
+			bool deflected = false, Vector3 deflectHeading = default)
 		{
 			PublishedHitCount++;
 
@@ -891,6 +1031,8 @@ namespace FishMMO.Shared
 				VictimObjectID = victimNob != null && victimNob.IsSpawned ? victimNob.ObjectId : 0,
 				Point = point,
 				Normal = normal,
+				Deflected = deflected,
+				PackedDeflectHeading = deflected ? AimDirectionCompression.Encode(deflectHeading) : 0u,
 			}, true, Channel.Reliable);
 		}
 

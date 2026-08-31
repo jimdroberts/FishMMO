@@ -59,13 +59,37 @@ namespace FishMMO.Shared
 				int amount = HealValue.GetValue(initiator, eventData);
 				defenderDamageController.Heal(initiator, amount);
 
-				// The healer's own number, drawn now. See ApplyDamageAction for the two guards.
-				if (!EcaAuthority.IsServer(initiator, eventData) && !IsReplayTick(eventData))
+				// The healer's own number, drawn now. See MayDrawPredictedNumber for the three guards.
+				if (MayDrawPredictedNumber(initiator, eventData))
 				{
 					PredictedCombatEvents.Predict(initiator, target, amount, PredictedCombatEvents.Kind.Heal,
 						null, UnityEngine.Time.unscaledTime);
 				}
 			}
 		}
+
+		/// <summary>
+		/// True when this peer should draw its own predicted number for this effect.
+		/// </summary>
+		/// <remarks>
+		/// Three conditions, and each removes a different duplicate. Not the server, which has no
+		/// display and whose report is what every other client draws from. Not a replayed tick, or a
+		/// reconcile would draw one number per tick it re-simulates. And not a hit the SERVER
+		/// resolved and told us about: that hit has a <c>CombatEventBroadcast</c> of its own already
+		/// in flight, so predicting it produces two labels for one hit whenever the unreliable
+		/// report wins the race against the reliable hit message. See
+		/// <see cref="AbilityCollisionEventData.IsAuthoritativeEcho"/>.
+		/// </remarks>
+		private static bool MayDrawPredictedNumber(ICharacter initiator, EventData eventData)
+		{
+			if (EcaAuthority.IsServer(initiator, eventData) || IsReplayTick(eventData))
+			{
+				return false;
+			}
+			return !(eventData != null &&
+				eventData.TryGet(out AbilityCollisionEventData collision) &&
+				collision.IsAuthoritativeEcho);
+		}
+
 	}
 }

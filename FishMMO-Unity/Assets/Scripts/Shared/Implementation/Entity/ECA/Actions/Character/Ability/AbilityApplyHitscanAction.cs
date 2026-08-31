@@ -49,6 +49,12 @@ namespace FishMMO.Shared
 	/// <c>PredictedCombatEvents</c> greys out anything the server does not confirm.
 	/// </para>
 	/// <para>
+	/// <b>Blocked by a raised shield.</b> A victim whose <c>ShieldVolume</c> covers the point the ray
+	/// met them stops the shot there and takes nothing, and so does everyone behind them — the same
+	/// gate a travelling projectile passes through, so the two shapes of attack meet one shield
+	/// rather than two implementations of one.
+	/// </para>
+	/// <para>
 	/// <b>Lag compensated, and it is the shape that needs it most.</b> A ray is infinitely thin, so
 	/// unlike a blast radius it has no tolerance to absorb the gap between where the shooter saw a
 	/// target and where the server holds it — at 300&#160;ms that gap is metres and the shot is
@@ -238,6 +244,17 @@ namespace FishMMO.Shared
 					 * BlockedByScenery is false the query filtered scenery out entirely and this never
 					 * fires. */
 					if (hit.Character == null)
+					{
+						break;
+					}
+
+					/* A raised shield stops the shot, exactly as a wall does.
+					 *
+					 * Tested in the victim's own space against the volume authored on their block
+					 * buff — the same gate AbilityObject.ApplyHit applies to a projectile, so an
+					 * arrow and a bullet meet the same shield. `break` rather than `continue`
+					 * because a shield is solid: anything further along the ray is behind it. */
+					if (DamageMitigation.TryBlockAtVolume(hit.Character, hit.LocalPoint, mutate: true))
 					{
 						break;
 					}

@@ -22,8 +22,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Maximum number of hits to process in the area.
 		/// </summary>
-		[Tooltip("Maximum number of hits to process in the area.")]
-		[Min(1)]
+		[Tooltip("Maximum number of distinct bodies to affect, nearest first. 0 or less means no cap.")]
+		[Min(0)]
 		public int MaxHits = 5;
 
 		/// <summary>

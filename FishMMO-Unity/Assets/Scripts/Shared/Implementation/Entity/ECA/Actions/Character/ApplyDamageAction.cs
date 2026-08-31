@@ -76,17 +76,37 @@ namespace FishMMO.Shared
 				defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
 
 				/* The caster's own floating number, drawn now rather than on the server's report.
-				 *
-				 * Only off the server: the server has no display, and its report is what every
-				 * OTHER client draws from. Only on a real tick, never a replayed one — a reconcile
-				 * replays every tick since the last correction, and drawing a number per replayed
-				 * tick is the visual spam PlayFXAction guards against for the same reason. */
-				if (!EcaAuthority.IsServer(initiator, eventData) && !IsReplayTick(eventData))
+				 * The three cases that must NOT draw one are all in MayDrawPredictedNumber. */
+				if (MayDrawPredictedNumber(initiator, eventData))
 				{
 					PredictedCombatEvents.Predict(initiator, target, amount, PredictedCombatEvents.Kind.Damage,
 						DamageAttributeTemplate, UnityEngine.Time.unscaledTime);
 				}
 			}
 		}
+
+		/// <summary>
+		/// True when this peer should draw its own predicted number for this effect.
+		/// </summary>
+		/// <remarks>
+		/// Three conditions, and each removes a different duplicate. Not the server, which has no
+		/// display and whose report is what every other client draws from. Not a replayed tick, or a
+		/// reconcile would draw one number per tick it re-simulates. And not a hit the SERVER
+		/// resolved and told us about: that hit has a <c>CombatEventBroadcast</c> of its own already
+		/// in flight, so predicting it produces two labels for one hit whenever the unreliable
+		/// report wins the race against the reliable hit message. See
+		/// <see cref="AbilityCollisionEventData.IsAuthoritativeEcho"/>.
+		/// </remarks>
+		private static bool MayDrawPredictedNumber(ICharacter initiator, EventData eventData)
+		{
+			if (EcaAuthority.IsServer(initiator, eventData) || IsReplayTick(eventData))
+			{
+				return false;
+			}
+			return !(eventData != null &&
+				eventData.TryGet(out AbilityCollisionEventData collision) &&
+				collision.IsAuthoritativeEcho);
+		}
+
 	}
 }

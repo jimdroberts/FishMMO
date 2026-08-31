@@ -15,6 +15,7 @@
 - [Operational Checks](#operational-checks)
 - [Flow Diagram](#flow-diagram)
 - [Project Structure](#project-structure)
+- [Block and Deflect](#block-and-deflect)
 - [License](#license)
 
 ## Overview
@@ -481,7 +482,9 @@ CachedScriptableObject<BaseBuffTemplate>
     ├── AttributeTickBuffTemplate      # Concrete: Attributes on apply + periodic attribute ticks
     ├── CompositeBuffTemplate          # Concrete: Composes multiple child templates
     ├── ResourceTickBuffTemplate       # Concrete: Periodic resource modification (regen/drain)
-    └── StateBuffTemplate              # Concrete: Applies/removes a character state flag
+    ├── StateBuffTemplate              # Concrete: Applies/removes a character state flag
+    ├── DamageNegationBuffTemplate     # Concrete: Block — absorbs, reduces or negates incoming damage
+    └── DeflectBuffTemplate            # Concrete: Deflect — turns an incoming ability object away
 ```
 
 #### Controllers (NetworkBehaviour)
@@ -496,6 +499,138 @@ CharacterBehaviour
 ```
 BuffAttributeTemplate              # [Serializable] class: Value + CharacterAttributeTemplate reference
 ```
+
+## Block and Deflect
+
+Blocking and deflecting are **buffs**, not a subsystem. Nothing in the ability system knows what a
+shield is: an ability applies a mitigation buff to its caster through the ordinary ECA
+`ApplyBuffAction`, and combat consults that buff when a hit is being resolved. That means every
+block and deflect variant is authored, not coded.
+
+### The two templates
+
+| Template | What it does | When it is consulted |
+|---|---|---|
+| `DamageNegationBuffTemplate` | Takes damage off an incoming hit (`Absorb` / `Reduce` / `Immune`), and optionally raises a physical `ShieldVolume` that stops ability objects outright. | `CharacterDamageController.Damage` for mitigation; `AbilityObject.ApplyHit` and `AbilityApplyHitscanAction` for the volume |
+| `DeflectBuffTemplate` | Turns an incoming ability object away — the hit is rejected, not mitigated. | `AbilityObject.ApplyHit`, before the hit is accepted |
+
+Both honour a facing arc, measured through `TargetOrdering.IsWithinCone` — the same test the cone
+selector uses — so a shield held forward stops the sword in front and not the arrow in the back.
+Set `RequiresFacing` false (or the angle to 360) for an omnidirectional barrier.
+
+### The shield volume
+
+An arc says nothing about height or reach: a buckler and a tower shield cover identical cones, and a
+shot at ankle height counts as "in front" of a shield held at the chest. `DamageNegationBuffTemplate`
+therefore also carries a **`ShieldVolume`** — a real shape with real dimensions (`Sphere`, `Box` or
+`Capsule`, plus `LocalCenter`, `Radius`/`Size`/`Height`).
+
+An ability object whose impact lands **inside** the volume never touched the character: it is
+destroyed outright and deals nothing, whatever `Mode` says. The arc and the mode still govern damage
+that genuinely reaches you — melee, damage over time, splash — none of which has a meaningful impact
+point on a shield. The two settings answer different questions on one template.
+
+**The volume is authored in the character's own space, and that is what makes it correct.** Ability
+hits are dispatched *after* the lag-compensation scope has closed, so a world-space volume read at
+that moment would sit where the defender is now while the impact point came from where the defender
+was — metres apart at 200 ms, blocking phantom hits and missing real ones. A local point against a
+local volume has no such disagreement to have, because the body carried its own frame with it.
+`AbilitySweepHit.LocalPoint` and `LagCompensatedQuery.CompensatedHit.LocalPoint` are captured inside
+the scope for exactly this.
+
+It gates both shapes of attack: a travelling projectile through `AbilityObject.ApplyHit`, and a
+hitscan ray through `AbilityApplyHitscanAction`, where a covered victim stops the shot for everyone
+behind them too.
+
+### Sweeping the shield outward (`ShieldInterceptAction`)
+
+The gate above stops anything that would have struck you. It cannot stop what was going to *miss* —
+and a tower shield held out to the side should still sweep an arrow out of the air, and a fireball
+should die on the shield face rather than reaching your chest.
+
+`ShieldInterceptAction` is the outward-looking half: wire it to the block ability's `OnSpawn` (a
+channel re-spawns each tick, so that fires once per tick) and it overlaps the shield volume and
+destroys the ability objects it catches. Leave its own `Volume.Shape` at `None` and it sweeps
+whatever volumes the character's active block buffs already define, so the dimensions are authored
+once, on the buff.
+
+Two properties worth knowing:
+
+- **It cannot change whether damage lands.** Both halves read the same authored volume, so anything
+  it catches would have been gated anyway had it gone on to strike. It is an accelerator, not the
+  mechanism.
+- **It runs after in-flight objects have already ticked.** Every `AbilityObject` subscribes to
+  `TimeManager.OnTick` at spawn, so an object already in the air moves and resolves its own sweep
+  first. A fast projectile can reach the body on the same tick this would have caught it — which is
+  harmless precisely because the gate is what decides the outcome.
+
+It may be predicted by the blocking client, unlike most hit resolution, because neither side of the
+test is interpolated: an ability object's position is a closed form every peer computes identically,
+and the blocker's own position is the one thing its client predicts and reconciles.
+
+Both spend `Buff.RemainingCharges`, one counter whose **unit belongs to the template**: damage points
+for an absorb shield, deflections for a guard. It is predicted state and rides
+`BuffReconcileEntry.RemainingCharges`, because the two peers move it independently: the server spends
+it as hits land, and the owner refills it every tick a channelled block re-applies its buff. It is deliberately **not** sent to observers —
+how much more you have to hit through is not information the game otherwise gives.
+
+### Authoring a channelled shield (hold to block)
+
+1. **Buff asset** — `FishMMO/Character/Buff/Damage Negation Buff`.
+   - `Mode = Reduce` (partial block) or `Immune` (full block) — this governs melee and splash.
+   - `Amount` = percent for `Reduce`.
+   - `Shield.Shape = Box`, `Size = (1.2, 1.4, 0.2)`, `LocalCenter = (0, 1.1, 0.75)` — the physical
+     shield that stops projectiles. `VolumeBlockCost = 0` so holding the block does not wear it down.
+   - `Duration` ≈ 2–3 ticks. Short on purpose: the channel re-applies it every tick, and it lapses
+     shortly after the button is released. `MaxStacks = 1`.
+   - `RequiresFacing = true`, `FacingAngleDegrees = 120`.
+2. **Ability event** — an `AbilityOnSpawnEvent` whose trigger has
+   `TargetSelector = InitiatorTargetSelector` and one `ApplyBuffAction` naming the buff above.
+3. **Ability template** — give it the project's `ChanneledTemplate` event so it spawns one object per
+   tick while held, `AbilitySpawnTarget = Spawner` (or `PointBlank`), and an `AbilityObjectPrefab`
+   that is the shield visual with `LifeTime` of about one tick. `ActivationTime` may be 0;
+   `ApplyChannelActivationFloor` raises a held channel to at least one tick for you.
+4. **Optional** — add a `ShieldInterceptAction` to the same `OnSpawn` trigger, leaving its `Volume`
+   at `None` so it sweeps the buff's volume. This is what makes a projectile visibly die on the
+   shield and lets a wide shield catch shots that would have gone past.
+
+The shield exists for as long as the button is down because the buff is refreshed every tick, and
+`BuffController` re-fills `RemainingCharges` on every re-apply — so a held block does not run out of
+pool part-way through the channel.
+
+### Authoring a consumable barrier (absorbs N damage)
+
+Same buff asset with `Mode = Absorb`, `Amount = 500`, and a real `Duration`. Apply it from any
+ability, on-hit event or trigger through `ApplyBuffAction`. It disappears the moment the pool reaches
+zero — `DamageMitigation` removes it through `IBuffController.Remove`, so the strip, the FX and the
+observer push all hear about it exactly as they would for an expiry.
+
+### Authoring a deflect window (timed parry)
+
+1. **Buff asset** — `FishMMO/Character/Buff/Deflect Buff`.
+   - `DeflectAngleDegrees = 120`.
+   - `MaxDeflections = 0` for a window that turns away everything arriving while it is up, or `1`
+     for a single-use guard consumed by the first thing it stops.
+   - `Duration` = the parry window, a few ticks.
+2. Apply it exactly as above — an `AbilityOnSpawnEvent` with `InitiatorTargetSelector` and
+   `ApplyBuffAction` — from an instant ability whose object prefab plays the deflect animation.
+
+A deflected object is never treated as having hit: no OnHit events, no hit count spent, no damage.
+It leaves along the incoming heading mirrored about the impact normal, and the defender is added to
+its hit set so the two cannot re-resolve against each other every tick.
+
+### How the three peers stay in step
+
+- The **server** decides both, inside the rewind scope that resolved the hit.
+- The **caster's own client** resolves its own hits, so it deflects and blocks identically — except
+  for an `Absorb` pool, whose remainder it cannot see; it may over-predict damage there and the
+  server's resource push corrects it on the next tick, the same bound every predicted number has.
+- **Observers** decide neither. A deflection reaches them as one bit on
+  `AbilityObjectHitBroadcast`, and they recompute the new heading from the `Normal` already in that
+  message — so the trajectory matches without the buff's timing having to.
+
+Charges are spent only where `IBuffController.SimulatesBuffEffects` is true, so no peer drains a
+pool it does not own.
 
 ## License
 

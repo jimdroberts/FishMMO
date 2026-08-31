@@ -20,12 +20,35 @@ namespace FishMMO.Shared
 		/// <summary>Distance along the swept segment, zero for a collider already overlapping at the start.</summary>
 		public readonly float Distance;
 
-		public AbilitySweepHit(Collider collider, Vector3 point, Vector3 normal, float distance)
+		/// <summary>
+		/// <see cref="Point"/> expressed in the hit BODY's own space, captured while the query's world
+		/// was still standing.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The only impact position that survives leaving the rewind scope.</b>
+		/// <c>AbilityObject.ResolveSweptHits</c> queries inside a rewind to the caster's view and then
+		/// dispatches the results after it has closed — deliberately, so no damage or authored action
+		/// ever runs against a displaced world. <see cref="Point"/> therefore describes a world that no
+		/// longer exists by the time anything reads it, and comparing it against anything read from a
+		/// live transform mixes the two. At 200&#160;ms that is metres.
+		/// </para>
+		/// <para>
+		/// A LOCAL point has no such problem, because the body and everything defined relative to it
+		/// were displaced together: the relationship is identical in the rewound world and the live
+		/// one. That is what lets <see cref="ShieldVolume"/> be tested against a hit long after the
+		/// scope has closed. Zero when the hit resolved to no body.
+		/// </para>
+		/// </remarks>
+		public readonly Vector3 LocalPoint;
+
+		public AbilitySweepHit(Collider collider, Vector3 point, Vector3 normal, float distance, Vector3 localPoint)
 		{
 			Collider = collider;
 			Point = point;
 			Normal = normal;
 			Distance = distance;
+			LocalPoint = localPoint;
 		}
 	}
 
@@ -261,7 +284,8 @@ namespace FishMMO.Shared
 				/* Bounds.ClosestPoint, not Collider.ClosestPoint: the latter logs an error for a
 				 * non-convex mesh collider rather than answering, and this is only ever an effect
 				 * position. */
-				gathered.Add(new AbilitySweepHit(hit, hit.bounds.ClosestPoint(origin), normal, 0f));
+				Vector3 overlapPoint = hit.bounds.ClosestPoint(origin);
+				gathered.Add(new AbilitySweepHit(hit, overlapPoint, normal, 0f, ToBodyLocal(hit, overlapPoint)));
 			}
 		}
 
@@ -307,7 +331,8 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				gathered.Add(new AbilitySweepHit(hit.collider, hit.point, hit.normal, hit.distance));
+				gathered.Add(new AbilitySweepHit(hit.collider, hit.point, hit.normal, hit.distance,
+					ToBodyLocal(hit.collider, hit.point)));
 			}
 		}
 
@@ -343,6 +368,22 @@ namespace FishMMO.Shared
 				}
 			}
 			return true;
+		}
+
+		/// <summary>
+		/// Expresses a world impact point in the hit body's own space, while the query's world is
+		/// still standing.
+		/// </summary>
+		/// <remarks>
+		/// Resolved through <see cref="TargetOrdering.ResolveHitRoot"/> — the same walk every other
+		/// hit-resolving path uses — so a character rigged with a child hitbox produces a point
+		/// relative to the CHARACTER rather than to the bone that happened to be struck, and an
+		/// authored shield volume means one thing whatever the rig.
+		/// </remarks>
+		private static Vector3 ToBodyLocal(Collider hit, Vector3 worldPoint)
+		{
+			GameObject root = TargetOrdering.ResolveHitRoot(hit, out FishMMO.Shared.Core.ICharacter _);
+			return root != null ? root.transform.InverseTransformPoint(worldPoint) : Vector3.zero;
 		}
 
 		/// <summary>Writes <see cref="gathered"/> into <paramref name="results"/> in sweep order.</summary>
