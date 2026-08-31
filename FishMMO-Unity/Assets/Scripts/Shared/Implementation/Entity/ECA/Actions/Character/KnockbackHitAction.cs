@@ -45,18 +45,21 @@ namespace FishMMO.Shared
 			 * What the attacker gets instead is a cosmetic flinch, played now, on a child transform
 			 * NetworkTransform does not touch — see CharacterHitReaction. The server's real
 			 * displacement then arrives and the two compose rather than fight. */
+			if (ForceValue == null)
+			{
+				Log.Warning("KnockbackHitAction", "ForceValue provider is null.");
+				return;
+			}
+
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. */
+			float force = ForceValue.GetValue(initiator, eventData);
+
 			if (!EcaAuthority.IsServer(initiator, eventData))
 			{
 				if (EcaAuthority.MayPredict(initiator, eventData))
 				{
 					PlayPredictedReaction(eventData);
 				}
-				return;
-			}
-
-			if (ForceValue == null)
-			{
-				Log.Warning("KnockbackHitAction", "ForceValue provider is null.");
 				return;
 			}
 
@@ -68,10 +71,28 @@ namespace FishMMO.Shared
 				character.TryGet(out ICharacterDamageController defenderDamageController) &&
 				!defenderDamageController.Immortal)
 			{
+				/* A victim whose motor will not run this tick is not knocked back at all, rather than
+				 * knocked back later.
+				 *
+				 * KCCPlayer.OnReplicate returns before Motor.UpdatePhase1/2 for an incapacitated or
+				 * dead character, and BaseVelocity is motor state that survives in the reconcile —
+				 * so an impulse written here was not lost, it was STORED, and the whole of it fired
+				 * as one lurch on the tick the stun ended or the character was revived. The
+				 * ForceUnground timer went with it. Refusing is the honest reading of "this
+				 * character cannot be moved right now": crowd control that pins somebody in place
+				 * should not also be charging up the hit that lands when it breaks.
+				 *
+				 * Tested on the replicated HEALTH value rather than CharacterFlags.IsDead, matching
+				 * KCCPlayer's own gate — flags ride the spawn payload and are never re-synced. */
+				if (CharacterIncapacitation.IsIncapacitated(character) ||
+					!defenderDamageController.IsAlive)
+				{
+					return;
+				}
+
 				if (eventData.TryGet(out AbilityCollisionEventData abilityEventData) && abilityEventData.AbilityObject != null)
 				{
 					Vector3 knockbackDirection = abilityEventData.AbilityObject.Transform.forward;
-					float force = ForceValue.GetValue(initiator, eventData);
 
 					// Apply knockback as a velocity impulse through the KCC motor.
 					// This respects collision geometry, prediction/reconciliation,

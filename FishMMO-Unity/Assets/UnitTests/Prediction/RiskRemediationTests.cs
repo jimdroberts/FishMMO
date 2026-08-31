@@ -186,7 +186,7 @@ namespace FishMMO.UnitTests
 					ChainLength = 3,
 					ChainRadius = 3f,
 					TargetLayer = ~0,
-					MaxHits = 16,
+					QueryBufferHint = 16,
 				};
 
 				EventData eventData = new EventData(null);

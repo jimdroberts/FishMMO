@@ -73,11 +73,17 @@ namespace FishMMO.Shared
 					 * every peer therefore walked the observer's count away from the authoritative
 					 * one in a direction nothing would ever correct. Asking the same question the
 					 * spend asks keeps the two in step. */
+					/* Drawn BEFORE the gate, never after — see AbilityObject.RNG. A provider may
+					 * consume this object's generator, which every action in the event chain
+					 * shares, so evaluating behind the gate advanced it only on the peers that
+					 * spend the count. Evaluate the amount, then decide whether to apply it. */
+					int amount = AmountValue.GetValue(initiator, eventData);
+
 					if (!abilityObject.ResolvesHitsLocally)
 					{
 						return;
 					}
-					abilityObject.HitCount += AmountValue.GetValue(initiator, eventData);
+					abilityObject.HitCount += amount;
 				}
 				else
 				{

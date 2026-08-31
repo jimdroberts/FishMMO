@@ -225,9 +225,21 @@ namespace FishMMO.UnitTests
 		/// by its collider count.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Two defects in one roll. The caster's own hitbox was an eligible candidate, and a body with
 		/// two hitboxes occupied two entries and so came up twice as often as a single-collider one —
 		/// a loaded die that no amount of determinism downstream can correct.
+		/// </para>
+		/// <para>
+		/// <b>The roll space is explored by varying the TICK, not by seeding <c>EventData.RNG</c>.</b>
+		/// This selector is server-only and deliberately does not draw from the event's shared
+		/// generator — doing so advanced it on the server alone and desynchronised every later
+		/// ungated draw in the same chain (see <c>RandomTargetSelector.ResolveRNG</c>). Its stream
+		/// comes from <c>EventData.IndependentRNG</c>, seeded from the initiator, the event's tick
+		/// and the selector's salt, so the tick is the input that moves it. Assigning
+		/// <c>eventData.RNG</c> here would leave every iteration drawing the same index — which is
+		/// exactly how this test caught the first, wrong version of that fix.
+		/// </para>
 		/// </remarks>
 		[Test]
 		public void RandomSelector_DrawsFromBodies()
@@ -238,17 +250,18 @@ namespace FishMMO.UnitTests
 			GameObject single = MakeLooseCollider("randomSingle", new Vector3(4f, 0f, 0f));
 			Physics.SyncTransforms();
 
-			// MaxHits is the pool the roll draws from. Two bodies are in range besides the caster, so a
-			// pool of two must hold exactly one entry each; before the dedupe it held both of the
-			// two-hitbox body's colliders and the single-collider body could never be drawn at all.
+			// QueryBufferHint sizes the buffer; MaxHits is the pool the roll draws from. Two bodies are
+			// in range besides the caster, so a pool of two must hold exactly one entry each; before the
+			// dedupe it held both of the two-hitbox body's colliders and the single-collider body could
+			// never be drawn at all.
 			RandomTargetSelector selector = new RandomTargetSelector { Radius = 20f, TargetLayer = ~0, MaxHits = 2 };
 
 			bool everPickedSingle = false;
-			for (int seed = 0; seed < 16; ++seed)
+			for (uint tick = 0; tick < 16; ++tick)
 			{
 				EventData eventData = new EventData(null);
 				eventData.SetTarget(caster);
-				eventData.RNG = new DeterministicRNG(seed);
+				eventData.Add(new TickEventData(null, new PredictionTick(tick)));
 
 				List<GameObject> picked = new List<GameObject>(selector.SelectTargets(eventData));
 				LogAssert.AreEqual(1, picked.Count, "A random selection yields exactly one target.");
@@ -259,7 +272,7 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(everPickedSingle,
 				"The single-collider body is reachable. While the two-hitbox body held two entries of a " +
-				"two-entry pool this was unreachable for every seed.");
+				"two-entry pool this was unreachable for every tick.");
 		}
 
 		// ── Chain: a link is a body, and a body is visited once ──
@@ -286,7 +299,7 @@ namespace FishMMO.UnitTests
 				ChainLength = 3,
 				ChainRadius = 20f,
 				TargetLayer = ~0,
-				MaxHits = 16,
+				QueryBufferHint = 16,
 			};
 			List<GameObject> chain = Select(selector, context);
 

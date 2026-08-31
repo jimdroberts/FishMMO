@@ -189,6 +189,15 @@ namespace FishMMO.Shared
 						spent.Add(pair.Key);
 					}
 				}
+
+				/* INSIDE the borrow, not after it. RemoveSpent is the one call in this method that
+				 * can re-enter: Remove runs the template's OnRemove and fires the buff-removed
+				 * triggers, and authored content there is free to deal damage — which lands back in
+				 * Negate on some character. Releasing the borrow first meant that nested pass took
+				 * the SHARED list and cleared it while this loop was still walking it, so a second
+				 * emptied shield was silently never removed; worse, a nested pass that refilled the
+				 * list had its ids removed from THIS defender. */
+				RemoveSpent(buffController, spent);
 			}
 			finally
 			{
@@ -198,7 +207,6 @@ namespace FishMMO.Shared
 				}
 			}
 
-			RemoveSpent(buffController, spent);
 			return remaining < 0 ? 0 : remaining;
 		}
 
@@ -271,6 +279,9 @@ namespace FishMMO.Shared
 
 					break;
 				}
+
+				// Inside the borrow — see the note in Negate.
+				RemoveSpent(buffController, spent);
 			}
 			finally
 			{
@@ -280,7 +291,6 @@ namespace FishMMO.Shared
 				}
 			}
 
-			RemoveSpent(buffController, spent);
 			return deflected;
 		}
 
@@ -367,6 +377,9 @@ namespace FishMMO.Shared
 
 					break;
 				}
+
+				// Inside the borrow — see the note in Negate.
+				RemoveSpent(buffController, spent);
 			}
 			finally
 			{
@@ -376,7 +389,6 @@ namespace FishMMO.Shared
 				}
 			}
 
-			RemoveSpent(buffController, spent);
 			return blocked;
 		}
 

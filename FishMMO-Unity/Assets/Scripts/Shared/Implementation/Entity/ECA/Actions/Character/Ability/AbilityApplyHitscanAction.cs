@@ -165,6 +165,14 @@ namespace FishMMO.Shared
 			 * rather than on the attached tick being a replicate tick, because the server's own spawn
 			 * dispatches carry replicate ticks too — the trap AbilityApplyAreaAction was corrected
 			 * for, and the reason an area effect wired to OnSpawn used to run on no peer at all. */
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. A provider may consume
+			 * this object's generator, which every action in the event chain shares, so evaluating
+			 * behind the gate advances it on the server alone. Both values are taken here even
+			 * though the range check that reads one is further down: what has to match across peers
+			 * is the number of DRAWS, so neither may sit behind a branch the other does not. */
+			float range = RangeValue.GetValue(initiator, eventData);
+			int maxHits = MaxHitsValue.GetValue(initiator, eventData);
+
 			if (!abilityObject.IsServer)
 			{
 				return;
@@ -176,12 +184,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			float range = RangeValue.GetValue(initiator, eventData);
 			if (range <= 0f)
 			{
 				return;
 			}
-			int maxHits = MaxHitsValue.GetValue(initiator, eventData);
 
 			var onHitEvents = abilityObject.OnHitEvents;
 			if (onHitEvents == null)

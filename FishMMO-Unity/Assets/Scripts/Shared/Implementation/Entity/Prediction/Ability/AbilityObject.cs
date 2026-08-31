@@ -133,6 +133,28 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Random number generator for ability effects.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Shared by every action in this object's event chains, and advanced by side effect —
+		/// so a draw that happens on one peer and not another desynchronises everything drawn
+		/// after it.</b> The generator is threaded onto the OnSpawn, OnTick, OnHit and OnDestroy
+		/// payloads, and <c>RandomRangeValue</c> / <c>RandomRangeFloatValue</c> consume it through
+		/// <c>EventData.RNG</c>. Its state is carried in the reconcile, which keeps the server and
+		/// the caster's owner aligned; an observer has no reconcile and stays aligned only by
+		/// making the same draws in the same order.
+		/// </para>
+		/// <para>
+		/// <b>The rule that follows: a value provider is evaluated BEFORE any peer gate, never
+		/// after.</b> An action that draws behind <c>EcaAuthority.MayPredict</c>, an
+		/// <c>IsServer</c> test or <see cref="ResolvesHitsLocally"/> advances this generator only
+		/// on the peers that pass — and an ungated action later in the same chain
+		/// (<c>AbilityForkHitAction</c>) then reads a different number. That put an observer's copy
+		/// of a forking projectile on a heading the server never took, permanently, from its first
+		/// hit. Evaluate the provider, then gate on what to DO with it. This is the same rule
+		/// <c>ResolveTargetAndSpawn</c> already follows when it advances the seed during a replay
+		/// whose spawn it deliberately skips.
+		/// </para>
+		/// </remarks>
 		public DeterministicRNG RNG;
 
 		/// <summary>World position this object was spawned at.</summary>
@@ -899,11 +921,24 @@ namespace FishMMO.Shared
 		/// Turns this object onto the heading a deflection sent it along.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// A thin wrapper over <see cref="Redirect"/> so the two callers — the peer that DECIDED the
 		/// deflection and the peer that was TOLD about it — cannot start a new leg differently.
 		/// Redirect is what actually re-anchors the closed-form trajectory; writing the rotation
 		/// alone would be overwritten on the next tick, which is the trap
 		/// <c>AbilityForkHitAction</c> fell into.
+		/// </para>
+		/// <para>
+		/// <b>Quantised before it is applied, never after.</b> The peer that DECIDES a deflection
+		/// computes a raw <c>Vector3.Reflect</c>, but what every other peer receives is that vector
+		/// through <see cref="AimDirectionCompression"/> — so applying the raw one here had the
+		/// server and the caster's client re-anchor the closed-form trajectory on a heading the wire
+		/// cannot carry while observers flew the decoded one. Small per step, but the new leg is
+		/// evaluated from this rotation, so the gap grows along the whole of it. This is the same
+		/// quantise-at-the-producer rule <c>KCCPlayer.PopulateInput</c> follows for aim, applied at
+		/// the one place the deflect path was still breaking it; a heading that arrived already
+		/// decoded is a fixed point, so the observer path is unaffected.
+		/// </para>
 		/// </remarks>
 		/// <param name="heading">Unit direction to travel along from here.</param>
 		private void ApplyDeflection(Vector3 heading)
@@ -912,7 +947,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			Redirect(AimDirectionCompression.ToRotation(heading));
+			Redirect(AimDirectionCompression.ToRotation(AimDirectionCompression.Quantize(heading)));
 		}
 
 		/// <summary>

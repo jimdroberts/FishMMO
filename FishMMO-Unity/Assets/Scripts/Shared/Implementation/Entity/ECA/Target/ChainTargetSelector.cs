@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -45,7 +46,12 @@ namespace FishMMO.Shared
 		/// </remarks>
 		[Tooltip("Starting size of the per-jump overlap buffer. The chain limit is ChainLength; this only affects allocation.")]
 		[Min(1)]
-		public int MaxHits = 16;
+		/* Renamed from MaxHits. The name was the last thing still claiming a cap after the
+		 * tooltip and the remarks were corrected — and a name is what a designer reads in the
+		 * inspector. FormerlySerializedAs keeps any value already authored against the old
+		 * name; without it a rename silently drops the authored value and uses the C# default. */
+		[FormerlySerializedAs("MaxHits")]
+		public int QueryBufferHint = 16;
 
 
 
@@ -133,9 +139,9 @@ namespace FishMMO.Shared
 				// nested scope.
 				/* Re-queried until the buffer stops coming back full. A non-allocating query returns
 				 * at most buffer.Length results and says nothing about how many it discarded, and the
-				 * ones it discarded were chosen by the broadphase — so the ranking and the MaxHits cap
-				 * below would be ordering an arbitrary subset. The starting size is already wider than
-				 * the cap; this covers the crowd that outgrows it. */
+				 * ones it discarded were chosen by the broadphase — so the walk below would be
+				 * choosing from an arbitrary subset. This selector applies no cap at all; the
+				 * starting size is only a hint, and this covers the crowd that outgrows it. */
 				int hitCount;
 				while (true)
 				{
@@ -187,8 +193,8 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// A query buffer wide enough that the cap is applied by this selector rather than by the
-		/// broadphase.
+		/// A query buffer wide enough that the broadphase is not the thing deciding which candidates
+		/// this selector gets to see.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -200,12 +206,13 @@ namespace FishMMO.Shared
 		/// exactly this reason; the buffer was missed.
 		/// </para>
 		/// <para>
-		/// Deliberately wider than the cap: sizing it at exactly MaxHits makes the broadphase perform
-		/// the truncation, in its own order, before the selector sees the candidates. The caller still
-		/// grows it through <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> when a query comes back
-		/// full.
+		/// <b>This selector applies no cap</b> — see the remarks on <c>QueryBufferHint</c>, which is only a
+		/// sizing hint here. The width still matters: a buffer the query fills is truncated by the
+		/// broadphase in its own order, so a candidate that should have won could simply never be
+		/// offered. <see cref="TargetOrdering.TryGrowQueryBuffer{T}"/> is what covers the crowd that
+		/// outgrows the starting size.
 		/// </para>
 		/// </remarks>
-		private Collider[] NewHitBuffer() => new Collider[QueryBufferSize(MaxHits)];
+		private Collider[] NewHitBuffer() => new Collider[QueryBufferSize(QueryBufferHint)];
 	}
 }

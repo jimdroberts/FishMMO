@@ -53,11 +53,6 @@ namespace FishMMO.Shared
 			 * at all: paired with StopChainOnFailure it would abort the rest of the chain on every
 			 * peer that did not spend, taking the non-authoritative steps (FX, dialogue, UI) down
 			 * with it. "Not this peer's decision" is not the same as "the cost could not be paid". */
-			if (!EcaAuthority.MayPredict(initiator, eventData))
-			{
-				return true;
-			}
-
 			if (ResourceTemplateID == 0)
 			{
 				Log.Warning("ConsumeResourceAction", "ResourceTemplateID is not set.");
@@ -70,10 +65,19 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. The two guards above
+			 * are authoring faults that answer the same on every peer, so they may precede it; the
+			 * gate may not. */
+			int amount = AmountValue.GetValue(initiator, eventData);
+
+			if (!EcaAuthority.MayPredict(initiator, eventData))
+			{
+				return true;
+			}
+
 			if (!TryResolveTargetOrInitiator(initiator, eventData, out ICharacter characterToConsume)) return false;
 			if (!characterToConsume.TryGet(out ICharacterAttributeController attributeController)) return false;
 
-			int amount = AmountValue.GetValue(initiator, eventData);
 			if (!attributeController.TryGetResourceAttribute(ResourceTemplateID, out CharacterResourceAttribute resource))
 			{
 				return false;

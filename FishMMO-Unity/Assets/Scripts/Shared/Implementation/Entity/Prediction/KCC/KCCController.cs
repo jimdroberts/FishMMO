@@ -217,10 +217,17 @@ namespace FishMMO.Shared
 		/// Rotation of the virtual camera used for input-relative movement calculations.
 		/// </summary>
 		public Quaternion VirtualCameraRotation { get; private set; }
-		/// <summary>
-		/// True while the character is in the jumping state.
-		/// </summary>
-		public bool IsJumping { get; private set; }
+		/* IsJumping was REMOVED, not left unused.
+		 *
+		 * It was a public bool set in HandleJumping and cleared in OnLanded, with no reader anywhere
+		 * in the project — and it was also predicted state written from inside the replicate body
+		 * that no field of CharacterReconcileData restored. That combination is the trap: harmless
+		 * only for as long as nothing reads it, and a genuine divergence the moment something does,
+		 * because a replay re-runs HandleJumping while nothing ever puts the flag back.
+		 *
+		 * Anything that needs "is this character mid-jump" should derive it from state that IS
+		 * reconciled — Motor.GroundingStatus and BaseVelocity are both in KinematicCharacterMotorState
+		 * — or add a field to the reconcile deliberately. Do not reintroduce a bare flag here. */
 
 		/// <summary>
 		/// Tracks whether the motor has completed its first ground probe. When it is false,
@@ -861,8 +868,6 @@ namespace FishMMO.Shared
 					stamina.Consume(Constants.Character.JumpStaminaCost);
 
 					jumpRequested = false;
-
-					IsJumping = true;
 				}
 			}
 		}
@@ -1026,11 +1031,16 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called when the character lands on stable ground. Resets jumping state.
+		/// Called when the character lands on stable ground.
 		/// </summary>
+		/// <remarks>
+		/// Empty, and deliberately so — the extension point is the point, exactly as with
+		/// <see cref="OnLeaveStableGround"/>. Anything added here runs on every replayed tick of a
+		/// reconcile as well as on the live one, so it must be either idempotent or reconciled; see
+		/// the note where <c>IsJumping</c> was removed.
+		/// </remarks>
 		protected void OnLanded()
 		{
-			IsJumping = false;
 		}
 
 		/// <summary>

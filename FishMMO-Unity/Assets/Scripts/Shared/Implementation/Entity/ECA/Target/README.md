@@ -229,13 +229,13 @@ instead of corrupting it.
 | `AreaTargetSelector` | Sphere | Bodies within `Radius`, nearest first | `MaxHits`, applied after ranking and per-body dedupe |
 | `ConeTargetSelector` | Cone | Bodies within `Radius` and `Angle` of context's forward, nearest first | `MaxHits`, same order |
 | `LineTargetSelector` | Ray | Bodies along context's forward for `Length`, in ray order | `MaxHits` bodies, streamed as the ray is walked. **`MaxHits <= 0` means pierce everything.** |
-| `ChainTargetSelector` | Chained spheres | Up to `ChainLength` bodies, each the nearest unvisited one within `ChainRadius` of the previous | `ChainLength`. Its `MaxHits` field only sizes the per-jump buffer. |
+| `ChainTargetSelector` | Chained spheres | Up to `ChainLength` bodies, each the nearest unvisited one within `ChainRadius` of the previous | `ChainLength`. Its `QueryBufferHint` field only sizes the per-jump buffer. |
 
 ### Distance-ranked
 | Selector | Yields |
 |---|---|
-| `NearestTargetSelector` | The single closest candidate within `Radius` (excluding the context's own body). Its `MaxHits` field only sizes the buffer. |
-| `FurthestTargetSelector` | The single furthest candidate within `Radius` (same exclusion, same `MaxHits` caveat). |
+| `NearestTargetSelector` | The single closest candidate within `Radius` (excluding the context's own body). Its `QueryBufferHint` field only sizes the buffer. |
+| `FurthestTargetSelector` | The single furthest candidate within `Radius` (same exclusion, same `QueryBufferHint` caveat). |
 
 ### Random
 | Selector | Yields |

@@ -305,9 +305,9 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void ChainSelector_QueriesWiderThanMaxHits_AndTargetsEverythingByDefault()
+		public void ChainSelector_QueriesWiderThanItsBufferHint_AndTargetsEverythingByDefault()
 		{
-			ChainTargetSelector selector = new ChainTargetSelector { MaxHits = 4 };
+			ChainTargetSelector selector = new ChainTargetSelector { QueryBufferHint = 4 };
 			LogAssert.AreEqual(~0, selector.TargetLayer.value,
 				"A fresh chain selector must target every layer like the other physics selectors, not Nothing.");
 
@@ -316,7 +316,11 @@ namespace FishMMO.UnitTests
 			 * serves every caster — and a nested trigger fired by a candidate's conditions could
 			 * re-enter the same instance and re-run the query into the array the outer gather was
 			 * still walking. What this test asserts is unchanged: the STARTING size is wider than
-			 * the cap, so the broadphase cannot truncate before the ranking runs. */
+			 * the authored hint, so the broadphase cannot truncate before the ranking runs.
+			 *
+			 * The field was called MaxHits and is now QueryBufferHint — this selector caps with
+			 * ChainLength and never with this value, and the old name was the last thing still
+			 * claiming otherwise. */
 			MethodInfo newBuffer = typeof(ChainTargetSelector).GetMethod("NewHitBuffer", Any);
 			LogAssert.IsNotNull(newBuffer);
 			Collider[] hits = (Collider[])newBuffer.Invoke(selector, null);
@@ -324,7 +328,7 @@ namespace FishMMO.UnitTests
 			int expected = (int)size.Invoke(null, new object[] { 4 });
 			LogAssert.AreEqual(expected, hits.Length,
 				"The chain's query buffer must be the wide one, so the broadphase cannot truncate before ranking.");
-			LogAssert.IsTrue(hits.Length > 4, "Wider than MaxHits.");
+			LogAssert.IsTrue(hits.Length > 4, "Wider than the authored hint.");
 		}
 
 		private static GameObject MakeSphere(string name, Vector3 position)

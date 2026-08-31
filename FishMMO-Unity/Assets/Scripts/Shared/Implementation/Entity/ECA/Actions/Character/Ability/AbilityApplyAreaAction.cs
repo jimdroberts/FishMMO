@@ -84,13 +84,15 @@ namespace FishMMO.Shared
 				 * spawn and self-target dispatches carry replicate ticks too, so the tick test
 				 * this replaced suppressed the server as well and the effect happened nowhere.
 				 * Clients receive the results through the usual authoritative paths. */
+				/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. A provider may
+				 * consume this object's generator, which every action in the event chain shares. */
+				int maxHits = MaxHitsValue.GetValue(initiator, eventData);
+				float radius = RadiusValue.GetValue(initiator, eventData);
+
 				if (!abilityObject.IsServer)
 				{
 					return;
 				}
-
-				int maxHits = MaxHitsValue.GetValue(initiator, eventData);
-				float radius = RadiusValue.GetValue(initiator, eventData);
 
 				/* Borrow the shared list, or allocate a private one when a nested execution already
 				 * holds it. See the remarks on `hits`. */

@@ -43,14 +43,22 @@ namespace FishMMO.Shared
 			 * authoritative paths (reconcile, observer broadcast). Running it locally as well would
 			 * apply the effect twice on the peer that also happens to be the server, and produce a
 			 * value on a client that the server never agreed to. */
-			if (!EcaAuthority.IsServer(initiator, eventData))
-			{
-				return;
-			}
-
 			if (ReviveValue == null)
 			{
 				Log.Warning("ApplyReviveAction", "ReviveValue provider is null.");
+				return;
+			}
+
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. A provider may
+			 * consume the ability object's generator, which every action in the event chain shares,
+			 * so evaluating it behind the gate advanced it only on the server and left an ungated
+			 * action later in the chain reading a different number. The null guard above may
+			 * precede it — an authoring fault answers the same on every peer — but neither the gate
+			 * nor the target resolution below may. */
+			int amount = ReviveValue.GetValue(initiator, eventData);
+
+			if (!EcaAuthority.IsServer(initiator, eventData))
+			{
 				return;
 			}
 
@@ -63,8 +71,6 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-
-			int amount = ReviveValue.GetValue(initiator, eventData);
 
 			/* A player is offered the revive; they are not revived by it.
 			 *

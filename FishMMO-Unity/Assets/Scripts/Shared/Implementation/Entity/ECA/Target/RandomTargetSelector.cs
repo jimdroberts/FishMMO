@@ -97,8 +97,9 @@ namespace FishMMO.Shared
 		/// <see cref="DeterministicRNG.Shared"/> whenever the event carried no generator, which is
 		/// every event type except an ability collision. That instance is seeded from
 		/// <c>Environment.TickCount</c> and is shared by the whole process, so the roll was neither
-		/// reproducible nor agreed on. An event that was not handed a generator now derives one from
-		/// its own identity; an event that was keeps it.
+		/// reproducible nor agreed on. The roll now comes from this event chain's own stream under
+		/// <see cref="RandomSelectionSalt"/> in every case — see <see cref="ResolveRNG"/> for why a
+		/// server-only selector must not touch the event's shared generator even when it has one.
 		/// </para>
 		/// </remarks>
 		private void Gather(EventData eventData, GameObject context, List<GameObject> results)
@@ -175,20 +176,42 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The generator this selection draws from: the event's own when one was threaded onto it,
-		/// otherwise a stream derived from the event's identity under this selector's salt.
+		/// The generator this selection draws from: always this event chain's own stream under
+		/// <see cref="RandomSelectionSalt"/>, never the event's shared generator.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Never <c>eventData.RNG</c>, precisely because this selector is server-only.</b> The
+		/// shared generator is threaded onto an ability object's OnSpawn/OnTick/OnHit/OnDestroy
+		/// payloads and is advanced by side effect, so a draw taken behind a peer gate advances it
+		/// only on the peers that pass — and an ungated action later in the same chain
+		/// (<c>AbilityForkHitAction</c>) then reads a different number, putting an observer's copy
+		/// of a forking projectile on a heading the server never took, permanently, from its first
+		/// hit. That is the rule stated on <c>AbilityObject.RNG</c>.
+		/// </para>
+		/// <para>
+		/// An ACTION satisfies that rule by evaluating its value providers above its gate. This
+		/// selector cannot: <see cref="TargetSelector.IsAuthoritativePeer"/> gates the whole
+		/// selection, which is the point of it. So it takes a stream of its own instead. This used
+		/// to read <c>eventData.RNG</c> whenever one had been threaded on — which is every ability
+		/// event, i.e. exactly the case where the desynchronisation bites.
+		/// </para>
+		/// <para>
+		/// <see cref="EventData.IndependentRNG(int)"/> rather than <c>DeriveRNG</c>: the latter is a
+		/// pure factory and returns a fresh generator every call, so two selectors sharing this salt
+		/// would draw the same index rather than independent ones. Nothing is lost by the swap — the
+		/// stream is seeded from the initiator's network id, the event's tick and this salt, all
+		/// values every peer agrees on, so the roll stays reproducible run to run, which is all a
+		/// server-only selection ever needed.
+		/// </para>
+		/// </remarks>
 		private DeterministicRNG ResolveRNG(EventData eventData)
 		{
 			if (eventData == null)
 			{
 				return new DeterministicRNG(EventData.DeriveSeed(0, 0u, RandomSelectionSalt));
 			}
-			if (eventData.HasExplicitRNG)
-			{
-				return eventData.RNG;
-			}
-			return eventData.DeriveRNG(RandomSelectionSalt);
+			return eventData.IndependentRNG(RandomSelectionSalt);
 		}
 
 		/// <summary>

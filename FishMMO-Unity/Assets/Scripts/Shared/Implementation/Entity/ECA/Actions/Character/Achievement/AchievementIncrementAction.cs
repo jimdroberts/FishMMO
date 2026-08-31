@@ -37,11 +37,6 @@ namespace FishMMO.Shared
 			 * an effect, which reads as "the quest/item/achievement hook is broken" rather than as a
 			 * build-configuration problem. EcaAuthority asks the question that was meant all along,
 			 * of the peer the character actually belongs to. See EcaAuthority's own remarks. */
-			if (!EcaAuthority.IsServer(initiator, eventData))
-			{
-				return;
-			}
-
 			if (AchievementTemplate == null || initiator == null)
 			{
 				return;
@@ -53,12 +48,25 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. A provider may
+			 * consume the ability object's generator, which every action in the event chain shares,
+			 * so evaluating it behind the gate advanced it only on the server and left an ungated
+			 * action later in the chain reading a different number. The two guards above may
+			 * precede it — both are authoring faults that answer the same on every peer — but the
+			 * gate may not, and neither may the controller lookup below: an achievement controller
+			 * is a server-side component, so a client would have returned before drawing. */
+			int value = AmountValue.GetValue(initiator, eventData);
+
+			if (!EcaAuthority.IsServer(initiator, eventData))
+			{
+				return;
+			}
+
 			if (!initiator.TryGet(out IAchievementController achievementController))
 			{
 				return;
 			}
 
-			int value = AmountValue.GetValue(initiator, eventData);
 			if (value < 1)
 			{
 				return;

@@ -47,6 +47,26 @@ namespace FishMMO.Shared.Core
 		private DeterministicRNG rng;
 
 		/// <summary>
+		/// The event that owns this chain's independent streams — <c>this</c> for a root event, the
+		/// original for anything <see cref="Fork"/> produced. Never null after construction.
+		/// </summary>
+		/// <remarks>
+		/// A fan-out is one event, so the streams handed out by <see cref="IndependentRNG(int)"/>
+		/// must be one set shared by the root and every fork of it. Routing to a root is what makes
+		/// that work with LAZY allocation: sharing the dictionary by reference the way
+		/// <see cref="Fork"/> shares <see cref="rng"/> would only share it when the parent happened
+		/// to have allocated one before the fork was taken, and two forks of a parent that had not
+		/// would each get their own — which is exactly the correlation this type exists to avoid.
+		/// </remarks>
+		private EventData streamRoot;
+
+		/// <summary>
+		/// Independent streams held by <see cref="streamRoot"/>, keyed by salt. Null until the first
+		/// one is asked for, because most events never ask.
+		/// </summary>
+		private Dictionary<int, DeterministicRNG> independentStreams;
+
+		/// <summary>
 		/// The deterministic RNG for this event. An explicitly threaded generator (the ability
 		/// object's, for a hit) is returned as-is; otherwise one is derived on first use from the
 		/// event's own identity and cached.
@@ -68,7 +88,7 @@ namespace FishMMO.Shared.Core
 		/// Two events in the same tick from the same initiator share a stream deliberately: they are
 		/// the same event as far as reproduction is concerned. Where a caller needs an independent
 		/// reproducible stream — a selector that must not consume the rolls a later action expects —
-		/// it takes one from <see cref="DeriveRNG(int)"/> with its own salt.
+		/// it takes one from <see cref="IndependentRNG(int)"/> with its own salt.
 		/// </para>
 		/// </remarks>
 		public DeterministicRNG RNG
@@ -94,8 +114,67 @@ namespace FishMMO.Shared.Core
 		public bool HasExplicitRNG => rng != null;
 
 		/// <summary>
+		/// The one independent stream this event chain holds for <paramref name="salt"/>, created on
+		/// first use and shared by the root event and every <see cref="Fork"/> of it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>This is what a server-only consumer draws from, not <see cref="RNG"/>.</b> The shared
+		/// generator is threaded onto an ability object's OnSpawn/OnTick/OnHit/OnDestroy payloads
+		/// and is advanced by side effect, so a draw taken behind a peer gate advances it only on
+		/// the peers that pass — and an ungated action later in the same chain
+		/// (<c>AbilityForkHitAction</c>) then reads a different number. See <c>AbilityObject.RNG</c>
+		/// for the rule and what it cost. An action can satisfy it by evaluating its providers
+		/// above the gate; a server-only SELECTOR cannot, because the gate is the selector, so it
+		/// takes a stream of its own instead.
+		/// </para>
+		/// <para>
+		/// <b>Memoised, which is the whole difference from <see cref="DeriveRNG(int)"/>.</b> That
+		/// method is a pure factory and hands back a FRESH generator every call, so two consumers
+		/// sharing a salt — or one consumer called twice — would draw identical numbers rather than
+		/// independent ones, and the sequence would not advance at all. Holding one generator per
+		/// (event chain, salt) gives a stream that advances across draws exactly as
+		/// <see cref="RNG"/> does, while touching nothing <see cref="RNG"/>'s consumers rely on.
+		/// </para>
+		/// <para>
+		/// <b>Reproducible, not seedable.</b> The sequence is a function of the initiator's network
+		/// identity, the event's tick and <paramref name="salt"/> — values every peer agrees on —
+		/// so it is identical on every peer and on every run of the same cast. It deliberately does
+		/// NOT depend on any generator a caller assigned to <see cref="RNG"/>; that independence is
+		/// the point. Use a distinct constant salt per call site.
+		/// </para>
+		/// </remarks>
+		/// <param name="salt">Distinguishes one consumer's stream from another's within one event.</param>
+		/// <returns>The shared-per-chain generator for <paramref name="salt"/>.</returns>
+		public DeterministicRNG IndependentRNG(int salt)
+		{
+			/* Always the root's map, never this instance's. A fan-out is one event: a selector that
+			 * draws on the parent and an action that draws on a per-candidate fork must be walking
+			 * the same sequence, or the fork's first draw repeats the parent's. */
+			EventData root = streamRoot ?? this;
+			if (!ReferenceEquals(root, this))
+			{
+				return root.IndependentRNG(salt);
+			}
+
+			independentStreams ??= new Dictionary<int, DeterministicRNG>(1);
+			if (!independentStreams.TryGetValue(salt, out DeterministicRNG stream))
+			{
+				stream = DeriveRNG(salt);
+				independentStreams[salt] = stream;
+			}
+			return stream;
+		}
+
+		/// <summary>
 		/// Builds a reproducible generator for this event, independent of any other stream.
 		/// </summary>
+		/// <remarks>
+		/// A pure factory: every call returns a NEW generator positioned at the start of the
+		/// sequence for these inputs. That is what makes it testable, and what makes it the wrong
+		/// thing for a consumer that draws more than once — see <see cref="IndependentRNG(int)"/>,
+		/// which memoises one per (event chain, salt) so the sequence actually advances.
+		/// </remarks>
 		/// <param name="salt">
 		/// Distinguishes one consumer from another within the same event. Use a constant per call
 		/// site; anything derived from local state would defeat the point.
@@ -183,6 +262,7 @@ namespace FishMMO.Shared.Core
 		public EventData(ICharacter initiator, params EventData[] initialData)
 		{
 			Initiator = initiator;
+			streamRoot = this;
 			eventDataDictionary[GetType()] = this;
 			AddRange(initialData);
 		}
@@ -277,6 +357,11 @@ namespace FishMMO.Shared.Core
 			 * when it does not, the fork derives its own from the identity they both carry, which is
 			 * the same seed the parent would have derived. */
 			scoped.rng = rng;
+			/* The chain's independent streams follow the fork, so a server-only consumer drawing on
+			 * a per-candidate fork continues the sequence the parent started rather than restarting
+			 * it. Routed rather than copied because the map is allocated lazily and may not exist
+			 * yet — see the remarks on streamRoot. */
+			scoped.streamRoot = streamRoot ?? this;
 			scoped.ConditionFilter = ConditionFilter;
 			scoped.Merge(this);
 			return scoped;

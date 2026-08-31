@@ -54,14 +54,20 @@ namespace FishMMO.Shared
 			 * anybody, emit a combat report, or award loot rights. The server's own resource
 			 * broadcast overwrites the predicted value rather than accumulating on top of it, so a
 			 * misprediction heals itself on the next push instead of drifting. */
-			if (!EcaAuthority.MayPredict(initiator, eventData))
-			{
-				return;
-			}
-
 			if (DamageValue == null)
 			{
 				Log.Warning("DamageAction", "DamageValue provider is null.");
+				return;
+			}
+
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. A provider may
+			 * consume the ability object's generator, which every action in the event chain shares,
+			 * so evaluating behind the gate advanced it only on the peers that pass and left an
+			 * ungated action later in the chain reading a different number. */
+			int amount = DamageValue.GetValue(initiator, eventData);
+
+			if (!EcaAuthority.MayPredict(initiator, eventData))
+			{
 				return;
 			}
 
@@ -72,7 +78,6 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				int amount = DamageValue.GetValue(initiator, eventData);
 				defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
 
 				/* The caster's own floating number, drawn now rather than on the server's report.

@@ -38,14 +38,17 @@ namespace FishMMO.Shared
 			 * anybody, emit a combat report, or award loot rights. The server's own resource
 			 * broadcast overwrites the predicted value rather than accumulating on top of it, so a
 			 * misprediction heals itself on the next push instead of drifting. */
-			if (!EcaAuthority.MayPredict(initiator, eventData))
-			{
-				return;
-			}
-
 			if (HealValue == null)
 			{
 				Log.Warning("HealAction", "HealValue provider is null.");
+				return;
+			}
+
+			/* Drawn BEFORE the peer gate, never after — see AbilityObject.RNG. */
+			int amount = HealValue.GetValue(initiator, eventData);
+
+			if (!EcaAuthority.MayPredict(initiator, eventData))
+			{
 				return;
 			}
 
@@ -56,7 +59,6 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
-				int amount = HealValue.GetValue(initiator, eventData);
 				defenderDamageController.Heal(initiator, amount);
 
 				// The healer's own number, drawn now. See MayDrawPredictedNumber for the three guards.
