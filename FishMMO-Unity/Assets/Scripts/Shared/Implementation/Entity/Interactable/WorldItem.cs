@@ -35,6 +35,19 @@ namespace FishMMO.Shared
 		public uint Amount;
 
 		/// <summary>
+		/// The attribute-generation seed the granted <see cref="Item"/> is built from.
+		/// </summary>
+		/// <remarks>
+		/// Rolled by <see cref="ItemSpawnableSettings"/> at spawn so this drop has an identity of
+		/// its own. Without one, pickup built the item through the template-only constructor, whose
+		/// seed derives from a database id that is still zero — so every generated ground drop of a
+		/// template rolled IDENTICAL attributes from RNG(0), and rolled a DIFFERENT set after a
+		/// relog once a real row id existed to derive from. Zero means "no seed was rolled" and
+		/// pickup keeps the old derive-from-id behavior.
+		/// </remarks>
+		public int Seed;
+
+		/// <summary>
 		/// Achievement template ID to increment when a player picks up this world item.
 		/// </summary>
 		[TemplateReference(typeof(AchievementTemplate))]
@@ -42,6 +55,9 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc />
 		uint IWorldItem.Amount { get => Amount; set => Amount = value; }
+
+		/// <inheritdoc />
+		int IWorldItem.Seed { get => Seed; set => Seed = value; }
 
 		/// <inheritdoc />
 		int IWorldItem.AchievementTemplateID => AchievementTemplateID;
@@ -64,7 +80,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Writes the scene object ID, then the template and stack size.
+		/// Writes the scene object ID, then the template, stack size and generation seed.
 		/// </summary>
 		/// <remarks>
 		/// <see cref="Interactable.WritePayload"/> is what sends the scene object ID, and this
@@ -82,6 +98,11 @@ namespace FishMMO.Shared
 			// Write the Template ID so clients know which data to look up
 			writer.WriteInt32(templateID != 0 ? templateID : -1);
 			writer.WriteUInt32(Amount);
+			/* The seed rides along so an observer's copy names the same eventual item. NetworkBehaviour
+			 * payloads share one unframed buffer across behaviours, so ReadPayload below must consume
+			 * exactly this — adding or reordering a field on one side desynchronizes every behaviour
+			 * that reads after this one. */
+			writer.WriteInt32(Seed);
 		}
 
 		/// <inheritdoc />
@@ -91,6 +112,7 @@ namespace FishMMO.Shared
 
 			int readTemplateId = reader.ReadInt32();
 			Amount = reader.ReadUInt32();
+			Seed = reader.ReadInt32();
 
 			// Use your existing Cache system to find the ScriptableObject by ID
 			if (readTemplateId != -1)
@@ -100,14 +122,15 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Clears the rolled stack when this instance returns to the pool.
+		/// Clears the rolled stack and seed when this instance returns to the pool.
 		/// </summary>
 		/// <remarks>
 		/// <para>
 		/// Per-life state. A pooled world item that is not reset comes back out of the pool still
-		/// carrying the amount its previous life was spawned with, and
-		/// <see cref="ItemSpawnableSettings"/> only overwrites it when the object is respawned
-		/// through a spawner — an item dropped by script would keep the old number.
+		/// carrying the amount and seed its previous life was spawned with, and
+		/// <see cref="ItemSpawnableSettings"/> only overwrites them when the object is respawned
+		/// through a spawner — an item dropped by script would keep the old number, and a stale
+		/// seed would silently hand a new drop the previous drop's attribute roll.
 		/// </para>
 		/// <para>
 		/// The template is deliberately left alone: <c>templateID</c> is a serialized field a
@@ -120,6 +143,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			Amount = 0;
+			Seed = 0;
 		}
 	}
 }

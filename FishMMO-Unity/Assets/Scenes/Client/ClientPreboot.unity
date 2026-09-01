@@ -489,7 +489,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   MinFontSize: 8
-  MaxFontSize: 96
+  MaxFontSize: 48
 --- !u!4 &583672064
 Transform:
   m_ObjectHideFlags: 0

@@ -35,5 +35,20 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <returns>True when the cross-container swap succeeded; otherwise false.</returns>
 		bool SwapContainerItems(IItemContainer from, IItemContainer to, int fromIndex, int toIndex,
 			out List<Item> affectedFromItems, out List<long> deletedFromSlots, out List<Item> affectedToItems);
+
+		/// <summary>
+		/// Persists a grant of inventory items — freshly created items and the existing stacks they
+		/// merged into — through the atomic item-batch machinery, so an item the database has never
+		/// seen (ID 0) gets the identity the write returns assigned onto the live <see cref="Item"/>
+		/// and the owning client is told the final instance id and seed.
+		/// </summary>
+		/// <param name="character">The character the items were granted to.</param>
+		/// <param name="modifiedItems">The inventory items the grant touched, as returned by the container add.</param>
+		/// <param name="operation">Short operation name used in persistence log lines.</param>
+		/// <returns>
+		/// True when the batch was enqueued normally; false when the bounded queue was full and the
+		/// write ran on the fallback path. Never a rollback signal — memory is already authoritative.
+		/// </returns>
+		bool TryPersistGrantedInventoryItems(ICharacter character, List<Item> modifiedItems, string operation);
 	}
 }

@@ -984,7 +984,17 @@ namespace FishMMO.Client
 					}
 				}
 
-				targetLabel = UITKLabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+				targetLabel = UITKLabelMaker.Display3D(label, newPos, color, 0.25f, 0.0f, true);
+				if (targetLabel != null && targetLabel.Label != null)
+				{
+					/* Pooled labels are ungrouped by default because their transform root is the
+					 * pool. This one is pinned over a specific object, so it opts into that
+					 * object's nameplate stack explicitly — with a sort order above the authored
+					 * nameplates (name 0, guild 10) so the caption stacks on top of them instead
+					 * of painting through them. */
+					targetLabel.Label.GroupAnchor = target.root;
+					targetLabel.Label.SortOrder = 100;
+				}
 			}
 		}
 	}

@@ -322,6 +322,107 @@
     margin-bottom: 24px;
 }
 
+/* ── Ranks page ─────────────────────────────────────────── */
+
+.guild-ranks-scroll {
+    flex-grow: 1;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.guild-rank-list {
+    flex-direction: column;
+}
+
+/*
+    One card per rank rather than one table row: a rank carries fourteen
+    permission toggles, and a table wide enough for them would not fit the
+    panel. The card reuses the info-page surface treatment.
+*/
+.guild-rank {
+    flex-direction: column;
+    margin-top: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    background-color: var(--abyss-850);
+    border-left-color: var(--abyss-400);
+    border-left-width: 1px;
+    flex-shrink: 0;
+}
+
+.guild-rank__header {
+    flex-direction: row;
+    align-items: center;
+    min-height: 20px;
+}
+
+.guild-rank__name {
+    color: var(--text-bright);
+    font-size: 12px;
+    -unity-font-style: bold;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.guild-rank__order {
+    color: var(--abyss-300);
+    font-size: 10px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.guild-rank__action {
+    height: 18px;
+    font-size: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+/*
+    Two-column wrap. Fourteen toggles in one column would make every rank card
+    taller than the page; three columns would clip the longer labels.
+*/
+.guild-rank__permissions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.guild-rank__toggle {
+    width: 50%;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.guild-rank__toggle > .unity-toggle__input > Label {
+    font-size: 10px;
+}
+
+.guild-ranks-empty {
+    margin-top: 24px;
+    margin-bottom: 24px;
+}
+
+.guild-ranks-bar {
+    flex-direction: row;
+    align-items: center;
+    height: 28px;
+    padding-left: 8px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.guild-ranks-add {
+    height: 20px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
 /* ── Hover card ─────────────────────────────────────────── */
 
 /*

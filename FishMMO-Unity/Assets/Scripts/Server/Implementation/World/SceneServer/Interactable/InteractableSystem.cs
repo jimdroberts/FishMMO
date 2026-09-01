@@ -327,7 +327,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		/// <summary>
 		/// Attempts to add items to a characters inventory controller and broadcasts the update to the client.
-		/// DB persistence is fire-and-forget async.
+		/// DB persistence routes through the inventory system's atomic item batches, which is what
+		/// hands a freshly minted item its database identity.
 		/// </summary>
 		public bool SendNewItemBroadcast<T>(T conn, ICharacter character, IInventoryController inventoryController, Item newItem)
 		{
@@ -338,7 +339,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
-			List<CharacterItemData> itemsToSave = new List<CharacterItemData>();
 
 			// see if we have successfully added the item
 			if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
@@ -353,19 +353,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					{
 						continue;
 					}
-
-					// collect items for async DB persistence
-					item.Version++;
-					itemsToSave.Add(new CharacterItemData(
-						id: item.ID,
-						version: item.Version,
-						characterID: character.ID,
-						container: ItemContainerType.Inventory,
-						templateID: item.Template.ID,
-						slot: item.Slot,
-						seed: item.IsGenerated ? item.Generator.Seed : 0,
-						amount: item.IsStackable ? (uint)item.Stackable.Amount : 1
-					));
 
 					// create the new item broadcast
 					modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -387,28 +374,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Items = modifiedItemBroadcasts.ToArray(),
 				}, true, Channel.Reliable);
 
-				// Fire-and-forget: persist inventory changes to DB
-				if (itemsToSave.Count > 0)
+				/* Persist through CharacterInventorySystem's batch machinery rather than the bulk
+				 * upsert this used to enqueue. The difference is not stylistic: the bulk overload
+				 * returns no per-row identities, so an item minted by a grant (ID 0) never learned
+				 * the id the database issued. Its seed stayed underived, its attribute ledger
+				 * stayed unwritten — a looted weapon granted no stats — every later save inserted a
+				 * duplicate row until the snapshot pruned them, and a relog re-derived a DIFFERENT
+				 * seed from the real row id, silently re-rolling the item's attributes. The batch
+				 * path persists row by row, writes each returned identity back onto the live Item
+				 * on the main thread, and re-broadcasts the final InstanceID/Seed to this client.
+				 * A false return means only that the write is running on the bounded queue's
+				 * fallback; the grant itself has already landed in memory and stands either way. */
+				if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 				{
-					if (!TryEnqueueAsyncWork(() => PersistInventoryItemsAsync(itemsToSave), character.ID))
+					inventorySystem.TryPersistGrantedInventoryItems(character, modifiedItems, "ItemGrant");
+				}
+				else
+				{
+					/* Degraded path for a mis-assembled server: keep the write itself rather than
+					 * dropping it, accepting that identities are not written back until the
+					 * character's next relog load. */
+					Log.Error("InteractableSystem", $"SendNewItemBroadcast: ICharacterInventorySystem not found; persisting item grant for CharID={character.ID} without identity write-back.");
+
+					List<CharacterItemData> itemsToSave = new List<CharacterItemData>(modifiedItems.Count);
+					foreach (Item item in modifiedItems)
 					{
-						/* async void local function captures Unity's SynchronizationContext
-						 * so the continuation after await runs on the main thread.
-						 * ContinueWith would run on the ThreadPool. */
-						async void PersistWithFaultHandling()
+						if (item == null)
 						{
-							try
-							{
-								await PersistInventoryItemsAsync(itemsToSave);
-							}
-							catch (Exception ex)
-							{
-								_ = Log.Error("InteractableSystem", $"Fallback inventory persist failed for CharID={character.ID}: {ex}");
-							}
+							continue;
 						}
-						PersistWithFaultHandling();
-						Log.Warning("InteractableSystem", $"SendNewItemBroadcast: Async worker rejected inventory persist for CharID={character.ID}; executed fallback persistence path.");
+						item.Version++;
+						itemsToSave.Add(new CharacterItemData(
+							id: item.ID,
+							version: item.Version,
+							characterID: character.ID,
+							container: ItemContainerType.Inventory,
+							templateID: item.Template.ID,
+							slot: item.Slot,
+							seed: item.IsGenerated ? item.Generator.Seed : 0,
+							amount: item.IsStackable ? item.Stackable.Amount : 1
+						));
 					}
+					EnqueuePersistence(() => PersistInventoryItemsAsync(itemsToSave), character.ID);
 				}
 
 				return true;

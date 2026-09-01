@@ -54,7 +54,15 @@ namespace FishMMO.Shared
 
 				if (!initiator.TryGet(out IInventoryController inventoryController)) return;
 
-				Item newItem = new Item(worldItem.Template, worldItem.Amount);
+				/* Build the item under the seed the spawner rolled, so this drop's attributes are
+				 * its own and survive persistence. The template-only constructor derives its seed
+				 * from a database id that is still zero, which made every generated ground drop of
+				 * a template roll IDENTICAL attributes — and a different set after a relog, once a
+				 * real row id existed to derive from. A world item spawned by script without a
+				 * seed (Seed == 0) keeps the derive-from-id behavior. */
+				Item newItem = worldItem.Seed != 0
+					? new Item(0, worldItem.Seed, worldItem.Template, worldItem.Amount)
+					: new Item(worldItem.Template, worldItem.Amount);
 				if (newItem == null) return;
 
 				if (data.OnGrantItem != null && data.OnGrantItem(initiator, inventoryController, newItem))

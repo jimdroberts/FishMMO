@@ -760,6 +760,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Persists a grant of inventory items through the batch machinery. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Exists for the grant paths that live OUTSIDE this system — pickups, merchant purchases,
+		/// mail attachments, container and corpse loot all reach the inventory via
+		/// <c>InteractableSystem.SendNewItemBroadcast</c>. Those used to persist through the bulk
+		/// upsert, which returns no per-row identities: an item minted by a grant (ID 0) never
+		/// learned the id the database issued, so its generation seed stayed underived, its
+		/// attribute ledger stayed unwritten (<c>ItemGenerator.TryResolveLedgerSource</c> refuses a
+		/// zero id — a looted weapon granted no stats at all), and every later save inserted a fresh
+		/// duplicate row until the periodic snapshot pruned them. Routing the grant through a batch
+		/// gives it the same treatment as every other item write: single-row persists that return
+		/// the assigned identity, the main-thread write-back in
+		/// <see cref="ApplyAssignedIdentities"/>, and the client update that goes with it.
+		/// </para>
+		/// <para>
+		/// Memory is already authoritative by the time this is called — the grant has landed in the
+		/// container and the client has been told — so the return value is
+		/// <see cref="EnqueueItemBatch"/>'s: false means only that the bounded queue was full and
+		/// the write is running on the fallback path, never that the grant should be undone.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character the items were granted to.</param>
+		/// <param name="modifiedItems">The inventory items the grant touched.</param>
+		/// <param name="operation">Short operation name used in persistence log lines.</param>
+		/// <returns>True when the batch was enqueued normally; false when the fallback ran it.</returns>
+		public bool TryPersistGrantedInventoryItems(ICharacter character, List<Item> modifiedItems, string operation)
+		{
+			if (character == null || modifiedItems == null || modifiedItems.Count == 0)
+			{
+				// Nothing to write is a success: the grant changed no persisted state.
+				return true;
+			}
+
+			ItemWriteBatch batch = BeginItemBatch(character.ID, operation);
+			batch.AddItemWrites(BuildItemDataList(character.ID, modifiedItems, ItemContainerType.Inventory));
+			return EnqueueItemBatch(batch);
+		}
+
+		/// <summary>
 		/// Applies one batch inside a single database transaction. Worker thread.
 		/// </summary>
 		private async Task ApplyItemBatchAsync(ItemWriteBatch batch)
@@ -897,6 +938,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// row for it and offers an identity again, and the periodic snapshot does the same. The cost
 		/// of declining is one more round trip; the cost of guessing is a mis-keyed item.
 		/// </para>
+		/// <para>
+		/// <b>The owning client is told, too.</b> Its copy of a granted item still carries the
+		/// InstanceID 0 and seed 0 the grant broadcast quoted, so until now its tooltip lied and a
+		/// generated item displayed attributes rolled from the wrong seed until a relog rebuilt it
+		/// from the row. Re-sending the slot with the identity the database issued is the same
+		/// set-item message the grant used, so the client needs no new handling — SetItemSlot
+		/// replaces the slot's item wholesale.
+		/// </para>
 		/// </remarks>
 		/// <param name="characterID">The character the batch belonged to.</param>
 		/// <param name="assignments">Container, slot and the identity the database issued.</param>
@@ -917,6 +966,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			List<InventorySetItemBroadcast> inventoryUpdates = null;
+			List<BankSetItemBroadcast> bankUpdates = null;
+
 			for (int i = 0; i < assignments.Count; ++i)
 			{
 				CharacterItemIdAssignment assignment = assignments[i];
@@ -934,7 +986,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				item.AssignPersistentID(assignment.ID);
+				if (!item.AssignPersistentID(assignment.ID))
+				{
+					continue;
+				}
+
+				/* AssignPersistentID has just derived the real seed (when the item had none), so
+				 * the values quoted here are the ones the item will be reloaded with. Equipment has
+				 * no set-item broadcast; an equipped item assigned an identity here (snapshot-minted)
+				 * is corrected on the client at the next relog instead. */
+				switch (assignment.Container)
+				{
+					case ItemContainerType.Inventory:
+						(inventoryUpdates ??= new List<InventorySetItemBroadcast>(assignments.Count)).Add(new InventorySetItemBroadcast()
+						{
+							InstanceID = item.ID,
+							TemplateID = item.Template.ID,
+							Slot = item.Slot,
+							Seed = item.IsGenerated ? item.Generator.Seed : 0,
+							StackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						});
+						break;
+					case ItemContainerType.Bank:
+						(bankUpdates ??= new List<BankSetItemBroadcast>(assignments.Count)).Add(new BankSetItemBroadcast()
+						{
+							InstanceID = item.ID,
+							TemplateID = item.Template.ID,
+							Slot = item.Slot,
+							Seed = item.IsGenerated ? item.Generator.Seed : 0,
+							StackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						});
+						break;
+					default:
+						break;
+				}
+			}
+
+			if (character.Owner == null)
+			{
+				// Resident but disconnected (logout in progress). The relog load path reads the row
+				// directly, so there is nobody to tell and nothing left stale.
+				return;
+			}
+
+			if (inventoryUpdates != null)
+			{
+				Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
+				{
+					Items = inventoryUpdates.ToArray(),
+				}, true, Channel.Reliable);
+			}
+			if (bankUpdates != null)
+			{
+				Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
+				{
+					Items = bankUpdates.ToArray(),
+				}, true, Channel.Reliable);
 			}
 		}
 

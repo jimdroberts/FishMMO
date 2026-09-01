@@ -22,6 +22,13 @@ namespace FishMMO.Shared.Core
 		uint Amount { get; set; }
 
 		/// <summary>
+		/// The attribute-generation seed for the item granted on pickup. Rolled by the spawner at
+		/// spawn time; zero means no seed was rolled and pickup falls back to deriving one from the
+		/// item's eventual database identity.
+		/// </summary>
+		int Seed { get; set; }
+
+		/// <summary>
 		/// Despawns this world item via its assigned ObjectSpawner.
 		/// </summary>
 		void Despawn();

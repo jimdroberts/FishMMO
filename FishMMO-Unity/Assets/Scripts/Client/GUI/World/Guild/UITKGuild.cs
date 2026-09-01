@@ -100,6 +100,55 @@ namespace FishMMO.Client
 		/// <summary>USS class applied to a log entry's timestamp.</summary>
 		private const string LOG_ENTRY_TIME_CLASS = "guild-log-entry__time";
 
+		/// <summary>Name of the ranks tab button.</summary>
+		private const string TAB_RANKS_NAME = "guild-tab-ranks";
+		/// <summary>Name of the ranks page.</summary>
+		private const string PAGE_RANKS_NAME = "guild-ranks-tab";
+		/// <summary>Name of the container rank rows are built into.</summary>
+		private const string RANK_LIST_NAME = "guild-rank-list";
+		/// <summary>Name of the label shown when the ladder has not arrived.</summary>
+		private const string RANKS_EMPTY_NAME = "guild-ranks-empty";
+		/// <summary>Name of the add-rank button.</summary>
+		private const string ADD_RANK_NAME = "guild-add-rank";
+		/// <summary>USS class applied to each generated rank card.</summary>
+		private const string RANK_ROW_CLASS = "guild-rank";
+		/// <summary>USS class applied to a rank card's header strip.</summary>
+		private const string RANK_HEADER_CLASS = "guild-rank__header";
+		/// <summary>USS class applied to a rank card's name label.</summary>
+		private const string RANK_NAME_CLASS = "guild-rank__name";
+		/// <summary>USS class applied to a rank card's order label.</summary>
+		private const string RANK_ORDER_CLASS = "guild-rank__order";
+		/// <summary>USS class applied to a rank card's rename and delete buttons.</summary>
+		private const string RANK_ACTION_CLASS = "guild-rank__action";
+		/// <summary>USS class applied to a rank card's permission toggle container.</summary>
+		private const string RANK_PERMISSIONS_CLASS = "guild-rank__permissions";
+		/// <summary>USS class applied to each permission toggle.</summary>
+		private const string RANK_TOGGLE_CLASS = "guild-rank__toggle";
+
+		/// <summary>
+		/// The permission flags the ranks page renders as toggles, with the short labels that keep
+		/// two columns of them readable. <see cref="GuildPermissions.All"/> is deliberately absent:
+		/// it is every row of this table at once, not a fifteenth power, and a toggle for it would
+		/// have no honest half-checked state.
+		/// </summary>
+		private static readonly (GuildPermissions Bit, string Label)[] PermissionToggles =
+		{
+			(GuildPermissions.Invite, "Invite"),
+			(GuildPermissions.Kick, "Kick"),
+			(GuildPermissions.Promote, "Promote"),
+			(GuildPermissions.EditMessageOfTheDay, "Edit MOTD"),
+			(GuildPermissions.EditNotice, "Edit Notice"),
+			(GuildPermissions.EditRanks, "Edit Ranks"),
+			(GuildPermissions.ManageBank, "Bank"),
+			(GuildPermissions.ManageApplications, "Applications"),
+			(GuildPermissions.Disband, "Disband"),
+			(GuildPermissions.EditRecruitment, "Recruitment"),
+			(GuildPermissions.ViewOfficerNotes, "View O.Notes"),
+			(GuildPermissions.EditOfficerNotes, "Edit O.Notes"),
+			(GuildPermissions.EditPublicNotes, "Edit P.Notes"),
+			(GuildPermissions.TransferLeadership, "Transfer"),
+		};
+
 		/// <summary>Name of the notice band container.</summary>
 		private const string NOTICE_BAND_NAME = "guild-notice-band";
 		/// <summary>Name of the notice band label.</summary>
@@ -177,6 +226,8 @@ namespace FishMMO.Client
 			Info = 1,
 			/// <summary>The activity log.</summary>
 			Log = 2,
+			/// <summary>The rank ladder and its permission masks.</summary>
+			Ranks = 3,
 		}
 
 		/// <summary>
@@ -381,6 +432,16 @@ namespace FishMMO.Client
 		private VisualElement logList;
 		/// <summary>Label shown when the log is empty.</summary>
 		private Label logEmptyLabel;
+		/// <summary>Ranks tab button.</summary>
+		private Button ranksTabButton;
+		/// <summary>Ranks page container.</summary>
+		private VisualElement ranksPage;
+		/// <summary>Container rank cards are built into.</summary>
+		private VisualElement rankList;
+		/// <summary>Label shown when the ladder has not arrived.</summary>
+		private Label ranksEmptyLabel;
+		/// <summary>Add-rank button.</summary>
+		private Button addRankButton;
 
 		/// <summary>Notice band container.</summary>
 		private VisualElement noticeBand;
@@ -470,6 +531,11 @@ namespace FishMMO.Client
 			logPage = root.Q(PAGE_LOG_NAME);
 			logList = root.Q(LOG_LIST_NAME);
 			logEmptyLabel = root.Q<Label>(LOG_EMPTY_NAME);
+			ranksTabButton = root.Q<Button>(TAB_RANKS_NAME);
+			ranksPage = root.Q(PAGE_RANKS_NAME);
+			rankList = root.Q(RANK_LIST_NAME);
+			ranksEmptyLabel = root.Q<Label>(RANKS_EMPTY_NAME);
+			addRankButton = root.Q<Button>(ADD_RANK_NAME);
 
 			noticeBand = root.Q(NOTICE_BAND_NAME);
 			noticeBandLabel = root.Q<Label>(NOTICE_BAND_LABEL_NAME);
@@ -550,6 +616,16 @@ namespace FishMMO.Client
 				logTabButton.clicked += () => SetActiveTab(GuildTab.Log);
 			}
 
+			if (ranksTabButton != null)
+			{
+				ranksTabButton.clicked += () => SetActiveTab(GuildTab.Ranks);
+			}
+
+			if (addRankButton != null)
+			{
+				addRankButton.clicked += OnButtonAddRank;
+			}
+
 			if (editMotdButton != null)
 			{
 				editMotdButton.clicked += OnButtonEditMessageOfTheDay;
@@ -608,6 +684,7 @@ namespace FishMMO.Client
 			RefreshFilterButtons();
 			RebuildRosterView();
 			RebuildLogView();
+			RebuildRankView();
 		}
 
 		/// <summary>
@@ -938,6 +1015,21 @@ namespace FishMMO.Client
 					break;
 				case GuildResultType.InsufficientRank:
 					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild rank does not allow that.");
+					break;
+				case GuildResultType.RankNotFound:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild rank does not exist.");
+					break;
+				case GuildResultType.InvalidRankName:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That rank name is not allowed.");
+					break;
+				case GuildResultType.TooManyRanks:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild cannot have any more ranks.");
+					break;
+				case GuildResultType.RankInUse:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That rank still has members in it.");
+					break;
+				case GuildResultType.WouldOrphanGuild:
+					chat.InstantiateChatMessage(ChatChannel.System, "", "That change would leave nobody able to manage the guild's ranks.");
 					break;
 				case GuildResultType.Failed:
 					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild request could not be completed.");
@@ -1288,9 +1380,15 @@ namespace FishMMO.Client
 				logPage.style.display = tab == GuildTab.Log ? DisplayStyle.Flex : DisplayStyle.None;
 			}
 
+			if (ranksPage != null)
+			{
+				ranksPage.style.display = tab == GuildTab.Ranks ? DisplayStyle.Flex : DisplayStyle.None;
+			}
+
 			rosterTabButton?.EnableInClassList(TAB_ACTIVE_CLASS, tab == GuildTab.Roster);
 			infoTabButton?.EnableInClassList(TAB_ACTIVE_CLASS, tab == GuildTab.Info);
 			logTabButton?.EnableInClassList(TAB_ACTIVE_CLASS, tab == GuildTab.Log);
+			ranksTabButton?.EnableInClassList(TAB_ACTIVE_CLASS, tab == GuildTab.Ranks);
 
 			// The card belongs to a roster row; leaving it up over another page would strand it.
 			HideHoverCard();
@@ -1301,6 +1399,14 @@ namespace FishMMO.Client
 			if (tab == GuildTab.Log)
 			{
 				RequestGuildLog();
+			}
+
+			/* Same economics as the log: the ladder is pulled when the page is opened, and pushed
+			 * unprompted only when it actually changes, because the server republishes it to the
+			 * whole guild after every successful rank edit. */
+			if (tab == GuildTab.Ranks)
+			{
+				RequestGuildRanks();
 			}
 		}
 
@@ -1318,6 +1424,22 @@ namespace FishMMO.Client
 			}
 
 			Client.Broadcast(new GuildLogRequestBroadcast(), Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Asks the server for the guild's rank ladder.
+		/// </summary>
+		private void RequestGuildRanks()
+		{
+			if (Character == null ||
+				!Character.TryGet(out IGuildController guildController) ||
+				guildController.ID < 1 ||
+				!Client.NetworkManager.IsClientStarted)
+			{
+				return;
+			}
+
+			Client.Broadcast(new GuildRankListRequestBroadcast(), Channel.Reliable);
 		}
 
 		/// <summary>
@@ -1705,6 +1827,12 @@ namespace FishMMO.Client
 			logEntries = Array.Empty<GuildLogEntry>();
 			logNameCache.Clear();
 			RebuildLogView();
+
+			/* The ladder goes for the same reason. Leaving a guild already cleared it, but a
+			 * character switch did not — and rank orders overlap between guilds, so a stale ladder
+			 * renders the next guild's ranks under the previous guild's names. */
+			rankLadder.Clear();
+			RebuildRankView();
 
 			RefreshHeader();
 		}
@@ -2331,9 +2459,479 @@ namespace FishMMO.Client
 
 			/* Every roster row renders a rank NAME resolved from this ladder, so a ladder that
 			 * arrives after the roster — which is the normal ordering on join — has to repaint
-			 * the rows that were drawn without it. */
+			 * the rows that were drawn without it. The ranks page renders the ladder itself. */
 			RebuildRosterView();
 			ApplyGuildInfo();
+			RebuildRankView();
+		}
+
+		/// <summary>
+		/// Rebuilds the ranks page from the stored ladder, highest order first.
+		/// </summary>
+		/// <remarks>
+		/// Every visibility decision below mirrors a <c>GuildRules</c> check and decides what to
+		/// DRAW, nothing more: the server re-derives the same rules from its own read of the
+		/// ladder before it acts. The mirrors are deliberately the CHEAP halves — hold the
+		/// permission, outrank the row, keep some rank able to administer ranks — so a control
+		/// this page offers is one the server will almost always accept, and a control it
+		/// withholds is one the server would certainly refuse.
+		/// </remarks>
+		private void RebuildRankView()
+		{
+			if (rankList == null)
+			{
+				return;
+			}
+
+			rankList.Clear();
+
+			IGuildController guildController = null;
+			if (Character == null ||
+				!Character.TryGet(out guildController) ||
+				guildController.ID < 1)
+			{
+				guildController = null;
+			}
+
+			bool mayEditRanks = guildController != null &&
+				guildController.HasGuildPermission(GuildPermissions.EditRanks);
+
+			// Highest order first: the page reads down the ladder the way the roster does.
+			List<GuildRankEntry> ladder = new List<GuildRankEntry>(rankLadder.Values);
+			ladder.Sort((a, b) => b.RankOrder.CompareTo(a.RankOrder));
+
+			for (int i = 0; i < ladder.Count; ++i)
+			{
+				BuildRankRow(ladder[i], guildController, mayEditRanks);
+			}
+
+			if (ranksEmptyLabel != null)
+			{
+				ranksEmptyLabel.style.display = ladder.Count > 0 ? DisplayStyle.None : DisplayStyle.Flex;
+				ranksEmptyLabel.text = guildController != null
+					? "No ranks received yet."
+					: "You are not in a guild.";
+			}
+
+			if (addRankButton != null)
+			{
+				/* Shown only when a create could actually be sent: the viewer holds EditRanks,
+				 * the guild is under the rank cap, and a free order exists STRICTLY below the
+				 * viewer's own seat — the same three things GuildRules.CanCreateRank will check. */
+				addRankButton.style.display = mayEditRanks && FindFreeRankOrder(guildController) > 0
+					? DisplayStyle.Flex
+					: DisplayStyle.None;
+			}
+		}
+
+		/// <summary>
+		/// Builds one rank's card — name, order, permission toggles and whichever edit actions
+		/// the viewer's own standing permits — into the rank list.
+		/// </summary>
+		/// <param name="entry">The rank to render.</param>
+		/// <param name="guildController">The viewer's guild controller, or null when guildless.</param>
+		/// <param name="mayEditRanks">Whether the viewer holds <see cref="GuildPermissions.EditRanks"/>.</param>
+		private void BuildRankRow(GuildRankEntry entry, IGuildController guildController, bool mayEditRanks)
+		{
+			byte rankOrder = entry.RankOrder;
+			GuildPermissions rankPermissions = (GuildPermissions)entry.Permissions;
+
+			/* Mirrors GuildRules.CanEditRank's seniority rule: the viewer must be STRICTLY senior
+			 * to the row. One comparison excludes both the leader's seat and the viewer's own —
+			 * the leader seat is senior to everyone below it, and nobody outranks themselves. */
+			bool editable = mayEditRanks &&
+				guildController != null &&
+				guildController.RankOrder > rankOrder;
+
+			VisualElement rowRoot = new VisualElement();
+			rowRoot.AddToClassList(RANK_ROW_CLASS);
+
+			VisualElement header = new VisualElement();
+			header.AddToClassList(RANK_HEADER_CLASS);
+			rowRoot.Add(header);
+
+			Label name = new Label(ResolveRankName(rankOrder));
+			name.AddToClassList(RANK_NAME_CLASS);
+			// Rank names are player-authored. See OnStarting.
+			name.enableRichText = false;
+			header.Add(name);
+
+			Label order = new Label($"Rank {rankOrder}");
+			order.AddToClassList(RANK_ORDER_CLASS);
+			header.Add(order);
+
+			if (editable)
+			{
+				Button rename = new Button(() => PromptRenameRank(rankOrder));
+				rename.text = "Rename";
+				rename.AddToClassList("fish-button");
+				rename.AddToClassList(RANK_ACTION_CLASS);
+				header.Add(rename);
+
+				if (MayDeleteRank(rankOrder))
+				{
+					Button delete = new Button(() => ConfirmDeleteRank(rankOrder));
+					delete.text = "Delete";
+					delete.AddToClassList("fish-button");
+					delete.AddToClassList("fish-button--danger");
+					delete.AddToClassList(RANK_ACTION_CLASS);
+					header.Add(delete);
+				}
+			}
+
+			VisualElement permissionsBox = new VisualElement();
+			permissionsBox.AddToClassList(RANK_PERMISSIONS_CLASS);
+			rowRoot.Add(permissionsBox);
+
+			/* Bits the toggle table does not know about — a newer server's flags — are carried
+			 * through every edit untouched, so toggling Invite on this client cannot strip a
+			 * permission this client cannot render. */
+			GuildPermissions preserved = rankPermissions;
+			for (int i = 0; i < PermissionToggles.Length; ++i)
+			{
+				preserved &= ~PermissionToggles[i].Bit;
+			}
+
+			/* Every toggle goes in this list, DISABLED ones included: the mask sent on change is
+			 * composed from the whole row, and a bit that is merely locked must still be sent. */
+			List<(GuildPermissions Bit, Toggle Toggle)> toggles = editable
+				? new List<(GuildPermissions, Toggle)>(PermissionToggles.Length)
+				: null;
+
+			for (int i = 0; i < PermissionToggles.Length; ++i)
+			{
+				GuildPermissions bit = PermissionToggles[i].Bit;
+				bool held = (rankPermissions & bit) == bit;
+
+				Toggle toggle = new Toggle
+				{
+					text = PermissionToggles[i].Label,
+				};
+				toggle.AddToClassList("fish-toggle");
+				toggle.AddToClassList(RANK_TOGGLE_CLASS);
+				toggle.SetValueWithoutNotify(held);
+
+				if (!editable)
+				{
+					toggle.SetEnabled(false);
+				}
+				else
+				{
+					toggles.Add((bit, toggle));
+
+					/* Two per-bit mirrors of GuildRules.CanEditRank, drawn as a locked toggle
+					 * rather than as a refusal after the click:
+					 * - a bit the viewer does not themselves hold cannot be GRANTED, though one
+					 *   the rank already has can still be removed — that is not an escalation;
+					 * - the ladder's last EditRanks bit cannot be turned off, which would
+					 *   soft-lock the guild's rank administration permanently. */
+					bool mayGrant = held || guildController.HasGuildPermission(bit);
+					bool mayRevoke = bit != GuildPermissions.EditRanks ||
+						!held ||
+						!WouldOrphanRankAdministration(rankOrder);
+
+					if (!mayGrant || !mayRevoke)
+					{
+						toggle.SetEnabled(false);
+					}
+					else
+					{
+						toggle.RegisterValueChangedCallback((evt) => SendRankPermissions(rankOrder, preserved, toggles));
+					}
+				}
+
+				permissionsBox.Add(toggle);
+			}
+
+			rankList.Add(rowRoot);
+		}
+
+		/// <summary>
+		/// Composes a rank's permission mask from its row of toggles and sends the edit.
+		/// </summary>
+		/// <param name="rankOrder">The rank being edited.</param>
+		/// <param name="preserved">Bits the toggle table does not render, carried through as-is.</param>
+		/// <param name="toggles">Every toggle in the rank's row, locked ones included.</param>
+		/// <remarks>
+		/// Composed from the toggles rather than from the stored entry so that two quick toggles
+		/// compose instead of the second resurrecting the bit the first just changed — the toggles
+		/// hold the row's intended state while the server's republish is in flight.
+		/// </remarks>
+		private void SendRankPermissions(byte rankOrder, GuildPermissions preserved, List<(GuildPermissions Bit, Toggle Toggle)> toggles)
+		{
+			if (Character == null ||
+				!Character.TryGet(out IGuildController guildController) ||
+				guildController.ID < 1 ||
+				!Client.NetworkManager.IsClientStarted ||
+				!rankLadder.TryGetValue(rankOrder, out GuildRankEntry entry))
+			{
+				return;
+			}
+
+			GuildPermissions mask = preserved;
+			for (int i = 0; i < toggles.Count; ++i)
+			{
+				if (toggles[i].Toggle.value)
+				{
+					mask |= toggles[i].Bit;
+				}
+			}
+
+			/* The name rides along unchanged: the edit broadcast carries both halves, and the
+			 * ladder's copy of the name is the server's own, so re-sending it is a no-op. */
+			Client.Broadcast(new GuildEditRankBroadcast()
+			{
+				RankOrder = rankOrder,
+				Name = entry.Name,
+				Permissions = (long)mask,
+			}, Channel.Reliable);
+
+			/* Applied to the model optimistically so the client-side gating above keeps agreeing
+			 * with what was just sent. The server's republished ladder remains the authority and
+			 * overwrites this on arrival — including on refusal, where it never arrives and the
+			 * next pull corrects it. */
+			entry.Permissions = (long)mask;
+			rankLadder[rankOrder] = entry;
+		}
+
+		/// <summary>
+		/// Prompts for a rank's new name and sends the edit.
+		/// </summary>
+		/// <param name="rankOrder">The rank being renamed.</param>
+		private void PromptRenameRank(byte rankOrder)
+		{
+			if (Character == null ||
+				!Character.TryGet(out IGuildController guildController) ||
+				guildController.ID < 1 ||
+				!Client.NetworkManager.IsClientStarted ||
+				!guildController.HasGuildPermission(GuildPermissions.EditRanks) ||
+				!rankLadder.ContainsKey(rankOrder))
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox input))
+			{
+				return;
+			}
+
+			input.Open($"Type the new name for the rank \"{ResolveRankName(rankOrder)}\".", (s) =>
+			{
+				/* The same sanitizer the server runs, applied here so the player sees the trim
+				 * instead of discovering it later. The server runs it again — a client's idea of
+				 * a limit is never the limit. */
+				if (!GuildRankDefaults.TrySanitizeRankName(s, out string sanitized))
+				{
+					if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+					{
+						chat.InstantiateChatMessage(ChatChannel.System, "", "That rank name is not allowed.");
+					}
+					return;
+				}
+
+				/* The permissions are re-read INSIDE the callback: a toggle flipped while the
+				 * dialog was open would otherwise be reverted by a rename carrying the mask the
+				 * rank had when the prompt was raised. */
+				if (!rankLadder.TryGetValue(rankOrder, out GuildRankEntry entry))
+				{
+					return;
+				}
+
+				Client.Broadcast(new GuildEditRankBroadcast()
+				{
+					RankOrder = rankOrder,
+					Name = sanitized,
+					Permissions = entry.Permissions,
+				}, Channel.Reliable);
+			}, null);
+		}
+
+		/// <summary>
+		/// Confirms then broadcasts removal of a rank.
+		/// </summary>
+		/// <param name="rankOrder">The rank to remove.</param>
+		private void ConfirmDeleteRank(byte rankOrder)
+		{
+			if (Character == null ||
+				!Character.TryGet(out IGuildController guildController) ||
+				guildController.ID < 1 ||
+				!Client.NetworkManager.IsClientStarted ||
+				!guildController.HasGuildPermission(GuildPermissions.EditRanks))
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK("UIDialogBox", out UITKDialogBox dialog))
+			{
+				return;
+			}
+
+			dialog.Open($"Delete the rank \"{ResolveRankName(rankOrder)}\"? A rank that still has members in it cannot be deleted.", () =>
+			{
+				Client.Broadcast(new GuildDeleteRankBroadcast()
+				{
+					RankOrder = rankOrder,
+				}, Channel.Reliable);
+			}, () => { });
+		}
+
+		/// <summary>
+		/// Prompts for a name and broadcasts creation of a new rank.
+		/// </summary>
+		/// <remarks>
+		/// The position is chosen here rather than asked for: the highest free order strictly
+		/// below the creator's own, which is both where <c>GuildRules.CanCreateRank</c> requires
+		/// a new rank to sit and the only placement whose creator may immediately edit it. The
+		/// new rank starts with NO permissions — an empty mask always passes the server's "may
+		/// not grant what you do not hold" rule, and the toggles are the tool for the rest.
+		/// </remarks>
+		public void OnButtonAddRank()
+		{
+			if (Character == null ||
+				!Character.TryGet(out IGuildController guildController) ||
+				guildController.ID < 1 ||
+				!Client.NetworkManager.IsClientStarted ||
+				!guildController.HasGuildPermission(GuildPermissions.EditRanks))
+			{
+				return;
+			}
+
+			byte previewOrder = FindFreeRankOrder(guildController);
+			if (previewOrder < 1)
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox input))
+			{
+				return;
+			}
+
+			input.Open($"Type a name for the new rank. It will be created at position {previewOrder}, with no permissions.", (s) =>
+			{
+				if (!GuildRankDefaults.TrySanitizeRankName(s, out string sanitized))
+				{
+					if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+					{
+						chat.InstantiateChatMessage(ChatChannel.System, "", "That rank name is not allowed.");
+					}
+					return;
+				}
+
+				/* Recomputed inside the callback: another editor may have taken the previewed
+				 * slot while the dialog was open, and sending a taken order would only earn a
+				 * refusal the recomputation can avoid. */
+				if (Character == null || !Character.TryGet(out IGuildController controller))
+				{
+					return;
+				}
+
+				byte rankOrder = FindFreeRankOrder(controller);
+				if (rankOrder < 1)
+				{
+					return;
+				}
+
+				Client.Broadcast(new GuildCreateRankBroadcast()
+				{
+					RankOrder = rankOrder,
+					Name = sanitized,
+					Permissions = (long)GuildPermissions.None,
+				}, Channel.Reliable);
+			}, null);
+		}
+
+		/// <summary>
+		/// The position a new rank would be created at, or zero when none is available.
+		/// </summary>
+		/// <param name="guildController">The viewer's guild controller.</param>
+		/// <returns>The highest free order strictly below the viewer's seat, or zero.</returns>
+		/// <remarks>
+		/// Mirrors <c>GuildRules.CanCreateRank</c> plus the row cap the create service enforces.
+		/// Zero when the ladder has not arrived yet — a position computed against an empty ladder
+		/// would collide with a rank this client simply has not seen.
+		/// </remarks>
+		private byte FindFreeRankOrder(IGuildController guildController)
+		{
+			if (guildController == null ||
+				rankLadder.Count < 1 ||
+				rankLadder.Count >= GuildRankDefaults.MaxRanksPerGuild)
+			{
+				return 0;
+			}
+
+			int highest = Math.Min(guildController.RankOrder - 1, (int)GuildRankDefaults.MaxRankOrder);
+			for (int order = highest; order >= GuildRankDefaults.MinRankOrder; --order)
+			{
+				if (!rankLadder.ContainsKey((byte)order))
+				{
+					return (byte)order;
+				}
+			}
+
+			return 0;
+		}
+
+		/// <summary>
+		/// Whether a delete of this rank is worth offering at all.
+		/// </summary>
+		/// <param name="rankOrder">The rank in question.</param>
+		/// <returns>True when the cheap half of <c>GuildRules.CanDeleteRank</c> passes.</returns>
+		/// <remarks>
+		/// The caller has already established EditRanks and seniority; what is mirrored here is
+		/// the rest of the server's rule: a guild needs a seat to lead from and a seat to admit
+		/// into, and deleting a rank takes its permissions with it. Occupancy is NOT checked —
+		/// this client cannot know it, and the server refuses an occupied rank with
+		/// <c>RankInUse</c>, which the result handler turns into a sentence.
+		/// </remarks>
+		private bool MayDeleteRank(byte rankOrder)
+		{
+			if (rankLadder.Count <= 2)
+			{
+				return false;
+			}
+
+			if (!rankLadder.TryGetValue(rankOrder, out GuildRankEntry entry))
+			{
+				return false;
+			}
+
+			if (((GuildPermissions)entry.Permissions & GuildPermissions.EditRanks) == GuildPermissions.EditRanks &&
+				WouldOrphanRankAdministration(rankOrder))
+			{
+				return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Would losing this rank's <see cref="GuildPermissions.EditRanks"/> leave no rank able
+		/// to administer ranks?
+		/// </summary>
+		/// <param name="rankOrder">The rank whose bit would be lost, by edit or by deletion.</param>
+		/// <returns>True when no OTHER rank on the ladder holds the bit.</returns>
+		/// <remarks>
+		/// Client mirror of the server's soft-lock guard, evaluated over the ladder this client
+		/// holds. See <c>GuildRules.WouldOrphanRankAdministration</c> for why only this one
+		/// permission is protected: it is the only one whose absence prevents its own restoration.
+		/// </remarks>
+		private bool WouldOrphanRankAdministration(byte rankOrder)
+		{
+			foreach (KeyValuePair<byte, GuildRankEntry> pair in rankLadder)
+			{
+				if (pair.Key == rankOrder)
+				{
+					continue;
+				}
+
+				if (((GuildPermissions)pair.Value.Permissions & GuildPermissions.EditRanks) == GuildPermissions.EditRanks)
+				{
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 		/// <summary>

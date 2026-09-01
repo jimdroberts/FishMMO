@@ -61,12 +61,16 @@ namespace FishMMO.Shared.Core
 		private Color labelColor = Color.white;
 
 		[SerializeField]
-		[Tooltip("Font size in UI panel points at the reference distance.")]
-		private float labelFontSize = 14.0f;
+		[Tooltip("Font size in world units; the renderer scales it by distance at projection time.")]
+		private float labelFontSize = 0.25f;
 
 		[SerializeField]
 		[Tooltip("World-space offset from this transform, applied before projection.")]
 		private Vector3 worldOffset = Vector3.zero;
+
+		[SerializeField]
+		[Tooltip("Draw-order bias within the label layer; also the bottom-to-top order within a nameplate stack.")]
+		private int sortOrder;
 
 		/// <summary>
 		/// Incremented whenever text, colour or font size changes.
@@ -139,9 +143,32 @@ namespace FishMMO.Shared.Core
 		}
 
 		/// <summary>
-		/// Optional sort bias. Higher values draw in front of lower ones within the label layer.
+		/// Optional sort bias. Higher values draw in front of lower ones within the label layer,
+		/// and stack higher up the screen within a label group.
 		/// </summary>
-		public int SortOrder { get; set; }
+		/// <remarks>
+		/// Serialized so prefab-authored nameplates can declare their place in the overhead stack
+		/// (name below, guild above, target caption on top) without a script having to assign it
+		/// at runtime — the labels are plain data components with no controller of their own.
+		/// </remarks>
+		public int SortOrder
+		{
+			get => sortOrder;
+			set => sortOrder = value;
+		}
+
+		/// <summary>
+		/// Optional grouping key for the renderer's vertical stacking. Labels that resolve to the
+		/// same transform are stacked above one another instead of drawn at coincident points.
+		/// </summary>
+		/// <remarks>
+		/// Runtime-only on purpose: a serialized reference could not describe the interesting case,
+		/// which is a pooled label being attached to a target the pool knows nothing about at author
+		/// time. Null means ungrouped — the default for pooled labels, whose transform root is the
+		/// pool object and therefore meaningless as a grouping key; the renderer falls back to the
+		/// transform root only for labels that live on a character.
+		/// </remarks>
+		public Transform GroupAnchor { get; set; }
 
 		/// <summary>
 		/// The world position this label should be drawn at.

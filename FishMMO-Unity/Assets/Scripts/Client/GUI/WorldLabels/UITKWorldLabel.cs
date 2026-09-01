@@ -332,6 +332,13 @@ namespace FishMMO.Client
 			baseOffset = Vector3.zero;
 			target.WorldOffset = baseOffset;
 
+			/* Grouping is per-checkout state, not per-label state. The previous occupant may have
+			 * been grouped and reordered (the target frame stacks its caption above nameplates);
+			 * left in place, a recycled damage number would inherit that anchor and stack itself
+			 * onto an unrelated character's nameplates. */
+			target.GroupAnchor = null;
+			target.SortOrder = 0;
+
 			target.Set(text, color);
 			target.fontSize = fontSize;
 

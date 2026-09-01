@@ -22,6 +22,7 @@
             <ui:Button name="guild-tab-roster" text="Roster" class="fish-tab guild-tab" />
             <ui:Button name="guild-tab-info" text="Info" class="fish-tab guild-tab" />
             <ui:Button name="guild-tab-log" text="Log" class="fish-tab guild-tab" />
+            <ui:Button name="guild-tab-ranks" text="Ranks" class="fish-tab guild-tab" />
         </ui:VisualElement>
 
         <!--
@@ -83,6 +84,21 @@
                 <ui:Label name="guild-log-empty" text="No guild activity recorded yet."
                           class="fish-empty guild-log-empty" />
             </ui:ScrollView>
+        </ui:VisualElement>
+
+        <!--
+            Ranks page. The rows themselves are generated in C# — which ranks exist, and which
+            of their controls the viewer's own standing permits, are both server data.
+        -->
+        <ui:VisualElement name="guild-ranks-tab" class="guild-tab-page">
+            <ui:ScrollView name="guild-ranks-scroll" class="fish-scroll guild-ranks-scroll">
+                <ui:VisualElement name="guild-rank-list" class="guild-rank-list" />
+                <ui:Label name="guild-ranks-empty" text="No ranks received yet."
+                          class="fish-empty guild-ranks-empty" />
+            </ui:ScrollView>
+            <ui:VisualElement name="guild-ranks-bar" class="guild-ranks-bar">
+                <ui:Button name="guild-add-rank" text="Add Rank" class="fish-button guild-ranks-add" />
+            </ui:VisualElement>
         </ui:VisualElement>
 
         <!--

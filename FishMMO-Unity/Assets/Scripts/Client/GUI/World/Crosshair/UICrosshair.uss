@@ -19,4 +19,12 @@
     width: 8px;
     height: 8px;
     -unity-background-scale-mode: scale-to-fit;
+    /*
+        The uGUI crosshair drew Unity's BUILT-IN UISprite (fileID 10905), which has no
+        asset to reference from USS — that reference is what did not survive the UITK
+        port, leaving this element a fully transparent box. Crosshair.png is a
+        project-owned 8x8 white plus; the theme system tints it at runtime via
+        unityBackgroundImageTintColor (UITKThemeManager.SetTint), so it must stay white.
+    */
+    background-image: url("Crosshair.png");
 }

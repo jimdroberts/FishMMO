@@ -1164,6 +1164,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 					}
 				});
+
+				/* The founder's client learns what it may DO from GuildRankListBroadcast — the
+				 * GuildAddBroadcast above carries only a rank ORDER, and the client deliberately
+				 * never derives a permission mask from a number. Without this send the founder
+				 * sits at Permissions.None until a relog: no invite button, no MOTD/notice
+				 * editing, and a rank rendered as a bare "3" because the rank names live only in
+				 * the ladder. Resolving also seeds the default three-rung ladder rows if the
+				 * create path has not written them yet. */
+				GuildAuthority authority = await ResolveGuildAuthorityAsync(newGuildID, characterID);
+				SendGuildRankList(conn, authority);
 			}
 			catch (Exception ex)
 			{

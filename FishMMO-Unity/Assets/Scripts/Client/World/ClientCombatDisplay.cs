@@ -397,7 +397,7 @@ namespace FishMMO.Client
 			 * attribute, and the report is free to arrive before this client has resolved the
 			 * template, so the colour falls back rather than the number being skipped. */
 			Color damageColor = dmg != null ? dmg.DisplayColor : new TinyColor(255, 64, 64).ToUnityColor();
-			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, damageColor, 2.0f, persistTime, false, fx);
+			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, damageColor, 0.5f, persistTime, false, fx);
 		}
 
 		private UITKWorldLabel OnHealed(ICharacter healer, ICharacter healed, int amount, float persistTime = ReportedLabelPersistSeconds)
@@ -407,7 +407,7 @@ namespace FishMMO.Client
 			var pos = healed.Transform.position;
 			pos.y += GetDisplayHeight(healed);
 			int fx = 0; fx.EnableBit(LabelEffect.FloatUp); fx.EnableBit(LabelEffect.FadeOut);
-			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, persistTime, false, fx);
+			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, new TinyColor(64, 64, 255).ToUnityColor(), 0.5f, persistTime, false, fx);
 		}
 
 		private void OnKilled(ICharacter killer, ICharacter victim)
@@ -429,7 +429,7 @@ namespace FishMMO.Client
 			var pos = character.Transform.position;
 			pos.y += GetDisplayHeight(character);
 			int fx = 0; fx.EnableBit(LabelEffect.FadeIn); fx.EnableBit(LabelEffect.FadeOut); fx.EnableBit(LabelEffect.Bounce);
-			UITKLabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 2.0f, 4.0f, false, fx);
+			UITKLabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 0.6f, 4.0f, false, fx);
 		}
 	}
 }

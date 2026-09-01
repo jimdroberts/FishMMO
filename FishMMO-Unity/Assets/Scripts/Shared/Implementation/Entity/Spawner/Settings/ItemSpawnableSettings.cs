@@ -80,7 +80,8 @@ namespace FishMMO.Shared
 		public int AchievementTemplateID;
 
 		/// <summary>
-		/// Injects the rolled item template and stack amount into the spawned WorldItem component.
+		/// Injects the rolled item template, stack amount and generation seed into the spawned
+		/// WorldItem component.
 		/// </summary>
 		/// <param name="nob">The instantiated network object to configure.</param>
 		/// <param name="spawner">The spawner that created this object.</param>
@@ -115,6 +116,19 @@ namespace FishMMO.Shared
 			// Range's upper bound is exclusive, and a max below the min would otherwise throw.
 			int high = Mathf.Max(minimum, maximum);
 			worldItem.Amount = (uint)DeterministicRNG.Shared.Range(Mathf.Max(1, minimum), high + 1);
+
+			/* The identity half of the roll. Item.Initialize treats seed 0 as "derive one from the
+			 * database id", and a freshly granted item has no id yet — so a drop spawned without a
+			 * seed rolled its attributes from RNG(0), identically for every drop of the template,
+			 * and re-rolled them differently at the next relog once a real id existed. Zero is that
+			 * sentinel, so it is re-rolled away. Two 16-bit draws cover the full int range; a single
+			 * Range(int.MinValue, int.MaxValue) call spans 2^32 and is clamped with a warning. */
+			int seed;
+			do
+			{
+				seed = (DeterministicRNG.Shared.Next(0x10000) << 16) | DeterministicRNG.Shared.Next(0x10000);
+			} while (seed == 0);
+			worldItem.Seed = seed;
 		}
 
 		/// <summary>

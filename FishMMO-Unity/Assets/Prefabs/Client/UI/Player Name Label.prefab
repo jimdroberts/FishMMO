@@ -50,5 +50,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
   labelText: 
   labelColor: {r: 1, g: 1, b: 1, a: 1}
-  labelFontSize: 1
+  labelFontSize: 0.25
   worldOffset: {x: 0, y: 0, z: 0}
+  sortOrder: 0
