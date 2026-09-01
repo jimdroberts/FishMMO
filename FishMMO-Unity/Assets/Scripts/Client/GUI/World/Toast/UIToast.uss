@@ -1,0 +1,53 @@
+/* Toast notifications.
+ *
+ * The root spans the screen and ignores picking so nothing here can eat a click meant for the
+ * world beneath it — a message that steals input is worse than no message.
+ */
+
+.toast-root {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+/* Sits directly above the chat panel, which is anchored left: 24px / bottom: 40px at 420px wide
+ * and 280px tall — so its top edge is 320px up, and this clears it by 8px. Moved here from
+ * top-centre, where the target frame covered it.
+ *
+ * Anchored by its BOTTOM edge, so the stack grows upward as toasts arrive: the newest sits
+ * closest to the chat log and older ones drift away from the eye, which is the direction chat
+ * itself reads. */
+.toast-stack {
+    position: absolute;
+    left: 24px;
+    bottom: 328px;
+    width: 420px;
+    align-items: flex-start;
+}
+
+.toast {
+    margin-bottom: 6px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border-left-width: 3px;
+    border-top-left-radius: 2px;
+    border-bottom-left-radius: 2px;
+    background-color: rgba(12, 14, 18, 0.88);
+    color: rgb(228, 232, 236);
+    font-size: 14px;
+    -unity-text-align: middle-left;
+    white-space: normal;
+    /* Matches the chat panel's width, so the two read as one column rather than two. */
+    max-width: 420px;
+}
+
+/* Severity is carried by the left rule only. The plate stays the same weight for every kind, so a
+ * warning does not shout louder than the thing the player is trying to look at. */
+.toast-info    { border-left-color: rgb(90, 150, 200); }
+.toast-success { border-left-color: rgb(110, 190, 130); }
+.toast-warning { border-left-color: rgb(220, 170, 70); }
+.toast-error   { border-left-color: rgb(210, 100, 90); }
