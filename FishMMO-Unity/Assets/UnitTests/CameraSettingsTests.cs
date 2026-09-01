@@ -137,6 +137,23 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void ApplyLookSensitivity_ReportsWhetherACameraReceivedIt()
+		{
+			/* What the Debug line in ApplySaved reports. The distinction matters because "applied"
+			 * and "applied to nothing" were indistinguishable for a whole release: the no-camera
+			 * path is the normal one at boot, so it cannot be an error, which is exactly why it
+			 * needs to be visible instead. */
+			LogAssert.IsTrue(ClientCameraSettings.ApplyLookSensitivity(0.4f),
+				"a camera is present, so the value lands");
+
+			UnityEngine.Object.DestroyImmediate(cameraObject);
+			cameraObject = null;
+
+			LogAssert.IsFalse(ClientCameraSettings.ApplyLookSensitivity(0.4f),
+				"with no camera the value goes nowhere, and the caller must be able to tell");
+		}
+
+		[Test]
 		public void TheSavedSensitivity_IsAppliedWhenTheLocalCharacterInitializes()
 		{
 			/* Pinned in source. This is the wiring the feature was missing, and it is not reachable

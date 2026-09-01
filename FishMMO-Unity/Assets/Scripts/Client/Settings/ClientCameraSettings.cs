@@ -53,13 +53,35 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Applies the stored look sensitivity to the live camera.
 		/// </summary>
+		/// <remarks>
+		/// Reports what it did, at Debug. This apply is the one that decides whether a player's
+		/// saved sensitivity is honoured, and it previously failed in total silence: the value was
+		/// stored, the options panel displayed it, and the camera ran at its authored speed for the
+		/// whole session with nothing anywhere saying so. A line here is what turns "the slider
+		/// feels wrong" from a guess into something answerable from a log.
+		///
+		/// Only this path logs. ApplyLookSensitivity is also called for every value change while
+		/// the player drags the slider, which would be pure noise.
+		/// </remarks>
 		public static void ApplySaved()
 		{
-			ApplyLookSensitivity(ClientSettings.GetFloat(
+			float sensitivity = ClientSettings.GetFloat(
 				ClientSettings.LookSensitivityKey,
 				DefaultLookSensitivity,
 				MinimumLookSensitivity,
-				MaximumLookSensitivity));
+				MaximumLookSensitivity);
+
+			if (ApplyLookSensitivity(sensitivity))
+			{
+				Log.Debug("ClientCameraSettings",
+					$"Look sensitivity {sensitivity} applied to the camera.");
+			}
+			else
+			{
+				Log.Debug("ClientCameraSettings",
+					$"Look sensitivity {sensitivity} not applied: no camera yet. Expected during " +
+					"boot, and applied again once the character is in the world.");
+			}
 		}
 
 		/// <summary>
@@ -72,7 +94,8 @@ namespace FishMMO.Client
 		/// immovable.
 		/// </remarks>
 		/// <param name="value">Sensitivity multiplier. Clamped to the supported range.</param>
-		public static void ApplyLookSensitivity(float value)
+		/// <returns><c>true</c> if a camera received the value; <c>false</c> if there is none yet.</returns>
+		public static bool ApplyLookSensitivity(float value)
 		{
 			float clamped = float.IsNaN(value)
 				? DefaultLookSensitivity
@@ -87,10 +110,11 @@ namespace FishMMO.Client
 				 * is in the world. Without that second apply the camera keeps its authored
 				 * RotationSpeed for the whole session, and the saved value appears to be ignored
 				 * until the player happens to move the slider. */
-				return;
+				return false;
 			}
 
 			camera.RotationSpeed = clamped;
+			return true;
 		}
 
 		/// <summary>
