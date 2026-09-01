@@ -62,6 +62,11 @@
                     <ui:Label name="brightness-value" text="100%" class="fish-hint options-row-value" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
+                    <ui:Label text="Look Sensitivity" class="fish-label options-row-label" />
+                    <ui:Slider name="look-sensitivity-slider" low-value="0.1" high-value="1" class="options-row-field" />
+                    <ui:Label name="look-sensitivity-value" text="0.50" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="Frame Rate Limit" class="fish-label options-row-label" />
                     <ui:DropdownField name="framerate-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>

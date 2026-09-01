@@ -57,6 +57,12 @@ namespace FishMMO.Client
 		public const string FrameRateKey = "Frame Rate Limit";
 		/// <summary>Configuration key for the brightness setting.</summary>
 		public const string BrightnessKey = "Brightness";
+
+		/// <summary>
+		/// How far the mouse turns the view. Only observable while the cursor is locked, which is
+		/// the state the mouse drives the camera in.
+		/// </summary>
+		public const string LookSensitivityKey = "Look Sensitivity";
 		/// <summary>Configuration key for the resolution width setting.</summary>
 		public const string ResolutionWidthKey = "Resolution Width";
 		/// <summary>Configuration key for the resolution height setting.</summary>
@@ -555,6 +561,7 @@ namespace FishMMO.Client
 			}
 
 			Apply("display", ClientDisplaySettings.ApplySaved);
+			Apply("camera", ClientCameraSettings.ApplySaved);
 			Apply("audio", ClientAudioSettings.ApplySaved);
 			Apply("interface", () => UITKPanelScale.Apply(GetFloat(UIScaleKey, 1.0f, MinimumUIScale, MaximumUIScale)));
 
