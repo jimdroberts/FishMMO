@@ -81,9 +81,12 @@ namespace FishMMO.Client
 			KCCCamera camera = ResolveCamera();
 			if (camera == null)
 			{
-				/* Not an error. Boot applies settings before the world exists, and the camera is
-				 * re-resolved on the next apply — which the options panel triggers, and which
-				 * happens again on the following launch. */
+				/* Not an error, and not the whole story either: boot applies settings before a
+				 * world camera exists, so this returns having done nothing. That is fine only
+				 * because PlayerInputController.Initialize applies again once the local character
+				 * is in the world. Without that second apply the camera keeps its authored
+				 * RotationSpeed for the whole session, and the saved value appears to be ignored
+				 * until the player happens to move the slider. */
 				return;
 			}
 
