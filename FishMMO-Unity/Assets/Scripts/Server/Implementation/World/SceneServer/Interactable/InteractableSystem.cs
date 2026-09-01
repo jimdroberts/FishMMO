@@ -495,10 +495,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
+				/* Instrumented refusals. Every branch below used to decline in silence, so "I
+				 * pressed E on the banker and nothing happened" was undiagnosable from either
+				 * side's logs. Debug level; raise the level while chasing an interaction report. */
 				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
-				if (interactable != null &&
-					interactable.CanInteract(character) &&
-					interactable.TryConsumeInteractRateLimit(character))
+				if (interactable == null)
+				{
+					Log.Debug("InteractableSystem",
+						$"Interact {msg.InteractableID} by {character.ID}: scene object resolved but carries no interactable.");
+					return;
+				}
+				if (!interactable.CanInteract(character))
+				{
+					Log.Debug("InteractableSystem",
+						$"Interact {msg.InteractableID} by {character.ID}: CanInteract refused (corpse={InteractableResolver.IsCorpse(interactable.GameObject)}, inRange={interactable.InRange(character.Transform)}).");
+					return;
+				}
+				if (!interactable.TryConsumeInteractRateLimit(character))
+				{
+					Log.Debug("InteractableSystem",
+						$"Interact {msg.InteractableID} by {character.ID}: rate limited.");
+					return;
+				}
 				{
 					/* Corpse looting is handled directly rather than through a trigger, because it
 					 * is intrinsic to any NPC that can die: an NPC whose prefab has no interact

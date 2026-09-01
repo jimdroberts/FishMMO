@@ -6,6 +6,7 @@ using UnityEngine;
 using System;
 using KinematicCharacterController;
 using System.Runtime.CompilerServices;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -499,7 +500,18 @@ namespace FishMMO.Shared
 			{
 				pendingPlatformID = 0;
 			}
-
+			else if (pendingPlatformID != 0)
+			{
+				/* Diagnostic for the falling-through-platforms class. The server says this rider
+				 * is standing on platform <id>, and this peer cannot find it in the scene-object
+				 * registry — so every replayed and future tick simulates with ZERO platform
+				 * velocity while the server simulates with the real one, and the rider walks off
+				 * the moving surface (or the reconcile drags them through it). Throttled by the
+				 * pending latch: this logs once per reconcile burst, and TryResolvePendingPlatform
+				 * quietly retries until registration catches up. */
+				Log.Debug("KCCPlayer",
+					$"Reconcile says riding platform {pendingPlatformID} but it is not registered on this peer; simulating without platform velocity until it resolves.");
+			}
 		}
 
 		/// <summary>

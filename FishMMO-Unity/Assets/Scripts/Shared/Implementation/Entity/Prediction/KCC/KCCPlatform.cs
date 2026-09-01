@@ -281,7 +281,47 @@ namespace FishMMO.Shared
 			 * leg; indexing past the end throws inside the replicate on the very next tick. */
 			goalIndex = readGoalIndex < goals.Count ? readGoalIndex : (byte)0;
 
+			uint serverTickAtWrite = reader.ReadUInt32();
+
 			SceneObject.Register(this, true);
+
+			/* FAST-FORWARD by the payload's transit, exactly as a streamed ability object is.
+			 *
+			 * The snapshot above describes where the platform WAS when the server wrote it. Left
+			 * as-is, this client starts stepping from that stale pose and stays behind the server
+			 * by the whole transit — permanently, because both sides step one tick per tick from
+			 * then on. Every rider's reconcile then arrives measured against the server's platform
+			 * while the local motor stands on the lagging copy: the correction drags the character
+			 * toward where the server's platform is, which near an edge or a direction reversal is
+			 * off the local platform — or inside it. That divergence never closed; it was simply
+			 * re-fought on every reconcile for as long as the client stayed connected.
+			 *
+			 * Catching up runs the SAME deterministic Step the live tick runs, so the goal index
+			 * and the corner snapping advance exactly as they did on the server. Aligned to the
+			 * interpolated view (the same SpectatorInterpolationTicks offset ability objects use),
+			 * which is the frame characters are drawn in. Skipped when either tick is unknown — an
+			 * older payload or a mid-assembly TimeManager — degrading to the old behaviour. */
+			/* NetworkObject first: the TimeManager accessor dereferences the network-object cache
+			 * and throws on a component that was never spawned (a test, a pooled instance before
+			 * first spawn) — the same guard order BuffController.GetCurrentDomainTick documents. */
+			if (serverTickAtWrite != 0u && base.NetworkObject != null && TimeManager != null)
+			{
+				uint catchUp = AbilityController.ComputeObserverFastForwardTicks(
+					TimeManager.Tick, serverTickAtWrite, LagCompensationTick.SpectatorInterpolationTicks);
+				/* A platform is cheap to step, but an absurd skew (clock estimate glitch, uint
+				 * wrap) must not spin a quarter-million MoveTowards calls on spawn. Ten seconds
+				 * of catch-up covers every honest transit by an order of magnitude. */
+				const uint MaxCatchUpTicks = 300;
+				if (catchUp > MaxCatchUpTicks)
+				{
+					catchUp = MaxCatchUpTicks;
+				}
+				float delta = (float)TimeManager.TickDelta;
+				for (uint i = 0; i < catchUp; ++i)
+				{
+					Step(delta);
+				}
+			}
 		}
 
 		/// <inheritdoc/>
@@ -290,6 +330,10 @@ namespace FishMMO.Shared
 			writer.WriteInt64(ID);
 			writer.WriteVector3(transform.position);
 			writer.WriteUInt8Unpacked(goalIndex);
+			/* The server tick this snapshot was true on, so the receiver can fast-forward it by
+			 * the transit — see ReadPayload. Zero when no TimeManager is reachable, which the
+			 * reader treats as "do not catch up". NetworkObject first — see the ReadPayload note. */
+			writer.WriteUInt32(base.NetworkObject != null && TimeManager != null ? TimeManager.LocalTick : 0u);
 		}
 
 		/// <inheritdoc/>

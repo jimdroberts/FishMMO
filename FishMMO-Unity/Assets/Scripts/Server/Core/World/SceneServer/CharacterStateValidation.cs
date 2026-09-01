@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishMMO.Logging;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
@@ -18,15 +19,43 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </summary>
 		public static bool CanAct(IPlayerCharacter character)
 		{
-			if (character == null) return false;
-			if (character.IsFlagged(CharacterFlags.IsDead)) return false;
-			if (character.IsTeleporting) return false;
+			/* Each refusal SAYS WHY, at Debug level. This gate fronts every state-mutating
+			 * broadcast handler on the server, and it used to refuse in total silence — so a
+			 * character with one stuck flag (dead, teleporting, a crowd-control flag whose buff
+			 * removal misfired, or an IsLoaded that never got re-armed) presented to the player
+			 * as "interaction/trading/crafting silently does nothing" with not one line in any
+			 * log to bisect with. The messages carry the character id so a live report can be
+			 * matched to a specific player. Debug level keeps them out of production noise
+			 * unless the level is raised while chasing exactly this class of bug. */
+			if (character == null)
+			{
+				Log.Debug("CharacterStateValidation", "CanAct refused: null character.");
+				return false;
+			}
+			if (character.IsFlagged(CharacterFlags.IsDead))
+			{
+				Log.Debug("CharacterStateValidation", $"CanAct refused: character {character.ID} is dead.");
+				return false;
+			}
+			if (character.IsTeleporting)
+			{
+				Log.Debug("CharacterStateValidation", $"CanAct refused: character {character.ID} is teleporting.");
+				return false;
+			}
 			/* Frozen, stunned and mesmerized all mean "cannot act". Only IsFrozen was tested
 			 * here; the other two were set by the crowd-control buff templates and read by no
 			 * code anywhere, so a stunned player could still craft, trade, use hotkeys and
 			 * activate abilities through every broadcast handler that funnels through CanAct. */
-			if (CharacterIncapacitation.IsIncapacitated(character)) return false;
-			if (!character.IsFlagged(CharacterFlags.IsLoaded)) return false;
+			if (CharacterIncapacitation.IsIncapacitated(character))
+			{
+				Log.Debug("CharacterStateValidation", $"CanAct refused: character {character.ID} is incapacitated (flags 0x{character.Flags:X}).");
+				return false;
+			}
+			if (!character.IsFlagged(CharacterFlags.IsLoaded))
+			{
+				Log.Debug("CharacterStateValidation", $"CanAct refused: character {character.ID} is not loaded (flags 0x{character.Flags:X}).");
+				return false;
+			}
 			return true;
 		}
 

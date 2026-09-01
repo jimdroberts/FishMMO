@@ -661,26 +661,57 @@ namespace FishMMO.Client
 			if (TypingIntoField) return;
 			if (!CanUpdateInput() || UIManager.ControlHasFocus()) return;
 
-			if (Character.TryGet(out ITargetController targetController))
+			/* Instrumented at every early-out. "Pressing E does nothing" has half a dozen distinct
+			 * causes spread over two machines, and this handler used to decline all of its own in
+			 * silence — so a live report could not even be split into "the client never sent" vs
+			 * "the server refused". Debug level; raise it while chasing an interaction report and
+			 * every press says exactly how far it got. */
+			if (!Character.TryGet(out ITargetController targetController))
 			{
-				Transform target = targetController.Current.Target;
-				if (target != null)
-				{
-					IInteractable interactable = InteractableResolver.Resolve(target.gameObject);
-					/* The client keeps its own copy of the limiter so holding the key does not
-					 * spam the server. It is spent here and again server-side against that peer's
-					 * own clock; the two never see each other's value. */
-					if (interactable != null &&
-						interactable.CanInteract(Character) &&
-						interactable.TryConsumeInteractRateLimit(Character))
-					{
-						Client.Broadcast(new InteractableBroadcast()
-						{
-							InteractableID = interactable.ID,
-						}, Channel.Reliable);
-					}
-				}
+				Log.Debug("Interact", "Refused: character has no target controller.");
+				return;
 			}
+
+			Transform target = targetController.Current.Target;
+			if (target == null)
+			{
+				Log.Debug("Interact", "Refused: no hover target under the cursor.");
+				return;
+			}
+
+			IInteractable interactable = InteractableResolver.Resolve(target.gameObject);
+			if (interactable == null)
+			{
+				Log.Debug("Interact", $"Refused: '{target.name}' has no interactable.");
+				return;
+			}
+			/* The client keeps its own copy of the limiter so holding the key does not
+			 * spam the server. It is spent here and again server-side against that peer's
+			 * own clock; the two never see each other's value. */
+			if (!interactable.CanInteract(Character))
+			{
+				Log.Debug("Interact",
+					$"Refused: CanInteract false on '{target.name}' (corpse={InteractableResolver.IsCorpse(target.gameObject)}, inRange={interactable.InRange(Character.Transform)}).");
+				return;
+			}
+			if (!interactable.TryConsumeInteractRateLimit(Character))
+			{
+				Log.Debug("Interact", $"Refused: rate limited on '{target.name}'.");
+				return;
+			}
+			if (interactable.ID == 0)
+			{
+				/* Worth its own line: an interactable whose scene-object ID never arrived sends 0,
+				 * and the server logs only "Missing SceneObject ID:0" — this names the object and
+				 * the real fault (client-side registration). */
+				Log.Debug("Interact", $"Sending ID 0 for '{target.name}' — its scene-object ID was never assigned client-side.");
+			}
+
+			Log.Debug("Interact", $"Sent interact {interactable.ID} ('{target.name}').");
+			Client.Broadcast(new InteractableBroadcast()
+			{
+				InteractableID = interactable.ID,
+			}, Channel.Reliable);
 		}
 
 		/// <summary>
