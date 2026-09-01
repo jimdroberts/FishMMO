@@ -687,6 +687,12 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Physical;
+				/* Range = Speed x LifeTime; for non-spawning shapes these are inert to the
+				 * runtime effect and exist so Ability.Range is honest - the AI holds THIS
+				 * distance, and the mocks originally shipped Range 0 on every instant, which
+				 * marched every fighter to point-blank. Cast times pace the burst. */
+				a.Speed = 4f;
+				a.LifeTime = 1f;
 				a.Cooldown = 1.5f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(stamina, 3));
@@ -729,6 +735,9 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: 60 degree cone damage, capped at 5 targets.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Magic;
+				a.Speed = 8f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.4f;
 				a.Cooldown = 3f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 6));
@@ -741,6 +750,9 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: 12m line damage, capped at 4 targets.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Magic;
+				a.Speed = 15f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.5f;
 				a.Cooldown = 3f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 6));
@@ -753,6 +765,9 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: chains to 4 targets within 6m of each other.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Magic;
+				a.Speed = 18f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.8f;
 				a.Cooldown = 5f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 7));
@@ -765,6 +780,9 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: 3 random targets within 10m, 2-6 damage each (deterministic RNG).";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Magic;
+				a.Speed = 20f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.6f;
 				a.Cooldown = 3f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 5));
@@ -777,6 +795,8 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: hits the nearest valid enemy within 12m.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Physical;
+				a.Speed = 5f;
+				a.LifeTime = 1f;
 				a.Cooldown = 2f;
 				a.HitCount = 1;
 				a.OnHitEvents.Add(e.NearestDamage);
@@ -787,6 +807,9 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: hits the furthest valid enemy within 18m.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Magic;
+				a.Speed = 30f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 1.2f;
 				a.Cooldown = 4f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 4));
@@ -801,6 +824,8 @@ namespace FishMMO.MockContent
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Magic;
 				a.ActivationTime = 1f;
+				a.Speed = 20f;
+				a.LifeTime = 1f;
 				a.Cooldown = 2f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 6));
@@ -826,6 +851,9 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Magic;
+				a.Speed = 15f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.5f;
 				a.Cooldown = 3f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 4));
@@ -837,6 +865,7 @@ namespace FishMMO.MockContent
 				a.Description = "Mock: applies an 8 second heal-over-time buff to self.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.Magic;
+				a.ActivationTime = 0.8f;
 				a.Cooldown = 5f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 4));
@@ -950,8 +979,9 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.SpawnerWithCameraRotation;
 				a.Type = AbilityType.Physical;
 				a.LifeTime = 0.1f;
-				a.Speed = 0f;
-				a.Cooldown = 1f;
+				a.Speed = 200f;
+				a.ActivationTime = 0.3f;
+				a.Cooldown = 2f;
 				a.HitCount = 1;
 				a.OnSpawnEvents.Add(e.HitscanBullet);
 				a.OnHitEvents.Add(e.ProjectileImpactDamage);
@@ -966,7 +996,7 @@ namespace FishMMO.MockContent
 				a.Type = AbilityType.Magic;
 				a.ActivationTime = 2f;
 				a.LifeTime = 0.2f;
-				a.Speed = 0f;
+				a.Speed = 100f;
 				a.Cooldown = 3f;
 				a.HitCount = 1;
 				a.OnSpawnEvents.Add(e.ChannelMarker);
@@ -1008,6 +1038,9 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Magic;
+				a.Speed = 15f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.5f;
 				a.Cooldown = 8f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 4));
@@ -1020,6 +1053,9 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Magic;
+				a.Speed = 6f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.3f;
 				a.Cooldown = 12f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 6));
@@ -1079,6 +1115,8 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Physical;
+				a.Speed = 10f;
+				a.LifeTime = 1f;
 				a.Cooldown = 8f;
 				a.HitCount = 1;
 				a.OnHitEvents.Add(e.Taunt);
@@ -1102,6 +1140,8 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Physical;
+				a.Speed = 12f;
+				a.LifeTime = 1f;
 				a.Cooldown = 10f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(stamina, 4));
@@ -1114,6 +1154,9 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Magic;
+				a.Speed = 15f;
+				a.LifeTime = 1f;
+				a.ActivationTime = 0.5f;
 				a.Cooldown = 6f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 5));
@@ -1126,6 +1169,7 @@ namespace FishMMO.MockContent
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.Magic;
+				a.ActivationTime = 0.5f;
 				a.Cooldown = 6f;
 				a.HitCount = 1;
 				a.ActivationConditions.Add(Cost(mana, 5));

@@ -62,6 +62,17 @@ namespace FishNet.Component.Prediction
         [Tooltip("Layers to trace on. This is used when value is not nothing.")]
         [SerializeField]
         protected LayerMask Layers = (LayerMask)0;
+
+        /* FISHMMO EDIT: game code must be able to guarantee its query layers. A collider whose
+         * Layers is left at 0 derives its mask from the physics matrix row of its own layer, and
+         * one authored without a required bit silently never detects those objects — a platform
+         * scene-authored to Default-only never saw characters (moved to the Player layer at
+         * runtime), so riders stood still while the deck slid out from under them. */
+        public LayerMask QueryLayers
+        {
+            get => Layers;
+            set => Layers = value;
+        }
         /// <summary>
         /// True if colliders have been searched for at least once.
         /// We cannot check the null state on _colliders because Unity has a habit of initializing collections on it's own.

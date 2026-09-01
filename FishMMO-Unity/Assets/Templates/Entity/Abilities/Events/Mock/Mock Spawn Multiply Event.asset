@@ -16,7 +16,7 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167610961
+  - rid: 4707556876456296529
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -30,15 +30,15 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167610961
+    - rid: 4707556876456296529
       type: {class: AbilitySpawnMultiplyAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
         SpawnCountValue:
-          rid: 1701798431167610962
-    - rid: 1701798431167610962
+          rid: 4707556876456296530
+    - rid: 4707556876456296530
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 3

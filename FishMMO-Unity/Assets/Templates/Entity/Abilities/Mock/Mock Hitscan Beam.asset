@@ -23,7 +23,7 @@ MonoBehaviour:
     Channel Marker Event''.'
   ActivationTime: 2
   LifeTime: 0.2
-  Speed: 0
+  Speed: 100
   Cooldown: 3
   Price: 0
   ActivationConditions: []

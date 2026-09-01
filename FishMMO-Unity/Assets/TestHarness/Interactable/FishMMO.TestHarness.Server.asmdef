@@ -1,0 +1,25 @@
+{
+    "name": "FishMMO.TestHarness.Server",
+    "rootNamespace": "FishMMO.TestHarness",
+    "references": [
+        "FishMMO.TestHarness",
+        "FishMMO.Shared",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64Server",
+        "WindowsStandalone64Server"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

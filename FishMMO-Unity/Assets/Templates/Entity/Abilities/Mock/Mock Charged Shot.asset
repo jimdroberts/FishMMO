@@ -26,7 +26,7 @@ MonoBehaviour:
   Cooldown: 6
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611032
+  - rid: 4707556876456296600
   AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
     type: 3}
   AbilitySpawnTarget: 6
@@ -48,7 +48,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611032
+    - rid: 4707556876456296600
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

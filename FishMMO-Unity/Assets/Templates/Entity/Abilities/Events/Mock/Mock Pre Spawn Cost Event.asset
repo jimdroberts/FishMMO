@@ -16,7 +16,7 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167611010
+  - rid: 4707556876456296578
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -30,7 +30,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611010
+    - rid: 4707556876456296578
       type: {class: ConsumeResourceAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -38,8 +38,8 @@ MonoBehaviour:
         StopChainOnFailure: 1
         ResourceTemplateID: 1606168262
         AmountValue:
-          rid: 1701798431167611011
-    - rid: 1701798431167611011
+          rid: 4707556876456296579
+    - rid: 4707556876456296579
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 2

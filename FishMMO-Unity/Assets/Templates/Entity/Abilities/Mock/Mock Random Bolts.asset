@@ -20,13 +20,13 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: 'Mock: 3 random targets within 10m, 2-6 damage each (deterministic
     RNG).'
-  ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  ActivationTime: 0.6
+  LifeTime: 1
+  Speed: 20
   Cooldown: 3
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611019
+  - rid: 4707556876456296587
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
@@ -45,7 +45,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611019
+    - rid: 4707556876456296587
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

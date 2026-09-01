@@ -138,6 +138,48 @@ namespace FishMMO.UnitTests
 			field.SetValue(instance, value);
 		}
 
+		[Test]
+		public void RiderVolume_AlwaysQueriesThePlayerLayer()
+		{
+			/* Riding regression, reported live 2026-09-01: players stood on platforms (solid
+			 * collision fine) while the deck slid out from under them. The rider-detection
+			 * NetworkCollision was scene-authored to query Default only, and BaseCharacter.Awake
+			 * moves every character to the Player layer at runtime — so OnEnter never fired,
+			 * SetPlatform never ran, and SetPlatformVelocity stayed zero. The fix forces the
+			 * Player bit into the volume's query layers at Awake, because the requirement is
+			 * intrinsic to being a platform and the failure is silent. */
+			string platformSource = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
+			LogAssert.IsTrue(platformSource.Contains("platformCollider.QueryLayers |= required"),
+				"KCCPlatform.Awake must force the Player layer into its rider volume's query " +
+				"layers — scene data authored without it silently breaks platform riding.");
+			LogAssert.IsTrue(platformSource.Contains("Constants.Layers.Index.Player"),
+				"The forced bit must come from the Player layer constant, not a hardcoded index.");
+		}
+
+		[Test]
+		public void QueryLayers_IsExposedOnNetworkColliderBase_AndRoundTrips()
+		{
+			/* The setter is a tagged FISHMMO EDIT inside FishNet's NetworkColliderBase. A FishNet
+			 * upgrade that wipes it makes KCCPlatform.Awake stop compiling loudly — but this test
+			 * documents WHY the edit exists so it is re-applied rather than deleted: game code
+			 * must be able to guarantee its query layers (see the riding regression above). */
+			GameObject go = new GameObject("QueryLayersProbe");
+			try
+			{
+				FishNet.Component.Prediction.NetworkCollision collision =
+					go.AddComponent<FishNet.Component.Prediction.NetworkCollision>();
+				collision.QueryLayers = (LayerMask)1;
+				collision.QueryLayers |= (LayerMask)(1 << 6);
+				LogAssert.AreEqual(65, (int)collision.QueryLayers,
+					"QueryLayers must read back exactly what was composed into it.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
 		private static T GetPrivateField<T>(object instance, string fieldName)
 		{
 			FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);

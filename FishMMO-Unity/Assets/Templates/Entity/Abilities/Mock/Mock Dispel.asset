@@ -19,13 +19,13 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   Description: 'Mock: strips up to 2 beneficial buffs from an enemy.'
-  ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  ActivationTime: 0.5
+  LifeTime: 1
+  Speed: 15
   Cooldown: 6
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611035
+  - rid: 4707556876456296603
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 1
@@ -44,7 +44,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611035
+    - rid: 4707556876456296603
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

@@ -16,7 +16,7 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167610995
+  - rid: 4707556876456296563
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -30,7 +30,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167610995
+    - rid: 4707556876456296563
       type: {class: ApplyThreatAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

@@ -5,6 +5,7 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using FishNet.Utility.Template;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -196,6 +197,26 @@ namespace FishMMO.Shared
 			{
 				platformCollider.OnEnter += PlatformCollider_OnEnter;
 				platformCollider.OnExit += PlatformCollider_OnExit;
+
+				/* The rider-detection volume MUST see characters, whatever the scene authored.
+				 * Characters live on the Player layer (BaseCharacter.Awake moves them there), and
+				 * a NetworkCollision whose Layers omits that bit polls forever and detects nobody
+				 * — SetPlatform never fires, SetPlatformVelocity stays zero, and a rider stands
+				 * still while the deck slides out from under them (reported live 2026-09-01: the
+				 * shipped platform's volume was authored Default-only). Forced here rather than
+				 * left to scene data, because the failure is silent and the requirement is
+				 * intrinsic to being a platform. */
+				if (Constants.Layers.Index.Player >= 0)
+				{
+					LayerMask required = 1 << Constants.Layers.Index.Player;
+					if ((platformCollider.QueryLayers & required) != required)
+					{
+						Log.Debug("KCCPlatform",
+							$"'{name}' rider volume layers 0x{(int)platformCollider.QueryLayers:X} " +
+							"did not include the Player layer; correcting.");
+						platformCollider.QueryLayers |= required;
+					}
+				}
 			}
 
 #if UNITY_SERVER

@@ -19,13 +19,13 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   Description: 'Mock: 12m line damage, capped at 4 targets.'
-  ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  ActivationTime: 0.5
+  LifeTime: 1
+  Speed: 15
   Cooldown: 3
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611017
+  - rid: 4707556876456296585
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
@@ -44,7 +44,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611017
+    - rid: 4707556876456296585
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

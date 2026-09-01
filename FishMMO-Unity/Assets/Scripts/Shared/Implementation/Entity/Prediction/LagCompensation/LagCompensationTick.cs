@@ -156,6 +156,21 @@ namespace FishMMO.Shared
 		/// False when there is nothing to compensate — a server-driven character, an unowned one, or
 		/// a connection whose tick bookkeeping is not yet established.
 		/// </returns>
+		/// <summary>
+		/// Test-only claim source, consulted before the owner/AI gates. Null in production —
+		/// nothing in shipping code assigns it, and it must stay that way.
+		/// </summary>
+		/// <remarks>
+		/// The gates below are correct for the live game: an ownerless or AI-driven caster has no
+		/// late-rendering client, so nothing rewinds for it. But that also means a simulation
+		/// harness (which drives casters server-side by construction) can never exercise the real
+		/// rewind path. This hook lets the harness say "treat this caster as a client that claims
+		/// this view offset" so <see cref="ResolveAnchor"/> and <c>CharacterPositionHistory</c>
+		/// run for real, with synthetic 0–500ms claims. Internal, and visible only to
+		/// FishMMO.TestHarness via InternalsVisibleTo; delete alongside that folder.
+		/// </remarks>
+		internal static System.Func<ICharacter, (byte ticks, byte fraction)?> ClaimOverride;
+
 		public static bool TryResolve(ICharacter caster, TimeManager timeManager, out RewindTarget target)
 		{
 			target = RewindTarget.None;
@@ -169,6 +184,21 @@ namespace FishMMO.Shared
 			if (nob == null || !nob.IsServerStarted)
 			{
 				return false;
+			}
+
+			if (ClaimOverride != null)
+			{
+				(byte ticks, byte fraction)? claim = ClaimOverride(caster);
+				if (claim.HasValue)
+				{
+					uint overrideAnchor = ServerTickDomain(timeManager);
+					if (overrideAnchor == TimeManager.UNSET_TICK)
+					{
+						return false;
+					}
+					return ResolveAnchor(overrideAnchor, claim.Value.ticks, claim.Value.fraction,
+						ResolveReplicateQueueTicks(nob), out target);
+				}
 			}
 
 			NetworkConnection owner = nob.Owner;

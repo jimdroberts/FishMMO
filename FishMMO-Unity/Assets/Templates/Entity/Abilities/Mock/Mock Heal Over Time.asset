@@ -19,13 +19,13 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   Description: 'Mock: applies an 8 second heal-over-time buff to self.'
-  ActivationTime: 0
+  ActivationTime: 0.8
   LifeTime: 0
   Speed: 0
   Cooldown: 5
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611024
+  - rid: 4707556876456296592
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
@@ -44,7 +44,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611024
+    - rid: 4707556876456296592
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

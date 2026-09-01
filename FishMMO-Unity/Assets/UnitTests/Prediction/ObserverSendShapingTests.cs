@@ -138,8 +138,8 @@ namespace FishMMO.UnitTests
 
 				// Cap says every 3rd tick, distance says every 4th.
 				entry.SetInterval(viewer, 3);
-				lod.BandObserver(viewer.ClientId, 45f * 45f); // coarsest default band: 6
-				LogAssert.AreEqual(6, entry.GetEffectiveInterval(viewer), "The larger interval wins.");
+				lod.BandObserver(viewer.ClientId, 100f * 100f); // coarsest default band: 4
+				LogAssert.AreEqual(4, entry.GetEffectiveInterval(viewer), "The larger interval wins.");
 
 				entry.SetInterval(viewer, 8);
 				LogAssert.AreEqual(8, entry.GetEffectiveInterval(viewer), "The larger interval wins in the other direction too.");

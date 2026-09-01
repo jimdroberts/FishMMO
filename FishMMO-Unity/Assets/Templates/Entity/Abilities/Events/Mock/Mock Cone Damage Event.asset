@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Mock Cone Damage Event
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnHitEvent
   TargetSelector:
-    rid: 1701798431167610894
+    rid: 4707556876456296462
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167610895
+  - rid: 4707556876456296463
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -30,29 +30,29 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167610894
+    - rid: 4707556876456296462
       type: {class: ConeTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Conditions:
-        - rid: 1701798431167610896
-        - rid: 1701798431167610897
+        - rid: 4707556876456296464
+        - rid: 4707556876456296465
         Radius: 7
         Angle: 60
         TargetLayer:
           serializedVersion: 2
           m_Bits: 4294967295
         MaxHits: 5
-    - rid: 1701798431167610895
+    - rid: 4707556876456296463
       type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
         DamageValue:
-          rid: 1701798431167610898
+          rid: 4707556876456296466
         DamageAttributeTemplate: {fileID: 11400000, guid: c4eb5f1a4b50f884c92f82a0e7ad26f3,
           type: 2}
-    - rid: 1701798431167610896
+    - rid: 4707556876456296464
       type: {class: TargetAllianceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -63,14 +63,14 @@ MonoBehaviour:
         ApplyToEnemy: 1
         ApplyToNeutral: 0
         ApplyToAllies: 0
-    - rid: 1701798431167610897
+    - rid: 4707556876456296465
       type: {class: IsCharacterAliveCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
         Combine: 0
         Invert: 0
-    - rid: 1701798431167610898
+    - rid: 4707556876456296466
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 4

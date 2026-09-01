@@ -16,8 +16,8 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167610967
-  - rid: 1701798431167610968
+  - rid: 4707556876456296535
+  - rid: 4707556876456296536
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -31,7 +31,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167610967
+    - rid: 4707556876456296535
       type: {class: ConsumeResourceAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -39,30 +39,30 @@ MonoBehaviour:
         StopChainOnFailure: 1
         ResourceTemplateID: 1606168262
         AmountValue:
-          rid: 1701798431167610969
-    - rid: 1701798431167610968
+          rid: 4707556876456296537
+    - rid: 4707556876456296536
       type: {class: AbilityApplyHitscanAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
         RangeValue:
-          rid: 1701798431167610970
+          rid: 4707556876456296538
         MaxHitsValue:
-          rid: 1701798431167610971
+          rid: 4707556876456296539
         TargetLayerMask:
           serializedVersion: 2
           m_Bits: 4294967295
         BlockedByScenery: 1
-    - rid: 1701798431167610969
+    - rid: 4707556876456296537
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 1
-    - rid: 1701798431167610970
+    - rid: 4707556876456296538
       type: {class: ConstantFloatValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 20
-    - rid: 1701798431167610971
+    - rid: 4707556876456296539
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 0

@@ -20,10 +20,10 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: 'Mock: instant hitscan shot; the ray resolves on OnSpawn and stops
     at the first body.'
-  ActivationTime: 0
+  ActivationTime: 0.3
   LifeTime: 0.1
-  Speed: 0
-  Cooldown: 1
+  Speed: 200
+  Cooldown: 2
   Price: 0
   ActivationConditions: []
   AbilityObjectPrefab: {fileID: 5773491593115871611, guid: e48c22ecb1287cf4185c17311214bc8a,

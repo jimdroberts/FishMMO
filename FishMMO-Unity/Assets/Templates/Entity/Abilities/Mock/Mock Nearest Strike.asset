@@ -20,8 +20,8 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: 'Mock: hits the nearest valid enemy within 12m.'
   ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  LifeTime: 1
+  Speed: 5
   Cooldown: 2
   Price: 0
   ActivationConditions: []

@@ -2,7 +2,9 @@
     "name": "FishMMO.UnitTests.PlayMode",
     "rootNamespace": "FishMMO.UnitTests.PlayMode",
     "references": [
-        "UnityEngine.TestRunner"
+        "UnityEngine.TestRunner",
+        "FishMMO.TestHarness",
+        "FishMMO.TestHarness.Server"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

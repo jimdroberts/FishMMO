@@ -137,6 +137,26 @@ namespace FishMMO.Shared
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
+
+			/* Re-assert the motor's physics scene PER SPAWN, not per pooled instance.
+			 *
+			 * Awake captures it once from whatever scene the instance sat in at instantiation,
+			 * and Awake runs once per POOLED instance — but world scenes are loaded with
+			 * LocalPhysicsMode.Physics3D (SceneServerSystem's connection load, which the client
+			 * mirrors), so each world scene has its own physics world. A pooled character reused
+			 * across a scene transfer therefore kept querying the PREVIOUS scene's physics — a
+			 * scene that may since have unloaded — and a motor whose queries return nothing
+			 * collides with nothing: the client copy falls through the ground and through moving
+			 * platforms while the server, which re-assigns per spawn in its loading path
+			 * (CharacterSystem.Loading), holds it up — an unresolvable rubber-band that presents
+			 * as "falling through the world/platform" after a scene change. By OnStartClient the
+			 * object is in its destination scene, so this is the client-side mirror of the
+			 * server's per-spawn assignment. */
+			if (Motor != null)
+			{
+				Motor.SetPhysicsScene(Motor.gameObject.scene.GetPhysicsScene());
+			}
+
 			TryBindOwnerCamera();
 		}
 

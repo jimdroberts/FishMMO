@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Mock Consumable Self Heal Event
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnHitEvent
   TargetSelector:
-    rid: 1701798431167610988
+    rid: 4707556876456296556
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167610989
+  - rid: 4707556876456296557
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -30,19 +30,19 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167610988
+    - rid: 4707556876456296556
       type: {class: InitiatorTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Conditions: []
-    - rid: 1701798431167610989
+    - rid: 4707556876456296557
       type: {class: ApplyHealAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
         HealValue:
-          rid: 1701798431167610990
-    - rid: 1701798431167610990
+          rid: 4707556876456296558
+    - rid: 4707556876456296558
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 12

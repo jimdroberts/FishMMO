@@ -1,0 +1,21 @@
+{
+    "name": "FishMMO.TestHarness.Editor",
+    "rootNamespace": "FishMMO.TestHarness.Editor",
+    "references": [
+        "FishMMO.TestHarness",
+        "FishMMO.TestHarness.Server",
+        "FishMMO.Shared",
+        "FishNet.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

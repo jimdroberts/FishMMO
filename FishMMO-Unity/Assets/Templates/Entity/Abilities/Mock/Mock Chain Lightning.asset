@@ -19,13 +19,13 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   Description: 'Mock: chains to 4 targets within 6m of each other.'
-  ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  ActivationTime: 0.8
+  LifeTime: 1
+  Speed: 18
   Cooldown: 5
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611018
+  - rid: 4707556876456296586
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
@@ -44,7 +44,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611018
+    - rid: 4707556876456296586
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

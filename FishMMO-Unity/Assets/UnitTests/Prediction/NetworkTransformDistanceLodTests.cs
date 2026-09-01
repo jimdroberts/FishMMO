@@ -26,9 +26,9 @@ namespace FishMMO.UnitTests
 
 		private static readonly NetworkTransformDistanceLod.Band[] Defaults =
 		{
-			new NetworkTransformDistanceLod.Band { MaximumDistance = 20f, Interval = 1 },
-			new NetworkTransformDistanceLod.Band { MaximumDistance = 40f, Interval = 3 },
-			new NetworkTransformDistanceLod.Band { MaximumDistance = 80f, Interval = 6 },
+			new NetworkTransformDistanceLod.Band { MaximumDistance = 40f, Interval = 1 },
+			new NetworkTransformDistanceLod.Band { MaximumDistance = 80f, Interval = 2 },
+			new NetworkTransformDistanceLod.Band { MaximumDistance = 140f, Interval = 4 },
 		};
 
 		private const float Hysteresis = 0.15f;
@@ -58,12 +58,16 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Distance_SelectsTheExpectedBand()
 		{
-			// Defaults: 20m -> every tick, 40m -> every 3rd, 80m -> every 6th.
+			/* Defaults: 40m -> every tick, 80m -> every 2nd, 140m -> every 4th. Retuned from
+			 * 20/1, 40/3, 80/6 after live "NPCs rubber band" reports: the transform interpolates
+			 * two ticks of received data, so any interval past 2 starves the buffer and renders
+			 * as stall-then-snap; full rate now covers the range where motion is actually
+			 * judged. */
 			LogAssert.AreEqual(0, Resolve(0f, -1), "An observer standing on the object must get the fastest band.");
-			LogAssert.AreEqual(0, Resolve(19f, -1), "Just inside the first edge must stay in the fastest band.");
-			LogAssert.AreEqual(1, Resolve(21f, -1), "Past the first edge must step down one band.");
-			LogAssert.AreEqual(1, Resolve(39f, -1), "Just inside the second edge must stay in the middle band.");
-			LogAssert.AreEqual(2, Resolve(41f, -1), "Past the second edge must step down again.");
+			LogAssert.AreEqual(0, Resolve(39f, -1), "Just inside the first edge must stay in the fastest band.");
+			LogAssert.AreEqual(1, Resolve(41f, -1), "Past the first edge must step down one band.");
+			LogAssert.AreEqual(1, Resolve(79f, -1), "Just inside the second edge must stay in the middle band.");
+			LogAssert.AreEqual(2, Resolve(81f, -1), "Past the second edge must step down again.");
 			LogAssert.AreEqual(2, Resolve(500f, -1), "Beyond the last band must clamp to the coarsest, not fall off the end.");
 		}
 
@@ -106,7 +110,7 @@ namespace FishMMO.UnitTests
 
 			int changes = 0;
 			int band = 0;
-			foreach (float d in new[] { 20.5f, 19.8f, 20.6f, 19.9f, 20.4f, 20.1f, 19.7f })
+			foreach (float d in new[] { 40.5f, 39.8f, 40.6f, 39.9f, 40.4f, 40.1f, 39.7f })
 			{
 				int next = Resolve(d, band);
 				if (next != band)
@@ -133,7 +137,7 @@ namespace FishMMO.UnitTests
 			lod.IntervalScale = 4;
 			LogAssert.AreEqual(4, lod.IntervalScale, "A valid scale must be kept.");
 
-			LogAssert.AreEqual(12, NetworkTransformDistanceLod.IntervalForBand(Defaults, 1, 4),
+			LogAssert.AreEqual(8, NetworkTransformDistanceLod.IntervalForBand(Defaults, 1, 4),
 				"The scale multiplies the band interval.");
 			LogAssert.AreEqual(255, NetworkTransformDistanceLod.IntervalForBand(
 				new[] { new NetworkTransformDistanceLod.Band { MaximumDistance = 1f, Interval = 60 } }, 0, 8),
@@ -150,10 +154,10 @@ namespace FishMMO.UnitTests
 			NetworkConnection far = Connection(2);
 
 			lod.BandObserver(near.ClientId, 5f * 5f);
-			lod.BandObserver(far.ClientId, 60f * 60f);
+			lod.BandObserver(far.ClientId, 100f * 100f);
 
 			LogAssert.AreEqual(1, lod.GetInterval(near), "A spectator 5 m away must receive every tick.");
-			LogAssert.AreEqual(6, lod.GetInterval(far), "A spectator 60 m away must be in the coarsest band.");
+			LogAssert.AreEqual(4, lod.GetInterval(far), "A spectator 100 m away must be in the coarsest band.");
 			LogAssert.AreEqual(1, lod.LimitedObserverCount, "Exactly one observer is limited.");
 			LogAssert.AreEqual(1, lod.GetInterval(Connection(3)), "An observer never banded is at full rate.");
 		}
@@ -162,7 +166,7 @@ namespace FishMMO.UnitTests
 		public void ShouldSend_NeverDeclinesReliable_OrTheOwner_OrAFullRateObserver()
 		{
 			NetworkConnection far = Connection(2);
-			lod.BandObserver(far.ClientId, 60f * 60f);
+			lod.BandObserver(far.ClientId, 100f * 100f);
 
 			FishNet.Object.NetworkObject nob = go.GetComponent<FishNet.Object.NetworkObject>();
 
@@ -173,16 +177,16 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(lod.ShouldSend(nob, null, Channel.Unreliable),
 				"A null connection must not be declined.");
 
-			// Every 6th tick, phase-spread by client id: exactly one send in any window of six.
+			// Every 4th tick, phase-spread by client id: exactly one send in any window of four.
 			int sent = 0;
-			for (uint tick = 0; tick < 6; tick++)
+			for (uint tick = 0; tick < 4; tick++)
 			{
 				if (ObserverStreamingPolicy.ShouldSendThisTick(tick, lod.GetInterval(far), far.ClientId))
 				{
 					sent++;
 				}
 			}
-			LogAssert.AreEqual(1, sent, "A coarsest-band observer must hear exactly once per six ticks, never zero.");
+			LogAssert.AreEqual(1, sent, "A coarsest-band observer must hear exactly once per four ticks, never zero.");
 		}
 
 		[Test]
@@ -233,12 +237,21 @@ namespace FishMMO.UnitTests
 			/* What the component is worth, in the units that actually drive cost: transform messages
 			 * per second per observer. Per-observer banding means the spread is over OBSERVERS of one
 			 * object rather than over objects near the closest observer, so this now holds in a
-			 * crowd as well as in a sparse zone. */
+			 * crowd as well as in a sparse zone.
+			 *
+			 * The spread reaches the FAR field deliberately. After the 2026-09-01 retune the first
+			 * two bands protect motion quality out to 80m (the transform's two-tick interpolation
+			 * buffer cannot bridge intervals past 2, and starved buffers rendered as the live
+			 * "NPCs rubber band" report), so the savings now live beyond that — where stepping is
+			 * pixels. A population bunched inside 60m would measure the bands at the exact ranges
+			 * they no longer throttle, and fail this test for doing their job. */
 			(float distance, int count)[] spread =
 			{
 				(10f, 5),
-				(30f, 15),
-				(60f, 40),
+				(30f, 10),
+				(60f, 10),
+				(100f, 25),
+				(130f, 10),
 			};
 
 			const int tickRate = 30;

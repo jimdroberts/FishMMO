@@ -3,6 +3,7 @@ using UnityEngine;
 using KinematicCharacterController;
 using FishMMO.Shared.Core;
 using FishMMO.Logging;
+using FishNet.Transporting;
 
 namespace FishMMO.Shared
 {
@@ -102,6 +103,7 @@ namespace FishMMO.Shared
 			if (player.IsInInstance())
 			{
 				Log.Debug("BindstoneAction", "Character cannot bind while inside an instance.");
+				SendFeedback(player, "You cannot set your home point inside an instance.");
 				return;
 			}
 
@@ -120,17 +122,43 @@ namespace FishMMO.Shared
 			if (!IsValidBindPosition(player, out string rejection))
 			{
 				Log.Debug("BindstoneAction", $"CharID={player.ID} cannot bind here: {rejection}");
+				// The detailed rejection is a diagnostic (it can name colliders); the player
+				// gets the actionable part: this spot won't do, stand somewhere clearer.
+				SendFeedback(player, "You cannot set your home point here — find a clearer spot to stand.");
 				return;
 			}
 
 			player.BindPosition = player.Motor.Transform.position;
 			player.BindScene = player.SceneName;
 
+			/* The whole visible effect of a bind is two fields changing server-side, so without
+			 * this line a successful bind is indistinguishable from a refused one from where the
+			 * player stands — which reads as "the bindstone doesn't work" (reported live,
+			 * 2026-09-01). Same System-channel pattern the dungeon finder uses. */
+			SendFeedback(player, "Your home point has been set.");
+
 			if (bindstone?.AchievementTemplate != null &&
 				player.TryGet(out IAchievementController achievementController))
 			{
 				achievementController.Increment(bindstone.AchievementTemplate, 1);
 			}
+		}
+
+		/// <summary>
+		/// Tells the binding player what happened, on the System chat channel. Server-side, to
+		/// the owner only; a character with no owner (nothing renders its feedback) is a no-op.
+		/// </summary>
+		private static void SendFeedback(IPlayerCharacter player, string text)
+		{
+			if (player?.Owner == null || !player.Owner.IsActive)
+			{
+				return;
+			}
+			player.Owner.Broadcast(new ChatBroadcast()
+			{
+				Channel = ChatChannel.System,
+				Text = text,
+			}, true, Channel.Reliable);
 		}
 
 		/// <summary>

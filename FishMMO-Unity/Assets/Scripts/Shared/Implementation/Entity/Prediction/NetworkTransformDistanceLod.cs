@@ -79,11 +79,18 @@ namespace FishMMO.Shared
 		[Header("Level of detail")]
 		[Tooltip("Ascending distance bands. An observer inside a band receives that band's interval.")]
 		[SerializeField]
+		/* Retuned 2026-09-01 from 20/1, 40/3, 80/6 after a live report of NPCs "teleporting or
+		 * rubber banding" while moving. The transform's interpolation buffers TWO ticks of
+		 * received data, sized for per-tick sends — an interval of 3 starves it (updates every
+		 * 100ms into a ~66ms buffer), so beyond 20m every moving NPC played out its buffer,
+		 * stalled, and snapped to the next sample. Full rate now covers the range where motion
+		 * quality is actually judged; interval 2 stays within what the buffer can bridge; the
+		 * far band's stepping is a few pixels at 80m+. intervalScale remains the crowd lever. */
 		private Band[] bands =
 		{
-			new Band { MaximumDistance = 20f, Interval = 1 },
-			new Band { MaximumDistance = 40f, Interval = 3 },
-			new Band { MaximumDistance = 80f, Interval = 6 },
+			new Band { MaximumDistance = 40f, Interval = 1 },
+			new Band { MaximumDistance = 80f, Interval = 2 },
+			new Band { MaximumDistance = 140f, Interval = 4 },
 		};
 
 		/// <summary>

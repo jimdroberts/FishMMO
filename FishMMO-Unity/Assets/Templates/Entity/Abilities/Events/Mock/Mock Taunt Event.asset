@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Mock Taunt Event
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnHitEvent
   TargetSelector:
-    rid: 1701798431167610991
+    rid: 4707556876456296559
   Conditions: []
   OnConditionsMetActions:
-  - rid: 1701798431167610992
+  - rid: 4707556876456296560
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -30,19 +30,19 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167610991
+    - rid: 4707556876456296559
       type: {class: TargetedEntitySelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Conditions:
-        - rid: 1701798431167610993
-        - rid: 1701798431167610994
+        - rid: 4707556876456296561
+        - rid: 4707556876456296562
         MaximumRange: 30
         RequireLineOfSight: 0
         LineOfSightBlockers:
           serializedVersion: 2
           m_Bits: 0
         EyeHeight: 1.45
-    - rid: 1701798431167610992
+    - rid: 4707556876456296560
       type: {class: ApplyTauntAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -52,7 +52,7 @@ MonoBehaviour:
         GuaranteeTopThreat: 1
         LeadOverHighest: 50
         ForceImmediateTargetSwitch: 1
-    - rid: 1701798431167610993
+    - rid: 4707556876456296561
       type: {class: TargetAllianceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -63,7 +63,7 @@ MonoBehaviour:
         ApplyToEnemy: 1
         ApplyToNeutral: 0
         ApplyToAllies: 0
-    - rid: 1701798431167610994
+    - rid: 4707556876456296562
       type: {class: IsCharacterAliveCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

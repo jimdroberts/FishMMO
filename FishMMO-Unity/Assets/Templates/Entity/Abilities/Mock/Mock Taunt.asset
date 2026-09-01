@@ -20,8 +20,8 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: 'Mock: forces the target NPC''s threat onto the caster.'
   ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  LifeTime: 1
+  Speed: 10
   Cooldown: 8
   Price: 0
   ActivationConditions: []

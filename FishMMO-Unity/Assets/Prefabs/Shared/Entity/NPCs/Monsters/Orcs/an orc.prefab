@@ -541,12 +541,12 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
   bands:
-  - MaximumDistance: 20
-    Interval: 1
   - MaximumDistance: 40
-    Interval: 3
+    Interval: 1
   - MaximumDistance: 80
-    Interval: 6
+    Interval: 2
+  - MaximumDistance: 140
+    Interval: 4
   intervalScale: 1
   evaluateInterval: 0.5
   hysteresis: 0.15

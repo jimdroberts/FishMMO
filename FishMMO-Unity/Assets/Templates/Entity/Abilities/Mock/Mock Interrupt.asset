@@ -20,12 +20,12 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: 'Mock: interrupts the target''s current cast.'
   ActivationTime: 0
-  LifeTime: 0
-  Speed: 0
+  LifeTime: 1
+  Speed: 12
   Cooldown: 10
   Price: 0
   ActivationConditions:
-  - rid: 1701798431167611034
+  - rid: 4707556876456296602
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 1
@@ -44,7 +44,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 1701798431167611034
+    - rid: 4707556876456296602
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

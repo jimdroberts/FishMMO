@@ -5512,7 +5512,7 @@ MonoBehaviour:
   AdditionalSize: 0.5
   Layers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
 --- !u!4 &6317921918617611146
 Transform:
   m_ObjectHideFlags: 0
