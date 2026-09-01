@@ -227,7 +227,17 @@ namespace FishMMO.Shared
 						if (!loggedMissingResource)
 						{
 							loggedMissingResource = true;
-							Log.Error("CharacterDamageController",
+
+							/* Warning, not Error. This is a content-authoring fault in a prefab, not a
+							 * runtime failure of this code: the entity is already handled safely,
+							 * because Damage and Kill both return early on a null resource. Error is
+							 * the level that says "an engineer should look at the running system
+							 * now", and reserving it for that is what keeps it worth reading -- a
+							 * misconfigured NPC firing Error means every real fault competes with it
+							 * during triage. It stays a Warning rather than Info because the entity
+							 * genuinely cannot be damaged or killed, which is not something to
+							 * discover from a player report. */
+							Log.Warning("CharacterDamageController",
 								$"{gameObject.name} is missing ICharacterAttributeController or Health Resource Attribute. " +
 								"It cannot be damaged or killed. Further occurrences on this object are suppressed until it resolves.");
 						}

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Runtime.Serialization;
 using FishMMO.Shared;
@@ -80,6 +81,50 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(ReportedFlag(),
 				"the report stays suppressed for every later access -- this is what #157 was");
+		}
+
+		[Test]
+		public void TheMissingHealthReport_IsAWarning_NotAnError()
+		{
+			/* Pinned in source, because the level is not observable from the property: the report
+			 * fires through FishMMO.Logging, and a test that captured it would be asserting on the
+			 * logger rather than on this decision.
+			 *
+			 * The decision is that a prefab authored without a health attribute is a content fault,
+			 * not a runtime failure of this code -- Damage and Kill both return early on a null
+			 * resource, so the entity is already handled safely. Error is the level that means "an
+			 * engineer should look at the running system now", and one misconfigured NPC firing it
+			 * makes every genuine fault compete for attention during triage. That is most of what
+			 * made issue #157 painful: not only the volume, but that the volume was Errors. */
+			string source = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");
+
+			const string message = "is missing ICharacterAttributeController";
+			int report = source.IndexOf(message, StringComparison.Ordinal);
+			LogAssert.IsTrue(report >= 0,
+				"the missing-health report must still exist in CharacterDamageController");
+
+			/* The call opens several lines above the message text, so look back over a bounded window
+			 * for whichever level opened it. Matching an exact rendering of the call would pin the
+			 * formatting rather than the decision, and would break on a reflow that changed nothing. */
+			int from = Math.Max(0, report - 400);
+			string call = source.Substring(from, report - from);
+
+			int warning = call.LastIndexOf("Log.Warning(", StringComparison.Ordinal);
+			int error = call.LastIndexOf("Log.Error(", StringComparison.Ordinal);
+
+			LogAssert.IsTrue(warning >= 0,
+				"the missing-health report must be raised through Log.Warning");
+			LogAssert.IsTrue(warning > error,
+				"the missing-health report must be a Warning, not an Error -- see #157");
+		}
+
+		/// <summary>Reads a project source file, so a decision that lives in code can be pinned.</summary>
+		private static string ReadSource(string relativePath)
+		{
+			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
+			LogAssert.IsTrue(File.Exists(path), $"{relativePath} not found at {path}.");
+			return File.ReadAllText(path);
 		}
 
 		[Test]
