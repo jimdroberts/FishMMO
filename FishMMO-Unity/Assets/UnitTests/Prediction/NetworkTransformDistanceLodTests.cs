@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using FishMMO.Shared;
 using FishNet.Connection;
 using FishNet.Transporting;
@@ -28,7 +28,7 @@ namespace FishMMO.UnitTests
 		{
 			new NetworkTransformDistanceLod.Band { MaximumDistance = 40f, Interval = 1 },
 			new NetworkTransformDistanceLod.Band { MaximumDistance = 80f, Interval = 2 },
-			new NetworkTransformDistanceLod.Band { MaximumDistance = 140f, Interval = 4 },
+			new NetworkTransformDistanceLod.Band { MaximumDistance = 140f, Interval = 2 },
 		};
 
 		private const float Hysteresis = 0.15f;
@@ -58,7 +58,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Distance_SelectsTheExpectedBand()
 		{
-			/* Defaults: 40m -> every tick, 80m -> every 2nd, 140m -> every 4th. Retuned from
+			/* Defaults: 40m -> every tick, 80m and beyond -> every 2nd. Retuned from
 			 * 20/1, 40/3, 80/6 after live "NPCs rubber band" reports: the transform interpolates
 			 * two ticks of received data, so any interval past 2 starves the buffer and renders
 			 * as stall-then-snap; full rate now covers the range where motion is actually
@@ -157,7 +157,7 @@ namespace FishMMO.UnitTests
 			lod.BandObserver(far.ClientId, 100f * 100f);
 
 			LogAssert.AreEqual(1, lod.GetInterval(near), "A spectator 5 m away must receive every tick.");
-			LogAssert.AreEqual(4, lod.GetInterval(far), "A spectator 100 m away must be in the coarsest band.");
+			LogAssert.AreEqual(2, lod.GetInterval(far), "A spectator 100 m away must be in the coarsest band.");
 			LogAssert.AreEqual(1, lod.LimitedObserverCount, "Exactly one observer is limited.");
 			LogAssert.AreEqual(1, lod.GetInterval(Connection(3)), "An observer never banded is at full rate.");
 		}
@@ -177,16 +177,23 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(lod.ShouldSend(nob, null, Channel.Unreliable),
 				"A null connection must not be declined.");
 
-			// Every 4th tick, phase-spread by client id: exactly one send in any window of four.
+			/* Phase-spread by client id: exactly one send in any window the width of the interval.
+			 * The window is read from the band rather than written as a literal — the far band's
+			 * interval has been retuned twice, and both times a literal here had to be chased. The
+			 * property being asserted is "one send per window, never zero", which is what makes the
+			 * throttle a throttle rather than a mute. */
+			byte interval = lod.GetInterval(far);
+			LogAssert.IsTrue(interval > 1, "The 100 m observer must actually be throttled, or this proves nothing.");
+
 			int sent = 0;
-			for (uint tick = 0; tick < 4; tick++)
+			for (uint tick = 0; tick < interval; tick++)
 			{
-				if (ObserverStreamingPolicy.ShouldSendThisTick(tick, lod.GetInterval(far), far.ClientId))
+				if (ObserverStreamingPolicy.ShouldSendThisTick(tick, interval, far.ClientId))
 				{
 					sent++;
 				}
 			}
-			LogAssert.AreEqual(1, sent, "A coarsest-band observer must hear exactly once per four ticks, never zero.");
+			LogAssert.AreEqual(1, sent, $"A coarsest-band observer must hear exactly once per {interval} ticks, never zero.");
 		}
 
 		[Test]
@@ -239,12 +246,23 @@ namespace FishMMO.UnitTests
 			 * object rather than over objects near the closest observer, so this now holds in a
 			 * crowd as well as in a sparse zone.
 			 *
-			 * The spread reaches the FAR field deliberately. After the 2026-09-01 retune the first
-			 * two bands protect motion quality out to 80m (the transform's two-tick interpolation
-			 * buffer cannot bridge intervals past 2, and starved buffers rendered as the live
-			 * "NPCs rubber band" report), so the savings now live beyond that — where stepping is
-			 * pixels. A population bunched inside 60m would measure the bands at the exact ranges
-			 * they no longer throttle, and fail this test for doing their job. */
+			 * The spread reaches the FAR field deliberately: a population bunched inside 60m would
+			 * measure the bands at the exact ranges they do not throttle, and fail this test for
+			 * doing their job.
+			 *
+			 * THE CEILING IS NOW TWO, AND THAT BOUNDS WHAT THIS CAN MEASURE. Every band interval is
+			 * capped at the transform's `_interpolation` of 2 — see the band table in
+			 * NetworkTransformDistanceLod and NetworkTransformLodBufferTests — because an observer
+			 * fed less often than its buffer is deep drains it and snaps, which is the live "NPCs
+			 * teleporting" report, twice. So no observer can ever be throttled by more than half,
+			 * and the observers inside the 40m engagement radius are not throttled at all. For this
+			 * spread that puts the best reachable result at 15 full-rate + 45 halved = 1125 of 1800,
+			 * which is exactly what it measures: the bands are already optimal under the invariant,
+			 * not merely adequate.
+			 *
+			 * This assertion used to demand better than half and passed only because the far band
+			 * ran at 4 — a saving that was being paid for in visibly broken motion. The threshold
+			 * moved because the tuning was wrong, not because the test was too strict. */
 			(float distance, int count)[] spread =
 			{
 				(10f, 5),
@@ -270,9 +288,12 @@ namespace FishMMO.UnitTests
 				$"MEASURE transform messages/sec to 60 observers: flat={flat}, with LOD={lodded} " +
 				$"({flat / (double)lodded:F1}x fewer)");
 
-			LogAssert.IsTrue(lodded < flat / 2,
-				$"On a spread-out population the bands must at least halve transform messages; " +
-				$"{flat} -> {lodded} is not worth the component's complexity.");
+			/* Two thirds, not one half. Half is unreachable while the interval ceiling is 2 and the
+			 * engagement radius is exempt — see above. A regression that disabled the bands entirely
+			 * would measure 1800 and still fail this, which is what the assertion is for. */
+			LogAssert.IsTrue(lodded < (flat * 2) / 3,
+				$"On a spread-out population the bands must still take a real bite out of transform " +
+				$"messages; {flat} -> {lodded} means they are barely doing anything.");
 		}
 	}
 }

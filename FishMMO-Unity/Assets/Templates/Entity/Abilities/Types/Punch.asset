@@ -33,7 +33,8 @@ MonoBehaviour:
   HitCount: 1
   Type: 3
   OnTickEvents: []
-  OnHitEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: 69de0afedec049ceaa7dfafe0242db29, type: 2}
   OnPreSpawnEvents: []
   OnSpawnEvents: []
   OnDestroyEvents: []

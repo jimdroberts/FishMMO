@@ -644,6 +644,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69de0afedec049ceaa7dfafe0242db29
+    m_Address: Basic Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d057742d4e36f464fb2f1dde1d2fe707
     m_Address: Gravity
     m_ReadOnly: 0

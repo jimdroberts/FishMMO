@@ -79,18 +79,31 @@ namespace FishMMO.Shared
 		[Header("Level of detail")]
 		[Tooltip("Ascending distance bands. An observer inside a band receives that band's interval.")]
 		[SerializeField]
-		/* Retuned 2026-09-01 from 20/1, 40/3, 80/6 after a live report of NPCs "teleporting or
-		 * rubber banding" while moving. The transform's interpolation buffers TWO ticks of
-		 * received data, sized for per-tick sends — an interval of 3 starves it (updates every
-		 * 100ms into a ~66ms buffer), so beyond 20m every moving NPC played out its buffer,
-		 * stalled, and snapped to the next sample. Full rate now covers the range where motion
-		 * quality is actually judged; interval 2 stays within what the buffer can bridge; the
-		 * far band's stepping is a few pixels at 80m+. intervalScale remains the crowd lever. */
+		/* NO INTERVAL HERE MAY EXCEED NetworkTransform's `_interpolation`, which is 2 on every
+		 * prefab in the project. That is the invariant this table exists under, and it is not a
+		 * guideline: the interpolation buffer is sized in TICKS OF RECEIVED DATA, so an observer
+		 * fed every Nth tick drains the buffer in `_interpolation` ticks and then has nothing to
+		 * move toward until the next sample lands. The render is play out, stall, snap — which
+		 * reads as an NPC teleporting between positions rather than walking.
+		 *
+		 * The buffer is per OBJECT and the interval is per OBSERVER, so an object cannot size its
+		 * buffer for the observer that happens to be furthest away. The buffer must therefore
+		 * cover the WORST interval any observer can be handed, which is the largest value below
+		 * multiplied by intervalScale. NetworkTransformLodBufferTests pins that.
+		 *
+		 * History, because this has now been got wrong twice. The original 20/1, 40/3, 80/6 was
+		 * retuned on 2026-09-01 after a live "NPCs teleporting or rubber banding" report; that
+		 * pass moved full rate out to 40m and dropped the middle band to 2, but left the far band
+		 * at 4 on the reasoning that its stepping was "a few pixels at 80m+". It is not — the same
+		 * report came back on 2026-09-02 for NPCs outside the 40m engagement radius. Bandwidth in
+		 * the far field is the visibility budget's job (ObserverStreamingPolicy.VisibilityBudget
+		 * stops distant characters existing at all); it is not worth buying with motion that
+		 * visibly breaks. intervalScale remains the crowd lever. */
 		private Band[] bands =
 		{
 			new Band { MaximumDistance = 40f, Interval = 1 },
 			new Band { MaximumDistance = 80f, Interval = 2 },
-			new Band { MaximumDistance = 140f, Interval = 4 },
+			new Band { MaximumDistance = 140f, Interval = 2 },
 		};
 
 		/// <summary>

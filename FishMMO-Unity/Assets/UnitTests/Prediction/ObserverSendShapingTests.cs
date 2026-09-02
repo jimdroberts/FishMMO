@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -136,13 +136,24 @@ namespace FishMMO.UnitTests
 
 				NetworkConnection viewer = Connection(7);
 
-				// Cap says every 3rd tick, distance says every 4th.
-				entry.SetInterval(viewer, 3);
-				lod.BandObserver(viewer.ClientId, 100f * 100f); // coarsest default band: 4
-				LogAssert.AreEqual(4, entry.GetEffectiveInterval(viewer), "The larger interval wins.");
+				/* Both directions, because the composition is a max and a max has to be proved from
+				 * either side. The numbers moved when the far band was capped at the interpolation
+				 * buffer's width (see NetworkTransformLodBufferTests): the coarsest band is 2 now,
+				 * so the cap has to be set BELOW it to let the distance side win. */
+				lod.BandObserver(viewer.ClientId, 100f * 100f); // coarsest band
+				byte distanceInterval = lod.GetInterval(viewer);
+				LogAssert.IsTrue(distanceInterval > 1, "The 100 m observer must be throttled by distance at all.");
 
+				// Cap unlimited, distance throttled: distance wins.
+				entry.SetInterval(viewer, 1);
+				LogAssert.AreEqual(distanceInterval, entry.GetEffectiveInterval(viewer),
+					"With no cap in force the distance interval must decide.");
+
+				// Cap coarser than distance: the cap wins, and the two must not multiply.
 				entry.SetInterval(viewer, 8);
 				LogAssert.AreEqual(8, entry.GetEffectiveInterval(viewer), "The larger interval wins in the other direction too.");
+				LogAssert.IsTrue(entry.GetEffectiveInterval(viewer) < 8 * distanceInterval,
+					"Composing by multiplication is the failure this test exists to catch.");
 
 				// Under the old design (NT interval N × per-observer gate M) an observer heard once
 				// in N×M ticks at best. Count what it hears now over a long window.

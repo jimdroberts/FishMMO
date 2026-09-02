@@ -935,7 +935,7 @@ MonoBehaviour:
   - MaximumDistance: 80
     Interval: 2
   - MaximumDistance: 140
-    Interval: 4
+    Interval: 2
   intervalScale: 1
   evaluateInterval: 0.5
   hysteresis: 0.15
