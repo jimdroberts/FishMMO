@@ -244,6 +244,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				/* The server's own cache of this member's standing, refreshed from the same
+				 * resolve the message carries. It is only ever a pre-filter — every operation
+				 * re-resolves before deciding — but inserting a rank RENUMBERS the ladder, so a
+				 * cache left on the pre-insert order would disagree with the panel the player is
+				 * looking at until the guild update pump next ran. */
+				guildController.RankOrder = broadcast.ViewerRankOrder;
+				guildController.Permissions = (GuildPermissions)broadcast.ViewerPermissions;
+				guildController.LeaderRankOrder = broadcast.LeaderRankOrder;
+
 				Server.NetworkWrapper.Broadcast(conn, broadcast, true, Channel.Reliable);
 			});
 		}

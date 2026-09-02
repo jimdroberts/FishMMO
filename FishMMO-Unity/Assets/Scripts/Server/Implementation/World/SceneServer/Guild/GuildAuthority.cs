@@ -332,12 +332,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// May the actor add a rank at the given position with the given permissions?
+		/// May the actor insert a rank at the given position with the given permissions?
 		/// </summary>
 		/// <param name="actor">The actor's standing.</param>
-		/// <param name="rankOrder">The requested position.</param>
+		/// <param name="rankOrder">The position the new rank would take.</param>
 		/// <param name="proposed">The requested mask.</param>
 		/// <returns>The decision.</returns>
+		/// <remarks>
+		/// <para><b>The position is an insertion point, not a free slot.</b> Everything already at
+		/// or above <paramref name="rankOrder"/> moves up one rung — see
+		/// <c>IGuildRankService.InsertAsync</c>. It has to work that way: a guild is seeded with
+		/// three contiguous ranks and the actor may only create below their own seat, so a leader
+		/// at order 3 has orders 1 and 2 to choose from and both are already taken. Requiring a
+		/// free position meant no guild could ever add a rank.</para>
+		///
+		/// <para><b>Which is why the actor's OWN order is allowed here</b>, where
+		/// <see cref="CanEditRank"/> refuses it. The two are not the same act. Editing your own
+		/// row is the shortest path from "may edit ranks" to "may do anything": you add the bits
+		/// you want to the seat you already occupy. Inserting at your own order adds a rank
+		/// BELOW you and moves your row up with the rest of the ladder — it cannot change your own
+		/// permissions, and every seniority comparison in the guild is preserved because every
+		/// rank at or above the point moves by the same one. Refusing it would mean the most
+		/// useful placement, a new tier directly under the person creating it, was the one
+		/// placement nobody could ask for.</para>
+		///
+		/// <para>Headroom is NOT checked here. Whether the top of the ladder can move up one is a
+		/// fact about rows this struct does not necessarily hold in full, and the service settles
+		/// it inside the same transaction that performs the shift.</para>
+		/// </remarks>
 		public static GuildActionResult CanCreateRank(GuildAuthority actor, byte rankOrder, GuildPermissions proposed)
 		{
 			if (!actor.Has(GuildPermissions.EditRanks))
@@ -350,7 +372,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return GuildActionResult.RankNotFound;
 			}
 
-			if (!actor.Outranks(rankOrder))
+			/* At or below the actor's own seat. Above it would let a rank administrator create a
+			 * seat senior to their own and then be promoted into it — the escalation the strict
+			 * comparison in CanEditRank exists to stop. */
+			if (!actor.IsMember || actor.RankOrder < rankOrder)
 			{
 				return GuildActionResult.InsufficientRank;
 			}

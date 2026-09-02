@@ -155,14 +155,14 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> CreateAsync(GuildRankData rank, int maxRanks, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> InsertAsync(GuildRankData rank, int maxRanks, byte maxRankOrder, CancellationToken cancellationToken = default)
 		{
 			if (rank.GuildID <= 0)
 			{
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid guild ID.");
 			}
 
-			if (rank.RankOrder < 1)
+			if (rank.RankOrder < 1 || rank.RankOrder > maxRankOrder)
 			{
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid rank order.");
 			}
@@ -177,44 +177,100 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Invalid maximum rank count.");
 			}
 
-			var result = await ExecuteWriteAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync<int>(async dbContext =>
 			{
-				/* The cap is enforced inside the INSERT, in the same statement that reads the
-				 * current count. Counting first and inserting second lets two concurrent creates
-				 * both see count = max - 1. */
-				var sql = $@"
-					WITH capacity_ok AS (
-						SELECT 1 WHERE (SELECT COUNT(*) FROM {TableName} WHERE guild_id = {{0}}) < {{1}}
-					),
-					inserted AS (
-						INSERT INTO {TableName} (guild_id, version, rank_order, name, permissions, time_created)
-						SELECT {{0}}, 1, {{2}}, {{3}}, {{4}}, {{5}}
-						WHERE EXISTS (SELECT 1 FROM capacity_ok)
-						ON CONFLICT (guild_id, rank_order) DO NOTHING
-						RETURNING 1
-					)
-					SELECT CASE
-						WHEN NOT EXISTS (SELECT 1 FROM capacity_ok) THEN 1
-						WHEN EXISTS (SELECT 1 FROM inserted) THEN 0
-						ELSE 2
-					END AS value";
+				/* FOR UPDATE, and the whole ladder rather than the rows being moved. Two scene
+				 * servers can be inserting into the same guild at the same moment, and each one's
+				 * decisions — is there capacity, is there headroom, which rows move — are read
+				 * from this list. Locking the ladder is what makes the second insert wait and then
+				 * re-read, instead of computing a shift against a ladder that has already moved. */
+				var existing = await dbContext.GuildRanks
+					.FromSqlRaw($"SELECT * FROM {TableName} WHERE guild_id = {{0}} ORDER BY rank_order DESC FOR UPDATE", rank.GuildID)
+					.AsNoTracking()
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-				return await ExecuteScalarIntAsync(
-					dbContext,
-					sql,
-					new object[] { rank.GuildID, maxRanks, (short)rank.RankOrder, rank.Name, rank.Permissions, DateTime.UtcNow },
+				/* Re-sorted in memory rather than trusted from the query. The ORDER BY above is
+				 * there for the lock's sake; EF composes over a raw query freely and the loop
+				 * below is only correct while the list really is highest-first. */
+				existing.Sort((a, b) => b.RankOrder.CompareTo(a.RankOrder));
+
+				if (existing.Count >= maxRanks)
+				{
+					return ResultCapacity;
+				}
+
+				/* Headroom. Every rank at or above the insertion point moves up one, so the guild
+				 * needs one unused order above its highest. Without this the shift would run the
+				 * top rank past the legal range and leave a leader on an order the rest of the
+				 * code refuses to accept. */
+				if (existing.Count > 0 && existing[0].RankOrder >= maxRankOrder)
+				{
+					return ResultNoHeadroom;
+				}
+
+				/* Descending, one statement per row. See IGuildRankService.InsertAsync: the
+				 * unique index on (guild_id, rank_order) is checked per row, so a single ranged
+				 * UPDATE collides with whichever occupied target the planner reaches first. */
+				for (int i = 0; i < existing.Count; ++i)
+				{
+					byte order = existing[i].RankOrder;
+					if (order < rank.RankOrder)
+					{
+						// Ordered descending, so everything from here down stays where it is.
+						break;
+					}
+
+					await dbContext.Database.ExecuteSqlRawAsync(
+						$@"UPDATE {TableName}
+							SET rank_order = rank_order + 1, version = version + 1
+							WHERE guild_id = {{0}} AND rank_order = {{1}}",
+						new object[] { rank.GuildID, (short)order },
+						cancellationToken).ConfigureAwait(false);
+				}
+
+				/* The membership rows move with the ladder. One statement, because nothing is
+				 * unique about character_guild.rank — the collision that forces the loop above
+				 * cannot happen here. */
+				await dbContext.Database.ExecuteSqlRawAsync(
+					@"UPDATE character_guild
+						SET rank = rank + 1
+						WHERE guild_id = {0} AND rank >= {1}",
+					new object[] { rank.GuildID, (short)rank.RankOrder },
 					cancellationToken).ConfigureAwait(false);
+
+				int inserted = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"INSERT INTO {TableName} (guild_id, version, rank_order, name, permissions, time_created)
+						SELECT {{0}}, 1, {{1}}, {{2}}, {{3}}, {{4}}
+						WHERE EXISTS (SELECT 1 FROM guilds WHERE id = {{0}})",
+					new object[] { rank.GuildID, (short)rank.RankOrder, rank.Name, rank.Permissions, DateTime.UtcNow },
+					cancellationToken).ConfigureAwait(false);
+
+				/* Zero rows means the guild itself is gone — disbanded while this request was in
+				 * flight. Reported rather than ignored, because the shift above has to roll back
+				 * with it, which is what returning through the transaction wrapper does. */
+				return inserted > 0 ? ResultInserted : ResultGuildMissing;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? result.Data switch
 				{
-					0 => DatabaseResult.Success(),
-					1 => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Guild already has the maximum of {maxRanks} ranks."),
-					_ => DatabaseResult.Failure(DatabaseErrorCodes.UniqueViolation, "A rank already occupies that position."),
+					ResultInserted => DatabaseResult.Success(),
+					ResultCapacity => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Guild already has the maximum of {maxRanks} ranks."),
+					ResultNoHeadroom => DatabaseResult.Failure(DatabaseErrorCodes.CapacityExceeded, $"Guild has no rank order free below {maxRankOrder}."),
+					_ => DatabaseResult.Failure(DatabaseErrorCodes.NotFound, "Guild not found."),
 				}
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
+
+		/// <summary><see cref="InsertAsync"/> outcome: the rank was created.</summary>
+		private const int ResultInserted = 0;
+		/// <summary><see cref="InsertAsync"/> outcome: the guild already holds its maximum ranks.</summary>
+		private const int ResultCapacity = 1;
+		/// <summary><see cref="InsertAsync"/> outcome: the ladder cannot be shifted up any further.</summary>
+		private const int ResultNoHeadroom = 2;
+		/// <summary><see cref="InsertAsync"/> outcome: the guild no longer exists.</summary>
+		private const int ResultGuildMissing = 3;
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteAsync(long guildId, byte rankOrder, CancellationToken cancellationToken = default)

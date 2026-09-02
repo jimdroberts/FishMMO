@@ -104,6 +104,21 @@ namespace FishMMO.Client
 		private const string AUDIO_MUTE_TOGGLE_NAME = "audio-mute-unfocused-toggle";
 		private const string RESET_AUDIO_NAME = "options-reset-audio-btn";
 		private const string GAMEPLAY_LIST_NAME = "options-gameplay-list";
+		private const string CROSSHAIR_ENABLED_NAME = "crosshair-enabled-toggle";
+		private const string CROSSHAIR_STYLE_NAME = "crosshair-style-dropdown";
+		private const string CROSSHAIR_SIZE_SLIDER_NAME = "crosshair-size-slider";
+		private const string CROSSHAIR_SIZE_VALUE_NAME = "crosshair-size-value";
+		private const string CROSSHAIR_OPACITY_SLIDER_NAME = "crosshair-opacity-slider";
+		private const string CROSSHAIR_OPACITY_VALUE_NAME = "crosshair-opacity-value";
+		private const string WORLDLABEL_SCALE_SLIDER_NAME = "worldlabel-scale-slider";
+		private const string WORLDLABEL_SCALE_VALUE_NAME = "worldlabel-scale-value";
+		private const string WORLDLABEL_OPACITY_SLIDER_NAME = "worldlabel-opacity-slider";
+		private const string WORLDLABEL_OPACITY_VALUE_NAME = "worldlabel-opacity-value";
+		private const string WORLDLABEL_DISTANCE_SLIDER_NAME = "worldlabel-distance-slider";
+		private const string WORLDLABEL_DISTANCE_VALUE_NAME = "worldlabel-distance-value";
+		private const string WORLDLABEL_MAX_SLIDER_NAME = "worldlabel-max-slider";
+		private const string WORLDLABEL_MAX_VALUE_NAME = "worldlabel-max-value";
+		private const string WORLDLABEL_OCCLUDE_NAME = "worldlabel-occlude-toggle";
 		private const string COLOR_LIST_NAME = "options-color-list";
 		private const string RESET_COLORS_NAME = "options-reset-colors-btn";
 		private const string CONTROLS_LIST_NAME = "options-controls-list";
@@ -319,6 +334,24 @@ namespace FishMMO.Client
 
 		private Button closeButton;
 		private VisualElement gameplayList;
+
+		// ── Crosshair and world label controls ──────────────────────
+
+		private Toggle crosshairEnabledToggle;
+		private DropdownField crosshairStyleDropdown;
+		private Slider crosshairSizeSlider;
+		private Label crosshairSizeValueLabel;
+		private Slider crosshairOpacitySlider;
+		private Label crosshairOpacityValueLabel;
+		private Slider worldLabelScaleSlider;
+		private Label worldLabelScaleValueLabel;
+		private Slider worldLabelOpacitySlider;
+		private Label worldLabelOpacityValueLabel;
+		private Slider worldLabelDistanceSlider;
+		private Label worldLabelDistanceValueLabel;
+		private Slider worldLabelMaxSlider;
+		private Label worldLabelMaxValueLabel;
+		private Toggle worldLabelOccludeToggle;
 		private VisualElement colorList;
 		private Button resetColorsButton;
 		private VisualElement controlsList;
@@ -464,6 +497,21 @@ namespace FishMMO.Client
 
 			closeButton = Root.Q<Button>(CLOSE_BUTTON_NAME);
 			gameplayList = Root.Q<VisualElement>(GAMEPLAY_LIST_NAME);
+			crosshairEnabledToggle = Root.Q<Toggle>(CROSSHAIR_ENABLED_NAME);
+			crosshairStyleDropdown = Root.Q<DropdownField>(CROSSHAIR_STYLE_NAME);
+			crosshairSizeSlider = Root.Q<Slider>(CROSSHAIR_SIZE_SLIDER_NAME);
+			crosshairSizeValueLabel = Root.Q<Label>(CROSSHAIR_SIZE_VALUE_NAME);
+			crosshairOpacitySlider = Root.Q<Slider>(CROSSHAIR_OPACITY_SLIDER_NAME);
+			crosshairOpacityValueLabel = Root.Q<Label>(CROSSHAIR_OPACITY_VALUE_NAME);
+			worldLabelScaleSlider = Root.Q<Slider>(WORLDLABEL_SCALE_SLIDER_NAME);
+			worldLabelScaleValueLabel = Root.Q<Label>(WORLDLABEL_SCALE_VALUE_NAME);
+			worldLabelOpacitySlider = Root.Q<Slider>(WORLDLABEL_OPACITY_SLIDER_NAME);
+			worldLabelOpacityValueLabel = Root.Q<Label>(WORLDLABEL_OPACITY_VALUE_NAME);
+			worldLabelDistanceSlider = Root.Q<Slider>(WORLDLABEL_DISTANCE_SLIDER_NAME);
+			worldLabelDistanceValueLabel = Root.Q<Label>(WORLDLABEL_DISTANCE_VALUE_NAME);
+			worldLabelMaxSlider = Root.Q<Slider>(WORLDLABEL_MAX_SLIDER_NAME);
+			worldLabelMaxValueLabel = Root.Q<Label>(WORLDLABEL_MAX_VALUE_NAME);
+			worldLabelOccludeToggle = Root.Q<Toggle>(WORLDLABEL_OCCLUDE_NAME);
 			colorList = Root.Q<VisualElement>(COLOR_LIST_NAME);
 			resetColorsButton = Root.Q<Button>(RESET_COLORS_NAME);
 			controlsList = Root.Q<VisualElement>(CONTROLS_LIST_NAME);
@@ -484,6 +532,8 @@ namespace FishMMO.Client
 			InitializeVSync();
 			InitializeAudioSettings();
 			InitializeGameplayToggles();
+			InitializeCrosshairSettings();
+			InitializeWorldLabelSettings();
 			InitializeInterfaceSettings();
 			InitializeColorSettings();
 			InitializeProfileSection();
@@ -1533,6 +1583,218 @@ namespace FishMMO.Client
 
 				row.Add(toggle);
 				gameplayList.Add(row);
+			}
+		}
+
+		// ── Crosshair ───────────────────────────────────────────────
+
+		/// <summary>
+		/// Binds the four crosshair controls to <see cref="ClientCrosshairSettings"/>.
+		/// </summary>
+		/// <remarks>
+		/// Every write goes through <see cref="ClientCrosshairSettings"/> rather than straight to
+		/// <see cref="ClientSettings"/>, because the crosshair panel is a separate document that
+		/// only repaints when that class raises its change event. Writing the key here and letting
+		/// the crosshair notice on its own would mean a size change that took effect at the next
+		/// scene load.
+		/// <para>
+		/// The crosshair's COLOUR is not here. It is a themed colour, edited in the UI tab's
+		/// colour list; a second control for the same value would leave two places to set it and
+		/// no rule about which wins.
+		/// </para>
+		/// </remarks>
+		private void InitializeCrosshairSettings()
+		{
+			if (crosshairEnabledToggle != null)
+			{
+				// Without notify: assigning `value` raises the callback, which writes back to the
+				// file this was just read from. See InitializeBrightness.
+				crosshairEnabledToggle.SetValueWithoutNotify(ClientCrosshairSettings.Enabled);
+				crosshairEnabledToggle.RegisterValueChangedCallback((evt) =>
+					ClientCrosshairSettings.SetEnabled(evt.newValue));
+			}
+
+			if (crosshairStyleDropdown != null)
+			{
+				crosshairStyleDropdown.choices = new List<string>(ClientCrosshairSettings.StyleLabels);
+				crosshairStyleDropdown.SetValueWithoutNotify(
+					ClientCrosshairSettings.StyleLabels[(int)ClientCrosshairSettings.Style]);
+
+				crosshairStyleDropdown.RegisterValueChangedCallback((evt) =>
+				{
+					/* The INDEX, not the label. Matching on the displayed string would break the
+					 * first time a style is renamed, and the stored value is the ordinal. */
+					int index = crosshairStyleDropdown.index;
+					if (index < 0 || index >= ClientCrosshairSettings.StyleLabels.Length)
+					{
+						return;
+					}
+					ClientCrosshairSettings.SetStyle((ClientCrosshairSettings.CrosshairStyle)index);
+				});
+			}
+
+			if (crosshairSizeSlider != null)
+			{
+				crosshairSizeSlider.lowValue = ClientCrosshairSettings.MinimumSize;
+				crosshairSizeSlider.highValue = ClientCrosshairSettings.MaximumSize;
+
+				float size = ClientCrosshairSettings.Size;
+				crosshairSizeSlider.SetValueWithoutNotify(size);
+				UpdatePixelLabel(crosshairSizeValueLabel, size);
+
+				crosshairSizeSlider.RegisterValueChangedCallback((evt) =>
+				{
+					float value = Mathf.Round(evt.newValue);
+					ClientCrosshairSettings.SetSize(value);
+					UpdatePixelLabel(crosshairSizeValueLabel, value);
+				});
+			}
+
+			if (crosshairOpacitySlider != null)
+			{
+				crosshairOpacitySlider.lowValue = ClientCrosshairSettings.MinimumOpacity;
+				crosshairOpacitySlider.highValue = ClientCrosshairSettings.MaximumOpacity;
+
+				float opacity = ClientCrosshairSettings.Opacity;
+				crosshairOpacitySlider.SetValueWithoutNotify(opacity);
+				UpdatePercentLabel(crosshairOpacityValueLabel, opacity);
+
+				crosshairOpacitySlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientCrosshairSettings.SetOpacity(evt.newValue);
+					UpdatePercentLabel(crosshairOpacityValueLabel, evt.newValue);
+				});
+			}
+		}
+
+		// ── World labels ────────────────────────────────────────────
+
+		/// <summary>
+		/// Binds the world label controls to <see cref="ClientWorldLabelSettings"/>.
+		/// </summary>
+		/// <remarks>
+		/// The last two rows are performance controls rather than taste ones. The world label
+		/// layer projects, diffs and depth-sorts once per label per frame — the client's hottest
+		/// UI loop — and the draw distance and the on-screen cap are what bound how much of it
+		/// runs. They are worth exposing for the same reason the minimap's refresh rate is: a
+		/// machine that struggles in a crowded hub gets a real frame back from either.
+		/// </remarks>
+		private void InitializeWorldLabelSettings()
+		{
+			if (worldLabelScaleSlider != null)
+			{
+				worldLabelScaleSlider.lowValue = ClientWorldLabelSettings.MinimumScale;
+				worldLabelScaleSlider.highValue = ClientWorldLabelSettings.MaximumScale;
+
+				float scale = ClientWorldLabelSettings.Scale;
+				worldLabelScaleSlider.SetValueWithoutNotify(scale);
+				UpdateMultiplierLabel(worldLabelScaleValueLabel, scale);
+
+				worldLabelScaleSlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientWorldLabelSettings.SetScale(evt.newValue);
+					UpdateMultiplierLabel(worldLabelScaleValueLabel, evt.newValue);
+				});
+			}
+
+			if (worldLabelOpacitySlider != null)
+			{
+				worldLabelOpacitySlider.lowValue = ClientWorldLabelSettings.MinimumOpacity;
+				worldLabelOpacitySlider.highValue = ClientWorldLabelSettings.MaximumOpacity;
+
+				float opacity = ClientWorldLabelSettings.Opacity;
+				worldLabelOpacitySlider.SetValueWithoutNotify(opacity);
+				UpdatePercentLabel(worldLabelOpacityValueLabel, opacity);
+
+				worldLabelOpacitySlider.RegisterValueChangedCallback((evt) =>
+				{
+					ClientWorldLabelSettings.SetOpacity(evt.newValue);
+					UpdatePercentLabel(worldLabelOpacityValueLabel, evt.newValue);
+				});
+			}
+
+			if (worldLabelDistanceSlider != null)
+			{
+				worldLabelDistanceSlider.lowValue = ClientWorldLabelSettings.MinimumDistance;
+				worldLabelDistanceSlider.highValue = ClientWorldLabelSettings.MaximumDistance;
+
+				float distance = ClientWorldLabelSettings.Distance;
+				worldLabelDistanceSlider.SetValueWithoutNotify(distance);
+				UpdateMetreLabel(worldLabelDistanceValueLabel, distance);
+
+				worldLabelDistanceSlider.RegisterValueChangedCallback((evt) =>
+				{
+					float value = Mathf.Round(evt.newValue);
+					ClientWorldLabelSettings.SetDistance(value);
+					UpdateMetreLabel(worldLabelDistanceValueLabel, value);
+				});
+			}
+
+			if (worldLabelMaxSlider != null)
+			{
+				worldLabelMaxSlider.lowValue = ClientWorldLabelSettings.MinimumMaxVisible;
+				worldLabelMaxSlider.highValue = ClientWorldLabelSettings.MaximumMaxVisible;
+
+				int maximum = ClientWorldLabelSettings.MaxVisible;
+				worldLabelMaxSlider.SetValueWithoutNotify(maximum);
+				UpdateCountLabel(worldLabelMaxValueLabel, maximum);
+
+				worldLabelMaxSlider.RegisterValueChangedCallback((evt) =>
+				{
+					// A count, so the stored value is an int; the slider itself is continuous.
+					int value = Mathf.RoundToInt(evt.newValue);
+					ClientWorldLabelSettings.SetMaxVisible(value);
+					UpdateCountLabel(worldLabelMaxValueLabel, value);
+				});
+			}
+
+			if (worldLabelOccludeToggle != null)
+			{
+				worldLabelOccludeToggle.SetValueWithoutNotify(ClientWorldLabelSettings.Occlude);
+				worldLabelOccludeToggle.RegisterValueChangedCallback((evt) =>
+					ClientWorldLabelSettings.SetOcclude(evt.newValue));
+			}
+		}
+
+		/// <summary>Writes a whole number of panel points into a label.</summary>
+		private static void UpdatePixelLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = $"{Mathf.RoundToInt(value)} px";
+			}
+		}
+
+		/// <summary>Writes a whole number of metres into a label.</summary>
+		private static void UpdateMetreLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = $"{Mathf.RoundToInt(value)} m";
+			}
+		}
+
+		/// <summary>Writes a plain count into a label.</summary>
+		private static void UpdateCountLabel(Label label, int value)
+		{
+			if (label != null)
+			{
+				label.text = value.ToString();
+			}
+		}
+
+		/// <summary>Writes a multiplier into a label.</summary>
+		/// <remarks>
+		/// A multiplier rather than a percentage, for the same reason
+		/// <see cref="UpdateSensitivityLabel"/> is: labels are drawn this many times their
+		/// authored size, and "100%" would read as a ceiling rather than as the middle of a range
+		/// that runs to twice.
+		/// </remarks>
+		private static void UpdateMultiplierLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = $"{value:0.00}x";
 			}
 		}
 

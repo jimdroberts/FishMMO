@@ -2516,9 +2516,10 @@ namespace FishMMO.Client
 			if (addRankButton != null)
 			{
 				/* Shown only when a create could actually be sent: the viewer holds EditRanks,
-				 * the guild is under the rank cap, and a free order exists STRICTLY below the
-				 * viewer's own seat — the same three things GuildRules.CanCreateRank will check. */
-				addRankButton.style.display = mayEditRanks && FindFreeRankOrder(guildController) > 0
+				 * the guild is under the rank cap, and the ladder has room to move up one — the
+				 * same three things the create path will check, on the server and then again in
+				 * the same transaction as the shift. */
+				addRankButton.style.display = mayEditRanks && FindInsertRankOrder(guildController) > 0
 					? DisplayStyle.Flex
 					: DisplayStyle.None;
 			}
@@ -2776,14 +2777,26 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Prompts for a name and broadcasts creation of a new rank.
+		/// Prompts for a name and broadcasts creation of a new rank directly below the viewer's.
 		/// </summary>
 		/// <remarks>
-		/// The position is chosen here rather than asked for: the highest free order strictly
-		/// below the creator's own, which is both where <c>GuildRules.CanCreateRank</c> requires
-		/// a new rank to sit and the only placement whose creator may immediately edit it. The
-		/// new rank starts with NO permissions — an empty mask always passes the server's "may
-		/// not grant what you do not hold" rule, and the toggles are the tool for the rest.
+		/// <para><b>The position is chosen here rather than asked for.</b> A new rank is INSERTED
+		/// at the viewer's own order, which puts it directly below them and carries every rank at
+		/// or above that point — their own included — up one rung. That placement is the one a
+		/// guild almost always wants (a new tier under the person creating it), it is the only one
+		/// whose creator may immediately edit the result, and it changes nobody's permissions and
+		/// nobody's relative standing.</para>
+		///
+		/// <para><b>It is not a free slot, because there are none.</b> A guild is seeded with
+		/// three contiguous ranks — member 1, officer 2, leader 3 — and a rank may only be created
+		/// at or below the creator's seat, so a leader has orders 1 and 2 to choose from and both
+		/// are occupied. The panel used to look for a gap, find none, and hide this button
+		/// permanently: the whole feature existed and could not be reached. See
+		/// <c>IGuildRankService.InsertAsync</c>.</para>
+		///
+		/// <para>The new rank starts with NO permissions — an empty mask always passes the
+		/// server's "may not grant what you do not hold" rule, and the toggles are the tool for
+		/// the rest.</para>
 		/// </remarks>
 		public void OnButtonAddRank()
 		{
@@ -2796,7 +2809,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte previewOrder = FindFreeRankOrder(guildController);
+			byte previewOrder = FindInsertRankOrder(guildController);
 			if (previewOrder < 1)
 			{
 				return;
@@ -2807,7 +2820,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			input.Open($"Type a name for the new rank. It will be created at position {previewOrder}, with no permissions.", (s) =>
+			input.Open("Type a name for the new rank. It will be created directly below your own, with no permissions.", (s) =>
 			{
 				if (!GuildRankDefaults.TrySanitizeRankName(s, out string sanitized))
 				{
@@ -2818,15 +2831,14 @@ namespace FishMMO.Client
 					return;
 				}
 
-				/* Recomputed inside the callback: another editor may have taken the previewed
-				 * slot while the dialog was open, and sending a taken order would only earn a
-				 * refusal the recomputation can avoid. */
+				/* Recomputed inside the callback: the ladder can have been renumbered by another
+				 * editor while the dialog was open, and the viewer's own seat moves with it. */
 				if (Character == null || !Character.TryGet(out IGuildController controller))
 				{
 					return;
 				}
 
-				byte rankOrder = FindFreeRankOrder(controller);
+				byte rankOrder = FindInsertRankOrder(controller);
 				if (rankOrder < 1)
 				{
 					return;
@@ -2842,34 +2854,43 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The position a new rank would be created at, or zero when none is available.
+		/// The position a new rank would be inserted at, or zero when one cannot be created.
 		/// </summary>
 		/// <param name="guildController">The viewer's guild controller.</param>
-		/// <returns>The highest free order strictly below the viewer's seat, or zero.</returns>
+		/// <returns>The viewer's own rank order, or zero when no insert is possible.</returns>
 		/// <remarks>
-		/// Mirrors <c>GuildRules.CanCreateRank</c> plus the row cap the create service enforces.
-		/// Zero when the ladder has not arrived yet — a position computed against an empty ladder
-		/// would collide with a rank this client simply has not seen.
+		/// Mirrors the cheap half of what the create path enforces: the guild must be under the
+		/// rank cap, and the ladder must have an order free above its highest for everything to
+		/// move up into. Zero when the ladder has not arrived yet — an insertion point computed
+		/// against an empty ladder is a guess about rows this client has simply not seen.
 		/// </remarks>
-		private byte FindFreeRankOrder(IGuildController guildController)
+		private byte FindInsertRankOrder(IGuildController guildController)
 		{
 			if (guildController == null ||
+				guildController.RankOrder < GuildRankDefaults.MinRankOrder ||
 				rankLadder.Count < 1 ||
 				rankLadder.Count >= GuildRankDefaults.MaxRanksPerGuild)
 			{
 				return 0;
 			}
 
-			int highest = Math.Min(guildController.RankOrder - 1, (int)GuildRankDefaults.MaxRankOrder);
-			for (int order = highest; order >= GuildRankDefaults.MinRankOrder; --order)
+			/* Headroom. Inserting moves the top of the ladder up one, so a guild whose highest
+			 * rank already sits at the ceiling has nowhere to put it. */
+			byte highest = 0;
+			foreach (KeyValuePair<byte, GuildRankEntry> pair in rankLadder)
 			{
-				if (!rankLadder.ContainsKey((byte)order))
+				if (pair.Key > highest)
 				{
-					return (byte)order;
+					highest = pair.Key;
 				}
 			}
 
-			return 0;
+			if (highest >= GuildRankDefaults.MaxRankOrder)
+			{
+				return 0;
+			}
+
+			return guildController.RankOrder;
 		}
 
 		/// <summary>
