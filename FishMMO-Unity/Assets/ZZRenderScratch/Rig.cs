@@ -243,6 +243,11 @@ namespace FishMMO.RenderScratch
 
 		public void Activate(int index) { }
 
+		/* The render rig has no server and no reconcile, so there is no request to remember. */
+		public void NotifyEquipRequested(Item item, int inventoryIndex, InventoryType fromInventory, ItemSlot toSlot) { }
+		public void NotifyUnequipRequested(ItemSlot slot, InventoryType toInventory) { }
+		public void ClearPendingRequest(ItemSlot slot) { }
+
 		public bool Equip(Item item, int inventoryIndex, IItemContainer container, ItemSlot toSlot)
 		{
 			bool ok = SetItemSlot(item, (int)toSlot);

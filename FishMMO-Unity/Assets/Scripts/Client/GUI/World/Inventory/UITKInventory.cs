@@ -946,6 +946,14 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Recorded before the request goes out: the reconcile can beat the acknowledgement
+			 * back, and without a record it returns the item to whichever container has room
+			 * rather than the one that was asked for. See IEquipmentController. */
+			if (Character.TryGet(out IEquipmentController equipmentForNotify))
+			{
+				equipmentForNotify.NotifyUnequipRequested((ItemSlot)equipmentSlot, InventoryType.Inventory);
+			}
+
 			Client.Broadcast(new EquipmentUnequipItemBroadcast()
 			{
 				Slot = (byte)equipmentSlot,
@@ -1041,6 +1049,12 @@ namespace FishMMO.Client
 				{
 					ItemOperationTracker.Release(ReferenceButtonType.Inventory, slotIndex);
 					return;
+				}
+
+				/* Recorded before the request goes out -- see the unequip path. */
+				if (Character.TryGet(out IEquipmentController equipmentForEquipNotify))
+				{
+					equipmentForEquipNotify.NotifyEquipRequested(item, slotIndex, InventoryType.Inventory, equippable.Slot);
 				}
 
 				Client.Broadcast(new EquipmentEquipItemBroadcast()

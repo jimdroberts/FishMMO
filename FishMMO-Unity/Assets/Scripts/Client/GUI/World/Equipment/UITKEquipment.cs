@@ -1048,6 +1048,15 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Recorded before the request goes out, for the reason the unequip path documents:
+			 * a reconcile that lands first has to know this slot is expecting an item rather
+			 * than treat the source container as the truth. */
+			if (Character.TryGet(out IEquipmentController equipmentForEquipNotify) &&
+				sourceContainer.TryGetItem(sourceSlot, out Item equipping))
+			{
+				equipmentForEquipNotify.NotifyEquipRequested(equipping, sourceSlot, sourceInventory, (ItemSlot)slotIndex);
+			}
+
 			Client.Broadcast(new EquipmentEquipItemBroadcast()
 			{
 				InventoryIndex = sourceSlot,
@@ -1118,6 +1127,14 @@ namespace FishMMO.Client
 			if (!ItemOperationTracker.TryBegin(ReferenceButtonType.Equipment, slotIndex))
 			{
 				return;
+			}
+
+			/* Recorded before the request goes out: the reconcile can beat the acknowledgement
+			 * back, and without a record it returns the item to whichever container has room
+			 * rather than the one that was asked for. See IEquipmentController. */
+			if (Character.TryGet(out IEquipmentController equipmentForNotify))
+			{
+				equipmentForNotify.NotifyUnequipRequested((ItemSlot)slotIndex, InventoryType.Inventory);
 			}
 
 			Client.Broadcast(new EquipmentUnequipItemBroadcast()
