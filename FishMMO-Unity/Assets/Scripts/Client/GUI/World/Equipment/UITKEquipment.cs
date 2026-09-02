@@ -1141,6 +1141,8 @@ namespace FishMMO.Client
 			{
 				Slot        = (byte)slotIndex,
 				ToInventory = InventoryType.Inventory,
+				// Meaningless on the request; the server fills it in on the way back.
+				ToSlot = -1,
 			}, Channel.Reliable);
 		}
 

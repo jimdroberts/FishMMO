@@ -567,6 +567,82 @@ namespace FishMMO.Shared
 		/// into a full container, so that means this client's view is already off — the warning
 		/// is the trace for that, and the item is dropped rather than left referencing a slot.
 		/// </remarks>
+		/// <summary>
+		/// Moves an item to the slot the server says it ended up in.
+		/// </summary>
+		/// <remarks>
+		/// The item is found by identity, not by slot, because where this client put it is exactly
+		/// what cannot be trusted here: it may be in the right container at the wrong index, or in
+		/// the fallback container altogether, depending on what had room when the reconcile ran.
+		/// </remarks>
+		/// <param name="msg">The acknowledgement, naming the destination container and slot.</param>
+		/// <param name="itemID">Identity of the item that was unequipped.</param>
+		private void PlaceAtAcknowledgedSlot(EquipmentUnequipItemBroadcast msg, long itemID)
+		{
+			if (msg.ToSlot < 0 || itemID == 0)
+			{
+				// No slot named: a path that does not report one. Leave what is there alone.
+				return;
+			}
+
+			IItemContainer destination = msg.ToInventory == InventoryType.Equipment
+				? null
+				: ResolveContainer(msg.ToInventory);
+
+			if (destination == null || !destination.IsValidSlot(msg.ToSlot))
+			{
+				return;
+			}
+
+			// Already where the server put it, which is the common case once both sides agree.
+			if (destination.TryGetItem(msg.ToSlot, out Item atDestination) &&
+				atDestination != null &&
+				atDestination.ID == itemID)
+			{
+				return;
+			}
+
+			if (!TryTakeByID(destination, itemID, out Item item) &&
+				!TryTakeByID(ResolveContainer(InventoryType.Inventory), itemID, out item) &&
+				!TryTakeByID(ResolveContainer(InventoryType.Bank), itemID, out item))
+			{
+				Log.Warning("EquipmentController",
+					$"Unequip acknowledged into {msg.ToInventory} slot {msg.ToSlot}, but item {itemID} " +
+					"is not in any container this client knows about.");
+				return;
+			}
+
+			if (!destination.SetItemSlot(item, msg.ToSlot))
+			{
+				Log.Warning("EquipmentController",
+					$"Could not place item {itemID} at {msg.ToInventory} slot {msg.ToSlot}.");
+			}
+		}
+
+		/// <summary>
+		/// Removes an item from a container by identity, wherever it happens to be sitting.
+		/// </summary>
+		private static bool TryTakeByID(IItemContainer container, long itemID, out Item item)
+		{
+			item = null;
+			if (container == null)
+			{
+				return false;
+			}
+
+			for (int i = 0; i < container.Items.Count; ++i)
+			{
+				Item candidate = container.Items[i];
+				if (candidate != null && candidate.ID == itemID)
+				{
+					item = container.RemoveItem(i);
+					return item != null;
+				}
+			}
+
+			return false;
+		}
+
 		private void ReturnToAnyContainer(Item item, InventoryType? preferred)
 		{
 			if (preferred.HasValue && TryReturnTo(ResolveContainer(preferred.Value), item))
@@ -1213,18 +1289,27 @@ namespace FishMMO.Shared
 		internal void ApplyUnequipAcknowledgement(EquipmentUnequipItemBroadcast msg)
 		{
 			byte slot = msg.Slot;
-			if (pendingUnequips.TryGetValue(slot, out PendingUnequip pending))
+			bool hadPending = pendingUnequips.TryGetValue(slot, out PendingUnequip pending);
+			if (hadPending)
 			{
 				pendingUnequips.Remove(slot);
-				if (pending.AppliedByReconcile)
-				{
-					return;
-				}
 			}
-			if (IsSlotEmpty(slot))
+
+			/* The reconcile may already have emptied the socket and put the item somewhere. Where
+			 * it put it is a guess: the request never named a destination slot, so the client chose
+			 * one and the server chose another, and nothing brought them back together. That is
+			 * what left an item in inventory slot 5 on the client and slot 0 on the server, with
+			 * every later request refused for a slot the server saw as empty.
+			 *
+			 * So this no longer treats an already-empty socket as nothing to do. The
+			 * acknowledgement names the slot; the item goes there. */
+			if ((hadPending && pending.AppliedByReconcile) || IsSlotEmpty(slot))
 			{
-				// Reconcile-first without a pending record: the slot is already empty and the item
-				// was returned to a container by RestoreFromReconcile.
+				if (hadPending)
+				{
+					PlaceAtAcknowledgedSlot(msg, pending.ItemID);
+				}
+
 				return;
 			}
 
@@ -1233,7 +1318,18 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			// Captured before the move, because afterwards the socket is empty.
+			long itemID = TryGetItem(slot, out Item unequipping) && unequipping != null ? unequipping.ID : 0;
+
 			Unequip(container, slot, out _, applyAttributes: false);
+
+			/* Unequip adds the item wherever the container has room, which is the same guess by
+			 * another route. The server has already decided, so correct it. */
+			if (itemID != 0)
+			{
+				PlaceAtAcknowledgedSlot(msg, itemID);
+			}
 		}
 
 		/// <inheritdoc />

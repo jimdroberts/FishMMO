@@ -2091,7 +2091,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					case InventoryType.Inventory:
 						if (character.TryGet(out IInventoryController inventoryController) &&
-							equipmentController.TryGetItem(msg.Slot, out Item _))
+							equipmentController.TryGetItem(msg.Slot, out Item unequippedItem))
 						{
 							// if we found the item we should unequip it
 							if (!equipmentController.Unequip(inventoryController, msg.Slot, out List<Item> modifiedItems))
@@ -2117,6 +2117,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 							if (EnqueueItemBatch(batch))
 							{
+								/* The slot the item actually landed in travels back with the
+								 * acknowledgement. The request could not name one -- only the
+								 * server knows what the container holds -- so without this the
+								 * client picks its own and the two disagree for good. */
+								msg.ToSlot = unequippedItem.Slot;
+
 								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 								succeeded = true;
 							}
@@ -2142,7 +2148,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								return;
 							}
 
-							if (equipmentController.TryGetItem(msg.Slot, out Item _))
+							if (equipmentController.TryGetItem(msg.Slot, out Item unequippedToBank))
 							{
 								if (!equipmentController.Unequip(bankController, msg.Slot, out List<Item> modifiedItems))
 								{
@@ -2165,6 +2171,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 								if (EnqueueItemBatch(batch))
 								{
+									/* The slot the item actually landed in travels back with the
+									 * acknowledgement. The request could not name one -- only the
+									 * server knows what the container holds -- so without this the
+									 * client picks its own and the two disagree for good. */
+									msg.ToSlot = unequippedToBank.Slot;
+
 									Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
 									succeeded = true;
 								}

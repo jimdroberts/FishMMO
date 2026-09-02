@@ -967,6 +967,8 @@ namespace FishMMO.Client
 			{
 				Slot = (byte)equipmentSlot,
 				ToInventory = OwnInventoryType,
+				// Meaningless on the request; the server fills it in on the way back.
+				ToSlot = -1,
 			}, FishNet.Transporting.Channel.Reliable);
 
 			dragObject.Clear();
