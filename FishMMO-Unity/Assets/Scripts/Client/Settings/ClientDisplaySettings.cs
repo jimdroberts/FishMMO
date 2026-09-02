@@ -167,7 +167,6 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		/// <summary>Applies the saved VSync preference.</summary>
 		/// <summary>
 		/// Texture filtering modes offered to the player, in the order the dropdown shows them.
 		/// </summary>
@@ -235,6 +234,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>Applies the saved VSync preference.</summary>
 		public static void ApplySavedVSync()
 		{
 			ApplyVSync(ClientSettings.GetBool(ClientSettings.VSyncKey, false));

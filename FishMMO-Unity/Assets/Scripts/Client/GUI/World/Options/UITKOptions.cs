@@ -1095,15 +1095,6 @@ namespace FishMMO.Client
 		// ── Quality, brightness, frame rate, VSync ──────────────────
 
 		/// <summary>
-		/// Binds the quality dropdown to the levels this build ships with.
-		/// </summary>
-		/// <remarks>
-		/// Stored by name, not by index. Quality levels can be reordered or inserted between builds
-		/// and an index saved against the old order silently selects a different level — which
-		/// looks like the setting having been forgotten, except the player is now running at a
-		/// quality they did not choose.
-		/// </remarks>
-		/// <summary>
 		/// Fills the texture filtering dropdown and applies the player's choice as they make it.
 		/// </summary>
 		private void InitializeAnisotropicFiltering()
@@ -1155,6 +1146,15 @@ namespace FishMMO.Client
 			"Forced",
 		};
 
+		/// <summary>
+		/// Binds the quality dropdown to the levels this build ships with.
+		/// </summary>
+		/// <remarks>
+		/// Stored by name, not by index. Quality levels can be reordered or inserted between builds
+		/// and an index saved against the old order silently selects a different level — which
+		/// looks like the setting having been forgotten, except the player is now running at a
+		/// quality they did not choose.
+		/// </remarks>
 		private void InitializeQualityLevel()
 		{
 			if (qualityDropdown == null)
