@@ -1,7 +1,5 @@
 using UnityEngine;
 using UnityEditor;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using System;
@@ -13,83 +11,109 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class WorldSceneDetailsCacheBuilder
 	{
-		/// <summary>
-		/// Rebuilds the WorldSceneDetailsCache asset. Loads the addressable asset asynchronously and triggers a rebuild.
-		/// If loading fails, creates a new asset and adds it to Addressables.
-		/// </summary>
-		//[MenuItem("FishMMO/Rebuild World Scene Details", priority = -10)]
-		/// <summary>Rebuilds the WorldSceneDetailsCache asset, loading or creating it as needed.</summary>
-		public static void Rebuild()
+		/// <summary>Menu entry point. See <see cref="Rebuild"/>.</summary>
+		[MenuItem("FishMMO/Rebuild World Scene Details", priority = -10)]
+		public static void RebuildMenuItem()
 		{
-			// Try loading the addressable asset asynchronously
-			AsyncOperationHandle handle = Addressables.LoadAssetAsync<WorldSceneDetailsCache>(WorldSceneDetailsCache.CACHE_FULL_PATH);
-
-			// Callback when the asset is loaded
-			handle.Completed += (op) =>
-			{
-				if (op.Status == AsyncOperationStatus.Succeeded)
-				{
-					// Successfully loaded the asset
-					WorldSceneDetailsCache worldDetailsCache = op.Result as WorldSceneDetailsCache;
-					if (worldDetailsCache != null)
-					{
-						UnityEngine.Debug.Log($"Addressable asset loaded: {worldDetailsCache.name}");
-						worldDetailsCache.Rebuild();
-						EditorUtility.SetDirty(worldDetailsCache);
-						AssetDatabase.SaveAssets();
-					}
-					else
-					{
-						UnityEngine.Debug.LogError("Failed to cast the loaded asset to WorldSceneDetailsCache.");
-					}
-				}
-				else
-				{
-					// If the asset failed to load, log the error and handle accordingly
-					UnityEngine.Debug.LogError($"Failed to load Addressable asset: {WorldSceneDetailsCache.CACHE_FULL_PATH}");
-					HandleLoadFailure();
-				}
-			};
+			Rebuild();
 		}
 
 		/// <summary>
-		/// Handles asset load failure by creating a new WorldSceneDetailsCache asset and adding it to Addressables.
+		/// Rebuilds the world scene details cache, creating it if it does not exist yet.
 		/// </summary>
-		private static void HandleLoadFailure()
+		/// <remarks>
+		/// <para>
+		/// Synchronous, and that is the point. This used to load the cache through
+		/// <c>Addressables.LoadAssetAsync</c> and do all of its work inside a
+		/// <c>handle.Completed</c> callback, so it returned having done nothing and finished later
+		/// — if the editor was still alive to finish it. Under <c>-executeMethod</c> it never was:
+		/// Unity ran the method, saw it return, and quit before the load completed, so the cache
+		/// was silently left stale while the process exited zero. That made the one instruction
+		/// <c>WorldMapDefinitionTests</c> gives — bake, then rebuild this cache — impossible to
+		/// carry out from a command line, and impossible to carry out at all while the menu item
+		/// below was commented out.
+		/// </para>
+		/// <para>
+		/// Loaded through <see cref="AssetDatabase"/> rather than Addressables. This is editor
+		/// tooling operating on a project asset, so the asset database is both the direct route and
+		/// the honest one: it does not depend on a built catalog, and it cannot report "missing"
+		/// for an asset that is sitting on disk. That distinction was not cosmetic — a catalog that
+		/// was merely stale sent the old code down its creation path, which called
+		/// <c>AssetDatabase.CreateAsset</c> over the existing file and replaced a populated cache
+		/// with an empty one.
+		/// </para>
+		/// </remarks>
+		/// <returns><c>true</c> if the cache was rebuilt and saved.</returns>
+		public static bool Rebuild()
+		{
+			WorldSceneDetailsCache cache =
+				AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(WorldSceneDetailsCache.CACHE_FULL_PATH);
+
+			if (cache == null)
+			{
+				return Create();
+			}
+
+			bool rebuilt = cache.Rebuild();
+
+			EditorUtility.SetDirty(cache);
+			AssetDatabase.SaveAssets();
+
+			if (!rebuilt)
+			{
+				Debug.LogWarning(
+					$"[WorldSceneDetailsCacheBuilder] '{WorldSceneDetailsCache.CACHE_FULL_PATH}' was rebuilt, " +
+					"but at least one reader reported a failure. The cache may be incomplete.");
+			}
+
+			return rebuilt;
+		}
+
+		/// <summary>
+		/// Creates the cache asset and registers it with Addressables.
+		/// </summary>
+		/// <remarks>
+		/// Reached only when the asset genuinely does not exist. It writes to
+		/// <see cref="WorldSceneDetailsCache.CACHE_FULL_PATH"/>, so reaching it while a cache is
+		/// present would destroy that cache rather than rebuild it.
+		/// </remarks>
+		/// <returns><c>true</c> if the asset was created and registered.</returns>
+		private static bool Create()
 		{
 			try
 			{
-				// Create a new instance of WorldSceneDetailsCache if loading fails
-				WorldSceneDetailsCache worldDetailsCache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
-				worldDetailsCache.Rebuild();
-				EditorUtility.SetDirty(worldDetailsCache);
+				WorldSceneDetailsCache cache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
+				bool rebuilt = cache.Rebuild();
 
-				// Create the asset and save it
-				AssetDatabase.CreateAsset(worldDetailsCache, WorldSceneDetailsCache.CACHE_FULL_PATH);
+				EditorUtility.SetDirty(cache);
+				AssetDatabase.CreateAsset(cache, WorldSceneDetailsCache.CACHE_FULL_PATH);
 
 				AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
 				if (settings == null)
 				{
-					UnityEngine.Debug.LogError("Addressable Asset Settings not found.");
-					return;
+					Debug.LogError("[WorldSceneDetailsCacheBuilder] Addressable Asset Settings not found.");
+					return false;
 				}
 
-				// Add the new asset to Addressables if not already present
-				AddressableAssetEntry entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(WorldSceneDetailsCache.CACHE_FULL_PATH));
-				if (entry == null)
+				string guid = AssetDatabase.AssetPathToGUID(WorldSceneDetailsCache.CACHE_FULL_PATH);
+
+				// Registered so the client can load it at runtime; the editor reads it directly.
+				if (settings.FindAssetEntry(guid) == null)
 				{
-					entry = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(WorldSceneDetailsCache.CACHE_FULL_PATH), settings.DefaultGroup);
-					UnityEngine.Debug.Log($"Asset '{WorldSceneDetailsCache.CACHE_FULL_PATH}' added to Addressables.");
+					settings.CreateOrMoveEntry(guid, settings.DefaultGroup);
+					Debug.Log($"[WorldSceneDetailsCacheBuilder] '{WorldSceneDetailsCache.CACHE_FULL_PATH}' added to Addressables.");
 				}
 
 				EditorUtility.SetDirty(settings);
 				AssetDatabase.SaveAssets();
 				AssetDatabase.Refresh();
+
+				return rebuilt;
 			}
 			catch (Exception ex)
 			{
-				// Log any error that occurs during asset creation
-				UnityEngine.Debug.LogError($"Error during asset creation: {ex.Message}");
+				Debug.LogError($"[WorldSceneDetailsCacheBuilder] Could not create the cache: {ex.Message}");
+				return false;
 			}
 		}
 	}
