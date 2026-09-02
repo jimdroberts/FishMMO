@@ -59,6 +59,11 @@ namespace FishMMO.Client
 		public static readonly AudioChannel[] PlayableChannels =
 		{
 			AudioChannel.Master,
+			AudioChannel.Music,
+			AudioChannel.Effects,
+			AudioChannel.Ambient,
+			AudioChannel.Interface,
+			AudioChannel.Voice,
 		};
 
 		/// <summary>Player-facing label for each channel, indexed by <see cref="AudioChannel"/>.</summary>
@@ -246,11 +251,11 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// Scoped to <see cref="PlayableChannels"/>, which is what the button the player pressed
-		/// actually offers. Resetting the whole enum would write a key for each of the five
-		/// channels the client cannot yet play through — settings the player was never shown,
-		/// appearing in Configuration.cfg because they pressed reset on the one they were. A
-		/// channel with no stored key already resolves to <see cref="DefaultVolume"/>, so there is
-		/// nothing to put back for the ones left out.
+		/// actually offers. That is now every channel, but the scoping stays: it is the reason a
+		/// channel retired from the list stops being written to Configuration.cfg rather than
+		/// lingering there as a setting nobody is shown. A channel with no stored key already
+		/// resolves to <see cref="DefaultVolume"/>, so there is nothing to put back for one left
+		/// out.
 		/// </remarks>
 		public static void ResetToDefaults()
 		{
