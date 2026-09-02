@@ -59,6 +59,8 @@
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Texture Filtering" class="fish-label options-row-label" />
                     <ui:DropdownField name="anisotropic-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="Antialiasing" class="fish-label options-row-label" />
                     <ui:DropdownField name="antialiasing-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
