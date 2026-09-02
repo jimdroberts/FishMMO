@@ -58,7 +58,11 @@ namespace FishMMO.UnitTests.Harness
 		public HashSet<NetworkConnection> Observers => null;
 		public bool IsTeleporting => false;
 		public bool IsSpawned => false;
-		public Transform MeshRoot => null;
+		/// <summary>
+		/// The character's mesh root. Settable so a fixture can hand this stub a real hierarchy;
+		/// still null by default, which is what every existing test expects.
+		/// </summary>
+		public Transform MeshRoot { get; set; }
 
 		public void EnableFlags(CharacterFlags flags) { }
 		public void DisableFlags(CharacterFlags flags) { }

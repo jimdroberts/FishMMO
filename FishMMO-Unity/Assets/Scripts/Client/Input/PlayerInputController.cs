@@ -199,6 +199,16 @@ namespace FishMMO.Client
 			// Start with cursor visible (login/loading state).
 			MouseMode = true;
 
+			/* Applied here, not only at boot. ClientSettings.ApplyAll runs before a world camera
+			 * exists, so the camera it wants to write to is not there yet and the apply is a no-op.
+			 * Nothing re-applied afterwards, which left the camera on its authored RotationSpeed --
+			 * a saved sensitivity was stored and shown correctly in the options panel, but did not
+			 * take effect until the player moved the slider, once per launch.
+			 *
+			 * This is the first point where the local character exists, so the world camera does
+			 * too. Cheap and idempotent: it reads one float and writes one field. */
+			ClientCameraSettings.ApplySaved();
+
 			SubscribeToInputActions();
 		}
 

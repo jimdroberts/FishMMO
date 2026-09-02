@@ -97,6 +97,7 @@ namespace FishMMO.Client
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
 		private const string QUALITY_DROPDOWN_NAME = "quality-dropdown";
 		private const string ANISOTROPIC_DROPDOWN_NAME = "anisotropic-dropdown";
+		private const string ANTIALIASING_DROPDOWN_NAME = "antialiasing-dropdown";
 		private const string FRAMERATE_DROPDOWN_NAME = "framerate-dropdown";
 		private const string GRAPHICS_HINT_NAME = "options-graphics-hint";
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
@@ -318,6 +319,7 @@ namespace FishMMO.Client
 		private DropdownField fullscreenDropdown;
 		private DropdownField qualityDropdown;
 		private DropdownField anisotropicDropdown;
+		private DropdownField antialiasingDropdown;
 		private DropdownField frameRateDropdown;
 		private Label graphicsHint;
 		private Button screenApplyButton;
@@ -485,6 +487,7 @@ namespace FishMMO.Client
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
 			qualityDropdown = Root.Q<DropdownField>(QUALITY_DROPDOWN_NAME);
 			anisotropicDropdown = Root.Q<DropdownField>(ANISOTROPIC_DROPDOWN_NAME);
+			antialiasingDropdown = Root.Q<DropdownField>(ANTIALIASING_DROPDOWN_NAME);
 			frameRateDropdown = Root.Q<DropdownField>(FRAMERATE_DROPDOWN_NAME);
 			graphicsHint = Root.Q<Label>(GRAPHICS_HINT_NAME);
 			screenApplyButton = Root.Q<Button>(SCREEN_APPLY_NAME);
@@ -527,6 +530,7 @@ namespace FishMMO.Client
 			InitializeQualityLevel();
 			InitializeAnisotropicFiltering();
 			InitializeBrightness();
+			InitializeAntialiasing();
 			InitializeLookSensitivity();
 			InitializeFrameRateLimit();
 			InitializeVSync();
@@ -1302,6 +1306,62 @@ namespace FishMMO.Client
 		/// the view unusable at exactly the moment they would need to reach this menu to undo it,
 		/// and zero makes the camera immovable.
 		/// </remarks>
+		/// <summary>
+		/// Fills the antialiasing dropdown and applies the player's choice as they make it.
+		/// </summary>
+		/// <remarks>
+		/// The labels carry both the technique and the trade-off -- see AntialiasingLabels.
+		/// </remarks>
+		private void InitializeAntialiasing()
+		{
+			if (antialiasingDropdown == null)
+			{
+				return;
+			}
+
+			antialiasingDropdown.choices = new List<string>(AntialiasingLabels);
+
+			int stored = Mathf.Clamp(
+				ClientSettings.GetInt(
+					ClientSettings.AntialiasingKey,
+					(int)ClientCameraSettings.DefaultAntialiasing),
+				0,
+				AntialiasingLabels.Length - 1);
+
+			// Without notify: assigning index raises the callback, which would write back the value
+			// just read. See InitializeBrightness.
+			antialiasingDropdown.SetValueWithoutNotify(AntialiasingLabels[stored]);
+
+			antialiasingDropdown.RegisterValueChangedCallback((evt) =>
+			{
+				int index = antialiasingDropdown.index;
+				if (index < 0 || index >= AntialiasingLabels.Length)
+				{
+					return;
+				}
+
+				ClientSettings.Set(ClientSettings.AntialiasingKey, index);
+				ClientCameraSettings.ApplyAntialiasing((ClientCameraSettings.AntialiasingOption)index);
+			});
+		}
+
+		/// <summary>
+		/// Dropdown labels, in the order of <see cref="ClientCameraSettings.AntialiasingOption"/>.
+		/// </summary>
+		/// <remarks>
+		/// Each names the technique and then what it is for. The acronym alone assumes the player
+		/// already knows the field; the plain word alone hides which technique they are choosing,
+		/// which matters as soon as they compare notes with anyone or search for what it looks
+		/// like. Both, in that order, so the list scans by technique and reads by intent.
+		/// </remarks>
+		private static readonly string[] AntialiasingLabels =
+		{
+			"Off",
+			"FXAA (Fast)",
+			"SMAA (Balanced)",
+			"TAA (Temporal)",
+		};
+
 		private void InitializeLookSensitivity()
 		{
 			if (lookSensitivitySlider == null)

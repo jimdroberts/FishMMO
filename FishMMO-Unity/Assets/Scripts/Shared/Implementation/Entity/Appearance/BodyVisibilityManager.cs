@@ -130,7 +130,18 @@ namespace FishMMO.Shared
 				regionHideCounts[(BodyRegion)i] = 0;
 			}
 
-			// Discover each region renderer by its expected name
+			/* Missing regions are collected rather than reported one by one.
+			 *
+			 * A model with none of them is not a broken model: it is a model that does not use
+			 * per-region hiding, which every shipped race currently is. Reporting that as six Errors
+			 * per spawn said "incorrectly authored" about every character in the game, which is how a
+			 * log stops being read at all.
+			 *
+			 * A model with SOME of them is a different thing and still worth saying out loud, because
+			 * a half-split body will hide the wrong parts once equipment is worn. That distinction is
+			 * the entire point of separating the two cases below. */
+			List<string> missing = new List<string>();
+
 			BodyRegion[] allRegions = (BodyRegion[])System.Enum.GetValues(typeof(BodyRegion));
 			for (int i = 0; i < allRegions.Length; i++)
 			{
@@ -144,26 +155,47 @@ namespace FishMMO.Shared
 					regionTransform = FindChildRecursive(meshRoot, rendererName);
 				}
 
-				if (regionTransform != null)
+				if (regionTransform == null)
 				{
-					SkinnedMeshRenderer renderer = regionTransform.GetComponent<SkinnedMeshRenderer>();
-					if (renderer != null)
-					{
-						regionRenderers[region] = renderer;
-					}
-					else
-					{
-						Log.Error("BodyVisibilityManager",
-							$"Body region '{rendererName}' found but has no SkinnedMeshRenderer. Model is incorrectly authored.");
-					}
+					missing.Add(rendererName);
+					continue;
 				}
-				else
+
+				SkinnedMeshRenderer renderer = regionTransform.GetComponent<SkinnedMeshRenderer>();
+				if (renderer == null)
 				{
-					Log.Error("BodyVisibilityManager",
-						$"Body region '{rendererName}' not found in model. Model is incorrectly authored — " +
-						$"the body mesh must be split into separate GameObjects named BodyHead, BodyTorso, BodyArms, BodyHands, BodyLegs, BodyFeet.");
+					/* Present but unusable. Grouped with the absent ones because the consequence is
+					 * identical -- the region cannot be hidden -- and named separately so whoever
+					 * fixes it knows the object exists and only lacks the renderer. */
+					missing.Add($"{rendererName} (no SkinnedMeshRenderer)");
+					continue;
 				}
+
+				regionRenderers[region] = renderer;
 			}
+
+			if (missing.Count == 0)
+			{
+				return;
+			}
+
+			if (regionRenderers.Count == 0)
+			{
+				/* Not a fault. Equipment simply never hides body parts on this model, and
+				 * HideRegions already no-ops for regions it has no renderer for. */
+				Log.Debug("BodyVisibilityManager",
+					$"{gameObject.name} has no split body regions, so per-region hiding is inactive " +
+					"for it. Split the body mesh into " + string.Join(", ", missing) + " to enable it.");
+				return;
+			}
+
+			/* Warning, not Error: a partly-split body is a content-authoring fault, not a runtime
+			 * failure, and nothing here is left in a broken state -- the regions that exist still
+			 * hide correctly. It stays above Debug because the ones that do not exist will silently
+			 * fail to hide, which is discovered as clipping through armour. */
+			Log.Warning("BodyVisibilityManager",
+				$"{gameObject.name} is partly split: {regionRenderers.Count} body region(s) found, " +
+				$"missing {string.Join(", ", missing)}. Equipment cannot hide the missing ones.");
 		}
 
 		/// <summary>Finds the skeleton root — the first Transform with bone children under the mesh root.</summary>

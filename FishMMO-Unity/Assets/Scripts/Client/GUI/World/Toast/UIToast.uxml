@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIToast.uss" />
+    <ui:VisualElement name="toast-root" class="toast-root" picking-mode="Ignore">
+        <ui:VisualElement name="toast-stack" class="toast-stack" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

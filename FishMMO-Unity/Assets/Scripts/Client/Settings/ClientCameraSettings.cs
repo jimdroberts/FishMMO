@@ -1,11 +1,13 @@
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using FishMMO.Shared;
 using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Camera preferences the player owns: how far the mouse turns the view.
+	/// Camera preferences the player owns: how far the mouse turns the view, and how its edges
+	/// are smoothed.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -53,13 +55,39 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Applies the stored look sensitivity to the live camera.
 		/// </summary>
+		/// <remarks>
+		/// Reports what it did, at Debug. This apply is the one that decides whether a player's
+		/// saved sensitivity is honoured, and it previously failed in total silence: the value was
+		/// stored, the options panel displayed it, and the camera ran at its authored speed for the
+		/// whole session with nothing anywhere saying so. A line here is what turns "the slider
+		/// feels wrong" from a guess into something answerable from a log.
+		///
+		/// Only this path logs. ApplyLookSensitivity is also called for every value change while
+		/// the player drags the slider, which would be pure noise.
+		/// </remarks>
 		public static void ApplySaved()
 		{
-			ApplyLookSensitivity(ClientSettings.GetFloat(
+			float sensitivity = ClientSettings.GetFloat(
 				ClientSettings.LookSensitivityKey,
 				DefaultLookSensitivity,
 				MinimumLookSensitivity,
-				MaximumLookSensitivity));
+				MaximumLookSensitivity);
+
+			/* Applied alongside sensitivity so both reach the camera at the same moment, which
+			 * is the point where one exists. */
+			ApplySavedAntialiasing();
+
+			if (ApplyLookSensitivity(sensitivity))
+			{
+				Log.Debug("ClientCameraSettings",
+					$"Look sensitivity {sensitivity} applied to the camera.");
+			}
+			else
+			{
+				Log.Debug("ClientCameraSettings",
+					$"Look sensitivity {sensitivity} not applied: no camera yet. Expected during " +
+					"boot, and applied again once the character is in the world.");
+			}
 		}
 
 		/// <summary>
@@ -72,7 +100,8 @@ namespace FishMMO.Client
 		/// immovable.
 		/// </remarks>
 		/// <param name="value">Sensitivity multiplier. Clamped to the supported range.</param>
-		public static void ApplyLookSensitivity(float value)
+		/// <returns><c>true</c> if a camera received the value; <c>false</c> if there is none yet.</returns>
+		public static bool ApplyLookSensitivity(float value)
 		{
 			float clamped = float.IsNaN(value)
 				? DefaultLookSensitivity
@@ -81,13 +110,116 @@ namespace FishMMO.Client
 			KCCCamera camera = ResolveCamera();
 			if (camera == null)
 			{
-				/* Not an error. Boot applies settings before the world exists, and the camera is
-				 * re-resolved on the next apply — which the options panel triggers, and which
-				 * happens again on the following launch. */
-				return;
+				/* Not an error, and not the whole story either: boot applies settings before a
+				 * world camera exists, so this returns having done nothing. That is fine only
+				 * because PlayerInputController.Initialize applies again once the local character
+				 * is in the world. Without that second apply the camera keeps its authored
+				 * RotationSpeed for the whole session, and the saved value appears to be ignored
+				 * until the player happens to move the slider. */
+				return false;
 			}
 
 			camera.RotationSpeed = clamped;
+			return true;
+		}
+
+		/// <summary>
+		/// Edge smoothing modes offered to the player, in the order the dropdown shows them.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not <c>AntialiasingMode</c> itself. What is stored is a player setting that
+		/// has to keep its meaning across Unity upgrades, and persisting a framework enum means a
+		/// reordering there silently changes what an existing saved file says. This order is ours.
+		///
+		/// Post-process antialiasing rather than MSAA. MSAA lives on the render pipeline asset and
+		/// is chosen by the quality level, so exposing it here would mean either swapping pipeline
+		/// assets at runtime or having two controls quietly fight over the same edges.
+		/// </remarks>
+		public enum AntialiasingOption
+		{
+			/// <summary>No edge smoothing. Cheapest, and what the camera currently ships with.</summary>
+			Off = 0,
+
+			/// <summary>Fast approximate. Very cheap, softens the whole image somewhat.</summary>
+			Fast = 1,
+
+			/// <summary>Subpixel morphological. Sharper than FXAA for a modest cost.</summary>
+			Balanced = 2,
+
+			/// <summary>Temporal. Best on still edges, and the only one that can ghost in motion.</summary>
+			Temporal = 3,
+		}
+
+		/// <summary>
+		/// Edge smoothing when nothing has been chosen.
+		/// </summary>
+		/// <remarks>
+		/// SMAA rather than Off. The camera ships with antialiasing disabled, which is what made
+		/// character silhouettes visibly stair-stepped; a default that looks broken is a poor one.
+		/// Chosen over FXAA because it keeps texture detail instead of softening the whole frame,
+		/// and over TAA because TAA ghosts on a camera that orbits the player.
+		/// </remarks>
+		public const AntialiasingOption DefaultAntialiasing = AntialiasingOption.Balanced;
+
+		/// <summary>
+		/// Applies the stored antialiasing mode to the live camera.
+		/// </summary>
+		public static void ApplySavedAntialiasing()
+		{
+			/* Clamped rather than cast straight through. The value comes from a text file the
+			 * player can edit, and an out-of-range ordinal would reach the switch below as an
+			 * unnamed enum value -- which the default arm already handles, but landing on the
+			 * default by accident and by intent should not be the same code path. */
+			int stored = Mathf.Clamp(
+				ClientSettings.GetInt(ClientSettings.AntialiasingKey, (int)DefaultAntialiasing),
+				(int)AntialiasingOption.Off,
+				(int)AntialiasingOption.Temporal);
+
+			ApplyAntialiasing((AntialiasingOption)stored);
+		}
+
+		/// <summary>
+		/// Writes an antialiasing mode onto the camera.
+		/// </summary>
+		/// <param name="option">The mode to apply. An unrecognised value falls back to the default.</param>
+		/// <returns><c>true</c> if a camera received it; <c>false</c> if there is none yet.</returns>
+		public static bool ApplyAntialiasing(AntialiasingOption option)
+		{
+			Camera main = Camera.main;
+			if (main == null)
+			{
+				return false;
+			}
+
+			UniversalAdditionalCameraData data = main.GetComponent<UniversalAdditionalCameraData>();
+			if (data == null)
+			{
+				/* Not an error. A camera the pipeline is not driving has nothing to smooth, which is
+				 * a legitimate configuration rather than a fault. */
+				return false;
+			}
+
+			switch (option)
+			{
+				case AntialiasingOption.Off:
+					data.antialiasing = AntialiasingMode.None;
+					break;
+				case AntialiasingOption.Fast:
+					data.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+					break;
+				case AntialiasingOption.Temporal:
+					data.antialiasing = AntialiasingMode.TemporalAntiAliasing;
+					break;
+				case AntialiasingOption.Balanced:
+				default:
+					data.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+					break;
+			}
+
+			/* SMAA is the only mode that reads this and is also the default, so it is set here
+			 * rather than left at whatever the scene happened to author. */
+			data.antialiasingQuality = AntialiasingQuality.High;
+			return true;
 		}
 
 		/// <summary>
