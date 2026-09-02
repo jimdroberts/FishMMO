@@ -251,6 +251,24 @@ Replicate(input);
 CreateReconcile();
 ```
 
+#### The replicate tick is the owner's clock
+
+`input.GetTick()` is the owning client's `LocalTick`, a counter that restarts at zero when that
+client connects. The server runs the body every tick whether or not input is queued; with an empty
+queue FishNet builds default data and stamps it `_lastOrderedReplicatedTick + 1`, and before the
+owner's first input has arrived (the spawn round trip) that baseline is *seeded from an estimate*.
+Upstream seeds it from `TimeManager.LastPacketTick`, which is fed by every connection's packets
+and keeps only the highest tick it has ever seen — so every login after the first one a server
+process has handled (a relog, a character switch, a scene transfer back, or a second player)
+stamped the spawning character with an earlier session's clock, tens of thousands of ticks ahead.
+**FISHMMO EDIT in `NetworkBehaviour.GetDefaultedLastReplicateTick`:** the server seeds from
+`Owner.PacketTick`, the same estimate kept per connection. Without it
+`CharacterAttributeController.Regenerate`'s high-water mark rejected the owner's real inputs for
+the whole session (stamina and mana never regenerated on any long-running server), and
+`BuffController`/`CooldownController` translated their pre-replicate ticks by a garbage offset. `CharacterAttributeController.AcceptReplicateTick` adds a
+second line of defence: a replicate that carried no real input (`ReplicateState.Created` unset)
+cannot anchor the regen schedule until one that did has run. `RegenReplicateTickSeedTests` pins both.
+
 ### Controller Order Example
 
 If you need current movement/camera state to be available before buff, cooldown, attribute, and ability logic:

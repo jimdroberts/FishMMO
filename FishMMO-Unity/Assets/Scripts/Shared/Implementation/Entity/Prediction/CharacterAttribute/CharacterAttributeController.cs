@@ -888,6 +888,7 @@ namespace FishMMO.Shared
 			lastObservedResourceValues.Clear();
 			lastConsumedResourceTicks.Clear();
 			hasLastProcessedRegenTick = false;
+			hasSeenCreatedReplicate = false;
 
 			// Reset propagation state.
 			propagationDepth = 0;
@@ -1540,6 +1541,30 @@ namespace FishMMO.Shared
 		private bool hasLastProcessedRegenTick;
 
 		/// <summary>
+		/// True once a replicate that carried real input for this character has run.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Until then, ticks from replicates the engine ran with default data are not allowed to touch
+		/// the regeneration schedule. FishNet runs the replicate body every tick whether or not input
+		/// is queued, and before the owner's first input arrives it stamps those ticks with an
+		/// <em>estimate</em> of where the owner's clock is. An estimate is the wrong thing to anchor a
+		/// high-water mark on: it sits ahead of the real ticks that follow, and if it is ever taken
+		/// from the wrong clock — see the FISHMMO EDIT in <c>GetDefaultedLastReplicateTick</c> — it
+		/// leaves <see cref="lastProcessedRegenTick"/> and <see cref="nextRegenTick"/> so far ahead
+		/// that no real input ever reaches them again, and the owner is stuck with whatever it had.
+		/// </para>
+		/// <para>
+		/// Replicates carrying real input are marked <c>Created</c> by the engine itself: the owner's
+		/// own input, the server's copy of it, a replay of it, and the server's authoritative input for
+		/// an NPC all carry the flag; only the default-data path omits it. Once one has run, the
+		/// default-data ticks that follow continue from it in the same domain and are accepted, so a
+		/// character whose owner is starving the queue keeps regenerating.
+		/// </para>
+		/// </remarks>
+		private bool hasSeenCreatedReplicate;
+
+		/// <summary>
 		/// Cached regeneration dependency attribute references, resolved once during init
 		/// to avoid per-tick string-keyed dictionary lookups in <see cref="RegenerateResource"/>.
 		/// </summary>
@@ -2022,13 +2047,45 @@ namespace FishMMO.Shared
 			// client and server cannot diverge after a tick-rate swap.
 			EnsureRegenIntervalCurrent();
 
+			ProcessReplicateTick(input.GetTick(), state);
+		}
+
+		/// <summary>
+		/// Decides whether a replicate's tick may drive regeneration, and remembers the first one
+		/// that carried real input. See <see cref="hasSeenCreatedReplicate"/>.
+		/// </summary>
+		/// <param name="state">The replicate state FishNet invoked the body with.</param>
+		/// <returns>True when <see cref="Regenerate"/> should run for this tick.</returns>
+		internal bool AcceptReplicateTick(ReplicateState state)
+		{
+			if (state.ContainsCreated())
+			{
+				hasSeenCreatedReplicate = true;
+				return true;
+			}
+
+			return hasSeenCreatedReplicate;
+		}
+
+		/// <summary>
+		/// The body of <see cref="OnReplicate"/> after the TimeManager checks, so the tick
+		/// acceptance rule and the replay suppression can be driven without a live network.
+		/// </summary>
+		/// <param name="tick">The replicate's tick.</param>
+		/// <param name="state">The replicate state FishNet invoked the body with.</param>
+		internal void ProcessReplicateTick(uint tick, ReplicateState state)
+		{
+			if (!AcceptReplicateTick(state))
+			{
+				return;
+			}
+
 			// Regen is now tick-driven via the authoritative simulation tick from the
 			// replicate input, with a per-tick monotonic guard inside Regenerate(tick)
 			// to prevent double-firing under replay/resimulation or future-state
 			// execution. The OnAttributeUpdated notifications that resource.Gain raises
 			// must still NOT fire during replay (UI flicker / repeated ECA), so we wrap
 			// the call in a propagation scope and drop queued notifications.
-			uint tick = input.GetTick();
 			if (state.ContainsReplayed())
 			{
 				// suppressNotifications ensures that EnqueueNotification is a no-op for the

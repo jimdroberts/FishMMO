@@ -785,7 +785,37 @@ namespace FishNet.Object
             uint GetDefaultedLastReplicateTick()
             {
                 if (_lastOrderedReplicatedTick == TimeManager.UNSET_TICK)
-                    _lastOrderedReplicatedTick = tm.LastPacketTick.Value() + pm.StateInterpolation;
+                {
+                    /* FISHMMO EDIT: seed from the OWNER's packet tick, not the TimeManager-wide one.
+                     *
+                     * tm.LastPacketTick is fed by every packet the server receives from ANY
+                     * connection, with OldTickOption.Discard — so its RemoteTick is the HIGHEST tick
+                     * any client has sent since the server started, and Value() keeps extrapolating
+                     * from that packet. A client's LocalTick restarts at zero on every connection.
+                     * So every login after the first one a server process has seen — a relog, a
+                     * character switch, a scene transfer back to this server, or simply a second
+                     * player — stamps the character's spawn replicates (the ones that run before the
+                     * owner's first input arrives) with an EARLIER session's clock, tens of thousands
+                     * of ticks ahead of the owner's. Every replicate the owner then sent was "in the
+                     * past" to anything keeping a high-water mark on the replicate tick
+                     * (CharacterAttributeController.Regenerate never fired again, so stamina and mana
+                     * stayed wherever they were for the whole session), and anything translating
+                     * pre-replicate ticks on the first replicate translated by a garbage offset
+                     * (BuffController, CooldownController). A freshly started server with one client
+                     * never shows it, which is why it survived single-client testing.
+                     *
+                     * NetworkConnection.PacketTick is the same estimate kept per connection, created
+                     * fresh for each connection and fed by its packets alone, so it is in the owner's
+                     * domain. The TimeManager-wide value remains the fallback for the client-side
+                     * forwarded path, where the only sender is the server. */
+                    uint seedTick = TimeManager.UNSET_TICK;
+                    if (isServer && Owner.IsValid)
+                        seedTick = Owner.PacketTick.Value(tm);
+                    if (seedTick == TimeManager.UNSET_TICK)
+                        seedTick = tm.LastPacketTick.Value(tm);
+
+                    _lastOrderedReplicatedTick = seedTick + pm.StateInterpolation;
+                }
 
                 return _lastOrderedReplicatedTick;
             }
