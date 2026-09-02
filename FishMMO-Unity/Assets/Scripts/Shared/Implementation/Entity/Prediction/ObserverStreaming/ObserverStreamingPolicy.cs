@@ -73,18 +73,56 @@ namespace FishMMO.Shared
 
 		// ── LOD rates ──
 
+		/// <summary>
+		/// Largest send interval, in ticks, any observer may be handed — by the cap bands here, by
+		/// the engaged overflow, or by <c>NetworkTransformDistanceLod</c>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Mirrors <c>NetworkTransform._interpolation</c>, which is 2 on every prefab. The client
+		/// buffers that many received goals before it starts moving and waits for that many again
+		/// whenever the buffer runs dry, so an observer fed every Nth tick stands still for up to
+		/// 2N ticks at every restart; and when the buffer overflows the client drops to the newest
+		/// goals and snaps, a jump of everything it skipped. Both scale with the interval, which is
+		/// how the 4- and 8-tick bands this table used to carry rendered as characters "teleporting"
+		/// beyond the near field while the distance LOD's own table was being retuned to no effect.
+		/// <c>NetworkTransformLodBufferTests</c> pins this value against the prefabs.
+		/// </para>
+		/// <para>
+		/// Every interval read out of this class is clamped to it. Raise it only together with the
+		/// prefab interpolation (config key <c>ObserverMaxSendInterval</c>).
+		/// </para>
+		/// </remarks>
+		public static byte MaxSendInterval { get; set; } = 2;
+
 		private static readonly List<LodBand> lodBands = new List<LodBand>
 		{
-			new LodBand(20f, 2),
-			new LodBand(45f, 4),
-			new LodBand(float.PositiveInfinity, 8),
+			new LodBand(float.PositiveInfinity, 2),
 		};
 
 		/// <summary>
 		/// Distance bands applied to characters beyond the cap, ascending by distance. The last
-		/// band should have an infinite distance so every character matches one.
+		/// band should have an infinite distance so every character matches one. Intervals are
+		/// clamped to <see cref="MaxSendInterval"/> when read.
 		/// </summary>
+		/// <remarks>
+		/// One band by default: with the ceiling at 2 there is no room for the table to get coarser
+		/// with distance, and bandwidth beyond the near field is <see cref="VisibilityBudget"/>'s
+		/// job. The banding stays configurable (<c>ObserverLodBands</c>) for a deployment that
+		/// raises the interpolation buffer.
+		/// </remarks>
 		public static IReadOnlyList<LodBand> LodBands => lodBands;
+
+		/// <summary>Clamps a configured interval into [1, <see cref="MaxSendInterval"/>].</summary>
+		public static byte ClampInterval(byte interval)
+		{
+			byte max = MaxSendInterval < 1 ? (byte)1 : MaxSendInterval;
+			if (interval < 1)
+			{
+				return 1;
+			}
+			return interval > max ? max : interval;
+		}
 
 		/// <summary>Replaces the LOD bands. Bands are sorted by distance; an empty list means "never limit".</summary>
 		public static void SetLodBands(IEnumerable<LodBand> bands)
@@ -176,8 +214,13 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public static int EngagedFullRateBudget { get; set; } = 12;
 
-		/// <summary>Interval applied to engaged characters beyond <see cref="EngagedFullRateBudget"/>.</summary>
-		public static byte EngagedOverflowInterval { get; set; } = 2;
+		/// <summary>Interval applied to engaged characters beyond <see cref="EngagedFullRateBudget"/>. Clamped to <see cref="MaxSendInterval"/>.</summary>
+		public static byte EngagedOverflowInterval
+		{
+			get => ClampInterval(engagedOverflowInterval);
+			set => engagedOverflowInterval = value;
+		}
+		private static byte engagedOverflowInterval = 2;
 
 		/// <summary>
 		/// Hard ceiling on the engagement radius: no attack or ability in this project reaches
@@ -257,7 +300,7 @@ namespace FishMMO.Shared
 			{
 				if (distance <= lodBands[i].MaxDistance)
 				{
-					return lodBands[i].Interval;
+					return ClampInterval(lodBands[i].Interval);
 				}
 			}
 			return 1;
@@ -316,9 +359,12 @@ namespace FishMMO.Shared
 		/// Keys: <c>ObserverFullRateCap</c>, <c>ObserverCombatWeight</c>, <c>ObserverPartyWeight</c>,
 		/// <c>ObserverGuildWeight</c>, <c>ObserverDistanceWeight</c>, <c>ObserverDensityRadius</c>,
 		/// <c>ObserverLowDensity</c>, <c>ObserverHighDensity</c>, <c>ObserverRangeScaleAtHighDensity</c>,
-		/// <c>ObserverMinimumRange</c>, <c>ObserverRescheduleTicks</c>, and
+		/// <c>ObserverMinimumRange</c>, <c>ObserverRescheduleTicks</c>, <c>ObserverEngagementRange</c>,
+		/// <c>ObserverVisibilityBudget</c>, <c>ObserverVisibilityBudgetHysteresis</c>,
+		/// <c>ObserverEngagedFullRateBudget</c>, <c>ObserverEngagementRangeCeiling</c>,
+		/// <c>ObserverEngagementRangeMargin</c>, <c>ObserverMaxSendInterval</c>, and
 		/// <c>ObserverLodBands</c> as <c>distance:interval,distance:interval,...</c>
-		/// (e.g. <c>20:2,45:4,inf:8</c>).
+		/// (e.g. <c>60:1,inf:2</c>; intervals above <see cref="MaxSendInterval"/> are clamped).
 		/// </remarks>
 		public static bool ApplySetting(string key, string value)
 		{
@@ -334,6 +380,7 @@ namespace FishMMO.Shared
 				case "ObserverVisibilityBudget": return TryInt(value, v => VisibilityBudget = Math.Max(0, v));
 				case "ObserverVisibilityBudgetHysteresis": return TryFloat(value, v => VisibilityBudgetHysteresis = Mathf.Max(0f, v));
 				case "ObserverEngagedFullRateBudget": return TryInt(value, v => EngagedFullRateBudget = Math.Max(0, v));
+				case "ObserverMaxSendInterval": return TryInt(value, v => MaxSendInterval = (byte)Mathf.Clamp(v, 1, 255));
 				case "ObserverEngagementRangeCeiling": return TryFloat(value, v => EngagementRangeCeiling = Mathf.Max(0f, v));
 				case "ObserverEngagementRangeMargin": return TryFloat(value, v => EngagementRangeMargin = Mathf.Max(0f, v));
 				case "ObserverCombatWeight": return TryFloat(value, v => CombatWeight = v);

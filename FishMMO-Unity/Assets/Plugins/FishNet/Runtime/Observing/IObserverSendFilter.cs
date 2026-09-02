@@ -14,7 +14,9 @@ namespace FishNet.Observing
      * RPCs: a reliable send (a NetworkTransform settle, a teleport) and a buffered one (an
      * interval change) must reach everyone, and skipping an unreliable update is
      * indistinguishable to the receiver from ordinary packet loss, which every such sender
-     * already tolerates. */
+     * already tolerates. One further exemption lives in NetworkBehaviour.SendObserversRpc: the
+     * first unreliable send after a reliable one goes to every observer, because the receiver
+     * measures it against the reliable packet as if a single tick had passed. */
 
     /// <summary>
     /// Decides, per observer and per send, whether an unreliable ObserversRpc from a

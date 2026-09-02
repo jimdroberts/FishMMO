@@ -377,9 +377,9 @@ namespace FishNet.Component.Transforming
          * range. Serialized rather than const so both peers read the same value from the same
          * asset; scale compression is deliberately left on the stock 100. */
         /// <summary>
-        /// Scale applied to positions before they are compressed into an Int16.
+        /// Scale applied to positions before they are compressed into a 24-bit integer (FISHMMO EDIT).
         /// </summary>
-        [Tooltip("Scale applied to positions before compressing them to 2 bytes per axis. Compressed range is 32766 divided by this value; resolution is 1 divided by it. The default 100 gives centimeter precision within +/-327.66 units; 10 gives decimeter precision within +/-3276.6 units. Positions outside the range cost 4 bytes per axis instead of 2.")]
+        [Tooltip("Scale applied to positions before compressing them to 3 bytes per axis. Compressed range is 8388606 divided by this value; resolution is 1 divided by it. The default 100 gives centimeter precision within +/-83886 units. Keep it at 100: the wire grid must stay well under a walking character's per-tick displacement (5 cm at 30 Hz) or interpolated motion stutters. Positions outside the range cost 4 bytes per axis instead of 3.")]
         [SerializeField]
         private float _positionMultiplier = DEFAULT_POSITION_MULTIPLIER;
         /// <summary>
@@ -391,6 +391,30 @@ namespace FishNet.Component.Transforming
         /// which would divide by zero on read and blank every position.
         /// </summary>
         private float PositionMultiplier => _positionMultiplier > 0f ? _positionMultiplier : DEFAULT_POSITION_MULTIPLIER;
+
+        /* FISHMMO EDIT: a packed position axis is a 24-bit signed integer of scaled units rather
+         * than FishNet's 16-bit one. At the stock multiplier (100) that is centimetre resolution
+         * out to ±83,886 m instead of ±327 m, for one byte more per axis. The alternative tried
+         * first — a coarser multiplier (10) to stretch the 16-bit range across the world —
+         * quantised a walking character's 5 cm ticks onto a 10 cm grid, which the interpolator
+         * rendered as alternating stalls and double-speed hops. Values are rounded, not
+         * truncated, so the error is half a step with no bias toward the origin. */
+        private const float PACKED_POSITION_MAX = (1 << 23) - 2;
+
+        private static void WritePackedPosition(PooledWriter writer, float scaled)
+        {
+            int value = (int)Math.Round(scaled, MidpointRounding.AwayFromZero);
+            writer.WriteUInt16Unpacked((ushort)(value & 0xFFFF));
+            writer.WriteUInt8Unpacked((byte)((value >> 16) & 0xFF));
+        }
+
+        private float ReadPackedPosition(PooledReader reader)
+        {
+            int value = reader.ReadUInt16Unpacked() | (reader.ReadUInt8Unpacked() << 16);
+            if ((value & 0x800000) != 0)
+                value |= unchecked((int)0xFF000000);
+            return value / PositionMultiplier;
+        }
         /// <summary>
         /// How many ticks to interpolate.
         /// </summary>
@@ -1213,6 +1237,8 @@ namespace FishNet.Component.Transforming
             /* Maximum value compressed may be
              * to send as compressed. */
             float maxValue = short.MaxValue - 1;
+            //FISHMMO EDIT: positions pack into 24 bits; scale keeps the stock 16.
+            float positionMaxValue = PACKED_POSITION_MAX;
 
             Transform t = _cachedTransform;
             /* Position. */
@@ -1224,10 +1250,10 @@ namespace FishNet.Component.Transforming
                 {
                     original = t.localPosition.x;
                     compressed = original * positionMultiplier;
-                    if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= maxValue)
+                    if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= positionMaxValue)
                     {
                         flagsA |= UpdateFlagA.X2;
-                        writer.WriteInt16((short)compressed);
+                        WritePackedPosition(writer, compressed); //FISHMMO EDIT
                     }
                     else
                     {
@@ -1241,10 +1267,10 @@ namespace FishNet.Component.Transforming
                 {
                     original = t.localPosition.y;
                     compressed = original * positionMultiplier;
-                    if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= maxValue)
+                    if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= positionMaxValue)
                     {
                         flagsA |= UpdateFlagA.Y2;
-                        writer.WriteInt16((short)compressed);
+                        WritePackedPosition(writer, compressed); //FISHMMO EDIT
                     }
                     else
                     {
@@ -1258,10 +1284,10 @@ namespace FishNet.Component.Transforming
                 {
                     original = t.localPosition.z;
                     compressed = original * positionMultiplier;
-                    if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= maxValue)
+                    if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= positionMaxValue)
                     {
                         flagsA |= UpdateFlagA.Z2;
-                        writer.WriteInt16((short)compressed);
+                        WritePackedPosition(writer, compressed); //FISHMMO EDIT
                     }
                     else
                     {
@@ -1392,21 +1418,21 @@ namespace FishNet.Component.Transforming
             readerRemaining = reader.Remaining;
             //X
             if (UpdateFlagAContains(flagsA, UpdateFlagA.X2))
-                nextTransformData.Position.x = reader.ReadInt16() / PositionMultiplier; //FISHMMO EDIT
+                nextTransformData.Position.x = ReadPackedPosition(reader); //FISHMMO EDIT
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.X4))
                 nextTransformData.Position.x = reader.ReadSingle();
             else
                 nextTransformData.Position.x = prevTransformData.Position.x;
             //Y
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Y2))
-                nextTransformData.Position.y = reader.ReadInt16() / PositionMultiplier; //FISHMMO EDIT
+                nextTransformData.Position.y = ReadPackedPosition(reader); //FISHMMO EDIT
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.Y4))
                 nextTransformData.Position.y = reader.ReadSingle();
             else
                 nextTransformData.Position.y = prevTransformData.Position.y;
             //Z
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Z2))
-                nextTransformData.Position.z = reader.ReadInt16() / PositionMultiplier; //FISHMMO EDIT
+                nextTransformData.Position.z = ReadPackedPosition(reader); //FISHMMO EDIT
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.Z4))
                 nextTransformData.Position.z = reader.ReadSingle();
             else

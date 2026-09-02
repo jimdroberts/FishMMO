@@ -456,7 +456,7 @@ MonoBehaviour:
     Position: 1
     Rotation: 1
     Scale: 0
-  _positionMultiplier: 10
+  _positionMultiplier: 100
   _interpolation: 2
   _extrapolation: 2
   _enableTeleport: 0
@@ -465,7 +465,7 @@ MonoBehaviour:
   _sendToOwner: 0
   _interval: 1
   _synchronizePosition: 1
-  _positionSensitivity: 0.05
+  _positionSensitivity: 0.01
   _positionSnapping:
     X: 0
     Y: 0

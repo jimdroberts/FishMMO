@@ -137,11 +137,23 @@ namespace FishMMO.UnitTests
 			lod.IntervalScale = 4;
 			LogAssert.AreEqual(4, lod.IntervalScale, "A valid scale must be kept.");
 
-			LogAssert.AreEqual(8, NetworkTransformDistanceLod.IntervalForBand(Defaults, 1, 4),
-				"The scale multiplies the band interval.");
-			LogAssert.AreEqual(255, NetworkTransformDistanceLod.IntervalForBand(
-				new[] { new NetworkTransformDistanceLod.Band { MaximumDistance = 1f, Interval = 60 } }, 0, 8),
-				"A scaled interval must clamp to the byte range rather than wrap.");
+			LogAssert.AreEqual((int)ObserverStreamingPolicy.MaxSendInterval, NetworkTransformDistanceLod.IntervalForBand(Defaults, 1, 4),
+				"The scale multiplies the band interval, but a runtime IntervalScale must never outrun the interpolation ceiling.");
+
+			byte savedCeiling = ObserverStreamingPolicy.MaxSendInterval;
+			try
+			{
+				ObserverStreamingPolicy.MaxSendInterval = 255;
+				LogAssert.AreEqual(8, NetworkTransformDistanceLod.IntervalForBand(Defaults, 1, 4),
+					"With the ceiling lifted the scale multiplies the band interval.");
+				LogAssert.AreEqual(255, NetworkTransformDistanceLod.IntervalForBand(
+					new[] { new NetworkTransformDistanceLod.Band { MaximumDistance = 1f, Interval = 60 } }, 0, 8),
+					"A scaled interval must clamp to the byte range rather than wrap.");
+			}
+			finally
+			{
+				ObserverStreamingPolicy.MaxSendInterval = savedCeiling;
+			}
 		}
 
 		[Test]

@@ -123,6 +123,43 @@ namespace FishMMO.UnitTests
 				"The owner exclusion must be added before the packet is handed to the transport.");
 		}
 
+		/// <summary>
+		/// A receiver measures the first unreliable packet after a reliable one as a single tick
+		/// (NetworkTransform unsets the tick on a settle), so if the filter skipped it for a
+		/// throttled observer, that observer's next packet would carry N ticks of motion and be
+		/// played in one. The hook must hand that first packet to everyone and re-arm on every
+		/// unbuffered reliable send, including after a pooled respawn.
+		/// </summary>
+		[Test]
+		public void SendObserversRpc_NeverFiltersTheFirstUnreliableSendAfterAReliableOne()
+		{
+			string path = Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.RPCs.cs");
+			string source = File.ReadAllText(path);
+			int send = source.IndexOf("internal void SendObserversRpc(", StringComparison.Ordinal);
+			int next = source.IndexOf("internal void SendTargetRpc(", send, StringComparison.Ordinal);
+			string body = source.Substring(send, next > send ? next - send : source.Length - send);
+
+			int latch = body.IndexOf("bool firstSinceReliable = _observersRpcSettled;", StringComparison.Ordinal);
+			int guard = body.IndexOf("if (sendFilter != null && !firstSinceReliable)", StringComparison.Ordinal);
+			int rearm = body.IndexOf("_observersRpcSettled = true;", StringComparison.Ordinal);
+			int sendToClients = body.IndexOf("SendToClients(", StringComparison.Ordinal);
+
+			LogAssert.IsTrue(latch >= 0, "SendObserversRpc must read the settled latch before consulting the filter.");
+			LogAssert.IsTrue(guard > latch, "The filter loop must be skipped on the first unreliable send after a reliable one.");
+			LogAssert.IsTrue(rearm > guard && rearm < sendToClients,
+				"An unbuffered reliable send must re-arm the latch, in the same decision block, before the transport send.");
+			LogAssert.IsTrue(body.Contains("_observersRpcSettled = false;"), "An unreliable send must clear the latch.");
+
+			string resetPath = Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.cs");
+			string reset = File.ReadAllText(resetPath);
+			int resetState = reset.IndexOf("public virtual void ResetState(bool asServer)", StringComparison.Ordinal);
+			int resetLatch = reset.IndexOf("_observersRpcSettled = true;", StringComparison.Ordinal);
+			LogAssert.IsTrue(resetState >= 0 && resetLatch > resetState,
+				"ResetState must re-arm the latch so a pooled object's first send after respawn reaches everyone.");
+		}
+
 		[Test]
 		public void Entry_ComposesCapAndDistanceIntervals_ByMax_NeverByStacking()
 		{

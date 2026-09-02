@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.IO;
 using NUnit.Framework;
 using UnityEditor;
+using FishMMO.Shared;
 
 namespace FishMMO.UnitTests
 {
@@ -146,6 +148,35 @@ namespace FishMMO.UnitTests
 					"the next sample, which renders as the object teleporting rather than moving. " +
 					"Either lower the band interval or raise _interpolation — they are one setting " +
 					"in two places.");
+			}
+		}
+
+		/// <summary>
+		/// The cap's own bands and the engaged overflow are the SECOND throttle table, applied to
+		/// every character beyond the 24th a viewer sees, and it is the table both 2026-09-01/02
+		/// retunes of the prefab bands missed: it still handed out 4- and 8-tick intervals against
+		/// a 2-goal buffer. Everything the policy can hand an observer must obey the same ceiling.
+		/// </summary>
+		[Test]
+		public void PolicyIntervals_NeverOutrunTheInterpolationBufferEither()
+		{
+			int smallestBuffer = int.MaxValue;
+			foreach (LodPrefab prefab in ReadPrefabs())
+			{
+				smallestBuffer = Math.Min(smallestBuffer, prefab.Interpolation);
+			}
+			Assert.AreNotEqual(int.MaxValue, smallestBuffer, "No prefab with a readable _interpolation was found.");
+
+			Assert.LessOrEqual((int)ObserverStreamingPolicy.MaxSendInterval, smallestBuffer,
+				"ObserverStreamingPolicy.MaxSendInterval must not exceed the smallest prefab _interpolation; " +
+				"it is the ceiling every other interval is clamped to.");
+			Assert.LessOrEqual((int)ObserverStreamingPolicy.EngagedOverflowInterval, smallestBuffer,
+				"The engaged overflow interval outruns the interpolation buffer.");
+			foreach (float distance in new[] { 0f, 10f, 30f, 60f, 200f, 5000f })
+			{
+				Assert.LessOrEqual((int)ObserverStreamingPolicy.LodInterval(distance), smallestBuffer,
+					$"The cap band at {distance} m outruns the interpolation buffer; this is the table the " +
+					"prefab retunes never touched.");
 			}
 		}
 

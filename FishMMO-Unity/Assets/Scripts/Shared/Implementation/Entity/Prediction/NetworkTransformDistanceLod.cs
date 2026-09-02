@@ -79,26 +79,28 @@ namespace FishMMO.Shared
 		[Header("Level of detail")]
 		[Tooltip("Ascending distance bands. An observer inside a band receives that band's interval.")]
 		[SerializeField]
-		/* NO INTERVAL HERE MAY EXCEED NetworkTransform's `_interpolation`, which is 2 on every
-		 * prefab in the project. That is the invariant this table exists under, and it is not a
-		 * guideline: the interpolation buffer is sized in TICKS OF RECEIVED DATA, so an observer
-		 * fed every Nth tick drains the buffer in `_interpolation` ticks and then has nothing to
-		 * move toward until the next sample lands. The render is play out, stall, snap — which
-		 * reads as an NPC teleporting between positions rather than walking.
+		/* NO INTERVAL HERE MAY EXCEED ObserverStreamingPolicy.MaxSendInterval, which mirrors
+		 * NetworkTransform's `_interpolation` (2 on every prefab). IntervalForBand clamps to it,
+		 * NetworkTransformLodBufferTests pins the prefabs against it, and the policy's own cap
+		 * bands obey the same ceiling — they are the SECOND throttle table (applied beyond the
+		 * 24th character a viewer sees), and the one the first two retunes of this one missed.
 		 *
-		 * The buffer is per OBJECT and the interval is per OBSERVER, so an object cannot size its
-		 * buffer for the observer that happens to be furthest away. The buffer must therefore
-		 * cover the WORST interval any observer can be handed, which is the largest value below
-		 * multiplied by intervalScale. NetworkTransformLodBufferTests pins that.
+		 * Why the ceiling, precisely. The client queues received goals, each spanning the tick
+		 * difference to the one before it, so a throttled stream does not starve in steady state:
+		 * an N-tick goal takes N ticks to play and the next arrives N ticks later. What scales
+		 * with N is everything around steady state. The client waits for `_interpolation` goals
+		 * before it moves, and again whenever the queue runs dry — up to 2N ticks standing still
+		 * at every restart. When goals pile up after jitter it drops to the newest and snaps — a
+		 * jump of everything skipped, N times larger. And until 2026-09-02 the first packet after a
+		 * reliable settle was played as ONE tick of motion whatever the observer's interval (see
+		 * NetworkBehaviour.SendObserversRpc), an N× lurch at every stop-and-go. Those three, at
+		 * intervals of 4 and 8, are what the live "NPCs teleporting or rubber banding" reports of
+		 * 2026-09-01/02 were describing.
 		 *
-		 * History, because this has now been got wrong twice. The original 20/1, 40/3, 80/6 was
-		 * retuned on 2026-09-01 after a live "NPCs teleporting or rubber banding" report; that
-		 * pass moved full rate out to 40m and dropped the middle band to 2, but left the far band
-		 * at 4 on the reasoning that its stepping was "a few pixels at 80m+". It is not — the same
-		 * report came back on 2026-09-02 for NPCs outside the 40m engagement radius. Bandwidth in
-		 * the far field is the visibility budget's job (ObserverStreamingPolicy.VisibilityBudget
-		 * stops distant characters existing at all); it is not worth buying with motion that
-		 * visibly breaks. intervalScale remains the crowd lever. */
+		 * History: 20/1, 40/3, 80/6 originally; 40/1, 80/2, 140/4 on 2026-09-01; the far band
+		 * capped at 2 on 2026-09-02. Bandwidth in the far field is the visibility budget's job
+		 * (ObserverStreamingPolicy.VisibilityBudget), not this table's. intervalScale remains the
+		 * crowd lever, under the same ceiling. */
 		private Band[] bands =
 		{
 			new Band { MaximumDistance = 40f, Interval = 1 },
@@ -482,14 +484,16 @@ namespace FishMMO.Shared
 			return bands.Length - 1;
 		}
 
-		/// <summary>Interval for a band after scaling, clamped to the byte range; 1 for no band.</summary>
+		/// <summary>Interval for a band after scaling, clamped to <see cref="ObserverStreamingPolicy.MaxSendInterval"/>; 1 for no band.</summary>
 		public static byte IntervalForBand(Band[] bands, int band, int scale)
 		{
 			if (bands == null || band < 0 || band >= bands.Length)
 			{
 				return 1;
 			}
-			return (byte)Mathf.Clamp(bands[band].Interval * Mathf.Max(1, scale), 1, 255);
+			int scaled = Mathf.Clamp(bands[band].Interval * Mathf.Max(1, scale), 1, 255);
+			// The interpolation ceiling applies here too, so a runtime IntervalScale cannot outrun it.
+			return ObserverStreamingPolicy.ClampInterval((byte)scaled);
 		}
 	}
 }

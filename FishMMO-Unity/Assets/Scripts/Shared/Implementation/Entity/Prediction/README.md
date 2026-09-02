@@ -386,6 +386,27 @@ They are **broadcasts, not RPCs**, sent to the observer set except the owner via
 observer-shaped form, so a late joiner reconstructs the same visible state a peer that was present
 the whole time holds.
 
+### Transform stream rules
+
+Observers receive position through `NetworkTransform`, shaped per observer by
+`NetworkTransformDistanceLod` (distance) and `ObserverStreamingEntry` (the viewer's full-rate cap).
+Four rules keep that stream rendering as motion, and each was learned from a live "NPCs teleporting
+or rubber banding" report (issue #176):
+
+- **No per-observer interval above `ObserverStreamingPolicy.MaxSendInterval` (2)**, which mirrors
+  `NetworkTransform._interpolation` on every prefab. Both throttle tables — the prefab bands and the
+  policy's cap bands — are clamped to it. The client waits for that many goals before it moves and
+  again whenever its queue runs dry, and a queue overflow snaps to the newest goal; both scale with
+  the interval. `NetworkTransformLodBufferTests` pins prefabs and policy together.
+- **The first unreliable send after a reliable one goes to every observer** (FISHMMO EDIT in
+  `NetworkBehaviour.SendObserversRpc`). The receiver measures it against the settle as one tick, so
+  a filtered observer would otherwise play N ticks of motion in one at every stop-and-go.
+- **Positions pack to 24 bits at 1 cm** (FISHMMO EDIT in `NetworkTransform`, multiplier 100 on
+  every prefab). The wire grid must stay well under a walking character's per-tick displacement
+  (5 cm at 30 Hz); the 10 cm grid tried before rendered a walk as alternating stalls and hops.
+- **The NavMeshAgent is disabled on clients** (`AIController.OnStartNetwork`). Left enabled it
+  re-maps the interpolated transform onto the client's NavMesh every frame.
+
 The one thing genuinely broken by forwarding-off is a character with nothing to replicate position —
 `CharacterPredictionController.OnStartNetwork` warns for a predicted object with no
 `NetworkTransform`, because that presents as a content bug (a frozen character that keeps dealing

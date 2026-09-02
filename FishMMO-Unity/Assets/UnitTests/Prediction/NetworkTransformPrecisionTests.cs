@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
+using FishMMO.Shared;
 using FishNet.Object;
 using FishNet.Serializing;
 using UnityEngine;
@@ -12,34 +13,37 @@ using NT = FishNet.Component.Transforming.NetworkTransform;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Covers the configurable position compression scale on <see cref="NT"/>.
+	/// Covers position packing on <see cref="NT"/>: 24-bit integers of scaled units (FISHMMO EDIT)
+	/// where FishNet ships 16-bit ones.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// A packed position is an Int16 of scaled units, so one multiplier fixes both the reachable
-	/// range (32766 / multiplier) and the resolution (1 / multiplier). FishNet's stock 100 gives
-	/// centimeter precision within +/-327.66 units, which on an 8-20 km^2 map means nearly every
-	/// object falls back to 4 bytes per axis. These tests pin the tradeoff at both ends: that the
-	/// project multiplier actually buys the packing back, and that lowering it does not quietly
-	/// damage anything else.
+	/// One multiplier fixes both the reachable range (8388606 / multiplier) and the resolution
+	/// (1 / multiplier). At the stock 100 that is centimetre precision out to +/-83,886 units, so
+	/// every position on an 8-20 km^2 map packs, for 3 bytes per axis. The 16-bit form could only
+	/// reach the map by dropping the multiplier to 10, and a 10 cm wire grid against a walking
+	/// character's 5 cm per tick rendered as alternating stalls and double-speed hops. These tests
+	/// pin the resolution against the slowest gait as well as the range against the map.
 	/// </para>
 	/// <para>
-	/// The scale isolation test is the important one. Position and scale shared a single
-	/// <c>multiplier</c> local, and scale's read side divides by its own hardcoded 100. Anyone who
-	/// "simplifies" this by pointing scale at the position multiplier breaks scale asymmetrically,
-	/// and because Scale defaults to Unpacked the damage stays invisible until a prefab enables
-	/// packed scale.
+	/// The scale isolation test is the important guard. Position and scale shared a single
+	/// <c>multiplier</c> local, and scale's read side divides by its own hardcoded 100 and still
+	/// reads 16 bits. Anyone who "simplifies" this by pointing scale at the position path breaks
+	/// scale asymmetrically, and because Scale defaults to Unpacked the damage stays invisible
+	/// until a prefab enables packed scale.
 	/// </para>
 	/// </remarks>
 	public class NetworkTransformPrecisionTests
 	{
 		private const int POSITION_XYZ = 1 | 2 | 4;
-		/// <summary>The value shipped on FishMMO prefabs: decimeter grid within +/-3276.6 units.</summary>
-		private const float PROJECT_MULTIPLIER = 10f;
-		/// <summary>FishNet's stock value, which every unmodified prefab still gets.</summary>
-		private const float STOCK_MULTIPLIER = 100f;
-		/// <summary>Half the 10 cm wire grid: fine enough to be responsive, coarse enough to carry news.</summary>
-		private const float PROJECT_SENSITIVITY = 0.05f;
+		/// <summary>The value on every FishMMO prefab, and FishNet's stock: centimetre grid.</summary>
+		private const float PROJECT_MULTIPLIER = 100f;
+		/// <summary>Half a step is 5 mm; float error at a few km adds a couple of millimetres.</summary>
+		private const float HALF_STEP_TOLERANCE = 0.0075f;
+		/// <summary>One wire grid step: a send is scheduled once an axis has moved a whole cell.</summary>
+		private const float PROJECT_SENSITIVITY = 0.01f;
+		/// <summary>A flags byte plus three 24-bit axes.</summary>
+		private const int PACKED_XYZ_BYTES = 1 + 3 * 3;
 
 		private static readonly Type NtType = typeof(NT);
 
@@ -104,39 +108,43 @@ namespace FishMMO.UnitTests
 			finally { UnityEngine.Object.DestroyImmediate(go); }
 		}
 
-		// ── the saving ───────────────────────────────────────────────────────
+		/// <summary>Every prefab carrying a NetworkTransform, by the script's GUID.</summary>
+		private static string[] NetworkTransformPrefabs()
+		{
+			const string ntGuid = "a2836e36774ca1c4bbbee976e17b649c";
+			return Array.FindAll(
+				Directory.GetFiles(Application.dataPath, "*.prefab", SearchOption.AllDirectories),
+				path => File.ReadAllText(path).Contains(ntGuid));
+		}
+
+		// ── range ────────────────────────────────────────────────────────────
 
 		/// <summary>
-		/// The whole point: at the far corner of a 20 km^2 scene the stock multiplier spends
-		/// 4 bytes on each horizontal axis, and the project multiplier packs them into 2.
+		/// The far corner of a 20 km^2 scene packs at the same cost and precision as a position
+		/// next to the origin. Under the 16-bit form it cost 4 bytes per horizontal axis instead.
 		/// </summary>
 		[Test]
-		public void FarFromOrigin_ProjectMultiplierPacksWhatTheStockOneCannot()
+		public void FarFromOrigin_PacksAtCentimetrePrecision()
 		{
 			Vector3 farCorner = new Vector3(2200f, 40f, 2200f);
 
-			RoundTrip(farCorner, STOCK_MULTIPLIER, out int stockBytes);
-			RoundTrip(farCorner, PROJECT_MULTIPLIER, out int projectBytes);
-			RoundTrip(new Vector3(12f, 40f, -8f), STOCK_MULTIPLIER, out int nearOriginBytes);
+			Vector3 got = RoundTrip(farCorner, PROJECT_MULTIPLIER, out int farBytes);
+			RoundTrip(new Vector3(12f, 40f, -8f), PROJECT_MULTIPLIER, out int nearOriginBytes);
 
-			// X and Z each drop from a 4-byte float to a 2-byte short. Y packs under both.
-			Assert.AreEqual(4, stockBytes - projectBytes,
-				"Expected X and Z to each fall from 4 bytes to 2 at the 20 km^2 corner.");
-			Assert.AreEqual(nearOriginBytes, projectBytes,
-				"A far position should cost exactly what a near one costs once it packs.");
-			TestContext.WriteLine($"MEASURE nt.farCorner stock={stockBytes}B project={projectBytes}B");
+			Assert.AreEqual(PACKED_XYZ_BYTES, farBytes, "Three packed axes are a flags byte plus 3 bytes each.");
+			Assert.AreEqual(nearOriginBytes, farBytes, "A far position must cost exactly what a near one costs.");
+			Assert.LessOrEqual(Mathf.Abs(got.x - farCorner.x), HALF_STEP_TOLERANCE, "X lost centimetre precision far from the origin.");
+			Assert.LessOrEqual(Mathf.Abs(got.z - farCorner.z), HALF_STEP_TOLERANCE, "Z lost centimetre precision far from the origin.");
+			TestContext.WriteLine($"MEASURE nt.farCorner packed={farBytes}B");
 		}
 
-		// ── the cost ─────────────────────────────────────────────────────────
-
 		/// <summary>
-		/// Recovery must land within half the grid the multiplier implies. The writer truncates
-		/// toward zero rather than rounding, so the bound is a whole grid step, not half of one.
+		/// Recovery lands within half a grid step everywhere on any map this project will ship:
+		/// the writer rounds rather than truncates, so the bound is half a step, not a whole one.
 		/// </summary>
 		[Test]
-		public void RoundTrip_AcrossTheRange_RecoversWithinOneGridStep()
+		public void RoundTrip_AcrossTheRange_RecoversWithinHalfAGridStep()
 		{
-			float step = 1f / PROJECT_MULTIPLIER; // 10 cm
 			foreach (Vector3 p in new[]
 			{
 				new Vector3(0f, 0f, 0f),
@@ -145,64 +153,109 @@ namespace FishMMO.UnitTests
 				new Vector3(1414f, 120f, -1414f),
 				new Vector3(2236f, 300f, -2236f),
 				new Vector3(3200f, 10f, -3200f),
+				new Vector3(20000.12f, 500.5f, -20000.12f),
 			})
 			{
-				Vector3 got = RoundTrip(p, PROJECT_MULTIPLIER, out _);
-				Assert.LessOrEqual(Mathf.Abs(got.x - p.x), step, $"X drifted too far at {p}.");
-				Assert.LessOrEqual(Mathf.Abs(got.y - p.y), step, $"Y drifted too far at {p}.");
-				Assert.LessOrEqual(Mathf.Abs(got.z - p.z), step, $"Z drifted too far at {p}.");
+				Vector3 got = RoundTrip(p, PROJECT_MULTIPLIER, out int bytes);
+				Assert.AreEqual(PACKED_XYZ_BYTES, bytes, $"{p} should pack on every axis.");
+				Assert.LessOrEqual(Mathf.Abs(got.x - p.x), HALF_STEP_TOLERANCE, $"X drifted too far at {p}.");
+				Assert.LessOrEqual(Mathf.Abs(got.y - p.y), HALF_STEP_TOLERANCE, $"Y drifted too far at {p}.");
+				Assert.LessOrEqual(Mathf.Abs(got.z - p.z), HALF_STEP_TOLERANCE, $"Z drifted too far at {p}.");
 			}
 		}
 
 		/// <summary>
+		/// Truncation toward zero put a two-cell dead band around every axis origin and biased
+		/// every sample toward it. Rounding has neither property.
+		/// </summary>
+		[Test]
+		public void Packing_RoundsToTheNearestCell_InBothDirections()
+		{
+			Vector3 got = RoundTrip(new Vector3(0.006f, -0.006f, 0.004f), PROJECT_MULTIPLIER, out _);
+			Assert.AreEqual(0.01f, got.x, 0.0001f, "+6 mm rounds up to +1 cm; truncation would have read 0.");
+			Assert.AreEqual(-0.01f, got.y, 0.0001f, "-6 mm rounds down to -1 cm; truncation would have read 0.");
+			Assert.AreEqual(0f, got.z, 0.0001f, "+4 mm rounds to 0.");
+		}
+
+		/// <summary>
 		/// Past the compressed range the writer falls back to a full float. That is graceful
-		/// rather than broken: it costs 2 extra bytes per axis and loses no accuracy.
+		/// rather than broken: it costs 1 extra byte per axis and loses no accuracy.
 		/// </summary>
 		[Test]
 		public void BeyondRange_FallsBackToFloatWithoutLosingAccuracy()
 		{
-			Vector3 outside = new Vector3(4000f, 10f, -4000f);
+			Vector3 outside = new Vector3(90000f, 10f, -90000f);
 
 			Vector3 got = RoundTrip(outside, PROJECT_MULTIPLIER, out int bytes);
 			RoundTrip(new Vector3(2200f, 10f, -2200f), PROJECT_MULTIPLIER, out int inside);
 
 			Assert.AreEqual(outside.x, got.x, 0.0001f, "An unpacked axis should survive exactly.");
 			Assert.AreEqual(outside.z, got.z, 0.0001f, "An unpacked axis should survive exactly.");
-			Assert.AreEqual(4, bytes - inside, "Falling outside the range should cost 2 bytes per axis.");
+			Assert.AreEqual(2, bytes - inside, "Falling outside the range should cost 1 byte per axis.");
 		}
 
-		// ── the guards ───────────────────────────────────────────────────────
+		// ── resolution ───────────────────────────────────────────────────────
 
 		/// <summary>
-		/// The stock value must behave exactly as it did before the field existed, so that an
-		/// unmodified prefab and an upstream project see no change at all.
+		/// The reason the grid is 1 cm and not 10: the interpolator plays each received goal at
+		/// (quantised distance / tick difference), so a grid coarser than a tick's displacement
+		/// turns a steady walk into stalls and hops. The slowest gait sets the bound.
 		/// </summary>
 		[Test]
-		public void StockMultiplier_KeepsCentimeterPrecisionInsideItsRange()
+		public void WireGrid_IsWellUnderAWalkingTicksDisplacement()
+		{
+			string scene = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scenes/Server/SceneServer.unity"));
+			Match tick = Regex.Match(scene, @"^\s+_tickRate:\s*(\d+)\s*$", RegexOptions.Multiline);
+			Assert.IsTrue(tick.Success, "SceneServer.unity no longer serializes a _tickRate; update this test.");
+			float tickRate = float.Parse(tick.Groups[1].Value, CultureInfo.InvariantCulture);
+			float walkingTick = Constants.Character.WalkSpeed / tickRate;
+
+			int checkedCount = 0;
+			foreach (string path in NetworkTransformPrefabs())
+			{
+				checkedCount++;
+				Match multiplier = Regex.Match(File.ReadAllText(path), @"_positionMultiplier:\s*([0-9.]+)");
+				Assert.IsTrue(multiplier.Success, $"{Path.GetFileName(path)} has no _positionMultiplier.");
+				float gridStep = 1f / float.Parse(multiplier.Groups[1].Value, CultureInfo.InvariantCulture);
+
+				Assert.LessOrEqual(gridStep, walkingTick / 4f,
+					$"{Path.GetFileName(path)}: a {gridStep} m wire grid against {walkingTick} m per walking tick " +
+					"(WalkSpeed / tick rate) quantises the per-tick delta to a handful of values; the interpolator " +
+					"renders that as stalls and hops. Keep the grid at or under a quarter of a walking tick.");
+			}
+			Assert.AreEqual(10, checkedCount, "Expected ten NetworkTransform prefabs; the set changed.");
+		}
+
+		// ── guards ───────────────────────────────────────────────────────────
+
+		/// <summary>Three packed axes: a flags byte plus 3 bytes each, at centimetre precision.</summary>
+		[Test]
+		public void PackedAxes_CostThreeBytesEach_AtCentimetrePrecision()
 		{
 			Vector3 p = new Vector3(112.61f, 30.9f, -47.21f);
 
-			Vector3 got = RoundTrip(p, STOCK_MULTIPLIER, out int bytes);
+			Vector3 got = RoundTrip(p, PROJECT_MULTIPLIER, out int bytes);
 
-			Assert.AreEqual(7, bytes, "Stock packing of three axes is a flags byte plus three shorts.");
-			Assert.LessOrEqual(Mathf.Abs(got.x - p.x), 0.01f, "Stock precision is one centimeter.");
-			Assert.LessOrEqual(Mathf.Abs(got.z - p.z), 0.01f, "Stock precision is one centimeter.");
+			Assert.AreEqual(PACKED_XYZ_BYTES, bytes, "Packing three axes is a flags byte plus three 24-bit integers.");
+			Assert.LessOrEqual(Mathf.Abs(got.x - p.x), HALF_STEP_TOLERANCE, "Precision is one centimetre.");
+			Assert.LessOrEqual(Mathf.Abs(got.z - p.z), HALF_STEP_TOLERANCE, "Precision is one centimetre.");
 		}
 
 		/// <summary>
 		/// Position and scale share a <c>multiplier</c> local on the write side while scale's read
-		/// side divides by its own hardcoded 100. This asserts they stayed independent.
+		/// side divides by its own hardcoded 100 and reads 16 bits. This asserts they stayed independent.
 		/// </summary>
 		[Test]
-		public void ScaleCompression_IsUnaffectedByThePositionMultiplier()
+		public void ScaleCompression_IsUnaffectedByThePositionPacking()
 		{
 			GameObject go = new GameObject("NtScale");
 			try
 			{
-				NT nt = Build(go, Vector3.zero, PROJECT_MULTIPLIER);
+				// A deliberately odd position multiplier, so any leak into the scale path shows.
+				NT nt = Build(go, Vector3.zero, 10f);
 				go.transform.localScale = new Vector3(2.5f, 1.25f, 0.75f);
 
-				// Ask for packed scale, which is the configuration that would expose a shared multiplier.
+				// Ask for packed scale, which is the configuration that would expose a shared path.
 				Type packingType = NtType.Assembly.GetType("FishNet.Serializing.TransformPackingData");
 				Assert.IsNotNull(packingType, "TransformPackingData moved; this guard needs updating.");
 				FieldInfo packingField = NtType.GetField("_packing", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -221,7 +274,8 @@ namespace FishMMO.UnitTests
 				}
 
 				byte[] packet = Serialize(nt, scaleMask);
-				Assert.Greater(packet.Length, 0, "Packed scale should have produced bytes.");
+				// Flags A, flags B, three Int16 scale axes: the stock 16-bit scale form.
+				Assert.AreEqual(2 + 3 * 2, packet.Length, "Packed scale must keep FishNet's 16-bit form.");
 
 				Type tdType = NtType.GetNestedType("TransformData", BindingFlags.Public);
 				Type changedFull = NtType.GetNestedType("ChangedFull", BindingFlags.NonPublic);
@@ -233,9 +287,9 @@ namespace FishMMO.UnitTests
 
 				// Scale is still on the stock 100, so it keeps centimeter precision regardless
 				// of what the position multiplier is set to.
-				Assert.AreEqual(2.5f, scale.x, 0.01f, "Scale X must not be read through the position multiplier.");
-				Assert.AreEqual(1.25f, scale.y, 0.01f, "Scale Y must not be read through the position multiplier.");
-				Assert.AreEqual(0.75f, scale.z, 0.01f, "Scale Z must not be read through the position multiplier.");
+				Assert.AreEqual(2.5f, scale.x, 0.01f, "Scale X must not be read through the position path.");
+				Assert.AreEqual(1.25f, scale.y, 0.01f, "Scale Y must not be read through the position path.");
+				Assert.AreEqual(0.75f, scale.z, 0.01f, "Scale Z must not be read through the position path.");
 			}
 			finally { UnityEngine.Object.DestroyImmediate(go); }
 		}
@@ -255,7 +309,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── the wiring ───────────────────────────────────────────────────────
+		// ── wiring ───────────────────────────────────────────────────────────
 
 		/// <summary>
 		/// Sends are gated on <c>_positionSensitivity</c>, measured against the last <em>sent</em>
@@ -289,12 +343,12 @@ namespace FishMMO.UnitTests
 					return Convert.ToInt32(result) & POSITION_XYZ;
 				}
 
-				Assert.AreEqual(0, PositionBits(new Vector3(0.02f, 0f, 0f)),
-					"A 2 cm move is inside the sensitivity and should not schedule a send.");
-				Assert.AreEqual(0, PositionBits(new Vector3(0.049f, 0f, 0f)),
+				Assert.AreEqual(0, PositionBits(new Vector3(0.004f, 0f, 0f)),
+					"A 4 mm move is inside the sensitivity and should not schedule a send.");
+				Assert.AreEqual(0, PositionBits(new Vector3(0.0099f, 0f, 0f)),
 					"A move just under the sensitivity should not schedule a send.");
-				Assert.AreEqual(1, PositionBits(new Vector3(0.06f, 0f, 0f)),
-					"A 6 cm move exceeds the sensitivity and should mark X changed.");
+				Assert.AreEqual(1, PositionBits(new Vector3(0.012f, 0f, 0f)),
+					"A 1.2 cm move exceeds the sensitivity and should mark X changed.");
 			}
 			finally { UnityEngine.Object.DestroyImmediate(go); }
 		}
@@ -312,17 +366,11 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void SensitivityAndMultiplier_StayCoherentOnEveryPrefab()
 		{
-			const string ntGuid = "a2836e36774ca1c4bbbee976e17b649c";
 			int checkedCount = 0;
 
-			foreach (string path in Directory.GetFiles(Application.dataPath, "*.prefab", SearchOption.AllDirectories))
+			foreach (string path in NetworkTransformPrefabs())
 			{
 				string text = File.ReadAllText(path);
-				if (!text.Contains(ntGuid))
-				{
-					continue;
-				}
-
 				checkedCount++;
 				string name = Path.GetFileName(path);
 				Match multiplier = Regex.Match(text, @"_positionMultiplier:\s*([0-9.]+)");
@@ -336,7 +384,7 @@ namespace FishMMO.UnitTests
 				Assert.GreaterOrEqual(sensitivityValue, gridStep * 0.25f,
 					$"{name}: sensitivity {sensitivityValue} is far finer than the {gridStep} wire grid, " +
 					"so it schedules sends that cannot carry new information.");
-				Assert.LessOrEqual(sensitivityValue, gridStep,
+				Assert.LessOrEqual(sensitivityValue, gridStep * 1.0001f,
 					$"{name}: sensitivity {sensitivityValue} exceeds the {gridStep} wire grid, " +
 					"so positions go stale by more than quantisation already costs.");
 			}
@@ -345,28 +393,20 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// Every NetworkTransform in the project must carry the project multiplier. A prefab that
-		/// misses it silently reverts to the stock 327 m range and stops packing, costing bandwidth
-		/// with no error anywhere.
+		/// Every NetworkTransform in the project must carry the project multiplier. The 24-bit
+		/// form reaches the whole map at 100, so there is no longer any reason for a prefab to
+		/// deviate — and a coarser value silently brings the walking stutter back.
 		/// </summary>
 		[Test]
 		public void EveryNetworkTransformPrefab_CarriesTheProjectMultiplier()
 		{
-			const string ntGuid = "a2836e36774ca1c4bbbee976e17b649c";
-			string root = Application.dataPath;
 			int checkedCount = 0;
 
-			foreach (string path in Directory.GetFiles(root, "*.prefab", SearchOption.AllDirectories))
+			foreach (string path in NetworkTransformPrefabs())
 			{
-				string text = File.ReadAllText(path);
-				if (!text.Contains(ntGuid))
-				{
-					continue;
-				}
-
 				checkedCount++;
-				StringAssert.Contains("_positionMultiplier: 10", text,
-					$"{Path.GetFileName(path)} has a NetworkTransform without the project position multiplier.");
+				StringAssert.Contains("_positionMultiplier: 100\n", File.ReadAllText(path).Replace("\r\n", "\n"),
+					$"{Path.GetFileName(path)} has a NetworkTransform without the project position multiplier (100).");
 			}
 
 			Assert.AreEqual(10, checkedCount, "Expected ten NetworkTransform prefabs; the set changed.");

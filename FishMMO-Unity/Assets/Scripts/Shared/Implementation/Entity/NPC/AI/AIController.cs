@@ -665,6 +665,21 @@ namespace FishMMO.Shared
 
 			if (!base.IsServerStarted)
 			{
+				/* The agent is a server-side driver and must not run on a client at all. Left
+				 * enabled, it keeps simulating: every frame it re-maps the transform — which the
+				 * NetworkTransform has just interpolated — onto whatever NavMesh this client has,
+				 * and runs crowd avoidance against every other visible NPC's agent. That is a
+				 * per-frame fight over the transform that reads as jitter, and a snap wherever the
+				 * interpolated path leaves the client's mesh. Disabling the component stops the
+				 * simulation; the transform is then the NetworkTransform's alone. */
+				if (Agent == null)
+				{
+					Agent = GetComponent<NavMeshAgent>();
+				}
+				if (Agent != null)
+				{
+					Agent.enabled = false;
+				}
 				enabled = false;
 				return;
 			}

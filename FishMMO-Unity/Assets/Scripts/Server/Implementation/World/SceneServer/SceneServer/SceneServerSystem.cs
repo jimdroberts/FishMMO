@@ -136,6 +136,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			"ObserverMinimumRange",
 			"ObserverRescheduleTicks",
 			"ObserverLodBands",
+			"ObserverEngagementRange",
+			"ObserverVisibilityBudget",
+			"ObserverVisibilityBudgetHysteresis",
+			"ObserverEngagedFullRateBudget",
+			"ObserverEngagementRangeCeiling",
+			"ObserverEngagementRangeMargin",
+			"ObserverMaxSendInterval",
 		};
 
 		/// <summary>
@@ -165,7 +172,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Observer streaming: cap={ObserverStreamingPolicy.FullRateObserverCap} " +
 				$"density={ObserverStreamingPolicy.LowDensity}..{ObserverStreamingPolicy.HighDensity}@{ObserverStreamingPolicy.DensityRadius}m " +
 				$"scale={ObserverStreamingPolicy.RangeScaleAtHighDensity} minRange={ObserverStreamingPolicy.MinimumRange}m " +
-				$"reschedule={ObserverStreamingPolicy.RescheduleIntervalTicks} ticks");
+				$"reschedule={ObserverStreamingPolicy.RescheduleIntervalTicks} ticks " +
+				$"maxSendInterval={ObserverStreamingPolicy.MaxSendInterval} visibilityBudget={ObserverStreamingPolicy.VisibilityBudget}");
 		}
 
 		/// <summary>

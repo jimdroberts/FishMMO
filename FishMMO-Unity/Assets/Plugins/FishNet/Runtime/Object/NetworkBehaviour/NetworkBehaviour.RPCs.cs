@@ -76,6 +76,10 @@ namespace FishNet.Object
         /// Connections to exclude from RPCs, such as ExcludeOwner or ExcludeServer.
         /// </summary>
         private readonly HashSet<NetworkConnection> _networkConnectionCache = new();
+        /* FISHMMO EDIT: true until this behaviour sends an unbuffered ObserversRpc unreliably, and
+         * again after any unbuffered reliable one. Starts true because a fresh observer's baseline
+         * is the reliable spawn state. See SendObserversRpc. */
+        private bool _observersRpcSettled = true;
         /// <summary>
         /// Used for debug output.
         /// </summary>
@@ -366,17 +370,34 @@ namespace FishNet.Object
                 _networkConnectionCache.Add(Owner);
             /* FISHMMO EDIT: per-observer level of detail. Observers the object's send filter
              * declines this tick join the exclusion list, exactly as the owner or clientHost
-             * would. Only unreliable, non-buffered RPCs are eligible — see IObserverSendFilter. */
-            if (channel == Channel.Unreliable && !bufferLast)
+             * would. Only unreliable, non-buffered RPCs are eligible — see IObserverSendFilter.
+             *
+             * The first unreliable send after a reliable one is never filtered. A receiver that
+             * last heard from this behaviour reliably has no tick to measure the next packet
+             * against — NetworkTransform unsets the tick on a reliable settle and then assumes
+             * exactly ONE tick passed — so a throttled observer would play N ticks of motion in
+             * one: a lurch that grows with the interval, and the "teleport" far-field NPCs showed
+             * at every stop-and-go. Sending that first packet to everyone restores the one-tick
+             * premise; every packet after it carries a real tick difference. */
+            if (!bufferLast)
             {
-                FishNet.Observing.IObserverSendFilter sendFilter = _networkObjectCache.ObserverSendFilter;
-                if (sendFilter != null)
+                if (channel == Channel.Unreliable)
                 {
-                    foreach (NetworkConnection observer in _networkObjectCache.Observers)
+                    bool firstSinceReliable = _observersRpcSettled;
+                    _observersRpcSettled = false;
+                    FishNet.Observing.IObserverSendFilter sendFilter = _networkObjectCache.ObserverSendFilter;
+                    if (sendFilter != null && !firstSinceReliable)
                     {
-                        if (!_networkConnectionCache.Contains(observer) && !sendFilter.ShouldSend(_networkObjectCache, observer, channel))
-                            _networkConnectionCache.Add(observer);
+                        foreach (NetworkConnection observer in _networkObjectCache.Observers)
+                        {
+                            if (!_networkConnectionCache.Contains(observer) && !sendFilter.ShouldSend(_networkObjectCache, observer, channel))
+                                _networkConnectionCache.Add(observer);
+                        }
                     }
+                }
+                else
+                {
+                    _observersRpcSettled = true;
                 }
             }
             _networkObjectCache.NetworkManager.TransportManager.SendToClients((byte)channel, writer.GetArraySegment(), _networkObjectCache.Observers, _networkConnectionCache, true, orderType);

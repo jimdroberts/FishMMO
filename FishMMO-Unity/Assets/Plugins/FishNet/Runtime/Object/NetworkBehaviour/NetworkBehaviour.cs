@@ -211,6 +211,7 @@ namespace FishNet.Object
             ResetState_Prediction(asServer);
             ClearReplicateCache();
             ClearBuffedRpcs();
+            _observersRpcSettled = true; //FISHMMO EDIT: a respawned object starts from a reliable baseline.
         }
 
         /// <summary>
