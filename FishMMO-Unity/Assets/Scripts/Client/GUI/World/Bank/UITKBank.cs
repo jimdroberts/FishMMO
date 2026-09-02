@@ -83,7 +83,12 @@ namespace FishMMO.Client
 		/// <summary>Label shown in place of the grid when nothing is stored.</summary>
 		private Label emptyLabel;
 
-		/// <summary>Cached item sprite per slot, used to drive the capacity readout.</summary>
+		/// <summary>Cached item sprite per slot.</summary>
+		/// <remarks>
+		/// No longer the source of the capacity readout — see <see cref="RefreshCapacity"/>. A
+		/// sprite says whether an item has an icon, which is not the same question as whether a
+		/// slot holds one.
+		/// </remarks>
 		private readonly List<Sprite> slotSprites = new List<Sprite>();
 
 		/// <summary>The slot grid container element.</summary>
@@ -627,19 +632,27 @@ namespace FishMMO.Client
 		/// Recomputes the header subtitle, footer counts and capacity bar.
 		/// </summary>
 		/// <remarks>
-		/// Occupancy is read from <c>slotSprites</c> rather than from the controller: this runs
-		/// on every slot write, and the sprite array is already the view's own record of which
-		/// slots are filled. Asking the controller would re-derive a fact the view just set.
+		/// Occupancy comes from the controller, which is the only thing that knows it. It used to
+		/// be counted from <c>slotSprites</c> on the reasoning that the sprite array is the view's
+		/// own record of which slots are filled — but a sprite records whether an item has an
+		/// ICON, not whether a slot holds an item. Every item whose template has no icon assigned,
+		/// or whose icon has not finished loading, left a null in that array and was counted as an
+		/// empty slot, so the totals read low and drifted as icons resolved.
+		///
+		/// The inventory panel had the same defect and was fixed the same way; the bank was missed.
 		/// </remarks>
 		private void RefreshCapacity()
 		{
-			int total = slotSprites.Count;
+			int total = slotViews.Count;
 			int used = 0;
-			for (int i = 0; i < total; ++i)
+			if (Character != null && Character.TryGet(out IBankController bankController))
 			{
-				if (slotSprites[i] != null)
+				for (int i = 0; i < total; ++i)
 				{
-					++used;
+					if (!bankController.IsSlotEmpty(i))
+					{
+						++used;
+					}
 				}
 			}
 			int free = total - used;
