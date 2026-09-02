@@ -603,6 +603,25 @@ namespace FishMMO.Client
 			string requestedScene = SceneName;
 
 			mapImageHandle = Definition.MapImage.LoadAssetAsync<Texture2D>();
+
+			/* A handle can come back invalid, and subscribing to one throws rather than reporting
+			 * failure through the callback below. Addressables answers this way when it has no
+			 * initialised runtime to load through -- which is every edit-mode test that reaches here,
+			 * so the exception surfaces as a fixture failure rather than as a map that did not draw.
+			 * ReleaseMapImage already tests the same handle before releasing it; this is the matching
+			 * test on the way in.
+			 *
+			 * Treated as a failed load rather than swallowed: the map draws over a plain background
+			 * either way, and the reason is worth saying once. */
+			if (!mapImageHandle.IsValid())
+			{
+				mapImageHandle = default;
+				Log.Warning("ClientMapSystem",
+					$"Addressables returned no load for the baked map image of scene '{requestedScene}'. " +
+					"The world map will draw markers over a plain background.");
+				return;
+			}
+
 			mapImageLoading = true;
 			mapImageHandle.Completed += handle =>
 			{
