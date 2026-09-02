@@ -8,8 +8,8 @@ namespace FishMMO.Shared
 	/// Custom delta serializers for <see cref="CharacterReplicateData"/>.
 	/// <para>
 	/// <b>Delta serializer</b>: Writes a 1-byte bitmask followed by delta-encoded values for only
-	/// the changed fields. Seven bits are in use — bit 3 is a retired gap, see the constants — for
-	/// the seven fields of <see cref="CharacterReplicateData"/>.
+	/// the changed fields. All eight bits are in use — bit 3, once a retired gap, now carries the
+	/// equipment request pair, see the constants.
 	/// <para>
 	/// An idle tick costs the bitmask alone. For real figures rather than an estimate, run
 	/// <c>PredictionBandwidthBenchmarkTests</c>, which measures this type against the production
@@ -25,11 +25,13 @@ namespace FishMMO.Shared
 		private const byte RIGHT_BIT = 1 << 1;
 		/// <summary>Bit flag for move flags changes.</summary>
 		private const byte MOVE_FLAGS_BIT = 1 << 2;
-		/// <summary>Bit flag for camera position changes.</summary>
-		/* Retired with CharacterReplicateData.CameraPosition -- the aim origin is derived from the
-		 * motor now, see CharacterAimOrigin. Deliberately left as a gap rather than reused: every
-		 * other bit keeps the value it already had, so this cannot be confused with a live field. */
-		// private const byte POSITION_BIT = 1 << 3;
+		/// <summary>Bit flag for the equipment request pair (packed request + source index).</summary>
+		/* Bit 3 carried CameraPosition until the aim origin was derived from the motor (see
+		 * CharacterAimOrigin) and sat as a gap for a while. It is live again: the byte was full, and
+		 * widening the bitmask to a ushort would have cost every replicate a byte to carry a field
+		 * that is non-zero on perhaps one tick in a thousand. Both peers ship together, so there is
+		 * no build in the field that could read this bit as the old position. */
+		private const byte EQUIPMENT_BIT = 1 << 3;
 		/// <summary>Bit flag for aim direction changes.</summary>
 		private const byte AIM_DIRECTION_BIT = 1 << 4;
 		/// <summary>Bit flag for activation flags changes.</summary>
@@ -59,6 +61,10 @@ namespace FishMMO.Shared
 			writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.AimDirection));
 			writer.WriteInt32(value.ActivationFlags);
 			writer.WriteInt64(value.QueuedAbilityID);
+			// The equipment request: one packed byte, plus the source index for an equip. Written
+			// whole; both are small fixed-width values and a difference could only ever match.
+			writer.WriteUInt8Unpacked(value.EquipmentRequest);
+			writer.WriteInt16(value.EquipmentIndex);
 		}
 
 		/// <summary>
@@ -76,6 +82,8 @@ namespace FishMMO.Shared
 				AimDirection = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked()),
 				ActivationFlags = reader.ReadInt32(),
 				QueuedAbilityID = reader.ReadInt64(),
+				EquipmentRequest = reader.ReadUInt8Unpacked(),
+				EquipmentIndex = reader.ReadInt16(),
 			};
 		}
 
@@ -172,6 +180,17 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt64(prev.QueuedAbilityID, next.QueuedAbilityID, fieldOption))
 				flags |= QUEUED_ABILITY_BIT;
 
+			/* Written explicitly, as a pair, for the same reason the view offset is: three fixed
+			 * bytes on the rare tick that carries a request, nothing on every other tick. */
+			if (fullSerialize ||
+				prev.EquipmentRequest != next.EquipmentRequest ||
+				prev.EquipmentIndex != next.EquipmentIndex)
+			{
+				writer.WriteUInt8Unpacked(next.EquipmentRequest);
+				writer.WriteInt16(next.EquipmentIndex);
+				flags |= EQUIPMENT_BIT;
+			}
+
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
@@ -230,6 +249,12 @@ namespace FishMMO.Shared
 
 			if ((flags & QUEUED_ABILITY_BIT) != 0)
 				result.QueuedAbilityID = reader.ReadDeltaInt64(prev.QueuedAbilityID);
+
+			if ((flags & EQUIPMENT_BIT) != 0)
+			{
+				result.EquipmentRequest = reader.ReadUInt8Unpacked();
+				result.EquipmentIndex = reader.ReadInt16();
+			}
 
 			return result;
 		}

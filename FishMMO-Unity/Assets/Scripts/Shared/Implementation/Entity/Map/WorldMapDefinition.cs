@@ -189,10 +189,15 @@ namespace FishMMO.Shared
 		public bool FogOfWarEnabled = true;
 
 		/// <summary>
-		/// Size of one reveal cell in world metres. Zero uses the client default.
+		/// Length of one exploration chunk's side, in world metres. Zero uses the client default.
 		/// </summary>
-		[Tooltip("Size of one fog reveal cell in metres. Zero uses the client default (4m).")]
-		public float FogCellSize;
+		/// <remarks>
+		/// Exploration works in whole chunks: walking into one reveals all of it, and the explored
+		/// percentage counts them. Smaller chunks mean a finer map and a slower-moving percentage;
+		/// the client default suits open country, and a compact interior usually wants less.
+		/// </remarks>
+		[Tooltip("Length of one exploration chunk in metres. Zero uses the client default (128m).")]
+		public float FogChunkSize;
 
 		// ── Authored content ────────────────────────────────────────
 
@@ -295,7 +300,7 @@ namespace FishMMO.Shared
 			MinimapMinimumRange = Mathf.Max(1.0f, MinimapMinimumRange);
 			MinimapMaximumRange = Mathf.Max(MinimapMinimumRange, MinimapMaximumRange);
 			MinimapDefaultRange = Mathf.Clamp(MinimapDefaultRange, MinimapMinimumRange, MinimapMaximumRange);
-			FogCellSize = Mathf.Max(0.0f, FogCellSize);
+			FogChunkSize = Mathf.Max(0.0f, FogChunkSize);
 		}
 	}
 }

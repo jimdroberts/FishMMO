@@ -191,6 +191,7 @@ namespace FishMMO.Client
 
 			ClientMapSystem.OnSceneMapChanged += MapSystem_OnSceneChanged;
 			ClientMapSystem.OnNotesChanged += MapSystem_OnNotesChanged;
+			ExploreMapAction.OnExploreMap += MapSystem_OnExploreMap;
 		}
 
 		/// <summary>
@@ -200,6 +201,7 @@ namespace FishMMO.Client
 		{
 			ClientMapSystem.OnSceneMapChanged -= MapSystem_OnSceneChanged;
 			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
+			ExploreMapAction.OnExploreMap -= MapSystem_OnExploreMap;
 
 			/* The panel outlives nothing here — the map subsystem is static and this is the panel
 			 * that drives it, so tearing it down with the panel is what stops a camera and a
@@ -207,6 +209,27 @@ namespace FishMMO.Client
 			ClientMapSystem.Shutdown();
 
 			base.OnDestroying();
+		}
+
+		/// <summary>
+		/// Grants map exploration that was not walked for — a map item, a discovery, a reward.
+		/// </summary>
+		/// <param name="worldCenter">Where the exploration is centred, in world space.</param>
+		/// <param name="radius">How far it reaches, in metres. Infinite means the whole scene.</param>
+		/// <remarks>
+		/// Applied here rather than in the action itself because <c>ExploreMapAction</c> lives in
+		/// the shared assembly, which cannot see the client's map subsystem. This panel already
+		/// owns that subsystem's lifetime, so it is where the event lands.
+		/// </remarks>
+		private void MapSystem_OnExploreMap(Vector3 worldCenter, float radius)
+		{
+			if (float.IsPositiveInfinity(radius))
+			{
+				ClientMapSystem.ExploreEverything();
+				return;
+			}
+
+			ClientMapSystem.ExploreAround(worldCenter, radius);
 		}
 
 		/// <summary>

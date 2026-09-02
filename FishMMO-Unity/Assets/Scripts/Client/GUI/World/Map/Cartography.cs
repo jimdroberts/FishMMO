@@ -67,18 +67,6 @@ namespace FishMMO.Client
 		public static float DetailFraction => DetailTier / (float)MaximumDetailTier;
 
 		/// <summary>
-		/// How far, in metres, walking reveals the fog around the character.
-		/// </summary>
-		/// <remarks>
-		/// The most directly felt effect of the skill: a novice clears a narrow corridor along the
-		/// path they walked, an expert clears the valley they walked through. Deliberately smaller
-		/// than the minimap's own view at every tier, so the map always shows terrain the player
-		/// has not yet permanently revealed — a fog radius larger than the view would make the
-		/// mechanic invisible.
-		/// </remarks>
-		public static float RevealRadius => Mathf.Lerp(18.0f, 55.0f, DetailFraction);
-
-		/// <summary>
 		/// The detail tier above which authored region labels and landmarks stay hidden.
 		/// </summary>
 		/// <remarks>

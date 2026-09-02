@@ -310,63 +310,178 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Fog_StartsCompletelyUnexplored()
 		{
-			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 100.0f, 100.0f), 4.0f);
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 100.0f, 100.0f), 50.0f);
 
 			Assert.AreEqual(0.0f, fog.ExploredFraction(), 1e-4f);
+			Assert.AreEqual(0, fog.ExploredChunkCount);
 			Assert.IsFalse(fog.IsDiscovered(new Vector3(50.0f, 0.0f, 50.0f)));
 		}
 
 		[Test]
-		public void Fog_GridCoversARectThatIsNotAWholeNumberOfCells()
+		public void Fog_GridCoversARectThatIsNotAWholeNumberOfChunks()
 		{
 			/* Rounding down here leaves a stripe of the zone that no amount of walking can reveal,
-			 * because there is no cell to write it into. */
-			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 101.0f, 99.0f), 4.0f);
+			 * because there is no chunk to write it into. */
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 101.0f, 99.0f), 25.0f);
 
-			Assert.AreEqual(26, fog.CellsX);
-			Assert.AreEqual(25, fog.CellsZ);
-			Assert.GreaterOrEqual(fog.CellsX * fog.CellSize, 101.0f);
-			Assert.GreaterOrEqual(fog.CellsZ * fog.CellSize, 99.0f);
+			Assert.AreEqual(5, fog.ChunksX);
+			Assert.AreEqual(4, fog.ChunksZ);
+			Assert.GreaterOrEqual(fog.ChunksX * fog.ChunkSize, 101.0f);
+			Assert.GreaterOrEqual(fog.ChunksZ * fog.ChunkSize, 99.0f);
 		}
 
 		[Test]
-		public void Fog_RevealClearsTheGroundUnderTheCharacter()
+		public void Fog_GridRectCoversTheSceneAndIsWhatTheTextureSpans()
 		{
-			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 4.0f);
+			/* The fog texture is one texel per chunk, so whatever rectangle the drawing code says
+			 * that texture covers is the rectangle it gets stretched across. Handing it the scene's
+			 * rectangle instead of the grid's squeezes nine chunks into the space of 8.6 and walks
+			 * the fog out of alignment with the ground — a third of a chunk by the far edge at the
+			 * shipped sizes. See UITKMapView.OnGenerateFogContent. */
+			Rect scene = new Rect(-540.96f, -540.96f, 1105.92f, 1105.92f);
+			FogOfWarMap fog = new FogOfWarMap(scene, 128.0f);
 
-			Assert.IsTrue(fog.Reveal(new Vector3(100.0f, 0.0f, 100.0f), 20.0f));
+			Assert.AreEqual(9, fog.ChunksX);
+			Assert.AreEqual(scene.xMin, fog.GridRect.xMin, 1e-3f, "the grid starts where the scene does");
+			Assert.AreEqual(scene.yMin, fog.GridRect.yMin, 1e-3f);
+			Assert.AreEqual(fog.ChunksX * fog.ChunkSize, fog.GridRect.width, 1e-3f, "and spans whole chunks");
+			Assert.AreEqual(fog.ChunksZ * fog.ChunkSize, fog.GridRect.height, 1e-3f);
+			Assert.GreaterOrEqual(fog.GridRect.width, scene.width, "which must cover the scene, never crop it");
+			Assert.GreaterOrEqual(fog.GridRect.height, scene.height);
 
-			Assert.IsTrue(fog.IsDiscovered(new Vector3(100.0f, 0.0f, 100.0f)));
-			Assert.IsFalse(fog.IsDiscovered(new Vector3(180.0f, 0.0f, 180.0f)), "Ground well outside the radius stays fogged.");
+			/* And the two really do differ at the shipped sizes — if they ever stop differing this
+			 * test is no longer proving anything and the drawing code's choice stops mattering. */
+			Assert.Greater(fog.GridRect.width - scene.width, 1.0f, "the overhang is what makes the distinction matter");
+		}
+
+		[Test]
+		public void Fog_EnteringAChunkExploresTheWholeOfIt()
+		{
+			/* The whole point of the chunk model: one step inside the boundary opens the entire
+			 * block, so the map gains a readable piece of ground rather than a disc around the
+			 * character. */
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
+
+			Assert.IsTrue(fog.Reveal(new Vector3(51.0f, 0.0f, 51.0f)), "stepping into a new chunk explores it");
+
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(51.0f, 0.0f, 51.0f)));
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(99.0f, 0.0f, 99.0f)), "the far corner of the same chunk is explored too");
+			Assert.IsFalse(fog.IsDiscovered(new Vector3(101.0f, 0.0f, 101.0f)), "the neighbouring chunk is not");
 			Assert.IsTrue(fog.IsDirty);
+			Assert.AreEqual(1, fog.ExploredChunkCount);
 		}
 
 		[Test]
-		public void Fog_RevealNeverPutsFogBack()
+		public void Fog_ReenteringAnExploredChunkChangesNothing()
 		{
-			/* Monotonic reveal is what lets overlapping reveals be applied in any order. A smaller
-			 * reveal that overwrote a larger one would un-explore ground the player had walked, and
-			 * the failure would only show up after a specific path. */
-			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 4.0f);
-			Vector3 centre = new Vector3(100.0f, 0.0f, 100.0f);
+			/* Reveal is called four times a second for as long as the client runs. Reporting a
+			 * change every time would dirty the file forever and rewrite it on a loop. */
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
+			Vector3 spot = new Vector3(51.0f, 0.0f, 51.0f);
 
-			fog.Reveal(centre, 40.0f);
-			float wide = fog.ExploredFraction();
+			Assert.IsTrue(fog.Reveal(spot));
+			fog.ClearDirty();
 
-			fog.Reveal(centre, 5.0f);
+			Assert.IsFalse(fog.Reveal(spot), "the same chunk again is not a change");
+			Assert.IsFalse(fog.Reveal(spot + new Vector3(10.0f, 0.0f, 10.0f)), "nor is a step within it");
+			Assert.IsFalse(fog.IsDirty);
+			Assert.AreEqual(1, fog.ExploredChunkCount);
+		}
 
-			Assert.AreEqual(wide, fog.ExploredFraction(), 1e-5f);
-			Assert.IsTrue(fog.IsDiscovered(new Vector3(120.0f, 0.0f, 100.0f)));
+		[Test]
+		public void Fog_ExploredFractionIsChunksOverChunks()
+		{
+			/* The readout's whole reason for changing: with sixteen chunks, entering one is a flat
+			 * one sixteenth. Nothing to average, nothing to threshold. */
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
+
+			Assert.AreEqual(16, fog.ChunkCount);
+
+			fog.Reveal(new Vector3(25.0f, 0.0f, 25.0f));
+			Assert.AreEqual(1.0f / 16.0f, fog.ExploredFraction(), 1e-5f);
+
+			fog.Reveal(new Vector3(75.0f, 0.0f, 25.0f));
+			Assert.AreEqual(2.0f / 16.0f, fog.ExploredFraction(), 1e-5f);
 		}
 
 		[Test]
 		public void Fog_RevealAll_ExploresEverything()
 		{
-			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 4.0f);
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
 
 			fog.RevealAll();
 
 			Assert.AreEqual(1.0f, fog.ExploredFraction(), 1e-4f);
+			Assert.AreEqual(fog.ChunkCount, fog.ExploredChunkCount);
+		}
+
+		// ── Exploration API (map items, triggers, quest rewards) ─────
+
+		[Test]
+		public void Fog_RevealChunk_TakesGridCoordinates()
+		{
+			FogOfWarMap fog = new FogOfWarMap(new Rect(-100.0f, -100.0f, 200.0f, 200.0f), 50.0f);
+
+			Assert.IsTrue(fog.RevealChunk(0, 0));
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(-99.0f, 0.0f, -99.0f)), "chunk 0,0 is the rect's minimum corner");
+			Assert.IsFalse(fog.RevealChunk(0, 0), "already explored");
+			Assert.AreEqual(1, fog.ExploredChunkCount);
+		}
+
+		[Test]
+		public void Fog_RevealChunk_IgnoresCoordinatesOffTheGrid()
+		{
+			/* Content authored against grid coordinates outlives the bounds it was authored for:
+			 * a designer moving a boundary volume resizes the grid under it. Inert beats fatal. */
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
+
+			Assert.IsFalse(fog.RevealChunk(-1, 0));
+			Assert.IsFalse(fog.RevealChunk(0, 99));
+			Assert.AreEqual(0, fog.ExploredChunkCount);
+			Assert.IsFalse(fog.IsDirty);
+		}
+
+		[Test]
+		public void Fog_RevealArea_ExploresEveryChunkItTouches()
+		{
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
+
+			/* Clips the corners of four chunks and covers none of them fully. A chunk is the
+			 * smallest thing the map can describe, so all four are explored. */
+			int revealed = fog.RevealArea(new Rect(45.0f, 45.0f, 10.0f, 10.0f));
+
+			Assert.AreEqual(4, revealed);
+			Assert.AreEqual(4, fog.ExploredChunkCount);
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(25.0f, 0.0f, 25.0f)));
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(75.0f, 0.0f, 75.0f)));
+			Assert.IsFalse(fog.IsDiscovered(new Vector3(125.0f, 0.0f, 125.0f)));
+		}
+
+		[Test]
+		public void Fog_RevealArea_ClampsToTheGridAndCountsOnlyNewChunks()
+		{
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
+
+			Assert.AreEqual(16, fog.RevealArea(new Rect(-5000.0f, -5000.0f, 10000.0f, 10000.0f)),
+				"an area larger than the scene explores the scene, not an index out of range");
+			Assert.AreEqual(0, fog.RevealArea(new Rect(0.0f, 0.0f, 200.0f, 200.0f)),
+				"a second pass explores nothing new, so nothing is written again");
+		}
+
+		[Test]
+		public void Fog_RevealAround_IsADiscRoundedOutToTheGrid()
+		{
+			/* The shape a map consumable wants. The chunk diagonally opposite the centre is outside
+			 * a sixty-metre circle even though its bounding box is not, which is what separates
+			 * this from RevealArea. */
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 400.0f, 400.0f), 50.0f);
+
+			fog.RevealAround(new Vector3(25.0f, 0.0f, 25.0f), 60.0f);
+
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(25.0f, 0.0f, 25.0f)), "the chunk holding the centre");
+			Assert.IsTrue(fog.IsDiscovered(new Vector3(75.0f, 0.0f, 25.0f)), "and the one beside it");
+			Assert.IsFalse(fog.IsDiscovered(new Vector3(175.0f, 0.0f, 175.0f)), "but nothing beyond the radius");
+			Assert.AreEqual(0, fog.RevealAround(new Vector3(25.0f, 0.0f, 25.0f), 0.0f), "a zero radius explores nothing");
 		}
 
 		[Test]
@@ -375,7 +490,7 @@ namespace FishMMO.UnitTests
 			/* Off-map is not somewhere the player can discover, and reporting it as fogged would hide
 			 * every marker just outside a scene's derived bounds — which, since those bounds are a
 			 * boundary volume plus padding, includes things placed at the edge on purpose. */
-			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 100.0f, 100.0f), 4.0f);
+			FogOfWarMap fog = new FogOfWarMap(new Rect(0.0f, 0.0f, 100.0f, 100.0f), 50.0f);
 
 			Assert.IsTrue(fog.IsDiscovered(new Vector3(-500.0f, 0.0f, -500.0f)));
 		}
@@ -388,17 +503,18 @@ namespace FishMMO.UnitTests
 			long characterID = Temporary(918273645);
 			Rect rect = new Rect(-100.0f, -100.0f, 400.0f, 400.0f);
 
-			FogOfWarMap written = new FogOfWarMap(rect, 4.0f);
-			written.Reveal(new Vector3(0.0f, 0.0f, 0.0f), 30.0f);
-			written.Reveal(new Vector3(80.0f, 0.0f, 20.0f), 25.0f);
+			FogOfWarMap written = new FogOfWarMap(rect, 50.0f);
+			written.Reveal(new Vector3(0.0f, 0.0f, 0.0f));
+			written.Reveal(new Vector3(80.0f, 0.0f, 20.0f));
 
 			Assert.IsTrue(FogOfWarStore.Save(characterID, "TestScene", written));
 			Assert.IsFalse(written.IsDirty, "A successful save clears the dirty flag.");
 
-			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", rect, 4.0f);
+			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", rect, 50.0f);
 
 			Assert.IsNotNull(read);
-			CollectionAssert.AreEqual(written.Cells, read.Cells);
+			CollectionAssert.AreEqual(written.Chunks, read.Chunks);
+			Assert.AreEqual(written.ExploredChunkCount, read.ExploredChunkCount);
 			Assert.AreEqual(written.ExploredFraction(), read.ExploredFraction(), 1e-5f);
 		}
 
@@ -412,8 +528,8 @@ namespace FishMMO.UnitTests
 			long characterID = Temporary(918273646);
 			Rect rect = new Rect(0.0f, 0.0f, 200.0f, 200.0f);
 
-			FogOfWarMap written = new FogOfWarMap(rect, 4.0f);
-			written.Reveal(new Vector3(100.0f, 0.0f, 100.0f), 20.0f);
+			FogOfWarMap written = new FogOfWarMap(rect, 50.0f);
+			written.Reveal(new Vector3(100.0f, 0.0f, 100.0f));
 			FogOfWarStore.Save(characterID, "TestScene", written);
 
 			string path = FogOfWarStore.FilePath(characterID, "TestScene");
@@ -424,7 +540,7 @@ namespace FishMMO.UnitTests
 			/* The store logs a warning for a file that fails its signature check, which is the
 			 * point of it — but an unexpected log entry fails a Unity test by default. */
 			LogAssert.ignoreFailingMessages = true;
-			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", rect, 4.0f);
+			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", rect, 50.0f);
 			LogAssert.ignoreFailingMessages = false;
 
 			Assert.IsNull(read, "A file whose contents no longer match its signature must be discarded.");
@@ -437,7 +553,7 @@ namespace FishMMO.UnitTests
 			long thief = Temporary(918273648);
 			Rect rect = new Rect(0.0f, 0.0f, 200.0f, 200.0f);
 
-			FogOfWarMap written = new FogOfWarMap(rect, 4.0f);
+			FogOfWarMap written = new FogOfWarMap(rect, 50.0f);
 			written.RevealAll();
 			FogOfWarStore.Save(owner, "TestScene", written);
 
@@ -448,7 +564,7 @@ namespace FishMMO.UnitTests
 			File.Copy(source, destination, true);
 
 			LogAssert.ignoreFailingMessages = true;
-			FogOfWarMap read = FogOfWarStore.Load(thief, "TestScene", rect, 4.0f);
+			FogOfWarMap read = FogOfWarStore.Load(thief, "TestScene", rect, 50.0f);
 			LogAssert.ignoreFailingMessages = false;
 
 			Assert.IsNull(read, "A map signed for one character must not load for another.");
@@ -462,11 +578,11 @@ namespace FishMMO.UnitTests
 			 * wrong place — worse than starting again, because it looks plausible. */
 			long characterID = Temporary(918273649);
 
-			FogOfWarMap written = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 4.0f);
+			FogOfWarMap written = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
 			written.RevealAll();
 			FogOfWarStore.Save(characterID, "TestScene", written);
 
-			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", new Rect(0.0f, 0.0f, 400.0f, 400.0f), 4.0f);
+			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", new Rect(0.0f, 0.0f, 400.0f, 400.0f), 50.0f);
 
 			Assert.IsNull(read);
 		}
@@ -475,7 +591,7 @@ namespace FishMMO.UnitTests
 		public void FogStore_MissingFileIsNotAnError()
 		{
 			FogOfWarMap read = FogOfWarStore.Load(Temporary(918273650), "NeverVisited",
-				new Rect(0.0f, 0.0f, 100.0f, 100.0f), 4.0f);
+				new Rect(0.0f, 0.0f, 100.0f, 100.0f), 50.0f);
 
 			Assert.IsNull(read);
 		}
@@ -722,21 +838,6 @@ namespace FishMMO.UnitTests
 
 			Cartography.SetProvider(new StubCartography(Cartography.MaximumDetailTier + 50));
 			Assert.AreEqual(Cartography.MaximumDetailTier, Cartography.DetailTier);
-
-			Cartography.SetProvider(null);
-		}
-
-		[Test]
-		public void Cartography_RevealRadiusStaysInsideTheMinimapView()
-		{
-			/* A reveal radius larger than the minimap's own view would make the mechanic invisible:
-			 * the player would never see unexplored ground on the map they are looking at. */
-			for (int tier = 0; tier <= Cartography.MaximumDetailTier; ++tier)
-			{
-				Cartography.SetProvider(new StubCartography(tier));
-				Assert.Less(Cartography.RevealRadius, 60.0f, $"tier {tier}");
-				Assert.Greater(Cartography.RevealRadius, 0.0f, $"tier {tier}");
-			}
 
 			Cartography.SetProvider(null);
 		}

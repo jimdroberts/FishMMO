@@ -1,23 +1,33 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishMMO.Logging;
 using FishMMO.Shared;
-using FishMMO.Shared.Core;
 
-namespace FishMMO.Server.Core.World.SceneServer
+namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// Shared character state validation for broadcast handlers.
-	/// Ensures characters cannot perform actions while dead, teleporting, frozen, unloaded,
-	/// or in combat (for movement-restricted operations).
-	/// Called at the start of every server-side broadcast handler that mutates game state.
+	/// The one rule for whether a character may act on a major event: dead, teleporting, frozen,
+	/// stunned, mesmerised and unloaded characters may not.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Shared, not server-only. The server asks it at the start of every broadcast handler that
+	/// mutates game state; the owning client asks it before it queues a request that the server
+	/// would answer with the same rule — an equip, an unequip, a container swap — so a refusal
+	/// costs no round trip and the two peers cannot disagree about who may act. The flags it reads
+	/// travel in the character's spawn payload, so the owner holds the same answer the server does.
+	/// </para>
+	/// <para>
+	/// It used to live in the server assembly, which client code cannot reference, and the client
+	/// grew its own partial copies of the rule as a result. There is one now.
+	/// </para>
+	/// </remarks>
 	public static class CharacterStateValidation
 	{
 		/// <summary>
 		/// Returns true if the character is in a valid state to perform actions.
-		/// Logs and rejects dead, teleporting, frozen, and unloaded characters.
+		/// Logs and rejects dead, teleporting, incapacitated, and unloaded characters.
 		/// </summary>
-		public static bool CanAct(IPlayerCharacter character)
+		public static bool CanAct(ICharacter character)
 		{
 			/* Each refusal SAYS WHY, at Debug level. This gate fronts every state-mutating
 			 * broadcast handler on the server, and it used to refuse in total silence — so a
@@ -60,8 +70,17 @@ namespace FishMMO.Server.Core.World.SceneServer
 		}
 
 		/// <summary>
+		/// Returns true if the character is in a valid state to perform actions.
+		/// The <see cref="IPlayerCharacter"/> form of <see cref="CanAct(ICharacter)"/>; the rule is the same.
+		/// </summary>
+		public static bool CanAct(IPlayerCharacter character)
+		{
+			return CanAct((ICharacter)character);
+		}
+
+		/// <summary>
 		/// Returns true if the character is in a valid state to perform movement.
-		/// Same as <see cref="CanAct"/> but also rejects characters in combat
+		/// Same as <see cref="CanAct(IPlayerCharacter)"/> but also rejects characters in combat
 		/// (prevents combat-escape via teleport or scene change).
 		/// </summary>
 		public static bool CanActOrMove(IPlayerCharacter character)
@@ -73,7 +92,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 
 		/// <summary>
 		/// Resolves the <see cref="IPlayerCharacter"/> from <paramref name="conn"/> and
-		/// validates it via <see cref="CanAct"/>. This is the canonical pattern for
+		/// validates it via <see cref="CanAct(IPlayerCharacter)"/>. This is the canonical pattern for
 		/// server-side broadcast handlers: every state-mutating handler must call this
 		/// (or <see cref="CanActOrMove"/> for movement-gated operations) before processing.
 		/// <para>

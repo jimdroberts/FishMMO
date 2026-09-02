@@ -3,44 +3,36 @@ using FishNet.Broadcast;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Broadcast for equipping an item from an inventory slot to an equipment slot.
-	/// Sent client→server to request an equip, echoed server→client as acknowledgement.
+	/// Tells the owner where an item that left an equipment socket actually landed. Server to
+	/// owner only.
 	/// </summary>
-	public struct EquipmentEquipItemBroadcast : IBroadcast
-	{
-		/// <summary>Index of the item in the inventory.</summary>
-		public int InventoryIndex;
-		/// <summary>Equipment slot to equip the item to.</summary>
-		public byte Slot;
-		/// <summary>Type of inventory the item is being equipped from.</summary>
-		public InventoryType FromInventory;
-	}
-
-	/// <summary>
-	/// Broadcast for unequipping an item from an equipment slot to an inventory slot.
-	/// Sent client→server to request an unequip, echoed server→client as acknowledgement.
-	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Equipment requests no longer travel as broadcasts at all: an equip or unequip is replicate
+	/// INPUT (<see cref="CharacterReplicateData.EquipmentRequest"/>), applied by the owner and the
+	/// server on the same tick and confirmed by the reconcile. The reliable equip acknowledgement
+	/// this file used to define is gone with it — it was applied on receipt, while the reconciles
+	/// for the ticks before the request were still queued behind it, so every equip was undone by a
+	/// stale snapshot and re-done by the next, and every unequip was re-equipped and then dropped
+	/// into the wrong container.
+	/// </para>
+	/// <para>
+	/// The unequip destination is the one thing the reconcile cannot settle. The socket empties on
+	/// both peers, but the container chooses the landing slot from ITS copy of the container, and
+	/// the owner's copy can differ from the server's by a grant that landed on one side first. So
+	/// the server reports the slot it chose, and the owner moves the item there by identity if it
+	/// put it anywhere else.
+	/// </para>
+	/// </remarks>
 	public struct EquipmentUnequipItemBroadcast : IBroadcast
 	{
-		/// <summary>Equipment slot to unequip the item from.</summary>
+		/// <summary>Identity of the item that was unequipped. The owner finds it by this, not by where it thinks it is.</summary>
+		public long ItemID;
+		/// <summary>Equipment slot the item left.</summary>
 		public byte Slot;
-		/// <summary>Type of inventory the item is being moved to.</summary>
+		/// <summary>Container the item landed in.</summary>
 		public InventoryType ToInventory;
-		/// <summary>
-		/// Slot within <see cref="ToInventory"/> the item ended up in. Server to client only.
-		/// </summary>
-		/// <remarks>
-		/// The request does not name a destination slot -- the server picks one, because only it
-		/// knows what the container really holds. That left the client picking its own when a
-		/// reconcile beat the acknowledgement back, and the two had no reason to agree: an unequip
-		/// could land in inventory slot 0 on the server and slot 5 on the client, after which every
-		/// later request naming slot 5 was refused for a slot the server sees as empty. The item
-		/// looked movable within the inventory only because the client was rearranging its own copy.
-		///
-		/// So the answer travels back with the acknowledgement. A client that guessed is corrected;
-		/// a client that has not placed it yet puts it straight where it belongs. -1 on the request
-		/// leg, where it has no meaning.
-		/// </remarks>
+		/// <summary>Slot within <see cref="ToInventory"/> the item landed in.</summary>
 		public int ToSlot;
 	}
 }

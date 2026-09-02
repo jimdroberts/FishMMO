@@ -326,126 +326,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Attempts to add items to a characters inventory controller and broadcasts the update to the client.
-		/// DB persistence routes through the inventory system's atomic item batches, which is what
-		/// hands a freshly minted item its database identity.
+		/// Grants an item to a character's inventory through the inventory system's grant funnel:
+		/// placed, broadcast to the owner, persisted, identity assigned.
 		/// </summary>
+		/// <remarks>
+		/// The body that used to live here — place, broadcast, persist — is now
+		/// <c>CharacterInventorySystem.TryGrantItem</c>, because it was one of three copies (the
+		/// quest and achievement systems had their own) and only this one handed the item its
+		/// database identity. A server without an inventory system refuses the grant rather than
+		/// persisting without a write-back: an item that never learns its id is an item that cannot
+		/// be equipped, used or moved, and the caller's own fallback (put it back on the corpse,
+		/// refund the purchase) is the better outcome.
+		/// </remarks>
 		public bool SendNewItemBroadcast<T>(T conn, ICharacter character, IInventoryController inventoryController, Item newItem)
 		{
-			if (conn is not NetworkConnection networkConn)
+			if (character is not IPlayerCharacter playerCharacter)
 			{
-				Log.Error("InteractableSystem", "Invalid connection type passed to SendNewItemBroadcast");
+				Log.Error("InteractableSystem", "SendNewItemBroadcast: the character is not a player character.");
 				return false;
 			}
 
-			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
-
-			// see if we have successfully added the item
-			if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
-				modifiedItems != null &&
-				modifiedItems.Count > 0)
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
-				// add slot update requests to our message
-				foreach (Item item in modifiedItems)
-				{
-					// just in case..
-					if (item == null)
-					{
-						continue;
-					}
-
-					// create the new item broadcast
-					modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
-					{
-						InstanceID = item.ID,
-						TemplateID = item.Template.ID,
-						Slot = item.Slot,
-						Seed = item.IsGenerated ? item.Generator.Seed : 0,
-						StackSize = item.IsStackable ? item.Stackable.Amount : 0,
-					});
-				}
+				Log.Error("InteractableSystem", $"SendNewItemBroadcast: ICharacterInventorySystem not found; refusing to grant an item CharID={character.ID} could never persist.");
+				return false;
 			}
 
-			// tell the client they have new items
-			if (modifiedItemBroadcasts.Count > 0)
-			{
-				Server.NetworkWrapper.Broadcast(networkConn, new InventorySetMultipleItemsBroadcast()
-				{
-					Items = modifiedItemBroadcasts.ToArray(),
-				}, true, Channel.Reliable);
-
-				/* Persist through CharacterInventorySystem's batch machinery rather than the bulk
-				 * upsert this used to enqueue. The difference is not stylistic: the bulk overload
-				 * returns no per-row identities, so an item minted by a grant (ID 0) never learned
-				 * the id the database issued. Its seed stayed underived, its attribute ledger
-				 * stayed unwritten — a looted weapon granted no stats — every later save inserted a
-				 * duplicate row until the snapshot pruned them, and a relog re-derived a DIFFERENT
-				 * seed from the real row id, silently re-rolling the item's attributes. The batch
-				 * path persists row by row, writes each returned identity back onto the live Item
-				 * on the main thread, and re-broadcasts the final InstanceID/Seed to this client.
-				 * A false return means only that the write is running on the bounded queue's
-				 * fallback; the grant itself has already landed in memory and stands either way. */
-				if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
-				{
-					inventorySystem.TryPersistGrantedInventoryItems(character, modifiedItems, "ItemGrant");
-				}
-				else
-				{
-					/* Degraded path for a mis-assembled server: keep the write itself rather than
-					 * dropping it, accepting that identities are not written back until the
-					 * character's next relog load. */
-					Log.Error("InteractableSystem", $"SendNewItemBroadcast: ICharacterInventorySystem not found; persisting item grant for CharID={character.ID} without identity write-back.");
-
-					List<CharacterItemData> itemsToSave = new List<CharacterItemData>(modifiedItems.Count);
-					foreach (Item item in modifiedItems)
-					{
-						if (item == null)
-						{
-							continue;
-						}
-						item.Version++;
-						itemsToSave.Add(new CharacterItemData(
-							id: item.ID,
-							version: item.Version,
-							characterID: character.ID,
-							container: ItemContainerType.Inventory,
-							templateID: item.Template.ID,
-							slot: item.Slot,
-							seed: item.IsGenerated ? item.Generator.Seed : 0,
-							amount: item.IsStackable ? item.Stackable.Amount : 1
-						));
-					}
-					EnqueuePersistence(() => PersistInventoryItemsAsync(itemsToSave), character.ID);
-				}
-
-				return true;
-			}
-			return false;
+			return inventorySystem.TryGrantItem(playerCharacter, newItem, InventoryType.Inventory);
 		}
 
 		/// <summary>
-		/// Persists inventory items to the database asynchronously.
+		/// Hands inventory rows a sale or a mail attachment changed to the inventory system's
+		/// journalled batch. The caller has already told the client.
 		/// </summary>
-		private async Task PersistInventoryItemsAsync(List<CharacterItemData> items)
+		private void PersistInventoryChanges(IPlayerCharacter character, IReadOnlyList<Item> changed, IReadOnlyList<RemovedItemRecord> removed)
 		{
-			try
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<ICharacterItemService>(out var itemService))
-				{
-					return;
-				}
-
-				await BulkWriteReporting.ReportAsync("InteractableSystem", "Inventory item save",
-					await itemService.PersistAsync(items), $"{items.Count} items");
+				Log.Error("InteractableSystem", $"PersistInventoryChanges: ICharacterInventorySystem not found; an inventory change for CharID={character?.ID} was not persisted.");
+				return;
 			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"Error persisting inventory items: {ex}");
-			}
+			inventorySystem.PersistInventoryChanges(character, changed, removed);
 		}
 
 		/// <summary>

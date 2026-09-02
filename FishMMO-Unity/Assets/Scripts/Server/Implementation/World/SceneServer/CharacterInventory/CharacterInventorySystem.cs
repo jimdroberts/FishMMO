@@ -138,9 +138,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
 
-			// Equipment broadcasts
-			Server.NetworkWrapper.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived, true);
+			/* No equipment broadcasts. Equip and unequip are replicate INPUT now — applied by the
+			 * EquipmentController inside the owner's replicate tick on both peers — and this system
+			 * hears about them through IEquipmentController.OnServerEquipmentChanged, subscribed per
+			 * character below. See EquipmentBroadcasts.cs for why the acknowledgements had to go. */
 
 			// Bank broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived, true);
@@ -161,8 +162,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// own save data but before the NetworkObject is despawned.
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem))
 			{
+				characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
 				characterSystem.OnDespawnCharacter += CharacterSystem_OnDespawnCharacter;
 			}
+
+			/* The gates and hooks shared code needs from the server. The equipment controller asks
+			 * the validator before applying a replicated request; the ECA give/remove actions hand
+			 * their changes to the hooks so they are persisted and the owner is told. */
+			EquipmentController.ServerRequestValidator = ValidateEquipmentRequest;
+			ServerItemHooks.GrantInventoryItem = GrantInventoryItemFromAction;
+			ServerItemHooks.InventoryChanged = InventoryChangedByAction;
 
 			Log.Debug("CharacterInventorySystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
@@ -183,17 +192,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
 
-			// Equipment broadcasts
-			Server.NetworkWrapper.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived);
-
 			// Bank broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
 
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem))
 			{
+				characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
 				characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;
+			}
+
+			if (EquipmentController.ServerRequestValidator == ValidateEquipmentRequest)
+			{
+				EquipmentController.ServerRequestValidator = null;
+			}
+			if (ServerItemHooks.GrantInventoryItem == GrantInventoryItemFromAction)
+			{
+				ServerItemHooks.GrantInventoryItem = null;
+			}
+			if (ServerItemHooks.InventoryChanged == InventoryChangedByAction)
+			{
+				ServerItemHooks.InventoryChanged = null;
 			}
 
 			if (Server.DataContainerRegistry.TryGet<ICharacterInventorySystemRuntimeData>(out var runtimeData))
@@ -269,6 +288,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			private readonly Dictionary<long, long> lastAppliedSnapshot = new Dictionary<long, long>();
 			private readonly Dictionary<long, CharacterSessionInfo> lastKnownLease = new Dictionary<long, CharacterSessionInfo>();
 			private readonly HashSet<long> reconcileRequests = new HashSet<long>();
+
+			/// <summary>Consecutive reconcile requests per character since its last successful snapshot.</summary>
+			private readonly Dictionary<long, int> reconcileFailures = new Dictionary<long, int>();
+
+			/// <summary>Earliest time a character's next repair snapshot may be captured.</summary>
+			private readonly Dictionary<long, DateTime> reconcileNotBeforeUtc = new Dictionary<long, DateTime>();
+
+			/// <summary>Longest wait between repair attempts for one character.</summary>
+			private static readonly TimeSpan MaxReconcileBackoff = TimeSpan.FromSeconds(30);
 
 			/// <summary>
 			/// Allocates the next capture sequence number. Main thread only, which is what makes the
@@ -427,16 +455,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>
 			/// Queues a character for an authoritative re-write of all three containers.
 			/// </summary>
+			/// <remarks>
+			/// Every request is a failure report, and repeated failures back off. Without this a
+			/// database that stayed down, or a row the snapshot could never write, produced a fresh
+			/// full snapshot EVERY FRAME: the failure requested a reconcile, the drain captured one
+			/// next frame, it failed, and round again — a write storm against the thing that was
+			/// already failing. The wait doubles from one second to thirty and resets on the first
+			/// snapshot that lands.
+			/// </remarks>
 			public void RequestReconcile(long characterID)
 			{
 				lock (gate)
 				{
 					reconcileRequests.Add(characterID);
+
+					reconcileFailures.TryGetValue(characterID, out int failures);
+					failures = Math.Min(failures + 1, 16);
+					reconcileFailures[characterID] = failures;
+
+					double seconds = Math.Min(MaxReconcileBackoff.TotalSeconds, Math.Pow(2, failures - 1));
+					reconcileNotBeforeUtc[characterID] = DateTime.UtcNow.AddSeconds(seconds);
 				}
 			}
 
 			/// <summary>
-			/// Takes and clears the pending repair queue.
+			/// Records that a snapshot for the character committed, ending its backoff.
+			/// </summary>
+			public void NoteSnapshotSucceeded(long characterID)
+			{
+				lock (gate)
+				{
+					reconcileFailures.Remove(characterID);
+					reconcileNotBeforeUtc.Remove(characterID);
+				}
+			}
+
+			/// <summary>
+			/// Takes the repair requests that are due. Requests still backing off stay queued.
 			/// </summary>
 			public List<long> DrainReconcileRequests()
 			{
@@ -446,8 +501,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						return null;
 					}
-					var drained = new List<long>(reconcileRequests);
-					reconcileRequests.Clear();
+
+					DateTime now = DateTime.UtcNow;
+					List<long> drained = null;
+					foreach (long characterID in reconcileRequests)
+					{
+						if (reconcileNotBeforeUtc.TryGetValue(characterID, out DateTime notBefore) && now < notBefore)
+						{
+							continue;
+						}
+						(drained ??= new List<long>()).Add(characterID);
+					}
+					if (drained != null)
+					{
+						foreach (long characterID in drained)
+						{
+							reconcileRequests.Remove(characterID);
+						}
+					}
 					return drained;
 				}
 			}
@@ -465,6 +536,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					lastAppliedSnapshot.Remove(characterID);
 					lastKnownLease.Remove(characterID);
 					reconcileRequests.Remove(characterID);
+					reconcileFailures.Remove(characterID);
+					reconcileNotBeforeUtc.Remove(characterID);
 				}
 			}
 
@@ -479,6 +552,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					lastAppliedSnapshot.Clear();
 					lastKnownLease.Clear();
 					reconcileRequests.Clear();
+					reconcileFailures.Clear();
+					reconcileNotBeforeUtc.Clear();
 				}
 			}
 		}
@@ -716,12 +791,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// is always at least as current.
 		/// </para>
 		/// </remarks>
-		private ItemWriteBatch BeginItemBatch(long characterID, string operation, bool isSnapshot = false)
+		private ItemWriteBatch BeginItemBatch(long characterID, string operation, bool isSnapshot = false, CharacterSessionLeaseData? explicitLease = null)
 		{
 			return new ItemWriteBatch()
 			{
 				CharacterID = characterID,
-				Lease = ResolveSessionLease(characterID),
+				Lease = explicitLease ?? ResolveSessionLease(characterID),
 				Sequence = itemWriteJournal.NextSequence(characterID),
 				IsSnapshot = isSnapshot,
 				Operation = operation,
@@ -775,35 +850,130 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			return EnqueuePersistence(() => ApplyItemBatchAsync(batch), batch.CharacterID);
 		}
 
+		/// <inheritdoc />
+		public bool TryGrantItem(IPlayerCharacter character, Item item, InventoryType container)
+		{
+			if (character == null || item == null || item.Template == null)
+			{
+				return false;
+			}
+
+			IItemContainer target = ResolveContainer(character, container.ToContainerType());
+			if (target == null ||
+				!target.TryAddItem(item, out List<Item> modifiedItems) ||
+				modifiedItems == null ||
+				modifiedItems.Count == 0)
+			{
+				return false;
+			}
+
+			BroadcastSlots(character, container, modifiedItems);
+			TryPersistGrantedItems(character, modifiedItems, container, "ItemGrant");
+			return true;
+		}
+
 		/// <summary>
-		/// Persists a grant of inventory items through the batch machinery. Main thread only.
+		/// Sends the owner the current contents of the slots these items occupy.
 		/// </summary>
 		/// <remarks>
-		/// <para>
-		/// Exists for the grant paths that live OUTSIDE this system — pickups, merchant purchases,
-		/// mail attachments, container and corpse loot all reach the inventory via
-		/// <c>InteractableSystem.SendNewItemBroadcast</c>. Those used to persist through the bulk
-		/// upsert, which returns no per-row identities: an item minted by a grant (ID 0) never
-		/// learned the id the database issued, so its generation seed stayed underived, its
-		/// attribute ledger stayed unwritten (<c>ItemGenerator.TryResolveLedgerSource</c> refuses a
-		/// zero id — a looted weapon granted no stats at all), and every later save inserted a fresh
-		/// duplicate row until the periodic snapshot pruned them. Routing the grant through a batch
-		/// gives it the same treatment as every other item write: single-row persists that return
-		/// the assigned identity, the main-thread write-back in
-		/// <see cref="ApplyAssignedIdentities"/>, and the client update that goes with it.
-		/// </para>
-		/// <para>
-		/// Memory is already authoritative by the time this is called — the grant has landed in the
-		/// container and the client has been told — so the return value is
-		/// <see cref="EnqueueItemBatch"/>'s: false means only that the bounded queue was full and
-		/// the write is running on the fallback path, never that the grant should be undone.
-		/// </para>
+		/// The same set-item message every other path uses, so the client has one way of learning
+		/// what a slot holds. An item that has not been persisted yet goes out with id 0, and the
+		/// client treats that as "waiting"; the identity write-back re-sends the slot with the
+		/// assigned id.
 		/// </remarks>
-		/// <param name="character">The character the items were granted to.</param>
-		/// <param name="modifiedItems">The inventory items the grant touched.</param>
-		/// <param name="operation">Short operation name used in persistence log lines.</param>
-		/// <returns>True when the batch was enqueued normally; false when the fallback ran it.</returns>
-		public bool TryPersistGrantedInventoryItems(ICharacter character, List<Item> modifiedItems, string operation)
+		private void BroadcastSlots(IPlayerCharacter character, InventoryType container, IReadOnlyList<Item> items)
+		{
+			if (character.Owner == null || items == null || items.Count == 0)
+			{
+				return;
+			}
+
+			switch (container)
+			{
+				case InventoryType.Inventory:
+				{
+					var updates = new List<InventorySetItemBroadcast>(items.Count);
+					for (int i = 0; i < items.Count; ++i)
+					{
+						Item item = items[i];
+						if (item == null || item.Template == null || item.Slot < 0)
+						{
+							continue;
+						}
+						updates.Add(new InventorySetItemBroadcast()
+						{
+							InstanceID = item.ID,
+							TemplateID = item.Template.ID,
+							Slot = item.Slot,
+							Seed = item.IsGenerated ? item.Generator.Seed : 0,
+							StackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						});
+					}
+					if (updates.Count > 0)
+					{
+						Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
+						{
+							Items = updates.ToArray(),
+						}, true, Channel.Reliable);
+					}
+					break;
+				}
+				case InventoryType.Bank:
+				{
+					var updates = new List<BankSetItemBroadcast>(items.Count);
+					for (int i = 0; i < items.Count; ++i)
+					{
+						Item item = items[i];
+						if (item == null || item.Template == null || item.Slot < 0)
+						{
+							continue;
+						}
+						updates.Add(new BankSetItemBroadcast()
+						{
+							InstanceID = item.ID,
+							TemplateID = item.Template.ID,
+							Slot = item.Slot,
+							Seed = item.IsGenerated ? item.Generator.Seed : 0,
+							StackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						});
+					}
+					if (updates.Count > 0)
+					{
+						Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
+						{
+							Items = updates.ToArray(),
+						}, true, Channel.Reliable);
+					}
+					break;
+				}
+				default:
+					// Equipment has no set-item message; the reconcile carries its sockets.
+					break;
+			}
+		}
+
+		/// <summary>Tells the owner that inventory slots emptied.</summary>
+		private void BroadcastRemovedSlots(IPlayerCharacter character, IReadOnlyList<RemovedItemRecord> removed)
+		{
+			if (character.Owner == null || removed == null)
+			{
+				return;
+			}
+			for (int i = 0; i < removed.Count; ++i)
+			{
+				if (removed[i].Slot < 0)
+				{
+					continue;
+				}
+				Server.NetworkWrapper.Broadcast(character.Owner, new InventoryRemoveItemBroadcast()
+				{
+					Slot = removed[i].Slot,
+				}, true, Channel.Reliable);
+			}
+		}
+
+		/// <inheritdoc />
+		public bool TryPersistGrantedItems(IPlayerCharacter character, List<Item> modifiedItems, InventoryType container, string operation)
 		{
 			if (character == null || modifiedItems == null || modifiedItems.Count == 0)
 			{
@@ -811,9 +981,81 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return true;
 			}
 
+			/* Lock every slot whose item has no identity yet, until the write comes back with one.
+			 * The lock is the existing per-slot mechanism consumables use: a locked slot cannot be
+			 * swapped, removed, merged into, equipped from or consumed, so the item cannot be
+			 * captured by a second batch under id 0 — which is what inserted a second row for one
+			 * item — and the identity write-back can trust that the slot still holds the item it
+			 * was written for. ApplyAssignedIdentities unlocks. */
+			IItemContainer target = ResolveContainer(character, container.ToContainerType());
+			if (target != null)
+			{
+				for (int i = 0; i < modifiedItems.Count; ++i)
+				{
+					Item item = modifiedItems[i];
+					if (item != null && item.ID <= 0 && item.Slot >= 0)
+					{
+						target.LockSlot(item.Slot);
+					}
+				}
+			}
+
 			ItemWriteBatch batch = BeginItemBatch(character.ID, operation);
-			batch.AddItemWrites(BuildItemDataList(character.ID, modifiedItems, ItemContainerType.Inventory));
+			batch.AddItemWrites(BuildItemDataList(character.ID, modifiedItems, container.ToContainerType()));
 			return EnqueueItemBatch(batch);
+		}
+
+		/// <summary>The ECA give action's grant: the funnel, addressed to the inventory.</summary>
+		private bool GrantInventoryItemFromAction(ICharacter character, Item item)
+		{
+			return character is IPlayerCharacter playerCharacter && TryGrantItem(playerCharacter, item, InventoryType.Inventory);
+		}
+
+		/// <summary>
+		/// Persists and reports inventory changes made by an ECA action.
+		/// </summary>
+		private void InventoryChangedByAction(ICharacter character, IReadOnlyList<Item> changed, IReadOnlyList<RemovedItemRecord> removed)
+		{
+			if (character is not IPlayerCharacter playerCharacter)
+			{
+				return;
+			}
+
+			PersistInventoryChanges(playerCharacter, changed, removed);
+			BroadcastSlots(playerCharacter, InventoryType.Inventory, changed);
+			BroadcastRemovedSlots(playerCharacter, removed);
+		}
+
+		/// <inheritdoc />
+		public void PersistInventoryChanges(IPlayerCharacter character, IReadOnlyList<Item> changed, IReadOnlyList<RemovedItemRecord> removed)
+		{
+			if (character == null)
+			{
+				return;
+			}
+
+			ItemWriteBatch batch = BeginItemBatch(character.ID, "InventoryChange");
+			if (changed != null)
+			{
+				for (int i = 0; i < changed.Count; ++i)
+				{
+					if (changed[i] != null)
+					{
+						batch.AddItemWrite(BuildItemData(character.ID, changed[i], ItemContainerType.Inventory));
+					}
+				}
+			}
+			if (removed != null)
+			{
+				for (int i = 0; i < removed.Count; ++i)
+				{
+					batch.AddItemDelete(removed[i].ItemID, removed[i].Version);
+				}
+			}
+			if (!EnqueueItemBatch(batch) && character.Owner != null)
+			{
+				SendServerBusy(character.Owner);
+			}
 		}
 
 		/// <summary>
@@ -907,6 +1149,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: unit of work disposal reported {unitOfWork.DisposeFault.Value.ErrorCode} - {unitOfWork.DisposeFault.Value.ErrorMessage}");
 				}
 
+				if (batch.IsSnapshot)
+				{
+					// A landed snapshot is the repair; whatever was backing off is repaired.
+					itemWriteJournal.NoteSnapshotSucceeded(batch.CharacterID);
+				}
+
 				/* Only after the commit. An identity written back from a transaction that then
 				 * rolled back would name a row that does not exist, and the next write would quote
 				 * it as an existing item — an upsert that updates nothing and reports a stale
@@ -996,9 +1244,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IItemContainer container = ResolveContainer(character, assignment.Container);
 				if (container == null ||
 					!container.TryGetItem(assignment.Slot, out Item item) ||
-					item == null ||
-					item.ID != 0)
+					item == null)
 				{
+					continue;
+				}
+
+				if (item.ID != 0)
+				{
+					// Already identified by an earlier write-back. The slot is no longer waiting.
+					container.UnlockSlot(assignment.Slot);
+					continue;
+				}
+
+				/* The template is the check the slot alone cannot make. The slot is locked while its
+				 * item awaits an identity, so nothing should have moved in — but an id handed to the
+				 * wrong item would let one row describe two items, and a comparison is cheaper than
+				 * the investigation that follows. */
+				if (item.Template == null || (assignment.TemplateID != 0 && item.Template.ID != assignment.TemplateID))
+				{
+					Log.Warning("CharacterInventorySystem",
+						$"Identity {assignment.ID} was written for template {assignment.TemplateID} at {assignment.Container} slot {assignment.Slot}, " +
+						$"but that slot now holds template {item.Template?.ID}; leaving it unassigned.");
 					continue;
 				}
 
@@ -1007,10 +1273,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
+				// The row exists; the item is usable.
+				container.UnlockSlot(assignment.Slot);
+
 				/* AssignPersistentID has just derived the real seed (when the item had none), so
 				 * the values quoted here are the ones the item will be reloaded with. Equipment has
-				 * no set-item broadcast; an equipped item assigned an identity here (snapshot-minted)
-				 * is corrected on the client at the next relog instead. */
+				 * no set-item broadcast, and should never need one: an item cannot be equipped
+				 * without an identity, so a socket only ever holds identified items. */
 				switch (assignment.Container)
 				{
 					case ItemContainerType.Inventory:
@@ -1149,28 +1418,58 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					if (batch.ItemWrites != null && batch.ItemWrites.Count > 0)
 					{
-						/* One row at a time rather than the bulk path, because each write returns the
-						 * identity the database assigned and a bulk upsert cannot report one per row.
-						 * An item that never learns its id is written as a new row on every save and
-						 * its ledger key moves underneath it, so the identity is not optional. Item
-						 * batches are a handful of rows; this is not the hot path. */
-						List<CharacterItemIdAssignment> assigned = null;
+						/* Identified rows go through the bulk upsert, as ONE statement. That is what
+						 * makes a swap persistable at all: the (character, container, slot) index is
+						 * checked per row, so writing the two halves of a swap one row at a time put
+						 * the first row onto the slot the second still held and tripped it every time.
+						 * The bulk path parks the rows it is about to update first, inside this same
+						 * transaction, and then writes the final layout.
+						 *
+						 * Rows with no identity yet go one at a time, because each of those writes
+						 * returns the identity the database assigned and a bulk upsert cannot report
+						 * one per row. They cannot collide with a swap: an unidentified item's slot is
+						 * locked until its identity lands, so nothing swaps it. */
+						List<CharacterItemData> identified = null;
+						List<CharacterItemData> unidentified = null;
 						foreach (CharacterItemData dto in batch.ItemWrites)
 						{
-							DatabaseResult<long> result = await itemService.PersistAsync(dto);
-							if (!result.IsSuccess)
+							if (dto.ID > 0)
 							{
-								return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+								(identified ??= new List<CharacterItemData>(batch.ItemWrites.Count)).Add(dto);
 							}
-							if (dto.ID <= 0 && result.Data > 0)
+							else
 							{
-								(assigned ??= new List<CharacterItemIdAssignment>(1))
-									.Add(new CharacterItemIdAssignment(dto.Container, dto.Slot, result.Data));
+								(unidentified ??= new List<CharacterItemData>(1)).Add(dto);
 							}
 						}
-						if (assigned != null)
+
+						if (identified != null)
 						{
-							batch.AssignedIdentities = assigned;
+							DatabaseResult bulk = RequireCompleteWrite("item write", batch.CharacterID,
+								await itemService.PersistAsync(identified));
+							if (!bulk.IsSuccess) return bulk;
+						}
+
+						if (unidentified != null)
+						{
+							List<CharacterItemIdAssignment> assigned = null;
+							foreach (CharacterItemData dto in unidentified)
+							{
+								DatabaseResult<long> result = await itemService.PersistAsync(dto);
+								if (!result.IsSuccess)
+								{
+									return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+								}
+								if (result.Data > 0)
+								{
+									(assigned ??= new List<CharacterItemIdAssignment>(1))
+										.Add(new CharacterItemIdAssignment(dto.Container, dto.Slot, result.Data, dto.TemplateID));
+								}
+							}
+							if (assigned != null)
+							{
+								batch.AssignedIdentities = assigned;
+							}
 						}
 					}
 				}
@@ -1329,9 +1628,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">The character to snapshot.</param>
 		private void SnapshotCharacterItems(IPlayerCharacter character)
 		{
+			ItemWriteBatch batch = CaptureSnapshotBatch(character, explicitLease: null);
+			if (batch != null)
+			{
+				EnqueueItemBatch(batch);
+			}
+		}
+
+		/// <inheritdoc />
+		public Func<Task> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease)
+		{
+			CharacterSessionLeaseData? explicitLease = null;
+			if (lease.HasValue && character != null)
+			{
+				explicitLease = new CharacterSessionLeaseData(character.ID, lease.Value.ServerID, lease.Value.Token);
+			}
+
+			ItemWriteBatch batch = CaptureSnapshotBatch(character, explicitLease);
+			if (batch == null)
+			{
+				return null;
+			}
+			return () => ApplyItemBatchAsync(batch);
+		}
+
+		/// <summary>
+		/// Builds the one-transaction, all-containers snapshot batch for a character. Main thread only.
+		/// </summary>
+		private ItemWriteBatch CaptureSnapshotBatch(IPlayerCharacter character, CharacterSessionLeaseData? explicitLease)
+		{
 			if (character == null || character.ID <= 0)
 			{
-				return;
+				return null;
 			}
 
 			long characterID = character.ID;
@@ -1342,7 +1670,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// All three containers travel in ONE batch, under ONE sequence number and ONE
 			// transaction. Three separate snapshots could interleave with an incremental
 			// write between them and leave the three tables describing different moments.
-			ItemWriteBatch batch = BeginItemBatch(characterID, "ItemSnapshot", isSnapshot: true);
+			ItemWriteBatch batch = BeginItemBatch(characterID, "ItemSnapshot", isSnapshot: true, explicitLease: explicitLease);
 
 			/* The containers this snapshot speaks for. A container whose controller is missing is
 			 * NOT listed, so its rows are left alone rather than pruned on the strength of a list
@@ -1367,39 +1695,97 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				rows = BuildContainerSnapshot(characterID, equipmentController, ItemContainerType.Equipment, rows);
 			}
 
+			/* One instance in two slots is a duplicated item in memory, and a snapshot that wrote
+			 * both rows would fail on the primary key — every time, forever, with the backoff the
+			 * only thing between that and a write storm. Keep the first, say so loudly, and let
+			 * the row describe the one place the item can legitimately be. */
+			if (rows != null && rows.Count > 1)
+			{
+				var seen = new HashSet<long>();
+				for (int i = rows.Count - 1; i >= 0; --i)
+				{
+					long id = rows[i].ID;
+					if (id <= 0)
+					{
+						continue;
+					}
+					if (!seen.Add(id))
+					{
+						Log.Error("CharacterInventorySystem",
+							$"Character {characterID}: item {id} appears in more than one slot ({rows[i].Container} slot {rows[i].Slot} dropped from the snapshot). " +
+							"The in-memory containers hold the same instance twice; this is an item duplication bug upstream of persistence.");
+						rows.RemoveAt(i);
+					}
+				}
+			}
+
 			batch.SnapshotContainers = containers;
 			batch.ItemWrites = rows;
-			EnqueueItemBatch(batch);
+			return batch;
 		}
 
 		/// <summary>
-		/// Snapshots a character's items as it leaves this scene server.
+		/// Attaches this system to a character's item-changing controllers as it spawns.
 		/// </summary>
 		/// <remarks>
-		/// CharacterSystem raises OnDespawnCharacter from SaveAndDespawnCharacter while the character
-		/// object is still live, so the containers are still readable here. This is the logout half of
-		/// the snapshot: without it, everything the player did since the last periodic sweep would
-		/// still depend entirely on the incremental writes having landed.
+		/// Equip, unequip and consumable use are applied inside the character's own controllers —
+		/// the first two inside the replicate tick — and this is how their persistence reaches the
+		/// batch machinery. Per character rather than through a static hook so a pooled controller
+		/// cannot keep reporting for its previous occupant.
+		/// </remarks>
+		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, UnityEngine.SceneManagement.Scene scene)
+		{
+			if (character == null)
+			{
+				return;
+			}
+			if (character.TryGet(out IEquipmentController equipment))
+			{
+				equipment.OnServerEquipmentChanged -= Equipment_OnServerEquipmentChanged;
+				equipment.OnServerEquipmentChanged += Equipment_OnServerEquipmentChanged;
+			}
+			if (character.TryGet(out IAbilityController abilities))
+			{
+				abilities.OnConsumableItemChanged -= Ability_OnConsumableItemChanged;
+				abilities.OnConsumableItemChanged += Ability_OnConsumableItemChanged;
+			}
+		}
+
+		/// <summary>
+		/// Forgets a character's write bookkeeping as it leaves this scene server.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The logout snapshot is NOT captured here any more. CharacterSystem captures it through
+		/// <see cref="CaptureDespawnFlush"/> before it enqueues the save-and-release, and awaits it
+		/// before the release — so it is ordered against the session hand-off rather than racing it
+		/// on a different worker lane. An evicted character (one another server already owns) goes
+		/// through this event too, and for that one there is deliberately nothing to write.
+		/// </para>
+		/// <para>
+		/// This drops the character's watermarks but NOT the capture counter, which is journal-wide
+		/// and never reset. That asymmetry is deliberate and load-bearing: the flush captured before
+		/// this call claims its sequence later, on the worker thread, so its claim lands after this
+		/// and writes a watermark back. A counter that restarted here would then issue sequence 1
+		/// against that watermark and the whole of the next session would be discarded as
+		/// superseded -- which is exactly what it did.
+		/// </para>
 		/// </remarks>
 		private void CharacterSystem_OnDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
-			SnapshotCharacterItems(character);
-
-			// The flush batch is already captured — it holds its own copy of the DTOs, its own
-			// sequence number and its own ownership triple — so dropping the journal entry now
-			// cannot affect it.
-			//
-			// This drops the character's watermarks but NOT the capture counter, which is journal-wide
-			// and never reset. That asymmetry is deliberate and load-bearing: the flush captured just
-			// above claims its sequence later, on the worker thread, so its claim lands after this
-			// call and writes a watermark back. A counter that restarted here would then issue
-			// sequence 1 against that watermark and the whole of the next session would be discarded
-			// as superseded -- which is exactly what it did.
-			//
-			// A batch still in flight from a previous visit is refused by the ownership assertion,
-			// since the character returns under a new session token; that guard is what keeps a late
-			// arrival from being applied out of order, and it is unaffected by any of this.
-			if (character != null && character.ID > 0)
+			if (character == null)
+			{
+				return;
+			}
+			if (character.TryGet(out IEquipmentController equipment))
+			{
+				equipment.OnServerEquipmentChanged -= Equipment_OnServerEquipmentChanged;
+			}
+			if (character.TryGet(out IAbilityController abilities))
+			{
+				abilities.OnConsumableItemChanged -= Ability_OnConsumableItemChanged;
+			}
+			if (character.ID > 0)
 			{
 				itemWriteJournal.ForgetCharacter(character.ID);
 			}
@@ -1871,338 +2257,135 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		#region Equipment
+
 		/// <summary>
-		/// Handles broadcast to equip an item from inventory or bank, updates the database and notifies the client.
+		/// The server-side gate the equipment controller consults before applying a replicated
+		/// request: may this character act, and may it reach the named container right now?
 		/// </summary>
-		/// <param name="conn">Network connection of the client.</param>
-		/// <param name="msg">EquipmentEquipItemBroadcast message.</param>
-		/// <param name="channel">Network channel used for the broadcast.</param>
-		private void OnServerEquipmentEquipItemBroadcastReceived(NetworkConnection conn, EquipmentEquipItemBroadcast msg, Channel channel)
+		/// <remarks>
+		/// The bank half is what a broadcast handler used to check before every bank-sourced equip
+		/// and bank-bound unequip. A replicated request has no handler, so the rule is installed
+		/// into the controller instead. A refusal here leaves the socket unchanged, and the owner,
+		/// which predicted the move, is corrected by the next reconcile.
+		/// </remarks>
+		private bool ValidateEquipmentRequest(ICharacter character, InventoryType container)
 		{
-			if (conn == null ||
-				conn.FirstObject == null)
+			if (character is not IPlayerCharacter playerCharacter ||
+				!CharacterStateValidation.CanAct(playerCharacter))
+			{
+				return false;
+			}
+			if (container == InventoryType.Bank)
+			{
+				return playerCharacter.TryGet(out IBankController bankController) &&
+					ValidateBankerSceneObject(bankController.LastInteractableID, playerCharacter);
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Persists an equip or unequip the server has just applied, and tells the owner where an
+		/// unequipped item landed.
+		/// </summary>
+		/// <remarks>
+		/// ONE batch: the socket, the container slot on the other side of the move, and the
+		/// attribute rows the change altered. Equipping is a single operation from the player's
+		/// point of view and half of it landing — the item equipped with none of its stats, or the
+		/// stats without the item — is a state nothing else in the server knows how to repair.
+		/// </remarks>
+		private void Equipment_OnServerEquipmentChanged(IEquipmentController equipment, EquipmentChange change)
+		{
+			if (equipment?.Character is not IPlayerCharacter character || change.Item == null)
 			{
 				return;
 			}
 
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.EquipmentEquip, out long guardKey))
+			long characterID = character.ID;
+			ItemContainerType containerType = change.ContainerType.ToContainerType();
+
+			if (change.Kind == EquipmentRequestKind.Equip)
 			{
-				// Refused by the ingress debounce, or an identical request is still in flight.
-				// The client is holding a pending lock on this slot; with no reply it holds it forever.
-				SendItemOperationFailed(conn, ItemOperationType.EquipmentEquip, ItemOperationFailureReason.Throttled, msg.FromInventory, msg.InventoryIndex, msg.Slot);
+				ItemWriteBatch batch = BeginItemBatch(characterID, "Equip");
+				if (change.DisplacedItem != null)
+				{
+					batch.AddItemWrite(BuildItemData(characterID, change.DisplacedItem, containerType));
+				}
+				batch.AddItemWrite(BuildItemData(characterID, change.Item, ItemContainerType.Equipment));
+				batch.AddAttributeWrites(BuildAttributeDataList(character));
+				if (!EnqueueItemBatch(batch) && character.Owner != null)
+				{
+					SendServerBusy(character.Owner);
+				}
 				return;
 			}
 
-			// Set at the point where this handler acknowledges success. Everything else — every
-			// validation return above and below, and any return a later edit adds — falls through
-			// to the failure notification in the finally block.
-			bool succeeded = false;
-			ItemOperationFailureReason failureReason = ItemOperationFailureReason.Rejected;
-
-			try
+			if (change.Kind == EquipmentRequestKind.Unequip)
 			{
-
-				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-				if (character == null ||
-					!CharacterStateValidation.CanAct(character) ||
-					!character.TryGet(out IEquipmentController equipmentController))
+				ItemWriteBatch batch = BeginItemBatch(characterID, "Unequip");
+				if (change.ModifiedItems != null && change.ModifiedItems.Count > 0)
 				{
-					return;
+					batch.AddItemWrites(BuildItemDataList(characterID, change.ModifiedItems, containerType));
 				}
-
-				// Validate that the target equipment slot is a defined enum value.
-				if (!Enum.IsDefined(typeof(ItemSlot), (byte)msg.Slot))
+				else
 				{
-					return;
+					batch.AddItemWrite(BuildItemData(characterID, change.Item, containerType));
 				}
+				/* No equipment delete. The item that left the socket is written above with its new
+				 * container, which moves its row. */
+				batch.AddAttributeWrites(BuildAttributeDataList(character));
+				bool enqueued = EnqueueItemBatch(batch);
 
-				long characterID = character.ID;
-
-				switch (msg.FromInventory)
+				if (character.Owner != null)
 				{
-					case InventoryType.Inventory:
-						if (character.TryGet(out IInventoryController inventoryController) &&
-							inventoryController.IsValidSlot(msg.InventoryIndex) &&
-							inventoryController.TryGetItem(msg.InventoryIndex, out Item inventoryItem))
-						{
-							if (!equipmentController.Equip(inventoryItem, msg.InventoryIndex, inventoryController, (ItemSlot)msg.Slot))
-							{
-								return;
-							}
+					/* The slot the item landed in. The owner chose one too, from its own copy of
+					 * the container, and the two copies can differ by a grant that landed on one
+					 * side first; the owner moves the item by identity if they do. */
+					Server.NetworkWrapper.Broadcast(character.Owner, new EquipmentUnequipItemBroadcast()
+					{
+						ItemID = change.Item.ID,
+						Slot = (byte)change.Socket,
+						ToInventory = change.ContainerType,
+						ToSlot = change.ContainerIndex,
+					}, true, Channel.Reliable);
 
-							// ONE batch: the inventory slot the item left, the equipment slot it arrived
-							// in, and the attribute rows the equip changed. Equipping is a single operation
-							// from the player's point of view and half of it landing — the item equipped
-							// with none of its stats, or the stats without the item — is a state nothing
-							// else in the server knows how to repair.
-							ItemWriteBatch batch = BeginItemBatch(characterID, "EquipFromInventory");
-
-							// did we replace an already equipped item?
-							if (inventoryController.TryGetItem(msg.InventoryIndex, out Item prevItem))
-							{
-								batch.AddItemWrite(BuildItemData(characterID, prevItem, ItemContainerType.Inventory));
-							}
-							// the inventory slot the item came from is now empty
-							else
-							{
-								/* Nothing to delete: the item that left this slot is written below
-								 * as equipment, which moves its row rather than creating a new one. */
-							}
-
-							batch.AddItemWrite(BuildItemData(characterID, inventoryItem, ItemContainerType.Equipment));
-							batch.AddAttributeWrites(BuildAttributeDataList(character));
-
-							if (EnqueueItemBatch(batch))
-							{
-								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-								succeeded = true;
-							}
-							else
-							{
-								SendServerBusy(conn);
-								failureReason = ItemOperationFailureReason.ServerBusy;
-							}
-						}
-						break;
-					case InventoryType.Equipment:
-						return;
-					case InventoryType.Bank:
-						{
-							if (!character.TryGet(out IBankController bankController))
-							{
-								return;
-							}
-
-							// validate banker scene object
-							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
-							{
-								return;
-							}
-
-							// Validate slot bounds before processing
-							if (!bankController.IsValidSlot(msg.InventoryIndex))
-							{
-								return;
-							}
-
-							if (bankController.TryGetItem(msg.InventoryIndex, out Item bankItem))
-							{
-								if (!equipmentController.Equip(bankItem, msg.InventoryIndex, bankController, (ItemSlot)msg.Slot))
-								{
-									return;
-								}
-
-								// ONE batch: the bank slot the item left, the equipment slot it arrived in,
-								// and the attribute rows the equip changed.
-								ItemWriteBatch batch = BeginItemBatch(characterID, "EquipFromBank");
-
-								// did we replace an already equipped item?
-								if (bankController.TryGetItem(msg.InventoryIndex, out Item prevItem))
-								{
-									batch.AddItemWrite(BuildItemData(characterID, prevItem, ItemContainerType.Bank));
-								}
-								// the bank slot the item came from is now empty
-								else
-								{
-									/* Nothing to delete: the item that left this slot is written
-									 * below as equipment, which moves its row. */
-								}
-
-								batch.AddItemWrite(BuildItemData(characterID, bankItem, ItemContainerType.Equipment));
-								batch.AddAttributeWrites(BuildAttributeDataList(character));
-
-								if (EnqueueItemBatch(batch))
-								{
-									Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-									succeeded = true;
-								}
-								else
-								{
-									SendServerBusy(conn);
-									failureReason = ItemOperationFailureReason.ServerBusy;
-								}
-							}
-						}
-						break;
-					default: return;
-				}
-			}
-			finally
-			{
-				EndIngressGuard(guardKey);
-
-				// One notification per refused request, from the one place every exit path passes
-				// through. A per-return-site call is a list the next edit forgets to extend.
-				if (!succeeded)
-				{
-					SendItemOperationFailed(conn, ItemOperationType.EquipmentEquip, failureReason, msg.FromInventory, msg.InventoryIndex, msg.Slot);
+					if (!enqueued)
+					{
+						SendServerBusy(character.Owner);
+					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// Handles broadcast to unequip an item to inventory or bank, updates the database and notifies the client.
+		/// Persists a consumable's effect on the inventory row that held it.
 		/// </summary>
-		/// <param name="conn">Network connection of the client.</param>
-		/// <param name="msg">EquipmentUnequipItemBroadcast message.</param>
-		/// <param name="channel">Network channel used for the broadcast.</param>
-		private void OnServerEquipmentUnequipItemBroadcastReceived(NetworkConnection conn, EquipmentUnequipItemBroadcast msg, Channel channel)
+		/// <remarks>
+		/// Consumable use runs inside the replicate tick and used to be recorded only by the next
+		/// full snapshot, so a crash refunded every potion drunk since. A destroyed item is a real
+		/// delete, addressed by the item; a reduced stack is a row update.
+		/// </remarks>
+		private void Ability_OnConsumableItemChanged(ICharacter character, Item item, int slot, bool destroyed)
 		{
-			if (conn == null ||
-				conn.FirstObject == null)
+			if (character is not IPlayerCharacter playerCharacter || item == null)
 			{
 				return;
 			}
 
-			if (!TryBeginIngressGuard(conn.ClientId, IngressOperation.EquipmentUnequip, out long guardKey))
+			ItemWriteBatch batch = BeginItemBatch(playerCharacter.ID, destroyed ? "ConsumableDestroyed" : "ConsumableUsed");
+			if (destroyed)
 			{
-				// Refused by the ingress debounce, or an identical request is still in flight.
-				// The client is holding a pending lock on this slot; with no reply it holds it forever.
-				SendItemOperationFailed(conn, ItemOperationType.EquipmentUnequip, ItemOperationFailureReason.Throttled, msg.ToInventory, msg.Slot, -1);
-				return;
+				item.Version++;
+				batch.AddItemDelete(item.ID, item.Version);
 			}
-
-			// Set at the point where this handler acknowledges success. Everything else — every
-			// validation return above and below, and any return a later edit adds — falls through
-			// to the failure notification in the finally block.
-			bool succeeded = false;
-			ItemOperationFailureReason failureReason = ItemOperationFailureReason.Rejected;
-
-			try
+			else
 			{
-
-				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-				if (character == null ||
-					!CharacterStateValidation.CanAct(character) ||
-					!character.TryGet(out IEquipmentController equipmentController))
-				{
-					return;
-				}
-
-				// Validate that the equipment slot is a defined enum value.
-				if (!Enum.IsDefined(typeof(ItemSlot), (byte)msg.Slot))
-				{
-					return;
-				}
-
-				long characterID = character.ID;
-
-				switch (msg.ToInventory)
-				{
-					case InventoryType.Inventory:
-						if (character.TryGet(out IInventoryController inventoryController) &&
-							equipmentController.TryGetItem(msg.Slot, out Item unequippedItem))
-						{
-							// if we found the item we should unequip it
-							if (!equipmentController.Unequip(inventoryController, msg.Slot, out List<Item> modifiedItems))
-							{
-								return;
-							}
-
-							// see if we have successfully added the item
-							if (modifiedItems == null ||
-								modifiedItems.Count < 1)
-							{
-								return;
-							}
-
-							// ONE batch: the inventory rows that received the item, the equipment slot it
-							// left, and the stat change unequipping caused. Persisting the arrival without
-							// the departure duplicates the item on next login; the reverse destroys it.
-							ItemWriteBatch batch = BeginItemBatch(characterID, "UnequipToInventory");
-							batch.AddItemWrites(BuildItemDataList(characterID, modifiedItems, ItemContainerType.Inventory));
-							/* No equipment delete. The item that left the socket is in modifiedItems
-							 * and is written above with container Inventory, which moves its row. */
-							batch.AddAttributeWrites(BuildAttributeDataList(character));
-
-							if (EnqueueItemBatch(batch))
-							{
-								/* The slot the item actually landed in travels back with the
-								 * acknowledgement. The request could not name one -- only the
-								 * server knows what the container holds -- so without this the
-								 * client picks its own and the two disagree for good. */
-								msg.ToSlot = unequippedItem.Slot;
-
-								Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-								succeeded = true;
-							}
-							else
-							{
-								SendServerBusy(conn);
-								failureReason = ItemOperationFailureReason.ServerBusy;
-							}
-						}
-						break;
-					case InventoryType.Equipment:
-						break;
-					case InventoryType.Bank:
-						{
-							if (!character.TryGet(out IBankController bankController))
-							{
-								return;
-							}
-
-							// validate banker scene object
-							if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
-							{
-								return;
-							}
-
-							if (equipmentController.TryGetItem(msg.Slot, out Item unequippedToBank))
-							{
-								if (!equipmentController.Unequip(bankController, msg.Slot, out List<Item> modifiedItems))
-								{
-									return;
-								}
-
-								// see if we have successfully added the item
-								if (modifiedItems == null ||
-									modifiedItems.Count < 1)
-								{
-									return;
-								}
-
-								// ONE batch: the bank rows that received the item, the equipment slot it
-								// left, and the stat change unequipping caused.
-								ItemWriteBatch batch = BeginItemBatch(characterID, "UnequipToBank");
-								batch.AddItemWrites(BuildItemDataList(characterID, modifiedItems, ItemContainerType.Bank));
-								/* No equipment delete — see UnequipToInventory above. */
-								batch.AddAttributeWrites(BuildAttributeDataList(character));
-
-								if (EnqueueItemBatch(batch))
-								{
-									/* The slot the item actually landed in travels back with the
-									 * acknowledgement. The request could not name one -- only the
-									 * server knows what the container holds -- so without this the
-									 * client picks its own and the two disagree for good. */
-									msg.ToSlot = unequippedToBank.Slot;
-
-									Server.NetworkWrapper.Broadcast(conn, msg, true, Channel.Reliable);
-									succeeded = true;
-								}
-								else
-								{
-									SendServerBusy(conn);
-									failureReason = ItemOperationFailureReason.ServerBusy;
-								}
-							}
-						}
-						break;
-					default: return;
-				}
+				batch.AddItemWrite(BuildItemData(playerCharacter.ID, item, ItemContainerType.Inventory));
 			}
-			finally
-			{
-				EndIngressGuard(guardKey);
-
-				// One notification per refused request, from the one place every exit path passes
-				// through. A per-return-site call is a list the next edit forgets to extend.
-				if (!succeeded)
-				{
-					SendItemOperationFailed(conn, ItemOperationType.EquipmentUnequip, failureReason, msg.ToInventory, msg.Slot, -1);
-				}
-			}
+			EnqueueItemBatch(batch);
 		}
+
+		#endregion
 
 		/// <summary>
 		/// Handles broadcast to remove an item from the player's bank, updates the database and notifies the client.

@@ -354,12 +354,11 @@ lived in no container, leaving nothing that could ever unequip it.
 
 #### Broadcast Types — Equipment
 
-Equipment state is synchronized via the prediction pipeline (`EquipmentController` at Order 93 in `CharacterReconcileData`). Only client→server request broadcasts remain:
+Equipment is predicted end to end: the owner's equip/unequip request rides `CharacterReplicateData.EquipmentRequest`, both peers apply it inside the replicate tick (`EquipmentController` at Order 93), and the reconcile's equipment array confirms or reverts the socket. One server → owner message remains:
 
 | Broadcast | Direction | Purpose |
 |-----------|-----------|---------|
-| `EquipmentEquipItemBroadcast` | Client ↔ Server | Equip from inventory/bank (echoed back as acknowledgement) |
-| `EquipmentUnequipItemBroadcast` | Client ↔ Server | Unequip to inventory/bank (echoed back as acknowledgement) |
+| `EquipmentUnequipItemBroadcast` | Server → Owner | Where an unequipped item landed (`ItemID`, `ToInventory`, `ToSlot`); the owner moves it there by identity |
 
 #### Broadcast Types — Bank
 

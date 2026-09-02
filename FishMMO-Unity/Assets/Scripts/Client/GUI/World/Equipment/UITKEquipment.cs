@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -322,6 +322,7 @@ namespace FishMMO.Client
 			{
 				equipmentController.OnSlotUpdated     -= OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
+				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
 			equipmentViewCamera = null;
@@ -397,6 +398,7 @@ namespace FishMMO.Client
 			{
 				equipmentController.OnSlotUpdated     -= OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
+				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
 			/* Detach the attribute subscriptions while Character still points at the character
@@ -427,11 +429,13 @@ namespace FishMMO.Client
 			{
 				equipmentController.OnSlotUpdated     -= OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
+				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 
 				RefreshAllSlots(equipmentController);
 
 				equipmentController.OnSlotUpdated     += OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged += OnEquipmentSlotLockChanged;
+				equipmentController.OnRequestResolved += OnEquipmentRequestResolved;
 			}
 
 			// ── Character attributes ──────────────────────────────────────────
@@ -457,6 +461,7 @@ namespace FishMMO.Client
 			{
 				equipmentController.OnSlotUpdated     -= OnEquipmentSlotUpdated;
 				equipmentController.OnSlotLockChanged -= OnEquipmentSlotLockChanged;
+				equipmentController.OnRequestResolved -= OnEquipmentRequestResolved;
 			}
 
 			UnsubscribeAttributes();
@@ -1017,6 +1022,7 @@ namespace FishMMO.Client
 
 			if (sourceContainer == null ||
 				!sourceContainer.CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character) ||
 				!sourceContainer.IsValidSlot(sourceSlot) ||
 				!sourceContainer.TryGetItem(sourceSlot, out Item sourceItem) ||
 				!dragObject.MatchesSource(sourceItem))
@@ -1048,23 +1054,39 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Recorded before the request goes out, for the reason the unequip path documents:
-			 * a reconcile that lands first has to know this slot is expecting an item rather
-			 * than treat the source container as the truth. */
-			if (Character.TryGet(out IEquipmentController equipmentForEquipNotify) &&
-				sourceContainer.TryGetItem(sourceSlot, out Item equipping))
+			/* Queued on the controller, not sent. The equip rides the owner's next replicate and
+			 * is applied inside that tick on both peers — see IEquipmentController. A refusal here
+			 * is local and immediate (the item is not where the drag said, or has no identity yet),
+			 * so the marks come straight off; a refusal by the server arrives as a reconcile that
+			 * moves the item back, which updates the slots and releases the marks the same way. */
+			if (!equipmentController.RequestEquip(sourceItem, sourceSlot, sourceInventory, (ItemSlot)slotIndex))
 			{
-				equipmentForEquipNotify.NotifyEquipRequested(equipping, sourceSlot, sourceInventory, (ItemSlot)slotIndex);
+				ItemOperationTracker.Release(dragObject.Type, sourceSlot);
+				ItemOperationTracker.Release(ReferenceButtonType.Equipment, slotIndex);
 			}
 
-			Client.Broadcast(new EquipmentEquipItemBroadcast()
-			{
-				InventoryIndex = sourceSlot,
-				Slot           = (byte)slotIndex,
-				FromInventory  = sourceInventory,
-			}, Channel.Reliable);
-
 			dragObject.Clear();
+		}
+
+		/// <summary>
+		/// Releases the marks of a request the controller could not apply when its tick ran.
+		/// </summary>
+		/// <remarks>
+		/// A request that WAS applied changes the slots, and the slot updates release the marks;
+		/// one that was not changes nothing, and without this the slots would stay waiting until
+		/// the tracker's timeout.
+		/// </remarks>
+		private void OnEquipmentRequestResolved(EquipmentRequestKind kind, ItemSlot socket, InventoryType container, int index, bool applied)
+		{
+			if (applied)
+			{
+				return;
+			}
+			ItemOperationTracker.Release(ReferenceButtonType.Equipment, (int)socket);
+			if (index >= 0)
+			{
+				ItemOperationTracker.Release(ItemOperationTracker.FromInventoryType(container), index);
+			}
 		}
 
 		/// <summary>
@@ -1117,6 +1139,7 @@ namespace FishMMO.Client
 			}
 
 			if (!equipmentController.CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character) ||
 				!equipmentController.IsValidSlot(slotIndex) ||
 				equipmentController.IsSlotEmpty(slotIndex) ||
 				IsSlotBlocked(slotIndex))
@@ -1129,21 +1152,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Recorded before the request goes out: the reconcile can beat the acknowledgement
-			 * back, and without a record it returns the item to whichever container has room
-			 * rather than the one that was asked for. See IEquipmentController. */
-			if (Character.TryGet(out IEquipmentController equipmentForNotify))
+			// Queued for the next replicate tick; see CompleteDropOntoSlot for the contract.
+			if (!equipmentController.RequestUnequip((ItemSlot)slotIndex, InventoryType.Inventory))
 			{
-				equipmentForNotify.NotifyUnequipRequested((ItemSlot)slotIndex, InventoryType.Inventory);
+				ItemOperationTracker.Release(ReferenceButtonType.Equipment, slotIndex);
 			}
-
-			Client.Broadcast(new EquipmentUnequipItemBroadcast()
-			{
-				Slot        = (byte)slotIndex,
-				ToInventory = InventoryType.Inventory,
-				// Meaningless on the request; the server fills it in on the way back.
-				ToSlot = -1,
-			}, Channel.Reliable);
 		}
 
 		/// <summary>

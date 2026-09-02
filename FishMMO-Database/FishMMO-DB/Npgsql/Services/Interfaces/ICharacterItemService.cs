@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
@@ -25,11 +25,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>The identity the database assigned.</summary>
 		public readonly long ID;
 
-		public CharacterItemIdAssignment(ItemContainerType container, int slot, long id)
+		/// <summary>
+		/// The template of the row that was written, so the caller can refuse to hand the identity
+		/// to a different item that has since moved into the same slot.
+		/// </summary>
+		public readonly int TemplateID;
+
+		public CharacterItemIdAssignment(ItemContainerType container, int slot, long id, int templateID)
 		{
 			Container = container;
 			Slot = slot;
 			ID = id;
+			TemplateID = templateID;
 		}
 	}
 

@@ -1,4 +1,4 @@
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Server.Core.World.SceneServer;
@@ -397,21 +397,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 
 					removed.Version++;
-					long version = removed.Version;
-					long itemID = removed.ID;
 					int slot = msg.AttachmentSlot;
-					/* An item the database has never seen has no row to remove, so the enqueue is
-					 * skipped rather than queuing a statement that can only fail. Attaching it still
-					 * stands: nothing persisted could bring it back. */
-					if (itemID > 0 &&
-						!EnqueuePersistence(() => DeleteCharacterItemAsync(characterID, itemID, version), characterID))
-					{
-						// Could not record the removal; putting it back is the only safe answer.
-						inventoryController.SetItemSlot(removed, slot);
-						RefundMailAttachment(conn, character, attachment);
-						attachment = new MailAttachment() { SourceSlot = -1 };
-						return false;
-					}
+					// Through the journalled batch, addressed by the item — see the merchant sale.
+					PersistInventoryChanges(character, null, new[] { new RemovedItemRecord(removed.ID, removed.Version, slot) });
 
 					Server.NetworkWrapper.Broadcast(conn, new InventoryRemoveItemBroadcast()
 					{
@@ -421,29 +409,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				else
 				{
 					item.Stackable.Remove((uint)quantity);
-					item.Version++;
-
-					List<CharacterItemData> itemsToSave = new List<CharacterItemData>
-					{
-						new CharacterItemData(
-							id: item.ID,
-							version: item.Version,
-							characterID: characterID,
-							container: ItemContainerType.Inventory,
-							templateID: item.Template.ID,
-							slot: item.Slot,
-							seed: item.IsGenerated ? item.Generator.Seed : 0,
-							amount: item.Stackable.Amount),
-					};
-
-					if (!EnqueuePersistence(() => PersistInventoryItemsAsync(itemsToSave), characterID))
-					{
-						item.Stackable.Amount += (uint)quantity;
-						item.Version++;
-						RefundMailAttachment(conn, character, attachment);
-						attachment = new MailAttachment() { SourceSlot = -1 };
-						return false;
-					}
+					PersistInventoryChanges(character, new[] { item }, null);
 
 					Server.NetworkWrapper.Broadcast(conn, new InventorySetItemBroadcast()
 					{
@@ -500,7 +466,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(attachment.ItemTemplateID);
 				if (itemTemplate != null)
 				{
-					Item restored = new Item(itemTemplate, attachment.ItemAmount);
+					// The seed rides along: a generated item refunded from a template alone would
+					// reroll its attributes.
+					Item restored = new Item(0, attachment.ItemSeed, itemTemplate, attachment.ItemAmount);
 					if (!SendNewItemBroadcast(conn, character, inventoryController, restored))
 					{
 						Log.Error("InteractableSystem", $"Mail refund: could not return attachment to CharID={character.ID}; the item was lost.");
@@ -915,7 +883,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return false;
 			}
 
-			return inventoryController.CanAddItem(new Item(itemTemplate, (uint)mail.ItemAttachmentAmount));
+			return inventoryController.CanAddItem(new Item(0, mail.ItemAttachmentSeed, itemTemplate, (uint)mail.ItemAttachmentAmount));
 		}
 
 		/// <summary>
@@ -961,7 +929,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				BaseItemTemplate itemTemplate = BaseItemTemplate.Get<BaseItemTemplate>(attachment.ItemTemplateID);
 				if (itemTemplate != null)
 				{
-					Item item = new Item(itemTemplate, attachment.ItemAmount);
+					// Rebuilt with the seed the sender's item had, so a mailed generated item keeps
+					// its attributes instead of rerolling them on arrival.
+					Item item = new Item(0, attachment.ItemSeed, itemTemplate, attachment.ItemAmount);
 					if (SendNewItemBroadcast(conn, character, inventoryController, item))
 					{
 						granted = true;

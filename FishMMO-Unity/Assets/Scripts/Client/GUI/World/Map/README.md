@@ -49,7 +49,7 @@ Add a `MapMarker`. Set `Type` for what it is and `Visibility` for who may see it
 - `PartyOrGuild` — the group only.
 - `Detection` — the default for anything that can be another player. Drawn only inside the filter's
   detection radius, at ~1 Hz, snapped to a 4 m grid, and never labelled.
-- `Discovered` — appears once the fog has revealed its cell.
+- `Discovered` — appears once the chunk it stands in has been explored.
 
 Party and guild members are promoted to full fidelity at runtime regardless of the authored rule,
 so authoring the strict rule costs nothing.
@@ -67,15 +67,53 @@ most one frame — and widening it only ever reveals terrain, which is public.
 A client that edits its own memory defeats all of this. The point is that doing so gains nothing the
 map subsystem was protecting, because the map never held anything better.
 
-## Fog of war and Cartography
+## Exploration and Cartography
 
-`FogOfWarStore` writes one signed, gzipped file per character per scene under
-`<install>/Cartography/<characterID>/`. It never crosses the network. The signature makes tampering
-detectable, not impossible — the key ships in the client.
+Exploration works in **chunks**. A scene's bounds are divided into squares of `FogChunkSize` metres
+(the map definition's field, defaulting to `FogOfWarDefaults.ChunkSize`, 128 m — nine chunks across
+a shipped thousand-metre scene), and walking into a chunk explores all of it. A chunk is explored or
+it is not; there is no coverage value and no radius. `ExploredFraction` is therefore chunks visited
+over chunks in the scene, and the world map's readout moves a visible step — a little over one
+percent — every time the player reaches new ground.
+
+This replaced a per-cell radial reveal that stored a coverage byte per four metres of ground:
+seventy-seven thousand bytes for a scene, gzipped on every save, uploaded through a dirty-rectangle
+tracker, and producing a percentage that climbed about one point per sixty metres walked — which
+read, correctly, as a readout that never changed.
+
+### Granting exploration that was not walked
+
+`ClientMapSystem` exposes the granting API for map consumables, discovery triggers and quest
+rewards:
+
+| Call | Grants |
+| --- | --- |
+| `ExploreAround(worldCenter, radius)` | Every chunk the circle reaches. The shape a map item wants. |
+| `ExploreArea(worldRect)` | Every chunk the rectangle touches. |
+| `ExploreChunk(x, z)` | One chunk by grid coordinates. Off-grid coordinates are inert. |
+| `ExploreEverything()` | The whole current scene. |
+
+All of them apply to the scene the character is in, explore nothing twice, and schedule the same
+debounced save that walking does. Reading the chunk grid directly — `Fog.Chunks`, `ChunksX`,
+`TryGetChunk` — is available for content that needs to reason about it.
+
+For asset-authored content there is `ExploreMapAction`, an ECA action that goes on an item's use
+event, a region's enter event or a quest completion. It follows `ChangeFogAction`: shared assembly,
+owner-client only, suppressed during reconcile, raising an event that `UITKMinimap` applies. Note
+what that means — **exploration is client-side data**, so the action is the whole delivery mechanism
+and the server neither stores nor validates it. Fine for revealing a map, wrong for anything a
+player could gain by lying about.
+
+`FogOfWarStore` writes one signed file per character per scene under
+`<install>/Cartography/<characterID>/`. It never crosses the network. One byte per chunk means a
+whole scene is smaller than the header describing it, so the payload is written raw. The signature
+makes tampering detectable, not impossible — the key ships in the client.
 
 **Cartography experience must therefore be awarded by the server**, from the positions it already
 receives, and never from anything read out of that file. Implement `ICartographyProvider` and
 register it with `Cartography.SetProvider` when the profession lands; every map feature that scales
-with skill — reveal radius, world-map zoom range, label detail tier, note capacity, minimap
-resolution, coordinates, grid — already reads it from there. Until then the provider is absent and
+with skill — world-map zoom range, label detail tier, note capacity, minimap resolution,
+coordinates, grid — already reads it from there. Chunk size is deliberately not one of them: it
+belongs to the scene, and making it vary per player would mean two characters disagreeing about
+what a chunk is and neither one's saved file surviving a change in skill. Until then the provider is absent and
 the seam answers with the maximum tier, so players get the full map rather than a crippled one.

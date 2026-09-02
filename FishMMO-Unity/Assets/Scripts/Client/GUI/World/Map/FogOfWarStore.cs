@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
@@ -44,7 +43,16 @@ namespace FishMMO.Client
 		private static readonly byte[] Magic = Encoding.ASCII.GetBytes("FMFOW");
 
 		/// <summary>Format version written into new files.</summary>
-		private const byte CurrentVersion = 1;
+		/// <summary>
+		/// Format version. Two is the chunk grid; one was the per-cell coverage field.
+		/// </summary>
+		/// <remarks>
+		/// A version-one file is discarded rather than converted. Its cells recorded coverage of
+		/// four-metre squares, and there is no honest way to decide which chunks that makes
+		/// explored — the answer would be a threshold nobody can defend, applied to data whose
+		/// whole point was that it was not a yes or no.
+		/// </remarks>
+		private const byte CurrentVersion = 2;
 
 		/// <summary>Length of the trailing signature, in bytes.</summary>
 		private const int SignatureLength = 32;
@@ -86,12 +94,12 @@ namespace FishMMO.Client
 		/// <param name="characterID">The character's ID.</param>
 		/// <param name="sceneName">The scene's name.</param>
 		/// <param name="worldRect">The rectangle the map must cover.</param>
-		/// <param name="cellSize">The cell size the map must use.</param>
+		/// <param name="chunkSize">The chunk size the map must use.</param>
 		/// <returns>
 		/// The stored map, or null when there is no usable file. A null return is the normal case
 		/// for a character who has not been to the scene before and is not an error.
 		/// </returns>
-		public static FogOfWarMap Load(long characterID, string sceneName, Rect worldRect, float cellSize)
+		public static FogOfWarMap Load(long characterID, string sceneName, Rect worldRect, float chunkSize)
 		{
 			string path = FilePath(characterID, sceneName);
 
@@ -131,10 +139,9 @@ namespace FishMMO.Client
 					byte version = reader.ReadByte();
 					if (version != CurrentVersion)
 					{
-						/* Discarded, not migrated. There is exactly one version, and a map is
-						 * re-earned by walking rather than by a conversion routine nobody can test
-						 * against files that do not exist yet. When a version 2 arrives, this is
-						 * where its reader goes. */
+						/* Discarded, not migrated. A map is re-earned by walking rather than by a
+						 * conversion routine, and for the one older version that ever existed there
+						 * is nothing honest to convert it into — see CurrentVersion. */
 						Log.Debug("FogOfWarStore", $"Explored map '{path}' is version {version}, this build writes version {CurrentVersion}; starting again for this scene.");
 						return null;
 					}
@@ -145,9 +152,9 @@ namespace FishMMO.Client
 					float storedY = reader.ReadSingle();
 					float storedWidth = reader.ReadSingle();
 					float storedHeight = reader.ReadSingle();
-					float storedCellSize = reader.ReadSingle();
-					int storedCellsX = reader.ReadInt32();
-					int storedCellsZ = reader.ReadInt32();
+					float storedChunkSize = reader.ReadSingle();
+					int storedChunksX = reader.ReadInt32();
+					int storedChunksZ = reader.ReadInt32();
 
 					if (storedCharacter != characterID ||
 						!string.Equals(storedScene, sceneName, StringComparison.Ordinal))
@@ -158,9 +165,9 @@ namespace FishMMO.Client
 
 					/* The scene's bounds are derived from its boundary volumes and can legitimately
 					 * change when a level designer moves one. A grid that no longer lines up with
-					 * the world cannot be reused: every cell would name a different patch of
+					 * the world cannot be reused: every chunk would name a different patch of
 					 * ground than it did when it was written. */
-					if (!Mathf.Approximately(storedCellSize, cellSize) ||
+					if (!Mathf.Approximately(storedChunkSize, chunkSize) ||
 						!Mathf.Approximately(storedX, worldRect.xMin) ||
 						!Mathf.Approximately(storedY, worldRect.yMin) ||
 						!Mathf.Approximately(storedWidth, worldRect.width) ||
@@ -170,20 +177,23 @@ namespace FishMMO.Client
 						return null;
 					}
 
-					int compressedLength = reader.ReadInt32();
-					if (compressedLength < 0 || compressedLength > bodyLength)
+					/* Checked against the file AND against the grid the header describes. The
+					 * signature already rules out a hostile file, but a length taken on trust would
+					 * still turn a truncated one into a large pointless allocation. */
+					int chunkLength = reader.ReadInt32();
+					if (chunkLength < 0 || chunkLength > bodyLength ||
+						chunkLength != storedChunksX * storedChunksZ)
 					{
 						Log.Warning("FogOfWarStore", $"Explored map '{path}' declares an impossible payload length; ignoring it.");
 						return null;
 					}
 
-					byte[] compressed = reader.ReadBytes(compressedLength);
-					byte[] cells = Decompress(compressed, storedCellsX * storedCellsZ);
+					byte[] chunks = reader.ReadBytes(chunkLength);
 
-					FogOfWarMap map = FogOfWarMap.FromCells(worldRect, cellSize, cells);
+					FogOfWarMap map = FogOfWarMap.FromChunks(worldRect, chunkSize, chunks);
 					if (map == null)
 					{
-						Log.Warning("FogOfWarStore", $"Explored map '{path}' holds the wrong number of cells for its grid; ignoring it.");
+						Log.Warning("FogOfWarStore", $"Explored map '{path}' holds the wrong number of chunks for its grid; ignoring it.");
 					}
 					return map;
 				}
@@ -231,13 +241,15 @@ namespace FishMMO.Client
 					writer.Write(map.WorldRect.yMin);
 					writer.Write(map.WorldRect.width);
 					writer.Write(map.WorldRect.height);
-					writer.Write(map.CellSize);
-					writer.Write(map.CellsX);
-					writer.Write(map.CellsZ);
+					writer.Write(map.ChunkSize);
+					writer.Write(map.ChunksX);
+					writer.Write(map.ChunksZ);
 
-					byte[] compressed = Compress(map.Cells);
-					writer.Write(compressed.Length);
-					writer.Write(compressed);
+					/* Written raw. One byte per chunk is a hundred-odd bytes for a whole scene —
+					 * smaller than the header in front of it — so the GZip pass the per-cell grid
+					 * needed has been dropped along with the grid. */
+					writer.Write(map.Chunks.Length);
+					writer.Write(map.Chunks);
 
 					writer.Flush();
 					body = stream.ToArray();
@@ -297,71 +309,6 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// GZip-compresses the cell data.
-		/// </summary>
-		/// <param name="cells">The cell data.</param>
-		/// <returns>The compressed bytes.</returns>
-		/// <remarks>
-		/// An unexplored map is a quarter of a million identical bytes and a well-explored one is
-		/// large runs of zero, so the ratio is enormous — a few kilobytes for a scene that would
-		/// otherwise be a quarter of a megabyte on disk, written every few seconds.
-		/// </remarks>
-		private static byte[] Compress(byte[] cells)
-		{
-			using (MemoryStream output = new MemoryStream())
-			{
-				using (GZipStream gzip = new GZipStream(output, System.IO.Compression.CompressionLevel.Fastest, true))
-				{
-					gzip.Write(cells, 0, cells.Length);
-				}
-				return output.ToArray();
-			}
-		}
-
-		/// <summary>
-		/// Expands GZip-compressed cell data.
-		/// </summary>
-		/// <param name="compressed">The compressed bytes.</param>
-		/// <param name="expectedLength">How many cells the grid should hold.</param>
-		/// <returns>The cell data, or null when it did not expand to the expected length.</returns>
-		/// <remarks>
-		/// The expected length is enforced rather than trusted: the header says how big the grid
-		/// is and a hostile file could claim a small grid with a payload that expands to gigabytes.
-		/// Reading into a buffer of exactly the size the header promised makes that impossible.
-		/// </remarks>
-		private static byte[] Decompress(byte[] compressed, int expectedLength)
-		{
-			if (expectedLength <= 0)
-			{
-				return null;
-			}
-
-			byte[] cells = new byte[expectedLength];
-
-			using (MemoryStream input = new MemoryStream(compressed, false))
-			using (GZipStream gzip = new GZipStream(input, CompressionMode.Decompress))
-			{
-				int read = 0;
-				while (read < expectedLength)
-				{
-					int count = gzip.Read(cells, read, expectedLength - read);
-					if (count <= 0)
-					{
-						return null;
-					}
-					read += count;
-				}
-
-				// Anything beyond the declared grid means the file disagrees with its own header.
-				if (gzip.ReadByte() != -1)
-				{
-					return null;
-				}
-			}
-
-			return cells;
-		}
 
 		/// <summary>
 		/// Signs a file body.

@@ -105,6 +105,39 @@ namespace FishMMO.Shared
 		/// </summary>
 		public long QueuedAbilityID;
 
+		// ── Equipment input ──
+
+		/// <summary>
+		/// An equip or unequip the owner asked for on this tick, packed by
+		/// <see cref="EquipmentReplicateInput"/>: the kind of request, the container it names and
+		/// the equipment socket. Zero on every tick that carries no request, which is almost all
+		/// of them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Equipment is INPUT, not state, and this is where it belongs. It used to travel as a
+		/// reliable broadcast that the server applied at whatever tick it happened to land on — a
+		/// tick the owner could not know in advance — so the item's attribute bonuses reached the
+		/// owner only through the next reconcile and the movement between the two was replayed at
+		/// the new speed. A +15% speed item equipped mid-stride was a visible snap. Carried here,
+		/// both peers apply the change on the same tick, the reconcile confirms rather than
+		/// corrects, and a stale reconcile is undone and re-applied by the replay like every other
+		/// predicted action.
+		/// </para>
+		/// <para>
+		/// One request per tick. A second request in the same tick waits for the next one; see
+		/// <c>EquipmentController.RequestEquip</c>.
+		/// </para>
+		/// </remarks>
+		public byte EquipmentRequest;
+
+		/// <summary>
+		/// For an equip, the index in the named container the item is coming from. Ignored for an
+		/// unequip, whose destination slot is chosen deterministically by the container on both
+		/// peers.
+		/// </summary>
+		public short EquipmentIndex;
+
 		/// <summary>
 		/// Returns the network tick for this replicate input as a <see cref="PredictionTick"/>.
 		/// This is the only sanctioned way to produce a PredictionTick — use it as the

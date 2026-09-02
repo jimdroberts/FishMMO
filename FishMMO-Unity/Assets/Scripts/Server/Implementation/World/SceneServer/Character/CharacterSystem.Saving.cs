@@ -147,6 +147,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendAbilityData(character, abilityDataList);
 			AppendPetData(character, petDataList);
 
+			/* The item flush is captured here, on the main thread, while the containers are still
+			 * live — and it is AWAITED inside the save-and-release below, before the release.
+			 *
+			 * It used to be enqueued from the despawn event onto the character's ordered lane
+			 * while the save-and-release ran unkeyed on another, so the two raced: the release
+			 * could land, the destination scene server could claim and load, and the item
+			 * snapshot would then be refused by the ownership assertion — or land too late for
+			 * the load that had already read the rows. Everything the player did with items in
+			 * the last minute was at the mercy of that race. The lease is passed explicitly for
+			 * the same reason the caller took the token out of SessionTokens first. */
+			Func<Task> itemFlush = null;
+			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			{
+				itemFlush = inventorySystem.CaptureDespawnFlush(character, sessionInfo);
+			}
+
 			/* Save everything, THEN release the session (Online → Offline).
 			 *
 			 * All of it in one work item, on purpose. The sub-entity writes used to be enqueued
@@ -165,9 +181,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * expired, and every attempt to load it on the destination scene server was
 			 * kicked for the whole two minutes. Hand it to the retry queue instead. */
 			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(
-					charData, buffDataList, attributeDataList, abilityDataList, petDataList, sessionInfo)))
+					charData, buffDataList, attributeDataList, abilityDataList, petDataList, sessionInfo, itemFlush)))
 			{
 				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID} — queued for retry.");
+				if (itemFlush != null)
+				{
+					// Not ordered against the retried release any more, but not lost either.
+					EnqueuePersistence(itemFlush, charData.ID);
+				}
 				QueuePendingFlush(charData.ID, charData, sessionInfo);
 			}
 
@@ -329,11 +350,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			List<CharacterAttributeData> attributes,
 			List<CharacterAbilityData> abilities,
 			List<PetSnapshot> pets,
-			CharacterSessionInfo? sessionInfo)
+			CharacterSessionInfo? sessionInfo,
+			Func<Task> itemFlush = null)
 		{
 			// Save first — we must persist while still holding the session lock, and prove that
 			// ownership in the same statement so a lapsed lease cannot overwrite the new owner.
 			bool saved = await SaveCharacterAsync(charData, sessionInfo);
+
+			/* Items before the release, for the same reason as the sub-entities below. The flush
+			 * is a full snapshot of all three containers in one transaction, captured on the main
+			 * thread at despawn; it proves ownership with the lease we still hold. */
+			if (itemFlush != null)
+			{
+				try
+				{
+					await itemFlush();
+				}
+				catch (Exception ex)
+				{
+					await Log.Error("CharacterSystem", $"SaveAndReleaseCharacterAsync: item flush failed for character {charData.ID}: {ex}");
+				}
+			}
 
 			/* Sub-entities before the release, not alongside it. Everything the next owner is
 			 * about to read has to be in the database before the claim it reads under is

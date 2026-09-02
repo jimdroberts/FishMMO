@@ -6,28 +6,27 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Proofs that every equip and unequip request records where the item is meant to go.
+	/// Proofs that every equip and unequip request reaches the server as replicate input, never as
+	/// a broadcast, and that the panels have no other way to send one.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// The equipment controller keeps a record of a requested move so that a reconcile arriving
-	/// before the server's acknowledgement knows which container the item was headed for. Nothing
-	/// called it. <c>NotifyEquipRequested</c>, <c>NotifyUnequipRequested</c> and
-	/// <c>ClearPendingRequest</c> were public, documented, and dead — they were not on
-	/// <see cref="IEquipmentController"/>, so the panels that send the requests could not reach
-	/// them even had they tried.
+	/// The reliable acknowledgement was the bug. A broadcast is applied the moment it is parsed,
+	/// while the state updates for the ticks before the server processed the request are still
+	/// queued behind it — FishNet holds each one until it is a few ticks old. So every equip was
+	/// undone by a stale snapshot and re-done by the next (the item "in the inventory briefly,
+	/// then equipped"), and every unequip was re-equipped by the stale snapshot and then dropped
+	/// into the first container with room by the next (the item "in the inventory and stuck",
+	/// because the server had it in the bank). Recording the destination before sending, which
+	/// this fixture used to pin, could not fix it: the record was consumed by the acknowledgement
+	/// before the stale snapshot arrived.
 	/// </para>
 	/// <para>
-	/// The result was reported from play: dragging an equipped item onto a bank slot put it in the
-	/// inventory. The reconcile emptied the equipment slot first and, with no record to consult,
-	/// returned the item to the first container with room — the inventory. The acknowledgement then
-	/// found the slot already empty and declined to act, so the server held the item in the bank
-	/// while the client showed it in the inventory, and nothing ever reconciled the two.
-	/// </para>
-	/// <para>
-	/// The bug was not that the recovery was wrong. It was that the information it needed was never
-	/// written down. So these tests pin the calls at the point of request, which is the part that
-	/// was missing and the part a later edit would drop again without noticing.
+	/// A request that rides the replicate has no such race. It is applied on the same tick on
+	/// both peers, a snapshot for an earlier tick restores the earlier state and the replay
+	/// re-applies the request, and a snapshot at or past the tick is the verdict. These tests pin
+	/// the shape of that: the panels queue through the controller, the controller's queue empties
+	/// into the replicate input, and no equip broadcast type exists to be sent instead.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -40,75 +39,62 @@ namespace FishMMO.UnitTests
 			return File.ReadAllText(path);
 		}
 
-		/// <summary>Panels that send an unequip, and must record it first.</summary>
-		private static readonly string[] UnequipSenders =
+		/// <summary>Every panel that can start an equip or an unequip.</summary>
+		private static readonly string[] Panels =
 		{
-			// The bank and the inventory both send theirs from here.
 			"Assets/Scripts/Client/GUI/World/ItemContainers/UITKItemGridPanel.cs",
 			"Assets/Scripts/Client/GUI/World/Equipment/UITKEquipment.cs",
-		};
-
-		/// <summary>Panels that send an equip, and must record it first.</summary>
-		private static readonly string[] EquipSenders =
-		{
 			"Assets/Scripts/Client/GUI/World/Inventory/UITKInventory.cs",
-			"Assets/Scripts/Client/GUI/World/Equipment/UITKEquipment.cs",
 		};
 
 		[Test]
-		public void EverySenderRecordsTheUnequipBeforeSendingIt()
+		public void NoPanelBroadcastsAnEquipmentRequest()
 		{
-			/* "Before" matters as much as "at all": the record has to exist by the time a reconcile
-			 * can arrive, and the reconcile can arrive as soon as the request is on the wire. */
-			foreach (string path in UnequipSenders)
+			foreach (string path in Panels)
 			{
 				string source = ReadSource(path);
-
-				int send = source.IndexOf("new EquipmentUnequipItemBroadcast", StringComparison.Ordinal);
-				LogAssert.IsTrue(send >= 0, $"{path} must still send an unequip.");
-
-				int notify = source.IndexOf("NotifyUnequipRequested", StringComparison.Ordinal);
-
-				LogAssert.IsTrue(notify >= 0,
-					$"{path} must record the unequip destination, or a reconcile will guess it");
-				LogAssert.IsTrue(notify < send,
-					$"{path} must record the destination BEFORE the request goes out");
+				LogAssert.IsFalse(source.Contains("new EquipmentEquipItemBroadcast"),
+					$"{path} must not send an equip as a broadcast; it is replicate input.");
+				LogAssert.IsFalse(source.Contains("new EquipmentUnequipItemBroadcast"),
+					$"{path} must not send an unequip as a broadcast; it is replicate input.");
 			}
 		}
 
 		[Test]
-		public void EverySenderRecordsTheEquipBeforeSendingIt()
+		public void TheEquipBroadcastTypeNoLongerExists()
 		{
-			foreach (string path in EquipSenders)
-			{
-				string source = ReadSource(path);
-
-				int send = source.IndexOf("new EquipmentEquipItemBroadcast", StringComparison.Ordinal);
-				LogAssert.IsTrue(send >= 0, $"{path} must still send an equip.");
-
-				int notify = source.IndexOf("NotifyEquipRequested", StringComparison.Ordinal);
-
-				LogAssert.IsTrue(notify >= 0,
-					$"{path} must record the equip request");
-				LogAssert.IsTrue(notify < send,
-					$"{path} must record it BEFORE the request goes out");
-			}
+			/* The type itself is gone, so a future panel cannot reach for it. The unequip message
+			 * survives, server-to-owner only, to report where the item landed. */
+			string source = ReadSource("Assets/Scripts/Shared/Implementation/Network/Character/Inventory/EquipmentBroadcasts.cs");
+			LogAssert.IsFalse(source.Contains("struct EquipmentEquipItemBroadcast"),
+				"the equip acknowledgement must not come back; see the file's remarks");
+			LogAssert.IsTrue(source.Contains("struct EquipmentUnequipItemBroadcast"),
+				"the unequip destination message must still exist");
+			LogAssert.IsTrue(source.Contains("public long ItemID"),
+				"the unequip destination must name the item by identity, not by where the owner put it");
 		}
 
 		[Test]
-		public void ThePanelsCanReachTheRecordingMethods()
+		public void EveryPanelQueuesThroughTheController()
 		{
-			/* The reason this went unwired for so long. The methods were public on the concrete
-			 * controller but absent from the interface, and the panels only ever hold the
-			 * interface — so the calls could not have been written even by someone who knew they
-			 * were needed. */
+			string grid = ReadSource(Panels[0]);
+			string equipment = ReadSource(Panels[1]);
+			string inventory = ReadSource(Panels[2]);
+
+			LogAssert.IsTrue(grid.Contains("RequestUnequip("), "the grid panels unequip through IEquipmentController.RequestUnequip");
+			LogAssert.IsTrue(equipment.Contains("RequestEquip("), "the equipment panel equips through IEquipmentController.RequestEquip");
+			LogAssert.IsTrue(equipment.Contains("RequestUnequip("), "the equipment panel unequips through IEquipmentController.RequestUnequip");
+			LogAssert.IsTrue(inventory.Contains("RequestEquip("), "the inventory right-click equips through IEquipmentController.RequestEquip");
+		}
+
+		[Test]
+		public void ThePanelsCanReachTheRequestMethods()
+		{
+			/* The panels only ever hold the interface, so the methods have to be on it. */
 			string contract = ReadSource(
 				"Assets/Scripts/Shared/Core/Entity/Item/Container/Equipment/IEquipmentController.cs");
 
-			foreach (string member in new[]
-			{
-				"NotifyEquipRequested", "NotifyUnequipRequested", "ClearPendingRequest",
-			})
+			foreach (string member in new[] { "RequestEquip", "RequestUnequip", "OnRequestResolved", "ApplyUnequipDestination" })
 			{
 				LogAssert.IsTrue(contract.Contains(member),
 					$"IEquipmentController must expose {member}, or no panel can call it");
@@ -116,24 +102,40 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheReconcileStillPrefersTheRecordedContainer()
+		public void TheRequestRidesTheReplicate()
 		{
-			/* The other half of the pair. Recording the destination only helps because the restore
-			 * consults it first and falls back afterwards; a restore that ignored the preference
-			 * would leave the calls above doing nothing at all. */
+			string data = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterReplicateData.cs");
+			LogAssert.IsTrue(data.Contains("public byte EquipmentRequest"), "CharacterReplicateData must carry the packed request");
+			LogAssert.IsTrue(data.Contains("public short EquipmentIndex"), "CharacterReplicateData must carry the source index");
+
+			string controller = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/Equipment/EquipmentController.cs");
+			int populate = controller.IndexOf("public void PopulateInput(ref CharacterReplicateData input)", StringComparison.Ordinal);
+			int replicate = controller.IndexOf("public void OnReplicate(ref CharacterReplicateData input", StringComparison.Ordinal);
+			LogAssert.IsTrue(populate >= 0 && replicate > populate, "the controller must populate and consume the replicate input");
+
+			string populateBody = controller.Substring(populate, replicate - populate);
+			LogAssert.IsTrue(populateBody.Contains("input.EquipmentRequest = packed"),
+				"PopulateInput must write the queued request into the replicate");
+		}
+
+		[Test]
+		public void TheRestoreReturnsAPredictedItemToItsOrigin()
+		{
+			/* The half that makes a stale snapshot harmless. The restore consults the recorded
+			 * origin before falling back; a restore that guessed would leave the replayed request
+			 * looking at an empty slot. */
 			string source = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/Equipment/EquipmentController.cs");
 
-			int restore = source.IndexOf("private void ReturnToAnyContainer", StringComparison.Ordinal);
+			int restore = source.IndexOf("private void RemoveFromSlotForReconcile", StringComparison.Ordinal);
 			LogAssert.IsTrue(restore >= 0, "the reconcile restore must still exist");
 
-			int end = source.IndexOf("private static bool TryReturnTo", restore, StringComparison.Ordinal);
+			int end = source.IndexOf("private void DetachFromSlot", restore, StringComparison.Ordinal);
 			LogAssert.IsTrue(end > restore, "the restore body must be locatable");
 
 			string body = source.Substring(restore, end - restore);
-
-			LogAssert.IsTrue(body.Contains("preferred.HasValue"),
-				"the restore must try the recorded container before falling back");
+			LogAssert.IsTrue(body.Contains("TryReturnToPredictedOrigin"),
+				"the restore must try the recorded origin before falling back to any container");
 		}
 	}
 }

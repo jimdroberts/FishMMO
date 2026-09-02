@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -56,8 +56,18 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Through the server's grant funnel, never straight into the container. A bare
+			 * TryAddItem placed the item in memory and stopped: nothing wrote the row, nothing told
+			 * the owning client, and the item either vanished at the next snapshot (an id it never
+			 * had) or turned up after a relog with no history of how. The funnel places, persists,
+			 * hands the item its identity and broadcasts the slot — the same path a pickup takes. */
 			Item item = new Item(ItemTemplate, (uint)Amount);
-			inventoryController.TryAddItem(item, out _);
+			if (ServerItemHooks.GrantInventoryItem == null)
+			{
+				FishMMO.Logging.Log.Error("GiveItemAction", "No server grant hook is installed; the item was not granted.");
+				return;
+			}
+			ServerItemHooks.GrantInventoryItem(initiator, item);
 		}
 	}
 }

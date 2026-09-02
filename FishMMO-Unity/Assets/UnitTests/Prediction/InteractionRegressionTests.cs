@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -218,7 +218,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(client.Contains("Sent interact"),
 				"A successful send must be visible, so 'client sent / server never answered' is distinguishable.");
 
-			string validation = ReadSource("Assets/Scripts/Server/Core/World/SceneServer/CharacterStateValidation.cs");
+			string validation = ReadSource("Assets/Scripts/Shared/Core/Entity/CharacterStateValidation.cs");
 			foreach (string refusal in new[] { "is dead.", "is teleporting.", "is incapacitated", "is not loaded" })
 			{
 				LogAssert.IsTrue(validation.Contains(refusal),

@@ -413,6 +413,7 @@ namespace FishMMO.Shared
 			OnPredictionMismatch = null;
 			OnAbilityDenied = null;
 			OnConsumableUsed = null;
+			OnConsumableItemChanged = null;
 			canManipulateHandlers.Clear();
 		}
 

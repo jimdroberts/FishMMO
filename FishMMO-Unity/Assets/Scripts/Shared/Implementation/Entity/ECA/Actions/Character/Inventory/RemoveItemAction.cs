@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Core;
@@ -55,6 +55,14 @@ namespace FishMMO.Shared
 			int remaining = Amount;
 			int targetTemplateID = ItemTemplate.ID;
 			List<Item> items = inventoryController.Items;
+
+			/* Every row this touches is reported to the server's persistence hook at the end,
+			 * with the slot captured BEFORE RemoveItem forgets it. This action used to mutate the
+			 * container and stop, so a quest that took an item left its row in the database until
+			 * the next snapshot — and showed the item on the client until a relog. */
+			List<Item> changed = null;
+			List<RemovedItemRecord> removed = null;
+
 			for (int i = 0; i < items.Count && remaining > 0; i++)
 			{
 				Item item = items[i];
@@ -71,6 +79,13 @@ namespace FishMMO.Shared
 					continue;
 				}
 
+				// A locked slot is mid-operation (a consumable activation, an identity still
+				// being assigned) and must be left alone; RemoveItem would refuse it anyway.
+				if (inventoryController.IsSlotLocked(i))
+				{
+					continue;
+				}
+
 				if (item.IsStackable && item.Stackable != null)
 				{
 					// For stackable items, reduce the stack amount rather than
@@ -79,20 +94,34 @@ namespace FishMMO.Shared
 					uint stackAmount = item.Stackable.Amount;
 					if (stackAmount <= (uint)remaining)
 					{
-						inventoryController.RemoveItem(i);
-						remaining -= (int)stackAmount;
+						if (inventoryController.RemoveItem(i) != null)
+						{
+							item.Version++;
+							(removed ??= new List<RemovedItemRecord>()).Add(new RemovedItemRecord(item.ID, item.Version, i));
+							remaining -= (int)stackAmount;
+						}
 					}
 					else
 					{
 						item.Stackable.Amount -= (uint)remaining;
+						(changed ??= new List<Item>()).Add(item);
 						remaining = 0;
 					}
 				}
 				else
 				{
-					inventoryController.RemoveItem(i);
-					remaining--;
+					if (inventoryController.RemoveItem(i) != null)
+					{
+						item.Version++;
+						(removed ??= new List<RemovedItemRecord>()).Add(new RemovedItemRecord(item.ID, item.Version, i));
+						remaining--;
+					}
 				}
+			}
+
+			if ((changed != null || removed != null) && ServerItemHooks.InventoryChanged != null)
+			{
+				ServerItemHooks.InventoryChanged(initiator, changed, removed);
 			}
 		}
 	}

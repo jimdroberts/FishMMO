@@ -387,22 +387,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 
 					removed.Version++;
-					long version = removed.Version;
-					long itemID = removed.ID;
 					int slot = msg.Slot;
-					/* Addressed by the item. An item the database has never seen has no row to
-					 * remove, and DeleteItemAsync refuses a zero id — so the enqueue is skipped
-					 * entirely rather than queuing a statement that can only fail. The sale still
-					 * stands: there is nothing persisted that could bring the item back. */
-					if (itemID > 0 &&
-						!EnqueuePersistence(() => DeleteCharacterItemAsync(characterID, itemID, version), characterID))
-					{
-						/* Could not record the removal, so undo it. Selling an item whose deletion
-						 * is never written means the item comes back on the next login while the
-						 * payout does not — a duplication bug in the player's favour. */
-						inventoryController.SetItemSlot(removed, slot);
-						return;
-					}
+					/* Through the journalled batch, addressed by the item. A delete issued around the
+					 * journal could commit after a snapshot captured while the item still existed,
+					 * and the snapshot would put the row back — the item returned on the next login
+					 * while the payout stayed. The batch is never dropped, so there is no failure to
+					 * undo here. */
+					PersistInventoryChanges(character, null, new[] { new RemovedItemRecord(removed.ID, removed.Version, slot) });
 
 					Server.NetworkWrapper.Broadcast(conn, new InventoryRemoveItemBroadcast()
 					{
@@ -412,30 +403,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				else
 				{
 					item.Stackable.Remove((uint)quantity);
-					item.Version++;
-
-					List<CharacterItemData> itemsToSave = new List<CharacterItemData>
-					{
-						new CharacterItemData(
-							id: item.ID,
-							version: item.Version,
-							characterID: characterID,
-							container: ItemContainerType.Inventory,
-							templateID: item.Template.ID,
-							slot: item.Slot,
-							seed: item.IsGenerated ? item.Generator.Seed : 0,
-							amount: item.Stackable.Amount),
-					};
-
-					if (!EnqueuePersistence(() => PersistInventoryItemsAsync(itemsToSave), characterID))
-					{
-						/* Put the stack back. Amount is written directly rather than through a
-						 * helper because ItemStackable exposes only a saturating Remove; there is
-						 * no Add, and the value being restored is one this method just took. */
-						item.Stackable.Amount += (uint)quantity;
-						item.Version++;
-						return;
-					}
+					PersistInventoryChanges(character, new[] { item }, null);
 
 					Server.NetworkWrapper.Broadcast(conn, new InventorySetItemBroadcast()
 					{
@@ -486,45 +454,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Quantity = quantity,
 				Payout = payout,
 			}, true, Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Removes one of a character's items from the database.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// Shared by the merchant sale and the mail-attachment path: both destroy an item the
-		/// character no longer owns, and neither is a move.
-		/// </para>
-		/// <para>
-		/// Addressed by the item's own identity, and version-gated by the item's own version — the
-		/// caller increments it once before enqueuing. The predecessor named a <c>(character, slot)</c>
-		/// pair, which had no item whose version could authorise it, so callers passed
-		/// <c>long.MaxValue</c> and left behind a soft-deleted row nothing could ever outrank. There
-		/// is no such ambiguity when the row and the item are the same thing.
-		/// </para>
-		/// </remarks>
-		private async Task DeleteCharacterItemAsync(long characterID, long itemID, long version)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterItemService>(out var itemService))
-				{
-					await Log.Error("InteractableSystem", "DeleteCharacterItemAsync: Failed to resolve ICharacterItemService");
-					return;
-				}
-
-				DatabaseResult result = await itemService.DeleteItemAsync(characterID, itemID, version);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem", $"DeleteCharacterItemAsync DB error (CharID={characterID}, ItemID={itemID}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("InteractableSystem", $"DeleteCharacterItemAsync failed (CharID={characterID}, ItemID={itemID}): {ex}");
-			}
 		}
 
 		/// <summary>

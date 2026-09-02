@@ -720,7 +720,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			DrawWindowedQuad(context, fogLayer.contentRect, Fog.GetTexture(), FogColor, Fog.WorldRect);
+			/* GridRect, not WorldRect. The chunk grid rounds up to whole chunks and so covers more
+			 * ground than the scene's rectangle; sampling it as though it covered exactly the
+			 * rectangle stretches the fog by the overhang and walks it out of alignment with the
+			 * terrain underneath. See FogOfWarMap.GridRect. */
+			DrawWindowedQuad(context, fogLayer.contentRect, Fog.GetTexture(), FogColor, Fog.GridRect);
 		}
 
 		/// <summary>

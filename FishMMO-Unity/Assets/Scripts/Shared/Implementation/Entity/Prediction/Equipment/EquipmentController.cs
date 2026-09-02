@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishNet.Managing.Timing;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -12,19 +13,22 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Controls the character's equipment slots, handling equip/unequip logic and network synchronization.
-	/// Manages client-server broadcasts for equipment changes and slot management.
 	///
-	/// Implements <see cref="IPredictableController"/> at Order 93 so equipment state participates
-	/// in the prediction pipeline. Equipment-driven attribute changes are reconciled alongside
-	/// other predicted state, eliminating the broadcast/reconcile race on <c>ExternalModifier</c>.
+	/// Implements <see cref="IPredictableController"/> at Order 93 so equipment participates in the
+	/// prediction pipeline: an owner's equip or unequip is INPUT, carried by
+	/// <see cref="CharacterReplicateData.EquipmentRequest"/>, applied by both the owner and the
+	/// server inside the replicate body for that tick, and confirmed by the reconcile. Equipment-driven
+	/// attribute changes therefore land on the same tick on both peers, and the attribute reconcile
+	/// (Order 95) never has a socket to correct that the replay would not also have re-applied.
 	///
 	/// Three network paths feed this container and they must agree with one another:
 	/// <list type="bullet">
 	/// <item>The spawn payload (<see cref="WritePayload"/>/<see cref="ReadPayload"/>) — owner
 	/// shaped for the owner, template+seed only for everyone else.</item>
-	/// <item>The owner's acknowledgement broadcasts and reconcile snapshot, which can arrive in
-	/// either order and are reconciled against each other by instance id (see
-	/// <see cref="RestoreFromReconcile"/> and the pending-request records).</item>
+	/// <item>The owner's replicate input and reconcile snapshot: the input moves items, the
+	/// snapshot says which instance sits in each socket, and <see cref="RestoreFromReconcile"/>
+	/// settles any disagreement by MOVING the real instance, never by cloning it. A reconcile that
+	/// predates a request restores the earlier state and the replay re-applies the request.</item>
 	/// <item><see cref="EquipmentObservedSlotBroadcast"/>, sent by the server to the character's
 	/// observers after every successful equip/unequip, applied by <see cref="ApplyObservedSlot"/>.</item>
 	/// </list>
@@ -35,6 +39,11 @@ namespace FishMMO.Shared
 		public event Action<Item, ItemSlot> OnItemEquipped;
 		/// <inheritdoc />
 		public event Action<Item, ItemSlot> OnItemUnequipped;
+		/// <inheritdoc />
+		public event Action<EquipmentRequestKind, ItemSlot, InventoryType, int, bool> OnRequestResolved;
+		/// <inheritdoc />
+		public event Action<IEquipmentController, EquipmentChange> OnServerEquipmentChanged;
+
 		[Header("ECA - Equipment")]
 		[Tooltip("Triggers invoked when this character equips an item.")]
 		[SerializeField]
@@ -47,6 +56,18 @@ namespace FishMMO.Shared
 		public List<Trigger> OnEquipTriggers => onEquipTriggers;
 		/// <inheritdoc />
 		public List<Trigger> OnUnequipTriggers => onUnequipTriggers;
+
+		/// <summary>
+		/// Server-side gate consulted before a replicated request is applied: is this character
+		/// allowed to act at all, and may it reach the named container right now?
+		/// </summary>
+		/// <remarks>
+		/// Installed by the server's inventory system. It answers the two questions this shared
+		/// class cannot — "can the character act" is a server-side validation rule set, and "is a
+		/// banker in range" needs the scene object registry. Null on every other peer, and null on
+		/// the server means no gate, which is the permissive default a test harness expects.
+		/// </remarks>
+		public static Func<ICharacter, InventoryType, bool> ServerRequestValidator;
 
 		// ── IPredictableController ──────────────────────────────────────
 
@@ -82,51 +103,207 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private readonly HashSet<int> reconcileSlots = new HashSet<int>();
 
-		// ── Pending client requests ─────────────────────────────────────
+		// ── Owner request queue ─────────────────────────────────────────
+
+		/// <summary>A request waiting for the next replicate tick.</summary>
+		private struct QueuedRequest
+		{
+			public EquipmentRequestKind Kind;
+			public InventoryType Container;
+			public ItemSlot Socket;
+			public int Index;
+		}
+
+		private QueuedRequest? queuedRequest;
 
 		/// <summary>
-		/// A client-initiated equip the server has not yet answered.
+		/// What the owner's prediction did to one socket, so a reconcile that does not yet include
+		/// it can put things back exactly where they were.
 		/// </summary>
 		/// <remarks>
-		/// The reconcile snapshot and the acknowledgement broadcast are independent messages and
-		/// arrive in either order. The snapshot names the instance that ended up in the slot; the
-		/// acknowledgement names the inventory index it came from. Neither alone can tell a swap
-		/// that has already been applied from one that has not — after a swap the source index
-		/// holds the previously equipped item, which is itself a legal equip for that slot — so the
-		/// request is recorded when it is sent and both messages consult it.
+		/// The snapshot names the instance in each socket and nothing else. When it disagrees with a
+		/// socket the owner has predicted into, the item has to go SOMEWHERE, and "the first container
+		/// with room" is a guess the replay then cannot undo: the replayed request names the index it
+		/// took the item from, and if the restore put it elsewhere the replay finds an empty slot.
+		/// So the origin is recorded when the prediction is applied and consulted when it is undone.
 		/// </remarks>
-		private struct PendingEquip
+		private struct PredictedMove
 		{
+			/// <summary>Replicate tick the move was applied on; a reconcile at or past it settles it.</summary>
+			public uint Tick;
+			/// <summary>The item that moved.</summary>
 			public long ItemID;
-			public int InventoryIndex;
-			public InventoryType FromInventory;
-			/// <summary>Set once the reconcile has placed the item; the acknowledgement is then a no-op.</summary>
-			public bool AppliedByReconcile;
+			/// <summary>The container on the other side of the move.</summary>
+			public InventoryType Container;
+			/// <summary>The index in that container: the source of an equip, the landing slot of an unequip.</summary>
+			public int Index;
 		}
 
-		/// <summary>A client-initiated unequip the server has not yet answered.</summary>
-		private struct PendingUnequip
-		{
-			public long ItemID;
-			public InventoryType ToInventory;
-			/// <summary>Set once the reconcile has moved the item out; the acknowledgement is then a no-op.</summary>
-			public bool AppliedByReconcile;
-		}
+		/// <summary>Sockets the owner has predicted an item INTO, keyed by socket, with where it came from.</summary>
+		private readonly Dictionary<byte, PredictedMove> predictedEquips = new Dictionary<byte, PredictedMove>();
 
-		private readonly Dictionary<byte, PendingEquip> pendingEquips = new Dictionary<byte, PendingEquip>();
-		private readonly Dictionary<byte, PendingUnequip> pendingUnequips = new Dictionary<byte, PendingUnequip>();
+		/// <summary>Sockets the owner has predicted an item OUT OF, keyed by socket, with where it went.</summary>
+		private readonly Dictionary<byte, PredictedMove> predictedUnequips = new Dictionary<byte, PredictedMove>();
+
+		/// <summary>Sockets whose predicted-move records are due for removal. Pooled for the reconcile path.</summary>
+		private readonly List<byte> settledSockets = new List<byte>();
 
 		/// <inheritdoc />
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
-			// Equipment changes are event-driven (broadcast), not per-tick input.
+			if (!queuedRequest.HasValue)
+			{
+				return;
+			}
+
+			QueuedRequest request = queuedRequest.Value;
+			queuedRequest = null;
+
+			if (!EquipmentReplicateInput.TryPack(request.Kind, request.Container, request.Socket, out byte packed))
+			{
+				// RequestEquip/RequestUnequip validated the fields, so this cannot happen; it is
+				// refused rather than sent malformed, and the panel hears the refusal.
+				OnRequestResolved?.Invoke(request.Kind, request.Socket, request.Container, request.Index, false);
+				return;
+			}
+
+			input.EquipmentRequest = packed;
+			input.EquipmentIndex = (short)request.Index;
 		}
 
 		/// <inheritdoc />
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
-			// Equipment state is not driven by tick simulation.
-			// OnReconcile handles state restoration.
+			/* Created is the engine's discriminator for "this tick carried real input". A tick the
+			 * server ran with default data has no request in it by construction, but the guard
+			 * states the rule rather than relying on the zero. See CharacterPredictionController. */
+			if (!state.ContainsCreated() || input.EquipmentRequest == 0)
+			{
+				return;
+			}
+
+			bool authoritative = IsServerPeer;
+			bool owner = base.NetworkObject != null && base.IsOwner;
+			if (!authoritative && !owner)
+			{
+				// Observers do not replicate at all with forwarding off; this is the contract, not a
+				// defence against a message that can arrive.
+				return;
+			}
+
+			ApplyEquipmentInput(ref input, authoritative, owner, state.ContainsReplayed());
+		}
+
+		/// <summary>
+		/// Applies the equipment request carried by one replicate, on whichever peer this is.
+		/// </summary>
+		/// <remarks>
+		/// Split from <see cref="OnReplicate"/> so the rule can be exercised without a spawned
+		/// NetworkObject: the flags that decide the peer's role are passed in rather than read.
+		/// </remarks>
+		/// <param name="input">The replicate input for this tick.</param>
+		/// <param name="authoritative">True on the server.</param>
+		/// <param name="owner">True on the owning client.</param>
+		/// <param name="replayed">True when this is a replay after a reconcile rather than the first run of the tick.</param>
+		/// <returns>True when the request was applied.</returns>
+		internal bool ApplyEquipmentInput(ref CharacterReplicateData input, bool authoritative, bool owner, bool replayed)
+		{
+			if (!EquipmentReplicateInput.TryUnpack(input.EquipmentRequest, out EquipmentRequestKind kind,
+					out InventoryType containerType, out ItemSlot socket))
+			{
+				return false;
+			}
+
+			uint tick = input.GetTick();
+			int index = input.EquipmentIndex;
+			bool applied = kind == EquipmentRequestKind.Equip
+				? ApplyPredictedEquip(containerType, index, socket, tick, authoritative, owner, replayed)
+				: ApplyPredictedUnequip(containerType, socket, tick, authoritative, owner, replayed);
+
+			/* The panel that marked its slots as waiting hears the outcome once, on the first run.
+			 * A replay re-applies a request the panel already heard about. */
+			if (owner && !replayed)
+			{
+				OnRequestResolved?.Invoke(kind, socket, containerType, kind == EquipmentRequestKind.Equip ? index : -1, applied);
+			}
+			return applied;
+		}
+
+		/// <summary>Runs one replicated equip on this peer.</summary>
+		private bool ApplyPredictedEquip(InventoryType containerType, int index, ItemSlot socket, uint tick, bool authoritative, bool owner, bool replayed)
+		{
+			IItemContainer source = ResolveContainer(containerType);
+			if (source == null ||
+				!source.TryGetItem(index, out Item item) ||
+				item == null ||
+				item.ID <= 0)
+			{
+				/* No identity means the database has not written it yet, and the ledger declines an
+				 * id of zero; the item is not usable until its row exists. The panel refuses it too,
+				 * so this is a server-side rule stated for a client that did not. */
+				return false;
+			}
+
+			if (authoritative &&
+				ServerRequestValidator != null &&
+				!ServerRequestValidator(Character, containerType))
+			{
+				return false;
+			}
+
+			if (!Equip(item, index, source, socket, containerType, raiseTriggers: !replayed))
+			{
+				return false;
+			}
+
+			if (owner && !authoritative)
+			{
+				predictedEquips[(byte)socket] = new PredictedMove
+				{
+					Tick = tick,
+					ItemID = item.ID,
+					Container = containerType,
+					Index = index,
+				};
+			}
+			return true;
+		}
+
+		/// <summary>Runs one replicated unequip on this peer.</summary>
+		private bool ApplyPredictedUnequip(InventoryType containerType, ItemSlot socket, uint tick, bool authoritative, bool owner, bool replayed)
+		{
+			IItemContainer destination = ResolveContainer(containerType);
+			if (destination == null ||
+				!TryGetItem((byte)socket, out Item item) ||
+				item == null ||
+				item.ID <= 0)
+			{
+				return false;
+			}
+
+			if (authoritative &&
+				ServerRequestValidator != null &&
+				!ServerRequestValidator(Character, containerType))
+			{
+				return false;
+			}
+
+			if (!Unequip(destination, (byte)socket, containerType, out _, raiseTriggers: !replayed))
+			{
+				return false;
+			}
+
+			if (owner && !authoritative)
+			{
+				predictedUnequips[(byte)socket] = new PredictedMove
+				{
+					Tick = tick,
+					ItemID = item.ID,
+					Container = containerType,
+					Index = item.Slot,
+				};
+			}
+			return true;
 		}
 
 		/// <inheritdoc />
@@ -143,7 +320,7 @@ namespace FishMMO.Shared
 		public void OnReconcile(CharacterReconcileData data, Channel channel)
 		{
 			/* The owner always reconciles: this is the authority for its own equipment, and the
-			 * correction that repairs a mispredicted equip.
+			 * confirmation of a predicted equip.
 			 *
 			 * A non-owner only reconciles when the object is forwarded, because that is the mode in
 			 * which the reconcile is what carries equipment to observers at all. With forwarding off
@@ -156,7 +333,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			RestoreFromReconcile(data.Equipment);
+			RestoreFromReconcile(data.Equipment, data.GetTick());
 		}
 
 		/// <summary>
@@ -218,22 +395,26 @@ namespace FishMMO.Shared
 		/// the inventory, the bank, or another equipment slot — so a slot that disagrees with the
 		/// snapshot is settled by MOVING the real item, never by cloning it. Cloning produced two
 		/// live objects with one id: the reconcile's copy in the slot and the original still in the
-		/// inventory, which the later acknowledgement then dutifully equipped as well.
+		/// inventory.
 		/// </para>
 		/// <para>
-		/// Likewise an item the snapshot no longer lists is returned to a container rather than
-		/// dropped. The pending unequip record names the container the player asked for; without
-		/// one the inventory is tried first, then the bank. The item was still equipped a moment
-		/// ago, so somewhere on the server it now exists — leaving it referenced by nothing made it
-		/// vanish from the client until relog when the acknowledgement arrived second.
+		/// <b>A snapshot older than a predicted move is not wrong, it is early.</b> The owner applied
+		/// its request on tick T; a snapshot for a tick before T describes the world without it, and
+		/// restoring that world is exactly right — the replay that follows re-runs T and applies the
+		/// request again. What makes that work is that the restore puts the item back where the
+		/// request will look for it: the recorded origin of a predicted equip, the recorded landing
+		/// slot of a predicted unequip. A snapshot at or past T is the verdict; its records are
+		/// dropped once it has been applied, whether it confirmed the move or refused it.
 		/// </para>
 		/// <para>
 		/// An item that cannot be found anywhere on this client is still materialised from the
 		/// entry, because the alternative — an empty slot the server considers filled — is worse.
-		/// That is the case for a server-side equip the client never requested.
+		/// It should not happen: every item the owner can hold arrives with its identity.
 		/// </para>
 		/// </remarks>
-		private void RestoreFromReconcile(EquipmentReconcileEntry[] entries)
+		/// <param name="entries">The server's socket contents.</param>
+		/// <param name="reconcileTick">The replicate tick the snapshot describes, or <see cref="TimeManager.UNSET_TICK"/>.</param>
+		internal void RestoreFromReconcile(EquipmentReconcileEntry[] entries, uint reconcileTick)
 		{
 			int slotCount = Items != null ? Items.Count : 0;
 			if (slotCount == 0) return;
@@ -256,8 +437,7 @@ namespace FishMMO.Shared
 			 * Items is read directly rather than through a defensive copy: the slot list is fixed
 			 * size (one entry per ItemSlot enum value, never resized), each iteration reads its
 			 * slot before the SetItemSlot below mutates it, and SetItemSlot touches only that one
-			 * index. The old Item[] copy existed to guard against iteration-under-mutation that
-			 * cannot occur here, at the cost of an array allocation per reconcile. */
+			 * index. */
 			for (int i = 0; i < slotCount; i++)
 			{
 				Item existing = Items[i];
@@ -284,53 +464,39 @@ namespace FishMMO.Shared
 						currentItem.Template.ID == entry.TemplateID &&
 						currentItem.ID == entry.ItemID)
 					{
-						// Already correct. If the acknowledgement placed it, the pending record
-						// was cleared then; if a reconcile placed it earlier, the record is already
-						// flagged. Either way nothing to do.
 						continue;
 					}
 
 					// Locate the real instance before touching the slot, so a swap between two
 					// equipment slots reads both sides before either is written.
-					IItemContainer sourceContainer = null;
-					int sourceIndex = -1;
-					Item realItem = FindOwnedInstance(entry.ItemID, (byte)slot, out sourceContainer, out sourceIndex);
+					Item realItem = FindOwnedInstance(entry.ItemID, (byte)slot, out IItemContainer sourceContainer, out int sourceIndex);
 
-					/* An item the database has not written yet has no identity to match on, and the
-					 * clone below would then put a second copy of it in the slot while the original
-					 * stayed in the inventory. The pending record is what still names it: the client
-					 * asked for this equip and recorded where the item came from, so the source is
-					 * known even though the id is not. Narrow window — it closes as soon as the
-					 * first persist returns — but it is exactly the window a freshly looted weapon
-					 * is equipped in. */
-					if (realItem == null && entry.ItemID == 0)
-					{
-						realItem = TakeUnidentifiedPendingSource((byte)slot, entry.TemplateID, out sourceContainer, out sourceIndex);
-					}
-
-					// Unequip old item if present. It goes back to wherever the incoming item came
-					// from — that is what the server's Equip did — or, when the incoming item was
-					// not found, to whichever container will take it.
+					// Unequip old item if present. It goes back to its recorded origin when the
+					// owner predicted it in, otherwise to wherever the incoming item came from —
+					// that is what the server's Equip did — or, when neither is known, to whichever
+					// container will take it.
 					if (currentItem != null)
 					{
-						if (sourceContainer != null && sourceIndex >= 0 && !ReferenceEquals(sourceContainer, this))
+						DetachFromSlot(currentItem, (byte)slot);
+						if (!TryReturnToPredictedOrigin(currentItem, (byte)slot))
 						{
-							DetachFromSlot(currentItem, (byte)slot);
-							// The source index was vacated by the RemoveItem in FindOwnedInstance.
-							if (!sourceContainer.SetItemSlot(currentItem, sourceIndex))
+							if (sourceContainer != null && sourceIndex >= 0 && !ReferenceEquals(sourceContainer, this) &&
+								sourceContainer.SetItemSlot(currentItem, sourceIndex))
+							{
+								// Placed at the index the incoming item vacated.
+							}
+							else
 							{
 								ReturnToAnyContainer(currentItem, null);
 							}
-						}
-						else
-						{
-							RemoveFromSlotForReconcile(currentItem, (byte)slot);
 						}
 					}
 
 					Item newItem = realItem;
 					if (newItem == null)
 					{
+						Log.Warning("EquipmentController",
+							$"Reconcile names item {entry.ItemID} (template {entry.TemplateID}) in socket {slot}, but this client holds no such item; materialising it.");
 						newItem = new Item(entry.ItemID, entry.Seed, entry.TemplateID, 1); // Equipment items are never stackable
 					}
 
@@ -340,16 +506,12 @@ namespace FishMMO.Shared
 						newItem.Equippable.Equip(Character);
 					}
 
-					if (pendingEquips.TryGetValue((byte)slot, out PendingEquip pending) && pending.ItemID == entry.ItemID)
-					{
-						pending.AppliedByReconcile = true;
-						pendingEquips[(byte)slot] = pending;
-					}
-
 					OnItemEquipped?.Invoke(newItem, (ItemSlot)slot);
 					changed = true;
 				}
 			}
+
+			DropSettledPredictions(reconcileTick);
 
 			if (changed)
 			{
@@ -358,63 +520,57 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Takes the item a pending equip named, for a reconcile entry that carries no identity yet.
+		/// Forgets every predicted move a snapshot at <paramref name="reconcileTick"/> has ruled on.
 		/// </summary>
 		/// <remarks>
-		/// <para>
-		/// Matched on the pending record's source index and the entry's template rather than on an
-		/// id, because the id is the thing that does not exist yet. That is weaker than an identity
-		/// match and deliberately so: the alternative is materialising a clone, which leaves the
-		/// player holding the same item in two places until the next full resync.
-		/// </para>
-		/// <para>
-		/// The template check is what keeps it honest. The pending record names one inventory index,
-		/// and if the item sitting there is not the kind of thing the server says it equipped, this
-		/// declines and the caller falls back to the clone.
-		/// </para>
+		/// A record whose tick is at or before the snapshot's has been either confirmed or refused;
+		/// the tick it belongs to is not replayed after this snapshot, so nothing will consult it
+		/// again. Records for later ticks stay, because those ticks ARE about to be replayed.
 		/// </remarks>
-		/// <param name="targetSlot">The equipment slot being filled.</param>
-		/// <param name="templateID">The template the server says is in that slot.</param>
-		/// <param name="container">The container the item was taken from, or null.</param>
-		/// <param name="index">The now-vacant index it came from, or -1.</param>
-		private Item TakeUnidentifiedPendingSource(byte targetSlot, int templateID, out IItemContainer container, out int index)
+		private void DropSettledPredictions(uint reconcileTick)
 		{
-			container = null;
-			index = -1;
-
-			if (Character == null ||
-				!pendingEquips.TryGetValue(targetSlot, out PendingEquip pending) ||
-				pending.ItemID != 0)
+			if (reconcileTick == TimeManager.UNSET_TICK)
 			{
-				return null;
+				return;
 			}
+			DropSettled(predictedEquips, reconcileTick);
+			DropSettled(predictedUnequips, reconcileTick);
+		}
 
-			IItemContainer named = ResolveContainer(pending.FromInventory);
-			if (named == null ||
-				!named.TryGetItem(pending.InventoryIndex, out Item namedItem) ||
-				namedItem == null ||
-				namedItem.ID != 0 ||
-				namedItem.Template == null ||
-				namedItem.Template.ID != templateID)
+		private void DropSettled(Dictionary<byte, PredictedMove> records, uint reconcileTick)
+		{
+			if (records.Count == 0)
 			{
-				return null;
+				return;
 			}
-
-			Item removed = named.RemoveItem(pending.InventoryIndex);
-			if (!ReferenceEquals(removed, namedItem))
+			settledSockets.Clear();
+			foreach (KeyValuePair<byte, PredictedMove> pair in records)
 			{
-				// A locked slot or a refused manipulation. Put back whatever came out and let the
-				// caller take the clone path rather than tearing the slot open.
-				if (removed != null)
+				if (pair.Value.Tick <= reconcileTick)
 				{
-					named.SetItemSlot(removed, pending.InventoryIndex);
+					settledSockets.Add(pair.Key);
 				}
-				return null;
 			}
+			for (int i = 0; i < settledSockets.Count; ++i)
+			{
+				records.Remove(settledSockets[i]);
+			}
+		}
 
-			container = named;
-			index = pending.InventoryIndex;
-			return removed;
+		/// <summary>
+		/// Puts an item the owner predicted into <paramref name="socket"/> back at the index it was
+		/// taken from, when that index is free.
+		/// </summary>
+		private bool TryReturnToPredictedOrigin(Item item, byte socket)
+		{
+			if (!predictedEquips.TryGetValue(socket, out PredictedMove move) || move.ItemID != item.ID)
+			{
+				return false;
+			}
+			IItemContainer origin = ResolveContainer(move.Container);
+			return origin != null &&
+				origin.IsSlotEmpty(move.Index) &&
+				origin.SetItemSlot(item, move.Index);
 		}
 
 		/// <summary>
@@ -422,9 +578,10 @@ namespace FishMMO.Shared
 		/// from wherever it was, ready to be placed in <paramref name="targetSlot"/>.
 		/// </summary>
 		/// <remarks>
-		/// Search order: the pending equip record for the slot (exact, cheapest), the other
-		/// equipment slots (a two-slot swap), the inventory, then the bank. The removal is done
-		/// here rather than by the caller so the source index reported back is guaranteed vacant.
+		/// Search order: the recorded landing slot of a predicted unequip out of this socket (exact,
+		/// cheapest), the other equipment slots (a two-slot swap), the inventory, then the bank. The
+		/// removal is done here rather than by the caller so the source index reported back is
+		/// guaranteed vacant.
 		/// </remarks>
 		private Item FindOwnedInstance(long instanceID, byte targetSlot, out IItemContainer container, out int index)
 		{
@@ -435,24 +592,24 @@ namespace FishMMO.Shared
 				return null;
 			}
 
-			// Pending record first: it names the exact source.
-			if (pendingEquips.TryGetValue(targetSlot, out PendingEquip pending) && pending.ItemID == instanceID)
+			// The record of a predicted unequip names exactly where the item went.
+			if (predictedUnequips.TryGetValue(targetSlot, out PredictedMove move) && move.ItemID == instanceID)
 			{
-				IItemContainer named = ResolveContainer(pending.FromInventory);
+				IItemContainer named = ResolveContainer(move.Container);
 				if (named != null &&
-					named.TryGetItem(pending.InventoryIndex, out Item namedItem) &&
+					named.TryGetItem(move.Index, out Item namedItem) &&
 					namedItem != null && namedItem.ID == instanceID)
 				{
-					Item removed = named.RemoveItem(pending.InventoryIndex);
+					Item removed = named.RemoveItem(move.Index);
 					if (ReferenceEquals(removed, namedItem))
 					{
 						container = named;
-						index = pending.InventoryIndex;
+						index = move.Index;
 						return removed;
 					}
 					if (removed != null)
 					{
-						named.SetItemSlot(removed, pending.InventoryIndex);
+						named.SetItemSlot(removed, move.Index);
 					}
 				}
 			}
@@ -523,14 +680,11 @@ namespace FishMMO.Shared
 		{
 			DetachFromSlot(item, slot);
 
-			InventoryType? preferred = null;
-			if (pendingUnequips.TryGetValue(slot, out PendingUnequip pending) && pending.ItemID == item.ID)
+			if (TryReturnToPredictedOrigin(item, slot))
 			{
-				preferred = pending.ToInventory;
-				pending.AppliedByReconcile = true;
-				pendingUnequips[slot] = pending;
+				return;
 			}
-			ReturnToAnyContainer(item, preferred);
+			ReturnToAnyContainer(item, null);
 		}
 
 		/// <summary>Takes an item out of an equipment slot: modifiers off, slot null, listeners told.</summary>
@@ -558,44 +712,36 @@ namespace FishMMO.Shared
 			SetItemSlot(null, slot);
 		}
 
-		/// <summary>
-		/// Places an item that just left an equipment slot into a container: the preferred one
-		/// when given and it has room, then the inventory, then the bank.
-		/// </summary>
-		/// <remarks>
-		/// Fails only when every container is full or unavailable. The server cannot have unequipped
-		/// into a full container, so that means this client's view is already off — the warning
-		/// is the trace for that, and the item is dropped rather than left referencing a slot.
-		/// </remarks>
+		/// <inheritdoc />
+		public void ApplyUnequipDestination(long itemID, InventoryType container, int slot)
+		{
+			PlaceAtAcknowledgedSlot(itemID, container, slot);
+		}
+
 		/// <summary>
 		/// Moves an item to the slot the server says it ended up in.
 		/// </summary>
 		/// <remarks>
 		/// The item is found by identity, not by slot, because where this client put it is exactly
-		/// what cannot be trusted here: it may be in the right container at the wrong index, or in
-		/// the fallback container altogether, depending on what had room when the reconcile ran.
+		/// what cannot be trusted here: both peers choose the landing slot deterministically from
+		/// their own copy of the container, and the copies can differ by a grant that landed on one
+		/// side first.
 		/// </remarks>
-		/// <param name="msg">The acknowledgement, naming the destination container and slot.</param>
-		/// <param name="itemID">Identity of the item that was unequipped.</param>
-		private void PlaceAtAcknowledgedSlot(EquipmentUnequipItemBroadcast msg, long itemID)
+		private void PlaceAtAcknowledgedSlot(long itemID, InventoryType container, int slot)
 		{
-			if (msg.ToSlot < 0 || itemID == 0)
+			if (slot < 0 || itemID == 0)
 			{
-				// No slot named: a path that does not report one. Leave what is there alone.
 				return;
 			}
 
-			IItemContainer destination = msg.ToInventory == InventoryType.Equipment
-				? null
-				: ResolveContainer(msg.ToInventory);
-
-			if (destination == null || !destination.IsValidSlot(msg.ToSlot))
+			IItemContainer destination = container == InventoryType.Equipment ? null : ResolveContainer(container);
+			if (destination == null || !destination.IsValidSlot(slot))
 			{
 				return;
 			}
 
 			// Already where the server put it, which is the common case once both sides agree.
-			if (destination.TryGetItem(msg.ToSlot, out Item atDestination) &&
+			if (destination.TryGetItem(slot, out Item atDestination) &&
 				atDestination != null &&
 				atDestination.ID == itemID)
 			{
@@ -607,15 +753,16 @@ namespace FishMMO.Shared
 				!TryTakeByID(ResolveContainer(InventoryType.Bank), itemID, out item))
 			{
 				Log.Warning("EquipmentController",
-					$"Unequip acknowledged into {msg.ToInventory} slot {msg.ToSlot}, but item {itemID} " +
+					$"Unequip landed in {container} slot {slot}, but item {itemID} " +
 					"is not in any container this client knows about.");
 				return;
 			}
 
-			if (!destination.SetItemSlot(item, msg.ToSlot))
+			if (!destination.SetItemSlot(item, slot))
 			{
 				Log.Warning("EquipmentController",
-					$"Could not place item {itemID} at {msg.ToInventory} slot {msg.ToSlot}.");
+					$"Could not place item {itemID} at {container} slot {slot}.");
+				ReturnToAnyContainer(item, container);
 			}
 		}
 
@@ -643,6 +790,15 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		/// <summary>
+		/// Places an item that just left an equipment slot into a container: the preferred one
+		/// when given and it has room, then the inventory, then the bank.
+		/// </summary>
+		/// <remarks>
+		/// Fails only when every container is full or unavailable. The server cannot have unequipped
+		/// into a full container, so that means this client's view is already off — the warning
+		/// is the trace for that, and the item is dropped rather than left referencing a slot.
+		/// </remarks>
 		private void ReturnToAnyContainer(Item item, InventoryType? preferred)
 		{
 			if (preferred.HasValue && TryReturnTo(ResolveContainer(preferred.Value), item))
@@ -688,50 +844,118 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// ── Pending request API ─────────────────────────────────────────
-
-		/// <inheritdoc />
-		public void NotifyEquipRequested(Item item, int inventoryIndex, InventoryType fromInventory, ItemSlot toSlot)
+		/// <summary>Names the container a caller handed in, for the persistence row.</summary>
+		private InventoryType ClassifyContainer(IItemContainer container)
 		{
-			if (item == null)
+			if (ReferenceEquals(container, ResolveContainer(InventoryType.Bank)))
+			{
+				return InventoryType.Bank;
+			}
+			if (ReferenceEquals(container, this))
+			{
+				return InventoryType.Equipment;
+			}
+			return InventoryType.Inventory;
+		}
+
+		// ── Owner request API ───────────────────────────────────────────
+
+		/// <summary>
+		/// Drops a request that is still waiting for a tick, telling its panel it will not run.
+		/// </summary>
+		/// <remarks>
+		/// A queued request lives for at most one tick on an owner that is producing input, so a
+		/// second request in the same tick is the only way to reach this — but a request queued on
+		/// a controller whose owner is NOT producing input would otherwise sit there forever and
+		/// refuse every request after it. Last writer wins; the displaced one is reported as not
+		/// applied so its slots unlock.
+		/// </remarks>
+		private void DiscardQueuedRequest()
+		{
+			if (!queuedRequest.HasValue)
 			{
 				return;
 			}
-			pendingEquips[(byte)toSlot] = new PendingEquip
-			{
-				ItemID = item.ID,
-				InventoryIndex = inventoryIndex,
-				FromInventory = fromInventory,
-				AppliedByReconcile = false,
-			};
+			QueuedRequest stale = queuedRequest.Value;
+			queuedRequest = null;
+			OnRequestResolved?.Invoke(stale.Kind, stale.Socket, stale.Container, stale.Index, false);
 		}
 
 		/// <inheritdoc />
-		public void NotifyUnequipRequested(ItemSlot slot, InventoryType toInventory)
+		public bool RequestEquip(Item item, int sourceIndex, InventoryType fromContainer, ItemSlot socket)
 		{
-			if (!TryGetItem((byte)slot, out Item item) || item == null)
+			if (item == null ||
+				item.ID <= 0 ||
+				!item.IsEquippable ||
+				!(item.Template is EquippableItemTemplate equippable) ||
+				equippable.Slot != socket ||
+				!IsValidSlot((byte)socket) ||
+				IsSlotLocked((byte)socket) ||
+				!CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character))
 			{
-				return;
+				return false;
 			}
-			pendingUnequips[(byte)slot] = new PendingUnequip
+
+			IItemContainer source = ResolveContainer(fromContainer);
+			if (source == null ||
+				ReferenceEquals(source, this) ||
+				!source.TryGetItem(sourceIndex, out Item atIndex) ||
+				!ReferenceEquals(atIndex, item) ||
+				source.IsSlotLocked(sourceIndex))
 			{
-				ItemID = item.ID,
-				ToInventory = toInventory,
-				AppliedByReconcile = false,
+				return false;
+			}
+
+			DiscardQueuedRequest();
+			queuedRequest = new QueuedRequest
+			{
+				Kind = EquipmentRequestKind.Equip,
+				Container = fromContainer,
+				Socket = socket,
+				Index = sourceIndex,
 			};
+			return true;
 		}
 
 		/// <inheritdoc />
-		public void ClearPendingRequest(ItemSlot slot)
+		public bool RequestUnequip(ItemSlot socket, InventoryType toContainer)
 		{
-			pendingEquips.Remove((byte)slot);
-			pendingUnequips.Remove((byte)slot);
+			if (toContainer == InventoryType.Equipment ||
+				!TryGetItem((byte)socket, out Item item) ||
+				item == null ||
+				item.ID <= 0 ||
+				IsSlotLocked((byte)socket) ||
+				!CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character))
+			{
+				return false;
+			}
+
+			IItemContainer destination = ResolveContainer(toContainer);
+			if (destination == null || !destination.CanAddItem(item))
+			{
+				return false;
+			}
+
+			DiscardQueuedRequest();
+			queuedRequest = new QueuedRequest
+			{
+				Kind = EquipmentRequestKind.Unequip,
+				Container = toContainer,
+				Socket = socket,
+				Index = -1,
+			};
+			return true;
 		}
 
-		/// <summary>True while a client-initiated request for this slot is unanswered. Test seam.</summary>
-		internal bool HasPendingRequest(byte slot)
+		/// <summary>True while a request is waiting for the next replicate. Test seam.</summary>
+		internal bool HasQueuedRequest => queuedRequest.HasValue;
+
+		/// <summary>True while the owner has a predicted move on this socket that no reconcile has ruled on. Test seam.</summary>
+		internal bool HasPredictedMove(byte socket)
 		{
-			return pendingEquips.ContainsKey(slot) || pendingUnequips.ContainsKey(slot);
+			return predictedEquips.ContainsKey(socket) || predictedUnequips.ContainsKey(socket);
 		}
 
 		/// <inheritdoc />
@@ -753,6 +977,14 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Forces the server role for a controller that has no spawned NetworkObject. Tests only.
+		/// </summary>
+		internal bool ServerAuthorityForTests;
+
+		/// <summary>True on the server. The one place the role is read for authority decisions.</summary>
+		private bool IsServerPeer => ServerAuthorityForTests || (base.NetworkObject != null && base.IsServerStarted);
+
+		/// <summary>
 		/// True when this peer applied the attribute modifiers of the items in these slots, and so
 		/// is the peer that must reverse them.
 		/// </summary>
@@ -765,7 +997,7 @@ namespace FishMMO.Shared
 		/// which draws the same line for the same reason.
 		/// </remarks>
 		private bool SimulatesEquipmentEffects =>
-			base.NetworkObject != null && (base.IsServerStarted || base.IsOwner);
+			ServerAuthorityForTests || (base.NetworkObject != null && (base.IsServerStarted || base.IsOwner));
 
 		/// <inheritdoc />
 		public override void ResetState(bool asServer)
@@ -795,8 +1027,11 @@ namespace FishMMO.Shared
 			}
 
 			Clear();
-			pendingEquips.Clear();
-			pendingUnequips.Clear();
+			queuedRequest = null;
+			predictedEquips.Clear();
+			predictedUnequips.Clear();
+			OnRequestResolved = null;
+			OnServerEquipmentChanged = null;
 			equipmentSnapshotDirty = true;
 			cachedEquipmentSnapshot = null;
 		}
@@ -936,14 +1171,7 @@ namespace FishMMO.Shared
 					 * item — see CharacterAttributeController.WritePayload. This is the identical
 					 * mistake ApplyObservedSlot was rewritten to remove for the broadcast path, and
 					 * the rule SimulatesEquipmentEffects states; the payload path was simply never
-					 * brought into line with it.
-					 *
-					 * It was inert rather than harmless: the observer shape omits the item id, so
-					 * ItemGenerator.TryResolveLedgerSource declined for a zero id and wrote nothing.
-					 * That is an accident of the wire format standing in for a rule, and it would
-					 * have become a live double-apply the moment the observer payload carried an id.
-					 * ResetState already assumes this path never applied — it detaches silently on a
-					 * peer that does not simulate equipment effects — so the two halves now agree. */
+					 * brought into line with it. */
 					if (ownerShape)
 					{
 						item.Equippable.Equip(Character);
@@ -1032,15 +1260,6 @@ namespace FishMMO.Shared
 
 		// ── Observer broadcast ──────────────────────────────────────────
 
-		/* The private observerRecipients set and CollectObserverRecipients were REMOVED, not left
-		 * unused. They were a line-for-line copy of ObserverBroadcastScope, which is the one place
-		 * that knows why the copy is mandatory — ServerManager.BroadcastExcept calls Remove on the
-		 * set it is handed, so passing NetworkObject.Observers to it permanently drops the owner
-		 * from that object's observer set rather than excluding it for one message. A second
-		 * implementation of a rule that subtle is how the next one gets it wrong; the copy here
-		 * also never cleared its static set after a send, so it retained a NetworkConnection
-		 * reference per observer between equipment pushes. */
-
 		/// <summary>
 		/// Tells this character's observers (never its owner) what a slot now holds.
 		/// </summary>
@@ -1104,7 +1323,7 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// A message for a character that is not spawned here is dropped: either it has not
 		/// arrived yet, in which case its spawn payload will carry this state, or it has already
-		/// gone. The owner is skipped as well — the server excludes it, but the acknowledgement and
+		/// gone. The owner is skipped as well — the server excludes it, but the replicate and
 		/// reconcile own that client's slots and a stray copy must never overwrite a real item
 		/// with an id-less one.
 		/// </remarks>
@@ -1193,21 +1412,23 @@ namespace FishMMO.Shared
 			}
 			if (item.IsEquippable)
 			{
-				/* Silently, like the owner's acknowledgement path: this is another character's
-				 * sheet, and the server already sends its authoritative ExternalModifier in
-				 * CharacterAttributesBroadcast. Calling Equip here ran ItemGenerator.ApplyAttributes
-				 * and added the item's bonuses ON TOP of that total, so a watching client saw the
-				 * peer's maximum jump on every equip and only converged when the next attribute
-				 * diff happened to be non-empty. Equipment-derived attributes are server-only; the
-				 * observer's interest in an equip is the mesh. The matching detach above is silent
-				 * for the same reason — removing a modifier this path never added would drift the
-				 * sheet the other way. */
+				/* Silently: this is another character's sheet, and the server already sends its
+				 * authoritative ExternalModifier in CharacterAttributesBroadcast. Calling Equip here
+				 * ran ItemGenerator.ApplyAttributes and added the item's bonuses ON TOP of that
+				 * total, so a watching client saw the peer's maximum jump on every equip and only
+				 * converged when the next attribute diff happened to be non-empty. Equipment-derived
+				 * attributes are server-only; the observer's interest in an equip is the mesh. The
+				 * matching detach above is silent for the same reason — removing a modifier this
+				 * path never added would drift the sheet the other way. */
 				SetEquippedCharacterSilently(item);
 			}
 			OnItemEquipped?.Invoke(item, (ItemSlot)slot);
 		}
 
 		// ── Owner acknowledgements ──────────────────────────────────────
+		//
+		// One message survives the move to predicted equipment: where an unequipped item landed.
+		// The socket itself is settled by the reconcile.
 
 #if !UNITY_SERVER
 		/// <inheritdoc />
@@ -1221,7 +1442,6 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ClientManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
 			ClientManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
 		}
 
@@ -1232,111 +1452,20 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
-				ClientManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
 				ClientManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
 			}
 		}
 
-		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg, Channel channel)
-		{
-			ApplyEquipAcknowledgement(msg);
-		}
-
 		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
-			ApplyUnequipAcknowledgement(msg);
+			ApplyUnequipDestination(msg.ItemID, msg.ToInventory, msg.ToSlot);
 		}
 #endif
-
-		/// <summary>
-		/// Handles an equip acknowledgement from the server, equipping the item from the specified inventory.
-		/// </summary>
-		/// <remarks>
-		/// A no-op when the reconcile already placed the requested instance (the pending record is
-		/// flagged) — after a swap, the source index holds the previously equipped item, and
-		/// re-running the equip would swap the two straight back. Also a no-op when the source
-		/// index is empty, which is the non-swap form of the same race.
-		/// </remarks>
-		internal void ApplyEquipAcknowledgement(EquipmentEquipItemBroadcast msg)
-		{
-			byte slot = msg.Slot;
-			if (pendingEquips.TryGetValue(slot, out PendingEquip pending))
-			{
-				pendingEquips.Remove(slot);
-				if (pending.AppliedByReconcile ||
-					(TryGetItem(slot, out Item already) && already != null && already.ID == pending.ItemID))
-				{
-					return;
-				}
-			}
-
-			IItemContainer container = msg.FromInventory == InventoryType.Equipment ? null : ResolveContainer(msg.FromInventory);
-			if (container == null ||
-				!container.TryGetItem(msg.InventoryIndex, out Item sourceItem))
-			{
-				return;
-			}
-			Equip(sourceItem, msg.InventoryIndex, container, (ItemSlot)slot, applyAttributes: false);
-		}
-
-		/// <summary>
-		/// Handles an unequip acknowledgement from the server, moving the item to the specified inventory.
-		/// </summary>
-		/// <remarks>
-		/// A no-op when the reconcile already emptied the slot and returned the item — the item is
-		/// then already in the container the acknowledgement names.
-		/// </remarks>
-		internal void ApplyUnequipAcknowledgement(EquipmentUnequipItemBroadcast msg)
-		{
-			byte slot = msg.Slot;
-			bool hadPending = pendingUnequips.TryGetValue(slot, out PendingUnequip pending);
-			if (hadPending)
-			{
-				pendingUnequips.Remove(slot);
-			}
-
-			/* The reconcile may already have emptied the socket and put the item somewhere. Where
-			 * it put it is a guess: the request never named a destination slot, so the client chose
-			 * one and the server chose another, and nothing brought them back together. That is
-			 * what left an item in inventory slot 5 on the client and slot 0 on the server, with
-			 * every later request refused for a slot the server saw as empty.
-			 *
-			 * So this no longer treats an already-empty socket as nothing to do. The
-			 * acknowledgement names the slot; the item goes there. */
-			if ((hadPending && pending.AppliedByReconcile) || IsSlotEmpty(slot))
-			{
-				if (hadPending)
-				{
-					PlaceAtAcknowledgedSlot(msg, pending.ItemID);
-				}
-
-				return;
-			}
-
-			IItemContainer container = msg.ToInventory == InventoryType.Equipment ? null : ResolveContainer(msg.ToInventory);
-			if (container == null)
-			{
-				return;
-			}
-
-			// Captured before the move, because afterwards the socket is empty.
-			long itemID = TryGetItem(slot, out Item unequipping) && unequipping != null ? unequipping.ID : 0;
-
-			Unequip(container, slot, out _, applyAttributes: false);
-
-			/* Unequip adds the item wherever the container has room, which is the same guess by
-			 * another route. The server has already decided, so correct it. */
-			if (itemID != 0)
-			{
-				PlaceAtAcknowledgedSlot(msg, itemID);
-			}
-		}
 
 		/// <inheritdoc />
 		public void Activate(int index)
 		{
-			if (!Character.TryGet(out ICharacterDamageController damageController) ||
-				!damageController.IsAlive)
+			if (!CharacterStateValidation.CanAct(Character))
 			{
 				return;
 			}
@@ -1349,16 +1478,17 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public bool Equip(Item item, int inventoryIndex, IItemContainer container, ItemSlot toSlot)
 		{
-			return Equip(item, inventoryIndex, container, toSlot, applyAttributes: true);
+			return Equip(item, inventoryIndex, container, toSlot, ClassifyContainer(container), raiseTriggers: true);
 		}
 
 		/// <summary>
-		/// Equips an item with control over whether attribute modifiers are applied.
-		/// When <paramref name="applyAttributes"/> is false, only slot state and visual events
-		/// are updated — the prediction pipeline's reconcile handles attribute changes. The
-		/// item still learns which character holds it (see <see cref="SetEquippedCharacterSilently"/>).
+		/// Equips an item, applying its attribute modifiers on this peer.
 		/// </summary>
-		private bool Equip(Item item, int inventoryIndex, IItemContainer container, ItemSlot toSlot, bool applyAttributes)
+		/// <param name="raiseTriggers">
+		/// False during a replay: the ECA triggers already fired when the tick first ran, and a
+		/// replay re-applies the state without re-announcing it.
+		/// </param>
+		private bool Equip(Item item, int inventoryIndex, IItemContainer container, ItemSlot toSlot, InventoryType containerType, bool raiseTriggers)
 		{
 			if (item == null ||
 				!item.IsEquippable ||
@@ -1375,51 +1505,45 @@ namespace FishMMO.Shared
 
 			byte slotIndex = (byte)toSlot;
 
-			// Already in place: the reconcile or an earlier acknowledgement did this. Reporting
+			// Already in place: a reconcile or an earlier run of this tick did this. Reporting
 			// success keeps the caller from treating an idempotent repeat as a refusal.
 			if (TryGetItem(slotIndex, out Item alreadyEquipped) && ReferenceEquals(alreadyEquipped, item))
 			{
 				return true;
 			}
 
+			Item displaced = null;
 			if (container != null)
 			{
+				/* The source slot must hold the item being equipped. Callers pass the pair they
+				 * read, but a request that has been queued for a tick, or an ECA action built from
+				 * stale event data, can name an index something else has since moved into — and the
+				 * swap branch below would overwrite that something with the previously equipped item,
+				 * leaving `item` still in its own slot AND in the socket. */
+				if (!container.TryGetItem(inventoryIndex, out Item atIndex) || !ReferenceEquals(atIndex, item))
+				{
+					return false;
+				}
+
 				if (TryGetItem(slotIndex, out Item previousItem) &&
 					previousItem.IsEquippable)
 				{
-					if (applyAttributes)
-					{
-						previousItem.Equippable.Unequip();
-					}
-					else
-					{
-						ClearEquippedCharacterSilently(previousItem);
-					}
+					previousItem.Equippable.Unequip();
 
 					if (!container.SetItemSlot(previousItem, inventoryIndex))
 					{
-						if (applyAttributes)
-						{
-							previousItem.Equippable.Equip(Character);
-						}
-						else
-						{
-							SetEquippedCharacterSilently(previousItem);
-						}
+						previousItem.Equippable.Equip(Character);
 						return false;
 					}
+					displaced = previousItem;
 				}
 				else
 				{
 					// RemoveItem returns null when the slot is locked, out of range, already empty,
-					// or the container refuses manipulation (dead character). The result used to be
-					// discarded and the equip proceeded regardless, leaving the SAME Item instance
-					// referenced by both the source slot and the equipment slot: two live references,
-					// two persistence rows, one duplicated item after the next login.
-					//
-					// The identity check matters as much as the null check. A concurrent request can
-					// have moved something else into inventoryIndex between validation and here, in
-					// which case we would otherwise delete an unrelated item to make room.
+					// or the container refuses manipulation. The result used to be discarded and the
+					// equip proceeded regardless, leaving the SAME Item instance referenced by both
+					// the source slot and the equipment slot: two live references, two persistence
+					// rows, one duplicated item after the next login.
 					Item removed = container.RemoveItem(inventoryIndex);
 					if (!ReferenceEquals(removed, item))
 					{
@@ -1436,46 +1560,59 @@ namespace FishMMO.Shared
 
 			if (!SetItemSlot(item, slotIndex))
 			{
+				/* Put the containers back the way they were: the socket refused (locked), and the
+				 * source slot is now empty or holds the displaced item. */
+				if (container != null)
+				{
+					if (displaced != null)
+					{
+						container.SetItemSlot(item, inventoryIndex);
+						SetItemSlot(displaced, slotIndex);
+						displaced.Equippable.Equip(Character);
+					}
+					else
+					{
+						container.SetItemSlot(item, inventoryIndex);
+					}
+				}
 				return false;
 			}
 
 			if (item.IsEquippable)
 			{
-				if (applyAttributes)
-				{
-					item.Equippable.Equip(Character);
-				}
-				else
-				{
-					SetEquippedCharacterSilently(item);
-				}
+				item.Equippable.Equip(Character);
 			}
 
 			equipmentSnapshotDirty = true;
-			Character.Invoke(onEquipTriggers, new EquipItemEventData(Character, item, toSlot));
+			if (raiseTriggers)
+			{
+				Character.Invoke(onEquipTriggers, new EquipItemEventData(Character, item, toSlot));
+			}
 			OnItemEquipped?.Invoke(item, toSlot);
 
-			if (applyAttributes)
+			if (IsServerPeer)
 			{
-				PushObservedSlot(slotIndex);
+				OnServerEquipmentChanged?.Invoke(this, EquipmentChange.ForEquip(item, toSlot, container, containerType, inventoryIndex, displaced));
 			}
+			PushObservedSlot(slotIndex);
 			return true;
 		}
 
 		/// <inheritdoc />
 		public bool Unequip(IItemContainer container, byte slot, out List<Item> modifiedItems)
 		{
-			return Unequip(container, slot, out modifiedItems, applyAttributes: true);
+			return Unequip(container, slot, ClassifyContainer(container), out modifiedItems, raiseTriggers: true);
 		}
 
 		/// <summary>
-		/// Unequips an item with control over whether attribute modifiers are applied.
+		/// Unequips an item, removing its attribute modifiers on this peer.
 		/// </summary>
-		private bool Unequip(IItemContainer container, byte slot, out List<Item> modifiedItems, bool applyAttributes)
+		private bool Unequip(IItemContainer container, byte slot, InventoryType containerType, out List<Item> modifiedItems, bool raiseTriggers)
 		{
 			if (!CanManipulate() ||
 				!TryGetItem(slot, out Item item) ||
 				container == null ||
+				ReferenceEquals(container, this) ||
 				!container.CanAddItem(item))
 			{
 				modifiedItems = null;
@@ -1489,26 +1626,23 @@ namespace FishMMO.Shared
 
 			if (item.IsEquippable)
 			{
-				if (applyAttributes)
-				{
-					item.Equippable.Unequip();
-				}
-				else
-				{
-					ClearEquippedCharacterSilently(item);
-				}
+				item.Equippable.Unequip();
 			}
 
 			SetItemSlot(null, slot);
 
 			equipmentSnapshotDirty = true;
-			Character.Invoke(onUnequipTriggers, new EquipItemEventData(Character, item, (ItemSlot)slot));
+			if (raiseTriggers)
+			{
+				Character.Invoke(onUnequipTriggers, new EquipItemEventData(Character, item, (ItemSlot)slot));
+			}
 			OnItemUnequipped?.Invoke(item, (ItemSlot)slot);
 
-			if (applyAttributes)
+			if (IsServerPeer)
 			{
-				PushObservedSlot(slot);
+				OnServerEquipmentChanged?.Invoke(this, EquipmentChange.ForUnequip(item, (ItemSlot)slot, container, containerType, item.Slot, modifiedItems));
 			}
+			PushObservedSlot(slot);
 			return true;
 		}
 
@@ -1517,15 +1651,14 @@ namespace FishMMO.Shared
 		/// applying its generated attribute modifiers.
 		/// </summary>
 		/// <remarks>
-		/// The client's acknowledgement path must not apply modifiers — the attribute reconcile is
-		/// the authority for those — but it must still record the owner, because
+		/// The observer paths must not apply modifiers — the server's authoritative total already
+		/// contains them — but they must still record the owner, because
 		/// <c>ItemGenerator.SetAttribute</c> reads <c>Equippable.Character</c> to decide whether a
-		/// later attribute change has a character to propagate to, and the payload and reconcile
-		/// paths both set it. <see cref="ItemEquippable.Character"/> is only writable through
-		/// <see cref="ItemEquippable.Equip"/>, which raises <c>OnEquip</c>; the item's own
-		/// attribute handler is the only subscriber and is only attached to generated items, so
-		/// it is detached around the call and restored afterwards. Not generated means no handler
-		/// and nothing to detach.
+		/// later attribute change has a character to propagate to. <see cref="ItemEquippable.Character"/>
+		/// is only writable through <see cref="ItemEquippable.Equip"/>, which raises <c>OnEquip</c>;
+		/// the item's own attribute handler is the only subscriber and is only attached to generated
+		/// items, so it is detached around the call and restored afterwards. Not generated means no
+		/// handler and nothing to detach.
 		/// </remarks>
 		private void SetEquippedCharacterSilently(Item item)
 		{

@@ -92,18 +92,19 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Determines if the container can be manipulated (e.g., items moved or swapped).
-		/// Checks if the character is alive and the items list is not empty.
 		/// </summary>
+		/// <remarks>
+		/// Answers only whether there is anything here to manipulate. It used to refuse while the
+		/// character was dead as well, and because every mutation consulted it — including the ones
+		/// a client applies on the server's authority — a dead character's containers refused the
+		/// server's own updates and drifted from it. Whether the character may ORIGINATE a request
+		/// is the requester's question, and <see cref="CharacterStateValidation.CanAct(ICharacter)"/>
+		/// is the one rule for it: the server's handlers ask it before touching a container and the
+		/// client asks it before queueing a request.
+		/// </remarks>
 		/// <returns>True if manipulation is allowed, false otherwise.</returns>
 		public virtual bool CanManipulate()
 		{
-			if (Character.TryGet(out ICharacterDamageController damageController))
-			{
-				if (!damageController.IsAlive)
-				{
-					return false;
-				}
-			}
 			return Items.Count > 0;
 		}
 
@@ -370,18 +371,6 @@ namespace FishMMO.Shared
 						// The slot that actually changed is the one holding the merged stack.
 						modifiedItems.Add(Items[i]);
 
-						/* The donor only belongs in the modified list while it still HAS a stack.
-						 * Once AddToStack has consumed it entirely its Amount is 0 and its Slot is
-						 * still -1 (it never entered this container), and every caller turns this
-						 * list straight into persistence DTOs and set-slot broadcasts — so a fully
-						 * merged donor was writing a (character_id, slot = -1, amount = 0) row on
-						 * the very common "loot one potion onto an existing stack" path, and
-						 * broadcasting a slot the client discards. */
-						if (amount > 0)
-						{
-							modifiedItems.Add(item);
-						}
-
 						/* Report the item that is now IN the slot, not the donor. Subscribers repaint
 						 * slot i from this argument, so passing the donor painted the leftover — or,
 						 * once the donor is empty, nothing at all. */
@@ -392,6 +381,14 @@ namespace FishMMO.Shared
 					if (amount < 1) return true;
 				}
 			}
+
+			/* The donor joins the modified list ONLY once it has a slot of its own, below. Every
+			 * caller turns this list straight into persistence rows and set-slot broadcasts, and
+			 * the donor's Slot is -1 until it is placed — so adding it after a partial merge, as
+			 * this used to, wrote a (slot = -1, amount = whatever was left) row whenever the
+			 * leftover then merged into a SECOND stack, and wrote the donor twice whenever the
+			 * leftover went into an empty slot instead. The stacks it merged into are already
+			 * listed; a donor that never gets a slot has no row to write. */
 			for (int i = 0; i < Items.Count; ++i)
 			{
 				// Find the first slot to put the remaining item in.

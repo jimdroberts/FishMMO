@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -244,9 +244,13 @@ namespace FishMMO.RenderScratch
 		public void Activate(int index) { }
 
 		/* The render rig has no server and no reconcile, so there is no request to remember. */
-		public void NotifyEquipRequested(Item item, int inventoryIndex, InventoryType fromInventory, ItemSlot toSlot) { }
-		public void NotifyUnequipRequested(ItemSlot slot, InventoryType toInventory) { }
-		public void ClearPendingRequest(ItemSlot slot) { }
+		public event Action<EquipmentRequestKind, ItemSlot, InventoryType, int, bool> OnRequestResolved;
+		public event Action<IEquipmentController, EquipmentChange> OnServerEquipmentChanged;
+
+		// The render rig equips directly; there is no replicate tick to queue a request into.
+		public bool RequestEquip(Item item, int sourceIndex, InventoryType fromContainer, ItemSlot socket) => false;
+		public bool RequestUnequip(ItemSlot socket, InventoryType toContainer) => false;
+		public void ApplyUnequipDestination(long itemID, InventoryType container, int slot) { }
 
 		public bool Equip(Item item, int inventoryIndex, IItemContainer container, ItemSlot toSlot)
 		{

@@ -3,233 +3,324 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The part of a scene a character has explored, as a grid of coverage values over the scene's
-	/// map rectangle.
+	/// The part of a scene a character has explored, as a grid of chunks over the scene's bounds.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Coverage, not a bit.</b> Each cell holds how much fog is left over it — 255 for
-	/// never visited, 0 for fully explored — rather than a single explored flag. A bit per cell
-	/// is a quarter of the memory and produces a hard checkerboard edge wherever the player walked,
-	/// because the smallest unit of reveal is then a whole cell. Storing coverage lets a reveal
-	/// write a radial falloff, so the boundary between explored and unexplored is a soft ring at
-	/// the edge of the player's sight rather than a staircase of squares, and it costs a byte per
-	/// 16 square metres of world.</para>
-	///
-	/// <para><b>Reveal only ever lowers a value.</b> Fog does not come back. That makes the grid
-	/// monotonic, which is what allows the overlapping reveals of a player walking in circles to
-	/// be applied in any order without the result depending on the order — and means a partial
-	/// save can only ever lose progress, never invent it.</para>
-	///
-	/// <para><b>It is not authoritative.</b> This lives on the player's machine and is never sent
-	/// to the server. Anything that matters — Cartography experience, a reward for full
-	/// exploration — must be decided by the server from where the character actually walked, which
-	/// it already knows. See <see cref="FogOfWarStore"/> for what the signature on the file does
-	/// and does not buy.</para>
+	/// <para>
+	/// A chunk is either explored or it is not, and walking into one explores the whole of it. That
+	/// is the entire model: there is no coverage value, no radius, and no falloff. What the player
+	/// gets is a map that opens up a block at a time as they travel, and a percentage that means
+	/// exactly what it says — chunks visited out of chunks in the scene.
+	/// </para>
+	/// <para>
+	/// <b>This replaced a per-cell radial reveal</b> that stored a coverage byte for every four
+	/// metres of ground: a thousand-metre scene was a 277 by 277 grid, seventy-seven thousand bytes
+	/// held in memory, gzipped on every save, and uploaded to a texture through a dirty-rectangle
+	/// tracker. The percentage it produced moved by about one point per sixty metres walked, which
+	/// read as a readout that never changed. The same scene is nine chunks square here: eighty-one
+	/// bytes, no compression, no dirty rectangle, and every chunk entered is a visible step.
+	/// </para>
+	/// <para>
+	/// <b>Chunk size is a scene's own business.</b> It comes from the map definition, falling back
+	/// to <c>FogOfWarDefaults.ChunkSize</c>, so a cramped dungeon can be divided more finely than
+	/// open country without anything else changing. It is baked into the saved file and a change
+	/// discards the old one — a chunk index means a different piece of ground at a different size.
+	/// </para>
 	/// </remarks>
 	public sealed class FogOfWarMap
 	{
-		/// <summary>Fog value meaning the cell has never been seen.</summary>
-		public const byte Unexplored = 255;
+		/// <summary>Chunk state meaning the character has never been here.</summary>
+		public const byte Unexplored = 0;
 
-		/// <summary>Fog value meaning the cell is fully explored.</summary>
-		public const byte Explored = 0;
+		/// <summary>Chunk state meaning the character has entered this chunk.</summary>
+		public const byte Explored = 1;
 
-		/// <summary>
-		/// Fraction of the reveal radius that is revealed completely, the rest being the falloff.
-		/// </summary>
-		/// <remarks>
-		/// A falloff that starts at the centre would leave the ground under the player's feet
-		/// half fogged, which looks like a rendering fault rather than a soft edge.
-		/// </remarks>
-		private const float SolidFraction = 0.65f;
-
-		/// <summary>The world rectangle the grid covers, on the XZ plane.</summary>
+		/// <summary>The world rectangle, on the XZ plane, this map covers.</summary>
 		public Rect WorldRect { get; }
 
-		/// <summary>Size of one cell in world metres.</summary>
-		public float CellSize { get; }
+		/// <summary>The length of one chunk's side, in world metres.</summary>
+		public float ChunkSize { get; }
 
-		/// <summary>Number of cells across the X axis.</summary>
-		public int CellsX { get; }
+		/// <summary>Number of chunks along the X axis.</summary>
+		public int ChunksX { get; }
 
-		/// <summary>Number of cells across the Z axis.</summary>
-		public int CellsZ { get; }
-
-		/// <summary>Fog coverage per cell, row-major with Z as the row.</summary>
-		public byte[] Cells { get; }
-
-		/// <summary>Whether anything has changed since the last time the flag was cleared.</summary>
-		public bool IsDirty { get; private set; }
-
-		/// <summary>Whether the texture needs rebuilding from <see cref="Cells"/>.</summary>
-		private bool textureDirty = true;
-
-		/// <summary>Lowest X cell index changed since the texture was last uploaded.</summary>
-		private int dirtyMinX;
-
-		/// <summary>Lowest Z cell index changed since the texture was last uploaded.</summary>
-		private int dirtyMinZ;
-
-		/// <summary>Highest X cell index changed since the texture was last uploaded.</summary>
-		private int dirtyMaxX;
-
-		/// <summary>Highest Z cell index changed since the texture was last uploaded.</summary>
-		private int dirtyMaxZ;
-
-		/// <summary>The texture handed to the UI, alpha carrying the fog coverage.</summary>
-		private Texture2D texture;
+		/// <summary>Number of chunks along the Z axis.</summary>
+		public int ChunksZ { get; }
 
 		/// <summary>
-		/// Scratch the cells are expanded into before being uploaded, kept for the map's lifetime.
+		/// The world rectangle the chunk grid actually spans.
 		/// </summary>
 		/// <remarks>
-		/// Allocated once. The grid is rebuilt up to four times a second while the character is
-		/// walking, and a 2 km scene at four-metre cells is a 500 by 500 texture — so allocating
-		/// this per rebuild is a megabyte of garbage several times a second, for as long as the
-		/// player is moving. Held rather than pooled because it is exactly as large as the grid and
-		/// dies with it.
+		/// <b>Not <see cref="WorldRect"/>, and the difference is visible.</b> The grid rounds up to
+		/// whole chunks, so it always covers the scene's rectangle and usually overhangs it — by up
+		/// to one chunk short of a full one on each axis. Anything mapping the chunk grid onto
+		/// screen space has to use this rectangle: treating the texture as covering
+		/// <see cref="WorldRect"/> stretches it by the overhang, which at four-metre cells was a
+		/// rounding error nobody could see and at chunk sizes is a third of a chunk of drift by the
+		/// far edge — the fog visibly out of step with the ground it describes.
 		/// </remarks>
+		public Rect GridRect { get; }
+
+		/// <summary>
+		/// The chunk grid, row-major from the rectangle's minimum corner.
+		/// </summary>
+		/// <remarks>
+		/// Exposed because the store writes it verbatim — one byte per chunk, which for any real
+		/// scene is smaller than the header describing it.
+		/// </remarks>
+		public byte[] Chunks { get; }
+
+		/// <summary>How many chunks have been explored.</summary>
+		/// <remarks>
+		/// Kept as the grid is written rather than counted on demand. That is what lets
+		/// <see cref="ExploredFraction"/> be a division instead of a walk, and it is why this class
+		/// no longer needs a cached fraction and a dirty flag to guard it.
+		/// </remarks>
+		public int ExploredChunkCount { get; private set; }
+
+		/// <summary>Total number of chunks in the scene.</summary>
+		public int ChunkCount => Chunks.Length;
+
+		/// <summary>True when the map has changed since it was last written to disk.</summary>
+		public bool IsDirty { get; private set; }
+
+		/// <summary>True when the texture no longer matches the grid.</summary>
+		private bool textureDirty = true;
+
+		/// <summary>The fog texture, built on demand and rebuilt whenever a chunk changes.</summary>
+		private Texture2D texture;
+
+		/// <summary>Scratch buffer for the texture upload, sized to the grid and allocated once.</summary>
 		private Color32[] pixelBuffer;
-
-		/// <summary>Cached result of <see cref="ExploredFraction"/>.</summary>
-		private float cachedFraction;
-
-		/// <summary>Whether <see cref="cachedFraction"/> needs recomputing.</summary>
-		private bool fractionDirty = true;
 
 		/// <summary>
 		/// Builds an entirely unexplored map over a world rectangle.
 		/// </summary>
 		/// <param name="worldRect">The world rectangle to cover, on the XZ plane.</param>
-		/// <param name="cellSize">Size of one cell in world metres.</param>
-		public FogOfWarMap(Rect worldRect, float cellSize)
+		/// <param name="chunkSize">Length of one chunk's side in world metres.</param>
+		public FogOfWarMap(Rect worldRect, float chunkSize)
 		{
 			WorldRect = worldRect;
-			CellSize = Mathf.Max(0.5f, cellSize);
+			ChunkSize = Mathf.Max(1.0f, chunkSize);
 
-			/* Ceiling, and at least one. A rectangle that is not a whole number of cells across
+			/* Ceiling, and at least one. A rectangle that is not a whole number of chunks across
 			 * must be covered by the grid rather than cropped by it, or the last few metres of a
 			 * zone can never be explored and the map keeps a permanent unexplored stripe down one
 			 * edge that no amount of walking removes. */
-			CellsX = Mathf.Max(1, Mathf.CeilToInt(worldRect.width / CellSize));
-			CellsZ = Mathf.Max(1, Mathf.CeilToInt(worldRect.height / CellSize));
+			ChunksX = Mathf.Max(1, Mathf.CeilToInt(worldRect.width / ChunkSize));
+			ChunksZ = Mathf.Max(1, Mathf.CeilToInt(worldRect.height / ChunkSize));
 
-			Cells = new byte[CellsX * CellsZ];
-			for (int i = 0; i < Cells.Length; ++i)
-			{
-				Cells[i] = Unexplored;
-			}
+			GridRect = new Rect(worldRect.xMin, worldRect.yMin, ChunksX * ChunkSize, ChunksZ * ChunkSize);
+
+			// Unexplored is zero, which is what a new array already holds.
+			Chunks = new byte[ChunksX * ChunksZ];
 		}
 
 		/// <summary>
-		/// Rebuilds a map from cells loaded off disk.
+		/// Rebuilds a map from chunks loaded off disk.
 		/// </summary>
-		/// <param name="worldRect">The world rectangle the cells cover.</param>
-		/// <param name="cellSize">Size of one cell in world metres.</param>
-		/// <param name="cells">The cell data. Must be exactly the grid's size.</param>
+		/// <param name="worldRect">The world rectangle the chunks cover.</param>
+		/// <param name="chunkSize">Length of one chunk's side in world metres.</param>
+		/// <param name="chunks">The chunk data. Must be exactly the grid's size.</param>
 		/// <returns>The loaded map, or null when the data does not match the grid.</returns>
 		/// <remarks>
-		/// Returns null rather than resizing. A cell array of the wrong length means the scene's
-		/// bounds or cell size changed since the file was written, and stretching old data across
+		/// <para>
+		/// Returns null rather than resizing. A chunk array of the wrong length means the scene's
+		/// bounds or chunk size changed since the file was written, and stretching old data across
 		/// new bounds would put the player's explored ground in the wrong place — worse than
 		/// starting again, because it looks plausible.
+		/// </para>
+		/// <para>
+		/// Every byte is normalised to one of the two states rather than trusted. The file is
+		/// signed, so this is not defending against tampering; it is making sure a future writer
+		/// that stores something else in this array cannot leave a chunk that is neither explored
+		/// nor unexplored, which nothing downstream has a meaning for.
+		/// </para>
 		/// </remarks>
-		public static FogOfWarMap FromCells(Rect worldRect, float cellSize, byte[] cells)
+		public static FogOfWarMap FromChunks(Rect worldRect, float chunkSize, byte[] chunks)
 		{
-			FogOfWarMap map = new FogOfWarMap(worldRect, cellSize);
-			if (cells == null || cells.Length != map.Cells.Length)
+			FogOfWarMap map = new FogOfWarMap(worldRect, chunkSize);
+			if (chunks == null || chunks.Length != map.Chunks.Length)
 			{
 				return null;
 			}
 
-			System.Array.Copy(cells, map.Cells, cells.Length);
+			int explored = 0;
+			for (int i = 0; i < chunks.Length; ++i)
+			{
+				bool isExplored = chunks[i] != Unexplored;
+				map.Chunks[i] = isExplored ? Explored : Unexplored;
+				if (isExplored)
+				{
+					++explored;
+				}
+			}
+
+			map.ExploredChunkCount = explored;
 			return map;
 		}
 
 		/// <summary>
-		/// Marks the area around a world position as explored.
+		/// Explores the chunk containing a world position.
 		/// </summary>
-		/// <param name="worldPosition">Centre of the reveal, in world space.</param>
-		/// <param name="radius">Radius of the reveal in world metres.</param>
-		/// <returns>True when at least one cell changed.</returns>
-		public bool Reveal(Vector3 worldPosition, float radius)
+		/// <param name="worldPosition">Where the character is, in world space.</param>
+		/// <returns>True when this entered a chunk that had not been explored before.</returns>
+		/// <remarks>
+		/// Returning false is the ordinary case and says nothing is wrong: a character standing
+		/// still, or crossing ground it has already walked, re-enters the same explored chunk
+		/// several times a second. A position outside the grid also returns false — see
+		/// <c>ClientMapSystem</c>, which reports that case rather than letting it pass unnoticed.
+		/// </remarks>
+		public bool Reveal(Vector3 worldPosition)
 		{
-			if (radius <= 0.0f)
+			if (!TryGetChunk(worldPosition, out int x, out int z))
 			{
 				return false;
 			}
 
-			float localX = worldPosition.x - WorldRect.xMin;
-			float localZ = worldPosition.z - WorldRect.yMin;
-
-			int minX = Mathf.Max(0, Mathf.FloorToInt((localX - radius) / CellSize));
-			int maxX = Mathf.Min(CellsX - 1, Mathf.CeilToInt((localX + radius) / CellSize));
-			int minZ = Mathf.Max(0, Mathf.FloorToInt((localZ - radius) / CellSize));
-			int maxZ = Mathf.Min(CellsZ - 1, Mathf.CeilToInt((localZ + radius) / CellSize));
-
-			if (minX > maxX || minZ > maxZ)
+			int index = (z * ChunksX) + x;
+			if (Chunks[index] == Explored)
 			{
 				return false;
 			}
 
-			float solidRadius = radius * SolidFraction;
-			float falloffRange = Mathf.Max(0.0001f, radius - solidRadius);
-			bool changed = false;
+			Chunks[index] = Explored;
+			++ExploredChunkCount;
+			IsDirty = true;
+			textureDirty = true;
+			return true;
+		}
 
-			int touchedMinX = int.MaxValue;
-			int touchedMinZ = int.MaxValue;
-			int touchedMaxX = int.MinValue;
-			int touchedMaxZ = int.MinValue;
+		/// <summary>
+		/// Explores one chunk by its grid coordinates.
+		/// </summary>
+		/// <param name="chunkX">The chunk's X index.</param>
+		/// <param name="chunkZ">The chunk's Z index.</param>
+		/// <returns>True when that chunk had not been explored before.</returns>
+		/// <remarks>
+		/// The grain everything else here is built on, and the one to reach for when something
+		/// other than a character's feet decides a chunk is known — a map fragment that names the
+		/// chunks it fills in, a quest that opens up the valley it sends you to, a trigger volume
+		/// at a vista. Out-of-range coordinates are ignored rather than throwing: a scene's grid
+		/// changes size when its bounds are re-derived, and content that named a chunk beyond the
+		/// edge should be inert, not fatal.
+		/// </remarks>
+		public bool RevealChunk(int chunkX, int chunkZ)
+		{
+			if (chunkX < 0 || chunkX >= ChunksX || chunkZ < 0 || chunkZ >= ChunksZ)
+			{
+				return false;
+			}
 
+			int index = (chunkZ * ChunksX) + chunkX;
+			if (Chunks[index] == Explored)
+			{
+				return false;
+			}
+
+			Chunks[index] = Explored;
+			++ExploredChunkCount;
+			IsDirty = true;
+			textureDirty = true;
+			return true;
+		}
+
+		/// <summary>
+		/// Explores every chunk that a world-space rectangle touches.
+		/// </summary>
+		/// <param name="worldArea">The rectangle, on the XZ plane, in world metres.</param>
+		/// <returns>How many chunks this explored that were not explored already.</returns>
+		/// <remarks>
+		/// Touching, not covering. A rectangle that clips the corner of a chunk explores that whole
+		/// chunk, because a chunk is the smallest thing this map can describe — asking for half of
+		/// one is not a question it can answer, and rounding the other way would let an area
+		/// smaller than a chunk reveal nothing at all.
+		/// </remarks>
+		public int RevealArea(Rect worldArea)
+		{
+			int minX = Mathf.FloorToInt((worldArea.xMin - WorldRect.xMin) / ChunkSize);
+			int maxX = Mathf.FloorToInt((worldArea.xMax - WorldRect.xMin) / ChunkSize);
+			int minZ = Mathf.FloorToInt((worldArea.yMin - WorldRect.yMin) / ChunkSize);
+			int maxZ = Mathf.FloorToInt((worldArea.yMax - WorldRect.yMin) / ChunkSize);
+
+			minX = Mathf.Max(0, minX);
+			minZ = Mathf.Max(0, minZ);
+			maxX = Mathf.Min(ChunksX - 1, maxX);
+			maxZ = Mathf.Min(ChunksZ - 1, maxZ);
+
+			int revealed = 0;
 			for (int z = minZ; z <= maxZ; ++z)
 			{
-				float cellCenterZ = (z + 0.5f) * CellSize;
-				float dz = cellCenterZ - localZ;
-				int row = z * CellsX;
-
 				for (int x = minX; x <= maxX; ++x)
 				{
-					float cellCenterX = (x + 0.5f) * CellSize;
-					float dx = cellCenterX - localX;
-
-					float distance = Mathf.Sqrt((dx * dx) + (dz * dz));
-					if (distance > radius)
+					if (RevealChunk(x, z))
 					{
-						continue;
-					}
-
-					float remaining = distance <= solidRadius
-						? 0.0f
-						: (distance - solidRadius) / falloffRange;
-
-					byte value = (byte)Mathf.RoundToInt(Mathf.Clamp01(remaining) * 255.0f);
-
-					int index = row + x;
-					if (value < Cells[index])
-					{
-						Cells[index] = value;
-						changed = true;
-
-						if (x < touchedMinX) { touchedMinX = x; }
-						if (x > touchedMaxX) { touchedMaxX = x; }
-						if (z < touchedMinZ) { touchedMinZ = z; }
-						if (z > touchedMaxZ) { touchedMaxZ = z; }
+						++revealed;
 					}
 				}
 			}
 
-			if (changed)
-			{
-				IsDirty = true;
-				fractionDirty = true;
-				MarkTextureRegionDirty(touchedMinX, touchedMinZ, touchedMaxX, touchedMaxZ);
-			}
-
-			return changed;
+			return revealed;
 		}
 
 		/// <summary>
-		/// Reveals the entire map.
+		/// Explores every chunk within a radius of a world position.
+		/// </summary>
+		/// <param name="worldCenter">Centre of the area, in world space.</param>
+		/// <param name="radius">Radius in world metres. Zero or less explores nothing.</param>
+		/// <returns>How many chunks this explored that were not explored already.</returns>
+		/// <remarks>
+		/// The shape a consumable naturally wants — "reveals the land within five hundred metres".
+		/// A chunk counts when the circle reaches any part of it, so the result is a disc rounded
+		/// outwards to the chunk grid rather than a square.
+		/// </remarks>
+		public int RevealAround(Vector3 worldCenter, float radius)
+		{
+			if (radius <= 0.0f)
+			{
+				return 0;
+			}
+
+			Rect bounds = new Rect(worldCenter.x - radius, worldCenter.z - radius, radius * 2.0f, radius * 2.0f);
+
+			int minX = Mathf.Max(0, Mathf.FloorToInt((bounds.xMin - WorldRect.xMin) / ChunkSize));
+			int maxX = Mathf.Min(ChunksX - 1, Mathf.FloorToInt((bounds.xMax - WorldRect.xMin) / ChunkSize));
+			int minZ = Mathf.Max(0, Mathf.FloorToInt((bounds.yMin - WorldRect.yMin) / ChunkSize));
+			int maxZ = Mathf.Min(ChunksZ - 1, Mathf.FloorToInt((bounds.yMax - WorldRect.yMin) / ChunkSize));
+
+			float radiusSquared = radius * radius;
+			int revealed = 0;
+
+			for (int z = minZ; z <= maxZ; ++z)
+			{
+				float chunkMinZ = WorldRect.yMin + (z * ChunkSize);
+				// Nearest point of this chunk to the centre, on each axis independently.
+				float nearestZ = Mathf.Clamp(worldCenter.z, chunkMinZ, chunkMinZ + ChunkSize);
+				float dz = nearestZ - worldCenter.z;
+
+				for (int x = minX; x <= maxX; ++x)
+				{
+					float chunkMinX = WorldRect.xMin + (x * ChunkSize);
+					float nearestX = Mathf.Clamp(worldCenter.x, chunkMinX, chunkMinX + ChunkSize);
+					float dx = nearestX - worldCenter.x;
+
+					if ((dx * dx) + (dz * dz) > radiusSquared)
+					{
+						continue;
+					}
+
+					if (RevealChunk(x, z))
+					{
+						++revealed;
+					}
+				}
+			}
+
+			return revealed;
+		}
+
+		/// <summary>
+		/// Explores the entire map.
 		/// </summary>
 		/// <remarks>
 		/// For scenes whose definition turns fog off, and for the map baker's preview. Cheaper and
@@ -237,123 +328,58 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void RevealAll()
 		{
-			for (int i = 0; i < Cells.Length; ++i)
+			for (int i = 0; i < Chunks.Length; ++i)
 			{
-				Cells[i] = Explored;
+				Chunks[i] = Explored;
 			}
+
+			ExploredChunkCount = Chunks.Length;
 			IsDirty = true;
-			fractionDirty = true;
-			MarkTextureRegionDirty(0, 0, CellsX - 1, CellsZ - 1);
+			textureDirty = true;
 		}
 
 		/// <summary>
-		/// Widens the block of cells the texture upload has to cover.
-		/// </summary>
-		/// <param name="minX">Lowest X cell index that changed.</param>
-		/// <param name="minZ">Lowest Z cell index that changed.</param>
-		/// <param name="maxX">Highest X cell index that changed.</param>
-		/// <param name="maxZ">Highest Z cell index that changed.</param>
-		/// <remarks>
-		/// A rectangle rather than a list of cells, because that is what
-		/// <c>Texture2D.SetPixels32</c> takes. The union of two distant reveals is a large
-		/// rectangle covering mostly unchanged cells, but reveals arrive four times a second from a
-		/// character who has moved a few metres — so in practice the block is the disc that was just
-		/// revealed, about a thousand pixels, instead of the quarter of a million a full upload
-		/// costs.
-		/// </remarks>
-		private void MarkTextureRegionDirty(int minX, int minZ, int maxX, int maxZ)
-		{
-			if (maxX < minX || maxZ < minZ)
-			{
-				return;
-			}
-
-			if (!textureDirty)
-			{
-				dirtyMinX = minX;
-				dirtyMinZ = minZ;
-				dirtyMaxX = maxX;
-				dirtyMaxZ = maxZ;
-				textureDirty = true;
-				return;
-			}
-
-			dirtyMinX = Mathf.Min(dirtyMinX, minX);
-			dirtyMinZ = Mathf.Min(dirtyMinZ, minZ);
-			dirtyMaxX = Mathf.Max(dirtyMaxX, maxX);
-			dirtyMaxZ = Mathf.Max(dirtyMaxZ, maxZ);
-		}
-
-		/// <summary>
-		/// How explored a world position is.
+		/// Whether a world position has been explored.
 		/// </summary>
 		/// <param name="worldPosition">The position to test.</param>
-		/// <returns>Zero for fully fogged, one for fully explored.</returns>
+		/// <returns>True when the chunk holding the position has been entered.</returns>
 		/// <remarks>
 		/// A position outside the grid reads as explored. Off-map is not a place the player can
 		/// discover, and reporting it as fogged would hide every marker that sits just outside a
 		/// scene's derived bounds — which, since those bounds are a boundary volume plus padding,
 		/// includes things a level designer legitimately put at the edge.
 		/// </remarks>
-		public float ExploredAt(Vector3 worldPosition)
-		{
-			if (!TryGetCell(worldPosition, out int x, out int z))
-			{
-				return 1.0f;
-			}
-
-			return 1.0f - (Cells[(z * CellsX) + x] / 255.0f);
-		}
-
-		/// <summary>
-		/// Whether a world position counts as discovered for the purposes of hiding markers.
-		/// </summary>
-		/// <param name="worldPosition">The position to test.</param>
-		/// <returns>True when the position is more than half explored.</returns>
 		public bool IsDiscovered(Vector3 worldPosition)
 		{
-			return ExploredAt(worldPosition) > 0.5f;
+			if (!TryGetChunk(worldPosition, out int x, out int z))
+			{
+				return true;
+			}
+
+			return Chunks[(z * ChunksX) + x] == Explored;
 		}
 
 		/// <summary>
-		/// The fraction of the whole map that has been explored.
+		/// The fraction of the scene that has been explored.
 		/// </summary>
-		/// <returns>Zero to one.</returns>
-		/// <remarks>
-		/// Walks every cell, so it is for a panel refreshing a progress readout rather than for a
-		/// per-frame caller. At 4 metre cells a two-kilometre scene is a quarter of a million
-		/// bytes, which is a fraction of a millisecond but not free.
-		/// </remarks>
+		/// <returns>Zero to one: explored chunks over total chunks.</returns>
 		public float ExploredFraction()
 		{
-			if (!fractionDirty)
-			{
-				return cachedFraction;
-			}
-
-			long total = 0;
-			for (int i = 0; i < Cells.Length; ++i)
-			{
-				total += 255 - Cells[i];
-			}
-
-			cachedFraction = (float)(total / (255.0 * Cells.Length));
-			fractionDirty = false;
-			return cachedFraction;
+			return ExploredChunkCount / (float)Chunks.Length;
 		}
 
 		/// <summary>
-		/// The grid cell containing a world position.
+		/// The chunk containing a world position.
 		/// </summary>
 		/// <param name="worldPosition">The position to convert.</param>
-		/// <param name="x">The cell's X index.</param>
-		/// <param name="z">The cell's Z index.</param>
+		/// <param name="x">The chunk's X index.</param>
+		/// <param name="z">The chunk's Z index.</param>
 		/// <returns>True when the position is inside the grid.</returns>
-		public bool TryGetCell(Vector3 worldPosition, out int x, out int z)
+		public bool TryGetChunk(Vector3 worldPosition, out int x, out int z)
 		{
-			x = Mathf.FloorToInt((worldPosition.x - WorldRect.xMin) / CellSize);
-			z = Mathf.FloorToInt((worldPosition.z - WorldRect.yMin) / CellSize);
-			return x >= 0 && x < CellsX && z >= 0 && z < CellsZ;
+			x = Mathf.FloorToInt((worldPosition.x - WorldRect.xMin) / ChunkSize);
+			z = Mathf.FloorToInt((worldPosition.z - WorldRect.yMin) / ChunkSize);
+			return x >= 0 && x < ChunksX && z >= 0 && z < ChunksZ;
 		}
 
 		/// <summary>
@@ -365,7 +391,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The fog as a texture, alpha carrying coverage, rebuilt only when the grid has changed.
+		/// The fog as a texture, alpha carrying the fog, rebuilt only when a chunk has changed.
 		/// </summary>
 		/// <returns>The fog texture. Never null once the map exists.</returns>
 		/// <remarks>
@@ -373,48 +399,42 @@ namespace FishMMO.Client
 		/// texel by the vertex colour: leaving the colour channels at white lets the fog be tinted
 		/// to whatever suits the theme, where a single-channel texture would force it to be black.
 		/// </para>
-		/// <para>Bilinear, and that matters. At four metres a cell is a tenth of the minimap's
-		/// width, so point sampling would show the grid itself; interpolation between cells, on
-		/// top of the radial falloff the reveal already writes, is what makes the edge read as
-		/// mist rather than as tiling.</para>
+		/// <para><b>Point sampling, and that matters.</b> A chunk either has been visited or has
+		/// not, and the edge between the two is a real boundary the player can walk across — so it
+		/// is drawn as one. Interpolating would smear each chunk into its neighbours and produce a
+		/// soft blob that no longer lines up with the ground it describes.</para>
+		/// <para>The whole grid is uploaded on any change. It is a few hundred texels for a scene,
+		/// so the dirty-rectangle bookkeeping the per-cell version needed buys nothing here.</para>
 		/// </remarks>
 		public Texture2D GetTexture()
 		{
 			if (texture == null)
 			{
-				texture = new Texture2D(CellsX, CellsZ, TextureFormat.RGBA32, false, true)
+				texture = new Texture2D(ChunksX, ChunksZ, TextureFormat.RGBA32, false, true)
 				{
 					name = "FogOfWar",
-					filterMode = FilterMode.Bilinear,
+					filterMode = FilterMode.Point,
 					wrapMode = TextureWrapMode.Clamp,
 					hideFlags = HideFlags.HideAndDontSave,
 				};
 
-				// A fresh texture holds nothing, so the whole grid has to go up regardless.
-				MarkTextureRegionDirty(0, 0, CellsX - 1, CellsZ - 1);
+				// A fresh texture holds nothing, so the grid has to go up regardless.
+				textureDirty = true;
 			}
 
 			if (textureDirty)
 			{
 				if (pixelBuffer == null)
 				{
-					pixelBuffer = new Color32[Cells.Length];
+					pixelBuffer = new Color32[Chunks.Length];
 				}
 
-				int blockWidth = (dirtyMaxX - dirtyMinX) + 1;
-				int blockHeight = (dirtyMaxZ - dirtyMinZ) + 1;
-
-				int destination = 0;
-				for (int z = dirtyMinZ; z <= dirtyMaxZ; ++z)
+				for (int i = 0; i < Chunks.Length; ++i)
 				{
-					int row = z * CellsX;
-					for (int x = dirtyMinX; x <= dirtyMaxX; ++x)
-					{
-						pixelBuffer[destination++] = new Color32(255, 255, 255, Cells[row + x]);
-					}
+					pixelBuffer[i] = new Color32(255, 255, 255, Chunks[i] == Explored ? (byte)0 : (byte)255);
 				}
 
-				texture.SetPixels32(dirtyMinX, dirtyMinZ, blockWidth, blockHeight, pixelBuffer);
+				texture.SetPixels32(pixelBuffer);
 				texture.Apply(false, false);
 				textureDirty = false;
 			}

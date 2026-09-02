@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
@@ -392,6 +392,10 @@ namespace FishMMO.Client
 			{
 				ClearSlot(slotIndex);
 			}
+
+			// The item itself can be the reason a slot is blocked (no identity yet), and the slot
+			// arriving with its identity is what unblocks it.
+			ApplySlotLockVisual(slotIndex, IsSlotBlocked(slotIndex));
 
 			// A drag started from this slot no longer refers to what it was started from.
 			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject))
@@ -798,7 +802,20 @@ namespace FishMMO.Client
 			}
 
 			IItemContainer container = OwnContainer;
-			return container != null && container.IsSlotLocked(slotIndex);
+			if (container == null)
+			{
+				return false;
+			}
+			if (container.IsSlotLocked(slotIndex))
+			{
+				return true;
+			}
+
+			/* An item with no identity is one the database has not written yet. The server keeps
+			 * its slot locked until the row lands and re-sends the slot with the assigned id; until
+			 * then every request naming it would be refused, so it is shown as waiting rather than
+			 * offered. */
+			return container.TryGetItem(slotIndex, out Item item) && item != null && item.ID <= 0;
 		}
 
 		// ── Slot interaction ──────────────────────────────────────────────────
@@ -902,6 +919,7 @@ namespace FishMMO.Client
 			if (sourceContainer == null ||
 				!sourceContainer.CanManipulate() ||
 				!container.CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character) ||
 				!sourceContainer.IsValidSlot(sourceSlot) ||
 				!container.IsValidSlot(slotIndex) ||
 				(sourceInventory == OwnInventoryType && sourceSlot == slotIndex) ||
@@ -952,24 +970,15 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Recorded before the request goes out, because the reconcile can beat the
-			 * acknowledgement back and has to know where the item was headed. Without this the
-			 * reconcile drops the item into the first container with room -- the inventory -- and
-			 * the acknowledgement then finds the equipment slot already empty and declines to act,
-			 * so an unequip into the bank leaves the server holding it in the bank and this client
-			 * showing it in the inventory. */
-			if (Character.TryGet(out IEquipmentController equipmentForNotify))
+			/* Queued on the controller and applied inside the owner's next replicate tick, on both
+			 * peers at once — see IEquipmentController. The destination CONTAINER is part of the
+			 * request; the slot within it is chosen by the container, and the server reports the
+			 * slot it chose if the two copies of the container disagreed. */
+			if (!Character.TryGet(out IEquipmentController equipmentController) ||
+				!equipmentController.RequestUnequip((ItemSlot)equipmentSlot, OwnInventoryType))
 			{
-				equipmentForNotify.NotifyUnequipRequested((ItemSlot)equipmentSlot, OwnInventoryType);
+				ItemOperationTracker.Release(ReferenceButtonType.Equipment, equipmentSlot);
 			}
-
-			Client.Broadcast(new EquipmentUnequipItemBroadcast()
-			{
-				Slot = (byte)equipmentSlot,
-				ToInventory = OwnInventoryType,
-				// Meaningless on the request; the server fills it in on the way back.
-				ToSlot = -1,
-			}, FishNet.Transporting.Channel.Reliable);
 
 			dragObject.Clear();
 		}

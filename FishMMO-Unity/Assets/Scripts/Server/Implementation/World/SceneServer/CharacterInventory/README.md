@@ -89,7 +89,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `ICharacterAttributeService`
 5. On initialize, `CharacterInventorySystem` validates all dependencies and registers broadcast handlers for inventory, equipment, and bank operations.
 6. On deinitialize, it unregisters all broadcast handlers and clears the ingress guard.
-7. Clients send the appropriate broadcast (e.g., `InventorySwapItemSlotsBroadcast`, `EquipmentEquipItemBroadcast`) and receive the same broadcast back on success.
+7. Clients send the appropriate broadcast (e.g., `InventorySwapItemSlotsBroadcast`) and receive the same broadcast back on success. Equip and unequip are NOT broadcasts: they ride the owner's replicate input (`CharacterReplicateData.EquipmentRequest`) and are applied inside the replicate tick on both peers; this system persists them through `IEquipmentController.OnServerEquipmentChanged`, subscribed per character on `OnSpawnCharacter`.
 
 ## Configuration
 
@@ -147,8 +147,6 @@ On initialization, inspector values are clamped to safe minimums:
 |---|---|---|
 | `InventoryRemoveItemBroadcast` | `OnServerInventoryRemoveItemBroadcastReceived` | Remove an item from inventory |
 | `InventorySwapItemSlotsBroadcast` | `OnServerInventorySwapItemSlotsBroadcastReceived` | Swap inventory slots or move bank → inventory |
-| `EquipmentEquipItemBroadcast` | `OnServerEquipmentEquipItemBroadcastReceived` | Equip item from inventory or bank |
-| `EquipmentUnequipItemBroadcast` | `OnServerEquipmentUnequipItemBroadcastReceived` | Unequip item to inventory or bank |
 | `BankRemoveItemBroadcast` | `OnServerBankRemoveItemBroadcastReceived` | Remove an item from bank |
 | `BankSwapItemSlotsBroadcast` | `OnServerBankSwapItemSlotsBroadcastReceived` | Swap bank slots or move inventory → bank |
 
@@ -177,31 +175,18 @@ On initialization, inspector values are clamped to safe minimums:
    - **Equipment → Inventory:** Not handled (no-op).
 4. Broadcasts success back to client.
 
-### Equipment Equip Path
+### Equipment (predicted)
 
-`OnServerEquipmentEquipItemBroadcastReceived(conn, msg, channel)`:
-
-1. Validates connection, spawned player, character, and `IEquipmentController`.
-2. Acquires ingress guard for `EquipmentEquip`.
-3. Validates `msg.Slot` is a defined `ItemSlot` enum value.
-4. Switches on `msg.FromInventory`:
-   - **Inventory → Equipment:** Validates slot bounds, retrieves item, calls `equipmentController.Equip(...)`. If replacing an existing equipped item, persists the swapped-back inventory item; otherwise deletes the vacated inventory slot. Persists the new equipment slot and character attributes.
-   - **Bank → Equipment:** Validates banker scene object, validates slot bounds, follows same logic as inventory equip but against the bank controller.
-   - **Equipment → Equipment:** Not handled (returns).
-5. Broadcasts success back to client.
-
-### Equipment Unequip Path
-
-`OnServerEquipmentUnequipItemBroadcastReceived(conn, msg, channel)`:
-
-1. Validates connection, spawned player, character, and `IEquipmentController`.
-2. Acquires ingress guard for `EquipmentUnequip`.
-3. Validates `msg.Slot` is a defined `ItemSlot` enum value.
-4. Switches on `msg.ToInventory`:
-   - **Equipment → Inventory:** Retrieves equipped item, calls `equipmentController.Unequip(inventoryController, ...)`, persists modified inventory slots, deletes old equipment slot, persists character attributes.
-   - **Equipment → Bank:** Validates banker scene object, follows same logic as inventory unequip but against the bank controller.
-   - **Equipment → Equipment:** Not handled (no-op).
-5. Broadcasts success back to client.
+Equip and unequip do not have broadcast handlers. The owner queues a request on its
+`EquipmentController` (`RequestEquip` / `RequestUnequip`), the request rides the next
+`CharacterReplicateData`, and `EquipmentController.OnReplicate` applies it on the owner and the server
+on the same tick. On the server the controller first asks `EquipmentController.ServerRequestValidator`
+(installed by this system: `CharacterStateValidation.CanAct` plus banker range for the bank), then
+raises `OnServerEquipmentChanged`. `Equipment_OnServerEquipmentChanged` writes ONE batch — the socket
+row, the container row on the other side of the move, and the attribute rows — and for an unequip
+sends `EquipmentUnequipItemBroadcast` (server → owner) naming the item and the slot it landed in.
+The owner's reconcile confirms or reverts the socket; a snapshot older than the request is restored
+and the replay re-applies it.
 
 ### Bank Remove Path
 
@@ -334,35 +319,9 @@ OnServerInventorySwapItemSlotsBroadcastReceived(conn, msg, channel)
 └─ FromInventory = Equipment: no-op
 ```
 
-### Equipment Equip
+### Equipment
 
-```
-OnServerEquipmentEquipItemBroadcastReceived(conn, msg, channel)
-│
-├─ 1. Validate connection + spawned object
-├─ 2. Acquire ingress guard (EquipmentEquip)
-├─ 3. Validate character + IEquipmentController
-├─ 4. Validate ItemSlot enum
-│
-├─ FromInventory = Inventory:
-│  ├─ 5a. Resolve IInventoryController + validate slot + get item
-│  ├─ 6a. equipmentController.Equip(...)
-│  ├─ 7a. Persist swapped-back inventory item OR delete vacated inventory slot
-│  ├─ 8a. Persist equipment slot
-│  ├─ 9a. BuildAttributeDataList → PersistAttributesAsync
-│  └─ 10a. Broadcast success
-│
-├─ FromInventory = Bank:
-│  ├─ 5b. Resolve IBankController + ValidateBankerSceneObject
-│  ├─ 6b. Validate slot + get item
-│  ├─ 7b. equipmentController.Equip(...)
-│  ├─ 8b. Persist swapped-back bank item OR delete vacated bank slot
-│  ├─ 9b. Persist equipment slot
-│  ├─ 10b. BuildAttributeDataList → PersistAttributesAsync
-│  └─ 11b. Broadcast success
-│
-└─ FromInventory = Equipment: returns
-```
+See *Equipment (predicted)* above; there is no handler to diagram.
 
 ### Equipment Unequip
 

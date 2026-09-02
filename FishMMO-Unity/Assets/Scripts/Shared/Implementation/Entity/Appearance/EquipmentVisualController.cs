@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishMMO.Shared.Core;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -238,10 +238,20 @@ namespace FishMMO.Shared
 
 			assetRef.LoadAssetAsync<GameObject>().Completed += (handle) =>
 			{
-				if (renderer.EquipGeneration != equipGen) return;
+				/* A superseded load still holds an Addressables reference, and nothing else will
+				 * ever release it: ReleaseSlotRenderer only knows about the handle that WON. This
+				 * path is no longer rare — a predicted equip is restored and re-applied by every
+				 * reconcile that predates it, so several loads for one socket can be in flight and
+				 * all but the last are superseded. Release here or the refcount only ever climbs. */
+				if (renderer.EquipGeneration != equipGen)
+				{
+					Addressables.Release(handle);
+					return;
+				}
 				if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
 				{
 					Debug.LogError($"[EquipmentVisualController] Failed to load asset for '{item.Name}'.");
+					Addressables.Release(handle);
 					return;
 				}
 				GameObject prefab = handle.Result;

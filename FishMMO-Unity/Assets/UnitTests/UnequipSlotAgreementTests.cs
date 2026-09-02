@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using NUnit.Framework;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -70,7 +70,7 @@ namespace FishMMO.UnitTests
 			/* The server is the only party that knows, so it is the only party that can answer. */
 			string source = ReadSource(ServerPath);
 
-			LogAssert.IsTrue(source.Contains("msg.ToSlot ="),
+			LogAssert.IsTrue(source.Contains("ToSlot = change.ContainerIndex"),
 				"the server must report the slot it put the item in");
 		}
 
@@ -82,29 +82,28 @@ namespace FishMMO.UnitTests
 			 * index zero would name another item's slot whenever a merge happened. */
 			string source = ReadSource(ServerPath);
 
-			LogAssert.IsFalse(source.Contains("msg.ToSlot = modifiedItems[0]"),
+			LogAssert.IsFalse(source.Contains("ToSlot = change.ModifiedItems[0]"),
 				"the destination must come from the unequipped item, not from a list position");
 		}
 
 		[Test]
 		public void TheClientCorrectsASlotItGuessed()
 		{
-			/* The half that actually repairs the divergence. An acknowledgement that returned early
-			 * on an already-empty socket is what let the two sides stay apart forever. */
+			/* The half that actually repairs the divergence. The socket is settled by the
+			 * reconcile; the destination message exists only to move the item to the slot the
+			 * server chose, and it must do that whether or not the owner has already placed it. */
 			string source = ReadSource(ControllerPath);
 
-			int ack = source.IndexOf("ApplyUnequipAcknowledgement", StringComparison.Ordinal);
-			LogAssert.IsTrue(ack >= 0, "the acknowledgement handler must still exist");
+			int ack = source.IndexOf("public void ApplyUnequipDestination", StringComparison.Ordinal);
+			LogAssert.IsTrue(ack >= 0, "the destination handler must still exist");
 
-			/* Bounded to the handler itself. The helper it calls is declared earlier in the file,
-			 * so searching forward for the helper would find nothing and prove nothing. */
-			int end = source.IndexOf("public void Activate(", ack, StringComparison.Ordinal);
-			LogAssert.IsTrue(end > ack, "the end of the handler must be locatable");
+			int end = source.IndexOf("private void PlaceAtAcknowledgedSlot", ack, StringComparison.Ordinal);
+			LogAssert.IsTrue(end > ack, "the placement helper must follow the handler");
 
 			string body = source.Substring(ack, end - ack);
 
 			LogAssert.IsTrue(body.Contains("PlaceAtAcknowledgedSlot"),
-				"an already-empty socket must still place the item at the acknowledged slot");
+				"the destination handler must place the item at the slot the server chose");
 		}
 
 		[Test]

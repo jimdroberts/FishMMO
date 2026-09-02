@@ -1,4 +1,4 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using UnityEngine.UIElements;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -114,6 +114,7 @@ namespace FishMMO.Client
 			 * the only authority, but a request it is certain to reject costs a round trip and
 			 * leaves both slots marked pending until the refusal arrives. */
 			if (!container.CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character) ||
 				container.IsSlotLocked(slotIndex))
 			{
 				return;
@@ -129,18 +130,15 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Recorded before the request goes out -- see the unequip path. */
-			if (Character.TryGet(out IEquipmentController equipmentForEquipNotify))
+			/* Queued on the controller and applied inside the owner's next replicate tick, on both
+			 * peers at once — see IEquipmentController. A local refusal frees the marks now; a
+			 * server refusal arrives as a reconcile that moves the item back. */
+			if (!Character.TryGet(out IEquipmentController equipmentController) ||
+				!equipmentController.RequestEquip(item, slotIndex, InventoryType.Inventory, equippable.Slot))
 			{
-				equipmentForEquipNotify.NotifyEquipRequested(item, slotIndex, InventoryType.Inventory, equippable.Slot);
+				ItemOperationTracker.Release(ReferenceButtonType.Inventory, slotIndex);
+				ItemOperationTracker.Release(ReferenceButtonType.Equipment, (int)equippable.Slot);
 			}
-
-			Client.Broadcast(new EquipmentEquipItemBroadcast()
-			{
-				InventoryIndex = slotIndex,
-				Slot           = (byte)equippable.Slot,
-				FromInventory  = InventoryType.Inventory,
-			}, Channel.Reliable);
 		}
 	}
 }

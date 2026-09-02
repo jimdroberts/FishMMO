@@ -239,10 +239,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles item rewards for achievement tiers, adds items to inventory or bank and broadcasts updates to the client.
-		/// Game logic and Broadcasts are synchronous. DB persistence is fire-and-forget async.
+		/// Handles item rewards for achievement tiers: grants each item through the inventory
+		/// system's funnel, into the inventory when it has room for all of them and the bank
+		/// otherwise.
 		/// </summary>
-		/// <param name="itemService">Async service for persisting items, or null if unavailable.</param>
+		/// <remarks>
+		/// The funnel is what completes an item — it places it, tells the client, persists it and
+		/// hands it the identity the database assigns. This system used to place items itself and
+		/// fire a write that discarded the returned id, so every reward stayed at <c>ID == 0</c>,
+		/// unequippable and rewritten as a fresh row on every save until a snapshot repaired it.
+		/// </remarks>
+		/// <param name="itemService">Unused; kept so the call site reads as before.</param>
 		/// <param name="character">Player character receiving rewards.</param>
 		/// <param name="tier">Achievement tier containing item rewards.</param>
 		private void HandleItemRewards(ICharacterItemService itemService, IPlayerCharacter character, AchievementTier tier)
@@ -253,113 +260,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			{
+				Log.Error("AchievementSystem", $"Achievement item rewards dropped for CharID={character.ID}: no inventory system to grant through.");
+				return;
+			}
+
+			InventoryType destination;
 			if (character.TryGet(out IInventoryController inventoryController) &&
 				inventoryController.FreeSlots() >= itemRewards.Count)
 			{
-				List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
-
-				for (int i = 0; i < itemRewards.Count; ++i)
-				{
-					Item newItem = new Item(itemRewards[i], 1);
-
-					if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
-					{
-						foreach (Item item in modifiedItems)
-						{
-							if (item == null)
-							{
-								continue;
-							}
-
-							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
-							if (itemService != null)
-							{
-								item.Version++;
-								var dto = new CharacterItemData(
-									id: item.ID,
-									version: item.Version,
-									characterID: character.ID,
-									container: ItemContainerType.Inventory,
-									templateID: item.Template.ID,
-									slot: item.Slot,
-									seed: item.IsGenerated ? item.Generator.Seed : 0,
-									amount: item.IsStackable ? item.Stackable.Amount : 0
-								);
-								EnqueuePersistence(() => PersistItemAsync(itemService, dto));
-							}
-
-							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
-							{
-								InstanceID = item.ID,
-								TemplateID = item.Template.ID,
-								Slot = item.Slot,
-								Seed = item.IsGenerated ? item.Generator.Seed : 0,
-								StackSize = item.IsStackable ? item.Stackable.Amount : 0,
-							});
-						}
-					}
-				}
-				if (modifiedItemBroadcasts.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
-					{
-						Items = modifiedItemBroadcasts.ToArray(),
-					}, true, Channel.Reliable);
-				}
+				destination = InventoryType.Inventory;
 			}
 			else if (character.TryGet(out IBankController bankController) &&
 					 bankController.FreeSlots() >= itemRewards.Count)
 			{
-				List<BankSetItemBroadcast> modifiedItemBroadcasts = new List<BankSetItemBroadcast>();
-
-				for (int i = 0; i < itemRewards.Count; ++i)
-				{
-					Item newItem = new Item(itemRewards[i], 1);
-
-					if (bankController.TryAddItem(newItem, out List<Item> modifiedItems))
-					{
-						foreach (Item item in modifiedItems)
-						{
-							if (item == null)
-							{
-								continue;
-							}
-
-							// Fire-and-forget async DB persist — build DTO on main thread for thread safety
-							if (itemService != null)
-							{
-								item.Version++;
-								var dto = new CharacterItemData(
-									id: item.ID,
-									version: item.Version,
-									characterID: character.ID,
-									container: ItemContainerType.Bank,
-									templateID: item.Template.ID,
-									slot: item.Slot,
-									seed: item.IsGenerated ? item.Generator.Seed : 0,
-									amount: item.IsStackable ? item.Stackable.Amount : 0
-								);
-								EnqueuePersistence(() => PersistItemAsync(itemService, dto));
-							}
-
-							modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
-							{
-								InstanceID = item.ID,
-								TemplateID = item.Template.ID,
-								Slot = item.Slot,
-								Seed = item.IsGenerated ? item.Generator.Seed : 0,
-								StackSize = item.IsStackable ? item.Stackable.Amount : 0,
-							});
-						}
-					}
-				}
-				if (modifiedItemBroadcasts.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
-					{
-						Items = modifiedItemBroadcasts.ToArray(),
-					}, true, Channel.Reliable);
-				}
+				destination = InventoryType.Bank;
 			}
 			else
 			{
@@ -370,42 +287,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Channel = ChatChannel.System,
 					Text = "Your inventory and bank are full. Achievement item rewards could not be delivered.",
 				}, true, Channel.Reliable);
+				return;
 			}
-		}
 
-		/// <summary>
-		/// Asynchronously persists one item row to the database.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// The identity the write returns is deliberately discarded here, and that is a known
-		/// shortcoming rather than an oversight. This grant path is fire-and-forget with no
-		/// main-thread hand-off of its own, so there is nowhere to put the id — the item keeps
-		/// <c>ID == 0</c> until <c>CharacterInventorySystem</c>'s next snapshot writes it and reports
-		/// the identity back. Until then the item's attribute-ledger key is zero, which is correct
-		/// but shared with any other unwritten item, and a second write of the same item creates a
-		/// second row. Both are repaired by that snapshot.
-		/// </para>
-		/// <para>
-		/// Routing achievement rewards through <c>CharacterInventorySystem</c>'s batch machinery
-		/// would close it properly; that is a larger change than this one and is not attempted here.
-		/// </para>
-		/// </remarks>
-		/// <param name="service">The item service.</param>
-		/// <param name="dto">Pre-built row captured on the main thread.</param>
-		private async Task PersistItemAsync(ICharacterItemService service, CharacterItemData dto)
-		{
-			try
+			for (int i = 0; i < itemRewards.Count; ++i)
 			{
-				DatabaseResult<long> result = await service.PersistAsync(dto);
-				if (!result.IsSuccess)
+				if (itemRewards[i] == null)
 				{
-					await Log.Warning("AchievementSystem", $"PersistItemAsync DB error (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
+					continue;
 				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("AchievementSystem", $"Error persisting item (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {ex}");
+				if (!inventorySystem.TryGrantItem(character, new Item(itemRewards[i], 1), destination))
+				{
+					Log.Warning("AchievementSystem", $"Achievement item reward '{itemRewards[i].Name}' could not be placed for CharID={character.ID}.");
+				}
 			}
 		}
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -43,11 +43,16 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para>
 	/// <b>The <c>(character_id, container, slot)</c> unique index is not a conflict target.</b> It
 	/// exists to stop two items claiming one slot, a state the in-memory container cannot represent.
-	/// It is checked per row, so a statement that moves several items at once can trip it halfway
-	/// through even when the end state is legal. <see cref="SaveSnapshotAsync"/> avoids that by
-	/// deleting the character's rows before re-inserting them; the incremental paths move one item
-	/// at a time. A stale row still sitting on a slot that an incoming item claims surfaces as a
-	/// UNIQUE_VIOLATION and is repaired by the next snapshot.
+	/// It is checked per row, not per statement, so any write that exchanges two items' slots —
+	/// a swap, a deposit onto an occupied bank slot, an equip that displaces the item already worn —
+	/// would trip it partway through even though the end state is legal. Every multi-row path here
+	/// therefore PARKS first: <see cref="SaveSnapshotAsync"/> deletes the character's rows before
+	/// re-inserting them, and the bulk <see cref="PersistAsync(IEnumerable{CharacterItemData}, CancellationToken)"/>
+	/// moves the rows it is about to update onto negative slots that nothing else can occupy, then
+	/// writes the final layout. Both happen inside the caller's transaction, so no intermediate
+	/// state is ever visible. A stale row still sitting on a slot that an incoming item claims —
+	/// one this batch does not know about — still surfaces as a UNIQUE_VIOLATION and is repaired
+	/// by the next snapshot.
 	/// </para>
 	/// </remarks>
 	public sealed class CharacterItemService : BaseService<CharacterItemEntity>, ICharacterItemService
@@ -237,6 +242,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var now = DateTime.UtcNow;
 
+				await ParkRowsAsync(dbContext, activeItems, cancellationToken).ConfigureAwait(false);
+
 				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					GetUpsertSql(),
@@ -247,6 +254,65 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return new BulkWriteResult(suppliedRows, activeItems.Count, appliedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Moves every existing row this batch is about to update onto a slot nothing else can hold,
+		/// so the update that follows can exchange slots between rows without tripping the
+		/// per-row unique index partway through.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The parking slot is <c>-1000000 - n</c> for the row's position in the batch: unique within
+		/// the batch, impossible for a real slot, and distinct from the <c>-1</c> that an unplaced
+		/// runtime item carries. Batches for different characters cannot collide because the index
+		/// includes <c>character_id</c>; two batches for one character are serialised by the caller's
+		/// row lock and lane.
+		/// </para>
+		/// <para>
+		/// <b>Parks exactly the rows the upsert will update, and no others.</b> The predicate is the
+		/// upsert's own version gate. A row that is going to be rejected as stale must not be parked,
+		/// because nothing would then move it back: a parked row left behind by a rejected update is a
+		/// row on a slot the load path cannot place, which is an item lost. The two predicates must
+		/// stay identical.
+		/// </para>
+		/// <para>
+		/// Skipped for a batch with fewer than two identified rows: a single row cannot swap with
+		/// anything, and a row with no identity has nothing to park.
+		/// </para>
+		/// </remarks>
+		private async Task ParkRowsAsync(NpgsqlDbContext dbContext, IReadOnlyList<CharacterItemData> rows, CancellationToken cancellationToken)
+		{
+			var identified = new List<CharacterItemData>(rows.Count);
+			foreach (var row in rows)
+			{
+				if (row.ID > 0)
+				{
+					identified.Add(row);
+				}
+			}
+			if (identified.Count < 2)
+			{
+				return;
+			}
+
+			var parkSql = $@"
+				UPDATE {TableName} AS t
+				SET slot = -1000000 - u.ord::integer
+				FROM UNNEST({{0}}::bigint[], {{1}}::bigint[]) WITH ORDINALITY AS u(id, version, ord)
+				WHERE t.id = u.id
+				  AND (t.deleted = TRUE OR u.version > t.version)";
+
+			await dbContext.Database
+				.ExecuteSqlRawAsync(
+					parkSql,
+					new object[]
+					{
+						identified.Select(i => i.ID).ToArray(),
+						identified.Select(i => i.Version).ToArray(),
+					},
+					cancellationToken)
+				.ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -610,7 +676,7 @@ namespace FishMMO.Database.Npgsql.Services
 						{{7}}::bigint[],
 						{{8}}::timestamp[]
 					) AS u(id, character_id, container, slot, version, template_id, seed, amount, time_created)
-					RETURNING id, container, slot";
+					RETURNING id, container, slot, template_id";
 
 				var written = await ExecuteReturningManyAsync(
 					dbContext,
@@ -619,7 +685,8 @@ namespace FishMMO.Database.Npgsql.Services
 					reader => new CharacterItemIdAssignment(
 						(ItemContainerType)reader.GetInt16(1),
 						reader.GetInt32(2),
-						reader.GetInt64(0)),
+						reader.GetInt64(0),
+						reader.GetInt32(3)),
 					cancellationToken).ConfigureAwait(false);
 
 				var assignments = written

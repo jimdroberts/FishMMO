@@ -109,6 +109,39 @@ namespace FishMMO.Client
 		private static long nextNoteID = 1;
 
 		/// <summary>
+		/// Whether the reason exploration is not advancing has already been reported for this scene.
+		/// </summary>
+		/// <remarks>
+		/// Once per scene load, not once per attempt: the check runs four times a second, and a
+		/// condition that holds at all holds for the whole session.
+		/// </remarks>
+		private static bool revealRefusalReported;
+
+		/// <summary>
+		/// Reports, once per scene, that exploration cannot advance and why.
+		/// </summary>
+		/// <param name="reason">What is preventing the reveal.</param>
+		/// <remarks>
+		/// A refused reveal is not the same as a reveal that changed nothing. Standing on ground
+		/// already explored changes nothing every quarter second and is entirely normal, so
+		/// <see cref="FogOfWarMap.Reveal"/> returning false is never reported. Only the two
+		/// structural refusals are — no transform to reveal from, and a character outside the
+		/// grid — because those never resolve on their own.
+		/// </remarks>
+		private static void WarnRevealRefused(string reason)
+		{
+			if (revealRefusalReported)
+			{
+				return;
+			}
+			revealRefusalReported = true;
+
+			Log.Warning("ClientMapSystem",
+				$"Fog of war cannot advance for scene '{SceneName}': {reason}. Explored territory will " +
+				"stay exactly as it is, and the world map's explored percentage will not move.");
+		}
+
+		/// <summary>
 		/// Points the map subsystem at a character, loading everything for the scene they are in.
 		/// </summary>
 		/// <param name="character">The local player character, or null to tear down.</param>
@@ -168,7 +201,25 @@ namespace FishMMO.Client
 				nextRevealTime = now + RevealInterval;
 
 				Transform transform = Character.Transform;
-				if (transform != null && Fog.Reveal(transform.position, Cartography.RevealRadius))
+				if (transform == null)
+				{
+					/* Nothing to reveal from. Reported because the failure is otherwise completely
+					 * silent: the fog grid still exists, so the map draws fog and the world map's
+					 * readout keeps saying "Explored 0%" for the whole session while exploration
+					 * never advances a single cell. That is indistinguishable from the readout
+					 * itself being broken, which is exactly how it gets reported. */
+					WarnRevealRefused("the character has no transform");
+				}
+				else if (!Fog.WorldRect.Contains(new Vector2(transform.position.x, transform.position.z)))
+				{
+					/* The character is not standing inside the rectangle the fog grid covers, so
+					 * every reveal lands outside the grid and is dropped. Same silence as above,
+					 * and the usual cause is a mismatch between the scene the fog was built for and
+					 * the scene the character is physically in. */
+					WarnRevealRefused($"the character is at {transform.position} but scene '{SceneName}' " +
+						$"covers {Fog.WorldRect} — every reveal falls outside the map");
+				}
+				else if (Fog.Reveal(transform.position))
 				{
 					saveDueTime = now + SaveDebounce;
 				}
@@ -269,6 +320,7 @@ namespace FishMMO.Client
 			nextNoteID = 1;
 			saveDueTime = 0.0;
 			nextRevealTime = 0.0;
+			revealRefusalReported = false;
 		}
 
 		/// <summary>
@@ -276,12 +328,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private static void LoadFog()
 		{
-			float cellSize = Definition != null && Definition.FogCellSize > 0.0f
-				? Definition.FogCellSize
-				: FogOfWarDefaults.CellSize;
+			float chunkSize = Definition != null && Definition.FogChunkSize > 0.0f
+				? Definition.FogChunkSize
+				: FogOfWarDefaults.ChunkSize;
 
-			Fog = FogOfWarStore.Load(Character.ID, SceneName, MapRect, cellSize)
-				?? new FogOfWarMap(MapRect, cellSize);
+			Fog = FogOfWarStore.Load(Character.ID, SceneName, MapRect, chunkSize)
+				?? new FogOfWarMap(MapRect, chunkSize);
 
 			if (Definition != null && !Definition.FogOfWarEnabled)
 			{
@@ -292,6 +344,119 @@ namespace FishMMO.Client
 				Fog.ClearDirty();
 			}
 		}
+
+		#region Exploration API
+
+		/* Everything below is for content that explores ground the character has not walked: a map
+		 * consumable, a quest reward, a trigger volume at a vista, a discovery on reaching a
+		 * landmark. Walking is handled by Tick and does not come through here.
+		 *
+		 * All of it applies to the scene the character is currently in. Exploring part of ANOTHER
+		 * scene — a treasure map for a zone you have not visited — is not offered yet, and the
+		 * reason is worth stating so it does not get bolted on wrongly: the obvious implementation
+		 * loads that scene's file, edits it and saves it, which silently throws away the player's
+		 * progress the moment the named scene happens to be the current one, because the live map
+		 * in memory is a different object that gets written over the top a few seconds later. Add
+		 * it by routing through the live Fog whenever the name matches SceneName, never by loading
+		 * a second copy. */
+
+		/// <summary>
+		/// Explores every chunk within a radius of a world position.
+		/// </summary>
+		/// <param name="worldCenter">Centre of the area, in world space.</param>
+		/// <param name="radius">Radius in world metres.</param>
+		/// <returns>How many chunks this explored that were not explored already.</returns>
+		/// <remarks>
+		/// The shape a consumable usually wants: "reveals the land within five hundred metres". A
+		/// chunk counts when the circle reaches any part of it.
+		/// </remarks>
+		public static int ExploreAround(Vector3 worldCenter, float radius)
+		{
+			if (Fog == null)
+			{
+				return 0;
+			}
+
+			return NoteExplored(Fog.RevealAround(worldCenter, radius));
+		}
+
+		/// <summary>
+		/// Explores every chunk a world-space rectangle touches.
+		/// </summary>
+		/// <param name="worldArea">The rectangle, on the XZ plane, in world metres.</param>
+		/// <returns>How many chunks this explored that were not explored already.</returns>
+		public static int ExploreArea(Rect worldArea)
+		{
+			if (Fog == null)
+			{
+				return 0;
+			}
+
+			return NoteExplored(Fog.RevealArea(worldArea));
+		}
+
+		/// <summary>
+		/// Explores one chunk by its grid coordinates.
+		/// </summary>
+		/// <param name="chunkX">The chunk's X index.</param>
+		/// <param name="chunkZ">The chunk's Z index.</param>
+		/// <returns>True when that chunk had not been explored before.</returns>
+		/// <remarks>
+		/// For content that names chunks directly. Grid coordinates are only meaningful alongside
+		/// the scene's bounds and chunk size, both of which change when a level designer moves a
+		/// boundary volume — so anything authored against them should be re-checked when that
+		/// happens. Naming a world position through <see cref="ExploreAround"/> does not have that
+		/// problem and is the better choice unless the grid is genuinely what is being described.
+		/// </remarks>
+		public static bool ExploreChunk(int chunkX, int chunkZ)
+		{
+			if (Fog == null)
+			{
+				return false;
+			}
+
+			return NoteExplored(Fog.RevealChunk(chunkX, chunkZ) ? 1 : 0) > 0;
+		}
+
+		/// <summary>
+		/// Explores the whole of the current scene.
+		/// </summary>
+		/// <remarks>
+		/// For the map that hands a player an entire zone. A scene whose definition disables fog is
+		/// already fully explored and has nothing to save, so this does nothing there.
+		/// </remarks>
+		public static void ExploreEverything()
+		{
+			if (Fog == null)
+			{
+				return;
+			}
+
+			int before = Fog.ExploredChunkCount;
+			Fog.RevealAll();
+			NoteExplored(Fog.ExploredChunkCount - before);
+		}
+
+		/// <summary>
+		/// Schedules a save when exploration actually changed something.
+		/// </summary>
+		/// <param name="revealed">How many chunks were newly explored.</param>
+		/// <returns><paramref name="revealed"/>, so callers can return it straight through.</returns>
+		/// <remarks>
+		/// The same debounce the walking path uses. Nothing new explored means nothing to write —
+		/// re-using a map item on ground already covered must not dirty the file.
+		/// </remarks>
+		private static int NoteExplored(int revealed)
+		{
+			if (revealed > 0)
+			{
+				saveDueTime = Time.unscaledTimeAsDouble + SaveDebounce;
+			}
+
+			return revealed;
+		}
+
+		#endregion
 
 		/// <summary>
 		/// Writes the explored map if it has changed.
@@ -498,21 +663,32 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// Defaults for the fog grid, in one place so the store, the map and the definition's
+	/// Defaults for the exploration grid, in one place so the store, the map and the definition's
 	/// override all agree.
 	/// </summary>
 	public static class FogOfWarDefaults
 	{
 		/// <summary>
-		/// Size of one reveal cell in world metres.
+		/// Length of one exploration chunk's side, in world metres.
 		/// </summary>
 		/// <remarks>
-		/// Four metres: roughly a character's stride at a walk, and small enough that the reveal's
-		/// radial falloff has several cells to work across. A two-kilometre scene is then a
-		/// 500 by 500 grid — a quarter of a megabyte in memory and a few kilobytes on disk once
-		/// compressed, which is small enough not to think about and large enough that halving it
-		/// again would be a real cost for a difference no player would see.
+		/// <para>
+		/// A hundred and twenty-eight metres, which makes the shipped thousand-metre scenes nine
+		/// chunks square. That is the number chosen to make the percentage worth showing: each
+		/// chunk entered is a little over one percent, so the readout moves a visible step every
+		/// time the player reaches new ground, rather than creeping by a point per sixty metres
+		/// walked as the per-cell version did.
+		/// </para>
+		/// <para>
+		/// It is also about the area the old reveal disc covered, so a scene opens up at roughly
+		/// the rate it used to — in blocks with edges rather than as a spreading smudge.
+		/// </para>
+		/// <para>
+		/// A scene that wants a different grain sets <c>FogChunkSize</c> on its map definition. A
+		/// small interior wants a smaller number: at this size a two-hundred-metre scene is four
+		/// chunks, and each one is a quarter of the map.
+		/// </para>
 		/// </remarks>
-		public const float CellSize = 4.0f;
+		public const float ChunkSize = 128.0f;
 	}
 }

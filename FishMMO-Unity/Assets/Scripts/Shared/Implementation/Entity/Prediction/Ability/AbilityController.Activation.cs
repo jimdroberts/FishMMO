@@ -26,6 +26,19 @@ namespace FishMMO.Shared
 		public event Action<ICharacter, int, int> OnConsumableUsed;
 
 		/// <summary>
+		/// Fired when a consumable has changed the inventory row that held it: the stack was
+		/// reduced, or the item was used up and its slot emptied.
+		/// </summary>
+		/// <remarks>
+		/// Arguments: the character, the item (still carrying its identity and version even when
+		/// destroyed), the slot it occupied, and whether it was destroyed. This is the persistence
+		/// hook: <see cref="OnConsumableUsed"/> fires after the slot has been cleared and names only
+		/// a template, so nothing could write the row from it, and a potion drunk was only ever
+		/// recorded by the next full snapshot — a crash before that refunded it.
+		/// </remarks>
+		public event Action<ICharacter, Item, int, bool> OnConsumableItemChanged;
+
+		/// <summary>
 		/// Gets the current ability type, considering any type override.
 		/// </summary>
 		/// <returns>The current <see cref="AbilityType"/> if an ability is active, otherwise <see cref="AbilityType.None"/>.</returns>
@@ -1238,9 +1251,11 @@ namespace FishMMO.Shared
 					int slot = consumableSlot;
 					if (consumable.Invoke(PlayerCharacter, item, activationData.GetTick()))
 					{
+						bool destroyed = !item.IsStackable || item.Stackable.Amount < 1;
+
 						// If the item was fully consumed, clean up the inventory slot.
 						// Stackable is not nulled by Item.Destroy(), so this check is safe.
-						if (!item.IsStackable || item.Stackable.Amount < 1)
+						if (destroyed)
 						{
 							// Unlock before setting null so the SetItemSlot call is not blocked.
 							cachedInventoryController.UnlockSlot(slot);
@@ -1254,6 +1269,7 @@ namespace FishMMO.Shared
 							cachedInventoryController.SetItemSlot(null, slot);
 						}
 
+						OnConsumableItemChanged?.Invoke(Character, item, slot, destroyed);
 						OnConsumableUsed?.Invoke(Character, consumable.ID, slot);
 					}
 				}
@@ -1305,7 +1321,13 @@ namespace FishMMO.Shared
 			for (int i = 0; i < items.Count; ++i)
 			{
 				Item item = items[i];
-				if (item != null && item.Template.ID == templateID)
+				/* An item with no identity is one the database has not written yet, and it is
+				 * held unusable until it has been — the server locks its slot until the row lands,
+				 * and every request the owner can make refuses it. Skipping it here keeps the
+				 * consumable path on the same rule, deterministically: the owner sees the zero
+				 * until the server re-sends the slot with the assigned id, so it never queues an
+				 * activation the server would refuse. */
+				if (item != null && item.ID > 0 && item.Template.ID == templateID)
 				{
 					return item;
 				}

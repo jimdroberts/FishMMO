@@ -12,6 +12,13 @@ namespace FishMMO.Shared.Core
 	public interface IAbilityController : IAbilityKnowledgeController
 	{
 		/// <summary>
+		/// Fired when a consumable changed the inventory row that held it. Arguments: the character,
+		/// the item (identity and version intact even when destroyed), its slot, and whether it was
+		/// destroyed. The server's persistence layer subscribes to this.
+		/// </summary>
+		event System.Action<ICharacter, Item, int, bool> OnConsumableItemChanged;
+
+		/// <summary>
 		/// Event triggered to check if manipulation is allowed.
 		/// </summary>
 		event Func<bool> OnCanManipulate;

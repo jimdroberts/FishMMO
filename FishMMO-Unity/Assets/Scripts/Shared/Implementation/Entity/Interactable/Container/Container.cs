@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared.Core;
@@ -265,10 +265,12 @@ namespace FishMMO.Shared
 					{
 						amount = item.Stackable.Amount;
 
+						// The donor is listed only once it has a slot of its own — see the
+						// matching note in ItemContainer.TryAddItem — and the slot is repainted
+						// from the stack that is now in it, not from the donor.
 						modifiedItems.Add(Items[i]);
-						modifiedItems.Add(item);
 
-						OnSlotUpdated?.Invoke(this, item, i);
+						OnSlotUpdated?.Invoke(this, Items[i], i);
 					}
 
 					if (amount < 1) return true;

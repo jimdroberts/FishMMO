@@ -936,20 +936,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Resolve DB services for fire-and-forget persistence
-			TryGetDbService<ICharacterItemService>(out var itemService);
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			{
+				Log.Error("QuestSystem", $"Quest item rewards dropped for CharID={character.ID}: no inventory system to grant through.");
+				return;
+			}
 
-			// Try inventory first
+			/* Through the inventory system's grant funnel, which is what completes an item: it
+			 * places it, tells the client, persists it and hands it the identity the database
+			 * assigns. This system used to place items itself and fire a write that discarded the
+			 * returned id, so every reward stayed at ID == 0 — unequippable, and rewritten as a
+			 * fresh row on every save until a snapshot repaired it. */
+			InventoryType destination;
 			if (character.TryGet(out IInventoryController inventoryController) &&
 				inventoryController.FreeSlots() >= allRewards.Count)
 			{
-				GrantItemsToInventory(character, inventoryController, itemService, allRewards);
+				destination = InventoryType.Inventory;
 			}
-			// Fall back to bank
 			else if (character.TryGet(out IBankController bankController) &&
 					 bankController.FreeSlots() >= allRewards.Count)
 			{
-				GrantItemsToBank(character, bankController, itemService, allRewards);
+				destination = InventoryType.Bank;
 			}
 			else
 			{
@@ -959,124 +966,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Channel = ChatChannel.System,
 					Text = "Your inventory and bank are full. Quest item rewards could not be delivered.",
 				}, true, Channel.Reliable);
+				return;
 			}
-		}
 
-		/// <summary>
-		/// Grants item rewards to the player's inventory and broadcasts updates.
-		/// </summary>
-		private void GrantItemsToInventory(IPlayerCharacter character, IInventoryController inventoryController,
-			ICharacterItemService itemService, List<BaseItemTemplate> rewards)
-		{
-			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
-
-			for (int i = 0; i < rewards.Count; i++)
+			for (int i = 0; i < allRewards.Count; i++)
 			{
-				Item newItem = new Item(rewards[i], 1);
-
-				if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
+				if (allRewards[i] == null)
 				{
-					for (int j = 0; j < modifiedItems.Count; j++)
-					{
-						Item item = modifiedItems[j];
-						if (item == null)
-						{
-							continue;
-						}
-
-						if (itemService != null)
-						{
-							item.Version++;
-							var dto = new CharacterItemData(
-								id: item.ID,
-								version: item.Version,
-								characterID: character.ID,
-								container: ItemContainerType.Inventory,
-								templateID: item.Template.ID,
-								slot: item.Slot,
-								seed: item.IsGenerated ? item.Generator.Seed : 0,
-								amount: item.IsStackable ? item.Stackable.Amount : 0
-							);
-							EnqueuePersistence(() => PersistItemAsync(itemService, dto), character.ID);
-						}
-
-						modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
-						{
-							InstanceID = item.ID,
-							TemplateID = item.Template.ID,
-							Slot = item.Slot,
-							Seed = item.IsGenerated ? item.Generator.Seed : 0,
-							StackSize = item.IsStackable ? item.Stackable.Amount : 0,
-						});
-					}
+					continue;
 				}
-			}
-
-			if (modifiedItemBroadcasts.Count > 0)
-			{
-				Server.NetworkWrapper.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
+				if (!inventorySystem.TryGrantItem(character, new Item(allRewards[i], 1), destination))
 				{
-					Items = modifiedItemBroadcasts.ToArray(),
-				}, true, Channel.Reliable);
-			}
-		}
-
-		/// <summary>
-		/// Grants item rewards to the player's bank and broadcasts updates.
-		/// </summary>
-		private void GrantItemsToBank(IPlayerCharacter character, IBankController bankController,
-			ICharacterItemService itemService, List<BaseItemTemplate> rewards)
-		{
-			List<BankSetItemBroadcast> modifiedItemBroadcasts = new List<BankSetItemBroadcast>();
-
-			for (int i = 0; i < rewards.Count; i++)
-			{
-				Item newItem = new Item(rewards[i], 1);
-
-				if (bankController.TryAddItem(newItem, out List<Item> modifiedItems))
-				{
-					for (int j = 0; j < modifiedItems.Count; j++)
-					{
-						Item item = modifiedItems[j];
-						if (item == null)
-						{
-							continue;
-						}
-
-						if (itemService != null)
-						{
-							item.Version++;
-							var dto = new CharacterItemData(
-								id: item.ID,
-								version: item.Version,
-								characterID: character.ID,
-								container: ItemContainerType.Bank,
-								templateID: item.Template.ID,
-								slot: item.Slot,
-								seed: item.IsGenerated ? item.Generator.Seed : 0,
-								amount: item.IsStackable ? item.Stackable.Amount : 0
-							);
-							EnqueuePersistence(() => PersistItemAsync(itemService, dto), character.ID);
-						}
-
-						modifiedItemBroadcasts.Add(new BankSetItemBroadcast()
-						{
-							InstanceID = item.ID,
-							TemplateID = item.Template.ID,
-							Slot = item.Slot,
-							Seed = item.IsGenerated ? item.Generator.Seed : 0,
-							StackSize = item.IsStackable ? item.Stackable.Amount : 0,
-						});
-					}
+					Log.Warning("QuestSystem", $"Quest item reward '{allRewards[i].Name}' could not be placed for CharID={character.ID}.");
 				}
-			}
-
-			if (modifiedItemBroadcasts.Count > 0)
-			{
-				Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
-				{
-					Items = modifiedItemBroadcasts.ToArray(),
-				}, true, Channel.Reliable);
 			}
 		}
 
@@ -1109,35 +1011,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				questController.Acquire(nextQuest);
-			}
-		}
-
-		#endregion
-
-		#region Async Persistence Helpers
-
-		/// <summary>
-		/// Asynchronously persists one item row to the database.
-		/// </summary>
-		/// <remarks>
-		/// The identity the write returns is discarded, which is the same known shortcoming the
-		/// achievement reward path carries: this is fire-and-forget with no main-thread hand-off, so
-		/// there is nowhere to put the id. The item keeps <c>ID == 0</c> until
-		/// <c>CharacterInventorySystem</c>'s next snapshot writes it and reports the identity back.
-		/// </remarks>
-		private async Task PersistItemAsync(ICharacterItemService service, CharacterItemData dto)
-		{
-			try
-			{
-				DatabaseResult<long> result = await service.PersistAsync(dto);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("QuestSystem", $"PersistItemAsync DB error (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("QuestSystem", $"Error persisting item (CharID={dto.CharacterID}, Container={dto.Container}, Slot={dto.Slot}): {ex}");
 			}
 		}
 
