@@ -1204,9 +1204,7 @@ namespace FishMMO.Client
 		/// Fills the antialiasing dropdown and applies the player's choice as they make it.
 		/// </summary>
 		/// <remarks>
-		/// The labels name the trade-off rather than the algorithm. "SMAA" tells a player nothing
-		/// about what it will cost them or look like, and the acronym is not what they are choosing
-		/// between.
+		/// The labels carry both the technique and the trade-off -- see AntialiasingLabels.
 		/// </remarks>
 		private void InitializeAntialiasing()
 		{
@@ -1244,12 +1242,18 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Dropdown labels, in the order of <see cref="ClientCameraSettings.AntialiasingOption"/>.
 		/// </summary>
+		/// <remarks>
+		/// Each names the technique and then what it is for. The acronym alone assumes the player
+		/// already knows the field; the plain word alone hides which technique they are choosing,
+		/// which matters as soon as they compare notes with anyone or search for what it looks
+		/// like. Both, in that order, so the list scans by technique and reads by intent.
+		/// </remarks>
 		private static readonly string[] AntialiasingLabels =
 		{
 			"Off",
-			"Fast",
-			"Balanced",
-			"Temporal",
+			"FXAA (Fast)",
+			"SMAA (Balanced)",
+			"TAA (Temporal)",
 		};
 
 		private void InitializeLookSensitivity()

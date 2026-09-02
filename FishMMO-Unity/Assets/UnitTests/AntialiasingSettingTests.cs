@@ -181,6 +181,30 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void EachLabel_NamesItsTechnique()
+		{
+			/* The acronym is what a player can act on outside the game -- comparing notes, searching
+			 * for what it looks like, reading a recommendation. The plain word is what they can act
+			 * on inside it. Dropping either half is a real loss, and dropping the acronym is the
+			 * easy one to do while "tidying up" the labels. */
+			string source = File.ReadAllText(Path.Combine(
+				Directory.GetCurrentDirectory(),
+				"Assets/Scripts/Client/GUI/World/Options/UITKOptions.cs"));
+
+			int labels = source.IndexOf("AntialiasingLabels =", StringComparison.Ordinal);
+			LogAssert.IsTrue(labels >= 0, "the dropdown must still declare its labels");
+
+			int end = source.IndexOf("};", labels, StringComparison.Ordinal);
+			string block = source.Substring(labels, end - labels);
+
+			foreach (string technique in new[] { "FXAA", "SMAA", "TAA" })
+			{
+				LogAssert.IsTrue(block.Contains(technique),
+					$"the labels must name {technique}, not only describe it");
+			}
+		}
+
+		[Test]
 		public void TheSavedAntialiasing_IsAppliedWhenTheLocalCharacterInitializes()
 		{
 			/* Pinned in source, for the same reason the sensitivity apply is: this is the wiring
