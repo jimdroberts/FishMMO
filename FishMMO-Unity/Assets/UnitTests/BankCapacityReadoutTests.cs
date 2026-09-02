@@ -31,6 +31,9 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class BankCapacityReadoutTests
 	{
+		private const string GridPanelPath =
+			"Assets/Scripts/Client/GUI/World/ItemContainers/UITKItemGridPanel.cs";
+
 		private const string BankPath =
 			"Assets/Scripts/Client/GUI/World/Bank/UITKBank.cs";
 
@@ -59,20 +62,24 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheBankCountsItemsRatherThanIcons()
+		public void TheGridPanelCountsItemsRatherThanIcons()
 		{
 			/* The defect. Counting sprites means an un-iconed item is invisible to the readout,
-			 * which on the current content is every item there is. */
-			string body = CapacityBody(BankPath);
+			 * which on the current content is every item there is.
+			 *
+			 * Asserted against the shared grid panel now that the bank draws its slots there. That
+			 * is the point of moving it: there is one implementation to be right rather than two to
+			 * keep in agreement. */
+			string body = CapacityBody(GridPanelPath);
 
 			/* The indexed read is the occupancy decision; a mention of the list is not. The
 			 * inventory still sizes its total from that list, correctly, so forbidding the name
 			 * outright would fail a panel that is already right. */
 			LogAssert.IsFalse(body.Contains("slotSprites[i]"),
-				"the bank must not decide occupancy from the cached sprites");
+				"the grid panel must not decide occupancy from cached sprites");
 
 			LogAssert.IsTrue(body.Contains("IsSlotEmpty"),
-				"the bank must ask the controller, which knows what the slot holds");
+				"the grid panel must ask the container, which knows what the slot holds");
 		}
 
 		[Test]
@@ -90,7 +97,19 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheBankSizesTheReadoutFromItsSlots()
+		public void TheBankDrawsItsGridFromTheSharedPanel()
+		{
+			/* The invariant that makes the counting bug unrepeatable. It was fixed in the inventory
+			 * and left wrong in the bank because there were two implementations; with one, a fix
+			 * cannot land in half the game. */
+			string source = ReadSource(BankPath);
+
+			LogAssert.IsTrue(source.Contains(": UITKItemGridPanel"),
+				"the bank panel must derive its grid from the shared implementation");
+		}
+
+		[Test]
+		public void TheGridPanelSizesTheReadoutFromItsSlots()
 		{
 			/* The total comes from the slots that exist rather than from the sprite cache. Both
 			 * lists hold one entry per slot so the two agree today, but once the cache is no longer
@@ -100,10 +119,10 @@ namespace FishMMO.UnitTests
 			 *
 			 * Asserted for the bank only. The inventory still takes its total from the sprite cache;
 			 * that is correct today and is left alone rather than changed in passing. */
-			string body = CapacityBody(BankPath);
+			string body = CapacityBody(GridPanelPath);
 
 			LogAssert.IsTrue(body.Contains("int total = slotViews.Count;"),
-				"the bank's total must come from the slots the panel built");
+				"the total must come from the slots the panel built");
 		}
 	}
 }
