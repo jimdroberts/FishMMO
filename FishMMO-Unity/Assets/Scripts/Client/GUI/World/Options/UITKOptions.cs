@@ -96,6 +96,7 @@ namespace FishMMO.Client
 		private const string REFRESHRATE_DROPDOWN_NAME = "refreshrate-dropdown";
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
 		private const string QUALITY_DROPDOWN_NAME = "quality-dropdown";
+		private const string ANTIALIASING_DROPDOWN_NAME = "antialiasing-dropdown";
 		private const string FRAMERATE_DROPDOWN_NAME = "framerate-dropdown";
 		private const string GRAPHICS_HINT_NAME = "options-graphics-hint";
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
@@ -301,6 +302,7 @@ namespace FishMMO.Client
 		private DropdownField refreshRateDropdown;
 		private DropdownField fullscreenDropdown;
 		private DropdownField qualityDropdown;
+		private DropdownField antialiasingDropdown;
 		private DropdownField frameRateDropdown;
 		private Label graphicsHint;
 		private Button screenApplyButton;
@@ -449,6 +451,7 @@ namespace FishMMO.Client
 			refreshRateDropdown = Root.Q<DropdownField>(REFRESHRATE_DROPDOWN_NAME);
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
 			qualityDropdown = Root.Q<DropdownField>(QUALITY_DROPDOWN_NAME);
+			antialiasingDropdown = Root.Q<DropdownField>(ANTIALIASING_DROPDOWN_NAME);
 			frameRateDropdown = Root.Q<DropdownField>(FRAMERATE_DROPDOWN_NAME);
 			graphicsHint = Root.Q<Label>(GRAPHICS_HINT_NAME);
 			screenApplyButton = Root.Q<Button>(SCREEN_APPLY_NAME);
@@ -475,6 +478,7 @@ namespace FishMMO.Client
 			InitializeDisplaySettings();
 			InitializeQualityLevel();
 			InitializeBrightness();
+			InitializeAntialiasing();
 			InitializeLookSensitivity();
 			InitializeFrameRateLimit();
 			InitializeVSync();
@@ -1196,6 +1200,58 @@ namespace FishMMO.Client
 		/// the view unusable at exactly the moment they would need to reach this menu to undo it,
 		/// and zero makes the camera immovable.
 		/// </remarks>
+		/// <summary>
+		/// Fills the antialiasing dropdown and applies the player's choice as they make it.
+		/// </summary>
+		/// <remarks>
+		/// The labels name the trade-off rather than the algorithm. "SMAA" tells a player nothing
+		/// about what it will cost them or look like, and the acronym is not what they are choosing
+		/// between.
+		/// </remarks>
+		private void InitializeAntialiasing()
+		{
+			if (antialiasingDropdown == null)
+			{
+				return;
+			}
+
+			antialiasingDropdown.choices = new List<string>(AntialiasingLabels);
+
+			int stored = Mathf.Clamp(
+				ClientSettings.GetInt(
+					ClientSettings.AntialiasingKey,
+					(int)ClientCameraSettings.DefaultAntialiasing),
+				0,
+				AntialiasingLabels.Length - 1);
+
+			// Without notify: assigning index raises the callback, which would write back the value
+			// just read. See InitializeBrightness.
+			antialiasingDropdown.SetValueWithoutNotify(AntialiasingLabels[stored]);
+
+			antialiasingDropdown.RegisterValueChangedCallback((evt) =>
+			{
+				int index = antialiasingDropdown.index;
+				if (index < 0 || index >= AntialiasingLabels.Length)
+				{
+					return;
+				}
+
+				ClientSettings.Set(ClientSettings.AntialiasingKey, index);
+				ClientCameraSettings.ApplyAntialiasing((ClientCameraSettings.AntialiasingOption)index);
+			});
+		}
+
+		/// <summary>
+		/// Dropdown labels, in the order of <see cref="ClientCameraSettings.AntialiasingOption"/>.
+		/// </summary>
+		private static readonly string[] AntialiasingLabels =
+		{
+			"Off",
+			"Fast",
+			"Balanced",
+			"Temporal",
+		};
+
 		private void InitializeLookSensitivity()
 		{
 			if (lookSensitivitySlider == null)
