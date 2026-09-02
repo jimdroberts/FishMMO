@@ -64,7 +64,7 @@ namespace FishMMO.Client
 		private const string ROW_RANK_CLASS = "guild-member__rank";
 
 		/// <summary>USS class applied to a member row's class label.</summary>
-		private const string ROW_CLASS_CLASS = "guild-member__class";
+		private const string ROW_RACE_CLASS = "guild-member__race";
 
 		/// <summary>USS class applied to a member row's location label.</summary>
 		private const string ROW_LOCATION_CLASS = "guild-member__location";
@@ -178,7 +178,7 @@ namespace FishMMO.Client
 		/// <summary>Name of the hover card's rank label.</summary>
 		private const string HOVER_RANK_NAME = "guild-hover-rank";
 		/// <summary>Name of the hover card's class label.</summary>
-		private const string HOVER_CLASS_NAME = "guild-hover-class";
+		private const string HOVER_RACE_NAME = "guild-hover-race";
 		/// <summary>Name of the hover card's location label.</summary>
 		private const string HOVER_LOCATION_NAME = "guild-hover-location";
 		/// <summary>Name of the hover card's last-seen label.</summary>
@@ -310,7 +310,7 @@ namespace FishMMO.Client
 			/// <summary>Member rank label.</summary>
 			public Label Rank;
 			/// <summary>Member class label.</summary>
-			public Label Class;
+			public Label Race;
 			/// <summary>Member location label.</summary>
 			public Label Location;
 		}
@@ -478,7 +478,7 @@ namespace FishMMO.Client
 		/// <summary>Hover card rank label.</summary>
 		private Label hoverRank;
 		/// <summary>Hover card class label.</summary>
-		private Label hoverClass;
+		private Label hoverRace;
 		/// <summary>Hover card location label.</summary>
 		private Label hoverLocation;
 		/// <summary>Hover card last-seen label.</summary>
@@ -552,7 +552,7 @@ namespace FishMMO.Client
 			hoverCard = root.Q(HOVER_CARD_NAME);
 			hoverName = root.Q<Label>(HOVER_NAME_NAME);
 			hoverRank = root.Q<Label>(HOVER_RANK_NAME);
-			hoverClass = root.Q<Label>(HOVER_CLASS_NAME);
+			hoverRace = root.Q<Label>(HOVER_RACE_NAME);
 			hoverLocation = root.Q<Label>(HOVER_LOCATION_NAME);
 			hoverSeen = root.Q<Label>(HOVER_SEEN_NAME);
 			hoverNote = root.Q<Label>(HOVER_NOTE_NAME);
@@ -1941,10 +1941,10 @@ namespace FishMMO.Client
 			rank.enableRichText = false;
 			rowRoot.Add(rank);
 
-			Label memberClass = new Label();
-			memberClass.AddToClassList("fish-row__meta");
-			memberClass.AddToClassList(ROW_CLASS_CLASS);
-			rowRoot.Add(memberClass);
+			Label memberRace = new Label();
+			memberRace.AddToClassList("fish-row__meta");
+			memberRace.AddToClassList(ROW_RACE_CLASS);
+			rowRoot.Add(memberRace);
 
 			Label location = new Label();
 			location.AddToClassList("fish-row__meta");
@@ -1959,7 +1959,7 @@ namespace FishMMO.Client
 				Name = name,
 				Level = level,
 				Rank = rank,
-				Class = memberClass,
+				Race = memberRace,
 				Location = location,
 			};
 
@@ -1991,7 +1991,7 @@ namespace FishMMO.Client
 			row.Name.text = model.Name;
 			row.Level.text = model.Level > 0 ? model.Level.ToString() : "—";
 			row.Rank.text = ResolveRankName(model.RankOrder);
-			row.Class.text = ResolveRaceName(model.RaceID);
+			row.Race.text = ResolveRaceName(model.RaceID);
 			row.Location.text = online ? model.Location : DescribeLastSeen(model.LastOnlineUtcTicks);
 
 			if (row.Dot != null)
@@ -2094,9 +2094,9 @@ namespace FishMMO.Client
 			{
 				hoverRank.text = $"Rank: {ResolveRankName(model.RankOrder)}";
 			}
-			if (hoverClass != null)
+			if (hoverRace != null)
 			{
-				hoverClass.text = $"Class: {ResolveRaceName(model.RaceID)}";
+				hoverRace.text = $"Race: {ResolveRaceName(model.RaceID)}";
 			}
 			if (hoverLocation != null)
 			{
