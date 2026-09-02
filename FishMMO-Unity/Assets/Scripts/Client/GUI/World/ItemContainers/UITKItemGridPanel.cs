@@ -936,6 +936,17 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Recorded before the request goes out, because the reconcile can beat the
+			 * acknowledgement back and has to know where the item was headed. Without this the
+			 * reconcile drops the item into the first container with room -- the inventory -- and
+			 * the acknowledgement then finds the equipment slot already empty and declines to act,
+			 * so an unequip into the bank leaves the server holding it in the bank and this client
+			 * showing it in the inventory. */
+			if (Character.TryGet(out IEquipmentController equipmentForNotify))
+			{
+				equipmentForNotify.NotifyUnequipRequested((ItemSlot)equipmentSlot, OwnInventoryType);
+			}
+
 			Client.Broadcast(new EquipmentUnequipItemBroadcast()
 			{
 				Slot = (byte)equipmentSlot,
