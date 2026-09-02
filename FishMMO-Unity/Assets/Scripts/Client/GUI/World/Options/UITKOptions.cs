@@ -96,6 +96,7 @@ namespace FishMMO.Client
 		private const string REFRESHRATE_DROPDOWN_NAME = "refreshrate-dropdown";
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
 		private const string QUALITY_DROPDOWN_NAME = "quality-dropdown";
+		private const string ANISOTROPIC_DROPDOWN_NAME = "anisotropic-dropdown";
 		private const string FRAMERATE_DROPDOWN_NAME = "framerate-dropdown";
 		private const string GRAPHICS_HINT_NAME = "options-graphics-hint";
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
@@ -301,6 +302,7 @@ namespace FishMMO.Client
 		private DropdownField refreshRateDropdown;
 		private DropdownField fullscreenDropdown;
 		private DropdownField qualityDropdown;
+		private DropdownField anisotropicDropdown;
 		private DropdownField frameRateDropdown;
 		private Label graphicsHint;
 		private Button screenApplyButton;
@@ -449,6 +451,7 @@ namespace FishMMO.Client
 			refreshRateDropdown = Root.Q<DropdownField>(REFRESHRATE_DROPDOWN_NAME);
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
 			qualityDropdown = Root.Q<DropdownField>(QUALITY_DROPDOWN_NAME);
+			anisotropicDropdown = Root.Q<DropdownField>(ANISOTROPIC_DROPDOWN_NAME);
 			frameRateDropdown = Root.Q<DropdownField>(FRAMERATE_DROPDOWN_NAME);
 			graphicsHint = Root.Q<Label>(GRAPHICS_HINT_NAME);
 			screenApplyButton = Root.Q<Button>(SCREEN_APPLY_NAME);
@@ -474,6 +477,7 @@ namespace FishMMO.Client
 
 			InitializeDisplaySettings();
 			InitializeQualityLevel();
+			InitializeAnisotropicFiltering();
 			InitializeBrightness();
 			InitializeLookSensitivity();
 			InitializeFrameRateLimit();
@@ -1099,6 +1103,58 @@ namespace FishMMO.Client
 		/// looks like the setting having been forgotten, except the player is now running at a
 		/// quality they did not choose.
 		/// </remarks>
+		/// <summary>
+		/// Fills the texture filtering dropdown and applies the player's choice as they make it.
+		/// </summary>
+		private void InitializeAnisotropicFiltering()
+		{
+			if (anisotropicDropdown == null)
+			{
+				return;
+			}
+
+			anisotropicDropdown.choices = new List<string>(AnisotropicLabels);
+
+			int stored = Mathf.Clamp(
+				ClientSettings.GetInt(
+					ClientSettings.AnisotropicFilteringKey,
+					(int)ClientDisplaySettings.DefaultAnisotropicFiltering),
+				0,
+				AnisotropicLabels.Length - 1);
+
+			// Without notify: assigning value raises the callback, which would write back what was
+			// just read. See InitializeBrightness.
+			anisotropicDropdown.SetValueWithoutNotify(AnisotropicLabels[stored]);
+
+			anisotropicDropdown.RegisterValueChangedCallback((evt) =>
+			{
+				int index = anisotropicDropdown.index;
+				if (index < 0 || index >= AnisotropicLabels.Length)
+				{
+					return;
+				}
+
+				ClientSettings.Set(ClientSettings.AnisotropicFilteringKey, index);
+				ClientDisplaySettings.ApplyAnisotropicFiltering(
+					(ClientDisplaySettings.AnisotropicOption)index);
+			});
+		}
+
+		/// <summary>
+		/// Dropdown labels, in the order of <see cref="ClientDisplaySettings.AnisotropicOption"/>.
+		/// </summary>
+		/// <remarks>
+		/// Named for what they do to the picture rather than for the API. "Per Texture" is the
+		/// authored intent and an honest description of Unity's Enable mode, which does not force
+		/// anything -- calling it "On" would promise more than it delivers.
+		/// </remarks>
+		private static readonly string[] AnisotropicLabels =
+		{
+			"Off",
+			"Per Texture",
+			"Forced",
+		};
+
 		private void InitializeQualityLevel()
 		{
 			if (qualityDropdown == null)

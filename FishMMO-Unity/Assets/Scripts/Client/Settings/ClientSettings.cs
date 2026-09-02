@@ -63,6 +63,9 @@ namespace FishMMO.Client
 		/// the state the mouse drives the camera in.
 		/// </summary>
 		public const string LookSensitivityKey = "Look Sensitivity";
+
+		/// <summary>Texture filtering. Stored as the ordinal of ClientDisplaySettings.AnisotropicOption.</summary>
+		public const string AnisotropicFilteringKey = "Anisotropic Filtering";
 		/// <summary>Configuration key for the resolution width setting.</summary>
 		public const string ResolutionWidthKey = "Resolution Width";
 		/// <summary>Configuration key for the resolution height setting.</summary>
