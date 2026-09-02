@@ -83,17 +83,15 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheInventoryCountsItemsRatherThanIcons()
+		public void TheInventoryDrawsItsGridFromTheSharedPanel()
 		{
-			/* Already fixed; pinned so the two panels cannot drift apart again. The bank's bug was
-			 * this same code before someone fixed one copy of it. */
-			string body = CapacityBody(InventoryPath);
+			/* The inventory no longer has a readout of its own to get wrong. That is the whole
+			 * point: this bug existed because there were two implementations and a fix reached one
+			 * of them, so the durable guard is that there is now one. */
+			string source = ReadSource(InventoryPath);
 
-			LogAssert.IsFalse(body.Contains("slotSprites[i]"),
-				"the inventory must not decide occupancy from the cached sprites");
-
-			LogAssert.IsTrue(body.Contains("IsSlotEmpty"),
-				"the inventory must ask the controller");
+			LogAssert.IsTrue(source.Contains(": UITKItemGridPanel"),
+				"the inventory panel must derive its grid from the shared implementation");
 		}
 
 		[Test]

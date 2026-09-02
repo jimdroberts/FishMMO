@@ -43,8 +43,8 @@ namespace FishMMO.UnitTests
 		/// <summary>Panels that send an unequip, and must record it first.</summary>
 		private static readonly string[] UnequipSenders =
 		{
+			// The bank and the inventory both send theirs from here.
 			"Assets/Scripts/Client/GUI/World/ItemContainers/UITKItemGridPanel.cs",
-			"Assets/Scripts/Client/GUI/World/Inventory/UITKInventory.cs",
 			"Assets/Scripts/Client/GUI/World/Equipment/UITKEquipment.cs",
 		};
 
