@@ -46,7 +46,7 @@
                 <ui:Label text="MEMBER" class="fish-col-head guild-column guild-column--name" />
                 <ui:Label text="LVL" class="fish-col-head guild-column guild-column--level" />
                 <ui:Label text="RANK" class="fish-col-head guild-column guild-column--rank" />
-                <ui:Label text="CLASS" class="fish-col-head guild-column guild-column--class" />
+                <ui:Label text="RACE" class="fish-col-head guild-column guild-column--race" />
                 <ui:Label text="LOCATION" class="fish-col-head guild-column guild-column--location" />
             </ui:VisualElement>
 
@@ -108,7 +108,7 @@
         <ui:VisualElement name="guild-hover-card" class="guild-hover-card">
             <ui:Label name="guild-hover-name" text="" class="guild-hover-card__name" />
             <ui:Label name="guild-hover-rank" text="" class="guild-hover-card__line" />
-            <ui:Label name="guild-hover-class" text="" class="guild-hover-card__line" />
+            <ui:Label name="guild-hover-race" text="" class="guild-hover-card__line" />
             <ui:Label name="guild-hover-location" text="" class="guild-hover-card__line" />
             <ui:Label name="guild-hover-seen" text="" class="guild-hover-card__line" />
             <!--

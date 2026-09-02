@@ -2,9 +2,9 @@
     UIGuild.uss
     Layout for the guild panel. Colours come from FishMMO-Theme.uss.
 
-    Four roster columns — member, rank, class, location. Rank sits beside the
+    Four roster columns — member, rank, race, location. Rank sits beside the
     name because it is the field a player scans for, and pairing it with the
-    name it belongs to is the whole point of a table; class and location follow
+    name it belongs to is the whole point of a table; race and location follow
     because they answer "who is this" and "can I reach them", in that order.
 
     The panel is taller and wider than the roster alone needed. It now carries a
@@ -178,7 +178,7 @@
    down the column, so a width that tracks content would make it unscannable. */
 .guild-column--level    { width: 44px; }
 .guild-column--rank     { width: 70px; }
-.guild-column--class    { width: 90px; }
+.guild-column--race    { width: 90px; }
 .guild-column--location { width: 110px; }
 
 /* ── Body ───────────────────────────────────────────────── */
@@ -226,7 +226,7 @@
     flex-shrink: 0;
 }
 
-.guild-member__class {
+.guild-member__race {
     width: 90px;
     flex-shrink: 0;
     overflow: hidden;
@@ -482,7 +482,7 @@
     margin-right: 3px;
 }
 
-/* Shared caption sizing; the --name/--rank/--class/--location modifiers set the widths. */
+/* Shared caption sizing; the --name/--rank/--race/--location modifiers set the widths. */
 .guild-column {
     flex-shrink: 0;
 }
