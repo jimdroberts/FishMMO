@@ -1328,6 +1328,40 @@ namespace FishMMO.Server.Implementation
 		/// The database is the ONLY source — no environment variable or .cfg file fallbacks exist.
 		/// If the database is unavailable, connection token verification will fail.
 		/// </summary>
+		/// <summary>
+		/// Whether the loaded key set differs from the one already held.
+		/// </summary>
+		/// <remarks>
+		/// Compares key identifiers only, not the secrets. A rotation issues a new key id, so the
+		/// ids are what change; comparing the bytes as well would mean touching secret material on
+		/// a timer to answer a question about logging.
+		/// </remarks>
+		/// <param name="previous">The previously held keys, or null if none were loaded yet.</param>
+		/// <param name="current">The keys just loaded.</param>
+		private static bool KeySetChanged(Dictionary<string, byte[]>? previous, Dictionary<string, byte[]> current)
+		{
+			// The first successful load is a change: nothing was held before it.
+			if (previous == null)
+			{
+				return true;
+			}
+
+			if (previous.Count != current.Count)
+			{
+				return true;
+			}
+
+			foreach (KeyValuePair<string, byte[]> entry in current)
+			{
+				if (!previous.ContainsKey(entry.Key))
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		private async Task LoadConnectionTokenKeysFromDbAsync()
 		{
 			try
@@ -1370,11 +1404,33 @@ namespace FishMMO.Server.Implementation
 						}
 					}
 
+					Dictionary<string, byte[]>? previous;
 					lock (s_dbConnectionTokenKeyMapLock)
 					{
+						previous = s_dbConnectionTokenKeyMap;
 						s_dbConnectionTokenKeyMap = map;
 					}
-					await Log.Warning(LogPrefix, $"Loaded {map.Count} active connection token key(s) from database.");
+
+					/* A refresh that loads the same keys it loaded a minute ago is not news.
+					 *
+					 * This runs on the periodic loop and reported success at Warning every time, so
+					 * three roles produced better than five hundred Warnings in three hours saying
+					 * that nothing had changed -- which was most of what the server logs contained.
+					 * A level used for the routine case cannot also mean "look at this".
+					 *
+					 * The event that IS worth seeing is the key set changing, because that is a
+					 * rotation and it explains why tokens that verified a moment ago stop doing so.
+					 * That keeps a level a reader can act on; the unchanged case drops to Debug. */
+					if (KeySetChanged(previous, map))
+					{
+						await Log.Info(LogPrefix,
+							$"Connection token keys changed: now {map.Count} active key(s) " +
+							$"(was {(previous == null ? "none loaded" : previous.Count + " key(s)")}).");
+					}
+					else
+					{
+						await Log.Debug(LogPrefix, $"Connection token keys unchanged: {map.Count} active key(s).");
+					}
 				}
 				else if (result.IsSuccess)
 				{
