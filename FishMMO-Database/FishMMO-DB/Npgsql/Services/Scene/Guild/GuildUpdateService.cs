@@ -53,11 +53,19 @@ namespace FishMMO.Database.Npgsql.Services
 			var now = DateTime.UtcNow;
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				/* The table qualifier is required, not stylistic. Inside ON CONFLICT DO UPDATE a
+				 * bare column name can mean either the existing row or the proposed one, so
+				 * Postgres refuses it outright:
+				 *
+				 *   42702: column reference "last_update" is ambiguous
+				 *
+				 * The statement never ran. It failed on every call, so the guard it implements --
+				 * do not move the timestamp backwards -- was not being applied either. */
 				var sql = $@"INSERT INTO {TableName} (guild_id, time_created, last_update)
 					VALUES ({{0}}, {{1}}, {{1}})
 					ON CONFLICT (guild_id) DO UPDATE
 					SET last_update = EXCLUDED.last_update
-					WHERE last_update < EXCLUDED.last_update";
+					WHERE {TableName}.last_update < EXCLUDED.last_update";
 
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
