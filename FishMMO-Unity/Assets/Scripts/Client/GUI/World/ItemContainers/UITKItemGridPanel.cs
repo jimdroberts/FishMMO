@@ -817,6 +817,22 @@ namespace FishMMO.Client
 			{
 				HandleSlotLeftClick(slotIndex);
 			}
+			else if (evt.button == 1)
+			{
+				HandleSlotRightClick(slotIndex);
+			}
+		}
+
+		/// <summary>
+		/// Right-click on a slot. Does nothing unless a panel gives it a meaning.
+		/// </summary>
+		/// <remarks>
+		/// A no-op rather than an abstract, because most containers have nothing sensible to do
+		/// with a right-click and should not be made to say so.
+		/// </remarks>
+		/// <param name="slotIndex">The slot that was clicked.</param>
+		protected virtual void HandleSlotRightClick(int slotIndex)
+		{
 		}
 
 		/// <summary>
