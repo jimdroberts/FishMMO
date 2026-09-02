@@ -2,6 +2,6 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UICrosshair.uss" />
     <ui:VisualElement name="crosshair-root" class="crosshair-root" picking-mode="Ignore">
-        <ui:VisualElement name="crosshair-icon" class="crosshair-icon" picking-mode="Ignore" />
+        <ui:VisualElement name="crosshair-icon" class="crosshair-icon crosshair-icon--cross" picking-mode="Ignore" />
     </ui:VisualElement>
 </ui:UXML>

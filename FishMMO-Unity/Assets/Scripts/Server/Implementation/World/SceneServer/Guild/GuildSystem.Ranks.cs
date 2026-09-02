@@ -253,9 +253,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="requestedPermissions">The proposed mask.</param>
 		/// <returns>Asynchronous create task.</returns>
 		/// <remarks>
-		/// The new rank must sit strictly below the creator's own, and may hold only permissions
-		/// the creator holds. Both for the same reason as the edit path: otherwise "may edit
-		/// ranks" is "may become the leader", one step removed.
+		/// The new rank must sit at or below the creator's own seat, and may hold only permissions
+		/// the creator holds. The second is for the same reason as the edit path: otherwise "may
+		/// edit ranks" is "may become the leader", one step removed. The first is weaker than the
+		/// edit path's rule on purpose — inserting AT the creator's order puts the new rank
+		/// directly below them and carries their own row up with the rest of the ladder, which
+		/// changes nobody's permissions and nobody's relative standing. See
+		/// <c>GuildRules.CanCreateRank</c>.
 		/// </remarks>
 		private async Task CreateGuildRankAsync(NetworkConnection conn, long guildID, long creatorCharacterID, byte rankOrder, string requestedName, long requestedPermissions)
 		{
@@ -290,7 +294,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				GuildRankData rank = new GuildRankData(0, 1, guildID, rankOrder, sanitizedName, (long)proposed);
 
-				DatabaseResult createResult = await rankService.CreateAsync(rank, GuildRankDefaults.MaxRanksPerGuild);
+				/* An INSERT, not a fill. The ladder is contiguous — a seeded guild is 1, 2, 3 —
+				 * and a new rank may only sit at or below the creator's own seat, so there is
+				 * never a free position to drop one into. The service makes room: everything at or
+				 * above this order, ranks and membership rows alike, moves up one rung inside a
+				 * single transaction. */
+				DatabaseResult createResult = await rankService.InsertAsync(
+					rank,
+					GuildRankDefaults.MaxRanksPerGuild,
+					GuildRankDefaults.MaxRankOrder);
+
 				if (!createResult.IsSuccess)
 				{
 					SendGuildResult(conn, createResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded

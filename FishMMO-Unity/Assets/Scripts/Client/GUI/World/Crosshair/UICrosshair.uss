@@ -1,6 +1,6 @@
 /*
     UICrosshair.uss
-    Centers the crosshair icon in the viewport.
+    Centers the crosshair icon in the viewport and declares the shapes it can take.
 */
 
 .crosshair-root {
@@ -14,17 +14,56 @@
     1680-wide reference; PanelSettings references 1200, so a point here is 1.4x larger on
     screen and 32 rendered roughly four times the original. A crosshair is a sighting mark —
     growing it is a functional change, not a cosmetic one.
+
+    The size here is the DEFAULT, not the value in force: UITKCrosshair writes an inline width
+    and height from ClientCrosshairSettings, which starts at this same 8 so an untouched
+    install looks identical either way. It stays declared so the element has a size before the
+    panel's OnStarting has run, and so the UI validation scenes render something.
 */
 .crosshair-icon {
     width: 8px;
     height: 8px;
     -unity-background-scale-mode: scale-to-fit;
-    /*
-        The uGUI crosshair drew Unity's BUILT-IN UISprite (fileID 10905), which has no
-        asset to reference from USS — that reference is what did not survive the UITK
-        port, leaving this element a fully transparent box. Crosshair.png is a
-        project-owned 8x8 white plus; the theme system tints it at runtime via
-        unityBackgroundImageTintColor (UITKThemeManager.SetTint), so it must stay white.
-    */
+}
+
+/*
+    One class per shape. The style modifier is what the setting selects; only one is ever
+    applied at a time and UITKCrosshair removes the other two.
+
+    Colour is NOT set here for any of them. The crosshair is a themed colour — UITKThemeManager
+    writes `color` and `unityBackgroundImageTintColor` onto .crosshair-icon from the player's
+    palette — and the two box-drawn shapes take that same colour as an inline background or
+    border from C#. Declaring a colour here as well would win over nothing and mislead the next
+    reader into thinking this file decides it.
+*/
+
+/*
+    The shipped sprite. Crosshair.png is a project-owned 8x8 white plus; the theme system tints
+    it at runtime via unityBackgroundImageTintColor (UITKThemeManager.SetTint), so it must stay
+    white in the source asset.
+
+    This is the class that carries the image, rather than .crosshair-icon itself. The uGUI
+    crosshair drew Unity's BUILT-IN UISprite (fileID 10905), which has no asset to reference
+    from USS — that reference is what did not survive the UITK port, leaving the element a
+    fully transparent box.
+*/
+.crosshair-icon--cross {
     background-image: url("Crosshair.png");
+}
+
+/* A filled circle. The background colour is written inline from the theme. */
+.crosshair-icon--dot {
+    background-image: none;
+    border-radius: 50%;
+}
+
+/*
+    An unfilled ring, which leaves the target itself unobscured. Border width is written inline
+    so it tracks the chosen size — a fixed 1px ring reads as a dot at 4px and as a hairline at
+    32.
+*/
+.crosshair-icon--circle {
+    background-image: none;
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 50%;
 }

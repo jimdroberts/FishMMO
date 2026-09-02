@@ -54,13 +54,36 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> UpdateAsync(long guildId, byte rankOrder, string name, long permissions, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Inserts a new rank row.
+		/// Inserts a new rank at a position, moving everything already at or above it up one rung.
 		/// </summary>
-		/// <param name="rank">The rank to insert.</param>
+		/// <param name="rank">The rank to insert. Its rank order is the POSITION it takes.</param>
 		/// <param name="maxRanks">Maximum rank rows one guild may own.</param>
+		/// <param name="maxRankOrder">Highest legal rank order, which bounds the shift.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A result indicating success or failure.</returns>
-		Task<DatabaseResult> CreateAsync(GuildRankData rank, int maxRanks, CancellationToken cancellationToken = default);
+		/// <remarks>
+		/// <para><b>Why this inserts rather than fills a hole.</b> A guild is seeded with three
+		/// CONTIGUOUS ranks — member 1, officer 2, leader 3 — and a rank may only be created
+		/// strictly below the creator's own seat. A leader at order 3 therefore has orders 1 and 2
+		/// to choose from and both are taken, so a "create at a free position" service could never
+		/// add a rank to a guild that had not already had one removed. Making room is the
+		/// operation; finding a gap was never going to find one.</para>
+		///
+		/// <para><b>Membership rows move with the ladder.</b> <c>character_guild.rank</c> holds the
+		/// same order byte, so every member at or above the insertion point is shifted by the same
+		/// one rung, in the same transaction. Relative standing is what the whole permission model
+		/// compares, and it is preserved exactly: a member who outranked another before the insert
+		/// still does, and the leader — defined as the highest order that exists — is still the
+		/// same character.</para>
+		///
+		/// <para><b>The shift is applied one row at a time, highest first.</b>
+		/// <c>(guild_id, rank_order)</c> is UNIQUE and PostgreSQL checks it per row rather than at
+		/// statement end, so a single <c>SET rank_order = rank_order + 1</c> over the whole range
+		/// raises a duplicate key the moment the planner happens to reach a row whose target is
+		/// still occupied. Descending, each target has just been vacated. Twelve ranks is the cap,
+		/// so this is at most eleven statements for something a guild does once in a while.</para>
+		/// </remarks>
+		Task<DatabaseResult> InsertAsync(GuildRankData rank, int maxRanks, byte maxRankOrder, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a rank row, refusing while any member still holds it.

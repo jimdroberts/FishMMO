@@ -175,6 +175,43 @@ namespace FishMMO.Client
 			}
 		}
 
+		// ── Crosshair ───────────────────────────────────────────────
+
+		/// <summary>Configuration key for whether the crosshair is drawn at all.</summary>
+		/// <remarks>
+		/// Separate from the mouse-mode rule the crosshair already follows: mouse mode hides it
+		/// while the cursor is free, and this hides it always. A player who aims from the model
+		/// rather than from a mark wants the second, and turning it off must not be expressible
+		/// only as "leave mouse mode on".
+		/// </remarks>
+		public const string CrosshairEnabledKey = "Crosshair.Enabled";
+
+		/// <summary>Configuration key for the crosshair shape, stored as the ordinal of <see cref="CrosshairStyle"/>.</summary>
+		public const string CrosshairStyleKey = "Crosshair.Style";
+
+		/// <summary>Configuration key for the crosshair's edge length, in panel points.</summary>
+		public const string CrosshairSizeKey = "Crosshair.Size";
+
+		/// <summary>Configuration key for the crosshair's opacity, 0 to 1.</summary>
+		public const string CrosshairOpacityKey = "Crosshair.Opacity";
+
+		// ── World labels ────────────────────────────────────────────
+
+		/// <summary>Configuration key for the world label size multiplier.</summary>
+		public const string WorldLabelScaleKey = "WorldLabels.Scale";
+
+		/// <summary>Configuration key for how far world labels are drawn, in metres.</summary>
+		public const string WorldLabelDistanceKey = "WorldLabels.Distance";
+
+		/// <summary>Configuration key for world label opacity, 0 to 1.</summary>
+		public const string WorldLabelOpacityKey = "WorldLabels.Opacity";
+
+		/// <summary>Configuration key for how many world labels may be drawn at once.</summary>
+		public const string WorldLabelMaxVisibleKey = "WorldLabels.MaxVisible";
+
+		/// <summary>Configuration key for hiding world labels behind scene geometry.</summary>
+		public const string WorldLabelOccludeKey = "WorldLabels.Occlude";
+
 		// ── Interface ───────────────────────────────────────────────
 
 		/// <summary>Configuration key for the interface scale multiplier.</summary>

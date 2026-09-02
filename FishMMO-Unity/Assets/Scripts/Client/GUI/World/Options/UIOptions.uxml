@@ -102,6 +102,65 @@
             <ui:ScrollView name="options-page-gameplay" class="fish-scroll options-scroll">
                 <ui:Label text="GAMEPLAY" class="fish-attr-category options-section" />
                 <ui:VisualElement name="options-gameplay-list" class="options-list" />
+
+                <!--
+                    Crosshair. Colour is deliberately NOT here: it is a themed colour, edited in
+                    the UI tab's colour list, and a second control for the same value would give
+                    the player two places to set one colour and no rule about which wins.
+                -->
+                <ui:Label text="CROSSHAIR" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Crosshair" class="fish-label options-row-label" />
+                    <ui:Toggle name="crosshair-enabled-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Style" class="fish-label options-row-label" />
+                    <ui:DropdownField name="crosshair-style-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Size" class="fish-label options-row-label" />
+                    <ui:Slider name="crosshair-size-slider" low-value="4" high-value="32" class="options-row-field" />
+                    <ui:Label name="crosshair-size-value" text="8 px" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Opacity" class="fish-label options-row-label" />
+                    <ui:Slider name="crosshair-opacity-slider" low-value="0.1" high-value="1" class="options-row-field" />
+                    <ui:Label name="crosshair-opacity-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+
+                <!--
+                    World labels: the nameplates, guild lines and floating damage and healing
+                    numbers projected onto the world. The last two rows are performance controls
+                    as much as taste ones — this is the client's hottest UI loop, and both bound
+                    how much of it runs.
+                -->
+                <ui:Label text="WORLD LABELS" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Label Size" class="fish-label options-row-label" />
+                    <ui:Slider name="worldlabel-scale-slider" low-value="0.5" high-value="2" class="options-row-field" />
+                    <ui:Label name="worldlabel-scale-value" text="1.00x" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Label Opacity" class="fish-label options-row-label" />
+                    <ui:Slider name="worldlabel-opacity-slider" low-value="0.2" high-value="1" class="options-row-field" />
+                    <ui:Label name="worldlabel-opacity-value" text="100%" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Draw Distance" class="fish-label options-row-label" />
+                    <ui:Slider name="worldlabel-distance-slider" low-value="10" high-value="200" class="options-row-field" />
+                    <ui:Label name="worldlabel-distance-value" text="80 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Maximum On Screen" class="fish-label options-row-label" />
+                    <ui:Slider name="worldlabel-max-slider" low-value="16" high-value="256" class="options-row-field" />
+                    <ui:Label name="worldlabel-max-value" text="64" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Hide Behind Geometry" class="fish-label options-row-label" />
+                    <ui:Toggle name="worldlabel-occlude-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label text="Hiding labels behind geometry costs a physics ray per visible label, every frame."
+                          class="fish-hint options-hint" />
             </ui:ScrollView>
 
             <!-- ══ Key Bindings ══════════════════════════════════ -->

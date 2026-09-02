@@ -357,6 +357,30 @@ namespace FishMMO.Client
 		[Min(1.0f)]
 		public float MaxFontSize = 48.0f;
 
+		/// <summary>
+		/// Player-chosen size multiplier applied to every projected label.
+		/// </summary>
+		/// <remarks>
+		/// Multiplied onto the CLAMPED size rather than into the projection, so it scales the
+		/// upper and lower bounds along with the value between them. Folded into the raw size
+		/// instead, a multiplier above one would do nothing the moment a label reached
+		/// <see cref="MaxFontSize"/> — which is exactly when the player is close enough to care.
+		/// </remarks>
+		private float labelScale = ClientWorldLabelSettings.DefaultScale;
+
+		/// <summary>
+		/// True while the player's settings still have to be written onto this layer.
+		/// </summary>
+		/// <remarks>
+		/// Set rather than applied directly, because the opacity lands on the container element
+		/// and the container is resolved lazily against a visual tree that may not exist when the
+		/// settings change — a settings write from the options panel can arrive before this
+		/// layer's document has built its tree, or after it has been replaced. LateUpdate applies
+		/// it once the container is known, which is one bool test on the frames it is already
+		/// current.
+		/// </remarks>
+		private bool settingsDirty = true;
+
 		private void Awake()
 		{
 			if (instance != null && instance != this)
@@ -387,6 +411,14 @@ namespace FishMMO.Client
 			WorldLabel.OnLabelEnabled += HandleLabelEnabled;
 			WorldLabel.OnLabelDisabled += HandleLabelDisabled;
 
+			/* Read on enable as well as on change. The event only carries a CHANGE, and this
+			 * layer comes and goes with the client scenes — a layer that waited for one would
+			 * spend the whole session on the values authored in ClientPreboot rather than on the
+			 * player's. */
+			ClientWorldLabelSettings.OnChanged -= MarkSettingsDirty;
+			ClientWorldLabelSettings.OnChanged += MarkSettingsDirty;
+			settingsDirty = true;
+
 			if (!TryResolveContainer())
 			{
 				return;
@@ -403,6 +435,7 @@ namespace FishMMO.Client
 		{
 			WorldLabel.OnLabelEnabled -= HandleLabelEnabled;
 			WorldLabel.OnLabelDisabled -= HandleLabelDisabled;
+			ClientWorldLabelSettings.OnChanged -= MarkSettingsDirty;
 			ReleaseAll();
 		}
 
@@ -452,6 +485,11 @@ namespace FishMMO.Client
 				document.rootVisualElement.Add(container);
 			}
 			container.pickingMode = PickingMode.Ignore;
+
+			/* A freshly resolved container carries none of the inline styles the player's
+			 * settings put on the last one, and the opacity is one of them. Marking dirty here is
+			 * what stops a tree rebuild from quietly restoring full-strength labels. */
+			settingsDirty = true;
 
 			screenContainer = document.rootVisualElement.Q<VisualElement>(SCREEN_CONTAINER_NAME);
 			if (screenContainer == null)
@@ -629,6 +667,11 @@ namespace FishMMO.Client
 				return;
 			}
 
+			if (settingsDirty)
+			{
+				ApplyPlayerSettings();
+			}
+
 			Camera camera = ProjectionCamera != null ? ProjectionCamera : Camera.main;
 			if (camera == null || document == null || document.rootVisualElement == null)
 			{
@@ -756,7 +799,7 @@ namespace FishMMO.Client
 
 				binding.LastMoveFrame = frame;
 
-				float fontSize = Mathf.Clamp(
+				float fontSize = labelScale * Mathf.Clamp(
 					label.fontSize * pointsPerUnitAtOne / (camera.orthographic ? 1.0f : forwardDistance),
 					MinFontSize,
 					MaxFontSize);
@@ -796,6 +839,47 @@ namespace FishMMO.Client
 
 			ApplyBudgetAndDepthOrder();
 			ApplyGroupStacking();
+		}
+
+		/// <summary>
+		/// Records that the player's world label settings need re-reading.
+		/// </summary>
+		private void MarkSettingsDirty()
+		{
+			settingsDirty = true;
+		}
+
+		/// <summary>
+		/// Copies the player's world label settings onto this layer.
+		/// </summary>
+		/// <remarks>
+		/// <para>The serialized fields above are the AUTHORING surface and
+		/// <see cref="ClientWorldLabelSettings"/>' defaults mirror them, so an install where the
+		/// player has changed nothing draws exactly what ClientPreboot.unity authors. The two must
+		/// be retuned together, the same way <see cref="MaxFontSize"/> already has to be — a
+		/// default here that disagrees with the scene silently overrides the scene the first time
+		/// a client boots.</para>
+		///
+		/// <para>Opacity is written onto the CONTAINER rather than onto each label. Every label's
+		/// colour is its own — faction standing, damage type, guild colour — and folding a global
+		/// alpha into each of them would mean re-diffing and rewriting a colour per label per
+		/// change, and losing the alpha the caller actually chose. One opacity on the parent
+		/// composites the whole layer in a single write, and leaves the screen-anchored captions
+		/// in the sibling container untouched: a region banner is not a world label.</para>
+		/// </remarks>
+		private void ApplyPlayerSettings()
+		{
+			settingsDirty = false;
+
+			labelScale = ClientWorldLabelSettings.Scale;
+			MaxVisibleDistance = ClientWorldLabelSettings.Distance;
+			MaxVisibleLabels = ClientWorldLabelSettings.MaxVisible;
+			OccludeBehindGeometry = ClientWorldLabelSettings.Occlude;
+
+			if (container != null)
+			{
+				container.style.opacity = ClientWorldLabelSettings.Opacity;
+			}
 		}
 
 		/// <summary>
