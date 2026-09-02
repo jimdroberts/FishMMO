@@ -11,7 +11,8 @@
         "KinematicCharacterController",
         "Unity.TextMeshPro",
         "Unity.RenderPipelines.Universal.Runtime",
-        "Unity.Addressables"
+        "Unity.Addressables",
+        "FishMMO.Shared.Tools.Editor"
     ],
     "includePlatforms": [
         "Editor"
