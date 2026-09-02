@@ -9,7 +9,8 @@
         "FishMMO.Server",
         "FishNet.Runtime",
         "KinematicCharacterController",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [
         "Editor"

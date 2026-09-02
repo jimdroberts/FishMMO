@@ -57,6 +57,10 @@
                     <ui:DropdownField name="quality-dropdown" class="fish-dropdown options-row-field" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
+                    <ui:Label text="Antialiasing" class="fish-label options-row-label" />
+                    <ui:DropdownField name="antialiasing-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="Brightness" class="fish-label options-row-label" />
                     <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
                     <ui:Label name="brightness-value" text="100%" class="fish-hint options-row-value" />

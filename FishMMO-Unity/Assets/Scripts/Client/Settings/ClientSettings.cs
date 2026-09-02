@@ -63,6 +63,9 @@ namespace FishMMO.Client
 		/// the state the mouse drives the camera in.
 		/// </summary>
 		public const string LookSensitivityKey = "Look Sensitivity";
+
+		/// <summary>Edge smoothing mode. Stored as the ordinal of ClientCameraSettings.AntialiasingOption.</summary>
+		public const string AntialiasingKey = "Antialiasing";
 		/// <summary>Configuration key for the resolution width setting.</summary>
 		public const string ResolutionWidthKey = "Resolution Width";
 		/// <summary>Configuration key for the resolution height setting.</summary>
