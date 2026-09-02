@@ -596,7 +596,7 @@ namespace FishMMO.Database.Npgsql.Services
 						u.template_id,
 						u.seed,
 						u.amount,
-						{{8}},
+						u.time_created,
 						FALSE,
 						NULL
 					FROM UNNEST(
@@ -607,8 +607,9 @@ namespace FishMMO.Database.Npgsql.Services
 						{{4}}::bigint[],
 						{{5}}::integer[],
 						{{6}}::integer[],
-						{{7}}::bigint[]
-					) AS u(id, character_id, container, slot, version, template_id, seed, amount)
+						{{7}}::bigint[],
+						{{8}}::timestamp[]
+					) AS u(id, character_id, container, slot, version, template_id, seed, amount, time_created)
 					RETURNING id, container, slot";
 
 				var written = await ExecuteReturningManyAsync(
