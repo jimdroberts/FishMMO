@@ -80,6 +80,7 @@ namespace FishMMO.Client
 			ApplySavedQualityLevel();
 			ApplySavedDisplayMode();
 			ApplySavedVSync();
+			ApplySavedAnisotropicFiltering();
 			ApplySavedFrameRate();
 			ApplySavedBrightness();
 			InstallSceneHook();
@@ -167,6 +168,73 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Applies the saved VSync preference.</summary>
+		/// <summary>
+		/// Texture filtering modes offered to the player, in the order the dropdown shows them.
+		/// </summary>
+		/// <remarks>
+		/// Our own enum rather than Unity's <see cref="AnisotropicFiltering"/>, for the same reason
+		/// the antialiasing setting keeps its own: the stored value is an ordinal in a save file,
+		/// and persisting a framework enum means a reordering upstream silently changes what an
+		/// existing player's setting means.
+		/// </remarks>
+		public enum AnisotropicOption
+		{
+			/// <summary>No anisotropic filtering. Ground textures blur at glancing angles.</summary>
+			Off = 0,
+
+			/// <summary>Whatever level each texture was imported with. The authored intent.</summary>
+			PerTexture = 1,
+
+			/// <summary>Forced on for every texture, regardless of how it was imported.</summary>
+			Forced = 2,
+		}
+
+		/// <summary>
+		/// Texture filtering when nothing has been chosen.
+		/// </summary>
+		/// <remarks>
+		/// Per-texture, which respects what the art was imported with rather than overriding it.
+		/// Forcing it on costs little on any modern GPU but is still a decision about someone
+		/// else's art, so it is offered rather than imposed.
+		/// </remarks>
+		public const AnisotropicOption DefaultAnisotropicFiltering = AnisotropicOption.PerTexture;
+
+		/// <summary>
+		/// Applies the stored anisotropic filtering mode.
+		/// </summary>
+		public static void ApplySavedAnisotropicFiltering()
+		{
+			int stored = Mathf.Clamp(
+				ClientSettings.GetInt(
+					ClientSettings.AnisotropicFilteringKey,
+					(int)DefaultAnisotropicFiltering),
+				(int)AnisotropicOption.Off,
+				(int)AnisotropicOption.Forced);
+
+			ApplyAnisotropicFiltering((AnisotropicOption)stored);
+		}
+
+		/// <summary>
+		/// Writes an anisotropic filtering mode into the quality settings.
+		/// </summary>
+		/// <param name="option">The mode to apply. An unrecognised value falls back to per-texture.</param>
+		public static void ApplyAnisotropicFiltering(AnisotropicOption option)
+		{
+			switch (option)
+			{
+				case AnisotropicOption.Off:
+					QualitySettings.anisotropicFiltering = AnisotropicFiltering.Disable;
+					break;
+				case AnisotropicOption.Forced:
+					QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
+					break;
+				case AnisotropicOption.PerTexture:
+				default:
+					QualitySettings.anisotropicFiltering = AnisotropicFiltering.Enable;
+					break;
+			}
+		}
+
 		public static void ApplySavedVSync()
 		{
 			ApplyVSync(ClientSettings.GetBool(ClientSettings.VSyncKey, false));
@@ -204,13 +272,21 @@ namespace FishMMO.Client
 		{
 			CaptureAuthoredQuality();
 			QualitySettings.SetQualityLevel(index, applyExpensiveChanges);
+
+			/* Both of these are authored per quality level, so switching level overwrites whatever
+			 * the player chose. Restoring them here is what makes them preferences rather than
+			 * things that silently revert the next time somebody touches the quality dropdown. */
 			ApplySavedVSync();
+			ApplySavedAnisotropicFiltering();
 		}
 
 #if UNITY_EDITOR
 		/// <summary>The quality level and VSync count authored in the project, before any change.</summary>
 		private static int authoredQualityLevel;
 		private static int authoredVSyncCount;
+
+		/// <summary>The anisotropic filtering mode authored in the project, before any change.</summary>
+		private static AnisotropicFiltering authoredAnisotropicFiltering;
 
 		/// <summary>True once the authored values above have been captured.</summary>
 		private static bool hasAuthoredQuality;
@@ -247,6 +323,7 @@ namespace FishMMO.Client
 
 			authoredQualityLevel = QualitySettings.GetQualityLevel();
 			authoredVSyncCount = QualitySettings.vSyncCount;
+			authoredAnisotropicFiltering = QualitySettings.anisotropicFiltering;
 			hasAuthoredQuality = true;
 
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
@@ -267,6 +344,7 @@ namespace FishMMO.Client
 			{
 				QualitySettings.SetQualityLevel(authoredQualityLevel, false);
 				QualitySettings.vSyncCount = authoredVSyncCount;
+				QualitySettings.anisotropicFiltering = authoredAnisotropicFiltering;
 			}
 
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
