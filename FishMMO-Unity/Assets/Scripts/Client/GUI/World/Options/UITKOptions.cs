@@ -1298,15 +1298,6 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Binds the look sensitivity slider.
-		/// </summary>
-		/// <remarks>
-		/// The stored value is clamped on the way in, for the same reason brightness is: it is a
-		/// float in a file the player can edit, and it multiplies raw mouse delta. A large one makes
-		/// the view unusable at exactly the moment they would need to reach this menu to undo it,
-		/// and zero makes the camera immovable.
-		/// </remarks>
-		/// <summary>
 		/// Fills the antialiasing dropdown and applies the player's choice as they make it.
 		/// </summary>
 		/// <remarks>
@@ -1362,6 +1353,15 @@ namespace FishMMO.Client
 			"TAA (Temporal)",
 		};
 
+		/// <summary>
+		/// Binds the look sensitivity slider.
+		/// </summary>
+		/// <remarks>
+		/// The stored value is clamped on the way in, for the same reason brightness is: it is a
+		/// float in a file the player can edit, and it multiplies raw mouse delta. A large one makes
+		/// the view unusable at exactly the moment they would need to reach this menu to undo it,
+		/// and zero makes the camera immovable.
+		/// </remarks>
 		private void InitializeLookSensitivity()
 		{
 			if (lookSensitivitySlider == null)
