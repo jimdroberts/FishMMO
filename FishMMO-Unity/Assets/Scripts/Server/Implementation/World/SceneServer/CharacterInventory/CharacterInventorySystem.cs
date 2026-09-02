@@ -248,24 +248,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private sealed class ItemWriteJournal
 		{
 			private readonly object gate = new object();
-			private readonly Dictionary<long, long> nextSequence = new Dictionary<long, long>();
+			/* One counter for the journal rather than one per character.
+			 *
+			 * Per character, it had to be reset by ForgetCharacter to bound memory, and that reset
+			 * raced the very flush that triggered it: ForgetCharacter runs when the despawn flush is
+			 * CAPTURED, while the flush claims its sequence later on the worker thread. The claim
+			 * therefore landed after the forget and put the watermark back -- so the next session
+			 * started issuing sequence 1 against a watermark left by the previous one, and every
+			 * write it made was discarded as superseded by a session that had already ended.
+			 *
+			 * Observed live: an equip logged 'skipped superseded ... Seq=1' followed by 'skipped
+			 * superseded ItemSnapshot ... Seq=2', and the database kept none of it while the client
+			 * showed the item equipped.
+			 *
+			 * Sequences only ever need to be comparable within one character, so making them global
+			 * costs nothing and removes the reset entirely. ForgetCharacter still drops everything it
+			 * held for the character; there is simply no longer a counter that can go backwards. */
+			private long nextSequence;
 			private readonly Dictionary<long, long> lastAppliedAny = new Dictionary<long, long>();
 			private readonly Dictionary<long, long> lastAppliedSnapshot = new Dictionary<long, long>();
 			private readonly Dictionary<long, CharacterSessionInfo> lastKnownLease = new Dictionary<long, CharacterSessionInfo>();
 			private readonly HashSet<long> reconcileRequests = new HashSet<long>();
 
 			/// <summary>
-			/// Allocates the next capture sequence number for a character. Main thread only, which is
-			/// what makes the numbers a faithful record of the order the mutations happened in.
+			/// Allocates the next capture sequence number. Main thread only, which is what makes the
+			/// numbers a faithful record of the order the mutations happened in.
+			/// </summary>
+			/// <remarks>
+			/// Journal-wide and never reset, so a number is issued at most once for the life of the
+			/// process. Only comparisons within one character are meaningful, so the gaps another
+			/// character's writes leave in the run carry no meaning and are not a problem.
 			/// </summary>
 			public long NextSequence(long characterID)
 			{
 				lock (gate)
 				{
-					nextSequence.TryGetValue(characterID, out long current);
-					current++;
-					nextSequence[characterID] = current;
-					return current;
+					return ++nextSequence;
 				}
 			}
 
@@ -443,7 +461,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				lock (gate)
 				{
-					nextSequence.Remove(characterID);
 					lastAppliedAny.Remove(characterID);
 					lastAppliedSnapshot.Remove(characterID);
 					lastKnownLease.Remove(characterID);
@@ -458,7 +475,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				lock (gate)
 				{
-					nextSequence.Clear();
 					lastAppliedAny.Clear();
 					lastAppliedSnapshot.Clear();
 					lastKnownLease.Clear();
@@ -1373,12 +1389,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// sequence number and its own ownership triple — so dropping the journal entry now
 			// cannot affect it.
 			//
-			// Resetting the sequence counter here is safe ONLY because of the ownership assertion.
-			// If this character comes back to this same scene server, it comes back under a NEW
-			// session token, so any batch still in flight from the previous visit quotes a triple
-			// that no longer matches and is refused rather than applied out of order. Without that
-			// guard this reset would be a resurrection bug, which is why the two changes belong
-			// together and neither should be removed on its own.
+			// This drops the character's watermarks but NOT the capture counter, which is journal-wide
+			// and never reset. That asymmetry is deliberate and load-bearing: the flush captured just
+			// above claims its sequence later, on the worker thread, so its claim lands after this
+			// call and writes a watermark back. A counter that restarted here would then issue
+			// sequence 1 against that watermark and the whole of the next session would be discarded
+			// as superseded -- which is exactly what it did.
+			//
+			// A batch still in flight from a previous visit is refused by the ownership assertion,
+			// since the character returns under a new session token; that guard is what keeps a late
+			// arrival from being applied out of order, and it is unaffected by any of this.
 			if (character != null && character.ID > 0)
 			{
 				itemWriteJournal.ForgetCharacter(character.ID);

@@ -34,9 +34,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float MaxDistance = 10f;
 		/// <summary>
-		/// Speed at which camera distance changes (zoom).
+		/// Distance the camera moves per notch of scroll wheel.
 		/// </summary>
-		public float DistanceMovementSpeed = 5f;
+		/// <remarks>
+		/// This is a distance per notch, not a rate: the scroll delta arrives normalised to -1..1
+		/// (the Input System's default <c>ScrollDeltaBehavior</c>), so one notch moves the camera
+		/// by exactly this much before smoothing.
+		///
+		/// Half a unit, down from five. Over the usual 0-10 range five gave two notches from fully
+		/// in to fully out, so the wheel behaved as a toggle rather than a zoom and no intermediate
+		/// framing was reachable. The value only reads as a "speed" if the delta is a rate; it is
+		/// not, which is what made 5 look reasonable.
+		/// </remarks>
+		public float DistanceMovementSpeed = 0.5f;
 		/// <summary>
 		/// Sharpness for distance movement smoothing.
 		/// </summary>

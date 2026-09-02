@@ -273,6 +273,31 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
+		/// Array parameters for the replace path, carrying each row's own creation time.
+		/// </summary>
+		/// <remarks>
+		/// A row that already exists keeps the time it was created; one arriving without an
+		/// identity, or whose id no longer resolves, is new and takes the save time. Passing a
+		/// single timestamp for the whole batch is what made every item look created at the moment
+		/// of the last save.
+		/// </remarks>
+		private static object[] BuildReplaceArrayParameters(
+			IReadOnlyList<CharacterItemData> rows,
+			IReadOnlyDictionary<long, DateTime> existingCreationTimes,
+			DateTime now)
+		{
+			var parameters = BuildArrayParameters(rows, now);
+
+			parameters[8] = rows
+				.Select(i => i.ID > 0 && existingCreationTimes.TryGetValue(i.ID, out DateTime created)
+					? created
+					: now)
+				.ToArray();
+
+			return parameters;
+		}
+
+		/// <summary>
 		/// Builds the UNNEST + UPSERT statement for a batch of rows.
 		/// </summary>
 		/// <remarks>
@@ -514,6 +539,35 @@ namespace FishMMO.Database.Npgsql.Services
 				 *
 				 * Identities survive because they are supplied explicitly below. An item keeps its
 				 * id across this; only rows that never had one draw a new value. */
+				/* Creation times are read before the delete, because the delete is what would
+				 * otherwise lose them.
+				 *
+				 * This path replaces rows rather than updating them, so time_created was being
+				 * stamped with the save time on every write -- every item in a character's
+				 * inventory ended up sharing the timestamp of the last save, which is not when any
+				 * of them was created. The single-item upsert above never had this problem: it
+				 * leaves time_created out of its DO UPDATE, and so preserves it.
+				 *
+				 * Worth more than tidiness. time_created is the only record of when an item came
+				 * into existence, which is exactly what an investigation into duplicated items has
+				 * to work from -- and with every row rewritten each save, there was nothing left to
+				 * investigate. */
+				var existingCreationTimes = new Dictionary<long, DateTime>();
+				var knownIds = snapshot.Where(i => i.ID > 0).Select(i => i.ID).ToArray();
+				if (knownIds.Length > 0)
+				{
+					var existing = await ExecuteReturningManyAsync(
+						dbContext,
+						$"SELECT id, time_created FROM {TableName} WHERE id = ANY({{0}}::bigint[])",
+						new object[] { knownIds },
+						reader => new KeyValuePair<long, DateTime>(reader.GetInt64(0), reader.GetDateTime(1)),
+						cancellationToken).ConfigureAwait(false);
+
+					foreach (var pair in existing)
+					{
+						existingCreationTimes[pair.Key] = pair.Value;
+					}
+				}
 				await dbContext.Database
 					.ExecuteSqlRawAsync(
 						$"DELETE FROM {TableName} WHERE character_id = {{0}} AND container = ANY({{1}}::smallint[])",
@@ -542,7 +596,7 @@ namespace FishMMO.Database.Npgsql.Services
 						u.template_id,
 						u.seed,
 						u.amount,
-						{{8}},
+						u.time_created,
 						FALSE,
 						NULL
 					FROM UNNEST(
@@ -553,14 +607,15 @@ namespace FishMMO.Database.Npgsql.Services
 						{{4}}::bigint[],
 						{{5}}::integer[],
 						{{6}}::integer[],
-						{{7}}::bigint[]
-					) AS u(id, character_id, container, slot, version, template_id, seed, amount)
+						{{7}}::bigint[],
+						{{8}}::timestamp[]
+					) AS u(id, character_id, container, slot, version, template_id, seed, amount, time_created)
 					RETURNING id, container, slot";
 
 				var written = await ExecuteReturningManyAsync(
 					dbContext,
 					insertSql,
-					BuildArrayParameters(snapshot, now),
+					BuildReplaceArrayParameters(snapshot, existingCreationTimes, now),
 					reader => new CharacterItemIdAssignment(
 						(ItemContainerType)reader.GetInt16(1),
 						reader.GetInt32(2),
