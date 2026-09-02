@@ -358,7 +358,7 @@ MonoBehaviour:
   DefaultDistance: 6
   MinDistance: 0
   MaxDistance: 10
-  DistanceMovementSpeed: 5
+  DistanceMovementSpeed: 0.5
   DistanceMovementSharpness: 10
   InvertX: 0
   InvertY: 0
