@@ -10,7 +10,8 @@
         "FishNet.Runtime",
         "KinematicCharacterController",
         "Unity.TextMeshPro",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.Addressables"
     ],
     "includePlatforms": [
         "Editor"

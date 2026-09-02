@@ -348,14 +348,28 @@ namespace FishMMO.Client
 
 		/// <summary>Largest font size, in panel points, a label is allowed to grow to.</summary>
 		/// <remarks>
-		/// 48 rather than the panel's practical maximum: the clamp is what a nameplate hits when the
-		/// player walks right up to a character, and at 96 points a name filled a fifth of the
-		/// screen. This value is serialized in ClientPreboot.unity as well — both must change
-		/// together for a retune to take effect.
+		/// <para>
+		/// This clamp is what a nameplate hits when the player walks up to a character, so it is
+		/// the number that decides how large a name gets at its largest — not the authored world
+		/// size, which only decides where the clamp starts biting. Against the 1200x800 reference
+		/// panel (675 points tall at 16:9) a 0.25 world-unit nameplate reaches 24 points at about
+		/// six metres and holds it inside that, which is 3.6% of screen height.
+		/// </para>
+		/// <para>
+		/// Retuned twice, downward both times: 96 filled a fifth of the screen, 48 was still
+		/// reported as "slightly large" at 7.1%. The player's own Label Size multiplier scales this
+		/// along with everything else (see <see cref="labelScale"/>), so anyone who wants the old
+		/// size can still reach it — the default is what a player who never opens the options menu
+		/// gets, and it should be the conservative end.
+		/// </para>
+		/// <para>
+		/// SERIALIZED IN ClientPreboot.unity AS WELL. The scene value is what ships and overrides
+		/// this initialiser entirely, so changing one alone fixes nothing for a player.
+		/// </para>
 		/// </remarks>
 		[Tooltip("Upper clamp for projected font size, in panel points.")]
 		[Min(1.0f)]
-		public float MaxFontSize = 48.0f;
+		public float MaxFontSize = 24.0f;
 
 		/// <summary>
 		/// Player-chosen size multiplier applied to every projected label.
