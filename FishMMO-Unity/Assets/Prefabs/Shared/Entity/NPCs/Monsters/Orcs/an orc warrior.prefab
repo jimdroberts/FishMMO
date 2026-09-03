@@ -373,7 +373,8 @@ MonoBehaviour:
   LootTable: {fileID: 0}
   onInteractTriggers: []
   AttributeBonuses: {fileID: 11400000, guid: 0f2ff92179a6d1b4c9dde7ad6a4afdb0, type: 2}
-  Abilities: []
+  Abilities:
+  - {fileID: 11400000, guid: 2e669850a4855b9438e174f70db28d9a, type: 2}
   objectSpawner: {fileID: 0}
   spawnableSettings:
     rid: -2
