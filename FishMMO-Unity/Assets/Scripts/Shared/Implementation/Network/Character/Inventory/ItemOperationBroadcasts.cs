@@ -26,6 +26,10 @@ namespace FishMMO.Shared
 		BankRemove = 5,
 		/// <summary>Move an item into, out of, or within the bank.</summary>
 		BankSwap = 6,
+		/// <summary>Split part of a stack into an inventory slot. Slot is the source, SecondarySlot the inventory destination.</summary>
+		InventorySplit = 7,
+		/// <summary>Split part of a stack into a bank slot. Slot is the source, SecondarySlot the bank destination.</summary>
+		BankSplit = 8,
 	}
 
 	/// <summary>

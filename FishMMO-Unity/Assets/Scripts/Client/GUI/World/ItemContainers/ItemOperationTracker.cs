@@ -332,6 +332,18 @@ namespace FishMMO.Client
 					Release(ReferenceButtonType.Bank, msg.SecondarySlot);
 					break;
 
+				case ItemOperationType.InventorySplit:
+					// Same shape as a swap: the source is wherever the client said, the
+					// destination is an inventory slot.
+					Release(source, msg.Slot);
+					Release(ReferenceButtonType.Inventory, msg.SecondarySlot);
+					break;
+
+				case ItemOperationType.BankSplit:
+					Release(source, msg.Slot);
+					Release(ReferenceButtonType.Bank, msg.SecondarySlot);
+					break;
+
 				case ItemOperationType.EquipmentEquip:
 					// Slot is the source container index, SecondarySlot the equipment socket.
 					Release(source, msg.Slot);

@@ -52,6 +52,18 @@ namespace FishMMO.Client
 			}, Channel.Reliable);
 		}
 
+		/// <inheritdoc/>
+		protected override void SendSplitRequest(int fromSlot, int toSlot, InventoryType fromInventory, uint amount)
+		{
+			Client.Broadcast(new InventorySplitItemBroadcast()
+			{
+				From = fromSlot,
+				To = toSlot,
+				Amount = amount,
+				FromInventory = fromInventory,
+			}, Channel.Reliable);
+		}
+
 		/// <summary>
 		/// Also completes a drag on pointer UP, so a held drag can be dropped rather than clicked.
 		/// </summary>
@@ -96,7 +108,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Right-click wears the item, if it can be worn.
+		/// Right-click wears the item if it can be worn, and otherwise offers to split it.
 		/// </summary>
 		/// <remarks>
 		/// <c>InventoryController.Activate</c> is the "use this item" path and it does nothing at
@@ -106,6 +118,11 @@ namespace FishMMO.Client
 		/// already handled server-side; the equipment panel has been sending it for click-to-drop
 		/// all along. The destination slot comes from the item's own template, which is what makes
 		/// a single right-click meaningful: a breastplate has exactly one slot it can go to.
+		/// <para>
+		/// Anything that is not wearable gets the grid's own meaning for the click, the split
+		/// prompt (issue #198), so a stack of arrows in the bag splits the same way it does in the
+		/// bank.
+		/// </para>
 		/// </remarks>
 		protected override void HandleSlotRightClick(int slotIndex)
 		{
@@ -120,9 +137,15 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (!container.TryGetItem(slotIndex, out Item item) ||
-				!(item.Template is EquippableItemTemplate equippable))
+			if (!container.TryGetItem(slotIndex, out Item item))
 			{
+				return;
+			}
+
+			if (!(item.Template is EquippableItemTemplate equippable))
+			{
+				// Not wearable: the click means what it means in every item grid.
+				base.HandleSlotRightClick(slotIndex);
 				return;
 			}
 

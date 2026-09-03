@@ -100,6 +100,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// Swap two item slots within the bank.
 			/// </summary>
 			BankSwap = 6,
+			/// <summary>
+			/// Split part of a stack into an inventory slot.
+			/// </summary>
+			InventorySplit = 7,
+			/// <summary>
+			/// Split part of a stack into a bank slot.
+			/// </summary>
+			BankSplit = 8,
 		}
 
 		/// <summary>
@@ -137,6 +145,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Inventory broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<InventorySplitItemBroadcast>(OnServerInventorySplitItemBroadcastReceived, true);
 
 			/* No equipment broadcasts. Equip and unequip are replicate INPUT now — applied by the
 			 * EquipmentController inside the owner's replicate tick on both peers — and this system
@@ -146,6 +155,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Bank broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<BankSplitItemBroadcast>(OnServerBankSplitItemBroadcastReceived, true);
 
 			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
@@ -191,10 +201,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Inventory broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<InventorySplitItemBroadcast>(OnServerInventorySplitItemBroadcastReceived);
 
 			// Bank broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<BankSplitItemBroadcast>(OnServerBankSplitItemBroadcastReceived);
 
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem))
 			{
@@ -969,6 +981,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					Slot = removed[i].Slot,
 				}, true, Channel.Reliable);
+			}
+		}
+
+		/// <summary>Tells the owner that one slot of a container emptied.</summary>
+		/// <remarks>
+		/// <see cref="BroadcastRemovedSlots"/> speaks only for the inventory, because the ECA
+		/// remove action that feeds it only ever touches the inventory. A merge can empty a bank
+		/// slot too, so this one takes the container.
+		/// </remarks>
+		private void BroadcastEmptiedSlot(IPlayerCharacter character, InventoryType container, int slot)
+		{
+			if (character.Owner == null || slot < 0)
+			{
+				return;
+			}
+
+			switch (container)
+			{
+				case InventoryType.Inventory:
+					Server.NetworkWrapper.Broadcast(character.Owner, new InventoryRemoveItemBroadcast()
+					{
+						Slot = slot,
+					}, true, Channel.Reliable);
+					break;
+				case InventoryType.Bank:
+					Server.NetworkWrapper.Broadcast(character.Owner, new BankRemoveItemBroadcast()
+					{
+						Slot = slot,
+					}, true, Channel.Reliable);
+					break;
+				default:
+					break;
 			}
 		}
 
@@ -2034,6 +2078,248 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			return false;
 		}
 
+		#region Stack Split And Merge
+
+		/// <summary>
+		/// Merges the stack in <paramref name="fromIndex"/> into a matching stack in
+		/// <paramref name="toIndex"/>, when that is what a drop onto it should do. Issue #198.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Called by the swap handlers ahead of the swap. Returns false when the two slots are NOT
+		/// a merge — the destination is empty, holds something else, or is full — and the caller
+		/// then swaps as it always did. Returns true when the drop was a merge, whether or not it
+		/// went through; <paramref name="succeeded"/> and <paramref name="failureReason"/> carry
+		/// the outcome the handler reports from its <c>finally</c>.
+		/// </para>
+		/// <para>
+		/// <b>Not echoed.</b> The client applies an echoed swap by exchanging two slots, which is
+		/// the wrong thing for a merge, so the outcome goes out as a set-slot message for the
+		/// receiving stack and either a set-slot or a remove for the donor. Those go out whether or
+		/// not the batch was queued normally: the containers have already changed and the client
+		/// has to be told what they now hold — a <c>ServerBusy</c> on top of them means only that
+		/// the acknowledgement is uncertain, as it does everywhere else.
+		/// </para>
+		/// <para>
+		/// Split and merge are a pair (see <see cref="ItemStackTransfer"/>): between them a player
+		/// can move any quantity anywhere, and quantity a split strands is quantity a merge can
+		/// recombine.
+		/// </para>
+		/// </remarks>
+		private bool TryMergeStacks(NetworkConnection conn, IPlayerCharacter character,
+			IItemContainer from, InventoryType fromType, int fromIndex,
+			IItemContainer to, InventoryType toType, int toIndex,
+			string operation, out bool succeeded, out ItemOperationFailureReason failureReason)
+		{
+			succeeded = false;
+			failureReason = ItemOperationFailureReason.Rejected;
+
+			if (from == null || to == null ||
+				!from.TryGetItem(fromIndex, out Item donor) ||
+				!to.TryGetItem(toIndex, out Item receiver) ||
+				!ItemStackTransfer.CanMergeInto(receiver, donor))
+			{
+				// Not a merge; the caller swaps.
+				return false;
+			}
+
+			if (!ItemStackTransfer.TryMerge(from, fromIndex, to, toIndex, out Item source, out Item destination, out bool sourceEmptied))
+			{
+				// A merge the pre-flight refused (a locked slot). Nothing changed, and the swap
+				// would refuse for the same reason, so it is reported rather than retried.
+				return true;
+			}
+
+			long characterID = character.ID;
+			ItemWriteBatch batch = BeginItemBatch(characterID, operation);
+			batch.AddItemWrite(BuildItemData(characterID, destination, toType.ToContainerType()));
+			if (sourceEmptied)
+			{
+				// The donor ceased to exist: a real delete, addressed by the item.
+				source.Version++;
+				batch.AddItemDelete(source.ID, source.Version);
+			}
+			else
+			{
+				batch.AddItemWrite(BuildItemData(characterID, source, fromType.ToContainerType()));
+			}
+			bool enqueued = EnqueueItemBatch(batch);
+
+			BroadcastSlots(character, toType, new List<Item>(1) { destination });
+			if (sourceEmptied)
+			{
+				BroadcastEmptiedSlot(character, fromType, fromIndex);
+			}
+			else
+			{
+				BroadcastSlots(character, fromType, new List<Item>(1) { source });
+			}
+
+			if (enqueued)
+			{
+				succeeded = true;
+			}
+			else
+			{
+				SendServerBusy(conn);
+				failureReason = ItemOperationFailureReason.ServerBusy;
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Handles a request to split part of a stack into an inventory slot. Issue #198.
+		/// </summary>
+		private void OnServerInventorySplitItemBroadcastReceived(NetworkConnection conn, InventorySplitItemBroadcast msg, Channel channel)
+		{
+			HandleSplitRequest(conn, IngressOperation.InventorySplit, ItemOperationType.InventorySplit,
+				msg.FromInventory, msg.From, InventoryType.Inventory, msg.To, msg.Amount);
+		}
+
+		/// <summary>
+		/// Handles a request to split part of a stack into a bank slot. Issue #198.
+		/// </summary>
+		private void OnServerBankSplitItemBroadcastReceived(NetworkConnection conn, BankSplitItemBroadcast msg, Channel channel)
+		{
+			HandleSplitRequest(conn, IngressOperation.BankSplit, ItemOperationType.BankSplit,
+				msg.FromInventory, msg.From, InventoryType.Bank, msg.To, msg.Amount);
+		}
+
+		/// <summary>
+		/// Splits <paramref name="amount"/> off a stack into another slot, persists both halves as
+		/// one transaction and tells the owner what the two slots now hold.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A new operation rather than a variation on swap: every existing item message moves or
+		/// exchanges whole slots, and none changes an amount. The rules — at least one, less than
+		/// the stack holds, onto an empty slot or a matching stack with room, both slots unlocked —
+		/// live in <see cref="ItemStackTransfer.TrySplit"/>, which refuses before writing anything,
+		/// so a refused split leaves the original stack untouched.
+		/// </para>
+		/// <para>
+		/// <b>The split half has no identity until its row lands.</b> It is handled exactly as a
+		/// granted item is: its slot is locked until the identity write-back arrives, the set-slot
+		/// message goes out with id 0 so the client shows it as waiting, and
+		/// <see cref="ApplyAssignedIdentities"/> unlocks the slot and re-sends it with the id the
+		/// database issued. Both rows travel in one batch, so the database either shows the split
+		/// or shows the stack as it was.
+		/// </para>
+		/// <para>
+		/// The banker has to be in range whenever either end is a bank slot, as for a deposit or a
+		/// withdrawal.
+		/// </para>
+		/// </remarks>
+		private void HandleSplitRequest(NetworkConnection conn, IngressOperation ingress, ItemOperationType operation,
+			InventoryType fromInventory, int from, InventoryType toInventory, int to, uint amount)
+		{
+			if (conn == null ||
+				conn.FirstObject == null)
+			{
+				return;
+			}
+
+			if (!TryBeginIngressGuard(conn.ClientId, ingress, out long guardKey))
+			{
+				// Refused by the ingress debounce, or an identical request is still in flight.
+				// The client is holding a pending lock on both slots; with no reply it holds them forever.
+				SendItemOperationFailed(conn, operation, ItemOperationFailureReason.Throttled, fromInventory, from, to);
+				return;
+			}
+
+			// Set at the point where this handler acknowledges success. Everything else — every
+			// validation return below, and any return a later edit adds — falls through to the
+			// failure notification in the finally block.
+			bool succeeded = false;
+			ItemOperationFailureReason failureReason = ItemOperationFailureReason.Rejected;
+
+			try
+			{
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+				if (character == null ||
+					!CharacterStateValidation.CanAct(character))
+				{
+					return;
+				}
+
+				// Only the two grid containers hold stacks; an equipment socket never does.
+				if (fromInventory != InventoryType.Inventory && fromInventory != InventoryType.Bank)
+				{
+					return;
+				}
+
+				IItemContainer source = ResolveContainer(character, fromInventory.ToContainerType());
+				IItemContainer target = ResolveContainer(character, toInventory.ToContainerType());
+				if (source == null || target == null)
+				{
+					return;
+				}
+
+				if ((fromInventory == InventoryType.Bank || toInventory == InventoryType.Bank) &&
+					(!character.TryGet(out IBankController bankController) ||
+					 !ValidateBankerSceneObject(bankController.LastInteractableID, character)))
+				{
+					return;
+				}
+
+				// Validate slot bounds before processing
+				if (!source.IsValidSlot(from) || !target.IsValidSlot(to))
+				{
+					return;
+				}
+
+				if (!ItemStackTransfer.TrySplit(source, from, target, to, amount,
+					out Item remainder, out Item taken, out bool created))
+				{
+					return;
+				}
+
+				long characterID = character.ID;
+
+				if (created)
+				{
+					/* Locked until the identity write-back, as TryPersistGrantedItems does for a
+					 * granted item: nothing may swap, merge into or split a stack the database has
+					 * not written, or a second batch would capture it under id 0 and insert a
+					 * second row for one item. ApplyAssignedIdentities unlocks. */
+					target.LockSlot(to);
+				}
+
+				ItemWriteBatch batch = BeginItemBatch(characterID, "StackSplit");
+				batch.AddItemWrite(BuildItemData(characterID, remainder, fromInventory.ToContainerType()));
+				batch.AddItemWrite(BuildItemData(characterID, taken, toInventory.ToContainerType()));
+				bool enqueued = EnqueueItemBatch(batch);
+
+				// Set-slot messages for both halves, never an echo: the client has never seen the
+				// split half and cannot construct it from two indices.
+				BroadcastSlots(character, fromInventory, new List<Item>(1) { remainder });
+				BroadcastSlots(character, toInventory, new List<Item>(1) { taken });
+
+				if (enqueued)
+				{
+					succeeded = true;
+				}
+				else
+				{
+					SendServerBusy(conn);
+					failureReason = ItemOperationFailureReason.ServerBusy;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+
+				// One notification per refused request, from the one place every exit path passes
+				// through. A per-return-site call is a list the next edit forgets to extend.
+				if (!succeeded)
+				{
+					SendItemOperationFailed(conn, operation, failureReason, fromInventory, from, to);
+				}
+			}
+		}
+
+		#endregion
+
 		/// <summary>
 		/// Handles broadcast to remove an item from the player's inventory, updates the database and notifies the client.
 		/// </summary>
@@ -2163,9 +2449,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						{
 							return;
 						}
+						if (msg.To == msg.From)
+						{
+							return;
+						}
+						// A stack dropped onto a matching stack merges instead of swapping. Issue #198.
+						if (TryMergeStacks(conn, character,
+							inventoryController, InventoryType.Inventory, msg.From,
+							inventoryController, InventoryType.Inventory, msg.To,
+							"InventoryMerge", out succeeded, out failureReason))
+						{
+							break;
+						}
 						// swap the items in the inventory
-						if (msg.To != msg.From &&
-							SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected, out int _))
+						if (SwapContainerItems(inventoryController, msg.From, msg.To, out List<Item> invAffected, out int _))
 						{
 							ItemWriteBatch batch = BeginItemBatch(characterID, "InventorySwap");
 							/* No delete for the vacated slot. A row is an item now, so writing the
@@ -2205,6 +2502,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (!bankController.IsValidSlot(msg.From) || !inventoryController.IsValidSlot(msg.To))
 							{
 								return;
+							}
+
+							// A stack withdrawn onto a matching stack merges instead of swapping. Issue #198.
+							if (TryMergeStacks(conn, character,
+								bankController, InventoryType.Bank, msg.From,
+								inventoryController, InventoryType.Inventory, msg.To,
+								"BankWithdrawMerge", out succeeded, out failureReason))
+							{
+								break;
 							}
 
 							if (SwapContainerItems(bankController, inventoryController, msg.From, msg.To,
@@ -2523,10 +2829,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				switch (msg.FromInventory)
 				{
 					case InventoryType.Inventory:
-						if (character.TryGet(out IInventoryController inventoryController) &&
-							inventoryController.IsValidSlot(msg.From) &&
-							bankController.IsValidSlot(msg.To) &&
-							SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
+						if (!character.TryGet(out IInventoryController inventoryController) ||
+							!inventoryController.IsValidSlot(msg.From) ||
+							!bankController.IsValidSlot(msg.To))
+						{
+							return;
+						}
+						// A stack deposited onto a matching stack merges instead of swapping. Issue #198.
+						if (TryMergeStacks(conn, character,
+							inventoryController, InventoryType.Inventory, msg.From,
+							bankController, InventoryType.Bank, msg.To,
+							"BankDepositMerge", out succeeded, out failureReason))
+						{
+							break;
+						}
+						if (SwapContainerItems(inventoryController, bankController, msg.From, msg.To,
 								out List<Item> fromItems, out List<long> deletedSlots, out List<Item> toItems))
 						{
 							// ONE batch for the whole deposit: the inventory rows that stayed behind, the
@@ -2576,9 +2893,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						{
 							return;
 						}
+						if (msg.To == msg.From)
+						{
+							return;
+						}
+						// A stack dropped onto a matching stack merges instead of swapping. Issue #198.
+						if (TryMergeStacks(conn, character,
+							bankController, InventoryType.Bank, msg.From,
+							bankController, InventoryType.Bank, msg.To,
+							"BankMerge", out succeeded, out failureReason))
+						{
+							break;
+						}
 						// swap the items in the bank
-						if (msg.To != msg.From &&
-							SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected, out int bankVacated))
+						if (SwapContainerItems(bankController, msg.From, msg.To, out List<Item> bankAffected, out int bankVacated))
 						{
 							ItemWriteBatch batch = BeginItemBatch(characterID, "BankSwap");
 							batch.AddItemWrites(BuildItemDataList(characterID, bankAffected, ItemContainerType.Bank));

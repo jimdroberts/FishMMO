@@ -111,6 +111,25 @@ namespace FishMMO.Client
 		public bool HasItemIdentity { get; private set; }
 
 		/// <summary>
+		/// How much of the source stack this drag is carrying, or 0 when it carries the whole
+		/// item. Issue #198.
+		/// </summary>
+		/// <remarks>
+		/// A non-zero value turns the drop into a split request rather than a swap. It is a
+		/// quantity the player chose, not an item: the split half does not exist anywhere until
+		/// the server creates it, so the drag still identifies the SOURCE item and re-validates
+		/// against it at drop time exactly as a whole-stack drag does. Anything that cannot take a
+		/// quantity — an equipment socket — must refuse a drag with this set rather than act on
+		/// the whole item it was taken from.
+		/// </remarks>
+		public uint SplitAmount { get; private set; }
+
+		/// <summary>
+		/// Name of the stack-count badge drawn on the drag icon for a split drag.
+		/// </summary>
+		private const string DRAG_AMOUNT_NAME = "drag-amount";
+
+		/// <summary>
 		/// Layer mask used for raycasting when dropping items.
 		/// </summary>
 		public LayerMask LayerMask;
@@ -124,6 +143,12 @@ namespace FishMMO.Client
 		/// The visual element used as the drag icon.
 		/// </summary>
 		private VisualElement dragIcon;
+
+		/// <summary>
+		/// The stack-count badge on the drag icon. Created on demand and re-resolved with the
+		/// icon, for the same reason the icon is.
+		/// </summary>
+		private Label dragAmount;
 
 		/// <summary>
 		/// The sprite displayed while dragging.
@@ -280,7 +305,7 @@ namespace FishMMO.Client
 		/// <param name="type">Type of reference button.</param>
 		public void SetReference(Sprite icon, long referenceID, ReferenceButtonType type)
 		{
-			ApplyReference(icon, referenceID, type, NULL_ITEM_ID, 0L, false);
+			ApplyReference(icon, referenceID, type, NULL_ITEM_ID, 0L, false, 0u);
 		}
 
 		/// <summary>
@@ -291,7 +316,10 @@ namespace FishMMO.Client
 		/// <param name="slotIndex">Slot index within the source container.</param>
 		/// <param name="type">Which container the slot belongs to.</param>
 		/// <param name="item">The item in that slot at the moment the drag began.</param>
-		public void SetItemReference(Sprite icon, int slotIndex, ReferenceButtonType type, Item item)
+		/// <param name="splitAmount">
+		/// How much of the stack to carry, or 0 for the whole item. See <see cref="SplitAmount"/>.
+		/// </param>
+		public void SetItemReference(Sprite icon, int slotIndex, ReferenceButtonType type, Item item, uint splitAmount = 0)
 		{
 			/* An item with no server-issued ID cannot be told apart from any other item with no
 			 * server-issued ID, so it gets no identity rather than a false one. The drop then
@@ -304,7 +332,8 @@ namespace FishMMO.Client
 				type,
 				hasIdentity ? item.ID : NULL_ITEM_ID,
 				item != null ? item.Version : 0L,
-				hasIdentity);
+				hasIdentity,
+				splitAmount);
 		}
 
 		/// <summary>
@@ -381,8 +410,10 @@ namespace FishMMO.Client
 				ItemID = NULL_ITEM_ID;
 				ItemVersion = 0L;
 				HasItemIdentity = false;
+				SplitAmount = 0u;
 
 				UITKItemIcon.Clear(dragIcon);
+				ApplyAmount();
 
 				Hide(false);
 			}
@@ -441,7 +472,7 @@ namespace FishMMO.Client
 		/// Common tail of both <c>Set*Reference</c> forms.
 		/// </summary>
 		private void ApplyReference(Sprite icon, long referenceID, ReferenceButtonType type,
-			long itemID, long itemVersion, bool hasItemIdentity)
+			long itemID, long itemVersion, bool hasItemIdentity, uint splitAmount)
 		{
 			iconSprite = icon;
 			ReferenceID = referenceID;
@@ -449,6 +480,7 @@ namespace FishMMO.Client
 			ItemID = itemID;
 			ItemVersion = itemVersion;
 			HasItemIdentity = hasItemIdentity;
+			SplitAmount = splitAmount;
 
 			/* Show first, then paint. Enabling the document re-clones the UXML, so an icon written
 			 * into dragIcon before this point belongs to a tree that has already been thrown away
@@ -488,6 +520,46 @@ namespace FishMMO.Client
 			 * invisible — which is the same "did that do anything?" as the drag being refused,
 			 * and the reason the refusal looked reasonable in the first place. */
 			UITKItemIcon.Apply(dragIcon, iconSprite);
+			ApplyAmount();
+		}
+
+		/// <summary>
+		/// Draws the count a split drag is carrying on the icon, and nothing for a whole drag.
+		/// </summary>
+		/// <remarks>
+		/// Only a split shows a count. A whole-stack drag never has, and putting the full amount
+		/// on it would read as a quantity the player chose. The badge lives inside the icon so it
+		/// is created and discarded with it; the UXML stays an empty container, as it is for
+		/// every other runtime-filled panel.
+		/// </remarks>
+		private void ApplyAmount()
+		{
+			if (dragIcon == null)
+			{
+				return;
+			}
+
+			if (dragAmount == null || dragAmount.parent != dragIcon)
+			{
+				dragAmount = dragIcon.Q<Label>(DRAG_AMOUNT_NAME);
+				if (dragAmount == null)
+				{
+					dragAmount = new Label();
+					dragAmount.name = DRAG_AMOUNT_NAME;
+					dragAmount.AddToClassList("fish-slot__amount");
+					dragAmount.pickingMode = PickingMode.Ignore;
+					dragAmount.style.position = Position.Absolute;
+					dragAmount.style.right = 2;
+					dragAmount.style.bottom = 2;
+					dragAmount.style.paddingLeft = 3;
+					dragAmount.style.paddingRight = 3;
+					dragIcon.Add(dragAmount);
+				}
+			}
+
+			bool carryingPart = SplitAmount > 0;
+			dragAmount.text = carryingPart ? SplitAmount.ToString() : string.Empty;
+			dragAmount.style.display = carryingPart ? DisplayStyle.Flex : DisplayStyle.None;
 		}
 
 		/// <summary>

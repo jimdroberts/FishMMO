@@ -198,6 +198,40 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TryUnstack_Zero_IsRefusedAndChangesNothing()
+		{
+			RunTraced(nameof(TryUnstack_Zero_IsRefusedAndChangesNothing),
+				"Splitting zero has a defined answer: it is refused, and the stack is untouched.",
+				() =>
+				{
+					Item source = MakeItem(6);
+
+					bool split = source.Stackable.TryUnstack(0, out Item taken);
+
+					LogAssert.IsFalse(split, "Zero is not a split.");
+					LogAssert.IsNull(taken, "A refused split hands back nothing.");
+					LogAssert.AreEqual(6u, source.Stackable.Amount, "The stack must be untouched.");
+				});
+		}
+
+		[Test]
+		public void TryUnstack_MoreThanHeld_ReturnsTheOriginalUntouched()
+		{
+			RunTraced(nameof(TryUnstack_MoreThanHeld_ReturnsTheOriginalUntouched),
+				"Asking for more than exists is treated as asking for everything: a move of the original, never a decrement past zero.",
+				() =>
+				{
+					Item source = MakeItem(6);
+
+					bool split = source.Stackable.TryUnstack(50, out Item taken);
+
+					LogAssert.IsTrue(split, "Requesting more than the stack holds must not fail silently.");
+					LogAssert.IsTrue(ReferenceEquals(taken, source), "It must hand back the original instance.");
+					LogAssert.AreEqual(6u, source.Stackable.Amount, "The stack must not be decremented.");
+				});
+		}
+
+		[Test]
 		public void Remove_MoreThanHeld_ClampsToEmptyInsteadOfWrapping()
 		{
 			RunTraced(nameof(Remove_MoreThanHeld_ClampsToEmptyInsteadOfWrapping),

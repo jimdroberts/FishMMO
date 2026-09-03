@@ -51,4 +51,23 @@ namespace FishMMO.Shared
 		/// <summary>Type of inventory the item is being moved from.</summary>
 		public InventoryType FromInventory;
 	}
+
+	/// <summary>
+	/// Client request to split part of a stack off into a bank slot. Issue #198.
+	/// </summary>
+	/// <remarks>
+	/// The bank-destination twin of <c>InventorySplitItemBroadcast</c>; see it for why the shape
+	/// mirrors the swap and why the server never echoes this message.
+	/// </remarks>
+	public struct BankSplitItemBroadcast : IBroadcast
+	{
+		/// <summary>Slot holding the stack being split, in <see cref="FromInventory"/>.</summary>
+		public int From;
+		/// <summary>Bank slot the split half goes to: empty, or a matching stack with room.</summary>
+		public int To;
+		/// <summary>How much to take. At least 1 and less than the stack holds; anything else is refused.</summary>
+		public uint Amount;
+		/// <summary>Container holding the stack being split.</summary>
+		public InventoryType FromInventory;
+	}
 }

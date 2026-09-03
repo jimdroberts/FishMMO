@@ -1005,6 +1005,15 @@ namespace FishMMO.Client
 		{
 			int sourceSlot = (int)dragObject.ReferenceID;
 
+			/* A split half is a quantity, not an item: nothing exists to equip until the server
+			 * has made it. Drop the drag rather than equip the whole stack it was taken from,
+			 * which is not what the player picked up. Issue #198. */
+			if (dragObject.SplitAmount > 0)
+			{
+				dragObject.Clear();
+				return;
+			}
+
 			IItemContainer sourceContainer = ResolveContainer(dragObject.Type);
 			InventoryType sourceInventory = dragObject.Type == ReferenceButtonType.Bank
 				? InventoryType.Bank

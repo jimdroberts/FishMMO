@@ -51,4 +51,33 @@ namespace FishMMO.Shared
 		/// <summary>Type of inventory the item is being moved from.</summary>
 		public InventoryType FromInventory;
 	}
+
+	/// <summary>
+	/// Client request to split part of a stack off into an inventory slot. Issue #198.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Shaped like <see cref="InventorySwapItemSlotsBroadcast"/> on purpose: the destination is
+	/// always an inventory slot, <see cref="FromInventory"/> names where the stack is, and the
+	/// two indices travel in the same fields — so the failure message, the client's pending-slot
+	/// bookkeeping and the server's banker check all treat it exactly as they treat a swap.
+	/// </para>
+	/// <para>
+	/// <b>Never echoed.</b> A swap is acknowledged by echoing the request, because the client can
+	/// apply a swap from the two indices alone. A split creates an item the client has never seen,
+	/// so the server answers with the ordinary set-slot messages for both slots instead, the same
+	/// way it reports a granted item.
+	/// </para>
+	/// </remarks>
+	public struct InventorySplitItemBroadcast : IBroadcast
+	{
+		/// <summary>Slot holding the stack being split, in <see cref="FromInventory"/>.</summary>
+		public int From;
+		/// <summary>Inventory slot the split half goes to: empty, or a matching stack with room.</summary>
+		public int To;
+		/// <summary>How much to take. At least 1 and less than the stack holds; anything else is refused.</summary>
+		public uint Amount;
+		/// <summary>Container holding the stack being split.</summary>
+		public InventoryType FromInventory;
+	}
 }

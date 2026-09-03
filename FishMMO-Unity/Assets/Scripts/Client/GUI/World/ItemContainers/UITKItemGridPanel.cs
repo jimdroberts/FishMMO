@@ -65,6 +65,19 @@ namespace FishMMO.Client
 		/// <param name="fromInventory">Container the item is leaving.</param>
 		protected abstract void SendSwapRequest(int fromSlot, int toSlot, InventoryType fromInventory);
 
+		/// <summary>
+		/// Asks the server to split part of a stack into one of this panel's slots. Issue #198.
+		/// </summary>
+		/// <remarks>
+		/// As with <see cref="SendSwapRequest"/>, the request names its DESTINATION container, so
+		/// the panel receiving the split half is the one that sends it.
+		/// </remarks>
+		/// <param name="fromSlot">Slot holding the stack being split.</param>
+		/// <param name="toSlot">Slot in this panel the split half is going to.</param>
+		/// <param name="fromInventory">Container holding the stack being split.</param>
+		/// <param name="amount">How much to take off it.</param>
+		protected abstract void SendSplitRequest(int fromSlot, int toSlot, InventoryType fromInventory, uint amount);
+
 		// ── UXML element names ────────────────────────────────────────────────
 
 		private const string SLOT_GRID_NAME = "slot-grid";
@@ -85,6 +98,7 @@ namespace FishMMO.Client
 
 		protected const string DRAG_OBJECT_NAME = "UIDragObject";
 		protected const string TOOLTIP_NAME = "UITooltip";
+		protected const string INPUT_DIALOG_NAME = "UIDialogInputBox";
 
 		// ── USS class names ───────────────────────────────────────────────────
 
@@ -984,15 +998,123 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Right-click on a slot. Does nothing unless a panel gives it a meaning.
+		/// Right-click on a slot: offers to split the stack in it. Issue #198.
 		/// </summary>
 		/// <remarks>
-		/// A no-op rather than an abstract, because most containers have nothing sensible to do
-		/// with a right-click and should not be made to say so.
+		/// A panel with a better use for the click (the inventory wears what can be worn)
+		/// overrides this and falls back to it for everything else, so a stack of arrows splits
+		/// the same way in the bag and in the bank.
 		/// </remarks>
 		/// <param name="slotIndex">The slot that was clicked.</param>
 		protected virtual void HandleSlotRightClick(int slotIndex)
 		{
+			TryPromptSplit(slotIndex);
+		}
+
+		/// <summary>
+		/// Asks how much of the stack in <paramref name="slotIndex"/> to pick up, then starts a
+		/// drag carrying just that much.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Shift-click already means "send to the other container" (issue #197) and press-drag
+		/// already means "move the whole stack", so the split is asked for another way: a
+		/// right-click on a stack of two or more opens a quantity prompt, and accepting it picks
+		/// the split half up as a drag. The drop then names its destination exactly as a drag of
+		/// the whole stack would, which is what lets the split reuse every check a drop makes.
+		/// </para>
+		/// <para>
+		/// Nothing is written on this client at any point. The prompt starts a drag, the drop
+		/// sends a request, and the two slots repaint when the server sends them back — the same
+		/// contract as every other item operation here.
+		/// </para>
+		/// </remarks>
+		/// <param name="slotIndex">Slot holding the stack to split.</param>
+		protected void TryPromptSplit(int slotIndex)
+		{
+			if (Character == null || Client == null || IsSlotBlocked(slotIndex))
+			{
+				return;
+			}
+
+			IItemContainer container = OwnContainer;
+			if (container == null ||
+				!container.CanManipulate() ||
+				!CharacterStateValidation.CanAct(Character) ||
+				!container.TryGetItem(slotIndex, out Item item) ||
+				item == null ||
+				!item.IsStackable ||
+				item.Stackable.Amount < 2)
+			{
+				// One of something cannot be split, and a right-click on it is not an error.
+				return;
+			}
+
+			/* A right-click while carrying something is not a drop, and starting a second drag
+			 * under the first would lose whichever one the player thought they were holding. */
+			if (UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) && dragObject.IsDragging)
+			{
+				return;
+			}
+
+			if (!UIManager.TryGetTK(INPUT_DIALOG_NAME, out UITKDialogInputBox prompt))
+			{
+				return;
+			}
+
+			uint held = item.Stackable.Amount;
+			prompt.Open(
+				$"Split {item.Name}: how many to pick up? (1 to {held - 1}, or {held} for the whole stack)",
+				answer => OnSplitAmountEntered(slotIndex, item, answer));
+		}
+
+		/// <summary>
+		/// Turns the prompt's answer into a drag, or says why it cannot.
+		/// </summary>
+		/// <remarks>
+		/// Every boundary has a defined answer rather than whatever the arithmetic would do: zero,
+		/// a non-number and more than the stack holds are refused out loud; exactly the whole
+		/// stack is an ordinary drag of the item, because moving everything is a move, not a
+		/// split — and the server refuses a split of the whole stack for the same reason.
+		/// </remarks>
+		private void OnSplitAmountEntered(int slotIndex, Item item, string answer)
+		{
+			if (!uint.TryParse(answer?.Trim(), out uint amount) || amount < 1)
+			{
+				Notify("Enter a whole number of at least 1.", ToastSeverity.Warning);
+				return;
+			}
+
+			/* Re-read the slot. The prompt was modal but the container was not frozen: a loot
+			 * broadcast or the identity write-back can have replaced the item since. The drag has
+			 * to start from what is there NOW, or the drop's source check fails for a reason the
+			 * player never saw. */
+			IItemContainer container = OwnContainer;
+			if (container == null ||
+				IsSlotBlocked(slotIndex) ||
+				!container.TryGetItem(slotIndex, out Item current) ||
+				!ReferenceEquals(current, item) ||
+				!item.IsStackable)
+			{
+				Notify("That stack changed; nothing was split.", ToastSeverity.Warning);
+				return;
+			}
+
+			uint held = item.Stackable.Amount;
+			if (amount > held)
+			{
+				Notify($"There are only {held} there.", ToastSeverity.Warning);
+				return;
+			}
+
+			if (!UIManager.TryGetTK(DRAG_OBJECT_NAME, out UITKDragObject dragObject) || dragObject.IsDragging)
+			{
+				return;
+			}
+
+			// The whole stack is a move, so it is carried as an ordinary drag: split amount 0.
+			Sprite sprite = item.Template != null ? item.Template.Icon : null;
+			dragObject.SetItemReference(sprite, slotIndex, DragType, item, amount < held ? amount : 0u);
 		}
 
 		/// <summary>
@@ -1075,6 +1197,13 @@ namespace FishMMO.Client
 				return;
 			}
 
+			// A drag carrying a quantity is a split, not a swap. Same checks so far; different request.
+			if (dragObject.SplitAmount > 0)
+			{
+				CompleteSplitOntoSlot(dragObject, sourceInventory, sourceSlot, sourceItem, container, slotIndex);
+				return;
+			}
+
 			// Claim both ends, or neither: a slot marked as waiting for an unsent request never unlocks.
 			if (!ItemOperationTracker.TryBegin(dragObject.Type, sourceSlot))
 			{
@@ -1089,6 +1218,55 @@ namespace FishMMO.Client
 			}
 
 			SendSwapRequest(sourceSlot, slotIndex, sourceInventory);
+
+			dragObject.Clear();
+		}
+
+		/// <summary>
+		/// Sends the split a quantity-carrying drag was started for. Issue #198.
+		/// </summary>
+		/// <remarks>
+		/// The destination is checked against the rule the server applies — empty, or a matching
+		/// stack with room for the whole amount — because a request the client already knows
+		/// will be refused costs a round trip and two locked slots. The amount is checked again
+		/// too: the stack may have shrunk under the drag, and a split of everything it now holds
+		/// is a move, which is not what the player picked up. Either refusal drops the drag and
+		/// says why, so a click that did nothing is never mistaken for one the game missed.
+		/// </remarks>
+		private void CompleteSplitOntoSlot(UITKDragObject dragObject, InventoryType sourceInventory,
+			int sourceSlot, Item sourceItem, IItemContainer container, int slotIndex)
+		{
+			uint amount = dragObject.SplitAmount;
+
+			if (!ItemStackTransfer.IsValidSplitAmount(sourceItem, amount))
+			{
+				Notify("That stack changed; nothing was split.", ToastSeverity.Warning);
+				dragObject.Clear();
+				return;
+			}
+
+			container.TryGetItem(slotIndex, out Item occupant);
+			if (!ItemStackTransfer.CanSplitOnto(occupant, sourceItem, amount))
+			{
+				Notify("A split stack can only go to an empty slot, or onto a matching stack with room.", ToastSeverity.Warning);
+				dragObject.Clear();
+				return;
+			}
+
+			// Claim both ends, or neither: a slot marked as waiting for an unsent request never unlocks.
+			if (!ItemOperationTracker.TryBegin(dragObject.Type, sourceSlot))
+			{
+				dragObject.Clear();
+				return;
+			}
+			if (!ItemOperationTracker.TryBegin(DragType, slotIndex))
+			{
+				ItemOperationTracker.Release(dragObject.Type, sourceSlot);
+				dragObject.Clear();
+				return;
+			}
+
+			SendSplitRequest(sourceSlot, slotIndex, sourceInventory, amount);
 
 			dragObject.Clear();
 		}

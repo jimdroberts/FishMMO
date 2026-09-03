@@ -94,5 +94,17 @@ namespace FishMMO.Client
 				FromInventory = fromInventory,
 			}, Channel.Reliable);
 		}
+
+		/// <inheritdoc/>
+		protected override void SendSplitRequest(int fromSlot, int toSlot, InventoryType fromInventory, uint amount)
+		{
+			Client.Broadcast(new BankSplitItemBroadcast()
+			{
+				From = fromSlot,
+				To = toSlot,
+				Amount = amount,
+				FromInventory = fromInventory,
+			}, Channel.Reliable);
+		}
 	}
 }
