@@ -299,7 +299,13 @@
     margin-right: 10px;
 }
 
+/*
+    Same box height as the button beside it, so the row's align-items: center
+    lands both on the same line. Without a height the slider sizes to its own
+    content and its track sat noticeably above the button's centre.
+*/
 .map-footer__zoom {
     width: 160px;
+    height: 22px;
     flex-shrink: 0;
 }

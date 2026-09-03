@@ -41,7 +41,7 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:Button name="close-button" class="fish-close-btn container-close-btn" text="✕" />
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
 
         </ui:VisualElement>
 

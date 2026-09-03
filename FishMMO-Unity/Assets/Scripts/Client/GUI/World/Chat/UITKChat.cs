@@ -100,7 +100,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The welcome message displayed when the chat is initialised.
 		/// </summary>
-		public string WelcomeMessage = "Welcome to " + Constants.Configuration.ProjectName + "!\r\nChat channels are available.";
+		public string WelcomeMessage = "Welcome to " + Constants.Configuration.ProjectName + "!\nChat channels are available.";
 
 		/// <summary>
 		/// Error code messages mapped to their respective error keys.
@@ -437,11 +437,8 @@ namespace FishMMO.Client
 			// Display available channel commands in the chat window.
 			foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
 			{
-				string newLine = pair.Key.ToString() + ": ";
-				foreach (string command in pair.Value)
-				{
-					newLine += command + ", ";
-				}
+				// Joined rather than appended: the old loop left a trailing ", " on every line.
+				string newLine = pair.Key.ToString() + ": " + string.Join(", ", pair.Value);
 				AddSystemMessage(newLine, ChannelColors[pair.Key]);
 			}
 		}

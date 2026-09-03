@@ -56,14 +56,24 @@
     margin-bottom: 1px;
 }
 
+/*
+    middle-left on both halves of a line. A row is as tall as its tallest label,
+    and a flex row stretches the shorter one to match -- a Label draws its text at
+    the TOP of that stretched box by default, which is what made every line sit
+    high in its own space. The two labels also differ in height whenever one wraps
+    and the other does not, so without this the sender and the message it belongs
+    to do not sit on the same baseline.
+*/
 .chat-message__name {
     font-size: 12px;
     -unity-font-style: bold;
+    -unity-text-align: middle-left;
     margin-right: 2px;
 }
 
 .chat-message__text {
     font-size: 12px;
+    -unity-text-align: middle-left;
     white-space: normal;
     flex-shrink: 1;
 }

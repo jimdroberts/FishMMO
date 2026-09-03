@@ -6,7 +6,7 @@
             <ui:VisualElement name="panel-header" class="fish-panel__header inspect-header">
                 <ui:VisualElement class="fish-panel__icon inspect-header__icon" />
                 <ui:Label name="inspect-name" text="" class="fish-panel__title inspect-title" />
-                <ui:Button name="inspect-close-btn" text="X" class="fish-close-btn inspect-close-btn" />
+                <ui:Button name="inspect-close-btn" text="✕" class="fish-close-btn" />
             </ui:VisualElement>
 
             <ui:ScrollView name="inspect-scroll" class="fish-scroll inspect-scroll">

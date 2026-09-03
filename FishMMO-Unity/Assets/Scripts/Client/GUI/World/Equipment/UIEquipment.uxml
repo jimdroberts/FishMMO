@@ -55,9 +55,9 @@
 
             </ui:VisualElement>
 
-            <!-- fish-close-btn → colors, border, transitions   -->
-            <!-- eq-close-btn   → width, height, padding        -->
-            <ui:Button name="close-button" class="fish-close-btn eq-close-btn" text="✕" />
+            <!-- fish-close-btn carries the whole control: size, colors, border, -->
+            <!-- transitions. Panels add a class only where they need a margin.   -->
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
 
         </ui:VisualElement>
 

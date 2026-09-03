@@ -11,7 +11,7 @@
                     <ui:Label name="dungeonfinder-subtitle" text="Select a dungeon"
                               class="fish-panel__subtitle" />
                 </ui:VisualElement>
-                <ui:Button name="dungeonfinder-close-btn" text="✕" class="fish-close-btn dungeonfinder-close-btn" />
+                <ui:Button name="dungeonfinder-close-btn" text="✕" class="fish-close-btn" />
             </ui:VisualElement>
 
             <!-- The dungeon itself: artwork and description, above everything about instances. -->
