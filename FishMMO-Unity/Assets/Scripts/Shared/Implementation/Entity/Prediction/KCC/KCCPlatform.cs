@@ -245,7 +245,17 @@ namespace FishMMO.Shared
 			if (other.TryGetComponent(out KCCPlayer player))
 			{
 				player.SetPlatform(this);
+				Log.Debug("KCCPlatform", $"'{name}' picked up rider '{other.name}'.");
+				return;
 			}
+
+			/* Something entered the rider volume that is not a rider. Worth saying: a character
+			 * whose collider sits on a child object resolves no KCCPlayer here, and the failure is
+			 * completely silent -- the deck slides away and the rider stands still, which is the
+			 * same symptom as the volume not seeing the Player layer at all. */
+			Log.Debug("KCCPlatform",
+				$"'{name}' rider volume entered by '{other.name}' on layer {other.gameObject.layer}, " +
+				"which carries no KCCPlayer.");
 		}
 
 		/// <summary>
@@ -256,6 +266,7 @@ namespace FishMMO.Shared
 			if (other.TryGetComponent(out KCCPlayer player))
 			{
 				player.SetPlatform(null);
+				Log.Debug("KCCPlatform", $"'{name}' dropped rider '{other.name}'.");
 			}
 		}
 
