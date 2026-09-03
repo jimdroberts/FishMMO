@@ -50,12 +50,6 @@
     flex-grow: 1;
 }
 
-.inspect-close-btn {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
-}
-
 .inspect-scroll {
     flex-grow: 1;
     padding: 8px;

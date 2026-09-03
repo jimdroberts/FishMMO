@@ -333,7 +333,18 @@
    2. CLOSE BUTTON
    ═══════════════════════════════════════════════════════════ */
 
+/*
+    Size lives here, not on each panel's own close rule. Fourteen panels repeated
+    26x26 and four disagreed -- two at 22 and 24, and the map and dungeon finder
+    named no size at all, so their buttons sized to the glyph instead. A close
+    button is the same control on every panel; there is nothing panel-specific
+    about how big it is. Panels keep only what genuinely differs, which is the
+    margin separating it from the title beside it.
+*/
 .fish-close-btn {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
     background-color: var(--clear);
     border-color: var(--abyss-400);
     border-width: 1px;

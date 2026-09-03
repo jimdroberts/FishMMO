@@ -33,7 +33,7 @@
                 <ui:Button name="mail-tab-inbox" class="fish-tab fish-tab--active mail-tab" text="Inbox" />
                 <ui:Button name="mail-tab-compose" class="fish-tab mail-tab" text="Compose" />
             </ui:VisualElement>
-            <ui:Button name="close-button" class="fish-close-btn mail-close-btn" text="✕" />
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
         </ui:VisualElement>
 
         <!-- ── BODY : inbox + detail ────────────────────────── -->

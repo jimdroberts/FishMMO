@@ -35,11 +35,6 @@
     -unity-font-style: bold;
 }
 
-.craft-close-btn {
-    width: 24px;
-    height: 24px;
-}
-
 .craft-body {
     flex-direction: row;
 }

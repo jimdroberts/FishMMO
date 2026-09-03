@@ -116,7 +116,6 @@
     border-radius: 2px;
 }
 
-
 /* ═══════════════════════════════════════════════════════════
    HEADER AND EMPTY STATE
    ═══════════════════════════════════════════════════════════ */
@@ -145,13 +144,8 @@
 
 /* Sizing only — .fish-close-btn carries the colours, border and hover. */
 .faction-close-btn {
-    width: 26px;
-    height: 26px;
-    flex-shrink: 0;
-    padding: 0;
     margin-left: 8px;
 }
-
 
 /*
     Shown when the list behind it has nothing in it. A blank scroll area reads

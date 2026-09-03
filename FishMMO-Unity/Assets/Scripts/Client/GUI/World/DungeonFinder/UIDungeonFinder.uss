@@ -71,10 +71,6 @@
     flex-shrink: 0;
 }
 
-.dungeonfinder-close-btn {
-    flex-shrink: 0;
-}
-
 /* ── About the dungeon ──────────────────────────────────── */
 
 .dungeonfinder-about {
@@ -293,8 +289,6 @@
     overflow: visible;
     text-overflow: clip;
 }
-
-
 
 .dungeonfinder-footer__actions {
     flex-direction: row;

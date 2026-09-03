@@ -27,7 +27,7 @@
         <!-- ── HEADER ──────────────────────────────────────── -->
         <ui:VisualElement name="panel-header" class="fish-panel__header lore-header">
             <ui:Label name="header-title" class="fish-panel__title lore-header__title" text="LORE" />
-            <ui:Button name="close-button" class="fish-close-btn lore-close-btn" text="✕" />
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
         </ui:VisualElement>
 
         <!-- ── BODY : the text itself ───────────────────────── -->
