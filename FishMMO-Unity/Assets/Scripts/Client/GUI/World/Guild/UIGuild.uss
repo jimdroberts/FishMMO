@@ -136,13 +136,20 @@
     min-height, so the search field inside can size to its own text. Pinned, the
     bar becomes a ceiling on the field even after the field stops asking for a
     fixed height itself.
+
+    stretch, so the field and the two buttons are the same height by construction
+    rather than by three pixel values that have to be kept in agreement. They no
+    longer can be: a text field has to size to its own text or it clips, and what
+    that comes to is UITK's business, not a number this sheet can name. Stretch
+    makes the row the single source of the height and hands the same one to all
+    three. The vertical padding is what keeps them inset from the band's edge, the
+    look the old fixed 20px children had.
 */
 .guild-filter-bar {
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     min-height: 26px;
-    padding-left: 8px;
-    padding-right: 8px;
+    padding: 3px 8px;
     flex-shrink: 0;
 }
 
@@ -161,11 +168,13 @@
 /*
     Fixed width so the two cycle buttons do not resize as their labels change —
     a control that moves under the cursor between clicks is a control that gets
-    misclicked.
+    misclicked. Width only: an exact HEIGHT here is what left the buttons shorter
+    than the search field once the field was allowed to size to its own text, so
+    the height comes from the row's stretch instead.
 */
 .guild-filter-button {
     width: 74px;
-    height: 20px;
+    min-height: 20px;
     margin-left: 3px;
     flex-shrink: 0;
 }

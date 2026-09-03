@@ -131,6 +131,33 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TheRosterFilterBarSizesItsControlsTogether()
+		{
+			/* The follow-on defect from the fix above, reported after it: freeing the search field to
+			 * size to its own text left it visibly taller than the two buttons beside it, which were
+			 * still pinned to 20px.
+			 *
+			 * There is no pixel value that fixes this. A text field must size to its text or it
+			 * clips, and what that comes to is UITK's business — so a sheet that names a height for
+			 * the buttons is naming a number it cannot keep in agreement with the field. Stretch
+			 * makes the row the one source of the height and hands the same one to every child, which
+			 * holds whatever the field resolves to.
+			 *
+			 * The general rule this stands for: a control sharing a row with a text field must not
+			 * pin its own height. */
+			string sheet = ReadSource("Assets/Scripts/Client/GUI/World/Guild/UIGuild.uss");
+
+			LogAssert.IsTrue(Declares(RuleBody(sheet, ".guild-filter-bar"), "align-items"),
+				"the filter bar must give its children a height, so they cannot disagree");
+
+			LogAssert.IsTrue(RuleBody(sheet, ".guild-filter-bar").Contains("stretch"),
+				"centring lets each child keep its own height; stretch is what makes them equal");
+
+			LogAssert.IsFalse(Declares(RuleBody(sheet, ".guild-filter-button"), "height"),
+				"a button beside a text field must take the row's height, not name its own");
+		}
+
+		[Test]
 		public void NoSingleLineTextFieldWearsAPinnedHeight()
 		{
 			LogAssert.IsTrue(Directory.Exists(GuiRoot), $"the GUI must live at {GuiRoot}");
