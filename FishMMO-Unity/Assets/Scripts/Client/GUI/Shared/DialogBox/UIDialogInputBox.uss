@@ -7,9 +7,19 @@
     Sits under the prompt with room above it, so the sentence asking for the
     value and the field taking it read as one unit rather than two stacked
     controls.
+
+    min-height, not height. Pinned to an exact 26px the TextField cannot grow to
+    fit its own text, and the glyphs are clipped at the top and bottom -- reported
+    on the guild name prompt, but every caller of this dialog had it: the guild
+    MOTD and notice editors, the guild and party invite prompts, rank naming,
+    member notes and the friend-list add. The chat input row hit the same wall from
+    the other side (see UIChat.uss: pinned to 26px, its inner text element resolved
+    to a height of zero and nothing drew at all) and was fixed the same way, by
+    letting the field size to its content with a floor under it rather than a
+    ceiling over it.
 */
 .dialog-input-field {
-    height: 26px;
+    min-height: 26px;
     margin-top: 12px;
     flex-shrink: 0;
 }
