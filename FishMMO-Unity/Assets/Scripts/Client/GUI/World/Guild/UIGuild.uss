@@ -143,8 +143,8 @@
 .guild-filter-bar {
     flex-direction: row;
     align-items: stretch;
-    min-height: 26px;
-    padding: 3px 8px;
+    height: 26px;
+    padding: 2px 8px;
     flex-shrink: 0;
 }
 
@@ -156,8 +156,20 @@
 */
 .guild-search {
     flex-grow: 1;
-    min-height: 20px;
     margin-right: 4px;
+}
+
+/*
+    Unity's own vertical padding on the glyph box is what made this field tall.
+    Stretch then handed that height to the whole row, so the band and its buttons
+    grew with it. Trimmed here rather than by shrinking the field, because it was
+    exactly this padding eating the usable height that clipped the text when the
+    field was pinned to 20px -- the row can be a normal 26px again precisely
+    because the glyphs no longer need the extra space.
+*/
+.guild-search > #unity-text-input {
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 /*

@@ -248,6 +248,23 @@ namespace FishMMO.Client
 		/// </remarks>
 		private int inputReleasedOnFrame = -1;
 
+		/// <summary>Frame on which the chat key gave the input field focus.</summary>
+		/// <remarks>
+		/// The mirror of <see cref="inputReleasedOnFrame"/>, for the opposite direction, and the
+		/// reason Enter appeared to do nothing while "/" worked.
+		///
+		/// Enter opens chat, and Enter also sends. Focusing the field does not consume the keypress
+		/// that did it, so the same Enter arrives at the newly-focused field as a KeyDownEvent, hits
+		/// the Return case below, submits an empty line and blurs -- chat opened and closed inside
+		/// one frame, which looks exactly like the key being dead. "/" has no such problem because
+		/// it produces no Return event, which is why one worked and the other did not.
+		///
+		/// Stamping the frame lets the Return case tell "the Enter that opened this" from "an Enter
+		/// the player typed", rather than depending on whether the poll ran before or after the
+		/// event was dispatched.
+		/// </remarks>
+		private int inputFocusedOnFrame = -1;
+
 		/// <summary>
 		/// Channels a player can actually send on, in selector order. Tell is excluded because it
 		/// needs a recipient typed with it, and System and Discord are not player-sendable.
@@ -523,6 +540,7 @@ namespace FishMMO.Client
 			}
 
 			inputField.Focus();
+			inputFocusedOnFrame = Time.frameCount;
 
 			// Enable mouse mode so the cursor is available for typing.
 			PlayerInputController.MouseMode = true;
@@ -617,6 +635,14 @@ namespace FishMMO.Client
 			{
 				case KeyCode.Return:
 				case KeyCode.KeypadEnter:
+					/* The Enter that opened this field is not a send. Swallowed rather than
+					 * submitted, or opening chat with Enter immediately closes it again. */
+					if (inputFocusedOnFrame == Time.frameCount)
+					{
+						evt.StopPropagation();
+						break;
+					}
+
 					OnSubmit(inputField.value);
 					/* Sending has to release the field for the same reason Escape does. A focused
 					 * text field is what UIManager.InputControlHasFocus gates ALL player input on
