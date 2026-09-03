@@ -13,6 +13,12 @@ using System.Linq;
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
+// The DB-side SceneType and SceneStatus enums (FishMMO.Database.Data.Enums)
+// collide with the game-side ones (FishMMO.Shared) that this file also uses.
+// The unqualified name resolves to the shared enum here; the DB enum is used
+// explicitly by its full name at the DB boundary.
+using SceneType = FishMMO.Shared.SceneType;
+using SceneStatus = FishMMO.Shared.SceneStatus;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
