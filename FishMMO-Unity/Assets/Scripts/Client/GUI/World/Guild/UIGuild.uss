@@ -132,18 +132,29 @@
 
 /* ── Filter bar ─────────────────────────────────────────── */
 
+/*
+    min-height, so the search field inside can size to its own text. Pinned, the
+    bar becomes a ceiling on the field even after the field stops asking for a
+    fixed height itself.
+*/
 .guild-filter-bar {
     flex-direction: row;
     align-items: center;
-    height: 26px;
+    min-height: 26px;
     padding-left: 8px;
     padding-right: 8px;
     flex-shrink: 0;
 }
 
+/*
+    min-height, not height. At 20px the field was shorter than the line box an
+    11px font asks for, so the roster search text drew clipped across the top and
+    bottom -- the same fault as the shared input dialog, reached by a different
+    rule. flex-grow is horizontal here and unrelated: the bar is a row.
+*/
 .guild-search {
     flex-grow: 1;
-    height: 20px;
+    min-height: 20px;
     margin-right: 4px;
 }
 
