@@ -413,10 +413,36 @@
     Two-column wrap. Fourteen toggles in one column would make every rank card
     taller than the page; three columns would clip the longer labels.
 */
+/*
+    Collapsed by default. A rank carries eleven toggles and a guild carries several
+    ranks, so every permission in the guild was on screen at once and the list of
+    ranks -- the thing the page is for -- was buried under it. The header stays,
+    the permissions fold away behind it.
+*/
 .guild-rank__permissions {
     flex-direction: row;
     flex-wrap: wrap;
     margin-top: 4px;
+}
+
+.guild-rank__permissions--collapsed {
+    display: none;
+}
+
+/*
+    The affordance. A rotated caret rather than two glyphs, so the open and closed
+    states are the same element and cannot disagree about which rank is expanded.
+*/
+.guild-rank__caret {
+    width: 14px;
+    font-size: 10px;
+    color: var(--abyss-200);
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+}
+
+.guild-rank__header {
+    cursor: link;
 }
 
 .guild-rank__toggle {
