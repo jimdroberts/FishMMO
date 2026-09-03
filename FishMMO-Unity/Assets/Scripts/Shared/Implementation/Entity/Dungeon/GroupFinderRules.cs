@@ -91,6 +91,38 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Why a waiting character is taken out of the queue by their own scene server, decided
+		/// from what it can see about them on each pump.
+		/// </summary>
+		/// <param name="isInInstance">Whether the character entered instanced content by other means.</param>
+		/// <param name="inParty">Whether the character joined a party by other means.</param>
+		/// <param name="nearEntrance">Whether the character is still within the leash of the entrance they queued at.</param>
+		/// <returns><see cref="GroupFinderRefusalReason.None"/> when they stay queued.</returns>
+		/// <remarks>
+		/// Waiting is done at the entrance. That is the whole guarantee that being moved into the
+		/// dungeon is never a surprise: a player who walks off is removed, told why, and can come
+		/// back and queue again. Entering an instance or joining a party by other means each make
+		/// the wait moot and are reported ahead of position, because they are the more useful
+		/// thing to say — a player who did one of those is unlikely to be standing at the door.
+		/// </remarks>
+		public static GroupFinderRefusalReason ResolveWaitingCancel(bool isInInstance, bool inParty, bool nearEntrance)
+		{
+			if (isInInstance)
+			{
+				return GroupFinderRefusalReason.EnteredInstance;
+			}
+			if (inParty)
+			{
+				return GroupFinderRefusalReason.JoinedParty;
+			}
+			if (!nearEntrance)
+			{
+				return GroupFinderRefusalReason.LeftEntrance;
+			}
+			return GroupFinderRefusalReason.None;
+		}
+
+		/// <summary>
 		/// What the pump does with a matched character on each visit.
 		/// </summary>
 		public enum MatchedTransferAction : byte
@@ -106,7 +138,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Decides whether a matched character is moved, left for the next pump, or dropped.
 		/// </summary>
-		/// <param name="canTransfer">Whether the character may leave the scene right now (not in combat, not dead, not mid-teleport).</param>
+		/// <param name="canTransfer">Whether the character may leave the scene right now (not in combat, not dead, not mid-teleport, and still at the entrance).</param>
 		/// <param name="secondsSinceMatch">How long ago the group formed.</param>
 		/// <param name="graceSeconds">How long a matched character may stay untransferable before the group goes on without them.</param>
 		/// <remarks>

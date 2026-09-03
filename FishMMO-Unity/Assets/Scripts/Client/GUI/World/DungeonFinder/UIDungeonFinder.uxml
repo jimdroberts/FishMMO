@@ -35,6 +35,12 @@
                 <ui:Label name="dungeonfinder-rules-text" text="" class="fish-hint dungeonfinder-rules__text" />
             </ui:VisualElement>
 
+            <!-- The group finder's strip: what is being waited for and how far along it is.
+                 Hidden until the server says the player is queued; C# fills it. -->
+            <ui:VisualElement name="dungeonfinder-queue" class="fish-well dungeonfinder-queue dungeonfinder-queue--hidden">
+                <ui:Label name="dungeonfinder-queue-text" text="" class="fish-hint dungeonfinder-queue__text" />
+            </ui:VisualElement>
+
             <ui:VisualElement name="dungeonfinder-columns" class="dungeonfinder-columns">
                 <ui:Label text="GROUP" class="fish-col-head dungeonfinder-col dungeonfinder-col--leader" />
                 <ui:Label text="PLAYERS" class="fish-col-head dungeonfinder-col dungeonfinder-col--size" />

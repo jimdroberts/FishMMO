@@ -128,6 +128,41 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<GroupFinderQueueData?>> DeleteReturningAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult<GroupFinderQueueData?>.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than zero.");
+			}
+
+			var result = await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"DELETE FROM {TableName} WHERE character_id = {{0}}
+					RETURNING id, world_server_id, character_id, scene_name, difficulty, status, party_id, instance_id, time_created, last_pulse, time_matched";
+
+				return await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sql,
+					new object[] { characterId },
+					reader => (GroupFinderQueueData?)new GroupFinderQueueData(
+						reader.GetInt64(0),
+						reader.GetInt64(1),
+						reader.GetInt64(2),
+						reader.GetString(3),
+						reader.GetInt32(4),
+						reader.GetInt32(5),
+						reader.GetInt64(6),
+						reader.GetInt64(7),
+						reader.GetDateTime(8),
+						reader.GetDateTime(9),
+						reader.IsDBNull(10) ? (DateTime?)null : reader.GetDateTime(10)),
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> PulseAsync(IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default)
 		{
 			long[] ids = Distinct(characterIds);

@@ -11,6 +11,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 // The DB-side SceneType and SceneStatus enums (FishMMO.Database.Data.Enums)
@@ -55,6 +56,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// reasons: the instance's leadership, kick authority and identity are all the owning party's.
 	/// So a character in a party with other people cannot queue — they would have to leave it —
 	/// and one alone in a party of their own is released from it when they queue.
+	/// </para>
+	/// <para>
+	/// <b>Waiting is done at the door.</b> A queued character has to stay within a short leash of
+	/// the entrance they queued at, with the finder panel open. Walking off removes them from the
+	/// queue with the reason; closing the panel leaves it. A matched character who has stepped
+	/// outside the leash is not moved until they step back, and is dropped from the group if they
+	/// stay away past the transfer grace. This is what makes being moved into the dungeon never a
+	/// surprise to somebody who has wandered off to do something else.
 	/// </para>
 	/// </remarks>
 	public partial class InteractableSystem
@@ -114,6 +123,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		[SerializeField] private float groupFinderStaleSweepIntervalSeconds = 30.0f;
 
 		/// <summary>
+		/// How far, in metres, a waiter may stand from the entrance they queued at before they
+		/// are dropped from the queue.
+		/// </summary>
+		/// <remarks>
+		/// Wider than the interaction range, which is a touch distance, so a player pacing about
+		/// or making room for others at the door is not thrown out of line by it — but a leash,
+		/// so nobody is queued from across the zone and moved into a dungeon they have walked away
+		/// from. Measured from the entrance's own transform.
+		/// </remarks>
+		[Tooltip("Metres a waiter may stand from the entrance before they are dropped from the queue.")]
+		[SerializeField] private float groupFinderLeashMeters = 8.0f;
+
+		/// <summary>
 		/// One character this scene server has in the queue. Main thread only.
 		/// </summary>
 		private sealed class GroupFinderEntry
@@ -129,6 +151,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int GroupSize;
 			public WorldSceneDetails SceneDetails;
 			public AchievementTemplate AchievementTemplate;
+
+			/// <summary>The entrance they queued at; the leash is measured from it.</summary>
+			public IInteractable Entrance;
 
 			/// <summary>What this server last told the client.</summary>
 			public GroupFinderState State;
@@ -169,8 +194,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>This server's queued characters, by character ID. Main thread only.</summary>
 		private readonly Dictionary<long, GroupFinderEntry> groupFinderEntries = new Dictionary<long, GroupFinderEntry>();
 
-		/// <summary>True while a pump's async half is running. One at a time.</summary>
-		private bool groupFinderPumpInFlight;
+		/// <summary>
+		/// 1 while a pump's async half is running, 0 otherwise. One at a time.
+		/// </summary>
+		/// <remarks>
+		/// An int for <see cref="Interlocked"/>, and cleared by the worker itself rather than via
+		/// the main-thread queue: a queue that refused the clearing action would have left the flag
+		/// set forever and silently stopped every future pump.
+		/// </remarks>
+		private int groupFinderPumpInFlight;
 
 		/// <summary>Next time the stale-row sweep runs. Runs whether or not anybody is queued here.</summary>
 		private DateTime nextGroupFinderStaleSweepUtc;
@@ -186,7 +218,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private void InitializeGroupFinder()
 		{
 			groupFinderEntries.Clear();
-			groupFinderPumpInFlight = false;
+			Interlocked.Exchange(ref groupFinderPumpInFlight, 0);
 			nextGroupFinderStaleSweepUtc = DateTime.UtcNow;
 
 			groupFinderPumpIntervalSeconds = Mathf.Max(0.5f, groupFinderPumpIntervalSeconds);
@@ -194,6 +226,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			groupFinderTransferGraceSeconds = Mathf.Max(groupFinderPumpIntervalSeconds, groupFinderTransferGraceSeconds);
 			groupFinderBackfillRetrySeconds = Mathf.Max(groupFinderPumpIntervalSeconds, groupFinderBackfillRetrySeconds);
 			groupFinderStaleSweepIntervalSeconds = Mathf.Max(5.0f, groupFinderStaleSweepIntervalSeconds);
+			groupFinderLeashMeters = Mathf.Max(1.0f, groupFinderLeashMeters);
 
 			Server.NetworkWrapper.RegisterBroadcast<GroupFinderQueueBroadcast>(OnServerGroupFinderQueueBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<GroupFinderLeaveBroadcast>(OnServerGroupFinderLeaveBroadcastReceived, true);
@@ -227,7 +260,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			groupFinderEntries.Clear();
-			groupFinderPumpInFlight = false;
+			Interlocked.Exchange(ref groupFinderPumpInFlight, 0);
 		}
 
 		// ──────────────────────────────────────────────────────────────────
@@ -397,12 +430,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				if (enqueueResult.Data <= 0)
 				{
-					/* A live matched row this server does not know about. Reachable only by a
-					 * character whose previous scene server matched them and then lost them within
-					 * the stale window; the row re-points itself once that window passes. */
-					await Log.Warning("InteractableSystem",
-						$"Group finder: character {characterID} has a live matched queue row this server did not create; refusing to re-queue them until it goes stale.");
-					TryEnqueueMainThread(() => SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError));
+					/* A live matched row. Two ways here. A matcher on another server took this
+					 * character's existing entry in the instant between the click and the upsert —
+					 * the upsert waited on its row lock, re-evaluated, and declined to re-point a
+					 * matched row — in which case this server has an entry and its next pump moves
+					 * them; the reply is that entry's state, and the pump corrects it within an
+					 * interval. Or the row belongs to a previous scene server that matched them and
+					 * lost them within the stale window, and re-points itself once it passes. */
+					TryEnqueueMainThread(() =>
+					{
+						if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry existing))
+						{
+							SendGroupFinderStatus(conn, existing, existing.State, GroupFinderRefusalReason.None, Math.Max(0, existing.LastSentWaitingCount));
+							return;
+						}
+
+						Log.Warning("InteractableSystem",
+							$"Group finder: character {characterID} has a live matched queue row this server did not create; refusing to re-queue them until it goes stale.");
+						SendGroupFinderRefusal(conn, GroupFinderRefusalReason.ServerError);
+					});
 					return;
 				}
 
@@ -431,6 +477,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						GroupSize = groupSize,
 						SceneDetails = captured.SceneDetails,
 						AchievementTemplate = captured.AchievementTemplate,
+						Entrance = captured.Entrance,
 						State = GroupFinderState.Waiting,
 						NextBackfillAttemptUtc = DateTime.UtcNow,
 					};
@@ -554,8 +601,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <remarks>
 		/// A character being transferred into their instance was forgotten before the disconnect
 		/// that moves them, so this only ever sees genuine departures. Their row is deleted
-		/// whatever its state: a matched character who logs out cannot be moved, and the party
-		/// system's own handling of absent members takes it from there.
+		/// whatever its state, and what the row said decides the rest: a character who was already
+		/// matched holds a seat in a party they will never be moved into, and is taken out of it so
+		/// the group is not left waiting on somebody who logged out. The delete reports the row it
+		/// removed, so a match that landed on another server in the same instant is seen rather
+		/// than raced.
 		/// </remarks>
 		private void CharacterSystem_OnGroupFinderCharacterDisconnected(NetworkConnection conn, IPlayerCharacter character)
 		{
@@ -565,9 +615,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			long characterID = character.ID;
-			if (!TryEnqueueAsyncWork(() => DeleteGroupFinderRowAsync(characterID), characterID))
+			if (!TryEnqueueAsyncWork(() => RemoveDisconnectedWaiterAsync(characterID), characterID))
 			{
 				Log.Warning("InteractableSystem", $"Group finder: could not enqueue removal of disconnected character {characterID}'s row; the stale sweep will reap it.");
+			}
+		}
+
+		/// <summary>
+		/// Removes a departed character's row and, if it had been matched, their party seat.
+		/// </summary>
+		private async Task RemoveDisconnectedWaiterAsync(long characterID)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<IGroupFinderQueueService>(out var queueService))
+				{
+					return;
+				}
+
+				DatabaseResult<GroupFinderQueueData?> removed = await queueService.DeleteReturningAsync(characterID);
+				if (!removed.IsSuccess)
+				{
+					await Log.Warning("InteractableSystem",
+						$"Group finder could not delete disconnected character {characterID}'s queue row: {removed.ErrorCode} - {removed.ErrorMessage}");
+					return;
+				}
+
+				if (!removed.Data.HasValue ||
+					removed.Data.Value.Status != (int)GroupFinderQueueStatus.Matched ||
+					removed.Data.Value.PartyID <= 0)
+				{
+					return;
+				}
+
+				long partyID = removed.Data.Value.PartyID;
+				if (Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
+				{
+					await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "matched by the group finder but logged out before being moved");
+				}
+				else
+				{
+					await Log.Warning("InteractableSystem",
+						$"Group finder: character {characterID} logged out while matched into party {partyID} and could not be removed from it; the party system is unavailable.");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("InteractableSystem", $"Error removing disconnected group finder character {characterID}: {ex}");
 			}
 		}
 
@@ -608,7 +703,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <param name="deltaTime">Seconds since the last pump.</param>
 		private void OnGroupFinderPump(float deltaTime)
 		{
-			if (groupFinderPumpInFlight || Server == null)
+			if (Server == null || Interlocked.CompareExchange(ref groupFinderPumpInFlight, 0, 0) != 0)
 			{
 				return;
 			}
@@ -639,21 +734,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				if (entry.State == GroupFinderState.Waiting)
 				{
-					/* Things the character did by other means while waiting take them out of the
-					 * queue: walking into a dungeon, or accepting a party invitation. The finder
-					 * would have skipped them at match time anyway; telling them now, with the
-					 * reason, is better than a widget that says "waiting" forever. The delete is
-					 * conditional on the row still waiting — if it was matched a moment ago, the
-					 * entry is kept and the match is honoured on the next pump. */
-					GroupFinderRefusalReason cancel = GroupFinderRefusalReason.None;
-					if (entry.Character.IsInInstance())
-					{
-						cancel = GroupFinderRefusalReason.EnteredInstance;
-					}
-					else if (entry.Character.TryGet(out IPartyController partyController) && partyController.ID != 0)
-					{
-						cancel = GroupFinderRefusalReason.JoinedParty;
-					}
+					/* Things the character did while waiting take them out of the queue: walking
+					 * into a dungeon, accepting a party invitation, or walking away from the
+					 * entrance. The first two the finder would have skipped at match time anyway;
+					 * the third is the leash that keeps a transfer from surprising anybody. Telling
+					 * them now, with the reason, is better than a panel that says "waiting" forever.
+					 * The delete is conditional on the row still waiting — if it was matched a
+					 * moment ago, the entry is kept and the match is honoured on the next pump. */
+					bool inParty = entry.Character.TryGet(out IPartyController partyController) && partyController.ID != 0;
+					GroupFinderRefusalReason cancel = GroupFinderRules.ResolveWaitingCancel(
+						entry.Character.IsInInstance(), inParty, IsNearEntrance(entry));
 
 					if (cancel != GroupFinderRefusalReason.None)
 					{
@@ -700,11 +790,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				nextGroupFinderStaleSweepUtc = now.AddSeconds(groupFinderStaleSweepIntervalSeconds);
 			}
 
-			groupFinderPumpInFlight = true;
+			Interlocked.Exchange(ref groupFinderPumpInFlight, 1);
 			if (!TryEnqueueAsyncWork(() => RunGroupFinderPumpAsync(items, sweepDue)))
 			{
-				groupFinderPumpInFlight = false;
+				Interlocked.Exchange(ref groupFinderPumpInFlight, 0);
 			}
+		}
+
+		/// <summary>
+		/// Whether a queued character is still within the leash of the entrance they queued at.
+		/// Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// An entrance that has been destroyed — its scene unloaded — reads as "not near": there is
+		/// no longer a door to be standing at, and the queue entry has nothing to be measured from.
+		/// </remarks>
+		private bool IsNearEntrance(GroupFinderEntry entry)
+		{
+			if (entry?.Entrance == null || entry.Character?.Transform == null)
+			{
+				return false;
+			}
+
+			Transform door = entry.Entrance.Transform;
+			if (door == null)
+			{
+				return false;
+			}
+
+			float leashSqr = groupFinderLeashMeters * groupFinderLeashMeters;
+			return (door.position - entry.Character.Transform.position).sqrMagnitude <= leashSqr;
 		}
 
 		/// <summary>
@@ -845,7 +960,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			finally
 			{
-				TryEnqueueMainThread(() => groupFinderPumpInFlight = false);
+				Interlocked.Exchange(ref groupFinderPumpInFlight, 0);
 			}
 		}
 
@@ -1137,7 +1252,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			bool canTransfer = !character.IsInInstance() && CharacterStateValidation.CanActOrMove(character);
+			/* At the door, as well as free to travel. A matched player who stepped outside the
+			 * leash is not moved until they step back in — the transfer must never surprise
+			 * somebody who has walked off — and the grace bounds how long the group waits. */
+			bool canTransfer = !character.IsInInstance() &&
+				CharacterStateValidation.CanActOrMove(character) &&
+				IsNearEntrance(entry);
 
 			switch (GroupFinderRules.ResolveMatchedTransfer(canTransfer, (now - entry.MatchedAtUtc).TotalSeconds, groupFinderTransferGraceSeconds))
 			{
@@ -1208,7 +1328,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			groupFinderEntries.Remove(characterID);
 
-			Log.Debug("InteractableSystem", $"Group finder: character {characterID} stayed untransferable past the grace; their group goes on without them.");
+			Log.Debug("InteractableSystem", $"Group finder: character {characterID} stayed untransferable, or away from the entrance, past the grace; their group goes on without them.");
 
 			TryEnqueueAsyncWork(async () =>
 			{

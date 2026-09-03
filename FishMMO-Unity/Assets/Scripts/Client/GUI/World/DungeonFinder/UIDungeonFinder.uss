@@ -165,6 +165,36 @@
     display: none;
 }
 
+/* ── Group finder strip ─────────────────────────────────── */
+
+.dungeonfinder-queue {
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-shrink: 0;
+}
+
+/* Not queued: nothing to say, and an empty well invites a search for what is missing. */
+.dungeonfinder-queue--hidden {
+    display: none;
+}
+
+/* Once the group has formed the strip takes the brand colour, so the change is seen at a glance. */
+.dungeonfinder-queue--matched {
+    border-color: var(--brand-500);
+    background-color: var(--brand-lo);
+}
+
+/* Left-aligned against .fish-hint, which centres: two sentences, not a caption. */
+.dungeonfinder-queue__text {
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
 /* ── Column strip ───────────────────────────────────────── */
 
 .dungeonfinder-columns {

@@ -67,6 +67,22 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<bool>> DeleteAsync(long characterId, bool onlyIfWaiting, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Removes a character's queue row whatever its state, and reports what was removed.
+		/// </summary>
+		/// <remarks>
+		/// For the disconnect path. Whether the row was still waiting or already matched decides
+		/// what else has to happen — a matched character who logged out before being moved holds a
+		/// seat in a party that will never see them, and must be taken out of it — and reading the
+		/// row first would race the matcher on another scene server. <c>DELETE ... RETURNING</c>
+		/// answers atomically: if the matcher's transaction holds the row, this waits for it to
+		/// commit and then removes, and reports, the matched row.
+		/// </remarks>
+		/// <param name="characterId">Character to remove.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The removed row, or null when the character had none.</returns>
+		Task<DatabaseResult<GroupFinderQueueData?>> DeleteReturningAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Refreshes the heartbeat on the rows of characters connected to the calling scene server.
 		/// </summary>
 		/// <remarks>

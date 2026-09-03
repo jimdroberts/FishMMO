@@ -74,6 +74,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int DungeonTemplateID;
 			public WorldSceneDetails SceneDetails;
 			public AchievementTemplate AchievementTemplate;
+
+			/// <summary>
+			/// The entrance itself. Main thread only, like <see cref="Character"/>. The group finder
+			/// keeps it to measure how far a waiter has wandered from where they queued.
+			/// </summary>
+			public IDungeonEntrance Entrance;
 		}
 
 		/// <summary>
@@ -151,6 +157,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				DungeonTemplateID = dungeonEntrance.DungeonTemplateID,
 				SceneDetails = details,
 				AchievementTemplate = dungeonEntrance.AchievementTemplate,
+				Entrance = dungeonEntrance,
 			};
 			return true;
 		}

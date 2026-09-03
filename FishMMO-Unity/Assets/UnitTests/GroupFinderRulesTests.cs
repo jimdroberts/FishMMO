@@ -109,6 +109,32 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(GroupFinderRefusalReason.None, GroupFinderRules.ResolveQueueRefusal(5, isInInstance: false, inPartyWithOthers: false));
 		}
 
+		// ── ResolveWaitingCancel ────────────────────────────────────────────
+
+		[Test]
+		public void WaitingCancel_AtEntranceAndFree_StaysQueued()
+		{
+			Assert.AreEqual(GroupFinderRefusalReason.None, GroupFinderRules.ResolveWaitingCancel(isInInstance: false, inParty: false, nearEntrance: true));
+		}
+
+		[Test]
+		public void WaitingCancel_WalkedAway_IsLeftEntrance()
+		{
+			Assert.AreEqual(GroupFinderRefusalReason.LeftEntrance, GroupFinderRules.ResolveWaitingCancel(isInInstance: false, inParty: false, nearEntrance: false));
+		}
+
+		[Test]
+		public void WaitingCancel_JoinedParty_BeatsPosition()
+		{
+			Assert.AreEqual(GroupFinderRefusalReason.JoinedParty, GroupFinderRules.ResolveWaitingCancel(isInInstance: false, inParty: true, nearEntrance: false));
+		}
+
+		[Test]
+		public void WaitingCancel_EnteredInstance_BeatsEverything()
+		{
+			Assert.AreEqual(GroupFinderRefusalReason.EnteredInstance, GroupFinderRules.ResolveWaitingCancel(isInInstance: true, inParty: true, nearEntrance: false));
+		}
+
 		// ── ResolveMatchedTransfer ──────────────────────────────────────────
 
 		[Test]

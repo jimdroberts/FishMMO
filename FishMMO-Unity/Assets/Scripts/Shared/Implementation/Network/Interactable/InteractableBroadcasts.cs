@@ -210,9 +210,11 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// Sent from the dungeon finder panel, so it names the entrance and is validated like every
-	/// other finder request: the player must be standing at it. Once queued the player may walk
-	/// away; the queue is server state and outlives the panel. Refused, accepted and every later
-	/// change is answered with a <see cref="GroupFinderStatusBroadcast"/>.
+	/// other finder request: the player must be standing at it. They must then <em>stay</em> at
+	/// it — the server drops a waiter who walks away, and the panel leaves the queue when it is
+	/// closed — so that being moved into the dungeon is never a surprise to somebody who has
+	/// wandered off. Refused, accepted and every later change is answered with a
+	/// <see cref="GroupFinderStatusBroadcast"/>.
 	/// </remarks>
 	public struct GroupFinderQueueBroadcast : IBroadcast
 	{
@@ -227,9 +229,9 @@ namespace FishMMO.Shared
 	/// Client → Server broadcast leaving the group finder queue.
 	/// </summary>
 	/// <remarks>
-	/// Carries nothing: a character is in at most one queue, and it is sent from a HUD widget
-	/// rather than from an entrance, so there is no entrance to name. Refused when the group has
-	/// already formed — see <see cref="GroupFinderState.Matched"/>.
+	/// Carries nothing: a character is in at most one queue. Sent by the finder panel's Leave
+	/// Queue button and, implicitly, by closing the panel. Refused when the group has already
+	/// formed — see <see cref="GroupFinderState.Matched"/>.
 	/// </remarks>
 	public struct GroupFinderLeaveBroadcast : IBroadcast
 	{
@@ -294,6 +296,11 @@ namespace FishMMO.Shared
 		GroupLeftWithoutYou = 12,
 		/// <summary>The queue entry disappeared server-side: a server restart, or a stale-row sweep.</summary>
 		Removed = 13,
+		/// <summary>
+		/// Removed from the queue because the character walked away from the entrance. Waiting is
+		/// done standing at the dungeon, so that being moved into it is never a surprise.
+		/// </summary>
+		LeftEntrance = 14,
 	}
 
 	/// <summary>
@@ -302,9 +309,9 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// Sent whenever the status changes: on the reply to a queue request, whenever the count of
 	/// waiting players moves, when a group forms, and when the character leaves or is removed.
-	/// Not sent on a timer while nothing changes. It carries enough to draw the HUD widget —
-	/// which dungeon, how many are waiting out of how many are needed — and nothing that
-	/// identifies the other people waiting.
+	/// Not sent on a timer while nothing changes. It carries enough for the finder panel to draw
+	/// the wait — which dungeon, how many are waiting out of how many are needed — and nothing
+	/// that identifies the other people waiting.
 	/// </remarks>
 	public struct GroupFinderStatusBroadcast : IBroadcast
 	{
@@ -314,7 +321,7 @@ namespace FishMMO.Shared
 		/// <summary>Template ID of the dungeon queued for, or 0 when the entrance had none.</summary>
 		public int DungeonTemplateID;
 
-		/// <summary>Scene name of the dungeon, so the widget can name it even without a template.</summary>
+		/// <summary>Scene name of the dungeon, so the panel can name it even without a template.</summary>
 		public string SceneName;
 
 		/// <summary>Difficulty index queued for.</summary>

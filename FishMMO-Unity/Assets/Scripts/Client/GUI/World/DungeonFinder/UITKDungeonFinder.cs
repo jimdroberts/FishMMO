@@ -25,6 +25,15 @@ namespace FishMMO.Client
 	/// timer would turn every open panel on the shard into standing database load for a list
 	/// nobody is necessarily reading.
 	/// </para>
+	/// <para>
+	/// <b>It is also the group finder's window.</b> Find Group queues the player for the selected
+	/// difficulty and the panel stays open, showing the wait in a strip above the list while
+	/// everything else keeps working — browsing, Refresh, Join and Open are all still there.
+	/// Closing the panel leaves the queue, and the server drops a waiter who walks away from the
+	/// entrance, so a player is only ever moved into a dungeon they are standing at with the
+	/// window open. The wait is drawn from <see cref="GroupFinderStatusBroadcast"/> alone; the
+	/// panel never assumes it is queued because a button was pressed.
+	/// </para>
 	/// </remarks>
 	public class UITKDungeonFinder : UITKCharacterControl
 	{
@@ -39,6 +48,8 @@ namespace FishMMO.Client
 		private const string LIST_NAME = "dungeonfinder-list";
 		private const string STATUS_NAME = "dungeonfinder-status";
 		private const string PUBLIC_TOGGLE_NAME = "dungeonfinder-public";
+		private const string QUEUE_NAME = "dungeonfinder-queue";
+		private const string QUEUE_TEXT_NAME = "dungeonfinder-queue-text";
 		private const string REFRESH_BUTTON_NAME = "dungeonfinder-refresh-btn";
 		private const string FIND_GROUP_BUTTON_NAME = "dungeonfinder-findgroup-btn";
 		private const string START_BUTTON_NAME = "dungeonfinder-start-btn";
@@ -52,6 +63,8 @@ namespace FishMMO.Client
 		private const string ROW_CLASS = "fish-row";
 		private const string ROW_LAYOUT_CLASS = "dungeonfinder-row";
 		private const string ROW_OWN_CLASS = "dungeonfinder-row--own";
+		private const string QUEUE_HIDDEN_CLASS = "dungeonfinder-queue--hidden";
+		private const string QUEUE_MATCHED_CLASS = "dungeonfinder-queue--matched";
 
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Window;
@@ -72,6 +85,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private const float RequestTimeoutSeconds = 8.0f;
 
+		/// <summary>
+		/// How long Find Group / Leave Queue stays disabled after being pressed, so a slow reply is
+		/// not met with a second request the server's ingress guard would drop.
+		/// </summary>
+		private const float FindGroupCooldownSeconds = 2.0f;
+
 		private Label subtitleLabel;
 		private VisualElement dungeonImage;
 		private Label imagePlaceholderLabel;
@@ -83,6 +102,8 @@ namespace FishMMO.Client
 		private VisualElement listContainer;
 		private Label statusLabel;
 		private Toggle publicToggle;
+		private VisualElement queueBox;
+		private Label queueLabel;
 		private Button refreshButton;
 		private Button findGroupButton;
 		private Button startButton;
@@ -115,6 +136,23 @@ namespace FishMMO.Client
 		private string statusText;
 
 		/// <summary>
+		/// The server's last word on the group finder queue. Default when not queued.
+		/// </summary>
+		/// <remarks>
+		/// Server state mirrored, never inferred: it is set only from
+		/// <see cref="GroupFinderStatusBroadcast"/>, so a refused request never leaves the panel
+		/// claiming to be queued, and a match that arrives from another server's pump is shown
+		/// the moment this server relays it.
+		/// </remarks>
+		private GroupFinderStatusBroadcast queueStatus;
+
+		/// <summary>Whether the server says this character is in the group finder queue.</summary>
+		private bool IsQueued => queueStatus.State != GroupFinderState.None;
+
+		/// <summary>Unscaled time before which Find Group / Leave Queue stays disabled.</summary>
+		private float findGroupAllowedAt;
+
+		/// <summary>
 		/// Queries the elements and wires the controls that do not depend on a dungeon.
 		/// </summary>
 		public override void OnStarting()
@@ -136,6 +174,8 @@ namespace FishMMO.Client
 			listContainer = root.Q(LIST_NAME);
 			statusLabel = root.Q<Label>(STATUS_NAME);
 			publicToggle = root.Q<Toggle>(PUBLIC_TOGGLE_NAME);
+			queueBox = root.Q(QUEUE_NAME);
+			queueLabel = root.Q<Label>(QUEUE_TEXT_NAME);
 
 			refreshButton = root.Q<Button>(REFRESH_BUTTON_NAME);
 			if (refreshButton != null)
@@ -169,6 +209,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<DungeonFinderBroadcast>(OnClientDungeonFinderBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<DungeonFinderListResultBroadcast>(OnClientDungeonFinderListResultBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<GroupFinderStatusBroadcast>(OnClientGroupFinderStatusBroadcastReceived);
 		}
 
 		/// <summary>
@@ -178,6 +219,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<DungeonFinderBroadcast>(OnClientDungeonFinderBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<DungeonFinderListResultBroadcast>(OnClientDungeonFinderListResultBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<GroupFinderStatusBroadcast>(OnClientGroupFinderStatusBroadcastReceived);
 		}
 
 		/// <summary>
@@ -210,8 +252,16 @@ namespace FishMMO.Client
 			 *
 			 * The panel is opened by walking up to an entrance, and index 2 of one dungeon has
 			 * nothing to do with index 2 of another — carrying a selection across would silently
-			 * preselect Hardcore at a dungeon whose Hardcore is a different proposition entirely. */
-			selectedDifficulty = 0;
+			 * preselect Hardcore at a dungeon whose Hardcore is a different proposition entirely.
+			 *
+			 * Except while queued. Interacting with the entrance again with the panel already open
+			 * re-sends this message, and the tab the player is queued on is the one they want to
+			 * keep looking at. A queued player cannot be at a different entrance: the server drops
+			 * a waiter who walks away from the one they queued at. */
+			if (!IsQueued)
+			{
+				selectedDifficulty = 0;
+			}
 			ClearList();
 
 			/* Show first, then render. Enabling the document re-clones the UXML, so anything
@@ -288,8 +338,77 @@ namespace FishMMO.Client
 
 			BuildTabs();
 			ApplyRules();
+			ApplyQueue();
 			ApplyList();
 			ApplyControls();
+		}
+
+		/// <summary>
+		/// Writes the group finder's state into the strip above the list, or hides the strip.
+		/// </summary>
+		/// <remarks>
+		/// The strip is the whole of the queue's UI. It says what is being waited for, how far
+		/// along the wait is, and the two conditions for staying in it — stay at the entrance,
+		/// keep the window open — because both are enforced by the server and a player who did not
+		/// know would experience them as being thrown out of line for no reason.
+		/// </remarks>
+		private void ApplyQueue()
+		{
+			if (queueBox == null || queueLabel == null)
+			{
+				return;
+			}
+
+			if (!IsQueued)
+			{
+				queueBox.AddToClassList(QUEUE_HIDDEN_CLASS);
+				queueBox.RemoveFromClassList(QUEUE_MATCHED_CLASS);
+				queueLabel.text = string.Empty;
+				return;
+			}
+
+			queueBox.RemoveFromClassList(QUEUE_HIDDEN_CLASS);
+
+			bool matched = queueStatus.State == GroupFinderState.Matched;
+			if (matched)
+			{
+				queueBox.AddToClassList(QUEUE_MATCHED_CLASS);
+				queueLabel.text = "Group found! Entering the dungeon…";
+				return;
+			}
+
+			queueBox.RemoveFromClassList(QUEUE_MATCHED_CLASS);
+
+			string what = DescribeQueuedDungeon();
+			string progress = queueStatus.GroupSize > 0
+				? $" — {Mathf.Clamp(queueStatus.WaitingCount, 0, queueStatus.GroupSize)}/{queueStatus.GroupSize} ready"
+				: string.Empty;
+			queueLabel.text = $"Finding a group for {what}{progress}.\nStay at the entrance and keep this window open, or you will leave the queue.";
+		}
+
+		/// <summary>
+		/// Names the dungeon and difficulty being waited for, from the template when it resolves.
+		/// </summary>
+		private string DescribeQueuedDungeon()
+		{
+			DungeonTemplate template = queueStatus.DungeonTemplateID != 0
+				? DungeonTemplate.Get<DungeonTemplate>(queueStatus.DungeonTemplateID)
+				: null;
+
+			string name = template != null
+				? template.ResolvedDisplayName
+				: (string.IsNullOrEmpty(queueStatus.SceneName) ? "this dungeon" : queueStatus.SceneName);
+
+			if (template != null && template.DifficultyCount > 1)
+			{
+				string difficulty = template.GetDifficultyName(queueStatus.Difficulty);
+				if (!string.IsNullOrEmpty(difficulty))
+				{
+					return $"{name} ({difficulty})";
+				}
+			}
+
+			return name;
 		}
 
 		/// <summary>
@@ -486,6 +605,8 @@ namespace FishMMO.Client
 			};
 			join.AddToClassList("fish-button");
 			join.AddToClassList("dungeonfinder-row__action");
+			// Once a group has formed the transfer is coming; a second one would race it.
+			join.SetEnabled(queueStatus.State != GroupFinderState.Matched);
 			row.Add(join);
 
 			return row;
@@ -501,19 +622,32 @@ namespace FishMMO.Client
 				refreshButton.SetEnabled(!awaitingList && Time.unscaledTime >= refreshAllowedAt);
 			}
 
+			bool matched = queueStatus.State == GroupFinderState.Matched;
+
 			if (startButton != null)
 			{
-				startButton.SetEnabled(currentInteractableID != 0);
+				// Once a group has formed the transfer is coming; opening a run would race it.
+				startButton.SetEnabled(currentInteractableID != 0 && !matched);
 			}
 
 			if (findGroupButton != null)
 			{
-				findGroupButton.SetEnabled(currentInteractableID != 0 && IsGroupFinderOffered());
+				/* One button, two jobs: it queues, and while queued it leaves. Disabled once the
+				 * group has formed, because leaving is no longer possible — the server would
+				 * refuse it — and disabled for a moment after each press so a slow reply is not
+				 * met with a duplicate the server's ingress guard would drop. */
+				findGroupButton.text = IsQueued ? "Leave Queue" : "Find Group";
+
+				bool cooledDown = Time.unscaledTime >= findGroupAllowedAt;
+				bool usable = IsQueued
+					? !matched
+					: currentInteractableID != 0 && IsGroupFinderOffered();
+				findGroupButton.SetEnabled(cooledDown && usable);
 			}
 
 			if (publicToggle != null)
 			{
-				publicToggle.SetEnabled(currentInteractableID != 0);
+				publicToggle.SetEnabled(currentInteractableID != 0 && !matched);
 			}
 		}
 
@@ -541,6 +675,7 @@ namespace FishMMO.Client
 				ApplyList();
 			}
 
+			// Also re-enables Find Group / Leave Queue once its cooldown expires.
 			ApplyControls();
 		}
 
@@ -741,33 +876,169 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Asks the group finder to find the player a group at the selected difficulty, and
-		/// closes the panel.
+		/// Asks the group finder to find the player a group at the selected difficulty — or, while
+		/// queued, asks to leave the queue. The panel stays open either way.
 		/// </summary>
 		/// <remarks>
-		/// Closes on send like Open and Join, though the answer is not a transfer: the queue is
-		/// server state that outlives the panel, and it is reported by the group finder HUD widget
-		/// from here on. Leaving the panel up would only invite the player to press the button
-		/// again, which the server's ingress guard would refuse as a duplicate.
+		/// Unlike Open and Join, the answer is not a transfer but a status, and the panel is where
+		/// that status is shown. Staying open is also the rule: closing the window leaves the
+		/// queue, so a player waiting for a group is a player with the finder on screen. The
+		/// button is disabled briefly after each press rather than the panel closing, which is
+		/// how a duplicate click is prevented here.
 		/// </remarks>
 		private void OnClick_FindGroup()
 		{
+			findGroupAllowedAt = Time.unscaledTime + FindGroupCooldownSeconds;
+			ApplyControls();
+
+			if (IsQueued)
+			{
+				if (queueStatus.State == GroupFinderState.Waiting)
+				{
+					Client.Broadcast(new GroupFinderLeaveBroadcast());
+				}
+				return;
+			}
+
 			if (currentInteractableID == 0)
 			{
 				return;
 			}
 
-			long requestedID = currentInteractableID;
-			int difficulty = selectedDifficulty;
-
-			ClearDungeon();
-			Hide();
-
 			Client.Broadcast(new GroupFinderQueueBroadcast()
 			{
-				InteractableID = requestedID,
-				Difficulty = difficulty,
+				InteractableID = currentInteractableID,
+				Difficulty = selectedDifficulty,
 			});
+		}
+
+		/// <summary>
+		/// Applies the server's latest word on where the character stands with the group finder.
+		/// </summary>
+		/// <param name="msg">The status.</param>
+		/// <param name="channel">The network channel.</param>
+		private void OnClientGroupFinderStatusBroadcastReceived(GroupFinderStatusBroadcast msg, Channel channel)
+		{
+			if (msg.State == GroupFinderState.None)
+			{
+				/* Out of the queue, for whatever reason. The strip goes away, and the reason —
+				 * when there is one worth reading — is spoken through the toast, because the panel
+				 * may already be closed: leaving by closing it is the ordinary way out. */
+				queueStatus = default;
+				AnnounceQueueReason(msg.Reason);
+			}
+			else
+			{
+				queueStatus = msg;
+
+				/* Ordinarily the panel is open — queuing is done from it. A match can still arrive
+				 * with it closed: a Leave sent in the same instant the group formed is refused, and
+				 * the player should see why they are about to be moved. */
+				if (!Visible)
+				{
+					Show();
+					return;
+				}
+			}
+
+			ApplyQueue();
+			ApplyList();
+			ApplyControls();
+		}
+
+		/// <summary>
+		/// Speaks a reason the character is no longer queued, when it is worth speaking.
+		/// </summary>
+		private static void AnnounceQueueReason(GroupFinderRefusalReason reason)
+		{
+			string text = DescribeQueueReason(reason, out ToastSeverity severity);
+			if (string.IsNullOrEmpty(text))
+			{
+				return;
+			}
+
+			if (UIManager.TryGetTK("UIToast", out UITKToast toast))
+			{
+				toast.Show(text, severity);
+			}
+		}
+
+		/// <summary>
+		/// Turns a group finder refusal into something a player can act on, or null when there is
+		/// nothing to say.
+		/// </summary>
+		private static string DescribeQueueReason(GroupFinderRefusalReason reason, out ToastSeverity severity)
+		{
+			severity = ToastSeverity.Info;
+			switch (reason)
+			{
+				case GroupFinderRefusalReason.NoEntrance:
+					severity = ToastSeverity.Warning;
+					return "You are too far from the dungeon entrance.";
+				case GroupFinderRefusalReason.UnknownDifficulty:
+					severity = ToastSeverity.Warning;
+					return "This dungeon does not offer that difficulty.";
+				case GroupFinderRefusalReason.NotAvailable:
+					severity = ToastSeverity.Warning;
+					return "Find Group is not available for this dungeon at that difficulty.";
+				case GroupFinderRefusalReason.InInstance:
+					severity = ToastSeverity.Warning;
+					return "You are already inside a dungeon.";
+				case GroupFinderRefusalReason.InParty:
+					severity = ToastSeverity.Warning;
+					return "Leave your party to use Find Group, or have your leader open the dungeon to others and the finder will fill it.";
+				case GroupFinderRefusalReason.HoldsInstance:
+					severity = ToastSeverity.Warning;
+					return "You already have a dungeon open. Finish or close it before finding a group.";
+				case GroupFinderRefusalReason.OnCooldown:
+					return "Asking too quickly. Try again in a moment.";
+				case GroupFinderRefusalReason.ServerError:
+					severity = ToastSeverity.Error;
+					return "The group finder could not take your request. Please try again.";
+				case GroupFinderRefusalReason.Left:
+					return "You left the group finder queue.";
+				case GroupFinderRefusalReason.JoinedParty:
+					return "Left the group finder: you joined a party.";
+				case GroupFinderRefusalReason.EnteredInstance:
+					return "Left the group finder: you entered a dungeon.";
+				case GroupFinderRefusalReason.LeftEntrance:
+					severity = ToastSeverity.Warning;
+					return "You walked away from the entrance and left the group finder queue.";
+				case GroupFinderRefusalReason.GroupLeftWithoutYou:
+					severity = ToastSeverity.Warning;
+					return "Your group could not wait any longer and went on without you.";
+				case GroupFinderRefusalReason.Removed:
+					severity = ToastSeverity.Warning;
+					return "You are no longer in the group finder queue. Queue again at the entrance.";
+				default:
+					return null;
+			}
+		}
+
+		/// <summary>
+		/// Leaves the group finder queue when the panel closes, then closes.
+		/// </summary>
+		/// <remarks>
+		/// Closing the window is the ordinary way to stop waiting, and it must mean that: a queue
+		/// that outlived its window would move a player who had put the finder away and gone to do
+		/// something else. Only a waiting entry is left — a matched one cannot be, and the server
+		/// would refuse — and the local state is cleared at once rather than on the reply, so a
+		/// panel reopened in the next second does not draw a wait the player just ended.
+		/// </remarks>
+		public override void Hide(bool overrideIsAlwaysOpen)
+		{
+			if (IsQueued)
+			{
+				bool wasWaiting = queueStatus.State == GroupFinderState.Waiting;
+				queueStatus = default;
+
+				if (wasWaiting && Client != null && Client.NetworkManager != null && Client.NetworkManager.IsClientStarted)
+				{
+					Client.Broadcast(new GroupFinderLeaveBroadcast());
+				}
+			}
+
+			base.Hide(overrideIsAlwaysOpen);
 		}
 
 		/// <summary>
@@ -833,6 +1104,8 @@ namespace FishMMO.Client
 		public override void OnPostUnsetCharacter()
 		{
 			base.OnPostUnsetCharacter();
+			// The server drops the queue row on disconnect; nothing to send, only to forget.
+			queueStatus = default;
 			ClearDungeon();
 			ApplyDungeon();
 		}
