@@ -114,12 +114,12 @@ namespace FishMMO.UnitTests
 			 * names the other panel's broadcast. Getting this backwards would ask the server to move
 			 * the item to where it already is. */
 			LogAssert.IsTrue(
-				MethodBody(BankPath, "protected override void SendQuickTransferRequest", "/// <inheritdoc/>\n\t\tprotected override void SendSwapRequest")
+				MethodBody(BankPath, "protected override void SendQuickTransferRequest", "protected override void SendSwapRequest")
 					.Contains("InventorySwapItemSlotsBroadcast"),
 				"the bank must send an inventory swap to push an item out to the inventory");
 
 			LogAssert.IsTrue(
-				MethodBody(InventoryPath, "protected override void SendQuickTransferRequest", "/// <inheritdoc/>\n\t\tprotected override void SendSwapRequest")
+				MethodBody(InventoryPath, "protected override void SendQuickTransferRequest", "protected override void SendSwapRequest")
 					.Contains("BankSwapItemSlotsBroadcast"),
 				"the inventory must send a bank swap to push an item into the bank");
 		}
