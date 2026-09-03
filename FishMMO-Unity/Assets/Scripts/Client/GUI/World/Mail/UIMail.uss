@@ -252,8 +252,10 @@
     margin-bottom: 2px;
 }
 
+/* min-height: an exact height clips the glyphs of the field's own text. The
+   multiline message body beside these already had it right. */
 .mail-compose__field {
-    height: 22px;
+    min-height: 22px;
     flex-shrink: 0;
     margin-bottom: 6px;
 }
@@ -276,8 +278,9 @@
     margin-right: 8px;
 }
 
+/* min-height, for the same reason as .mail-compose__field above. */
 .mail-compose__small {
-    height: 22px;
+    min-height: 22px;
     flex-shrink: 0;
     margin-bottom: 6px;
 }
