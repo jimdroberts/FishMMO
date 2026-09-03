@@ -832,11 +832,154 @@ namespace FishMMO.Client
 
 			if (evt.button == 0)
 			{
-				HandleSlotLeftClick(slotIndex);
+				/* Shift is read from the event rather than from global input state: the modifier
+				 * that matters is the one held when this click happened, and a poll can answer for
+				 * a moment either side of it. */
+				if (evt.shiftKey)
+				{
+					TryQuickTransfer(slotIndex);
+				}
+				else
+				{
+					HandleSlotLeftClick(slotIndex);
+				}
 			}
 			else if (evt.button == 1)
 			{
 				HandleSlotRightClick(slotIndex);
+			}
+		}
+
+		/// <summary>
+		/// The container a shift-click sends an item to, or null when this panel has nowhere to
+		/// send one.
+		/// </summary>
+		protected virtual ReferenceButtonType? QuickTransferTarget => null;
+
+		/// <summary>
+		/// Sends the request that moves an item out of this panel and into
+		/// <see cref="QuickTransferTarget"/>.
+		/// </summary>
+		/// <remarks>
+		/// The broadcast belongs to the DESTINATION container, not this one — moving into the bank
+		/// is a bank swap whoever asked for it — so the panel losing the item is the one that has
+		/// to name the other panel's request.
+		/// </remarks>
+		/// <param name="fromSlot">Slot in this panel the item is leaving.</param>
+		/// <param name="toSlot">Slot in the target container it is going to.</param>
+		protected virtual void SendQuickTransferRequest(int fromSlot, int toSlot)
+		{
+		}
+
+		/// <summary>
+		/// Moves an item to the other open container without a drag.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Banking a bagful is the operation players repeat most, and doing it by drag means one
+		/// press, one aim and one release per item across two panels.
+		/// </para>
+		/// <para>
+		/// The destination is the first free slot this client can see, and the request is the same
+		/// swap a drag onto that slot would send. That is deliberate: it carries exactly the risk
+		/// the drag it replaces already carries, no more. A slot this client believes is empty and
+		/// the server does not would swap two items rather than move one — but the player aiming a
+		/// drag at that same slot gets the same outcome, so quick transfer is not introducing a
+		/// class of mistake, only saving the aiming.
+		/// </para>
+		/// </remarks>
+		/// <param name="slotIndex">Slot holding the item to send.</param>
+		protected void TryQuickTransfer(int slotIndex)
+		{
+			if (QuickTransferTarget == null)
+			{
+				return;
+			}
+
+			IItemContainer source = OwnContainer;
+			IItemContainer target = ResolveContainer(QuickTransferTarget.Value);
+
+			// No target container means the other panel is not something this character has.
+			if (source == null || target == null)
+			{
+				return;
+			}
+
+			if (IsSlotBlocked(slotIndex) ||
+				!source.TryGetItem(slotIndex, out Item item) ||
+				item == null)
+			{
+				return;
+			}
+
+			if (!source.CanManipulate() || !target.CanManipulate())
+			{
+				return;
+			}
+
+			int destination = FirstFreeSlot(target);
+			if (destination < 0)
+			{
+				/* Said out loud. A shift-click that silently does nothing is indistinguishable from
+				 * one the game did not register, and the player's next move is to try it again. */
+				Notify($"No room in your {QuickTransferTargetName}.", ToastSeverity.Warning);
+				return;
+			}
+
+			// Claim both ends, or neither: a slot marked as waiting for an unsent request never unlocks.
+			if (!ItemOperationTracker.TryBegin(DragType, slotIndex))
+			{
+				return;
+			}
+			if (!ItemOperationTracker.TryBegin(QuickTransferTarget.Value, destination))
+			{
+				ItemOperationTracker.Release(DragType, slotIndex);
+				return;
+			}
+
+			SendQuickTransferRequest(slotIndex, destination);
+		}
+
+		/// <summary>Player-facing name of the quick transfer destination, for a refusal.</summary>
+		private string QuickTransferTargetName
+		{
+			get
+			{
+				switch (QuickTransferTarget)
+				{
+					case ReferenceButtonType.Bank: return "bank";
+					case ReferenceButtonType.Inventory: return "inventory";
+					default: return "bags";
+				}
+			}
+		}
+
+		/// <summary>
+		/// The first slot of a container that can take an item, or -1 when none can.
+		/// </summary>
+		/// <remarks>
+		/// A locked slot is skipped rather than treated as free: it is waiting on a request of its
+		/// own, and aiming a second one at it would be refused.
+		/// </remarks>
+		private static int FirstFreeSlot(IItemContainer container)
+		{
+			for (int i = 0; i < container.Items.Count; ++i)
+			{
+				if (container.IsSlotEmpty(i) && !container.IsSlotLocked(i))
+				{
+					return i;
+				}
+			}
+
+			return -1;
+		}
+
+		/// <summary>Shows a transient notice, if the toast panel is up.</summary>
+		private static void Notify(string text, ToastSeverity severity)
+		{
+			if (UIManager.TryGetTK("UIToast", out UITKToast toast))
+			{
+				toast.Show(text, severity);
 			}
 		}
 
