@@ -763,6 +763,17 @@ namespace FishMMO.Shared
 			 * not. One implementation is what keeps them honest. */
 			GameObject hitRoot = TargetOrdering.ResolveHitRoot(collider, out ICharacter hitCharacter);
 
+			/* Every swept hit, and what it resolved to. A sweep that strikes a collider but resolves
+			 * no ICharacter produces no target at all, and the ability then falls back to the caster
+			 * -- which reads downstream as the player hitting themselves, with no indication that a
+			 * hit ever happened. Naming the collider, the body it resolved to and whether a character
+			 * came out of it separates "the sweep never reached it" from "it was reached and not
+			 * recognised", which are otherwise identical from the outside. */
+			Log.Debug("AbilityObject",
+				$"Swept hit: collider '{collider.name}' on layer {collider.gameObject.layer}, " +
+				$"resolved body '{(hitRoot != null ? hitRoot.name : "<null>")}', " +
+				$"character {(hitCharacter != null ? hitCharacter.GameObject.name : "<none>")}.");
+
 			return ApplyHit(hitCharacter, hitRoot, hit.Point, hit.Normal, hit.LocalPoint);
 		}
 

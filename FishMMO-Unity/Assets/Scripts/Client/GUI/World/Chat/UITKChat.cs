@@ -75,6 +75,10 @@ namespace FishMMO.Client
 		private const string CHAT_MESSAGES_NAME = "chat-messages";
 		/// <summary>Name of the chat input field.</summary>
 		private const string CHAT_INPUT_NAME = "chat-input";
+		/// <summary>Name of the "new messages" pill.</summary>
+		private const string CHAT_NEW_MESSAGES_NAME = "chat-new-messages";
+		/// <summary>Class that hides the pill.</summary>
+		private const string CHAT_NEW_MESSAGES_HIDDEN_CLASS = "chat-new-messages--hidden";
 		/// <summary>Name of the channel selector button beside the input.</summary>
 		private const string CHAT_CHANNEL_SELECTOR_NAME = "chat-channel-selector";
 
@@ -349,6 +353,9 @@ namespace FishMMO.Client
 		/// </remarks>
 		private bool stickToBottom = true;
 
+		/// <summary>The "new messages" pill, shown when messages land out of view below.</summary>
+		private Button newMessagesPill;
+
 		/// <summary>
 		/// The <c>ReleasesCursor</c> value authored on the scene, captured before this panel
 		/// starts driving the flag itself.
@@ -389,6 +396,15 @@ namespace FishMMO.Client
 			scrollView = Root.Q<ScrollView>(CHAT_SCROLL_NAME);
 			messagesContainer = Root.Q<VisualElement>(CHAT_MESSAGES_NAME);
 			inputField = Root.Q<TextField>(CHAT_INPUT_NAME);
+
+			newMessagesPill = Root.Q<Button>(CHAT_NEW_MESSAGES_NAME);
+			if (newMessagesPill != null)
+			{
+				// Idempotent: OnStarting runs again whenever the tree is replaced.
+				newMessagesPill.clicked -= OnNewMessagesPillClicked;
+				newMessagesPill.clicked += OnNewMessagesPillClicked;
+				SetNewMessagesPillVisible(false);
+			}
 
 			channelSelectorButton = Root.Q<Button>(CHAT_CHANNEL_SELECTOR_NAME);
 			if (channelSelectorButton != null)
@@ -893,6 +909,13 @@ namespace FishMMO.Client
 			{
 				inputField.value = "";
 			}
+
+			/* Sending returns the reader to the bottom even if they had scrolled back. The line
+			 * they just sent is the one thing they are certain to want to see, and it lands below
+			 * wherever they were. This is deliberately the only thing that overrides a scrolled-back
+			 * position -- an ARRIVING message must not, or reading history in a busy channel becomes
+			 * impossible; that case raises the pill instead. */
+			ForceScrollToBottom();
 		}
 
 		/// <summary>
@@ -1274,14 +1297,19 @@ namespace FishMMO.Client
 			textLabel.style.color = resolved;
 			DisableRichText(textLabel);
 
-			// Hide the sender column when the previous line was from the same sender on the same
-			// channel, or when the line has no sender at all.
-			if (!ShouldShowSender(record, index))
+			/* Left out of the row entirely rather than hidden with display: none. The row wraps,
+			 * and a hidden child still counted as a flex item -- it opened an empty flex line above
+			 * the text, so every line without a visible sender drew about twice as tall as one with
+			 * it. That is the odd spacing on the welcome block and the channel-command list, which
+			 * are sender-less to the last line, while ordinary chat sat tight.
+			 *
+			 * Safe to leave unparented: the label is only ever reached again to patch its text once
+			 * a sender name resolves, and a row that can happen to has a visible sender. */
+			if (ShouldShowSender(record, index))
 			{
-				nameLabel.style.display = DisplayStyle.None;
+				row.Add(nameLabel);
 			}
 
-			row.Add(nameLabel);
 			row.Add(textLabel);
 			messagesContainer.Add(row);
 
@@ -1304,6 +1332,15 @@ namespace FishMMO.Client
 			if (follow)
 			{
 				ScrollToBottomDeferred();
+			}
+			else if (row.style.display != DisplayStyle.None)
+			{
+				/* The reader has scrolled back and this line landed below them. Their position is
+				 * left exactly where they put it -- moving it is the thing that makes reading
+				 * history in a busy channel impossible -- and the pill is how they find out
+				 * something arrived. Filtered-out rows raise nothing: from the reader's side that
+				 * message did not arrive in this tab. */
+				SetNewMessagesPillVisible(true);
 			}
 		}
 
@@ -1503,6 +1540,44 @@ namespace FishMMO.Client
 			 * never start following. The epsilon absorbs the fractional offsets that fall out of
 			 * a wrapping label's layout. */
 			stickToBottom = scroller.highValue <= 0f || value >= scroller.highValue - 1f;
+
+			// Back at the bottom by any route: there is nothing below to announce.
+			if (stickToBottom)
+			{
+				SetNewMessagesPillVisible(false);
+			}
+		}
+
+		/// <summary>Shows or hides the "new messages" pill.</summary>
+		private void SetNewMessagesPillVisible(bool visible)
+		{
+			if (newMessagesPill == null)
+			{
+				return;
+			}
+
+			newMessagesPill.EnableInClassList(CHAT_NEW_MESSAGES_HIDDEN_CLASS, !visible);
+		}
+
+		/// <summary>Jumps to the newest message when the pill is clicked.</summary>
+		private void OnNewMessagesPillClicked()
+		{
+			SetNewMessagesPillVisible(false);
+			ScrollToBottomDeferred();
+		}
+
+		/// <summary>
+		/// Scrolls to the newest message, whether or not the reader was following.
+		/// </summary>
+		/// <remarks>
+		/// For the player's own line. Sending is an explicit act and the sent message is the one
+		/// thing they are certain to want to see, so it overrides a scrolled-back position -- unlike
+		/// an arriving message, which must not move the list under someone who is reading it.
+		/// </remarks>
+		private void ForceScrollToBottom()
+		{
+			SetNewMessagesPillVisible(false);
+			ScrollToBottomDeferred();
 		}
 
 		/// <summary>
