@@ -7,6 +7,8 @@ namespace FishMMO.Client
 	/// <summary>
 	/// How the world-anchored labels — nameplates, guild lines, damage and healing numbers — are
 	/// drawn: how large, how far out, how strongly, how many at once, and whether walls hide them.
+	/// Also which nameplates are up without being targeted: NPCs and other players inside their
+	/// own ranges, and the player's own.
 	/// </summary>
 	/// <remarks>
 	/// <para><b>These are the layer's own fields, made editable.</b>
@@ -89,12 +91,57 @@ namespace FishMMO.Client
 		public const bool DefaultOcclude = false;
 
 		/// <summary>
+		/// How close an NPC must be, in metres, for its nameplate to show without being targeted
+		/// on a fresh install.
+		/// </summary>
+		/// <remarks>
+		/// Thirty: conversational distance in a town, and well inside the eighty-metre draw
+		/// distance, so a nameplate that this rule turns on is never immediately culled by the
+		/// layer's distance cutoff and drawn as nothing.
+		/// </remarks>
+		public const float DefaultNpcNameRange = 30.0f;
+
+		/// <summary>
+		/// Shortest NPC nameplate range offered, in metres.
+		/// </summary>
+		/// <remarks>
+		/// Zero is a real setting here, not a sentinel: it means NPC nameplates show only on the
+		/// current target, which is exactly what the client did before the range existed.
+		/// </remarks>
+		public const float MinimumNpcNameRange = 0.0f;
+
+		/// <summary>Longest NPC nameplate range offered, in metres. Matches the draw distance ceiling.</summary>
+		public const float MaximumNpcNameRange = MaximumDistance;
+
+		/// <summary>
+		/// How close another player must be, in metres, for their nameplate to show without being
+		/// targeted on a fresh install.
+		/// </summary>
+		/// <remarks>
+		/// The same thirty as NPCs. Other players' names used to be target-only, but only because
+		/// the player prefabs never referenced their labels — nothing chose that behaviour, and a
+		/// crowd of anonymous players in a hub reads as a bug rather than as a default.
+		/// </remarks>
+		public const float DefaultPlayerNameRange = 30.0f;
+
+		/// <summary>Shortest player nameplate range offered, in metres. Zero means target only.</summary>
+		public const float MinimumPlayerNameRange = 0.0f;
+
+		/// <summary>Longest player nameplate range offered, in metres. Matches the draw distance ceiling.</summary>
+		public const float MaximumPlayerNameRange = MaximumDistance;
+
+		/// <summary>Whether a fresh install keeps the player's own nameplate up at all times.</summary>
+		public const bool DefaultShowOwnName = true;
+
+		/// <summary>
 		/// Raised when any world label setting changes.
 		/// </summary>
 		/// <remarks>
 		/// The layer subscribes and re-reads. It is a scene object that comes and goes with the
 		/// client scenes, so it reads on enable as well — the event only carries a CHANGE, and a
 		/// layer that waited for one would start on the authored values rather than the player's.
+		/// <see cref="ClientNameplateDisplay"/> subscribes for the two nameplate rules, which it
+		/// applies to characters rather than to the layer.
 		/// </remarks>
 		public static event Action OnChanged;
 
@@ -118,6 +165,17 @@ namespace FishMMO.Client
 
 		/// <summary>Whether labels behind scene geometry are hidden.</summary>
 		public static bool Occlude => ClientSettings.GetBool(ClientSettings.WorldLabelOccludeKey, DefaultOcclude);
+
+		/// <summary>How close an NPC must be, in metres, for its nameplate to show untargeted. Zero: target only.</summary>
+		public static float NpcNameRange => ClientSettings.GetFloat(
+			ClientSettings.WorldLabelNpcNameRangeKey, DefaultNpcNameRange, MinimumNpcNameRange, MaximumNpcNameRange);
+
+		/// <summary>How close another player must be, in metres, for their nameplate to show untargeted. Zero: target only.</summary>
+		public static float PlayerNameRange => ClientSettings.GetFloat(
+			ClientSettings.WorldLabelPlayerNameRangeKey, DefaultPlayerNameRange, MinimumPlayerNameRange, MaximumPlayerNameRange);
+
+		/// <summary>Whether the player's own nameplate stays up at all times.</summary>
+		public static bool ShowOwnName => ClientSettings.GetBool(ClientSettings.WorldLabelShowOwnNameKey, DefaultShowOwnName);
 
 		/// <summary>Writes the label size multiplier and notifies the layer.</summary>
 		public static void SetScale(float value)
@@ -152,6 +210,29 @@ namespace FishMMO.Client
 		public static void SetOcclude(bool value)
 		{
 			ClientSettings.Set(ClientSettings.WorldLabelOccludeKey, value);
+			Raise();
+		}
+
+		/// <summary>Writes the NPC nameplate range and notifies the nameplate display.</summary>
+		public static void SetNpcNameRange(float value)
+		{
+			ClientSettings.Set(ClientSettings.WorldLabelNpcNameRangeKey,
+				Clamp(value, DefaultNpcNameRange, MinimumNpcNameRange, MaximumNpcNameRange));
+			Raise();
+		}
+
+		/// <summary>Writes the player nameplate range and notifies the nameplate display.</summary>
+		public static void SetPlayerNameRange(float value)
+		{
+			ClientSettings.Set(ClientSettings.WorldLabelPlayerNameRangeKey,
+				Clamp(value, DefaultPlayerNameRange, MinimumPlayerNameRange, MaximumPlayerNameRange));
+			Raise();
+		}
+
+		/// <summary>Writes the own-nameplate setting and notifies the nameplate display.</summary>
+		public static void SetShowOwnName(bool value)
+		{
+			ClientSettings.Set(ClientSettings.WorldLabelShowOwnNameKey, value);
 			Raise();
 		}
 

@@ -165,6 +165,29 @@
                 </ui:VisualElement>
                 <ui:Label text="Hiding labels behind geometry costs a physics ray per visible label, every frame."
                           class="fish-hint options-hint" />
+
+                <!--
+                    Nameplates that are up without being targeted. Both ranges are measured from
+                    the player, not the camera, and zero means "target only", which is what the
+                    client did before the ranges existed.
+                -->
+                <ui:Label text="NAMEPLATES" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="NPC Name Range" class="fish-label options-row-label" />
+                    <ui:Slider name="worldlabel-npc-range-slider" low-value="0" high-value="200" class="options-row-field" />
+                    <ui:Label name="worldlabel-npc-range-value" text="30 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Player Name Range" class="fish-label options-row-label" />
+                    <ui:Slider name="worldlabel-player-range-slider" low-value="0" high-value="200" class="options-row-field" />
+                    <ui:Label name="worldlabel-player-range-value" text="30 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show My Name" class="fish-label options-row-label" />
+                    <ui:Toggle name="worldlabel-show-own-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label text="Names show for every NPC or player within its range; at zero they show only on your target."
+                          class="fish-hint options-hint" />
             </ui:ScrollView>
 
             <!-- ══ Key Bindings ══════════════════════════════════ -->

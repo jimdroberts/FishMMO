@@ -120,6 +120,11 @@ namespace FishMMO.Client
 		private const string WORLDLABEL_MAX_SLIDER_NAME = "worldlabel-max-slider";
 		private const string WORLDLABEL_MAX_VALUE_NAME = "worldlabel-max-value";
 		private const string WORLDLABEL_OCCLUDE_NAME = "worldlabel-occlude-toggle";
+		private const string WORLDLABEL_NPC_RANGE_SLIDER_NAME = "worldlabel-npc-range-slider";
+		private const string WORLDLABEL_NPC_RANGE_VALUE_NAME = "worldlabel-npc-range-value";
+		private const string WORLDLABEL_PLAYER_RANGE_SLIDER_NAME = "worldlabel-player-range-slider";
+		private const string WORLDLABEL_PLAYER_RANGE_VALUE_NAME = "worldlabel-player-range-value";
+		private const string WORLDLABEL_SHOW_OWN_NAME = "worldlabel-show-own-toggle";
 		private const string COLOR_LIST_NAME = "options-color-list";
 		private const string RESET_COLORS_NAME = "options-reset-colors-btn";
 		private const string CONTROLS_LIST_NAME = "options-controls-list";
@@ -354,6 +359,11 @@ namespace FishMMO.Client
 		private Slider worldLabelMaxSlider;
 		private Label worldLabelMaxValueLabel;
 		private Toggle worldLabelOccludeToggle;
+		private Slider worldLabelNpcRangeSlider;
+		private Label worldLabelNpcRangeValueLabel;
+		private Slider worldLabelPlayerRangeSlider;
+		private Label worldLabelPlayerRangeValueLabel;
+		private Toggle worldLabelShowOwnToggle;
 		private VisualElement colorList;
 		private Button resetColorsButton;
 		private VisualElement controlsList;
@@ -515,6 +525,11 @@ namespace FishMMO.Client
 			worldLabelMaxSlider = Root.Q<Slider>(WORLDLABEL_MAX_SLIDER_NAME);
 			worldLabelMaxValueLabel = Root.Q<Label>(WORLDLABEL_MAX_VALUE_NAME);
 			worldLabelOccludeToggle = Root.Q<Toggle>(WORLDLABEL_OCCLUDE_NAME);
+			worldLabelNpcRangeSlider = Root.Q<Slider>(WORLDLABEL_NPC_RANGE_SLIDER_NAME);
+			worldLabelNpcRangeValueLabel = Root.Q<Label>(WORLDLABEL_NPC_RANGE_VALUE_NAME);
+			worldLabelPlayerRangeSlider = Root.Q<Slider>(WORLDLABEL_PLAYER_RANGE_SLIDER_NAME);
+			worldLabelPlayerRangeValueLabel = Root.Q<Label>(WORLDLABEL_PLAYER_RANGE_VALUE_NAME);
+			worldLabelShowOwnToggle = Root.Q<Toggle>(WORLDLABEL_SHOW_OWN_NAME);
 			colorList = Root.Q<VisualElement>(COLOR_LIST_NAME);
 			resetColorsButton = Root.Q<Button>(RESET_COLORS_NAME);
 			controlsList = Root.Q<VisualElement>(CONTROLS_LIST_NAME);
@@ -1813,6 +1828,63 @@ namespace FishMMO.Client
 				worldLabelOccludeToggle.SetValueWithoutNotify(ClientWorldLabelSettings.Occlude);
 				worldLabelOccludeToggle.RegisterValueChangedCallback((evt) =>
 					ClientWorldLabelSettings.SetOcclude(evt.newValue));
+			}
+
+			/* Nameplate rules. These reach ClientNameplateDisplay through the same OnChanged the
+			 * layer listens to; the display applies them to characters rather than to the layer. */
+			if (worldLabelNpcRangeSlider != null)
+			{
+				worldLabelNpcRangeSlider.lowValue = ClientWorldLabelSettings.MinimumNpcNameRange;
+				worldLabelNpcRangeSlider.highValue = ClientWorldLabelSettings.MaximumNpcNameRange;
+
+				float range = ClientWorldLabelSettings.NpcNameRange;
+				worldLabelNpcRangeSlider.SetValueWithoutNotify(range);
+				UpdateRangeLabel(worldLabelNpcRangeValueLabel, range);
+
+				worldLabelNpcRangeSlider.RegisterValueChangedCallback((evt) =>
+				{
+					float value = Mathf.Round(evt.newValue);
+					ClientWorldLabelSettings.SetNpcNameRange(value);
+					UpdateRangeLabel(worldLabelNpcRangeValueLabel, value);
+				});
+			}
+
+			if (worldLabelPlayerRangeSlider != null)
+			{
+				worldLabelPlayerRangeSlider.lowValue = ClientWorldLabelSettings.MinimumPlayerNameRange;
+				worldLabelPlayerRangeSlider.highValue = ClientWorldLabelSettings.MaximumPlayerNameRange;
+
+				float range = ClientWorldLabelSettings.PlayerNameRange;
+				worldLabelPlayerRangeSlider.SetValueWithoutNotify(range);
+				UpdateRangeLabel(worldLabelPlayerRangeValueLabel, range);
+
+				worldLabelPlayerRangeSlider.RegisterValueChangedCallback((evt) =>
+				{
+					float value = Mathf.Round(evt.newValue);
+					ClientWorldLabelSettings.SetPlayerNameRange(value);
+					UpdateRangeLabel(worldLabelPlayerRangeValueLabel, value);
+				});
+			}
+
+			if (worldLabelShowOwnToggle != null)
+			{
+				worldLabelShowOwnToggle.SetValueWithoutNotify(ClientWorldLabelSettings.ShowOwnName);
+				worldLabelShowOwnToggle.RegisterValueChangedCallback((evt) =>
+					ClientWorldLabelSettings.SetShowOwnName(evt.newValue));
+			}
+		}
+
+		/// <summary>Writes a whole number of metres into a label, or "Off" at zero.</summary>
+		/// <remarks>
+		/// Zero is a real setting for both nameplate ranges — target only — and "0 m" would read
+		/// as a bug in the slider rather than as that choice.
+		/// </remarks>
+		private static void UpdateRangeLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				int metres = Mathf.RoundToInt(value);
+				label.text = metres <= 0 ? "Off" : $"{metres} m";
 			}
 		}
 

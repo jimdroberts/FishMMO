@@ -641,8 +641,8 @@ MonoBehaviour:
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  characterNameLabel: {fileID: 0}
-  characterGuildLabel: {fileID: 0}
+  characterNameLabel: {fileID: 2817084262407755495}
+  characterGuildLabel: {fileID: 3362407936794280637}
   meshRoot: {fileID: 2976285799004961102}
   equipmentViewCamera: {fileID: 0}
 --- !u!136 &4989737185595066850
@@ -1164,6 +1164,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player Guild Label
       objectReference: {fileID: 0}
+    - target: {fileID: 4213452809119816546, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
         type: 3}
       propertyPath: m_text
@@ -1185,6 +1190,18 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 1499871529757219294}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3362407936794280637 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+    type: 3}
+  m_PrefabInstance: {fileID: 1499871529757219294}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393abe25c2024ca5a6c1dca89ead0737, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
 --- !u!1001 &2117107678736878980
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1298,6 +1315,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player Name Label
       objectReference: {fileID: 0}
+    - target: {fileID: 4213452809119816546, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_fontSize
@@ -1319,6 +1341,18 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 2117107678736878980}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2817084262407755495 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+    type: 3}
+  m_PrefabInstance: {fileID: 2117107678736878980}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 393abe25c2024ca5a6c1dca89ead0737, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.WorldLabel
 --- !u!114 &522642137528249964
 MonoBehaviour:
   m_ObjectHideFlags: 0

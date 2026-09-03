@@ -860,14 +860,12 @@ namespace FishMMO.Client
 				ICharacter character = lastTarget.GetComponent<ICharacter>();
 				if (character != null)
 				{
-					IPlayerCharacter playerCharacter = character as IPlayerCharacter;
-					bool keepLabels = (playerCharacter != null && playerCharacter.NetworkObject.IsOwner);
-
-					if (!keepLabels)
-					{
-						Pet pet = lastTarget.GetComponent<Pet>();
-						keepLabels = pet != null && pet.NetworkObject.IsOwner;
-					}
+					/* One rule for "does this nameplate stay up when it stops being the target",
+					 * shared with the sweep that puts nameplates up in the first place. It used
+					 * to be answered here alone — own character, own pet — and once NPCs in range
+					 * kept theirs too, answering it in two places meant an untargeted NPC beside
+					 * the player blinked off for a sweep before coming back. */
+					bool keepLabels = ClientNameplateDisplay.ShouldStayVisible(character);
 
 					if (!keepLabels)
 					{

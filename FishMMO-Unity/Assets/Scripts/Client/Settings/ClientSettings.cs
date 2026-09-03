@@ -214,6 +214,21 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for hiding world labels behind scene geometry.</summary>
 		public const string WorldLabelOccludeKey = "WorldLabels.Occlude";
 
+		/// <summary>
+		/// Configuration key for how close an NPC must be, in metres, for its nameplate to show
+		/// without being targeted. Zero means nameplates show only on the current target.
+		/// </summary>
+		public const string WorldLabelNpcNameRangeKey = "WorldLabels.NpcNameRange";
+
+		/// <summary>
+		/// Configuration key for how close another player must be, in metres, for their nameplate
+		/// to show without being targeted. Zero means nameplates show only on the current target.
+		/// </summary>
+		public const string WorldLabelPlayerNameRangeKey = "WorldLabels.PlayerNameRange";
+
+		/// <summary>Configuration key for keeping the player's own nameplate up at all times.</summary>
+		public const string WorldLabelShowOwnNameKey = "WorldLabels.ShowOwnName";
+
 		// ── Interface ───────────────────────────────────────────────
 
 		/// <summary>Configuration key for the interface scale multiplier.</summary>

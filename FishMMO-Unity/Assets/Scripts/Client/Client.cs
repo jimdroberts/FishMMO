@@ -41,6 +41,7 @@ namespace FishMMO.Client
 		/// Displays combat-related UI elements.
 		/// </summary>
 		private ClientCombatDisplay combatDisplay;
+		private ClientNameplateDisplay nameplateDisplay;
 		/// <summary>
 		/// Manages client-side fog-of-war visibility.
 		/// </summary>
@@ -365,6 +366,9 @@ namespace FishMMO.Client
 			this.combatDisplay = new ClientCombatDisplay();
 			this.combatDisplay.Initialize();
 
+			this.nameplateDisplay = new ClientNameplateDisplay();
+			this.nameplateDisplay.Initialize();
+
 			this.fogManager = new ClientFogManager(this);
 			this.fogManager.Initialize();
 
@@ -388,6 +392,10 @@ namespace FishMMO.Client
 			 * from here rather than from a timer inside the display, because without a caller the
 			 * sweep never runs and a rejected number stays on screen looking like a real hit. */
 			combatDisplay?.Tick();
+
+			/* Puts up the nameplates of NPCs inside the player's chosen range, and the player's
+			 * own. Same reason it is driven from here: the sweep has no other caller. */
+			nameplateDisplay?.Tick();
 
 			TickDeathDialogFallback();
 			
@@ -422,6 +430,7 @@ namespace FishMMO.Client
 			DisplayRegionNameAction.OnDisplay2DLabel -= OnRegionNameDisplay;
 			this.audioListener = null;
 			this.combatDisplay?.Shutdown();
+			this.nameplateDisplay?.Shutdown();
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
 			if (Connection != null)
