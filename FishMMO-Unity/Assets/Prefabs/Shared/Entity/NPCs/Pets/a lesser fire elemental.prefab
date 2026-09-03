@@ -5111,10 +5111,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
-    type: 3}
-  _networkObjectCache: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
-    type: 3}
+  _addedNetworkObject: {fileID: -4468559157413045786}
+  _networkObjectCache: {fileID: -4468559157413045786}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
   HealthResourceTemplateID: -2113468379
