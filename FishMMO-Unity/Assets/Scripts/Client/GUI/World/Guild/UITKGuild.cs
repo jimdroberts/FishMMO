@@ -122,6 +122,10 @@ namespace FishMMO.Client
 		private const string RANK_ACTION_CLASS = "guild-rank__action";
 		/// <summary>USS class applied to a rank card's permission toggle container.</summary>
 		private const string RANK_PERMISSIONS_CLASS = "guild-rank__permissions";
+		/// <summary>Class that folds a rank's permissions away.</summary>
+		private const string RANK_PERMISSIONS_COLLAPSED_CLASS = "guild-rank__permissions--collapsed";
+		/// <summary>Class of the expand/collapse caret.</summary>
+		private const string RANK_CARET_CLASS = "guild-rank__caret";
 		/// <summary>USS class applied to each permission toggle.</summary>
 		private const string RANK_TOGGLE_CLASS = "guild-rank__toggle";
 
@@ -355,6 +359,14 @@ namespace FishMMO.Client
 		private string guildName = string.Empty;
 		/// <summary>Last known guild notice.</summary>
 		private string guildNotice = string.Empty;
+
+		/// <summary>Rank whose permissions are open, or -1 when every rank is folded.</summary>
+		/// <remarks>
+		/// Held across rebuilds deliberately. The rank list is rebuilt whenever the server sends an
+		/// update, and it sends one after every permission change -- so without this, ticking a
+		/// toggle would fold the very rank being edited on the reply to that tick.
+		/// </remarks>
+		private int expandedRankOrder = -1;
 		/// <summary>Last known guild message of the day.</summary>
 		private string guildMessageOfTheDay = string.Empty;
 
@@ -2612,6 +2624,65 @@ namespace FishMMO.Client
 		/// <param name="entry">The rank to render.</param>
 		/// <param name="guildController">The viewer's guild controller, or null when guildless.</param>
 		/// <param name="mayEditRanks">Whether the viewer holds <see cref="GuildPermissions.EditRanks"/>.</param>
+		/// <summary>Folds one rank's permissions to match <see cref="expandedRankOrder"/>.</summary>
+		/// <param name="caret">The row's caret label.</param>
+		/// <param name="permissionsBox">The row's permission toggles.</param>
+		/// <param name="rankOrder">The rank this row is for.</param>
+		private void ApplyRankExpansion(Label caret, VisualElement permissionsBox, int rankOrder)
+		{
+			bool expanded = expandedRankOrder == rankOrder;
+
+			permissionsBox.EnableInClassList(RANK_PERMISSIONS_COLLAPSED_CLASS, !expanded);
+			caret.text = expanded ? "\u25BC" : "\u25B6";
+		}
+
+		/// <summary>Re-folds every rank row in place, without rebuilding them.</summary>
+		/// <remarks>
+		/// In place rather than through a rebuild: rebuilding drops and recreates every Toggle, and
+		/// a rebuild triggered by a click is a rebuild that happens while the player's pointer is
+		/// still down on one of them.
+		/// </remarks>
+		private void RefreshRankExpansion()
+		{
+			if (rankList == null)
+			{
+				return;
+			}
+
+			foreach (VisualElement row in rankList.Children())
+			{
+				Label caret = row.Q<Label>(className: RANK_CARET_CLASS);
+				VisualElement permissions = row.Q<VisualElement>(className: RANK_PERMISSIONS_CLASS);
+				if (caret == null || permissions == null)
+				{
+					continue;
+				}
+
+				/* The row's own rank, recovered from the order label rather than captured, so this
+				 * does not need a parallel list of rows to stay in step with. */
+				Label order = row.Q<Label>(className: RANK_ORDER_CLASS);
+				if (order == null || !TryParseRankOrder(order.text, out int rankOrder))
+				{
+					continue;
+				}
+
+				ApplyRankExpansion(caret, permissions, rankOrder);
+			}
+		}
+
+		/// <summary>Reads the rank number back out of a row's "Rank N" label.</summary>
+		private static bool TryParseRankOrder(string orderText, out int rankOrder)
+		{
+			rankOrder = -1;
+			if (string.IsNullOrEmpty(orderText))
+			{
+				return false;
+			}
+
+			int space = orderText.LastIndexOf(' ');
+			return space >= 0 && int.TryParse(orderText.Substring(space + 1), out rankOrder);
+		}
+
 		private void BuildRankRow(GuildRankEntry entry, IGuildController guildController, bool mayEditRanks)
 		{
 			byte rankOrder = entry.RankOrder;
@@ -2640,6 +2711,10 @@ namespace FishMMO.Client
 			VisualElement header = new VisualElement();
 			header.AddToClassList(RANK_HEADER_CLASS);
 			rowRoot.Add(header);
+
+			Label caret = new Label();
+			caret.AddToClassList(RANK_CARET_CLASS);
+			header.Add(caret);
 
 			Label name = new Label(ResolveRankName(rankOrder));
 			name.AddToClassList(RANK_NAME_CLASS);
@@ -2676,6 +2751,26 @@ namespace FishMMO.Client
 			VisualElement permissionsBox = new VisualElement();
 			permissionsBox.AddToClassList(RANK_PERMISSIONS_CLASS);
 			rowRoot.Add(permissionsBox);
+
+			ApplyRankExpansion(caret, permissionsBox, rankOrder);
+
+			/* Clicking the header folds this rank open and every other one shut. One at a time
+			 * because the whole point is to stop the page being a wall of toggles; two open ranks
+			 * is most of the way back to that.
+			 *
+			 * Registered on the header rather than the row so a click inside the permissions box
+			 * cannot collapse the thing being edited. The Rename and Delete buttons sit in the
+			 * header and consume their own click, so pressing one does not also toggle the fold. */
+			header.RegisterCallback<PointerDownEvent>(evt =>
+			{
+				if (evt.button != 0)
+				{
+					return;
+				}
+
+				expandedRankOrder = expandedRankOrder == rankOrder ? -1 : rankOrder;
+				RefreshRankExpansion();
+			});
 
 			/* Bits the toggle table does not know about — a newer server's flags — are carried
 			 * through every edit untouched, so toggling Invite on this client cannot strip a
