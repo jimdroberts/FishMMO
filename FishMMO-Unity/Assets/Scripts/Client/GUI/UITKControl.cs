@@ -883,6 +883,34 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Name the inventory panel is registered under with <see cref="UIManager"/>.
+		/// </summary>
+		public const string InventoryPanelName = "UIInventory";
+
+		/// <summary>
+		/// True for a panel that should bring the inventory up alongside itself when it opens.
+		/// </summary>
+		/// <remarks>
+		/// Interaction panels — shops, the bank — are where the player is about to move items,
+		/// and opening one without the inventory meant a second key press before anything could
+		/// be dragged. Each such panel exposes an inspector toggle and overrides this to return
+		/// it; the default is off so HUD elements and dialogs stay out of it.
+		/// (Issue #208.)
+		/// </remarks>
+		protected virtual bool OpensInventoryOnShow => false;
+
+		/// <summary>
+		/// Shows the inventory panel if it is closed. A visible inventory is left exactly as it is.
+		/// </summary>
+		protected static void ShowInventoryIfClosed()
+		{
+			if (UIManager.TryGetTK(InventoryPanelName, out UITKControl inventory) && !inventory.Visible)
+			{
+				inventory.Show();
+			}
+		}
+
+		/// <summary>
 		/// Shows the panel by enabling the <see cref="UIDocument"/>.
 		/// </summary>
 		public virtual void Show()
@@ -891,6 +919,16 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			/* The companion first, then this panel: Show brings a panel to the front, and the one
+			 * the player just opened is the one that belongs on top. Only on a real open — an
+			 * already-visible panel returned above, so a repeat Show cannot re-raise the inventory
+			 * the player has since closed. */
+			if (OpensInventoryOnShow)
+			{
+				ShowInventoryIfClosed();
+			}
+
 			Document.enabled = true;
 			ApplySortingOrder();
 			Visible = true;

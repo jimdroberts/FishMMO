@@ -3,6 +3,8 @@ using UnityEngine.UIElements;
 using FishNet.Transporting;
 using FishMMO.Shared;
 
+using UnityEngine;
+
 namespace FishMMO.Client
 {
 	/// <summary>
@@ -28,6 +30,18 @@ namespace FishMMO.Client
 	/// </remarks>
 	public class UITKNPCDialogue : UITKCharacterControl
 	{
+		/// <summary>
+		/// Opens the inventory alongside this panel when it is shown, if the inventory is closed.
+		/// An open inventory is left alone. Issue #208.
+		/// </summary>
+		[Header("Interaction")]
+		[Tooltip("Open the inventory panel when this panel opens (if it is closed). An open inventory is left as it is.")]
+		[SerializeField]
+		private bool openInventoryOnShow = false;
+
+		/// <inheritdoc />
+		protected override bool OpensInventoryOnShow => openInventoryOnShow;
+
 		/// <summary>
 		/// Choice index that tells the server the player has left the conversation.
 		/// </summary>

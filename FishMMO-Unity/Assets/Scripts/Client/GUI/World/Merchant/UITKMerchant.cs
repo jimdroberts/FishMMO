@@ -4,6 +4,8 @@ using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
+using UnityEngine;
+
 namespace FishMMO.Client
 {
 	/// <summary>
@@ -40,6 +42,18 @@ namespace FishMMO.Client
 	/// </remarks>
 	public class UITKMerchant : UITKCharacterControl
 	{
+		/// <summary>
+		/// Opens the inventory alongside this panel when it is shown, if the inventory is closed.
+		/// An open inventory is left alone. Issue #208.
+		/// </summary>
+		[Header("Interaction")]
+		[Tooltip("Open the inventory panel when this panel opens (if it is closed). An open inventory is left as it is.")]
+		[SerializeField]
+		private bool openInventoryOnShow = true;
+
+		/// <inheritdoc />
+		protected override bool OpensInventoryOnShow => openInventoryOnShow;
+
 		/// <summary>Name of the items tab button.</summary>
 		private const string ITEMS_TAB_NAME = "merchant-tab-items";
 

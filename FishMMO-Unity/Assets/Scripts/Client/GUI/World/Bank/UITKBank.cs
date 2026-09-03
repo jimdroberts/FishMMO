@@ -1,5 +1,7 @@
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using FishMMO.Shared;
+
+using UnityEngine;
 
 namespace FishMMO.Client
 {
@@ -14,6 +16,18 @@ namespace FishMMO.Client
 	/// </remarks>
 	public class UITKBank : UITKItemGridPanel
 	{
+		/// <summary>
+		/// Opens the inventory alongside this panel when it is shown, if the inventory is closed.
+		/// An open inventory is left alone. Issue #208.
+		/// </summary>
+		[Header("Interaction")]
+		[Tooltip("Open the inventory panel when this panel opens (if it is closed). An open inventory is left as it is.")]
+		[SerializeField]
+		private bool openInventoryOnShow = true;
+
+		/// <inheritdoc />
+		protected override bool OpensInventoryOnShow => openInventoryOnShow;
+
 		/// <inheritdoc/>
 		protected override string Prefix => "bank";
 

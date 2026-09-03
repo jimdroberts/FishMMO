@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -29,6 +29,18 @@ namespace FishMMO.Client
 	/// </remarks>
 	public class UITKLoot : UITKCharacterControl
 	{
+		/// <summary>
+		/// Opens the inventory alongside this panel when it is shown, if the inventory is closed.
+		/// An open inventory is left alone. Issue #208.
+		/// </summary>
+		[Header("Interaction")]
+		[Tooltip("Open the inventory panel when this panel opens (if it is closed). An open inventory is left as it is.")]
+		[SerializeField]
+		private bool openInventoryOnShow = false;
+
+		/// <inheritdoc />
+		protected override bool OpensInventoryOnShow => openInventoryOnShow;
+
 		// ── UXML element names ────────────────────────────────────────────────
 
 		/// <summary>Name of the container that runtime rows are appended to.</summary>
