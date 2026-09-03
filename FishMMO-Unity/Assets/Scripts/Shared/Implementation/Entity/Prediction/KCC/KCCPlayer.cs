@@ -432,6 +432,20 @@ namespace FishMMO.Shared
 			}
 			Motor.SetPlatformVelocity(platformVelocity);
 
+			/* The two numbers that decide whether a rider is actually carried. The motor adds the
+			 * platform velocity only when the platform is moving UP into the character (dot > 0.5)
+			 * or the character is stably grounded on it -- and a platform travelling horizontally
+			 * has a dot near zero, so a rider who is not stably grounded is not carried at all and
+			 * stands still while the deck slides away. Zero velocity produces the same symptom for
+			 * a different reason, so both are named. */
+			if (currentPlatform != null)
+			{
+				Log.Debug("KCCPlayer",
+					$"Riding '{currentPlatform.name}': platformVelocity={platformVelocity} " +
+					$"(magnitude {platformVelocity.magnitude:0.###}), " +
+					$"stableOnGround={Motor.GroundingStatus.IsStableOnGround}.");
+			}
+
 			// Stamina consumed by sprint/jump inside the motor update (KCCController.UpdateVelocity)
 			// must still re-simulate during reconcile replay to keep the predicted stamina value
 			// correct, but the OnAttributeUpdated notifications it raises must NOT fire during
