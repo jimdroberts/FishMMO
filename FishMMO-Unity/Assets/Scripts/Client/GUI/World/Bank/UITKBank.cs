@@ -56,6 +56,21 @@ namespace FishMMO.Client
 		}
 
 		/// <inheritdoc/>
+		protected override ReferenceButtonType? QuickTransferTarget => ReferenceButtonType.Inventory;
+
+		/// <inheritdoc/>
+		protected override void SendQuickTransferRequest(int fromSlot, int toSlot)
+		{
+			// Into the inventory, so it is the inventory's request even though the bank sends it.
+			Client.Broadcast(new InventorySwapItemSlotsBroadcast()
+			{
+				From = fromSlot,
+				To = toSlot,
+				FromInventory = InventoryType.Bank,
+			}, Channel.Reliable);
+		}
+
+		/// <inheritdoc/>
 		protected override void SendSwapRequest(int fromSlot, int toSlot, InventoryType fromInventory)
 		{
 			Client.Broadcast(new BankSwapItemSlotsBroadcast()
