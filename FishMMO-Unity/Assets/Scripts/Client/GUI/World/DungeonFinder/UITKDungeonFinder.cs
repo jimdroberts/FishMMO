@@ -40,6 +40,7 @@ namespace FishMMO.Client
 		private const string STATUS_NAME = "dungeonfinder-status";
 		private const string PUBLIC_TOGGLE_NAME = "dungeonfinder-public";
 		private const string REFRESH_BUTTON_NAME = "dungeonfinder-refresh-btn";
+		private const string FIND_GROUP_BUTTON_NAME = "dungeonfinder-findgroup-btn";
 		private const string START_BUTTON_NAME = "dungeonfinder-start-btn";
 		private const string CLOSE_BUTTON_NAME = "dungeonfinder-close-btn";
 
@@ -83,6 +84,7 @@ namespace FishMMO.Client
 		private Label statusLabel;
 		private Toggle publicToggle;
 		private Button refreshButton;
+		private Button findGroupButton;
 		private Button startButton;
 
 		/// <summary>Entrance the panel is currently describing. 0 when it has none.</summary>
@@ -139,6 +141,12 @@ namespace FishMMO.Client
 			if (refreshButton != null)
 			{
 				refreshButton.clicked += OnClick_Refresh;
+			}
+
+			findGroupButton = root.Q<Button>(FIND_GROUP_BUTTON_NAME);
+			if (findGroupButton != null)
+			{
+				findGroupButton.clicked += OnClick_FindGroup;
 			}
 
 			startButton = root.Q<Button>(START_BUTTON_NAME);
@@ -498,6 +506,11 @@ namespace FishMMO.Client
 				startButton.SetEnabled(currentInteractableID != 0);
 			}
 
+			if (findGroupButton != null)
+			{
+				findGroupButton.SetEnabled(currentInteractableID != 0 && IsGroupFinderOffered());
+			}
+
 			if (publicToggle != null)
 			{
 				publicToggle.SetEnabled(currentInteractableID != 0);
@@ -703,6 +716,57 @@ namespace FishMMO.Client
 				InteractableID = requestedID,
 				Difficulty = difficulty,
 				IsPrivate = !isPublic,
+			});
+		}
+
+		/// <summary>
+		/// Whether the selected difficulty offers Find Group, as far as this client can tell.
+		/// </summary>
+		/// <remarks>
+		/// Only the author's on/off switch is read here. The rest of
+		/// <see cref="GroupFinderRules.ResolveGroupSize"/> needs the scene's capacity, which the
+		/// server has and the client does not, so a difficulty this enables can still be refused
+		/// as unavailable by the server — a dungeon that seats one, say. A dungeon with no template
+		/// has no ruleset for the finder to serve, and the server refuses it for the same reason.
+		/// </remarks>
+		private bool IsGroupFinderOffered()
+		{
+			if (currentTemplate == null)
+			{
+				return false;
+			}
+
+			DungeonDifficultyDefinition difficulty = currentTemplate.GetDifficulty(selectedDifficulty);
+			return difficulty != null && difficulty.GroupFinderEnabled;
+		}
+
+		/// <summary>
+		/// Asks the group finder to find the player a group at the selected difficulty, and
+		/// closes the panel.
+		/// </summary>
+		/// <remarks>
+		/// Closes on send like Open and Join, though the answer is not a transfer: the queue is
+		/// server state that outlives the panel, and it is reported by the group finder HUD widget
+		/// from here on. Leaving the panel up would only invite the player to press the button
+		/// again, which the server's ingress guard would refuse as a duplicate.
+		/// </remarks>
+		private void OnClick_FindGroup()
+		{
+			if (currentInteractableID == 0)
+			{
+				return;
+			}
+
+			long requestedID = currentInteractableID;
+			int difficulty = selectedDifficulty;
+
+			ClearDungeon();
+			Hide();
+
+			Client.Broadcast(new GroupFinderQueueBroadcast()
+			{
+				InteractableID = requestedID,
+				Difficulty = difficulty,
 			});
 		}
 

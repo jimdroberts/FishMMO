@@ -52,6 +52,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private float updatePumpRate = 1.0f;
 
 		/// <summary>
+		/// Currency attribute a character pays to found a guild. Issue #186.
+		/// </summary>
+		/// <remarks>
+		/// Any <see cref="CharacterAttributeTemplate"/> will do — gold, a premium currency, a
+		/// faction token — because currency in FishMMO is an attribute and
+		/// <see cref="CharacterCurrency"/> spends against the attribute's BASE value. Left empty,
+		/// or with <see cref="guildCreationFee"/> at zero, founding a guild is free and nothing
+		/// about the create path changes.
+		/// </remarks>
+		[Header("Creation Fee")]
+		[Tooltip("Currency attribute a character pays to found a guild. Leave empty for no fee.")]
+		[SerializeField]
+		private CharacterAttributeTemplate guildCreationFeeCurrency;
+
+		/// <summary>
+		/// Amount of <see cref="guildCreationFeeCurrency"/> charged to found a guild. Zero or less
+		/// disables the fee.
+		/// </summary>
+		[Tooltip("Amount charged to found a guild. Zero or less means no fee.")]
+		[SerializeField]
+		private long guildCreationFee = 0;
+
+		/// <summary>True when founding a guild costs something on this server.</summary>
+		private bool HasCreationFee => guildCreationFeeCurrency != null && guildCreationFee > 0;
+
+		/// <summary>
 		/// Invitation lifetime in seconds before automatic expiration.
 		/// </summary>
 		[Header("Invitation Protection")]
@@ -833,6 +859,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			// Every character, in a guild or not: a member who later leaves needs to know too.
+			SendGuildCreationCost(conn);
+
 			if (!character.TryGet(out IGuildController guildController) ||
 				guildController.ID < 1)
 			{
@@ -1017,8 +1046,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				string guildName = msg.GuildName;
 				string sceneName = conn.FirstObject.gameObject.scene.name;
 
-				deferGuardRelease = TryEnqueueIngressWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName), guardKey, characterID);
-				if (!deferGuardRelease) SendServerBusy(conn);
+				/* The fee is taken NOW, on this thread, before the asynchronous create begins.
+				 * Charging on success instead would leave a window between the affordability
+				 * check and the charge in which the same balance can be spent elsewhere — a
+				 * merchant purchase races it — so the guild would exist and the fee go unpaid.
+				 * Taking it first and refunding on every failure is the order the merchant path
+				 * already uses, and the refund is the price of getting it right. Issue #186. */
+				long feeCharged = 0;
+				if (HasCreationFee)
+				{
+					if (!CharacterCurrency.CanAfford(player, guildCreationFeeCurrency, guildCreationFee))
+					{
+						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+						{
+							Result = GuildResultType.InsufficientFunds,
+						}, true, Channel.Reliable);
+						return;
+					}
+
+					// Deduct, persist, and refund if the write is refused — TrySpend owns that ordering.
+					if (!CharacterCurrency.TrySpend(player, guildCreationFeeCurrency, guildCreationFee, () => TryPersistCreationFeeCurrency(player)))
+					{
+						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+						{
+							Result = GuildResultType.Failed,
+						}, true, Channel.Reliable);
+						return;
+					}
+					feeCharged = guildCreationFee;
+				}
+
+				deferGuardRelease = TryEnqueueIngressWork(() => CreateGuildAsync(conn, characterID, guildName, sceneName, feeCharged), guardKey, characterID);
+				if (!deferGuardRelease)
+				{
+					// The create never started, so the fee is returned here and now.
+					RefundCreationFee(characterID, feeCharged);
+					SendServerBusy(conn);
+				}
 			}
 			finally
 			{
@@ -1029,6 +1093,209 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		#region Creation Fee
+
+		/// <summary>
+		/// Tells one connection what founding a guild costs here. Issue #186.
+		/// </summary>
+		/// <remarks>
+		/// Only when there is a fee. The client's default is "no fee", so a server that charges
+		/// nothing has nothing to say.
+		/// </remarks>
+		private void SendGuildCreationCost(NetworkConnection conn)
+		{
+			if (!HasCreationFee || conn == null || !conn.IsActive || Server == null)
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new GuildCreationCostBroadcast()
+			{
+				CurrencyTemplateID = guildCreationFeeCurrency.ID,
+				Amount = guildCreationFee,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Persists the fee currency's attribute row. Used as <see cref="CharacterCurrency.TrySpend"/>'s
+		/// persist step and again for a refund. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Only the currency attribute is written — a fee changes nothing else — and it is written
+		/// immediately rather than left to the periodic save, for the same reason the guild row
+		/// is: a crash between the two would otherwise leave a guild that was never paid for.
+		/// </para>
+		/// <para>
+		/// <c>Version++</c> AND <c>MarkPersistPending</c>, together. The periodic save clears an
+		/// attribute's dirty flag only when the confirmation quotes the version it stamped; a
+		/// bump from here without the mark would move the attribute past a version an in-flight
+		/// save is waiting on, and the attribute would stay dirty — and be rewritten on every
+		/// pass — for the rest of the session. See <c>CharacterInventorySystem.BuildAttributeDataList</c>.
+		/// </para>
+		/// </remarks>
+		/// <returns>True when the write was queued. False means nothing was queued and the caller must not rely on it.</returns>
+		private bool TryPersistCreationFeeCurrency(IPlayerCharacter character)
+		{
+			if (character == null ||
+				guildCreationFeeCurrency == null ||
+				!character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(guildCreationFeeCurrency, out CharacterAttribute currency))
+			{
+				return false;
+			}
+
+			currency.Version++;
+			currency.MarkPersistPending(currency.Version);
+
+			long characterID = character.ID;
+			var dtos = new List<CharacterAttributeData>(1)
+			{
+				new CharacterAttributeData(
+					id: 0,
+					version: currency.Version,
+					characterID: characterID,
+					templateID: guildCreationFeeCurrency.ID,
+					value: currency.Value,
+					currentValue: 0.0f),
+			};
+
+			return EnqueuePersistence(() => PersistCreationFeeCurrencyToDbAsync(dtos, characterID), characterID);
+		}
+
+		/// <summary>
+		/// Writes the fee currency's attribute row. Worker thread.
+		/// </summary>
+		private async Task PersistCreationFeeCurrencyToDbAsync(List<CharacterAttributeData> dtos, long characterID)
+		{
+			try
+			{
+				if (!TryGetDbService(out ICharacterAttributeService attributeService))
+				{
+					await Log.Error("GuildSystem", "PersistCreationFeeCurrencyToDbAsync: Failed to resolve ICharacterAttributeService");
+					return;
+				}
+
+				await BulkWriteReporting.ReportAsync("GuildSystem", "Guild creation fee save",
+					await attributeService.PersistAsync(dtos), $"CharID={characterID}");
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("GuildSystem", $"PersistCreationFeeCurrencyToDbAsync failed (CharID={characterID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Gives a charged creation fee back after the create did not happen. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Resolved by character ID, not by the connection: the refund is owed whether or not the
+		/// requester is still connected, and the mapping is what still knows the character while
+		/// a logout is in progress. A character that has already left this server cannot be
+		/// refunded in memory — its logout save carried the reduced balance — so that case is
+		/// logged as an error with the amount, for an operator to restore. The window is a couple
+		/// of database round trips wide and the same one the merchant path accepts.
+		/// </para>
+		/// <para>
+		/// Recorded in the currency ledger as Returned, so a fee that was charged and given back
+		/// leaves the same two-sided trail a refunded purchase does.
+		/// </para>
+		/// </remarks>
+		private void RefundCreationFee(long characterID, long amount)
+		{
+			if (amount <= 0 || guildCreationFeeCurrency == null)
+			{
+				return;
+			}
+
+			if (Server == null ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData) ||
+				!mappingData.CharactersByID.TryGetValue(characterID, out IPlayerCharacter character) ||
+				character == null)
+			{
+				Log.Error("GuildSystem", $"Guild creation fee of {amount} {guildCreationFeeCurrency.Name} could not be refunded: CharID={characterID} is no longer resident on this server. Restore it by hand.");
+				return;
+			}
+
+			if (!CharacterCurrency.TryAdd(character, guildCreationFeeCurrency, amount))
+			{
+				Log.Error("GuildSystem", $"Guild creation fee of {amount} {guildCreationFeeCurrency.Name} could not be refunded to CharID={characterID}: the character has no such attribute.");
+				return;
+			}
+
+			if (!TryPersistCreationFeeCurrency(character))
+			{
+				Log.Error("GuildSystem", $"Guild creation fee refund persist rejected for CharID={characterID}; in-memory balance is correct but the DB holds the deduction until the next save.");
+			}
+
+			RecordCurrencyMovement(characterID, amount, CurrencyMovementReason.GuildCreation, absorbed: false);
+		}
+
+		/// <summary>
+		/// Answers a failed create from the worker thread: refund, then tell the requester.
+		/// </summary>
+		/// <remarks>
+		/// One main-thread action for both halves so the refund cannot be skipped by the
+		/// connection check that guards the message — a player who has since disconnected is
+		/// still owed the money.
+		/// </remarks>
+		private void FailCreate(NetworkConnection conn, long characterID, long feeCharged, GuildResultType result)
+		{
+			TryEnqueueMainThread(() =>
+			{
+				RefundCreationFee(characterID, feeCharged);
+
+				if (conn == null || !conn.IsActive || Server == null)
+				{
+					return;
+				}
+				Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
+				{
+					Result = result,
+				}, true, Channel.Reliable);
+			});
+		}
+
+		/// <summary>
+		/// Records a currency movement in the ledger. Fire-and-forget; nothing waits on it.
+		/// </summary>
+		/// <remarks>
+		/// The same bookkeeping the merchant and ability-craft paths keep, so a guild fee is
+		/// auditable alongside every other sink: Absorbed when the guild was founded, Returned
+		/// when the fee was charged and then given back.
+		/// </remarks>
+		private void RecordCurrencyMovement(long characterID, long amount, CurrencyMovementReason reason, bool absorbed)
+		{
+			if (characterID <= 0 || amount <= 0)
+			{
+				return;
+			}
+
+			CurrencyMovementState state = absorbed
+				? CurrencyMovementState.Absorbed
+				: CurrencyMovementState.Returned;
+
+			if (!TryEnqueueAsyncWork(async () =>
+			{
+				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
+				{
+					return;
+				}
+
+				DatabaseResult record = await ledgerService.RecordAsync(characterID, amount, (int)reason, (int)state);
+				if (!record.IsSuccess)
+				{
+					await Log.Warning("GuildSystem", $"Currency ledger: could not record {amount} ({reason}/{state}) for CharID={characterID}. {record.ErrorMessage}");
+				}
+			}, characterID))
+			{
+				Log.Warning("GuildSystem", $"Currency ledger: async worker rejected the record for CharID={characterID}.");
+			}
+		}
+
+		#endregion
+
 		/// <summary>
 		/// Asynchronously checks guild name availability, creates the guild, persists membership,
 		/// and marshals in-memory state changes + Broadcasts back to the main thread.
@@ -1037,14 +1304,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterID">Requesting character identifier.</param>
 		/// <param name="guildName">Requested guild name.</param>
 		/// <param name="sceneName">Requester scene name.</param>
+		/// <param name="feeCharged">
+		/// The creation fee already taken from the requester on the main thread, or 0. Every path
+		/// that does not end in a guild must give it back — see <see cref="FailCreate"/>.
+		/// </param>
 		/// <returns>Asynchronous guild creation task.</returns>
-		private async Task CreateGuildAsync(NetworkConnection conn, long characterID, string guildName, string sceneName)
+		private async Task CreateGuildAsync(NetworkConnection conn, long characterID, string guildName, string sceneName, long feeCharged)
 		{
+			// Set the moment the guild has a leader row: past that point the fee bought something.
+			bool guildExists = false;
 			try
 			{
 				if (!TryGetDbService(out IGuildService guildService) ||
 					!TryGetDbService(out ICharacterGuildService charGuildService))
 				{
+					FailCreate(conn, characterID, feeCharged, GuildResultType.Failed);
 					return;
 				}
 
@@ -1052,18 +1326,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult<bool> existsResult = await guildService.ExistsAsync(guildName);
 				if (!existsResult.IsSuccess)
 				{
+					FailCreate(conn, characterID, feeCharged, GuildResultType.Failed);
 					return;
 				}
 				if (existsResult.Data)
 				{
-					TryEnqueueMainThread(() =>
-					{
-						if (conn == null || !conn.IsActive) return;
-						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
-						{
-							Result = GuildResultType.NameAlreadyExists,
-						}, true, Channel.Reliable);
-					});
+					FailCreate(conn, characterID, feeCharged, GuildResultType.NameAlreadyExists);
 					return;
 				}
 
@@ -1078,14 +1346,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						? GuildResultType.NameAlreadyExists
 						: GuildResultType.Failed;
 
-					TryEnqueueMainThread(() =>
-					{
-						if (conn == null || !conn.IsActive) return;
-						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
-						{
-							Result = failure,
-						}, true, Channel.Reliable);
-					});
+					FailCreate(conn, characterID, feeCharged, failure);
 					return;
 				}
 
@@ -1112,16 +1373,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						await Log.Error("GuildSystem", $"CreateGuildAsync could not remove the orphaned guild {newGuildID}; its name stays reserved: {cleanupResult.ErrorCode} - {cleanupResult.ErrorMessage}");
 					}
 
-					TryEnqueueMainThread(() =>
-					{
-						if (conn == null || !conn.IsActive) return;
-						Server.NetworkWrapper.Broadcast(conn, new GuildResultBroadcast()
-						{
-							Result = GuildResultType.Failed,
-						}, true, Channel.Reliable);
-					});
+					FailCreate(conn, characterID, feeCharged, GuildResultType.Failed);
 					return;
 				}
+
+				/* From here the guild exists with a leader: the fee has bought something and is
+				 * absorbed. Recorded before the marshal below so a requester who disconnects in
+				 * the meantime still leaves the same ledger trail. */
+				guildExists = true;
+				RecordCurrencyMovement(characterID, feeCharged, CurrencyMovementReason.GuildCreation, absorbed: true);
 
 				// Marshal in-memory state changes + Broadcast back to main thread
 				TryEnqueueMainThread(() =>
@@ -1178,6 +1438,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("GuildSystem", $"Error creating guild '{guildName}' for CharID={characterID}: {ex}");
+
+				/* Refunded only if the guild does not exist. An exception after the leader row
+				 * landed (the marshal, the rank list) means the player HAS a guild; giving the
+				 * fee back as well would mint currency. */
+				if (!guildExists)
+				{
+					FailCreate(conn, characterID, feeCharged, GuildResultType.Failed);
+				}
 			}
 		}
 

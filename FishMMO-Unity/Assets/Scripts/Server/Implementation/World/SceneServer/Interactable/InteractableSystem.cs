@@ -153,11 +153,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				dialogueCharacterSystem.OnAfterLoadCharacter += CharacterSystem_OnDialogueCharacterLoaded;
 				dialogueCharacterSystem.OnDisconnect += CharacterSystem_OnDialogueCharacterDisconnected;
+				dialogueCharacterSystem.OnDisconnect += CharacterSystem_OnGroupFinderCharacterDisconnected;
 			}
 			else
 			{
-				Log.Warning("InteractableSystem", "InitializeOnce: ICharacterSystem not found; cached dialogue choices will not be released on disconnect.");
+				Log.Warning("InteractableSystem", "InitializeOnce: ICharacterSystem not found; cached dialogue choices will not be released on disconnect, and group finder rows will outlive their characters until the stale sweep.");
 			}
+
+			// Group finder: its two requests, its pump, and its tunables. See InteractableSystem.GroupFinder.cs.
+			InitializeGroupFinder();
 
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			interactionDebounceMilliseconds = Mathf.Max(0, interactionDebounceMilliseconds);
@@ -219,7 +223,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				dialogueCharacterSystem.OnAfterLoadCharacter -= CharacterSystem_OnDialogueCharacterLoaded;
 				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnDialogueCharacterDisconnected;
+				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnGroupFinderCharacterDisconnected;
 			}
+
+			DeinitializeGroupFinder();
 
 			// Corpse loot cleanup
 			ClearCorpseSubscriptions();

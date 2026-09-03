@@ -205,6 +205,132 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Client → Server broadcast asking the group finder to find the player a group for one
+	/// dungeon at one difficulty.
+	/// </summary>
+	/// <remarks>
+	/// Sent from the dungeon finder panel, so it names the entrance and is validated like every
+	/// other finder request: the player must be standing at it. Once queued the player may walk
+	/// away; the queue is server state and outlives the panel. Refused, accepted and every later
+	/// change is answered with a <see cref="GroupFinderStatusBroadcast"/>.
+	/// </remarks>
+	public struct GroupFinderQueueBroadcast : IBroadcast
+	{
+		/// <summary>ID of the dungeon entrance scene object.</summary>
+		public long InteractableID;
+
+		/// <summary>Difficulty index to queue for. Validated against the dungeon's own list.</summary>
+		public int Difficulty;
+	}
+
+	/// <summary>
+	/// Client → Server broadcast leaving the group finder queue.
+	/// </summary>
+	/// <remarks>
+	/// Carries nothing: a character is in at most one queue, and it is sent from a HUD widget
+	/// rather than from an entrance, so there is no entrance to name. Refused when the group has
+	/// already formed — see <see cref="GroupFinderState.Matched"/>.
+	/// </remarks>
+	public struct GroupFinderLeaveBroadcast : IBroadcast
+	{
+	}
+
+	/// <summary>
+	/// Where a character stands with the group finder.
+	/// </summary>
+	public enum GroupFinderState : byte
+	{
+		/// <summary>Not in the queue. <see cref="GroupFinderStatusBroadcast.Reason"/> says why, when there is a why.</summary>
+		None = 0,
+
+		/// <summary>Waiting for enough players, or for an open run with room.</summary>
+		Waiting = 1,
+
+		/// <summary>
+		/// A group formed and the character has been placed in its party. The transfer into the
+		/// run follows on the server's next pump — immediately if the character is free to
+		/// travel, otherwise as soon as they are. Leaving is no longer possible from here.
+		/// </summary>
+		Matched = 2,
+	}
+
+	/// <summary>
+	/// Why the group finder refused, or ended, a character's request.
+	/// </summary>
+	public enum GroupFinderRefusalReason : byte
+	{
+		/// <summary>Nothing to explain.</summary>
+		None = 0,
+		/// <summary>The entrance no longer exists, or the player has walked away from it.</summary>
+		NoEntrance = 1,
+		/// <summary>The dungeon does not offer the difficulty that was asked for.</summary>
+		UnknownDifficulty = 2,
+		/// <summary>Find Group is not offered at this difficulty, or the dungeon cannot seat a group.</summary>
+		NotAvailable = 3,
+		/// <summary>The character is already inside instanced content.</summary>
+		InInstance = 4,
+		/// <summary>
+		/// The character is in a party with other people. Matching joins a party the finder
+		/// builds, so the player must leave theirs first — or have its leader open the dungeon
+		/// to others, which is how a partial group fills its empty slots.
+		/// </summary>
+		InParty = 5,
+		/// <summary>The character, or a party they were in, still holds an open instance.</summary>
+		HoldsInstance = 6,
+		/// <summary>Asked again too soon.</summary>
+		OnCooldown = 7,
+		/// <summary>The server could not complete the request; try again.</summary>
+		ServerError = 8,
+		/// <summary>The player left the queue.</summary>
+		Left = 9,
+		/// <summary>Removed from the queue because the character joined a party by other means.</summary>
+		JoinedParty = 10,
+		/// <summary>Removed from the queue because the character entered an instance by other means.</summary>
+		EnteredInstance = 11,
+		/// <summary>
+		/// A group formed, but the character stayed untransferable — in combat, dead — for
+		/// longer than the server allows, and the group went on without them.
+		/// </summary>
+		GroupLeftWithoutYou = 12,
+		/// <summary>The queue entry disappeared server-side: a server restart, or a stale-row sweep.</summary>
+		Removed = 13,
+	}
+
+	/// <summary>
+	/// Server → Client broadcast reporting the character's group finder status.
+	/// </summary>
+	/// <remarks>
+	/// Sent whenever the status changes: on the reply to a queue request, whenever the count of
+	/// waiting players moves, when a group forms, and when the character leaves or is removed.
+	/// Not sent on a timer while nothing changes. It carries enough to draw the HUD widget —
+	/// which dungeon, how many are waiting out of how many are needed — and nothing that
+	/// identifies the other people waiting.
+	/// </remarks>
+	public struct GroupFinderStatusBroadcast : IBroadcast
+	{
+		/// <summary>Where the character stands.</summary>
+		public GroupFinderState State;
+
+		/// <summary>Template ID of the dungeon queued for, or 0 when the entrance had none.</summary>
+		public int DungeonTemplateID;
+
+		/// <summary>Scene name of the dungeon, so the widget can name it even without a template.</summary>
+		public string SceneName;
+
+		/// <summary>Difficulty index queued for.</summary>
+		public int Difficulty;
+
+		/// <summary>How many players are waiting for this dungeon at this difficulty, including this one.</summary>
+		public int WaitingCount;
+
+		/// <summary>How many the finder needs before it opens a run.</summary>
+		public int GroupSize;
+
+		/// <summary>Why the state is <see cref="GroupFinderState.None"/>, when it is for a reason worth saying.</summary>
+		public GroupFinderRefusalReason Reason;
+	}
+
+	/// <summary>
 	/// Broadcast for interacting with a merchant object.
 	/// Contains the interactable object's ID and the merchant's template ID.
 	/// </summary>

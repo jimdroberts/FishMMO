@@ -311,3 +311,13 @@
 .dungeonfinder-action--wide {
     min-width: 132px;
 }
+
+/*
+    Four footer controls share 440px: the toggle, Find Group, Refresh and Open New
+    Dungeon. The primary button keeps its width; the other two sit at their text.
+    The panel is one column, so nothing here wraps — if a fifth control is ever
+    added the footer needs a second row, not a narrower button.
+*/
+.dungeonfinder-action--find {
+    min-width: 76px;
+}

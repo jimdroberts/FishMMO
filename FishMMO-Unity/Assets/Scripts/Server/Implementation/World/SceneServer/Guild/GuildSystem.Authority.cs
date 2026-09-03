@@ -258,19 +258,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Re-resolves and re-sends the rank ladder to every member of a guild on this server.
+		/// Re-reads the ladder once and re-sends it to every member of a guild on this server.
 		/// </summary>
 		/// <param name="guildID">The guild whose ladder changed.</param>
 		/// <returns>Asynchronous publish task.</returns>
 		/// <remarks>
-		/// Called after any edit to the ladder. Each member's standing is resolved individually
-		/// rather than broadcasting one shared message, because the message carries the
-		/// RECIPIENT's own permission mask — a shared copy would tell every member they hold
-		/// whatever the first member holds.
+		/// <para>
+		/// Called after any edit to the ladder. Each member still receives their OWN message,
+		/// because the message carries the recipient's permission mask and a shared copy would
+		/// tell every member they hold whatever the first member holds.
+		/// </para>
+		/// <para>
+		/// But the standings are built from ONE snapshot — the roster and the ladder, read once
+		/// each — rather than by resolving every member individually. Resolving is two reads per
+		/// member, which made a rank edit in a guild with a hundred members online cost two
+		/// hundred round trips; and two hundred separate reads can straddle a second edit, so
+		/// half the guild would be sent one ladder and half another. A snapshot costs two reads
+		/// and everybody sees the same ladder.
+		/// </para>
 		/// </remarks>
 		private async Task PublishGuildRankLadderAsync(long guildID)
 		{
 			if (guildID < 1)
+			{
+				return;
+			}
+
+			if (!TryGetDbService(out ICharacterGuildService charGuildService) ||
+				!TryGetDbService(out IGuildRankService rankService))
 			{
 				return;
 			}
@@ -311,9 +326,60 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			await gathered.Task;
 
+			if (recipients.Count == 0)
+			{
+				return;
+			}
+
+			DatabaseResult<IReadOnlyList<CharacterGuildData>> membersResult = await charGuildService.FetchManyAsync(guildID);
+			if (!membersResult.IsSuccess || membersResult.Data == null)
+			{
+				await Log.Warning("GuildSystem", $"PublishGuildRankLadderAsync roster fetch failed (GuildID={guildID}): {membersResult.ErrorCode} - {membersResult.ErrorMessage}");
+				return;
+			}
+
+			IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(guildID, rankService);
+			if (ladder == null)
+			{
+				return;
+			}
+
+			byte leaderRankOrder = 0;
+			for (int i = 0; i < ladder.Count; ++i)
+			{
+				if (ladder[i].RankOrder > leaderRankOrder)
+				{
+					leaderRankOrder = ladder[i].RankOrder;
+				}
+			}
+
+			Dictionary<long, CharacterGuildData> membersByID = new Dictionary<long, CharacterGuildData>(membersResult.Data.Count);
+			for (int i = 0; i < membersResult.Data.Count; ++i)
+			{
+				membersByID[membersResult.Data[i].CharacterID] = membersResult.Data[i];
+			}
+
 			for (int i = 0; i < recipients.Count; ++i)
 			{
-				GuildAuthority authority = await ResolveGuildAuthorityAsync(guildID, recipients[i].characterID);
+				/* A tracked member with no roster row was removed between the gather and the
+				 * read. They get nothing: SendGuildRankList refuses a non-member standing, and
+				 * the update pump is already on its way to tell them they have left. */
+				if (!membersByID.TryGetValue(recipients[i].characterID, out CharacterGuildData membership) ||
+					membership.GuildID != guildID)
+				{
+					continue;
+				}
+
+				GuildAuthority authority = new GuildAuthority(
+					true,
+					guildID,
+					membership.CharacterID,
+					membership.Rank,
+					PermissionsForOrder(ladder, membership.Rank),
+					leaderRankOrder,
+					membership.Version,
+					ladder);
+
 				SendGuildRankList(recipients[i].conn, authority);
 			}
 		}

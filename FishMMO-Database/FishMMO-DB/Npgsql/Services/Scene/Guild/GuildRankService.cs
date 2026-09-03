@@ -231,10 +231,17 @@ namespace FishMMO.Database.Npgsql.Services
 
 				/* The membership rows move with the ladder. One statement, because nothing is
 				 * unique about character_guild.rank — the collision that forces the loop above
-				 * cannot happen here. */
+				 * cannot happen here.
+				 *
+				 * The VERSION moves too. Every membership write is guarded by "version < the
+				 * one I read plus one", so a rank change decided on another scene server against
+				 * the pre-shift ladder — "promote to 2", meaning the officer rank, computed a
+				 * moment before 2 became a new empty tier — arrives with a version this bump has
+				 * already overtaken, and is refused as stale instead of landing the member on a
+				 * rank nobody chose. */
 				await dbContext.Database.ExecuteSqlRawAsync(
 					@"UPDATE character_guild
-						SET rank = rank + 1
+						SET rank = rank + 1, version = version + 1
 						WHERE guild_id = {0} AND rank >= {1}",
 					new object[] { rank.GuildID, (short)rank.RankOrder },
 					cancellationToken).ConfigureAwait(false);

@@ -163,7 +163,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildActionResult decision = GuildRules.CanEditRank(editor, rankOrder, proposed);
 				if (decision != GuildActionResult.Allowed)
 				{
-					SendGuildResult(conn, ToGuildResultType(decision));
+					RefuseRankEdit(conn, ToGuildResultType(decision), editor);
 					return;
 				}
 
@@ -171,7 +171,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!GuildRankDefaults.TrySanitizeRankName(requestedName, out string sanitizedName))
 				{
-					SendGuildResult(conn, GuildResultType.InvalidRankName);
+					RefuseRankEdit(conn, GuildResultType.InvalidRankName, editor);
 					return;
 				}
 
@@ -179,6 +179,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (!updateResult.IsSuccess)
 				{
 					await Log.Warning("GuildSystem", $"EditGuildRankAsync update failed (GuildID={guildID}, RankOrder={rankOrder}): {updateResult.ErrorCode} - {updateResult.ErrorMessage}");
+
+					/* A stale version here means another editor — usually on another scene
+					 * server — got to this row first. The ladder the requester is looking at is
+					 * therefore already wrong, so it is re-resolved and re-sent rather than left
+					 * for the update pump to correct whenever it next runs. */
+					RefuseRankEdit(conn, GuildResultType.Failed, await ResolveGuildAuthorityAsync(guildID, editorCharacterID));
 					return;
 				}
 
@@ -282,13 +288,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildActionResult decision = GuildRules.CanCreateRank(creator, rankOrder, proposed);
 				if (decision != GuildActionResult.Allowed)
 				{
-					SendGuildResult(conn, ToGuildResultType(decision));
+					RefuseRankEdit(conn, ToGuildResultType(decision), creator);
 					return;
 				}
 
 				if (!GuildRankDefaults.TrySanitizeRankName(requestedName, out string sanitizedName))
 				{
-					SendGuildResult(conn, GuildResultType.InvalidRankName);
+					RefuseRankEdit(conn, GuildResultType.InvalidRankName, creator);
 					return;
 				}
 
@@ -306,9 +312,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				if (!createResult.IsSuccess)
 				{
-					SendGuildResult(conn, createResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded
-						? GuildResultType.TooManyRanks
-						: GuildResultType.RankNotFound);
+					/* The service decided this against the locked ladder, which may differ from
+					 * the one the creator resolved a moment ago — so the refusal carries a fresh
+					 * ladder, not the one the decision above was made on. */
+					RefuseRankEdit(
+						conn,
+						createResult.ErrorCode == DatabaseErrorCodes.CapacityExceeded
+							? GuildResultType.TooManyRanks
+							: GuildResultType.RankNotFound,
+						await ResolveGuildAuthorityAsync(guildID, creatorCharacterID));
 					return;
 				}
 
@@ -397,7 +409,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				GuildActionResult decision = GuildRules.CanDeleteRank(deleter, rankOrder);
 				if (decision != GuildActionResult.Allowed)
 				{
-					SendGuildResult(conn, ToGuildResultType(decision));
+					RefuseRankEdit(conn, ToGuildResultType(decision), deleter);
 					return;
 				}
 
@@ -406,7 +418,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				DatabaseResult deleteResult = await rankService.DeleteAsync(guildID, rankOrder);
 				if (!deleteResult.IsSuccess)
 				{
-					SendGuildResult(conn, GuildResultType.RankInUse);
+					RefuseRankEdit(
+						conn,
+						deleteResult.ErrorCode == DatabaseErrorCodes.NotFound
+							? GuildResultType.RankNotFound
+							: GuildResultType.RankInUse,
+						await ResolveGuildAuthorityAsync(guildID, deleterCharacterID));
 					return;
 				}
 
@@ -543,6 +560,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("GuildSystem", $"Error setting guild member note (GuildID={guildID}, Target={targetCharacterID}): {ex}");
 			}
+		}
+
+		/// <summary>
+		/// Refuses a rank edit, create or delete: sends the reason, then the ladder as it stands.
+		/// </summary>
+		/// <param name="conn">The requesting connection.</param>
+		/// <param name="result">Why the request was refused.</param>
+		/// <param name="requester">The requester's standing, resolved for this request.</param>
+		/// <remarks>
+		/// <para>
+		/// The ladder goes back WITH the refusal because the client applies a permission toggle
+		/// to its own copy of the ladder the moment it is flipped, so that two quick toggles
+		/// compose instead of the second resurrecting the first. On acceptance the republished
+		/// ladder overwrites that guess; on refusal nothing would, and the panel would keep
+		/// drawing a mask the server never accepted until the player happened to reopen the tab.
+		/// </para>
+		/// <para>
+		/// Sent from the standing this request was decided on, which costs no extra read for the
+		/// rules-based refusals. The callers that refused on a DATABASE outcome — a stale version,
+		/// a full ladder, an occupied rank — re-resolve first, because those refusals are
+		/// evidence that the standing they hold is already out of date.
+		/// </para>
+		/// </remarks>
+		private void RefuseRankEdit(NetworkConnection conn, GuildResultType result, GuildAuthority requester)
+		{
+			SendGuildResult(conn, result);
+			SendGuildRankList(conn, requester);
 		}
 
 		/// <summary>

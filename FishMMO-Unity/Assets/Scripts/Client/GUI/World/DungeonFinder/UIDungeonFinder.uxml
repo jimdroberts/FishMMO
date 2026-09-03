@@ -52,6 +52,8 @@
                 <ui:Toggle name="dungeonfinder-public" label="Open to others"
                            class="fish-toggle dungeonfinder-public" />
                 <ui:VisualElement class="dungeonfinder-footer__actions">
+                    <ui:Button name="dungeonfinder-findgroup-btn" text="Find Group"
+                               class="fish-button dungeonfinder-action dungeonfinder-action--find" />
                     <ui:Button name="dungeonfinder-refresh-btn" text="Refresh"
                                class="fish-button dungeonfinder-action" />
                     <ui:Button name="dungeonfinder-start-btn" text="Open New Dungeon"

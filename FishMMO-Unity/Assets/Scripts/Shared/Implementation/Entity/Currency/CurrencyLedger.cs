@@ -73,5 +73,8 @@ namespace FishMMO.Shared
 
 		/// <summary>A player-to-player trade.</summary>
 		PlayerTrade = 7,
+
+		/// <summary>The fee for founding a guild. Issue #186.</summary>
+		GuildCreation = 8,
 	}
 }

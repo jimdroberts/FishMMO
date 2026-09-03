@@ -242,12 +242,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				var rankTableName = dbContext.GetTableName<GuildRankEntity>();
+
+				/* The destination rank must EXIST, checked in the same statement as the write.
+				 * The caller validated it against a ladder it read a moment ago, but a rank can
+				 * be deleted — on another scene server — between that read and this write, and
+				 * the delete refuses only ranks that are occupied AT THAT MOMENT. Without this
+				 * clause the two would pass each other and leave a member holding an order with
+				 * no row, which resolves to no permissions at all. */
 				var updateSql = $@"UPDATE {TableName}
 					SET rank = {{0}}, version = {{1}}
-					WHERE character_id = {{2}} AND guild_id = {{3}} AND version < {{1}}";
+					WHERE character_id = {{2}} AND guild_id = {{3}} AND version < {{1}}
+					  AND EXISTS (SELECT 1 FROM {rankTableName} WHERE guild_id = {{3}} AND rank_order = {{0}})";
 
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(updateSql, new object[] { rank, incomingVersion, characterId, guildId }, cancellationToken)
+					.ExecuteSqlRawAsync(updateSql, new object[] { (short)rank, incomingVersion, characterId, guildId }, cancellationToken)
 					.ConfigureAwait(false);
 
 				if (rowsAffected == 0)
@@ -265,6 +274,12 @@ namespace FishMMO.Database.Npgsql.Services
 					if (existing.Version == incomingVersion)
 					{
 						throw new DuplicateReplayException();
+					}
+
+					if (existing.Version < incomingVersion)
+					{
+						// The version was current, so the only clause left to fail was the rank's existence.
+						throw new DatabaseEntityNotFoundException("GuildRank", $"{guildId}:{rank}");
 					}
 
 					throw new StaleStateException("Guild rank update rejected due to a stale Version.");

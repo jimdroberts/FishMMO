@@ -118,6 +118,27 @@ namespace FishMMO.Shared.Core
 		byte LeaderRankOrder { get; set; }
 
 		/// <summary>
+		/// Raised when the server states what founding a guild costs: the currency attribute's
+		/// template ID and the amount. Issue #186.
+		/// </summary>
+		event Action<int, long> OnReceiveGuildCreationCost;
+
+		/// <summary>
+		/// Template ID of the currency attribute a guild creation fee is paid in, or 0 when the
+		/// server has not stated a fee.
+		/// </summary>
+		int CreationCostCurrencyTemplateID { get; }
+
+		/// <summary>
+		/// The guild creation fee the server last stated, or 0 when there is none.
+		/// </summary>
+		/// <remarks>
+		/// Informational. The server charges what it is configured to charge; this is what the
+		/// client shows the player before they ask.
+		/// </remarks>
+		long CreationCost { get; }
+
+		/// <summary>
 		/// Convenience test for a single permission on the cached mask.
 		/// </summary>
 		/// <param name="permission">The permission to test.</param>

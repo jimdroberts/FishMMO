@@ -97,6 +97,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		public byte RankOrder { get; set; }
 
+		/// <inheritdoc />
+		public event Action<int, long> OnReceiveGuildCreationCost;
+
+		/// <inheritdoc />
+		public int CreationCostCurrencyTemplateID { get; private set; }
+
+		/// <inheritdoc />
+		public long CreationCost { get; private set; }
+
 		/// <summary>
 		/// Storage for <see cref="Permissions"/>, held as the underlying <see cref="long"/>.
 		/// </summary>
@@ -195,6 +204,9 @@ namespace FishMMO.Shared
 			OnRemoveGuildMember = null;
 			OnLeaveGuild = null;
 			OnReceiveGuildResult = null;
+			OnReceiveGuildCreationCost = null;
+			CreationCostCurrencyTemplateID = 0;
+			CreationCost = 0;
 			OnReceiveGuildInfo = null;
 			OnReceiveGuildLog = null;
 			OnReceiveGuildRanks = null;
@@ -265,6 +277,7 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildCreationCostBroadcast>(OnClientGuildCreationCostBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildInfoBroadcast>(OnClientGuildInfoBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildLogBroadcast>(OnClientGuildLogBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRankListBroadcast>(OnClientGuildRankListBroadcastReceived);
@@ -294,6 +307,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildCreationCostBroadcast>(OnClientGuildCreationCostBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildInfoBroadcast>(OnClientGuildInfoBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildLogBroadcast>(OnClientGuildLogBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildRankListBroadcast>(OnClientGuildRankListBroadcastReceived);
@@ -387,6 +401,23 @@ namespace FishMMO.Shared
 		public void OnClientGuildResultBroadcastReceived(GuildResultBroadcast msg, Channel channel)
 		{
 			OnReceiveGuildResult?.Invoke(msg.Result);
+		}
+
+		/// <summary>
+		/// Handles the server stating the guild creation fee. Issue #186.
+		/// </summary>
+		/// <remarks>
+		/// Kept on the controller as well as raised, because the guild panel is usually bound
+		/// after this arrives: it reads the stored values when it binds and listens for changes
+		/// after.
+		/// </remarks>
+		/// <param name="msg">The fee: currency template ID and amount, both 0 when there is none.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		public void OnClientGuildCreationCostBroadcastReceived(GuildCreationCostBroadcast msg, Channel channel)
+		{
+			CreationCostCurrencyTemplateID = msg.CurrencyTemplateID;
+			CreationCost = msg.Amount;
+			OnReceiveGuildCreationCost?.Invoke(msg.CurrencyTemplateID, msg.Amount);
 		}
 
 		/// <summary>

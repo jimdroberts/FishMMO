@@ -1193,40 +1193,89 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <returns>True when the character is free to join another party.</returns>
 		private async Task<bool> TryLeaveOwnPartyForJoinAsync(NetworkConnection conn, long characterID, long partyID)
 		{
+			switch (await TryReleaseOwnPartyAsync(conn, characterID, partyID, "joining another group's dungeon instance"))
+			{
+				case OwnPartyReleaseOutcome.Released:
+					return true;
+				case OwnPartyReleaseOutcome.WithOthers:
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
+					return false;
+				case OwnPartyReleaseOutcome.RemovalRefused:
+					/* The membership row still stands, and the join that follows would persist over
+					 * it — moving the character out of a party that is being changed underneath us,
+					 * without telling anyone still in it. Reported as AlreadyInParty because that is
+					 * exactly what is still true. */
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
+					return false;
+				default:
+					TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
+					return false;
+			}
+		}
+
+		/// <summary>
+		/// How <see cref="TryReleaseOwnPartyAsync"/> ended.
+		/// </summary>
+		private enum OwnPartyReleaseOutcome
+		{
+			/// <summary>The character has no party, or was alone in one and has left it.</summary>
+			Released,
+			/// <summary>The character shares a party with somebody else and was not moved.</summary>
+			WithOthers,
+			/// <summary>The party system declined the removal; the membership row still stands.</summary>
+			RemovalRefused,
+			/// <summary>The roster could not be read or the party system is unavailable.</summary>
+			Failed,
+		}
+
+		/// <summary>
+		/// Releases a character from a party they are alone in, so they can be placed in another.
+		/// </summary>
+		/// <remarks>
+		/// The shared half of two requests — joining another group's run, and asking the group
+		/// finder for a group — that both end with the character in a party they did not start
+		/// in. The rule is deliberately narrow: alone in a party of their own, they are simply
+		/// released from it; in a party with anybody else, they are refused and told to leave
+		/// first. Silently dissolving a real group would be a much larger act than the click that
+		/// caused it, and if the character led that group it would hand it to somebody else
+		/// without asking.
+		/// <para>
+		/// Sends nothing to the client about the refusal; each caller reports in its own terms.
+		/// The successful release does clear the controller and send <see cref="PartyLeaveBroadcast"/>,
+		/// because that is the same on both paths.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The character's connection.</param>
+		/// <param name="characterID">The character.</param>
+		/// <param name="partyID">Their party, or 0 for none.</param>
+		/// <param name="reason">Why, for the party system's log line.</param>
+		private async Task<OwnPartyReleaseOutcome> TryReleaseOwnPartyAsync(NetworkConnection conn, long characterID, long partyID, string reason)
+		{
 			if (partyID <= 0)
 			{
-				return true;
+				return OwnPartyReleaseOutcome.Released;
 			}
 
 			List<long> members = await FetchPartyMemberIDsAsync(partyID);
 			if (members == null)
 			{
-				TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
-				return false;
+				return OwnPartyReleaseOutcome.Failed;
 			}
 
 			if (members.Count > 1)
 			{
-				TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
-				return false;
+				return OwnPartyReleaseOutcome.WithOthers;
 			}
 
 			if (!Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
 			{
-				TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.ServerError));
-				return false;
+				return OwnPartyReleaseOutcome.Failed;
 			}
 
-			/* Alone in it, so leaving retires the party rather than breaking up a group.
-			 *
-			 * The result is honoured: a refusal means the membership row still stands, and the
-			 * join that follows would then persist over it — moving the character out of a party
-			 * that is being changed underneath us, without telling anyone still in it. Reported as
-			 * AlreadyInParty because that is exactly what is still true. */
-			if (!await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "joining another group's dungeon instance"))
+			// Alone in it, so leaving retires the party rather than breaking up a group.
+			if (!await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, reason))
 			{
-				TryEnqueueMainThread(() => SendTransferRefused(conn, SceneTransferRefusalReason.AlreadyInParty));
-				return false;
+				return OwnPartyReleaseOutcome.RemovalRefused;
 			}
 
 			TryEnqueueMainThread(() =>
@@ -1247,7 +1296,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Server?.NetworkWrapper?.Broadcast(conn, new PartyLeaveBroadcast(), true, FishNet.Transporting.Channel.Reliable);
 			});
 
-			return true;
+			return OwnPartyReleaseOutcome.Released;
 		}
 
 		/// <summary>

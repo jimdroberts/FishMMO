@@ -206,6 +206,15 @@ namespace FishMMO.Shared
 		/// rollback) reach the player as something rather than as silence.
 		/// </remarks>
 		Failed = 20,
+
+		/// <summary>
+		/// The requester cannot pay the guild creation fee. Issue #186.
+		/// </summary>
+		/// <remarks>
+		/// Its own code, not <see cref="Failed"/>: the player can do something about this one.
+		/// Appended, never inserted — the values are on the wire.
+		/// </remarks>
+		InsufficientFunds = 21,
 	}
 
 	/// <summary>
@@ -216,6 +225,30 @@ namespace FishMMO.Shared
 	{
 		/// <summary>Result of the guild operation.</summary>
 		public GuildResultType Result;
+	}
+
+	/// <summary>
+	/// Server to client: what founding a guild costs on this server. Issue #186.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Sent once per connection so the client can say the price before the player types a name,
+	/// and grey out or label the Create button, rather than learning the fee from a refusal. The
+	/// fee is server configuration (an inspector field on the guild system), so it has to be
+	/// told, not looked up — nothing on the client knows it otherwise.
+	/// </para>
+	/// <para>
+	/// Advisory only. The server charges whatever it is configured to charge when the request
+	/// arrives; the client's copy exists to inform the player, never to authorise anything.
+	/// </para>
+	/// </remarks>
+	public struct GuildCreationCostBroadcast : IBroadcast
+	{
+		/// <summary>Template ID of the currency attribute the fee is paid in, or 0 for no fee.</summary>
+		public int CurrencyTemplateID;
+
+		/// <summary>Amount charged, or 0 for no fee.</summary>
+		public long Amount;
 	}
 
 	/// <summary>

@@ -587,6 +587,8 @@ namespace FishMMO.Client
 			if (createButton != null)
 			{
 				createButton.clicked += OnButtonCreateGuild;
+				// The tree was just re-cloned; the fee the server stated still applies to it.
+				RefreshCreateButtonLabel();
 			}
 
 			leaveButton = root.Q<Button>(LEAVE_BUTTON_NAME);
@@ -731,6 +733,10 @@ namespace FishMMO.Client
 				guildController.OnReceiveGuildInfo += GuildController_OnReceiveGuildInfo;
 				guildController.OnReceiveGuildLog += GuildController_OnReceiveGuildLog;
 				guildController.OnReceiveGuildRanks += GuildController_OnReceiveGuildRanks;
+				guildController.OnReceiveGuildCreationCost += GuildController_OnReceiveGuildCreationCost;
+
+				// The fee usually arrives before this panel binds; the controller kept it.
+				RefreshCreateButtonLabel();
 			}
 		}
 
@@ -780,6 +786,7 @@ namespace FishMMO.Client
 			guildController.OnReceiveGuildInfo -= GuildController_OnReceiveGuildInfo;
 			guildController.OnReceiveGuildLog -= GuildController_OnReceiveGuildLog;
 			guildController.OnReceiveGuildRanks -= GuildController_OnReceiveGuildRanks;
+			guildController.OnReceiveGuildCreationCost -= GuildController_OnReceiveGuildCreationCost;
 		}
 
 		/// <summary>
@@ -1034,9 +1041,61 @@ namespace FishMMO.Client
 				case GuildResultType.Failed:
 					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild request could not be completed.");
 					break;
+				case GuildResultType.InsufficientFunds:
+					chat.InstantiateChatMessage(ChatChannel.System, "", $"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
+					break;
 				default:
 					return;
 			}
+		}
+
+		// ── Creation fee (issue #186) ─────────────────────────────────────────
+
+		/// <summary>
+		/// Re-labels the Create button when the server states or changes the fee.
+		/// </summary>
+		private void GuildController_OnReceiveGuildCreationCost(int currencyTemplateID, long amount)
+		{
+			RefreshCreateButtonLabel();
+		}
+
+		/// <summary>
+		/// The fee the server last stated, as the player would say it: "100 Gold".
+		/// </summary>
+		/// <remarks>
+		/// The currency is an attribute template the client has by ID, so its display name comes
+		/// from the same asset the server charges against. An unknown template — a client whose
+		/// assets are behind the server's — still gets a number rather than nothing.
+		/// </remarks>
+		private string DescribeCreationFee()
+		{
+			if (Character == null ||
+				!Character.TryGet(out IGuildController guildController) ||
+				guildController.CreationCost <= 0)
+			{
+				return "nothing";
+			}
+
+			CharacterAttributeTemplate currency = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(guildController.CreationCostCurrencyTemplateID);
+			string name = currency != null && !string.IsNullOrEmpty(currency.Name) ? currency.Name : "currency";
+			return $"{guildController.CreationCost:N0} {name}";
+		}
+
+		/// <summary>
+		/// Puts the fee on the Create button, so the price is visible before the prompt opens.
+		/// </summary>
+		private void RefreshCreateButtonLabel()
+		{
+			if (createButton == null)
+			{
+				return;
+			}
+
+			bool hasFee = Character != null &&
+						  Character.TryGet(out IGuildController guildController) &&
+						  guildController.CreationCost > 0;
+
+			createButton.text = hasFee ? $"Create ({DescribeCreationFee()})" : "Create";
 		}
 
 		/// <summary>
@@ -1048,9 +1107,30 @@ namespace FishMMO.Client
 				Character.TryGet(out IGuildController guildController) &&
 				guildController.ID < 1 && Client.NetworkManager.IsClientStarted)
 			{
+				/* Say the price before asking for a name, and refuse locally when the player
+				 * plainly cannot pay it. The server re-checks and is the only authority — a
+				 * request it would refuse anyway costs a round trip and a typed-out name for
+				 * nothing. CharacterCurrency reads the same base value the server spends against,
+				 * so the two agree unless the balance changes in flight. */
+				string prompt = "Please type the name of your new guild!";
+				if (guildController.CreationCost > 0)
+				{
+					CharacterAttributeTemplate currency = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(guildController.CreationCostCurrencyTemplateID);
+					if (currency != null && !CharacterCurrency.CanAfford(Character, currency, guildController.CreationCost))
+					{
+						if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+						{
+							chat.InstantiateChatMessage(ChatChannel.System, "", $"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
+						}
+						return;
+					}
+
+					prompt = $"Founding a guild costs {DescribeCreationFee()}. Please type the name of your new guild!";
+				}
+
 				if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox tooltip))
 				{
-					tooltip.Open("Please type the name of your new guild!", (s) =>
+					tooltip.Open(prompt, (s) =>
 					{
 						if (Authentication.IsAllowedGuildName(s))
 						{
@@ -2538,11 +2618,21 @@ namespace FishMMO.Client
 			GuildPermissions rankPermissions = (GuildPermissions)entry.Permissions;
 
 			/* Mirrors GuildRules.CanEditRank's seniority rule: the viewer must be STRICTLY senior
-			 * to the row. One comparison excludes both the leader's seat and the viewer's own —
-			 * the leader seat is senior to everyone below it, and nobody outranks themselves. */
+			 * to the row to touch its MASK. One comparison excludes both the leader's seat and the
+			 * viewer's own — the leader seat is senior to everyone below it, and nobody outranks
+			 * themselves. */
 			bool editable = mayEditRanks &&
 				guildController != null &&
 				guildController.RankOrder > rankOrder;
+
+			/* The viewer's OWN row may be renamed, and only renamed: the server accepts an edit
+			 * of the seat you occupy when the mask it carries is identical to the one stored.
+			 * Without this the guild's top rank could never be called anything but "Leader",
+			 * since nobody outranks the leader. Its toggles stay locked below. */
+			bool renameable = editable ||
+				(mayEditRanks &&
+					guildController != null &&
+					guildController.RankOrder == rankOrder);
 
 			VisualElement rowRoot = new VisualElement();
 			rowRoot.AddToClassList(RANK_ROW_CLASS);
@@ -2561,14 +2651,17 @@ namespace FishMMO.Client
 			order.AddToClassList(RANK_ORDER_CLASS);
 			header.Add(order);
 
-			if (editable)
+			if (renameable)
 			{
 				Button rename = new Button(() => PromptRenameRank(rankOrder));
 				rename.text = "Rename";
 				rename.AddToClassList("fish-button");
 				rename.AddToClassList(RANK_ACTION_CLASS);
 				header.Add(rename);
+			}
 
+			if (editable)
+			{
 				if (MayDeleteRank(rankOrder))
 				{
 					Button delete = new Button(() => ConfirmDeleteRank(rankOrder));
@@ -2688,9 +2781,10 @@ namespace FishMMO.Client
 			}, Channel.Reliable);
 
 			/* Applied to the model optimistically so the client-side gating above keeps agreeing
-			 * with what was just sent. The server's republished ladder remains the authority and
-			 * overwrites this on arrival — including on refusal, where it never arrives and the
-			 * next pull corrects it. */
+			 * with what was just sent. The server's ladder remains the authority and overwrites
+			 * this on arrival: republished to the whole guild on acceptance, and sent back to
+			 * this client alone with the result code on refusal, so a guess the server rejected
+			 * is corrected as soon as the refusal is. */
 			entry.Permissions = (long)mask;
 			rankLadder[rankOrder] = entry;
 		}

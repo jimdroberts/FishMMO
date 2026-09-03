@@ -1158,6 +1158,12 @@ namespace FishMMO.Client
 					return "You already have a dungeon open. Finish or close it before starting another.";
 				case SceneTransferRefusalReason.AlreadyAtDestination:
 					return "You are already on that channel.";
+				case SceneTransferRefusalReason.RequirementsNotMet:
+					return "You do not meet that difficulty's requirements.";
+				case SceneTransferRefusalReason.InstanceUnavailable:
+					return "That run can no longer be joined. Refresh the list and try another.";
+				case SceneTransferRefusalReason.AlreadyInParty:
+					return "Leave your party before joining another group's dungeon.";
 				case SceneTransferRefusalReason.ServerError:
 					return "The server could not complete that request. Please try again.";
 				default:

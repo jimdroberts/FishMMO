@@ -292,10 +292,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="proposed">The mask the rank would end up with.</param>
 		/// <returns>The decision.</returns>
 		/// <remarks>
+		/// <para>
 		/// The grant check compares only the bits being ADDED against the actor's own mask. A rank
 		/// that already holds a permission the actor lacks keeps it: removing it is not an
 		/// escalation, and refusing the whole edit over it would make such a rank uneditable
 		/// forever by anyone below the person who granted it.
+		/// </para>
+		/// <para>
+		/// <b>The actor's own row may be RENAMED, never re-permissioned.</b> Seniority is strict
+		/// for any change to a mask, because editing the seat you occupy is the shortest path
+		/// from "may edit ranks" to "may do anything". A rename carries no such path — the mask
+		/// is compared bit for bit and must be identical — and without the exception the guild's
+		/// top rank could never be called anything but what it was seeded as, since nobody
+		/// outranks the leader.
+		/// </para>
 		/// </remarks>
 		public static GuildActionResult CanEditRank(GuildAuthority actor, byte rankOrder, GuildPermissions proposed)
 		{
@@ -309,15 +319,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return GuildActionResult.RankNotFound;
 			}
 
-			/* Strictly below the actor's own rank. Editing your OWN row is refused: it is the
-			 * shortest path from "may edit ranks" to "may do anything", since the actor would
-			 * simply add the bits they wanted to the seat they already occupy. */
+			GuildPermissions current = (GuildPermissions)existing.Permissions;
+
+			/* Strictly below the actor's own rank for any change to the MASK. The one thing
+			 * permitted on the actor's own row is a rename: the seat's powers are untouched, so
+			 * there is nothing to escalate into. Rows above the actor stay off limits entirely —
+			 * a rank administrator renaming the leader's rank is not theirs to do. */
 			if (!actor.Outranks(rankOrder))
 			{
-				return GuildActionResult.InsufficientRank;
+				bool isOwnRow = actor.IsMember && rankOrder == actor.RankOrder;
+				if (!isOwnRow || proposed != current)
+				{
+					return GuildActionResult.InsufficientRank;
+				}
 			}
 
-			GuildPermissions added = proposed & ~(GuildPermissions)existing.Permissions;
+			GuildPermissions added = proposed & ~current;
 			if ((added & ~actor.Permissions) != GuildPermissions.None)
 			{
 				return GuildActionResult.InsufficientRank;

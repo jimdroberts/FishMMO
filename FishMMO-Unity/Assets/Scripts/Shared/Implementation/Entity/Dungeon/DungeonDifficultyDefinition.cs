@@ -66,6 +66,33 @@ namespace FishMMO.Shared
 		[Min(0)]
 		public int MaximumPlayers;
 
+		// ── Group finder ────────────────────────────────────────────────────
+
+		/// <summary>
+		/// Whether Find Group is offered at this difficulty.
+		/// </summary>
+		/// <remarks>
+		/// Off for content that should only be run by groups who chose each other — a difficulty
+		/// whose first death ends a character's run is a poor thing to be matched into with
+		/// strangers. Browsing and joining open runs at the entrance is unaffected; only the
+		/// automatic queue is.
+		/// </remarks>
+		[Header("Group Finder")]
+		[Tooltip("Whether Find Group is offered at this difficulty. Browsing and joining open runs is unaffected.")]
+		public bool GroupFinderEnabled = true;
+
+		/// <summary>
+		/// Players the group finder gathers before opening a run, or 0 to fill to capacity.
+		/// </summary>
+		/// <remarks>
+		/// Never below <see cref="MinimumPartySize"/> — the finder cannot form a group the dungeon
+		/// would refuse — and never below two, because a group of one is not a group. See
+		/// <see cref="GroupFinderRules.ResolveGroupSize"/> for the exact resolution.
+		/// </remarks>
+		[Tooltip("Players the group finder waits for before opening a run. 0 fills to capacity.")]
+		[Min(0)]
+		public int GroupFinderSize;
+
 		// ── Detriments ──────────────────────────────────────────────────────
 
 		/// <summary>
@@ -169,6 +196,15 @@ namespace FishMMO.Shared
 			if (MaximumPlayers > 0)
 			{
 				AppendLine(sb, $"Holds up to {MaximumPlayers} players.");
+			}
+
+			/* The finder's group size is only stated when the author pinned it, because the
+			 * default — fill to capacity — depends on the scene's MaxClients, which this class
+			 * cannot see. The panel's Find Group button is disabled outright when the finder is
+			 * off, so that case needs no line. */
+			if (GroupFinderEnabled && GroupFinderSize > 0)
+			{
+				AppendLine(sb, $"Find Group forms parties of {GroupFinderSize}.");
 			}
 
 			AppendMultiplier(sb, EnemyResourceMultiplier, "Enemy health");
