@@ -207,7 +207,9 @@ namespace FishMMO.Shared
 
 			controller.LookTarget = ally.Transform;
 
-			if (allyDistance <= healAbility.Range)
+			// Reach, not Range: a heal that does not travel has a Range of zero.
+			float healReach = controller.ResolveAbilityReach(healAbility);
+			if (allyDistance <= healReach)
 			{
 				controller.Agent.isStopped = true;
 				ActivateAbility(controller, abilityController, healAbility);
@@ -215,7 +217,7 @@ namespace FishMMO.Shared
 			}
 
 			// Unreachable ally: fall through to the damage rotation instead of stalling on it.
-			return MoveTowardAlly(controller, ally, healAbility.Range);
+			return MoveTowardAlly(controller, ally, healReach);
 		}
 
 		/// <summary>

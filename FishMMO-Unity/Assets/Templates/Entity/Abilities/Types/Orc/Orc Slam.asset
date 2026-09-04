@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Orc Slam
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: A heavy two-handed slam that hits everything in front of the orc.
+  ActivationTime: 0.6
+  LifeTime: 0.1
+  Speed: 0
+  Cooldown: 6
+  Price: 0
+  ActivationConditions: []
+  AbilityObjectPrefab: {fileID: 2816792916139270222, guid: 36f09b2b65ae4bd7f9302fcd8e1b3d2c,
+    type: 3}
+  AbilitySpawnTarget: 3
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 3
+  Type: 1
+  IntentOverride: 0
+  OnTickEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: 5aa15889374b0092ba247f732346d5f4, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds: []

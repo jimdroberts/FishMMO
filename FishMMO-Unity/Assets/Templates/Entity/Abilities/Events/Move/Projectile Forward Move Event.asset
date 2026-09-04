@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b57a95ec463f0b047834e2b1bc0ed972, type: 3}
+  m_Name: Projectile Forward Move Event
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnTickEvent
+  TargetSelector:
+    rid: -2
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 4707556931114369024
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  icon: {fileID: 0}
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 0
+  Price: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4707556931114369024
+      type: {class: AbilityMoveTransformAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        MoveDirection: {x: 0, y: 0, z: 1}

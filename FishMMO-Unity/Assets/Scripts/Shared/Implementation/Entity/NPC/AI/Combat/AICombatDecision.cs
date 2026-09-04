@@ -64,6 +64,12 @@
 		/// <see cref="PreferredDistance"/> is 0. Typically twice the agent radius, floored at 1.
 		/// </summary>
 		public float MeleeReach;
+
+		/// <summary>
+		/// True while the NPC's kiting budget is spent: the comfort band is ignored and it holds
+		/// its ground. See <see cref="AIKiteBudget"/>.
+		/// </summary>
+		public bool KiteExhausted;
 	}
 
 	/// <summary>
@@ -163,8 +169,10 @@
 
 			// 2. Panic radius — the target is close enough to be a real threat to a squishy
 			//    archetype. Callers interrupt the current cast for this one; they do not for
-			//    the ordinary BackAway below.
-			if (context.MinComfortDistance > 0f &&
+			//    the ordinary BackAway below. A spent kite budget suspends both: the NPC has
+			//    run enough, and now it fights where it stands.
+			if (!context.KiteExhausted &&
+				context.MinComfortDistance > 0f &&
 				context.Distance < context.MinComfortDistance * context.EmergencyRetreatThreshold)
 			{
 				plan.Intent = AICombatIntent.EmergencyRetreat;
@@ -174,7 +182,8 @@
 
 			// 3. Kiting band — uncomfortable but not desperate. Fire on the way out when the
 			//    chosen ability still reaches.
-			if (context.MinComfortDistance > 0f &&
+			if (!context.KiteExhausted &&
+				context.MinComfortDistance > 0f &&
 				context.Distance < context.MinComfortDistance)
 			{
 				plan.Intent = AICombatIntent.BackAway;
@@ -230,6 +239,49 @@
 		/// </summary>
 		/// <param name="context">The measured combat situation.</param>
 		/// <returns>A strictly positive engagement distance.</returns>
+		/// <summary>
+		/// Fits an archetype's spacing to what the NPC's abilities can actually do.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The spacing on a state asset is a hope, not a fact: the Caster archetype prefers 22 m
+		/// and backs away inside 10 m, and the orc mage that uses it knows one ability that
+		/// reaches 1.25 m. Taken literally that spacing produced an NPC which kept its distance
+		/// forever and never attacked — the "constantly retreats to cast range" report.
+		/// </para>
+		/// <para>
+		/// The preferred distance is capped at the longest offensive reach, and a comfort
+		/// distance the NPC cannot attack from is dropped: backing away to a range you cannot
+		/// hit from is not kiting. An NPC that knows no abilities keeps its spacing as authored.
+		/// </para>
+		/// </remarks>
+		/// <param name="preferredDistance">The state's preferred distance.</param>
+		/// <param name="minComfortDistance">The state's comfort distance.</param>
+		/// <param name="maxOffensiveReach">The NPC's longest offensive reach, 0 if none.</param>
+		/// <param name="effectivePreferred">The preferred distance to plan with.</param>
+		/// <param name="effectiveComfort">The comfort distance to plan with.</param>
+		public static void ResolveSpacing(float preferredDistance, float minComfortDistance, float maxOffensiveReach,
+			out float effectivePreferred, out float effectiveComfort)
+		{
+			effectivePreferred = preferredDistance;
+			effectiveComfort = minComfortDistance;
+
+			if (maxOffensiveReach <= 0f)
+			{
+				return;
+			}
+
+			if (effectivePreferred > maxOffensiveReach)
+			{
+				effectivePreferred = maxOffensiveReach;
+			}
+
+			if (effectiveComfort > 0f && effectiveComfort >= maxOffensiveReach)
+			{
+				effectiveComfort = 0f;
+			}
+		}
+
 		public static float ResolveEngageDistance(in AICombatContext context)
 		{
 			if (context.PreferredDistance > 0f)

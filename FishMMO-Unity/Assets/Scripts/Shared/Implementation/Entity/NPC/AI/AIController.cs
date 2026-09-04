@@ -481,7 +481,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float EffectiveAiTickRate => ticksPerAiUpdate > 0 ? (1f / (networkTickDelta * ticksPerAiUpdate)) : 0f;
 
-		private float nextUpdate = 0.0f;
 		private float nextLeashUpdate = 0.0f;
 		private float nextEnemySweepUpdate = 0.0f;
 		private float aggressionTickTimer = 0.0f;
@@ -614,6 +613,61 @@ namespace FishMMO.Shared
 		/// frame instead of one AI tick.
 		/// </remarks>
 		public float LastAiDeltaTime { get; private set; }
+
+		/// <summary>
+		/// Seconds covered by the state update currently executing.
+		/// </summary>
+		/// <remarks>
+		/// A state updates every <c>updateRate</c> seconds, not every brain tick, so a timer a
+		/// state advances must use this rather than <see cref="LastAiDeltaTime"/>. See
+		/// <see cref="AIStateClock"/> for what happened when it did not.
+		/// </remarks>
+		public float StateDeltaTime { get; private set; }
+
+		/// <summary>
+		/// Per-NPC kiting allowance. See <see cref="AIKiteBudget"/>.
+		/// </summary>
+		[System.NonSerialized]
+		public AIKiteBudget Kite;
+
+		/// <summary>
+		/// The longest reach among this NPC's offensive abilities, in metres. 0 when it knows none.
+		/// </summary>
+		/// <remarks>
+		/// What an archetype's spacing is checked against: a comfort distance no ability can
+		/// attack from is not kiting, it is running away. Refreshed with the ability cache.
+		/// </remarks>
+		public float MaxOffensiveReach { get; private set; }
+
+		[Header("Separation")]
+		/// <summary>
+		/// Distance at which another NPC body starts pushing this one away. 0 = twice the agent radius.
+		/// </summary>
+		[Tooltip("Distance at which another NPC starts pushing this one away. 0 = twice the agent radius.")]
+		public float SeparationRadius = 0f;
+
+		/// <summary>
+		/// Push speed when fully overlapped with another NPC, in metres per second.
+		/// </summary>
+		[Tooltip("Push speed when fully overlapped with another NPC. 0 disables separation.")]
+		public float SeparationSpeed = 1.0f;
+
+		/// <summary>
+		/// The separation velocity computed on the last brain tick, applied by <see cref="StepAgent"/>.
+		/// </summary>
+		private Vector3 separationVelocity;
+
+		/// <summary>Scratch buffer for the separation overlap query. Grown on demand.</summary>
+		private Collider[] separationHits = new Collider[16];
+
+		/// <summary>Scratch list of neighbour positions for <see cref="AISeparation.Resolve"/>.</summary>
+		private readonly List<Vector3> separationNeighbours = new List<Vector3>(16);
+
+		/// <summary>Scratch list of bodies already counted, so a multi-collider NPC pushes once.</summary>
+		private readonly List<GameObject> separationKeys = new List<GameObject>(16);
+
+		/// <summary>Schedules the current state's updates and measures the interval each covers.</summary>
+		private AIStateClock stateClock;
 
 		/// <summary>
 		/// The seeded RNG from the owning <see cref="NPC"/>.
@@ -787,6 +841,29 @@ namespace FishMMO.Shared
 			Agent.avoidancePriority = (int)AvoidancePriority;
 			Agent.speed = Constants.Character.WalkSpeed;
 
+			/* The agent simulates; the tick moves the transform. See StepAgent.
+			 *
+			 * With updatePosition on, the NavMeshAgent writes the transform every FRAME while the
+			 * NetworkTransform samples it every TICK. The scene server runs 60 FPS against a 30 Hz
+			 * tick, so a tick normally covers two frames of agent motion but regularly covers one
+			 * or three — a per-tick displacement that swings between 0.5x and 1.5x the true speed.
+			 * FishNet's abnormal-rate corrector only recognises exactly 0.5x and 2x, so the 1.5x
+			 * case reaches every observer as a stutter. Issue #220.
+			 *
+			 * With updateRotation on, the agent also turns the transform toward its velocity every
+			 * frame while FaceLookTarget turns it toward the target every tick: two writers, and a
+			 * chasing NPC's heading flickered between them on the wire. Both flags are cleared and
+			 * both writes happen once per tick, in StepAgent. Harmless on a client, where
+			 * OnStartNetwork disables the agent outright. */
+			Agent.updatePosition = false;
+			Agent.updateRotation = false;
+
+			/* No crowd avoidance. Unity's crowd is one global simulation, and the scene server
+			 * stacks instances of the same scene at the same coordinates, so avoidance made NPCs
+			 * steer around NPCs in OTHER instances. AISeparation replaces it, scoped to this
+			 * NPC's own PhysicsScene; AICombatSlots spaces attackers around a target. */
+			Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+
 			// Add available movement states to the list for random selection.
 			if (WanderState != null)
 			{
@@ -888,6 +965,11 @@ namespace FishMMO.Shared
 			AllyScanTimer = 0f;
 			CachedHealTarget = null;
 			LastAiDeltaTime = 0f;
+			StateDeltaTime = 0f;
+			Kite.Clear();
+			MaxOffensiveReach = 0f;
+			separationVelocity = Vector3.zero;
+			stateClock = default;
 			aggressionTickTimer = 0f;
 			cachedTargetHalfHeight = 0f;
 			cachedTargetHeightSource = null;
@@ -924,6 +1006,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void TimeManager_OnTick()
 		{
+			/* The brain is a tick subscription, not Update, so disabling the MonoBehaviour did not
+			 * stop it: a corpse kept sweeping, leashing (warping home and healing itself) and
+			 * driving its agent for the whole of its decay. NPC.Despawn disables the controller
+			 * and calls HaltMovement; this is what makes the disable mean something. */
+			if (!enabled)
+			{
+				return;
+			}
+
+			// Apply this tick's slice of agent motion before anything reads the position.
+			StepAgent(networkTickDelta);
+
 			/* Facing runs on every network tick, the brain on a fraction of them.
 			 *
 			 * The two rates want different things. Rotation is replicated by the NetworkTransform,
@@ -1019,6 +1113,7 @@ namespace FishMMO.Shared
 		private void UpdateActive(float dt)
 		{
 			repathCooldown -= dt;
+			UpdateSeparation();
 			SweepForEnemies(dt);
 			CheckLeash(dt);
 
@@ -1062,6 +1157,7 @@ namespace FishMMO.Shared
 		private void UpdateNearby(float dt)
 		{
 			repathCooldown -= dt;
+			UpdateSeparation();
 			CheckLeash(dt);
 			UpdateCurrentState(dt);
 			UpdateVirtualCamera();
@@ -1085,6 +1181,8 @@ namespace FishMMO.Shared
 			}
 
 			repathCooldown -= dt;
+			// Nobody is close enough to see two far NPCs overlap; skip the query.
+			separationVelocity = Vector3.zero;
 			CheckLeash(dt);
 			UpdateCurrentState(dt);
 		}
@@ -1272,11 +1370,11 @@ namespace FishMMO.Shared
 					{
 						characterDamageController.CompleteHeal();
 					}
-					// Attempt to warp home, fallback to setting position if warp fails.
-					if (!Agent.Warp(Home))
-					{
-						Character.Transform.position = Home;
-					}
+					/* WarpTo, not Agent.Warp(Home). A raw Warp to a point that is not exactly on
+					 * the NavMesh fails, and the fallback of writing the transform left the agent
+					 * off-mesh: AgentIsUsable was false from then on, every TryMoveTo failed, and
+					 * the NPC stood at home for the rest of its life. WarpTo samples first. */
+					WarpTo(Home);
 
 					// Clear aggression on full leash reset.
 					AggressionState?.Clear();
@@ -1320,14 +1418,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Update state if timer has elapsed.
-			if (nextUpdate < 0.0f)
+			// Update the state when its interval has elapsed, telling it how long that really was.
+			if (stateClock.Advance(deltaTime, out float elapsed))
 			{
-				CurrentState.UpdateState(this, deltaTime);
+				StateDeltaTime = elapsed;
+				CurrentState.UpdateState(this, elapsed);
 
-				nextUpdate = CurrentState.GetUpdateRate(this);
+				stateClock.Rearm(CurrentState.GetUpdateRate(this), deltaTime);
 			}
-			nextUpdate -= deltaTime;
 		}
 
 		/// <summary>
@@ -1415,14 +1513,33 @@ namespace FishMMO.Shared
 				return;
 
 			cachedAbilities.Clear();
+			MaxOffensiveReach = 0f;
 			foreach (var kvp in abilityController.KnownAbilities)
 			{
 				if (kvp.Value != null && kvp.Value.Template != null)
 				{
 					cachedAbilities.Add(kvp.Value);
+
+					if (BaseAttackingState.IsEnemyAbility(kvp.Value))
+					{
+						MaxOffensiveReach = Mathf.Max(MaxOffensiveReach, ResolveAbilityReach(kvp.Value));
+					}
 				}
 			}
 			lastKnownAbilityCount = currentCount;
+		}
+
+		/// <summary>
+		/// How far <paramref name="ability"/> can hit something from, for this NPC's body size.
+		/// </summary>
+		/// <remarks>
+		/// Always use this rather than <see cref="Ability.Range"/> in AI code: the raw range is
+		/// zero for anything that does not travel. See <see cref="AIAbilityReach"/>.
+		/// </remarks>
+		public float ResolveAbilityReach(Ability ability)
+		{
+			float casterRadius = Agent != null ? Agent.radius : 0.5f;
+			return AIAbilityReach.Resolve(ability, casterRadius);
 		}
 
 		/// <summary>
@@ -1666,7 +1783,7 @@ namespace FishMMO.Shared
 				if (!ability.MeetsActivationConditions(Character, ref activationCheckData))
 					continue;
 
-				float abilityRange = ability.Range;
+				float abilityRange = ResolveAbilityReach(ability);
 
 				// Score: prefer abilities that can reach the target.
 				float score = 0f;
@@ -1732,7 +1849,8 @@ namespace FishMMO.Shared
 					continue;
 				if (!ability.MeetsActivationConditions(Character, ref activationCheckData))
 					continue;
-				if (ability.Range * ability.Range >= sqrMinRange)
+				float reach = ResolveAbilityReach(ability);
+				if (reach * reach >= sqrMinRange)
 					return true;
 			}
 			return false;
@@ -1781,7 +1899,7 @@ namespace FishMMO.Shared
 			CurrentState = newState;
 			if (CurrentState != null)
 			{
-				nextUpdate = CurrentState.GetUpdateRate(this);
+				stateClock.Rearm(CurrentState.GetUpdateRate(this));
 			}
 
 			if (newState is BaseAttackingState attackingState)
@@ -2003,6 +2121,177 @@ namespace FishMMO.Shared
 			float t = 1f - Mathf.Exp(-TurnRate * deltaTime);
 
 			Character.Transform.rotation = Quaternion.Slerp(Character.Transform.rotation, targetRotation, t);
+		}
+
+		/// <summary>
+		/// Speed below which the agent's velocity is not worth turning toward, in metres per second.
+		/// </summary>
+		public const float HEADING_SPEED_THRESHOLD = 0.05f;
+
+		/// <summary>
+		/// Recomputes the push away from overlapping NPC bodies in this NPC's own physics scene.
+		/// </summary>
+		/// <remarks>
+		/// Runs on the brain tick for the Active and Nearby tiers only. Players are not pushed
+		/// against — they do not run agents and never took part in crowd avoidance either — and
+		/// neither is anything outside this NPC's <see cref="PhysicsScene"/>, which is what keeps
+		/// stacked scene instances from touching each other. See <see cref="AISeparation"/>.
+		/// </remarks>
+		private void UpdateSeparation()
+		{
+			separationVelocity = Vector3.zero;
+
+			if (SeparationSpeed <= 0f || Agent == null || Character == null || !PhysicsScene.IsValid())
+			{
+				return;
+			}
+
+			float radius = SeparationRadius > 0f ? SeparationRadius : Agent.radius * 2f;
+			Vector3 position = Character.Transform.position;
+
+			int hitCount;
+			while (true)
+			{
+				hitCount = PhysicsScene.OverlapSphere(position, radius, separationHits, Constants.Layers.Player, QueryTriggerInteraction.Ignore);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref separationHits, hitCount))
+				{
+					break;
+				}
+			}
+
+			separationNeighbours.Clear();
+			separationKeys.Clear();
+			for (int i = 0; i < hitCount && i < separationHits.Length; ++i)
+			{
+				Collider hit = separationHits[i];
+				if (hit == null)
+				{
+					continue;
+				}
+
+				GameObject key = TargetOrdering.ResolveHitKey(hit, out ICharacter other);
+				if (key == null || other == null || other == Character || !(other is NPC))
+				{
+					continue;
+				}
+				if (TargetOrdering.ContainsBody(separationKeys, key))
+				{
+					continue;
+				}
+				separationKeys.Add(key);
+				separationNeighbours.Add(other.Transform.position);
+			}
+
+			separationVelocity = AISeparation.Resolve(position, separationNeighbours, radius, SeparationSpeed);
+		}
+
+		/// <summary>
+		/// Applies one network tick of the NavMeshAgent's simulated motion to the transform.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The agent keeps simulating every frame (path following, acceleration, crowd
+		/// avoidance) but no longer touches the transform — see <see cref="InitializeOnce"/>.
+		/// Each tick the transform advances by exactly <c>velocity × tickDelta</c>, the agent's
+		/// internal position is re-seated on that point (which projects it back onto the NavMesh,
+		/// so the y follows the mesh), and the heading turns toward the velocity at the agent's
+		/// angular speed unless a <see cref="LookTarget"/> owns the facing.
+		/// </para>
+		/// <para>
+		/// The displacement the NetworkTransform samples is therefore identical every tick for a
+		/// given speed, regardless of how many frames the server happened to render in between.
+		/// </para>
+		/// </remarks>
+		/// <param name="tickDelta">Seconds per network tick.</param>
+		private void StepAgent(float tickDelta)
+		{
+			if (!AgentIsUsable() || tickDelta <= 0f)
+			{
+				return;
+			}
+
+			Transform t = Character.Transform;
+
+			// Off-mesh links are traversed by the agent itself; just follow it.
+			if (Agent.isOnOffMeshLink)
+			{
+				t.position = Agent.nextPosition;
+				return;
+			}
+
+			Vector3 velocity = Agent.velocity;
+			// Separation moves the body but never turns it: an NPC nudged sideways keeps facing
+			// where it was going.
+			Vector3 step = ResolveTickStep(velocity + separationVelocity, tickDelta);
+
+			/* Re-seat the simulation on the transform even when the step is zero: anything that
+			 * moved the transform directly (a platform, a scripted placement) would otherwise
+			 * leave the agent believing it is somewhere else. */
+			Agent.nextPosition = t.position + step;
+			t.position = Agent.nextPosition;
+
+			if (LookTarget == null && ResolveTickHeading(t.rotation, velocity, Agent.angularSpeed, tickDelta, out Quaternion heading))
+			{
+				t.rotation = heading;
+			}
+		}
+
+		/// <summary>
+		/// The displacement one tick of travel at <paramref name="velocity"/> covers.
+		/// </summary>
+		/// <remarks>Separated so the tick-uniformity StepAgent relies on can be asserted directly.</remarks>
+		public static Vector3 ResolveTickStep(Vector3 velocity, float tickDelta)
+		{
+			return velocity * tickDelta;
+		}
+
+		/// <summary>
+		/// Turns a heading toward the direction of travel, bounded by an angular speed.
+		/// </summary>
+		/// <remarks>
+		/// Mirrors what <c>NavMeshAgent.updateRotation</c> does per frame, on the tick instead.
+		/// Vertical velocity is ignored so a slope does not pitch the character, and a velocity
+		/// below <see cref="HEADING_SPEED_THRESHOLD"/> leaves the heading alone: an agent braking
+		/// to a stop or being nudged by avoidance must not spin to face the nudge.
+		/// </remarks>
+		/// <param name="current">The current rotation.</param>
+		/// <param name="velocity">The agent's velocity.</param>
+		/// <param name="angularSpeed">Maximum turn, in degrees per second.</param>
+		/// <param name="tickDelta">Seconds per tick.</param>
+		/// <param name="result">The rotation to apply.</param>
+		/// <returns>True if the heading changed.</returns>
+		public static bool ResolveTickHeading(Quaternion current, Vector3 velocity, float angularSpeed, float tickDelta, out Quaternion result)
+		{
+			result = current;
+
+			velocity.y = 0f;
+			if (velocity.sqrMagnitude < HEADING_SPEED_THRESHOLD * HEADING_SPEED_THRESHOLD)
+			{
+				return false;
+			}
+
+			Quaternion target = Quaternion.LookRotation(velocity.normalized, Vector3.up);
+			result = Quaternion.RotateTowards(current, target, Mathf.Max(0f, angularSpeed) * tickDelta);
+			return result != current;
+		}
+
+		/// <summary>
+		/// Stops the NPC where it stands and forgets what it was doing, for a death.
+		/// </summary>
+		/// <remarks>
+		/// Called by <see cref="NPC.Despawn"/> alongside disabling the controller. Disabling stops
+		/// the brain; this stops the body: the agent's path is cleared, the target and look target
+		/// are dropped so nothing re-engages, and the threat table is emptied. Without it the
+		/// corpse's agent kept its destination and, when the brain was later re-enabled for the
+		/// next pool occupant, was still heading for wherever its killer had been standing.
+		/// </remarks>
+		public void HaltMovement()
+		{
+			Target = null;
+			LookTarget = null;
+			ClearPath();
+			Stop();
+			AggressionState?.Clear();
 		}
 	}
 }

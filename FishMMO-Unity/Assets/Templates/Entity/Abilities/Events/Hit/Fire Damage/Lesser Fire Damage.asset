@@ -14,12 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TargetSelector:
     rid: -2
-  Conditions:
-  - rid: 8938684509875339264
+  Conditions: []
   OnConditionsMetActions:
-  - rid: 8938684490743545926
-  - rid: 8938684490743545935
+  - rid: 4707556931114369032
+  - rid: 4707556931114369033
   OnConditionsNotMetActions: []
+  Verbose: 0
   icon: {fileID: 0}
   ActivationTime: 0
   LifeTime: 0
@@ -31,31 +31,25 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 8938684490743545926
+    - rid: 4707556931114369032
       type: {class: ApplyDamageAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
+        StopChainOnFailure: 0
         DamageValue:
-          rid: 8938684490743545927
+          rid: 4707556931114369034
         DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
           type: 2}
-    - rid: 8938684490743545927
-      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        Amount: 3
-    - rid: 8938684490743545935
+    - rid: 4707556931114369033
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
-        FXPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
+        StopChainOnFailure: 0
+        FXPrefab: {fileID: 1283335467853853480, guid: 422ac1a06602ba841bd45b8b1c616098,
           type: 3}
-    - rid: 8938684509875339264
-      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+    - rid: 4707556931114369034
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
-        TargetSelector:
-          rid: -2
-        Combine: 0
-        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
-        RequiredAmount: 5
+        Amount: 3

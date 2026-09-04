@@ -1,76 +1,108 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using NUnit.Framework;
+using FishMMO.Shared;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Proofs that a networked component points at the NetworkObject in its own prefab.
+	/// Proofs that a networked component points at the NetworkObject in its own asset.
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// FishNet caches the owning NetworkObject on each NetworkBehaviour as a serialized reference.
-	/// Within a prefab that reference is local — a bare fileID. Duplicating a prefab can leave it
-	/// pointing at the ORIGINAL asset instead, as a fileID plus that asset's guid, and Unity reports
-	/// nothing: the field is populated and the type is right, it just names another prefab's object.
+	/// Within a prefab or scene that reference is local — a bare fileID. Anything that copies
+	/// serialized fields between prefabs (Paste Component Values, CopySerialized, a
+	/// SerializedObject migration) can leave it pointing at ANOTHER asset instead, as a fileID plus
+	/// that asset's guid, and Unity reports nothing: the field is populated and the type is right,
+	/// it just names another asset's object.
 	/// </para>
 	/// <para>
 	/// Found through "I cannot damage the orc warrior". Its health bar never moved, and the server
 	/// log showed why — every swing at it resolved to <c>target Elf(Clone)</c>, the caster, because
 	/// the ability found no target and <c>TargetSelector</c> falls back to the initiator. The
 	/// warrior's CharacterAttributeController, which owns Health, was bound to the orc mage's
-	/// NetworkObject. Three prefabs had been duplicated from that mage and carried the same fault:
-	/// the warrior and a lesser fire elemental on both fields, and a plain orc on one — and the orc
-	/// stayed damageable with one of the two intact, which is what made this look like a warrior
-	/// problem rather than a family one.
+	/// NetworkObject. The template-to-ID migration of 2026-03-27 had rewritten the field on three
+	/// prefabs at once: the warrior and a lesser fire elemental on both fields, and a plain orc on
+	/// one — and the orc stayed damageable with one of the two intact, which is what made this look
+	/// like a warrior problem rather than a family one (PR #212).
 	/// </para>
 	/// <para>
-	/// Cheap to assert and impossible to see by eye in the inspector, so it is asserted here.
+	/// The scan lives in <see cref="NetworkObjectBindingValidator"/> so the import hook, the build
+	/// hook, the repair menu and this test agree on what "foreign" means. The second test pins the
+	/// scanner itself against the exact bytes that broke the warrior, so a regex regression cannot
+	/// turn the first test into a silent pass.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
 	public class PrefabNetworkObjectBindingTests
 	{
-		/// <summary>Fields FishNet uses to cache the owning NetworkObject.</summary>
-		private static readonly string[] OwnerFields =
-		{
-			"_addedNetworkObject",
-			"_networkObjectCache",
-		};
+		private static string AssetRoot =>
+			Path.Combine(Directory.GetCurrentDirectory(), "Assets");
 
-		private static string PrefabRoot =>
-			Path.Combine(Directory.GetCurrentDirectory(), "Assets/Prefabs");
+		/// <summary>The warrior's CharacterAttributeController as committed on 2026-03-27.</summary>
+		private const string BrokenWarrior =
+			"  _componentIndexCache: 1\n" +
+			"  _addedNetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,\n" +
+			"    type: 3}\n" +
+			"  _networkObjectCache: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,\n" +
+			"    type: 3}\n" +
+			"  CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,\n" +
+			"    type: 2}\n";
+
+		/// <summary>The same block after PR #212.</summary>
+		private const string FixedWarrior =
+			"  _componentIndexCache: 1\n" +
+			"  _addedNetworkObject: {fileID: -4468559157413045786}\n" +
+			"  _networkObjectCache: {fileID: -4468559157413045786}\n" +
+			"  CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,\n" +
+			"    type: 2}\n";
 
 		[Test]
-		public void NoPrefabBindsItsComponentsToAnotherPrefabsNetworkObject()
+		public void NoNetworkedComponentBindsToAnotherAssetsNetworkObject()
 		{
-			LogAssert.IsTrue(Directory.Exists(PrefabRoot), $"prefabs must live at {PrefabRoot}");
+			LogAssert.IsTrue(Directory.Exists(AssetRoot), $"assets must live at {AssetRoot}");
 
-			string[] prefabs = Directory.GetFiles(PrefabRoot, "*.prefab", SearchOption.AllDirectories);
-			LogAssert.IsTrue(prefabs.Length > 0, "there must be prefabs to check");
+			int prefabs = Directory.GetFiles(AssetRoot, "*.prefab", SearchOption.AllDirectories).Length;
+			int scenes = Directory.GetFiles(AssetRoot, "*.unity", SearchOption.AllDirectories).Length;
+			LogAssert.IsTrue(prefabs > 0 && scenes > 0, "there must be prefabs and scenes to check");
 
-			/* A guid on one of these fields is the whole tell. A reference inside the prefab is a
-			 * bare fileID; the guid only appears when it reaches out to a different asset. */
-			Regex foreign = new Regex(
-				"_(?:" + string.Join("|", OwnerFields) + "): \\{fileID: -?\\d+, guid: ([0-9a-f]{32})");
+			List<NetworkObjectBindingValidator.Finding> findings = NetworkObjectBindingValidator.ScanAll(AssetRoot);
 
-			List<string> offenders = new List<string>();
+			LogAssert.IsTrue(findings.Count == 0, NetworkObjectBindingValidator.Describe(findings));
+		}
 
-			foreach (string prefab in prefabs)
-			{
-				foreach (Match match in foreign.Matches(File.ReadAllText(prefab)))
-				{
-					offenders.Add($"{Path.GetFileName(prefab)} -> guid {match.Groups[1].Value}");
-				}
-			}
+		[Test]
+		public void ScannerRecognisesTheShapeThatBrokeTheWarrior()
+		{
+			List<NetworkObjectBindingValidator.Finding> findings =
+				NetworkObjectBindingValidator.ScanText(BrokenWarrior, "an orc warrior.prefab");
 
-			LogAssert.IsTrue(offenders.Count == 0,
-				"a NetworkBehaviour must be bound to the NetworkObject in its own prefab; " +
-				"these point at another asset, which silently breaks targeting and health on the " +
-				"affected entity: " + string.Join("; ", offenders));
+			LogAssert.AreEqual(2, findings.Count, "both owner fields name the mage");
+			LogAssert.AreEqual("_addedNetworkObject", findings[0].Field);
+			LogAssert.AreEqual(2, findings[0].Line, "line of the first foreign field");
+			LogAssert.AreEqual("_networkObjectCache", findings[1].Field);
+			LogAssert.AreEqual(4, findings[1].Line, "line of the second foreign field");
+			LogAssert.AreEqual("a7364fafb6a45174babebcc6a5fbdce4", findings[0].TargetGuid, "the mage's guid");
+
+			// The template reference two lines later also carries a guid, and must not be reported.
+			LogAssert.AreEqual(0, NetworkObjectBindingValidator.ScanText(FixedWarrior, "fixed").Count,
+				"a bare fileID is the healthy shape");
+		}
+
+		[Test]
+		public void RepairProducesExactlyThePr212Edit()
+		{
+			string repaired = NetworkObjectBindingValidator.RepairText(BrokenWarrior, out int count);
+
+			LogAssert.AreEqual(2, count, "one rewrite per foreign field");
+			LogAssert.AreEqual(FixedWarrior, repaired, "guid and type dropped, fileID kept, neighbours untouched");
+			LogAssert.AreEqual(0, NetworkObjectBindingValidator.ScanText(repaired, "repaired").Count,
+				"repair output is clean");
+
+			NetworkObjectBindingValidator.RepairText(FixedWarrior, out int noop);
+			LogAssert.AreEqual(0, noop, "a healthy asset is left alone");
 		}
 	}
 }

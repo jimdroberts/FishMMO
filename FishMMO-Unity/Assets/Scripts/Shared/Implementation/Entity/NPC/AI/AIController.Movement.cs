@@ -328,6 +328,7 @@ namespace FishMMO.Shared
 				if (TrySampleNavMesh(warpTarget, out Vector3 sampled, SAMPLE_RADIUS * SAMPLE_RADIUS_GROWTH) &&
 					Agent.Warp(sampled))
 				{
+					SyncTransformToAgent();
 					stuckTimer = 0f;
 					stuckRecoveryAttempts = 0;
 					LastPathWasPartial = false;
@@ -375,6 +376,7 @@ namespace FishMMO.Shared
 
 			if (TrySampleNavMesh(position, out Vector3 sampled) && Agent.Warp(sampled))
 			{
+				SyncTransformToAgent();
 				ResetMovementState();
 				return true;
 			}
@@ -383,6 +385,22 @@ namespace FishMMO.Shared
 			Character.Transform.position = position;
 			ResetMovementState();
 			return false;
+		}
+
+		/// <summary>
+		/// Copies the agent's simulated position onto the transform after a warp.
+		/// </summary>
+		/// <remarks>
+		/// The transform is no longer driven by the agent (<c>updatePosition</c> is off, see
+		/// <see cref="StepAgent"/>), so a warp that re-seats the simulation must be mirrored here
+		/// or the NetworkTransform keeps sending the old spot until the next tick's step.
+		/// </remarks>
+		private void SyncTransformToAgent()
+		{
+			if (Agent != null && Agent.isActiveAndEnabled && Agent.isOnNavMesh)
+			{
+				Character.Transform.position = Agent.nextPosition;
+			}
 		}
 
 		/// <summary>

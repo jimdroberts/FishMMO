@@ -18,25 +18,40 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: Creates a flame in front of the caster for 5 seconds.
-  ActivationTime: 0.5
-  LifeTime: 5
+  Description: A burst of flame in front of the caster. Burns whatever is standing
+    in it.
+  ActivationTime: 0.3
+  LifeTime: 0.5
   Speed: 0
-  Cooldown: 1
+  Cooldown: 4
   Price: 0
-  ActivationConditions: []
+  ActivationConditions:
+  - rid: 4707556931114369035
   AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 81dd6c8841df66e44ad306e2ef34aaee,
     type: 3}
   AbilitySpawnTarget: 6
   RequiresTarget: 0
   AdditionalEventSlots: 0
-  HitCount: 1
+  HitCount: 2
   Type: 2
+  IntentOverride: 0
   OnTickEvents: []
-  OnHitEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
   OnPreSpawnEvents: []
   OnSpawnEvents: []
   OnDestroyEvents: []
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4707556931114369035
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 3

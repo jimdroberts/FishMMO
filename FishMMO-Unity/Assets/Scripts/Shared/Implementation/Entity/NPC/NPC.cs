@@ -519,13 +519,17 @@ namespace FishMMO.Shared
 			AIController ai = GetComponent<AIController>();
 			if (ai != null)
 			{
-				/* Remembered, because nothing else would ever switch it back on. Update() is what
-				 * drives the whole brain — LOD scheduling, state dispatch, target selection — and
-				 * a disabled MonoBehaviour does not receive it. Before this, the first death of a
-				 * pooled NPC disabled its controller permanently: every later occupant of that
-				 * pool slot spawned, stood still, and never thought again. */
+				/* Remembered, because nothing else would ever switch it back on. Before this, the
+				 * first death of a pooled NPC disabled its controller permanently: every later
+				 * occupant of that pool slot spawned, stood still, and never thought again.
+				 *
+				 * The brain runs from a TimeManager tick subscription, which a disabled
+				 * MonoBehaviour still receives; AIController.TimeManager_OnTick honours `enabled`
+				 * itself. HaltMovement stops the body — path, target, threat — so the corpse does
+				 * not keep walking to wherever its killer was. */
 				aiDisabledByCorpse = ai.enabled;
 				ai.enabled = false;
+				ai.HaltMovement();
 
 				/* A corpse holds no grudges. Beyond being wrong, a populated threat table keeps
 				 * AggressionState.HasAggression true, which is exactly the flag

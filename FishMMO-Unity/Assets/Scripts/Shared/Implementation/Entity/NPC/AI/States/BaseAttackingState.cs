@@ -62,6 +62,17 @@ namespace FishMMO.Shared
 		/// Minimum seconds between ability activations. A small deterministic jitter is added so
 		/// a pack of identical NPCs does not fire in lockstep.
 		/// </summary>
+		[Header("Kiting")]
+		[Tooltip("Seconds the NPC may spend backing away per window before it must stand and fight. 0 = unlimited.")]
+		public float KiteBudgetSeconds = 2.5f;
+
+		[Tooltip("Seconds the NPC holds its ground once the kite budget is spent, before it may back away again.")]
+		public float KiteRecoverySeconds = 5.0f;
+
+		[Range(0.1f, 1f)]
+		[Tooltip("Run speed multiplier while backing away. Below 1 lets a chasing player close the gap.")]
+		public float KiteSpeedMultiplier = 0.8f;
+
 		[Header("Pacing")]
 		[Tooltip("Minimum seconds between ability activations. 0 = as fast as cooldowns allow.")]
 		public float AttackCooldown = 1.5f;
@@ -157,6 +168,7 @@ namespace FishMMO.Shared
 			// Allow the agent to run
 			controller.Agent.speed = Constants.Character.RunSpeed;
 			controller.AttackCooldownTimer = 0f;
+			controller.Kite.Reset(KiteBudgetSeconds);
 		}
 
 		/// <summary>
@@ -571,12 +583,20 @@ namespace FishMMO.Shared
 		{
 			AICombatContext context = default;
 			context.Distance = distance;
-			context.PreferredDistance = PreferredDistance;
-			context.MinComfortDistance = MinComfortDistance;
 			context.EmergencyRetreatThreshold = EmergencyRetreatThreshold;
 			context.HasUsableAbility = chosenAbility != null;
-			context.AbilityRange = chosenAbility != null ? chosenAbility.Range : 0f;
+			// Reach, not Range: Range is zero for anything that does not travel. See AIAbilityReach.
+			context.AbilityRange = chosenAbility != null ? controller.ResolveAbilityReach(chosenAbility) : 0f;
 			context.MeleeReach = GetMeleeReach(controller);
+			context.KiteExhausted = controller.Kite.Exhausted;
+
+			/* Spacing the NPC can actually fight at. The archetype's numbers are fitted to the
+			 * longest reach among the abilities this NPC really knows, so a caster archetype on
+			 * a melee kit closes in rather than holding a range it cannot attack from. */
+			AICombatDecision.ResolveSpacing(PreferredDistance, MinComfortDistance, controller.MaxOffensiveReach,
+				out float effectivePreferred, out float effectiveComfort);
+			context.PreferredDistance = effectivePreferred;
+			context.MinComfortDistance = effectiveComfort;
 			context.HealthPercent = controller.GetHealthPercent();
 			context.WasAttacking = controller.WasAttackingLastTick;
 
@@ -712,6 +732,16 @@ namespace FishMMO.Shared
 			// Remembered for the next tick's range hysteresis.
 			controller.WasAttackingLastTick = plan.Intent == AICombatIntent.Attack ||
 											  plan.Intent == AICombatIntent.HoldPosition;
+
+			/* Kiting is budgeted and slower than a chase. The budget is charged AFTER the plan
+			 * that consumed it, so the tick that spends the last of it still backs away; the
+			 * next one holds. Speed drops while backing away so a pursuing player gains ground,
+			 * and comes back to a run for everything else. */
+			bool kiting = plan.Intent == AICombatIntent.BackAway || plan.Intent == AICombatIntent.EmergencyRetreat;
+			controller.Kite.Tick(kiting, controller.StateDeltaTime, KiteBudgetSeconds, KiteRecoverySeconds);
+			controller.Agent.speed = kiting
+				? Constants.Character.RunSpeed * Mathf.Clamp(KiteSpeedMultiplier, 0.1f, 1f)
+				: Constants.Character.RunSpeed;
 
 			switch (plan.Intent)
 			{
@@ -949,7 +979,7 @@ namespace FishMMO.Shared
 			}
 
 			AIMovementProgress progress = controller.GetMovementProgress(
-				controller.LastAiDeltaTime,
+				controller.StateDeltaTime,
 				Mathf.Max(stopRange, AIController.ARRIVAL_TOLERANCE));
 
 			bool blocked = progress == AIMovementProgress.Stuck || controller.LastPathWasPartial;
@@ -960,7 +990,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			controller.UnreachableTargetTimer += controller.LastAiDeltaTime;
+			controller.UnreachableTargetTimer += controller.StateDeltaTime;
 
 			if (controller.UnreachableTargetTimer < UnreachableTargetTimeout)
 			{

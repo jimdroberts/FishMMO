@@ -18,13 +18,14 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: Creates a large ball of flame in front of the caster for 5 seconds.
-  ActivationTime: 0.5
-  LifeTime: 5
-  Speed: 0
-  Cooldown: 1
+  Description: Hurls a ball of flame that bursts on the first thing it strikes.
+  ActivationTime: 0.8
+  LifeTime: 2.5
+  Speed: 12
+  Cooldown: 2.5
   Price: 0
-  ActivationConditions: []
+  ActivationConditions:
+  - rid: 4707556931114369036
   AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
     type: 3}
   AbilitySpawnTarget: 6
@@ -32,12 +33,26 @@ MonoBehaviour:
   AdditionalEventSlots: 0
   HitCount: 1
   Type: 4
-  OnTickEvents: []
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: 4d4ceeca1eb78ef9cae0e864a6e3645f, type: 2}
   OnHitEvents:
   - {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
   OnPreSpawnEvents: []
   OnSpawnEvents: []
-  OnDestroyEvents: []
+  OnDestroyEvents:
+  - {fileID: 11400000, guid: 2767bd947c0c0e89d97a609c45aa8a0e, type: 2}
   references:
     version: 2
-    RefIds: []
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4707556931114369036
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 5

@@ -223,9 +223,18 @@ namespace FishNet.Object
             if (Application.isPlaying)
                 return _addedNetworkObject;
 
+            /* FISHMMO EDIT: a cached owner is only trusted when it sits in this behaviour's own
+             * hierarchy. Paste Component Values, EditorUtility.CopySerialized and SerializedObject
+             * migrations copy this hidden field between prefabs verbatim, leaving it pointing at
+             * ANOTHER asset's NetworkObject. Unity reports nothing, the stock code returned the
+             * stale value forever, and the affected NPC could not be damaged (PR #212). */
+            if (_addedNetworkObject != null && !IsInOwnHierarchy(_addedNetworkObject))
+                _addedNetworkObject = null;
+
             if (_addedNetworkObject != null)
             {
                 AlertToDuplicateNetworkObjects(_addedNetworkObject.transform);
+                SyncNetworkObjectCache(); //FISHMMO EDIT
                 return _addedNetworkObject;
             }
 
@@ -255,7 +264,30 @@ namespace FishNet.Object
             }
 
             AlertToDuplicateNetworkObjects(_addedNetworkObject.transform);
+            SyncNetworkObjectCache(); //FISHMMO EDIT
             return _addedNetworkObject;
+
+            //FISHMMO EDIT: keep the runtime cache on the same object as the discovered owner, so a
+            // foreign or missing cache is repaired the moment Unity validates the component.
+            void SyncNetworkObjectCache()
+            {
+                if (_networkObjectCache == null || !IsInOwnHierarchy(_networkObjectCache))
+                    _networkObjectCache = _addedNetworkObject;
+            }
+
+            //FISHMMO EDIT: true when nob is on this transform or one of its ancestors. Works for
+            // prefab assets, prefab stages and scene objects alike, and is false for any object in
+            // a different asset because that asset's transforms are never on this chain.
+            bool IsInOwnHierarchy(NetworkObject nob)
+            {
+                Transform target = nob.transform;
+                for (Transform t = transform; t != null; t = t.parent)
+                {
+                    if (t == target)
+                        return true;
+                }
+                return false;
+            }
 
             // Removes duplicate network objects from t.
             void AlertToDuplicateNetworkObjects(Transform t)

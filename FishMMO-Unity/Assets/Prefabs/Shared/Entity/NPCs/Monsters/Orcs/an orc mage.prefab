@@ -134,6 +134,29 @@ CapsuleCollider:
   m_Height: 1.35
   m_Direction: 1
   m_Center: {x: 0, y: 0.675, z: 0}
+--- !u!114 &545689852689658496
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
+  Type: 12
+  Visibility: 0
+  Icon: {fileID: 0}
+  Tint: {r: 1, g: 1, b: 1, a: 1}
+  Label: 
+  IconSize: 10
+  ClampToEdge: 0
+  Priority: 0
+  ShowOnMinimap: 1
+  ShowOnWorldMap: 1
+  MarkerAnchor: {fileID: 0}
 --- !u!114 &-4468559157413045786
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -260,6 +283,8 @@ MonoBehaviour:
   RandomizeState: 0
   Waypoints: []
   AiTickRate: 8
+  SeparationRadius: 0
+  SeparationSpeed: 1
 --- !u!114 &2119787057571980410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -284,6 +309,8 @@ MonoBehaviour:
   StaminaResourceTemplateID: 2142067754
   StaminaRegenerationTemplateID: -251416119
   regenTickRate: 1
+  observedResourcePushInterval: 6
+  observedResourceOutOfCombatPushInterval: 12
 --- !u!114 &7824644601122125574
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -375,6 +402,8 @@ MonoBehaviour:
   AttributeBonuses: {fileID: 11400000, guid: 0f2ff92179a6d1b4c9dde7ad6a4afdb0, type: 2}
   Abilities:
   - {fileID: 11400000, guid: 9a571cab03b3f684da8436e4391abdbb, type: 2}
+  - {fileID: 11400000, guid: 3852a4063401fbc949f2d9ac83a2b7be, type: 2}
+  - {fileID: 11400000, guid: 7c14874e3c902684a8d562913ed73c24, type: 2}
   objectSpawner: {fileID: 0}
   spawnableSettings:
     rid: -2
@@ -404,7 +433,7 @@ NavMeshAgent:
   m_Height: 1.35
   m_BaseOffset: 0
   m_WalkableMask: 4294967295
-  m_ObstacleAvoidanceType: 2
+  m_ObstacleAvoidanceType: 0
 --- !u!114 &2898743231479186744
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -481,7 +510,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -4468559157413045786}
   AbilitySpawner: {fileID: 8284866284985655959}
   AttackSpeedReductionTemplate: {fileID: 11400000, guid: 15a71776a1f5e4245841b3301c881f80,
     type: 2}
@@ -509,7 +538,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -4468559157413045786}
 --- !u!114 &6308388451046359136
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -524,7 +553,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CooldownController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -4468559157413045786}
 --- !u!114 &534150588493569565
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -564,7 +593,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPositionHistory
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -4468559157413045786}
   maximumRewindMilliseconds: 500
 --- !u!1 &9198423041106670181
 GameObject:
@@ -1031,26 +1060,3 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 4103170126109918815}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &545689852689658496
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
-  Type: 12
-  Visibility: 0
-  Icon: {fileID: 0}
-  Tint: {r: 1, g: 1, b: 1, a: 1}
-  Label: 
-  IconSize: 10
-  ClampToEdge: 0
-  Priority: 0
-  ShowOnMinimap: 1
-  ShowOnWorldMap: 1
-  MarkerAnchor: {fileID: 0}
