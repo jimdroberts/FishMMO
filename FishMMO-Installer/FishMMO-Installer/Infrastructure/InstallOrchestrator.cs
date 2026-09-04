@@ -40,7 +40,13 @@ namespace FishMMO.Installer
         /// <summary>
         /// Runs a single component by name. Dispatches to the correct installer.
         /// </summary>
-        public static async Task<InstallResult> RunComponentAsync(string componentName, AppSettings appSettings)
+        /// <param name="manifest">
+        /// When running from an install config, the manifest whose <c>firewallPorts</c> and
+        /// <c>webServers</c> parameterise the <c>firewall</c> and <c>systemd-services</c>
+        /// components. Null for single-component CLI dispatch, which uses the defaults.
+        /// </param>
+        public static async Task<InstallResult> RunComponentAsync(
+            string componentName, AppSettings appSettings, InstallManifest? manifest = null)
         {
             var sw = Stopwatch.StartNew();
             InstallResult result;
@@ -118,15 +124,15 @@ namespace FishMMO.Installer
                         await AppSettingsInstaller.ConfigureAppSettings();
                         return true;
                     }),
-                    "firewall" => await FirewallInstaller.OpenPortsAsync(new[] { 80, 443 }, prompt: false),
+                    "firewall" => await FirewallInstaller.OpenPortsAsync(FirewallPortsFor(manifest), prompt: false),
                     "systemd-services" => await SystemdServiceInstaller.InstallAllAsync(
-                        InstallationConstants.FishMMOMonorepoRoot),
+                        InstallationConstants.FishMMOMonorepoRoot, WebServersFor(manifest)),
                     "create-migration" => await FromVoidAsync("create-migration", async () =>
                     {
                         await PostgreSQLInstaller.CreateMigration(appSettings);
                         return true;
                     }),
-                    "all" => await RunAllComponentsAsync(appSettings),
+                    "all" => await RunAllComponentsAsync(appSettings, manifest),
                     _ => InstallResult.Fail(componentName, $"Unknown component: '{componentName}'. Use --help for component list."),
                 };
             }
@@ -139,6 +145,23 @@ namespace FishMMO.Installer
             sw.Stop();
             return result with { Duration = sw.Elapsed };
         }
+
+        /// <summary>The manifest's firewall rules, or HTTP/HTTPS when it names none.</summary>
+        private static IReadOnlyList<FirewallPortSpec> FirewallPortsFor(InstallManifest? manifest) =>
+            manifest is { FirewallPorts.Count: > 0 } ? manifest.FirewallPorts : FirewallInstaller.DefaultPorts;
+
+        /// <summary>The manifest's web server selection, or null (all servers) when it names none.</summary>
+        private static IReadOnlyList<string>? WebServersFor(InstallManifest? manifest) =>
+            manifest is { WebServers.Count: > 0 } ? manifest.WebServers : null;
+
+        /// <summary>
+        /// True when the component list will run <paramref name="component"/> itself,
+        /// either by name or through the <c>all</c> pseudo-component.
+        /// </summary>
+        private static bool ComponentsInclude(InstallManifest manifest, string component) =>
+            manifest.Components.Any(c =>
+                c.Equals(component, StringComparison.OrdinalIgnoreCase) ||
+                c.Equals("all", StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
         /// Runs a full install manifest — validates component names, pre-sorts by
@@ -179,13 +202,19 @@ namespace FishMMO.Installer
             {
                 if (manifest.DryRun)
                 {
-                    await Log.Info("FishMMOInstaller", $"[DRY-RUN] Would install: {name}");
+                    string detail = name.ToLowerInvariant() switch
+                    {
+                        "firewall" => $" (ports: {string.Join(", ", FirewallPortsFor(manifest))})",
+                        "systemd-services" => $" (servers: {string.Join(", ", WebServersFor(manifest) ?? new[] { "all" })})",
+                        _ => string.Empty,
+                    };
+                    await Log.Info("FishMMOInstaller", $"[DRY-RUN] Would install: {name}{detail}");
                     results.Add(InstallResult.Ok(name));
                     continue;
                 }
 
                 _ = Log.Info("FishMMOInstaller", $"--- Installing: {name} ---");
-                InstallResult result = await RunComponentAsync(name, appSettings);
+                InstallResult result = await RunComponentAsync(name, appSettings, manifest);
                 results.Add(result);
 
                 if (!result.Success)
@@ -196,12 +225,18 @@ namespace FishMMO.Installer
                 }
             }
 
-            // Post-install: firewall
-            if (manifest.ConfigureFirewall)
+            // Post-install: firewall.
+            // Skipped when the component list already ran "firewall" with the same
+            // port list; running it twice duplicated netsh rules on Windows, and the
+            // component pass used to ignore the manifest's ports entirely.
+            if (manifest.ConfigureFirewall && ComponentsInclude(manifest, "firewall"))
             {
-                var ports = manifest.FirewallPorts.Count > 0
-                    ? manifest.FirewallPorts
-                    : new List<int> { 80, 443 };
+                await Log.Info("FishMMOInstaller",
+                    "configureFirewall is set but 'firewall' is already in components; rules were applied in that step.");
+            }
+            else if (manifest.ConfigureFirewall)
+            {
+                var ports = FirewallPortsFor(manifest);
 
                 if (manifest.DryRun)
                 {
@@ -216,8 +251,13 @@ namespace FishMMO.Installer
                 }
             }
 
-            // Post-install: systemd services
-            if (manifest.RegisterSystemdServices && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            // Post-install: systemd services. Same dedup rule as the firewall above.
+            if (manifest.RegisterSystemdServices && ComponentsInclude(manifest, "systemd-services"))
+            {
+                await Log.Info("FishMMOInstaller",
+                    "registerSystemdServices is set but 'systemd-services' is already in components; services were registered in that step.");
+            }
+            else if (manifest.RegisterSystemdServices && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 if (manifest.DryRun)
                 {
@@ -228,8 +268,7 @@ namespace FishMMO.Installer
                 {
                     _ = Log.Info("FishMMOInstaller", "--- Registering systemd services ---");
                     results.Add(await SystemdServiceInstaller.InstallAllAsync(
-                        InstallationConstants.FishMMOMonorepoRoot,
-                        manifest.WebServers.Count > 0 ? manifest.WebServers : null));
+                        InstallationConstants.FishMMOMonorepoRoot, WebServersFor(manifest)));
                 }
             }
 
@@ -260,7 +299,7 @@ namespace FishMMO.Installer
         /// Runs every known component in dependency order. Used by the "all" pseudo-component.
         /// Stops on the first failure.
         /// </summary>
-        private static async Task<InstallResult> RunAllComponentsAsync(AppSettings appSettings)
+        private static async Task<InstallResult> RunAllComponentsAsync(AppSettings appSettings, InstallManifest? manifest)
         {
             var allComponents = DependencyOrder
                 .OrderBy(kv => kv.Value)
@@ -278,7 +317,7 @@ namespace FishMMO.Installer
             foreach (string name in allComponents)
             {
                 _ = Log.Info("FishMMOInstaller", $"--- Installing: {name} ---");
-                InstallResult result = await RunComponentAsync(name, appSettings);
+                InstallResult result = await RunComponentAsync(name, appSettings, manifest);
 
                 if (result.Success)
                 {

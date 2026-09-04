@@ -15,9 +15,12 @@ namespace FishMMO.Installer
         [JsonPropertyName("configureFirewall")]
         public bool ConfigureFirewall { get; init; }
 
-        /// <summary>Firewall ports to open (e.g. [80, 443]).</summary>
+        /// <summary>
+        /// Firewall rules to open. Entries are a bare port number (TCP) or a string
+        /// with an optional range and protocol, e.g. <c>[80, 443, "7770-7999/udp"]</c>.
+        /// </summary>
         [JsonPropertyName("firewallPorts")]
-        public List<int> FirewallPorts { get; init; } = new();
+        public List<FirewallPortSpec> FirewallPorts { get; init; } = new();
 
         /// <summary>Whether to register FishMMO web servers as systemd services.</summary>
         [JsonPropertyName("registerSystemdServices")]

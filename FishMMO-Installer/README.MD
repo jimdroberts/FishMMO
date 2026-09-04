@@ -469,7 +469,7 @@ For non-interactive mode, create an `install-config.json`:
 {
   "components": ["postgresql", "fishmmo-db", "nginx", "letsencrypt"],
   "configureFirewall": true,
-  "firewallPorts": [80, 443],
+  "firewallPorts": [80, 443, "7770-7999/udp"],
   "registerSystemdServices": true,
   "webServers": ["ipfetch", "patcher", "webgl"],
   "validateAfterInstall": true,
@@ -480,9 +480,9 @@ For non-interactive mode, create an `install-config.json`:
 | Field | Type | Description |
 |---|---|---|
 | `components` | `string[]` | Component names to install, in desired order (sorted by dependency before execution) |
-| `configureFirewall` | `bool` | Whether to open firewall ports after installation |
-| `firewallPorts` | `int[]` | TCP ports to open (defaults to `[80, 443]` if empty) |
-| `registerSystemdServices` | `bool` | Whether to register FishMMO web servers as systemd services (Linux only) |
+| `configureFirewall` | `bool` | Open `firewallPorts` after the components finish. Redundant when `firewall` (or `all`) is in `components`: that step already applies `firewallPorts`, and the post-install pass is skipped so rules are not added twice. |
+| `firewallPorts` | `(int \| string)[]` | Ports to open. A bare number is a single TCP port; a string may carry a range and protocol: `"443/tcp"`, `"7770-7999/udp"` (ranges inclusive, protocol defaults to `tcp`). Defaults to `[80, 443]` if empty. |
+| `registerSystemdServices` | `bool` | Register `webServers` as systemd services after the components finish (Linux only). Redundant when `systemd-services` (or `all`) is in `components`, which already uses `webServers`; the post-install pass is then skipped. |
 | `webServers` | `string[]` | Web server names to register (`ipfetch`, `patcher`, `webgl` or `fishmmo-ipfetch` etc). When empty or omitted, all three are registered. |
 | `validateAfterInstall` | `bool` | Run health checks after installation completes |
 | `dryRun` | `bool` | Simulate without making changes |

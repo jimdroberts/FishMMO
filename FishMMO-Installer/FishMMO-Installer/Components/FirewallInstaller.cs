@@ -9,22 +9,29 @@ namespace FishMMO.Installer
     /// </summary>
     public static class FirewallInstaller
     {
+        /// <summary>Ports opened when a manifest or menu does not name any: HTTP and HTTPS.</summary>
+        public static readonly IReadOnlyList<FirewallPortSpec> DefaultPorts = new[]
+        {
+            FirewallPortSpec.TcpPort(80),
+            FirewallPortSpec.TcpPort(443),
+        };
+
         /// <summary>
-        /// Opens the specified TCP ports on the host firewall.
+        /// Opens the specified ports or port ranges on the host firewall.
         /// </summary>
-        /// <param name="ports">Port numbers to open.</param>
+        /// <param name="ports">Rules to open; each is a single port or a range on TCP or UDP.</param>
         /// <param name="prompt">When true, prompts for confirmation before making changes.</param>
         /// <returns>InstallResult indicating success or failure.</returns>
-        public static async Task<InstallResult> OpenPortsAsync(IReadOnlyList<int> ports, bool prompt = true)
+        public static async Task<InstallResult> OpenPortsAsync(IReadOnlyList<FirewallPortSpec> ports, bool prompt = true)
         {
             if (ports.Count == 0)
                 return InstallResult.Ok("firewall");
 
             if (prompt && !InstallerProcessHelper.PromptForYesNo(
-                    $"Open firewall ports {string.Join(", ", ports)} (TCP)?"))
+                    $"Open firewall ports {string.Join(", ", ports)}?"))
                 return InstallResult.Fail("firewall", "User cancelled.");
 
-            await Log.Info("FishMMOInstaller", $"Configuring firewall for TCP ports: {string.Join(", ", ports)}");
+            await Log.Info("FishMMOInstaller", $"Configuring firewall for ports: {string.Join(", ", ports)}");
 
             try
             {
@@ -49,14 +56,16 @@ namespace FishMMO.Installer
         }
 
         /// <summary>Adds Windows Firewall rules via netsh.</summary>
-        private static async Task<InstallResult> ConfigureWindowsFirewallAsync(IReadOnlyList<int> ports)
+        private static async Task<InstallResult> ConfigureWindowsFirewallAsync(IReadOnlyList<FirewallPortSpec> ports)
         {
-            foreach (int port in ports)
+            foreach (FirewallPortSpec port in ports)
             {
-                string ruleName = $"FishMMO Port {port} TCP";
+                // netsh accepts hyphenated ranges for localport (e.g. 7770-7999).
+                string protocol = port.Protocol.ToUpperInvariant();
+                string ruleName = $"FishMMO Port {port.PortText} {protocol}";
                 bool ok = await InstallerProcessHelper.RunShellCommandAsync(
                     "cmd.exe", "/c",
-                    $"netsh advfirewall firewall add rule name=\"{ruleName}\" dir=in action=allow protocol=TCP localport={port}",
+                    $"netsh advfirewall firewall add rule name=\"{ruleName}\" dir=in action=allow protocol={protocol} localport={port.PortText}",
                     $"Failed to add Windows Firewall rule for port {port}.");
 
                 if (!ok)
@@ -68,7 +77,7 @@ namespace FishMMO.Installer
         }
 
         /// <summary>Adds Linux firewall rules via ufw (preferred) or firewalld.</summary>
-        private static async Task<InstallResult> ConfigureLinuxFirewallAsync(IReadOnlyList<int> ports, bool prompt)
+        private static async Task<InstallResult> ConfigureLinuxFirewallAsync(IReadOnlyList<FirewallPortSpec> ports, bool prompt)
         {
             IPlatform platform = PlatformFactory.Current;
             (string shell, string argPrefix) = platform.GetShellCommand();
@@ -119,10 +128,11 @@ namespace FishMMO.Installer
                     }
                 }
 
-                foreach (int port in ports)
+                foreach (FirewallPortSpec port in ports)
                 {
+                    // ufw writes ranges with a colon: 7770:7999/udp.
                     if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-                            $"sudo ufw allow {port}/tcp",
+                            $"sudo ufw allow {port.UfwPortText}/{port.Protocol}",
                             $"Failed to add ufw rule for port {port}."))
                         return InstallResult.Fail("firewall", $"ufw rule failed for port {port}.");
                 }
@@ -134,10 +144,11 @@ namespace FishMMO.Installer
             bool firewalldAvailable = await platform.IsCommandAvailableAsync("firewall-cmd");
             if (firewalldAvailable)
             {
-                foreach (int port in ports)
+                foreach (FirewallPortSpec port in ports)
                 {
+                    // firewalld writes ranges with a hyphen: 7770-7999/udp.
                     if (!await InstallerProcessHelper.RunShellCommandAsync(shell, argPrefix,
-                            $"sudo firewall-cmd --permanent --add-port={port}/tcp",
+                            $"sudo firewall-cmd --permanent --add-port={port}",
                             $"Failed to add firewalld rule for port {port}."))
                         return InstallResult.Fail("firewall", $"firewalld rule failed for port {port}.");
                 }

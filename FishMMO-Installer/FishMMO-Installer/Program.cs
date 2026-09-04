@@ -608,7 +608,7 @@ namespace FishMMO.Installer
                         await NGINXInstaller.DeployNginxConfigAsync();
                         break;
                     case ConsoleKey.D4:
-                        _ = await FirewallInstaller.OpenPortsAsync(new[] { 80, 443 }, prompt: true);
+                        _ = await FirewallInstaller.OpenPortsAsync(FirewallInstaller.DefaultPorts, prompt: true);
                         break;
                     case ConsoleKey.D5:
                         _ = await SystemdServiceInstaller.InstallAllAsync(

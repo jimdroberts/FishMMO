@@ -302,11 +302,13 @@ FishMMO-Installer --log-file /path/to.log    # Tee log output to a file
 {
   "components": ["dotnet-sdk", "postgresql", "nginx", "firewall", "systemd-services"],
   "configureFirewall": true,
-  "firewallPorts": [80, 443],
+  "firewallPorts": [80, 443, "7770-7999/udp"],
   "registerSystemdServices": true,
   "validateAfterInstall": true
 }
 ```
+
+`firewallPorts` entries are either a bare port number (TCP) or a string with an optional range and protocol: `443`, `"443/tcp"`, `"7770-7999/udp"`. Ranges are inclusive and the protocol defaults to `tcp` when omitted.
 
 **Available component names for CLI use** (`--list-components` prints this list):
 `dotnet-ef`, `aspnet-runtime`, `vs-build-tools`, `postgresql`, `pgbouncer`, `fishmmo-db`, `nginx`, `letsencrypt`, `unity-hub`, `unity-editor`, `build-projects`, `build-unity`, `appsettings`, `create-migration`, `firewall`, `systemd-services`, `all`
