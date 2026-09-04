@@ -131,6 +131,7 @@ namespace FishMMO.Client
 			{ ChatChannel.Region,   new Color(0.45f, 0.65f, 1f) },
 			{ ChatChannel.Party,    Color.red },
 			{ ChatChannel.Guild,    Color.green},
+			{ ChatChannel.Team,     new Color(1f, 0.55f, 0.2f) },
 			{ ChatChannel.Tell,     Color.magenta },
 			{ ChatChannel.Trade,    new Color(0.98f, 0.68f, 0.34f) },
 			{ ChatChannel.System,   Color.yellow },
@@ -212,6 +213,7 @@ namespace FishMMO.Client
 				ChatChannel.Region,
 				ChatChannel.Party,
 				ChatChannel.Guild,
+				ChatChannel.Team,
 				ChatChannel.Tell,
 				ChatChannel.Trade,
 				ChatChannel.System,
@@ -280,6 +282,7 @@ namespace FishMMO.Client
 			ChatChannel.Region,
 			ChatChannel.Party,
 			ChatChannel.Guild,
+			ChatChannel.Team,
 			ChatChannel.Trade,
 		};
 
@@ -1625,6 +1628,7 @@ namespace FishMMO.Client
 				case ChatChannel.Region: return OnRegionChat;
 				case ChatChannel.Party: return OnPartyChat;
 				case ChatChannel.Guild: return OnGuildChat;
+				case ChatChannel.Team: return OnTeamChat;
 				case ChatChannel.Tell: return OnTellChat;
 				case ChatChannel.Trade: return OnTradeChat;
 				case ChatChannel.Say: return OnSayChat;
@@ -1764,6 +1768,13 @@ namespace FishMMO.Client
 		/// <param name="localCharacter">The local player character.</param>
 		/// <param name="msg">The chat broadcast message.</param>
 		/// <returns>True if handled successfully.</returns>
+		/// <summary>Arena team chat: drawn like party chat, without a party id prefix.</summary>
+		public bool OnTeamChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
+		{
+			AddSenderMessage(msg.Channel, msg.SenderID, msg.Text);
+			return true;
+		}
+
 		public bool OnGuildChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);

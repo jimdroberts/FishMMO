@@ -200,6 +200,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{ ChatChannel.Tell, OnTellChat },
 				{ ChatChannel.Trade, OnTradeChat },
 				{ ChatChannel.Say, OnSayChat },
+				{ ChatChannel.Team, OnTeamChat },
 			};
 
 			// Chat helper commands

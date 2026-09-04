@@ -200,6 +200,12 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int MaxPartyBlockingIds = 64;
 
 		/// <inheritdoc/>
+		/// <summary>
+		/// The shared <c>FishMMO.Shared.SceneType.PvP</c> value. Numeric because the database-side
+		/// <see cref="SceneType"/> enum's names do not correspond to the shared values callers cast in.
+		/// </summary>
+		private const int ArenaSceneType = 3;
+
 		public async Task<DatabaseResult<long>> EnqueueForPartyAsync(
 			long worldServerId,
 			string sceneName,
@@ -294,6 +300,21 @@ namespace FishMMO.Database.Npgsql.Services
 					heldClauses.Add("(party_id <> 0 AND party_id = {6})");
 				}
 
+				/* Arenas count. An arena instance row names only its first seat, so a member sitting
+				 * in a live arena match is found through the match's seats rather than through
+				 * scenes.character_id. One instance per party means one of either kind. */
+				string arenaClause = null;
+				if (blocking.Count > 0)
+				{
+					string matchTable = dbContext.GetTableName<Entities.ArenaMatchEntity>();
+					string memberTable = dbContext.GetTableName<Entities.ArenaMatchMemberEntity>();
+					arenaClause = $@"OR EXISTS (
+							SELECT 1 FROM {memberTable} m
+							JOIN {matchTable} am ON am.id = m.match_id
+							WHERE m.character_id IN ({ids}) AND am.status < {{{FirstBlockingIndex + blocking.Count}}}
+						)";
+				}
+
 				string sql;
 				if (heldClauses.Count == 0)
 				{
@@ -312,14 +333,18 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE NOT EXISTS (
 							SELECT 1 FROM {TableName}
 							WHERE world_server_id = {{0}}
-								AND scene_type = {{3}}
+								AND scene_type IN ({{3}}, {{{FirstBlockingIndex + blocking.Count + 1}}})
 								AND scene_status IN ({{2}}, {{9}}, {{10}})
 								AND ({string.Join(" OR ", heldClauses)})
-						)
+						) {arenaClause}
 						RETURNING id";
 				}
 
-				var parameters = new object[FirstBlockingIndex + blocking.Count];
+				// Two trailing parameters after the member ids: the live-match status ceiling, and
+				// the arena scene type, so an arena instance held by a member blocks a dungeon too.
+				var parameters = new object[FirstBlockingIndex + blocking.Count + 2];
+				parameters[FirstBlockingIndex + blocking.Count] = (int)ArenaMatchStatus.Ended;
+				parameters[FirstBlockingIndex + blocking.Count + 1] = ArenaSceneType;
 				parameters[0] = worldServerId;
 				parameters[1] = sceneName;
 				parameters[2] = (int)SceneStatus.Pending;

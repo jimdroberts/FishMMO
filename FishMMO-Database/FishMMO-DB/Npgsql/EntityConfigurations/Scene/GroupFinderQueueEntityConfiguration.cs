@@ -30,6 +30,15 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasMaxLength(100);
 
+			// 2 is SceneType.Group: every row written before arenas existed was a dungeon row.
+			builder.Property(e => e.SceneType)
+				.IsRequired()
+				.HasDefaultValue(2);
+
+			builder.Property(e => e.GroupID)
+				.IsRequired()
+				.HasDefaultValue(0L);
+
 			builder.Property(e => e.Difficulty)
 				.IsRequired()
 				.HasDefaultValue(0);
@@ -62,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			 * (world, dungeon, difficulty), how many are waiting and then tries to take the oldest
 			 * N of them. Status leads the trailing columns so Matched rows fall out of the scan
 			 * immediately, and time_created ends it so the ORDER BY is served from the index. */
-			builder.HasIndex(e => new { e.WorldServerID, e.SceneName, e.Difficulty, e.Status, e.TimeCreated });
+			builder.HasIndex(e => new { e.WorldServerID, e.SceneType, e.SceneName, e.Difficulty, e.Status, e.TimeCreated });
 
 			// The stale-row reaper: rows whose heartbeat stopped.
 			builder.HasIndex(e => e.LastPulse);

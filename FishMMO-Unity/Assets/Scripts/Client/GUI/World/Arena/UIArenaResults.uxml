@@ -1,0 +1,41 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIArenaResults.uss" />
+    <ui:VisualElement name="results-root" class="results-root">
+        <ui:VisualElement name="results-panel" class="fish-panel results-panel">
+
+            <ui:VisualElement class="fish-panel__header results-header">
+                <ui:VisualElement class="fish-panel__icon results-header__icon" />
+                <ui:VisualElement class="results-header__titles">
+                    <ui:Label text="MATCH RESULTS" class="fish-panel__title" />
+                    <ui:Label name="results-subtitle" text="" class="fish-panel__subtitle" />
+                </ui:VisualElement>
+                <ui:Button name="results-close-btn" text="✕" class="fish-close-btn results-close-btn" />
+            </ui:VisualElement>
+
+            <ui:Label name="results-banner" text="" class="results-banner" />
+            <ui:VisualElement name="results-scores" class="results-scores" />
+
+            <!-- Second, first, third: podium order. Built at runtime. -->
+            <ui:VisualElement name="results-pedestal" class="results-pedestal" />
+
+            <ui:VisualElement class="results-columns">
+                <ui:Label text="#" class="fish-col-head results-col results-col--place" />
+                <ui:Label text="PLAYER" class="fish-col-head results-col results-col--name" />
+                <ui:Label text="TEAM" class="fish-col-head results-col results-col--team" />
+                <ui:Label text="K / D" class="fish-col-head results-col results-col--kd" />
+                <ui:Label text="SCORE" class="fish-col-head results-col results-col--score" />
+            </ui:VisualElement>
+
+            <ui:ScrollView name="results-scroll" class="fish-scroll results-scroll">
+                <ui:VisualElement name="results-list" class="results-list" />
+            </ui:ScrollView>
+
+            <ui:VisualElement class="fish-panel__footer results-footer">
+                <ui:Label name="results-rank" text="" class="fish-label results-rank" />
+                <ui:Label name="results-return" text="" class="fish-hint results-return" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

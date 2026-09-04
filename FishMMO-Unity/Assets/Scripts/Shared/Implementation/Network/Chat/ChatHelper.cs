@@ -113,6 +113,7 @@ namespace FishMMO.Shared
 		   { ChatChannel.Tell, new List<string>() { "/tell", } },
 		   { ChatChannel.Trade, new List<string>() { "/t", "/trade", } },
 		   { ChatChannel.Say, new List<string>() { "/s", "/say", } },
+		   { ChatChannel.Team, new List<string>() { "/team", "/tm", } },
 	   };
 
 		/// <summary>

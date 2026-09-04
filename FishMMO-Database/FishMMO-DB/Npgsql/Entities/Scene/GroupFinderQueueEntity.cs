@@ -36,10 +36,33 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>The waiting character. Unique: a character queues for one thing at a time.</summary>
 		public long CharacterID { get; set; }
 
-		/// <summary>Dungeon scene the character wants to run.</summary>
+		/// <summary>
+		/// What kind of instance is being waited for: a dungeon (<c>Group</c>) or an arena
+		/// (<c>PvP</c>), as the shared <c>SceneType</c> value.
+		/// </summary>
+		/// <remarks>
+		/// Separates the two queues so a count or a match for one never reads the other's rows,
+		/// and lets one table, one pump and one leash serve both.
+		/// </remarks>
+		public int SceneType { get; set; }
+
+		/// <summary>
+		/// Pre-made group this character queued with, or 0 when they queued alone.
+		/// </summary>
+		/// <remarks>
+		/// Arenas allow a party to queue together; the composer keeps rows sharing a group id on
+		/// one team and takes all of them or none. Dungeons never set it — the finder fills a
+		/// party's dungeon through the open run instead.
+		/// </remarks>
+		public long GroupID { get; set; }
+
+		/// <summary>Dungeon or arena scene the character wants to play.</summary>
 		public string SceneName { get; set; }
 
-		/// <summary>Difficulty index into the dungeon's own list.</summary>
+		/// <summary>
+		/// Index into the template's own list: a dungeon's difficulty, or an arena's format
+		/// (team size).
+		/// </summary>
 		public int Difficulty { get; set; }
 
 		/// <summary>Where the row is in its life. See <c>GroupFinderQueueStatus</c>.</summary>

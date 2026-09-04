@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIArenaHud.uss" />
+    <ui:VisualElement name="arenahud-root" class="fish-panel arenahud-root" picking-mode="Ignore">
+        <ui:Label name="arenahud-phase" text="" class="fish-panel__title arenahud-phase" />
+        <ui:VisualElement name="arenahud-scores" class="arenahud-scores" />
+        <ui:Label name="arenahud-clock" text="" class="fish-label fish-label--numeric arenahud-clock" />
+        <ui:Label name="arenahud-hint" text="" class="fish-hint arenahud-hint" />
+        <ui:VisualElement name="arenahud-objectives" class="arenahud-objectives" />
+        <ui:Label name="arenahud-countdown" text="" class="arenahud-countdown arenahud-countdown--hidden" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

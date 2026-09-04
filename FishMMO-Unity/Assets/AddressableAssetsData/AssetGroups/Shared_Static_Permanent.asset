@@ -880,6 +880,36 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 20e5bd4e8ce1460eb80fef7bd641e060
+    m_Address: PvP Rank
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 02cee5ed950c4185983e1ca27784d056
+    m_Address: PvP Wins
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 042b8be6248c45caacbb52d80db80025
+    m_Address: PvP Losses
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a88fefa44ca40898b9b14fcec6f3d87
+    m_Address: PvP Matches
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a45324fc4ef46e5bf058abd2434582b
+    m_Address: Test Arena
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:

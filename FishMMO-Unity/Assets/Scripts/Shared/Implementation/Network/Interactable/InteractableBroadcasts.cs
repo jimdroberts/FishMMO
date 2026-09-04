@@ -301,6 +301,14 @@ namespace FishMMO.Shared
 		/// done standing at the dungeon, so that being moved into it is never a surprise.
 		/// </summary>
 		LeftEntrance = 14,
+		/// <summary>Only the party leader may queue the party for an arena.</summary>
+		NotPartyLeader = 15,
+		/// <summary>The party has more members than a team of the chosen format seats.</summary>
+		PartyTooLarge = 16,
+		/// <summary>A party member is not at the board, or not on this scene server.</summary>
+		PartyNotPresent = 17,
+		/// <summary>A party member is inside an instance, holds one, or is seated in a live arena match.</summary>
+		PartyMemberBusy = 18,
 	}
 
 	/// <summary>
@@ -318,8 +326,18 @@ namespace FishMMO.Shared
 		/// <summary>Where the character stands.</summary>
 		public GroupFinderState State;
 
+		/// <summary>
+		/// Which queue this is about: <see cref="SceneType.Group"/> for the dungeon group finder,
+		/// <see cref="SceneType.PvP"/> for the arena board. One character is in at most one queue,
+		/// so a status for one kind also means "not in the other". Each panel draws only its own.
+		/// </summary>
+		public SceneType Kind;
+
 		/// <summary>Template ID of the dungeon queued for, or 0 when the entrance had none.</summary>
 		public int DungeonTemplateID;
+
+		/// <summary>Template ID of the arena queued for, when <see cref="Kind"/> is PvP.</summary>
+		public int ArenaTemplateID;
 
 		/// <summary>Scene name of the dungeon, so the panel can name it even without a template.</summary>
 		public string SceneName;

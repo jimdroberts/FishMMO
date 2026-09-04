@@ -1,0 +1,86 @@
+/*
+    UIArenaHud.uss
+    Layout for the arena HUD strip. Colours come from FishMMO-Theme.uss. Sizes are written
+    against the 1200x800 reference resolution declared by Assets/UI Toolkit/PanelSettings.asset.
+*/
+
+/* Top centre, under the target frame and clear of the minimap. */
+.arenahud-root {
+    position: absolute;
+    left: 50%;
+    top: 12%;
+    translate: -50% 0;
+    width: 260px;
+    flex-direction: column;
+    align-items: center;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.arenahud-root--live {
+    border-color: var(--brand-500);
+}
+
+.arenahud-phase {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.arenahud-scores {
+    flex-direction: row;
+    justify-content: center;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.arenahud-score {
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.arenahud-clock {
+    margin-top: 4px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.arenahud-hint {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.arenahud-objectives {
+    flex-direction: column;
+    align-items: center;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.arenahud-objective {
+    height: 13px;
+    flex-shrink: 0;
+}
+
+/*
+    The countdown is drawn large and outside the strip, in the middle of the screen, where a
+    player looking at their opponent will see it. Positioned relative to the screen-filling
+    document root rather than the strip.
+*/
+.arenahud-countdown {
+    position: absolute;
+    left: 50%;
+    top: 220px;
+    translate: -50% 0;
+    font-size: 72px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--brand-300);
+    text-shadow: 0 2px 6px var(--edge-dark);
+}
+
+.arenahud-countdown--hidden {
+    display: none;
+}

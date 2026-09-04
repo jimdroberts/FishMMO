@@ -39,6 +39,19 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int MaxGroupSize = 64;
 
 		/// <summary>
+		/// The shared <c>FishMMO.Shared.SceneType.Group</c> value: a dungeon instance.
+		/// </summary>
+		/// <remarks>
+		/// Numeric on purpose. Callers pass the shared enum cast to <c>int</c>, and the
+		/// database-side <see cref="SceneType"/> enum's member names do not correspond to those
+		/// values, so naming them here would read as the wrong thing.
+		/// </remarks>
+		private const int GroupSceneType = 2;
+
+		/// <summary>The shared <c>FishMMO.Shared.SceneType.PvP</c> value: an arena instance.</summary>
+		private const int PvPSceneType = 3;
+
+		/// <summary>
 		/// Initializes a new instance of GroupFinderQueueService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -48,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> EnqueueAsync(long worldServerId, long characterId, string sceneName, int difficulty, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> EnqueueAsync(long worldServerId, long characterId, SceneType sceneType, string sceneName, int difficulty, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0 || characterId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
@@ -75,28 +88,77 @@ namespace FishMMO.Database.Npgsql.Services
 				 * The table qualifier in the WHERE is required, not stylistic: inside ON CONFLICT DO
 				 * UPDATE a bare column name is ambiguous between the existing and proposed rows,
 				 * and Postgres refuses it. */
-				var sql = $@"INSERT INTO {TableName}
-						(world_server_id, character_id, scene_name, difficulty, status, party_id, instance_id, time_created, last_pulse, time_matched)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, 0, 0, {{5}}, {{5}}, NULL)
-					ON CONFLICT (character_id) DO UPDATE
-					SET world_server_id = EXCLUDED.world_server_id,
-						scene_name = EXCLUDED.scene_name,
-						difficulty = EXCLUDED.difficulty,
-						time_created = EXCLUDED.time_created,
-						last_pulse = EXCLUDED.last_pulse,
-						status = {{4}},
-						party_id = 0,
-						instance_id = 0,
-						time_matched = NULL
-					WHERE {TableName}.status = {{4}} OR {TableName}.last_pulse < {{6}}
-					RETURNING id";
+				return await UpsertRowAsync(dbContext, worldServerId, characterId, sceneType, sceneName, difficulty, 0, now, stalePulsedBeforeUtc, cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				return await ExecuteReturningOrDefaultAsync(
-					dbContext,
-					sql,
-					new object[] { worldServerId, characterId, sceneName, difficulty, (int)GroupFinderQueueStatus.Waiting, now, stalePulsedBeforeUtc },
-					reader => reader.GetInt64(0),
-					cancellationToken).ConfigureAwait(false);
+			return result;
+		}
+
+		/// <summary>
+		/// The single-row upsert both enqueue paths use. Returns the row id, or 0 when a live
+		/// matched row refused the re-point.
+		/// </summary>
+		private async Task<long> UpsertRowAsync(NpgsqlDbContext dbContext, long worldServerId, long characterId, SceneType sceneType, string sceneName, int difficulty, long groupId, DateTime now, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken)
+		{
+			var sql = $@"INSERT INTO {TableName}
+					(world_server_id, character_id, scene_type, group_id, scene_name, difficulty, status, party_id, instance_id, time_created, last_pulse, time_matched)
+				VALUES ({{0}}, {{1}}, {{7}}, {{8}}, {{2}}, {{3}}, {{4}}, 0, 0, {{5}}, {{5}}, NULL)
+				ON CONFLICT (character_id) DO UPDATE
+				SET world_server_id = EXCLUDED.world_server_id,
+					scene_type = EXCLUDED.scene_type,
+					group_id = EXCLUDED.group_id,
+					scene_name = EXCLUDED.scene_name,
+					difficulty = EXCLUDED.difficulty,
+					time_created = EXCLUDED.time_created,
+					last_pulse = EXCLUDED.last_pulse,
+					status = {{4}},
+					party_id = 0,
+					instance_id = 0,
+					time_matched = NULL
+				WHERE {TableName}.status = {{4}} OR {TableName}.last_pulse < {{6}}
+				RETURNING id";
+
+			return await ExecuteReturningOrDefaultAsync(
+				dbContext,
+				sql,
+				new object[] { worldServerId, characterId, sceneName, difficulty, (int)GroupFinderQueueStatus.Waiting, now, stalePulsedBeforeUtc, (int)sceneType, groupId },
+				reader => reader.GetInt64(0),
+				cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> EnqueueGroupAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, long groupId, IReadOnlyList<long> characterIds, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken = default)
+		{
+			long[] ids = Distinct(characterIds);
+			if (worldServerId <= 0 || groupId <= 0 || ids.Length == 0 || string.IsNullOrWhiteSpace(sceneName))
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID, group ID, members and scene name are required.");
+			}
+
+			if (difficulty < 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Format index cannot be negative.");
+			}
+
+			var now = DateTime.UtcNow;
+
+			var result = await ExecuteTransactionAsync(async dbContext =>
+			{
+				int written = 0;
+				foreach (long characterId in ids)
+				{
+					long rowId = await UpsertRowAsync(dbContext, worldServerId, characterId, sceneType, sceneName, difficulty, groupId, now, stalePulsedBeforeUtc, cancellationToken).ConfigureAwait(false);
+					if (rowId <= 0)
+					{
+						/* A member is live-matched elsewhere. The group queues together or not at
+						 * all; throwing rolls back the members already written. */
+						throw new DatabaseException(
+							$"Group finder could not queue group {groupId}: character {characterId} is already matched.",
+							errorCode: DatabaseErrorCodes.StaleState);
+					}
+					++written;
+				}
+				return written;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
@@ -138,7 +200,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE character_id = {{0}}
-					RETURNING id, world_server_id, character_id, scene_name, difficulty, status, party_id, instance_id, time_created, last_pulse, time_matched";
+					RETURNING id, world_server_id, character_id, scene_type, group_id, scene_name, difficulty, status, party_id, instance_id, time_created, last_pulse, time_matched";
 
 				return await ExecuteReturningOrDefaultAsync(
 					dbContext,
@@ -148,14 +210,16 @@ namespace FishMMO.Database.Npgsql.Services
 						reader.GetInt64(0),
 						reader.GetInt64(1),
 						reader.GetInt64(2),
-						reader.GetString(3),
-						reader.GetInt32(4),
-						reader.GetInt32(5),
-						reader.GetInt64(6),
-						reader.GetInt64(7),
-						reader.GetDateTime(8),
-						reader.GetDateTime(9),
-						reader.IsDBNull(10) ? (DateTime?)null : reader.GetDateTime(10)),
+						reader.GetInt32(3),
+						reader.GetInt64(4),
+						reader.GetString(5),
+						reader.GetInt32(6),
+						reader.GetInt32(7),
+						reader.GetInt64(8),
+						reader.GetInt64(9),
+						reader.GetDateTime(10),
+						reader.GetDateTime(11),
+						reader.IsDBNull(12) ? (DateTime?)null : reader.GetDateTime(12)),
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -212,7 +276,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> CountWaitingAsync(long worldServerId, string sceneName, int difficulty, DateTime pulsedSinceUtc, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CountWaitingAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, DateTime pulsedSinceUtc, CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
 			{
@@ -223,6 +287,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var sql = $@"SELECT COUNT(*)::int FROM {TableName}
 					WHERE world_server_id = {{0}}
+						AND scene_type = {{5}}
 						AND scene_name = {{1}}
 						AND difficulty = {{2}}
 						AND status = {{3}}
@@ -231,7 +296,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return await ExecuteScalarIntAsync(
 					dbContext,
 					sql,
-					new object[] { worldServerId, sceneName, difficulty, (int)GroupFinderQueueStatus.Waiting, pulsedSinceUtc },
+					new object[] { worldServerId, sceneName, difficulty, (int)GroupFinderQueueStatus.Waiting, pulsedSinceUtc, (int)sceneType },
 					cancellationToken).ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -294,6 +359,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var selectSql = $@"SELECT q.id, q.character_id
 					FROM {TableName} q
 					WHERE q.world_server_id = {{0}}
+						AND q.scene_type = {{10}}
 						AND q.scene_name = {{1}}
 						AND q.difficulty = {{2}}
 						AND q.status = {{3}}
@@ -312,7 +378,7 @@ namespace FishMMO.Database.Npgsql.Services
 				List<(long RowID, long CharacterID)> candidates = await ReadRowsAsync(
 					dbContext,
 					selectSql,
-					new object[] { worldServerId, sceneName, difficulty, waiting, pulsedSinceUtc, (int)sceneType, pending, loading, ready, groupSize },
+					new object[] { worldServerId, sceneName, difficulty, waiting, pulsedSinceUtc, (int)sceneType, pending, loading, ready, groupSize, GroupSceneType },
 					reader => (reader.GetInt64(0), reader.GetInt64(1)),
 					cancellationToken).ConfigureAwait(false);
 
@@ -417,6 +483,172 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return new GroupFinderMatchData(true, partyId, instanceId.Value, leaderId, memberIds);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<ArenaMatchFormedData>> TryFormArenaMatchAsync(
+			long worldServerId,
+			string sceneName,
+			int format,
+			int templateId,
+			int teamCount,
+			int teamSize,
+			DateTime pulsedSinceUtc,
+			int maxCandidates = 128,
+			CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
+			{
+				return DatabaseResult<ArenaMatchFormedData>.Failure(DatabaseErrorCodes.ValidationError, "Invalid parameters: world server ID and scene name are required.");
+			}
+
+			if (format < 0 || teamCount < 2 || teamSize < 1 || teamCount * teamSize > MaxGroupSize)
+			{
+				return DatabaseResult<ArenaMatchFormedData>.Failure(DatabaseErrorCodes.ValidationError, $"Team count must be at least 2, team size at least 1, and the match at most {MaxGroupSize} players.");
+			}
+
+			int seatsNeeded = teamCount * teamSize;
+			int candidateLimit = Math.Max(seatsNeeded, Math.Min(maxCandidates, 512));
+
+			var result = await ExecuteTransactionAsync(async dbContext =>
+			{
+				string sceneTable = dbContext.GetTableName<SceneEntity>();
+				string matchTable = dbContext.GetTableName<ArenaMatchEntity>();
+				string memberTable = dbContext.GetTableName<ArenaMatchMemberEntity>();
+
+				int waiting = (int)GroupFinderQueueStatus.Waiting;
+				int matched = (int)GroupFinderQueueStatus.Matched;
+				int pending = (int)SceneStatus.Pending;
+				int loading = (int)SceneStatus.Loading;
+				int ready = (int)SceneStatus.Ready;
+
+				/* 1. Lock the eligible waiters, oldest first. Same locking rationale as the
+				 * dungeon former. Eligibility is the arena's: no seat in a live match, no usable
+				 * dungeon or arena instance held. Party membership is fine here. */
+				var selectSql = $@"SELECT q.id, q.character_id, q.group_id
+					FROM {TableName} q
+					WHERE q.world_server_id = {{0}}
+						AND q.scene_type = {{1}}
+						AND q.scene_name = {{2}}
+						AND q.difficulty = {{3}}
+						AND q.status = {{4}}
+						AND q.last_pulse >= {{5}}
+						AND NOT EXISTS (
+							SELECT 1 FROM {sceneTable} s
+							WHERE s.character_id = q.character_id
+								AND s.world_server_id = {{0}}
+								AND s.scene_type IN ({{6}}, {{1}})
+								AND s.scene_status IN ({{7}}, {{8}}, {{9}}))
+						AND NOT EXISTS (
+							SELECT 1 FROM {memberTable} m
+							JOIN {matchTable} am ON am.id = m.match_id
+							WHERE m.character_id = q.character_id AND am.status < {{10}})
+					ORDER BY q.time_created, q.id
+					LIMIT {{11}}
+					FOR UPDATE OF q";
+
+				List<ArenaCandidate> candidates = await ReadRowsAsync(
+					dbContext,
+					selectSql,
+					new object[] { worldServerId, PvPSceneType, sceneName, format, waiting, pulsedSinceUtc, GroupSceneType, pending, loading, ready, (int)ArenaMatchStatus.Ended, candidateLimit },
+					reader => new ArenaCandidate(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2)),
+					cancellationToken).ConfigureAwait(false);
+
+				if (!ArenaMatchComposer.TryCompose(candidates, teamCount, teamSize, out List<ArenaSeat> seats))
+				{
+					return ArenaMatchFormedData.None;
+				}
+
+				var rowIds = new long[seats.Count];
+				var memberIds = new long[seats.Count];
+				var teams = new int[seats.Count];
+				for (int i = 0; i < seats.Count; ++i)
+				{
+					rowIds[i] = seats[i].RowID;
+					memberIds[i] = seats[i].CharacterID;
+					teams[i] = seats[i].Team;
+				}
+				var now = DateTime.UtcNow;
+
+				/* 2. The instance: private, unowned by any party — the match row is who is in it —
+				 * and under the one-instance guard against every seat, across both instance kinds. */
+				var sceneSql = $@"INSERT INTO {sceneTable}
+						(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private)
+					SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, 0, {{6}}, TRUE
+					WHERE NOT EXISTS (
+						SELECT 1 FROM {sceneTable}
+						WHERE world_server_id = {{0}}
+							AND scene_type IN ({{3}}, {{9}})
+							AND scene_status IN ({{2}}, {{7}}, {{8}})
+							AND character_id = ANY({{10}})
+					)
+					RETURNING id";
+
+				long? instanceId = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					sceneSql,
+					new object[] { worldServerId, sceneName, pending, PvPSceneType, memberIds[0], now, format, loading, ready, GroupSceneType, memberIds },
+					reader => (long?)reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+
+				if (!instanceId.HasValue || instanceId.Value <= 0)
+				{
+					throw new DatabaseException(
+						$"Arena match for '{sceneName}' could not open its instance: a seated character already holds one. Rolling the match back.",
+						errorCode: DatabaseErrorCodes.StaleState);
+				}
+
+				// 3. The match.
+				var matchSql = $@"INSERT INTO {matchTable}
+						(world_server_id, instance_id, scene_name, template_id, format, team_count, team_size, status, winner_team, time_created)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, -1, {{8}})
+					RETURNING id";
+
+				long matchId = await ExecuteReturningAsync(
+					dbContext,
+					matchSql,
+					new object[] { worldServerId, instanceId.Value, sceneName, templateId, format, teamCount, teamSize, (int)ArenaMatchStatus.Gathering, now },
+					reader => reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+
+				// 4. The seats.
+				var memberSql = $@"INSERT INTO {memberTable} (match_id, character_id, team, kills, deaths, score)
+					SELECT {{0}}, x.character_id, x.team, 0, 0, 0
+					FROM UNNEST({{1}}, {{2}}) AS x(character_id, team)";
+
+				int seated = await dbContext.Database.ExecuteSqlRawAsync(
+					memberSql,
+					new object[] { matchId, memberIds, teams },
+					cancellationToken).ConfigureAwait(false);
+
+				if (seated != memberIds.Length)
+				{
+					throw new DatabaseException(
+						$"Arena match {matchId} seated {seated} of {memberIds.Length} players. Rolling the match back.",
+						errorCode: DatabaseErrorCodes.StaleState);
+				}
+
+				// 5. Bind the queue rows to the instance. No party: arenas do not form one.
+				var claimSql = $@"UPDATE {TableName}
+					SET status = {{0}}, party_id = 0, instance_id = {{1}}, time_matched = {{2}}
+					WHERE id = ANY({{3}})";
+
+				int claimed = await dbContext.Database.ExecuteSqlRawAsync(
+					claimSql,
+					new object[] { matched, instanceId.Value, now, rowIds },
+					cancellationToken).ConfigureAwait(false);
+
+				if (claimed != rowIds.Length)
+				{
+					throw new DatabaseException(
+						$"Arena match {matchId} marked {claimed} of {rowIds.Length} locked queue rows as matched. Rolling the match back.",
+						errorCode: DatabaseErrorCodes.StaleState);
+				}
+
+				return new ArenaMatchFormedData(true, matchId, instanceId.Value, seats);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
@@ -573,6 +805,8 @@ namespace FishMMO.Database.Npgsql.Services
 				entity.ID,
 				entity.WorldServerID,
 				entity.CharacterID,
+				entity.SceneType,
+				entity.GroupID,
 				entity.SceneName,
 				entity.Difficulty,
 				entity.Status,

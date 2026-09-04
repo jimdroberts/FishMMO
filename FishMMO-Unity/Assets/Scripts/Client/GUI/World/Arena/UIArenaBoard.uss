@@ -1,0 +1,191 @@
+/*
+    UIArenaBoard.uss
+    Layout for the arena board. Colours come from FishMMO-Theme.uss. Sizes are written
+    against the 1200x800 reference resolution declared by Assets/UI Toolkit/PanelSettings.asset.
+*/
+
+.arena-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.arena-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 440px;
+    max-height: 82%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.arena-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.arena-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.arena-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.arena-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.arena-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.arena-close-btn {
+    flex-shrink: 0;
+}
+
+/* ── Tabs (arenas and formats share the strip geometry) ─── */
+
+.arena-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    flex-shrink: 0;
+}
+
+.arena-tab,
+.arena-format-tab {
+    margin-right: 4px;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+
+.arena-tabs--single {
+    display: none;
+}
+
+/* ── About ──────────────────────────────────────────────── */
+
+.arena-about {
+    flex-direction: row;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.arena-image {
+    width: 96px;
+    height: 96px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.arena-image__label {
+    -unity-text-align: middle-center;
+}
+
+.arena-about__text {
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.arena-name {
+    margin-bottom: 4px;
+    flex-shrink: 0;
+    white-space: normal;
+}
+
+.arena-mode {
+    align-self: flex-start;
+    margin-bottom: 6px;
+}
+
+.arena-description {
+    white-space: normal;
+    flex-grow: 1;
+}
+
+/* ── Rules and queue strips ─────────────────────────────── */
+
+.arena-rules,
+.arena-queue {
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.arena-rules__text,
+.arena-queue__text {
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.arena-rules--empty,
+.arena-queue--hidden {
+    display: none;
+}
+
+.arena-queue--matched {
+    border-color: var(--brand-500);
+    background-color: var(--brand-lo);
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.arena-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 38px;
+    padding-left: 10px;
+    padding-right: 8px;
+    flex-shrink: 0;
+}
+
+.arena-footer__hint {
+    flex-shrink: 1;
+    -unity-text-align: middle-left;
+}
+
+.arena-footer__actions {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.arena-action {
+    height: 22px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.arena-action--wide {
+    min-width: 96px;
+}

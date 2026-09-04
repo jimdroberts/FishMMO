@@ -135,6 +135,10 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
 		/// <summary>Characters waiting in, or matched by, the dungeon group finder.</summary>
 		public DbSet<GroupFinderQueueEntity> GroupFinderQueue { get; set; }
+		/// <summary>Arena matches, live and historical.</summary>
+		public DbSet<ArenaMatchEntity> ArenaMatches { get; set; }
+		/// <summary>Seats in arena matches.</summary>
+		public DbSet<ArenaMatchMemberEntity> ArenaMatchMembers { get; set; }
 		/// <summary>Chat messages.</summary>
 		public DbSet<ChatEntity> Chat { get; set; }
 

@@ -153,12 +153,53 @@ namespace FishMMO.Client
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ResurrectOfferBroadcast>(OnResurrectOfferReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<ArenaRespawnBroadcast>(OnArenaRespawnReceived);
 		}
 
 		/// <summary>Unregisters the resurrect-offer handler when the client is cleared.</summary>
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<ResurrectOfferBroadcast>(OnResurrectOfferReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<ArenaRespawnBroadcast>(OnArenaRespawnReceived);
+		}
+
+		/// <summary>Unscaled time the arena will respawn this player, or 0 when eliminated for the match.</summary>
+		private float arenaRespawnAt;
+
+		/// <summary>True while a death inside a live arena is waiting on the server's respawn.</summary>
+		private bool arenaRespawnPending;
+
+		/// <summary>
+		/// A death inside a live arena. The server respawns the player itself, at their team's
+		/// spawn, after the arena's delay — so the dialog shows the wait and offers nothing, since
+		/// a bind-point respawn would take them out of the match.
+		/// </summary>
+		private void OnArenaRespawnReceived(ArenaRespawnBroadcast msg, Channel channel)
+		{
+			EnsureElementsBound();
+			arenaRespawnPending = true;
+			arenaRespawnAt = msg.SecondsUntilRespawn > 0 ? Time.unscaledTime + msg.SecondsUntilRespawn : 0f;
+			currentResurrectorID = 0;
+			SetResurrectVisible(false);
+			ClearAwaitingRevive();
+			SetActionsEnabled(false);
+			ApplyArenaRespawnText();
+			Show();
+		}
+
+		private void ApplyArenaRespawnText()
+		{
+			if (messageLabel == null)
+			{
+				return;
+			}
+			if (arenaRespawnAt <= 0f)
+			{
+				messageLabel.text = "You have been eliminated.\nThe match continues without you.";
+				return;
+			}
+			int seconds = Mathf.Max(0, Mathf.CeilToInt(arenaRespawnAt - Time.unscaledTime));
+			messageLabel.text = $"You have died.\nRespawning in {seconds}…";
 		}
 
 		/// <summary>Shows the dialog, binding its elements on first use.</summary>
@@ -210,6 +251,8 @@ namespace FishMMO.Client
 			// The character is going away — despawn, transfer, or logout. Nothing here applies
 			// to whatever comes next, and leaving the panel up would float it over the loading
 			// screen of the transfer it just triggered.
+			arenaRespawnPending = false;
+			arenaRespawnAt = 0f;
 			ClearAwaitingRevive();
 			Hide();
 		}
@@ -230,6 +273,22 @@ namespace FishMMO.Client
 		protected override void OnTick()
 		{
 			base.OnTick();
+
+			if (arenaRespawnPending)
+			{
+				// The server revives; the dialog only counts down and leaves when it happens.
+				if (Character == null ||
+					(Character.TryGet(out ICharacterDamageController arenaDamage) && arenaDamage.IsAlive))
+				{
+					arenaRespawnPending = false;
+					arenaRespawnAt = 0f;
+					SetActionsEnabled(true);
+					Hide();
+					return;
+				}
+				ApplyArenaRespawnText();
+				return;
+			}
 
 			if (!awaitingRevive)
 			{
@@ -324,6 +383,14 @@ namespace FishMMO.Client
 		{
 			EnsureElementsBound();
 
+			if (arenaRespawnPending)
+			{
+				// The arena's respawn notice arrived first, or this is a repeated death broadcast.
+				ApplyArenaRespawnText();
+				Show();
+				return;
+			}
+
 			if (messageLabel != null)
 				messageLabel.text = "You have died.";
 
@@ -384,6 +451,8 @@ namespace FishMMO.Client
 		{
 			base.OnQuitToLogin();
 
+			arenaRespawnPending = false;
+			arenaRespawnAt = 0f;
 			currentResurrectorID = 0;
 			SetResurrectVisible(false);
 			ClearAwaitingRevive();

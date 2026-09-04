@@ -144,10 +144,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public IPlayerCharacter Character;
 			public long CharacterID;
 			public long WorldServerID;
+
+			/// <summary>Dungeon (<see cref="SceneType.Group"/>) or arena (<see cref="SceneType.PvP"/>) queue.</summary>
+			public SceneType Kind = SceneType.Group;
+
 			public string SceneName;
 			public int DungeonTemplateID;
+
+			/// <summary>Arena template, for arena entries.</summary>
+			public int ArenaTemplateID;
+
+			/// <summary>Teams and seats per team, for arena entries.</summary>
+			public int TeamCount;
+			public int TeamSize;
+
+			/// <summary>Difficulty index for dungeons; format index for arenas.</summary>
 			public int Difficulty;
 			public int Capacity;
+
+			/// <summary>Players needed: the finder's group size, or the arena's full match size.</summary>
 			public int GroupSize;
 			public WorldSceneDetails SceneDetails;
 			public AchievementTemplate AchievementTemplate;
@@ -183,7 +198,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public NetworkConnection Connection;
 			public long CharacterID;
 			public long WorldServerID;
+			public SceneType Kind;
 			public string SceneName;
+			public int ArenaTemplateID;
+			public int TeamCount;
+			public int TeamSize;
 			public int Difficulty;
 			public int Capacity;
 			public int GroupSize;
@@ -239,6 +258,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				Log.Warning("InteractableSystem", "Group finder: the server is not a periodic update system; nobody will be matched.");
 			}
+
+			InitializeArena();
 		}
 
 		/// <summary>
@@ -258,6 +279,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnGroupFinderPump);
 			}
+
+			DeinitializeArena();
 
 			groupFinderEntries.Clear();
 			Interlocked.Exchange(ref groupFinderPumpInFlight, 0);
@@ -419,7 +442,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				DatabaseResult<long> enqueueResult = await queueService.EnqueueAsync(
-					worldServerID, characterID, dungeonName, difficultyIndex, GroupFinderStaleBefore);
+					worldServerID, characterID, DbSceneType(SceneType.Group), dungeonName, difficultyIndex, GroupFinderStaleBefore);
 				if (!enqueueResult.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem",
@@ -452,7 +475,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				var countResult = await queueService.CountWaitingAsync(worldServerID, dungeonName, difficultyIndex, GroupFinderStaleBefore);
+				var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.Group), dungeonName, difficultyIndex, GroupFinderStaleBefore);
 				int waiting = countResult.IsSuccess ? Math.Max(1, countResult.Data) : 1;
 
 				DungeonRequestContext captured = context;
@@ -741,7 +764,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					 * them now, with the reason, is better than a panel that says "waiting" forever.
 					 * The delete is conditional on the row still waiting — if it was matched a
 					 * moment ago, the entry is kept and the match is honoured on the next pump. */
-					bool inParty = entry.Character.TryGet(out IPartyController partyController) && partyController.ID != 0;
+					/* A party is a reason to leave the dungeon queue and the way to be in the arena
+					 * queue: pre-made groups queue for arenas together. */
+					bool inParty = entry.Kind == SceneType.Group &&
+						entry.Character.TryGet(out IPartyController partyController) && partyController.ID != 0;
 					GroupFinderRefusalReason cancel = GroupFinderRules.ResolveWaitingCancel(
 						entry.Character.IsInInstance(), inParty, IsNearEntrance(entry));
 
@@ -761,7 +787,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Connection = entry.Connection,
 					CharacterID = entry.CharacterID,
 					WorldServerID = entry.WorldServerID,
+					Kind = entry.Kind,
 					SceneName = entry.SceneName,
+					ArenaTemplateID = entry.ArenaTemplateID,
+					TeamCount = entry.TeamCount,
+					TeamSize = entry.TeamSize,
 					Difficulty = entry.Difficulty,
 					Capacity = entry.Capacity,
 					GroupSize = entry.GroupSize,
@@ -884,6 +914,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					{
 						await Log.Debug("InteractableSystem", $"Group finder swept {sweepResult.Data} stale queue rows.");
 					}
+
+					/* Arena matches whose instance is gone but whose row never reached Ended — a
+					 * hosting server that died, a load that failed — would hold every seat out of
+					 * both finders forever. Ten minutes is far longer than any gathering or match
+					 * takes to reach a hosting server. */
+					if (Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var arenaService))
+					{
+						var cancelResult = await arenaService.CancelAbandonedAsync(DateTime.UtcNow.AddMinutes(-10), 64);
+						if (cancelResult.IsSuccess && cancelResult.Data > 0)
+						{
+							await Log.Warning("InteractableSystem", $"Arena: cancelled {cancelResult.Data} abandoned matches whose instances no longer exist.");
+						}
+					}
 				}
 
 				if (items.Count == 0)
@@ -913,7 +956,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				// Waiters grouped by what they are waiting for, in queue order within each group.
-				var waitingByKey = new Dictionary<(string, int), List<GroupFinderPumpItem>>();
+				var waitingByKey = new Dictionary<(SceneType, string, int), List<GroupFinderPumpItem>>();
 
 				foreach (GroupFinderPumpItem item in items)
 				{
@@ -940,7 +983,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						continue;
 					}
 
-					var key = (item.SceneName, item.Difficulty);
+					var key = (item.Kind, item.SceneName, item.Difficulty);
 					if (!waitingByKey.TryGetValue(key, out List<GroupFinderPumpItem> group))
 					{
 						group = new List<GroupFinderPumpItem>();
@@ -949,9 +992,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					group.Add(item);
 				}
 
-				foreach (KeyValuePair<(string, int), List<GroupFinderPumpItem>> kvp in waitingByKey)
+				foreach (KeyValuePair<(SceneType, string, int), List<GroupFinderPumpItem>> kvp in waitingByKey)
 				{
-					await ProcessWaitingGroupAsync(queueService, kvp.Key.Item1, kvp.Key.Item2, kvp.Value);
+					if (kvp.Key.Item1 == SceneType.PvP)
+					{
+						await ProcessWaitingArenaGroupAsync(queueService, kvp.Key.Item2, kvp.Key.Item3, kvp.Value);
+					}
+					else
+					{
+						await ProcessWaitingGroupAsync(queueService, kvp.Key.Item2, kvp.Key.Item3, kvp.Value);
+					}
 				}
 			}
 			catch (Exception ex)
@@ -1079,7 +1129,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			var countResult = await queueService.CountWaitingAsync(worldServerID, sceneName, difficulty, GroupFinderStaleBefore);
+			var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.Group), sceneName, difficulty, GroupFinderStaleBefore);
 			if (!countResult.IsSuccess)
 			{
 				return;
@@ -1206,7 +1256,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private async Task DispatchMatchedAsync(long characterID, long partyID, long instanceID)
 		{
 			PartyRank rank = PartyRank.Member;
-			if (Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+			if (partyID > 0 && Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
 			{
 				DatabaseResult<CharacterPartyData?> membership = await charPartyService.FetchAsync(characterID);
 				if (membership.IsSuccess && membership.Data.HasValue && membership.Data.Value.PartyID == partyID)
@@ -1274,7 +1324,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			 * client's own controller is what the panel it opens on arrival consults first. A
 			 * late-join arrives here with this already done by the party system; it is not
 			 * repeated, because a second add would double the roster row on the client. */
-			if (character.TryGet(out IPartyController partyController) && partyController.ID != partyID)
+			if (partyID > 0 && character.TryGet(out IPartyController partyController) && partyController.ID != partyID)
 			{
 				partyController.ID = partyID;
 				partyController.Rank = rank;
@@ -1334,11 +1384,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				try
 				{
-					if (Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
+					if (partyID > 0 && Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
 					{
 						await partySystem.RemoveCharacterFromPartyAsync(characterID, partyID, "matched by the group finder but never became free to travel");
 					}
 
+					/* An arena seat is left for the match coordinator: the match's gathering timeout
+					 * drops a seat that never arrives, so nothing else has to. */
 					await DeleteGroupFinderRowAsync(characterID);
 
 					TryEnqueueMainThread(() =>
@@ -1349,7 +1401,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 
 						IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
-						if (partyController != null && partyController.ID == partyID)
+						if (partyID > 0 && partyController != null && partyController.ID == partyID)
 						{
 							partyController.ID = 0;
 							partyController.Rank = PartyRank.None;
@@ -1381,7 +1433,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>
 		/// Tells a client it is not in the queue, and why. Main thread only.
 		/// </summary>
-		private void SendGroupFinderRefusal(NetworkConnection conn, GroupFinderRefusalReason reason)
+		private void SendGroupFinderRefusal(NetworkConnection conn, GroupFinderRefusalReason reason, SceneType kind = SceneType.Group)
 		{
 			if (conn == null || !conn.IsActive || Server?.NetworkWrapper == null)
 			{
@@ -1391,8 +1443,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.Broadcast(conn, new GroupFinderStatusBroadcast()
 			{
 				State = GroupFinderState.None,
+				Kind = kind,
 				Reason = reason,
 			}, true, FishNet.Transporting.Channel.Reliable);
+		}
+
+		/// <summary>
+		/// The shared scene type as the database service takes it. The two enums share values,
+		/// not names.
+		/// </summary>
+		private static FishMMO.Database.Data.Enums.SceneType DbSceneType(SceneType kind)
+		{
+			return (FishMMO.Database.Data.Enums.SceneType)(int)kind;
 		}
 
 		/// <summary>
@@ -1410,7 +1472,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			Server.NetworkWrapper.Broadcast(conn, new GroupFinderStatusBroadcast()
 			{
 				State = state,
+				Kind = entry.Kind,
 				DungeonTemplateID = entry.DungeonTemplateID,
+				ArenaTemplateID = entry.ArenaTemplateID,
 				SceneName = entry.SceneName ?? string.Empty,
 				Difficulty = entry.Difficulty,
 				WaitingCount = waitingCount,

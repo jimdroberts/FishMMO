@@ -919,6 +919,12 @@ namespace FishMMO.Client
 		/// <param name="channel">The network channel.</param>
 		private void OnClientGroupFinderStatusBroadcastReceived(GroupFinderStatusBroadcast msg, Channel channel)
 		{
+			// The arena board draws the arena queue. A character is in one queue at most.
+			if (msg.Kind != SceneType.Group)
+			{
+				return;
+			}
+
 			if (msg.State == GroupFinderState.None)
 			{
 				/* Out of the queue, for whatever reason. The strip goes away, and the reason —

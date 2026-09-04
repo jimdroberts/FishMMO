@@ -1,0 +1,204 @@
+/*
+    UIArenaResults.uss
+    Layout for the arena results screen. Colours come from FishMMO-Theme.uss. Sizes are
+    written against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+*/
+
+.results-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.results-panel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: 480px;
+    max-height: 86%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.results-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 10px;
+    padding-right: 6px;
+    flex-shrink: 0;
+}
+
+.results-header__icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 9px;
+    flex-shrink: 0;
+}
+
+.results-header__titles {
+    flex-direction: column;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.results-header__titles > .fish-panel__title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.results-header__titles > .fish-panel__subtitle {
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.results-close-btn {
+    flex-shrink: 0;
+}
+
+/* ── Banner and scores ──────────────────────────────────── */
+
+.results-banner {
+    margin-top: 8px;
+    font-size: 28px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--text-bright);
+    flex-shrink: 0;
+}
+
+.results-banner--win {
+    color: var(--brand-300);
+}
+
+.results-banner--loss {
+    color: var(--danger);
+}
+
+.results-scores {
+    flex-direction: row;
+    justify-content: center;
+    margin-top: 6px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.results-score {
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+/* ── Pedestal ───────────────────────────────────────────── */
+
+.results-pedestal {
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-end;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.results-podium {
+    flex-direction: column;
+    align-items: center;
+    width: 120px;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.results-podium__name {
+    height: 14px;
+    overflow: hidden;
+    -unity-text-align: middle-center;
+}
+
+.results-podium__score {
+    height: 14px;
+    -unity-text-align: middle-center;
+}
+
+.results-podium__block {
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+}
+
+/* The winner's block stands tallest. */
+.results-podium--1 > .results-podium__block { height: 44px; border-color: var(--gold); }
+.results-podium--2 > .results-podium__block { height: 32px; }
+.results-podium--3 > .results-podium__block { height: 24px; }
+
+/* ── List ───────────────────────────────────────────────── */
+
+.results-columns {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    padding-left: 12px;
+    padding-right: 10px;
+    background-color: var(--abyss-850);
+    border-bottom-color: var(--abyss-400);
+    border-bottom-width: 1px;
+    flex-shrink: 0;
+}
+
+.results-col { flex-shrink: 0; }
+.results-col--place { width: 24px; }
+.results-col--name  { flex-grow: 1; }
+.results-col--team  { width: 40px; -unity-text-align: middle-center; }
+.results-col--kd    { width: 60px; -unity-text-align: middle-center; }
+.results-col--score { width: 52px; -unity-text-align: middle-right; }
+
+.results-scroll {
+    flex-grow: 1;
+    min-height: 60px;
+    max-height: 180px;
+}
+
+.results-list {
+    flex-direction: column;
+}
+
+.results-row {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.results-row__place { width: 24px; flex-shrink: 0; }
+.results-row__name  { flex-grow: 1; overflow: hidden; }
+.results-row__team  { width: 40px; flex-shrink: 0; -unity-text-align: middle-center; }
+.results-row__kd    { width: 60px; flex-shrink: 0; -unity-text-align: middle-center; }
+.results-row__score { width: 52px; flex-shrink: 0; -unity-text-align: middle-right; }
+
+/* ── Footer ─────────────────────────────────────────────── */
+
+.results-footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 34px;
+    padding-left: 10px;
+    padding-right: 10px;
+    flex-shrink: 0;
+}
+
+.results-rank {
+    flex-shrink: 0;
+}
+
+.results-return {
+    flex-shrink: 0;
+}

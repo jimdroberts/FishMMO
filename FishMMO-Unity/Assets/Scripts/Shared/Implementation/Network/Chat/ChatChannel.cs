@@ -25,5 +25,11 @@ namespace FishMMO.Shared
 		Command = 8,
 		/// <summary>Discord integration channel.</summary>
 		Discord = 9,
+		/// <summary>
+		/// Arena team chat. Reaches the sender's teammates in the arena match they are standing in,
+		/// on the scene server hosting it, and nowhere else. Not persisted: it means nothing once
+		/// the match is over.
+		/// </summary>
+		Team = 10,
 	}
 }

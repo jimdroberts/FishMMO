@@ -1006,6 +1006,16 @@ namespace FishMMO.Shared
 				return FactionAllianceLevel.Neutral;
 			}
 
+			/* Arenas first. Inside an arena the side a character is on is the team the match
+			 * seated them on, and nothing else: two guildmates on opposite teams are enemies, two
+			 * strangers on one team are allies, and nobody is anybody's enemy until the match is
+			 * live. Party, guild and faction are the open world's rules and are consulted only
+			 * when no arena has a say. */
+			if (ArenaTeamRegistry.TryResolveAlliance(Character, otherFactionController.Character, out FactionAllianceLevel arenaLevel))
+			{
+				return arenaLevel;
+			}
+
 			// Same party?
 			if (Character.TryGet(out IPartyController partyController) &&
 				otherFactionController.Character.TryGet(out IPartyController otherPartyController) &&

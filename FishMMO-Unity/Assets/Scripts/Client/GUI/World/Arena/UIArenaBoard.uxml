@@ -1,0 +1,52 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIArenaBoard.uss" />
+    <ui:VisualElement name="arena-root" class="arena-root">
+        <ui:VisualElement name="arena-panel" class="fish-panel arena-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header arena-header">
+                <ui:VisualElement class="fish-panel__icon arena-header__icon" />
+                <ui:VisualElement class="arena-header__titles">
+                    <ui:Label text="ARENA" class="fish-panel__title" />
+                    <ui:Label name="arena-subtitle" text="Select an arena" class="fish-panel__subtitle" />
+                </ui:VisualElement>
+                <ui:Button name="arena-close-btn" text="✕" class="fish-close-btn arena-close-btn" />
+            </ui:VisualElement>
+
+            <!-- One tab per arena the board offers. Built at runtime. -->
+            <ui:VisualElement name="arena-tabs" class="arena-tabs" />
+
+            <ui:VisualElement name="arena-about" class="arena-about">
+                <ui:VisualElement name="arena-image" class="fish-preview arena-image">
+                    <ui:Label name="arena-image-label" text="NO PREVIEW" class="fish-preview__label arena-image__label" />
+                </ui:VisualElement>
+                <ui:VisualElement class="arena-about__text">
+                    <ui:Label name="arena-name" text="" class="fish-label fish-label--title arena-name" />
+                    <ui:Label name="arena-mode" text="" class="fish-badge fish-badge--accent arena-mode" />
+                    <ui:Label name="arena-description" text="" class="fish-label fish-label--secondary arena-description" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- One tab per format (team size). Built at runtime. -->
+            <ui:VisualElement name="arena-formats" class="arena-tabs arena-formats" />
+
+            <ui:VisualElement name="arena-rules" class="fish-well arena-rules arena-rules--empty">
+                <ui:Label name="arena-rules-text" text="" class="fish-hint arena-rules__text" />
+            </ui:VisualElement>
+
+            <!-- The queue strip: hidden until the server says the player is queued. -->
+            <ui:VisualElement name="arena-queue" class="fish-well arena-queue arena-queue--hidden">
+                <ui:Label name="arena-queue-text" text="" class="fish-hint arena-queue__text" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer arena-footer">
+                <ui:Label text="Stay at the board while queued." class="fish-hint arena-footer__hint" />
+                <ui:VisualElement class="arena-footer__actions">
+                    <ui:Button name="arena-party-btn" text="Queue as Party" class="fish-button arena-action" />
+                    <ui:Button name="arena-queue-btn" text="Queue" class="fish-button fish-button--primary arena-action arena-action--wide" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
