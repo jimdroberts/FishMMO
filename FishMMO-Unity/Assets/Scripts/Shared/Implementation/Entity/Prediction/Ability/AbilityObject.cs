@@ -763,6 +763,25 @@ namespace FishMMO.Shared
 			 * not. One implementation is what keeps them honest. */
 			GameObject hitRoot = TargetOrdering.ResolveHitRoot(collider, out ICharacter hitCharacter);
 
+			/* Never the caster's own body.
+			 *
+			 * AbilityObjectSweep.Accept excludes this object and its children, which is the right
+			 * rule for the object -- but the caster is a separate body, and a melee ability spawns
+			 * INSIDE it. Its capsule was therefore in the overlap on the very first tick and was
+			 * accepted ahead of anything else: 17 of 27 swept hits in one play session resolved to
+			 * the caster. Each one claimed a slot in the per-object dedupe and spent a hit from
+			 * HitCount, so an ability that may only strike once was frequently used up on the
+			 * player who cast it before it ever reached what they aimed at. That is what made melee
+			 * damage look intermittent and made a target with more health survive indefinitely,
+			 * while the same swing on a weaker one occasionally landed.
+			 *
+			 * Dropped here rather than in the sweep so the sweep keeps its single, geometric rule,
+			 * and because this is the point at which the body has been resolved to a character. */
+			if (hitCharacter != null && Caster != null && ReferenceEquals(hitCharacter, Caster))
+			{
+				return true;
+			}
+
 			/* Every swept hit, and what it resolved to. A sweep that strikes a collider but resolves
 			 * no ICharacter produces no target at all, and the ability then falls back to the caster
 			 * -- which reads downstream as the player hitting themselves, with no indication that a
